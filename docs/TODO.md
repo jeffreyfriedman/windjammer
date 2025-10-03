@@ -2,27 +2,28 @@
 
 ## 🔴 P0 - Critical Missing Features
 
-### Assignment Statements
-**Status**: Not implemented  
-**Blocked Test**: `test_ownership_inference_mut_borrowed`
+### ~~Assignment Statements~~ ✅ IMPLEMENTED (Oct 3, 2025)
+**Status**: ✅ Complete  
+**Test**: `test_ownership_inference_mut_borrowed` - PASSING
 
-**What's missing**:
-- Parser support for assignment expressions (`x = value`)
-- Analyzer support for tracking variable mutations
-- Proper `&mut` inference when variables are reassigned
+**What was implemented**:
+- ✅ Parser support for assignment expressions (`x = value`)
+- ✅ Analyzer detection of variable mutations
+- ✅ Proper `&mut` inference when variables are reassigned
 
-**Example that doesn't work**:
+**Example that now works**:
 ```windjammer
 fn increment(x: int) {
-    x = x + 1  // Parse error!
+    x = x + 1  // ✅ Works!
 }
 ```
 
-**Implementation needed**:
-1. Add `Assignment` statement to AST
-2. Parse `identifier = expression`
-3. Use `Analyzer.variables` to track mutations
-4. Infer `&mut` for parameters that are reassigned
+**Transpiles to**:
+```rust
+fn increment(x: &mut i64) {
+    x = x + 1;
+}
+```
 
 ---
 
