@@ -44,7 +44,8 @@ impl SignatureRegistry {
 }
 
 pub struct Analyzer {
-    // Track variable ownership modes
+    // Track variable ownership modes (reserved for future use)
+    #[allow(dead_code)]
     variables: HashMap<String, OwnershipMode>,
 }
 

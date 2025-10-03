@@ -41,9 +41,10 @@ Zero-cost abstractions, memory safety, and blazing speed.
 - **Method syntax**: `impl` blocks with `&self` and `&mut self`
 - **String interpolation**: `"Hello, ${name}!"` ✨
 - **Pipe operator**: `value |> func1 |> func2` ✨
+- **Ternary operator**: `condition ? true_val : false_val` ✨
 - **Labeled arguments**: `create_user(name: "Alice", age: 30)` ✨
 - **Pattern matching in function parameters**: `fn process((x, y): (int, int))` ✨
-- **@auto derive**: Automatic trait derivation for structs ✨
+- **Smart @auto derive**: Zero-config trait inference (`@auto`) ✨
 - **Trait system**: Full trait definitions and implementations ✨
 
 ## Ownership Inference Strategy
