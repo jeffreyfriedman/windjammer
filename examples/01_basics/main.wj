@@ -1,0 +1,70 @@
+// Example 1: Basics - Functions, variables, control flow
+
+// Simple function with automatic ownership inference
+fn greet(name: string) -> string {
+    "Hello, ${name}!"
+}
+
+// Function with multiple parameters
+fn add(x: int, y: int) -> int {
+    x + y
+}
+
+// Mutable parameter (inferred from assignment)
+fn increment(counter: int) {
+    counter = counter + 1
+}
+
+// Using the ternary operator
+fn sign(x: int) -> string {
+    x >= 0 ? "positive" : "negative"
+}
+
+// Pattern matching
+fn describe_number(x: int) -> string {
+    match x {
+        0 => "zero",
+        1 => "one",
+        n if n < 0 => "negative",
+        n if n > 100 => "large",
+        _ => "other",
+    }
+}
+
+// If-else expressions
+fn abs(x: int) -> int {
+    if x < 0 {
+        -x
+    } else {
+        x
+    }
+}
+
+fn main() {
+    // String interpolation
+    let name = "World"
+    println!("${greet(name)}")
+    
+    // Automatic reference insertion
+    let x = 5
+    let y = 10
+    println!("${x} + ${y} = ${add(x, y)}")
+    
+    // Mutable borrowing
+    let mut count = 0
+    increment(count)
+    println!("Counter: ${count}")
+    
+    // Ternary operator
+    println!("5 is ${sign(5)}")
+    println!("-3 is ${sign(-3)}")
+    
+    // Pattern matching
+    for i in 0..5 {
+        println!("${i} is ${describe_number(i)}")
+    }
+    
+    // If-else
+    println!("abs(-42) = ${abs(-42)}")
+}
+

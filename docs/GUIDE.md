@@ -17,10 +17,11 @@ Welcome to Windjammer! This guide will take you from zero to hero, teaching you 
 9. [String Interpolation](#string-interpolation)
 10. [Pipe Operator](#pipe-operator)
 11. [Labeled Arguments](#labeled-arguments)
-12. [Concurrency](#concurrency)
-13. [Error Handling](#error-handling)
-14. [Decorators and Auto-Derive](#decorators-and-auto-derive)
-15. [Advanced Topics](#advanced-topics)
+12. [Character Literals](#character-literals)
+13. [Concurrency](#concurrency)
+14. [Error Handling](#error-handling)
+15. [Decorators and Auto-Derive](#decorators-and-auto-derive)
+16. [Advanced Topics](#advanced-topics)
 
 ---
 
@@ -652,6 +653,64 @@ match result {
 
 ---
 
+## Character Literals
+
+Windjammer supports character literals with single quotes:
+
+```windjammer
+let letter = 'a'
+let digit = '5'
+let symbol = '@'
+
+// Use in pattern matching
+fn describe_char(c: char) -> string {
+    match c {
+        'a' => "lowercase a",
+        'A' => "uppercase A",
+        '0' => "zero digit",
+        _ => "other character",
+    }
+}
+```
+
+### Escape Sequences
+
+Windjammer supports common escape sequences:
+
+```windjammer
+let newline = '\n'      // Newline
+let tab = '\t'          // Tab
+let carriage = '\r'     // Carriage return
+let backslash = '\\'    // Backslash
+let single_quote = '\''  // Single quote
+let null = '\0'         // Null character
+
+// Use in strings
+println!("Line 1\nLine 2\nLine 3")
+println!("Column1\tColumn2\tColumn3")
+```
+
+### Character Operations
+
+```windjammer
+fn is_vowel(c: char) -> bool {
+    match c {
+        'a' | 'e' | 'i' | 'o' | 'u' => true,
+        'A' | 'E' | 'I' | 'O' | 'U' => true,
+        _ => false,
+    }
+}
+
+fn main() {
+    let ch = 'a'
+    if is_vowel(ch) {
+        println!("${ch} is a vowel")
+    }
+}
+```
+
+---
+
 ## Decorators and Auto-Derive
 
 ### @auto Derive
@@ -728,6 +787,68 @@ fn compute_value(x: int) -> int {
 @auth_required
 async fn get_user(id: Path<int>) -> Result<Json<User>, StatusCode> {
     // ...
+}
+```
+
+### Field Decorators
+
+Decorators can also be applied to struct fields, which is particularly useful for CLI argument parsing, serialization, and validation:
+
+```windjammer
+// CLI argument parsing with clap
+@command(
+    name: "my-tool",
+    about: "A sample CLI tool",
+    version: "1.0"
+)
+struct Args {
+    @arg(help: "Input files to process")
+    files: Vec<string>,
+    
+    @arg(short: 'o', long: "output", help: "Output directory")
+    output_dir: Option<string>,
+    
+    @arg(short: 'v', long: "verbose", help: "Verbose output")
+    verbose: bool,
+    
+    @arg(long: "workers", default_value: "4", help: "Number of threads")
+    workers: int,
+}
+
+// Serialization with custom field names
+@auto(Serialize, Deserialize)
+struct User {
+    @serde(rename: "username")
+    name: string,
+    
+    @serde(skip_serializing_if: "Option::is_none")
+    email: Option<string>,
+}
+
+// Validation
+struct Config {
+    @validate(range: (min: 1, max: 65535))
+    port: int,
+    
+    @validate(url)
+    api_endpoint: string,
+}
+```
+
+**Common field decorators:**
+- `@arg(...)` - CLI argument configuration (clap)
+- `@serde(...)` - Serialization options (serde)
+- `@validate(...)` - Field validation
+- `@doc(...)` - Field documentation
+
+The generated Rust code converts these to appropriate Rust attributes:
+```rust
+struct Args {
+    #[arg(help = "Input files to process")]
+    files: Vec<String>,
+    
+    #[arg(short = 'o', long = "output", help = "Output directory")]
+    output_dir: Option<String>,
 }
 ```
 

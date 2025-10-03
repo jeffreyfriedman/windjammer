@@ -51,6 +51,7 @@ pub enum Token {
     FloatLiteral(f64),
     StringLiteral(String),
     InterpolatedString(Vec<StringPart>),  // For strings with ${expr}
+    CharLiteral(char),
     BoolLiteral(bool),
     
     // Identifiers
@@ -275,6 +276,45 @@ impl Lexer {
         }
     }
     
+    fn read_char(&mut self) -> Token {
+        self.advance(); // Skip opening quote
+        
+        let ch = if let Some(c) = self.current_char {
+            if c == '\\' {
+                // Handle escape sequences
+                self.advance();
+                if let Some(escaped) = self.current_char {
+                    let unescaped = match escaped {
+                        'n' => '\n',
+                        't' => '\t',
+                        'r' => '\r',
+                        '\\' => '\\',
+                        '\'' => '\'',
+                        '0' => '\0',
+                        _ => escaped,
+                    };
+                    self.advance();
+                    unescaped
+                } else {
+                    '\0'
+                }
+            } else {
+                let character = c;
+                self.advance();
+                character
+            }
+        } else {
+            '\0'
+        };
+        
+        // Skip closing quote
+        if self.current_char == Some('\'') {
+            self.advance();
+        }
+        
+        Token::CharLiteral(ch)
+    }
+    
     fn read_identifier(&mut self) -> Token {
         let mut ident = String::new();
         
@@ -345,6 +385,7 @@ impl Lexer {
                 return self.next_token();
             }
             Some('"') => self.read_string(),
+            Some('\'') => self.read_char(),
             Some(ch) if ch.is_ascii_digit() => self.read_number(),
             Some(ch) if ch.is_alphabetic() || ch == '_' => self.read_identifier(),
             Some('@') => {

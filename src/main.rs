@@ -1,7 +1,7 @@
-mod lexer;
-mod parser;
-mod analyzer;
-mod codegen;
+pub mod lexer;
+pub mod parser;
+pub mod analyzer;
+pub mod codegen;
 
 use clap::{Parser, Subcommand};
 use std::path::PathBuf;

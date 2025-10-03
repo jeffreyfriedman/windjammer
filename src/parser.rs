@@ -50,9 +50,16 @@ pub struct FunctionDecl {
 }
 
 #[derive(Debug, Clone)]
+pub struct StructField {
+    pub name: String,
+    pub field_type: Type,
+    pub decorators: Vec<Decorator>,
+}
+
+#[derive(Debug, Clone)]
 pub struct StructDecl {
     pub name: String,
-    pub fields: Vec<(String, Type)>,
+    pub fields: Vec<StructField>,
     pub decorators: Vec<Decorator>,
 }
 
@@ -219,6 +226,7 @@ pub enum Literal {
     Int(i64),
     Float(f64),
     String(String),
+    Char(char),
     Bool(bool),
 }
 
@@ -874,6 +882,13 @@ impl Parser {
         
         let mut fields = Vec::new();
         while self.current_token() != &Token::RBrace {
+            // Parse decorators on fields
+            let mut field_decorators = Vec::new();
+            while let Token::Decorator(_dec_name) = self.current_token() {
+                let decorator = self.parse_decorator()?;
+                field_decorators.push(decorator);
+            }
+            
             let field_name = if let Token::Ident(n) = self.current_token() {
                 let name = n.clone();
                 self.advance();
@@ -885,7 +900,11 @@ impl Parser {
             self.expect(Token::Colon)?;
             let field_type = self.parse_type()?;
             
-            fields.push((field_name, field_type));
+            fields.push(StructField {
+                name: field_name,
+                field_type,
+                decorators: field_decorators,
+            });
             
             if self.current_token() == &Token::Comma {
                 self.advance();
@@ -967,8 +986,20 @@ impl Parser {
             Token::Break => { self.advance(); Ok(Statement::Break) }
             Token::Continue => { self.advance(); Ok(Statement::Continue) }
             _ => {
+                // Try to parse as expression first
                 let expr = self.parse_expression()?;
-                Ok(Statement::Expression(expr))
+                
+                // Check if this is an assignment (expr = value)
+                if self.current_token() == &Token::Assign {
+                    self.advance(); // consume '='
+                    let value = self.parse_expression()?;
+                    Ok(Statement::Assignment {
+                        target: expr,
+                        value,
+                    })
+                } else {
+                    Ok(Statement::Expression(expr))
+                }
             }
         }
     }
@@ -1094,7 +1125,7 @@ impl Parser {
     fn parse_match(&mut self) -> Result<Statement, String> {
         self.expect(Token::Match)?;
         
-        let value = self.parse_expression()?;
+        let value = self.parse_match_value()?;
         
         self.expect(Token::LBrace)?;
         
@@ -1181,6 +1212,11 @@ impl Parser {
                 let s = s.clone();
                 self.advance();
                 Ok(Pattern::Literal(Literal::String(s)))
+            }
+            Token::CharLiteral(c) => {
+                let c = *c;
+                self.advance();
+                Ok(Pattern::Literal(Literal::Char(c)))
             }
             Token::Ident(name) => {
                 let name = name.clone();
@@ -1273,6 +1309,49 @@ impl Parser {
                 let expr = self.parse_expression()?;
                 self.expect(Token::RParen)?;
                 expr
+            }
+            Token::Ampersand => {
+                // Handle & and &mut unary operators
+                self.advance();
+                let _mutable = if self.current_token() == &Token::Mut {
+                    self.advance();
+                    true
+                } else {
+                    false
+                };
+                // TODO: Properly handle &mut as separate UnaryOp variant
+                let inner = self.parse_match_value()?;
+                Expression::Unary {
+                    op: UnaryOp::Ref,
+                    operand: Box::new(inner),
+                }
+            }
+            Token::Star => {
+                // Handle * dereference operator
+                self.advance();
+                let inner = self.parse_match_value()?;
+                Expression::Unary {
+                    op: UnaryOp::Deref,
+                    operand: Box::new(inner),
+                }
+            }
+            Token::Minus => {
+                // Handle - negation operator
+                self.advance();
+                let inner = self.parse_match_value()?;
+                Expression::Unary {
+                    op: UnaryOp::Neg,
+                    operand: Box::new(inner),
+                }
+            }
+            Token::Bang => {
+                // Handle ! not operator
+                self.advance();
+                let inner = self.parse_match_value()?;
+                Expression::Unary {
+                    op: UnaryOp::Not,
+                    operand: Box::new(inner),
+                }
             }
             Token::Ident(name) => {
                 let name = name.clone();
@@ -1438,6 +1517,11 @@ impl Parser {
                 let s = s.clone();
                 self.advance();
                 Expression::Literal(Literal::String(s))
+            }
+            Token::CharLiteral(c) => {
+                let c = *c;
+                self.advance();
+                Expression::Literal(Literal::Char(c))
             }
             Token::InterpolatedString(parts) => {
                 // Convert interpolated string to format! macro call
