@@ -8,15 +8,35 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
-- Ternary operator (`condition ? true_val : false_val`)
-- Smart `@auto` derive with zero-config trait inference
-- Dual MIT/Apache-2.0 licensing
-- Comprehensive test suite (8 integration tests)
-- CONTRIBUTING.md for contributors
+- Character literals with escape sequences (`'a'`, `'\n'`, `'\t'`, `'\''`, `'\\'`, `'\0'`)
+- Struct field decorators for CLI args, serialization, validation
+- Comprehensive test suite (57 tests total):
+  - 16 lexer tests (all token types)
+  - 9 compiler integration tests
+  - 32 feature test framework
+- 5 working example projects (385 lines total):
+  - 01_basics - Functions, loops, ternary, string interpolation
+  - 02_structs - Structs, impl blocks, methods
+  - 03_enums - Enums, pattern matching, OR patterns
+  - 04_traits - Trait definitions and implementations
+  - 05_modern - Pipe operator, labeled args, ranges, characters
+- Comprehensive documentation:
+  - SESSION_COMPLETE.md - Session summary
+  - COMPREHENSIVE_STATUS.md - Detailed status
+  - Updated GUIDE.md with character literals and field decorators
+
+### Fixed
+- **MAJOR**: Match expression parsing (confused `match x {}` with struct literals)
+  - Now supports `match x {}`, `match &x {}`, `match *x {}`, etc.
+  - Added unary operator support in match values
+  - Fixed match as return expression
+- Parser now correctly handles match expressions in all contexts
+- Match expressions work with references and dereferences
 
 ### Changed
-- Updated project description to reflect multi-language inspiration
-- Reorganized documentation into `docs/` folder
+- Updated `parse_match()` to use `parse_match_value()` instead of `parse_expression()`
+- Enhanced `parse_match_value()` with unary operator support (&, *, -, !)
+- Improved parser disambiguation for match vs struct literals
 
 ## [0.3.0] - 2025-10-03
 
