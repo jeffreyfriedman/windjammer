@@ -967,8 +967,20 @@ impl Parser {
             Token::Break => { self.advance(); Ok(Statement::Break) }
             Token::Continue => { self.advance(); Ok(Statement::Continue) }
             _ => {
+                // Try to parse as expression first
                 let expr = self.parse_expression()?;
-                Ok(Statement::Expression(expr))
+                
+                // Check if this is an assignment (expr = value)
+                if self.current_token() == &Token::Assign {
+                    self.advance(); // consume '='
+                    let value = self.parse_expression()?;
+                    Ok(Statement::Assignment {
+                        target: expr,
+                        value,
+                    })
+                } else {
+                    Ok(Statement::Expression(expr))
+                }
             }
         }
     }
