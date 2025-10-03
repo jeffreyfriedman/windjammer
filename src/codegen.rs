@@ -159,8 +159,19 @@ impl CodeGenerator {
         
         output.push_str(&format!("struct {} {{\n", s.name));
         
-        for (field_name, field_type) in &s.fields {
-            output.push_str(&format!("    {}: {},\n", field_name, self.type_to_rust(field_type)));
+        for field in &s.fields {
+            // Generate decorators for the field (convert to Rust attributes)
+            for decorator in &field.decorators {
+                output.push_str(&format!("    #[{}(", decorator.name));
+                let args: Vec<String> = decorator.arguments.iter()
+                    .map(|(key, expr)| {
+                        format!("{} = {}", key, self.generate_expression_immut(expr))
+                    })
+                    .collect();
+                output.push_str(&args.join(", "));
+                output.push_str(")]\n");
+            }
+            output.push_str(&format!("    {}: {},\n", field.name, self.type_to_rust(&field.field_type)));
         }
         
         output.push_str("}");
@@ -841,6 +852,18 @@ impl CodeGenerator {
             Literal::Int(n) => n.to_string(),
             Literal::Float(f) => f.to_string(),
             Literal::String(s) => format!("\"{}\"", s),
+            Literal::Char(c) => {
+                // Escape special characters
+                match c {
+                    '\n' => "'\\n'".to_string(),
+                    '\t' => "'\\t'".to_string(),
+                    '\r' => "'\\r'".to_string(),
+                    '\\' => "'\\\\'".to_string(),
+                    '\'' => "'\\''".to_string(),
+                    '\0' => "'\\0'".to_string(),
+                    _ => format!("'{}'", c),
+                }
+            }
             Literal::Bool(b) => b.to_string(),
         }
     }
@@ -917,20 +940,20 @@ impl CodeGenerator {
         traits
     }
     
-    fn all_fields_are_copy(&self, fields: &[(String, Type)]) -> bool {
-        fields.iter().all(|(_, ty)| self.is_copy_type(ty))
+    fn all_fields_are_copy(&self, fields: &[crate::parser::StructField]) -> bool {
+        fields.iter().all(|field| self.is_copy_type(&field.field_type))
     }
     
-    fn all_fields_are_comparable(&self, fields: &[(String, Type)]) -> bool {
-        fields.iter().all(|(_, ty)| self.is_comparable_type(ty))
+    fn all_fields_are_comparable(&self, fields: &[crate::parser::StructField]) -> bool {
+        fields.iter().all(|field| self.is_comparable_type(&field.field_type))
     }
     
-    fn all_fields_are_hashable(&self, fields: &[(String, Type)]) -> bool {
-        fields.iter().all(|(_, ty)| self.is_hashable_type(ty))
+    fn all_fields_are_hashable(&self, fields: &[crate::parser::StructField]) -> bool {
+        fields.iter().all(|field| self.is_hashable_type(&field.field_type))
     }
     
-    fn all_fields_have_default(&self, fields: &[(String, Type)]) -> bool {
-        fields.iter().all(|(_, ty)| self.has_default(ty))
+    fn all_fields_have_default(&self, fields: &[crate::parser::StructField]) -> bool {
+        fields.iter().all(|field| self.has_default(&field.field_type))
     }
     
     fn is_copy_type(&self, ty: &Type) -> bool {

@@ -216,7 +216,6 @@ fn test_smart_auto_derive() {
 }
 
 #[test]
-#[ignore] // Skip until we implement assignment statements
 fn test_ownership_inference_mut_borrowed() {
     let generated = compile_fixture("mut_borrowed").expect("Compilation failed");
     
