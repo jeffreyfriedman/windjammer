@@ -50,9 +50,16 @@ pub struct FunctionDecl {
 }
 
 #[derive(Debug, Clone)]
+pub struct StructField {
+    pub name: String,
+    pub field_type: Type,
+    pub decorators: Vec<Decorator>,
+}
+
+#[derive(Debug, Clone)]
 pub struct StructDecl {
     pub name: String,
-    pub fields: Vec<(String, Type)>,
+    pub fields: Vec<StructField>,
     pub decorators: Vec<Decorator>,
 }
 
@@ -875,6 +882,13 @@ impl Parser {
         
         let mut fields = Vec::new();
         while self.current_token() != &Token::RBrace {
+            // Parse decorators on fields
+            let mut field_decorators = Vec::new();
+            while let Token::Decorator(_dec_name) = self.current_token() {
+                let decorator = self.parse_decorator()?;
+                field_decorators.push(decorator);
+            }
+            
             let field_name = if let Token::Ident(n) = self.current_token() {
                 let name = n.clone();
                 self.advance();
@@ -886,7 +900,11 @@ impl Parser {
             self.expect(Token::Colon)?;
             let field_type = self.parse_type()?;
             
-            fields.push((field_name, field_type));
+            fields.push(StructField {
+                name: field_name,
+                field_type,
+                decorators: field_decorators,
+            });
             
             if self.current_token() == &Token::Comma {
                 self.advance();
