@@ -841,6 +841,18 @@ impl CodeGenerator {
             Literal::Int(n) => n.to_string(),
             Literal::Float(f) => f.to_string(),
             Literal::String(s) => format!("\"{}\"", s),
+            Literal::Char(c) => {
+                // Escape special characters
+                match c {
+                    '\n' => "'\\n'".to_string(),
+                    '\t' => "'\\t'".to_string(),
+                    '\r' => "'\\r'".to_string(),
+                    '\\' => "'\\\\'".to_string(),
+                    '\'' => "'\\''".to_string(),
+                    '\0' => "'\\0'".to_string(),
+                    _ => format!("'{}'", c),
+                }
+            }
             Literal::Bool(b) => b.to_string(),
         }
     }

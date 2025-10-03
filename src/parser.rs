@@ -219,6 +219,7 @@ pub enum Literal {
     Int(i64),
     Float(f64),
     String(String),
+    Char(char),
     Bool(bool),
 }
 
@@ -1194,6 +1195,11 @@ impl Parser {
                 self.advance();
                 Ok(Pattern::Literal(Literal::String(s)))
             }
+            Token::CharLiteral(c) => {
+                let c = *c;
+                self.advance();
+                Ok(Pattern::Literal(Literal::Char(c)))
+            }
             Token::Ident(name) => {
                 let name = name.clone();
                 self.advance();
@@ -1450,6 +1456,11 @@ impl Parser {
                 let s = s.clone();
                 self.advance();
                 Expression::Literal(Literal::String(s))
+            }
+            Token::CharLiteral(c) => {
+                let c = *c;
+                self.advance();
+                Expression::Literal(Literal::Char(c))
             }
             Token::InterpolatedString(parts) => {
                 // Convert interpolated string to format! macro call
