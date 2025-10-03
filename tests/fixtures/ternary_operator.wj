@@ -1,0 +1,22 @@
+// Test ternary operator
+fn main() {
+    let x = 5
+    
+    // Simple ternary
+    let status = x > 0 ? "positive" : "non-positive"
+    println!("Status: {}", status)
+    
+    // Nested ternary
+    let grade = x >= 90 ? "A" : x >= 80 ? "B" : "C"
+    println!("Grade: {}", grade)
+    
+    // Ternary with expressions
+    let y = 10
+    let max = x > y ? x : y
+    println!("Max: {}", max)
+    
+    // Ternary in assignment
+    let is_even = x % 2 == 0 ? true : false
+    println!("Is even: {}", is_even)
+}
+

@@ -1,0 +1,260 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <title>Conway's Game of Life - Windjammer</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            max-width: 900px;
+            margin: 40px auto;
+            padding: 0 20px;
+            background: #f5f5f5;
+        }
+        
+        h1 {
+            color: #333;
+            margin-bottom: 10px;
+        }
+        
+        .subtitle {
+            color: #666;
+            margin-bottom: 30px;
+        }
+        
+        .container {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        
+        #game-canvas {
+            border: 1px solid #ddd;
+            cursor: pointer;
+            display: block;
+            margin: 20px auto;
+        }
+        
+        .controls {
+            display: flex;
+            gap: 10px;
+            justify-content: center;
+            margin: 20px 0;
+            flex-wrap: wrap;
+        }
+        
+        button {
+            background: #007AFF;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 14px;
+            transition: background 0.2s;
+        }
+        
+        button:hover {
+            background: #0056b3;
+        }
+        
+        button:active {
+            transform: translateY(1px);
+        }
+        
+        .stats {
+            display: flex;
+            justify-content: space-around;
+            background: #f8f9fa;
+            padding: 15px;
+            border-radius: 6px;
+            margin-top: 20px;
+        }
+        
+        .stat {
+            text-align: center;
+        }
+        
+        .stat-value {
+            font-size: 24px;
+            font-weight: bold;
+            color: #007AFF;
+        }
+        
+        .stat-label {
+            font-size: 12px;
+            color: #666;
+            text-transform: uppercase;
+            margin-top: 5px;
+        }
+        
+        .instructions {
+            background: #e7f3ff;
+            padding: 15px;
+            border-radius: 6px;
+            margin-top: 20px;
+            font-size: 14px;
+        }
+        
+        .instructions h3 {
+            margin-top: 0;
+            color: #007AFF;
+        }
+        
+        .instructions ul {
+            margin: 10px 0;
+            padding-left: 20px;
+        }
+        
+        .instructions li {
+            margin: 5px 0;
+        }
+    </style>
+</head>
+<body>
+    <h1>Conway's Game of Life</h1>
+    <p class="subtitle">Built with Windjammer - Compiles to Rust, Runs as WebAssembly</p>
+    
+    <div class="container">
+        <canvas id="game-canvas"></canvas>
+        
+        <div class="controls">
+            <button id="play-pause">⏸ Pause</button>
+            <button id="step">⏭ Step</button>
+            <button id="random">🎲 Random</button>
+            <button id="clear">🗑 Clear</button>
+        </div>
+        
+        <div class="stats">
+            <div class="stat">
+                <div class="stat-value" id="generation">0</div>
+                <div class="stat-label">Generation</div>
+            </div>
+            <div class="stat">
+                <div class="stat-value" id="fps">60</div>
+                <div class="stat-label">FPS</div>
+            </div>
+            <div class="stat">
+                <div class="stat-value" id="alive">0</div>
+                <div class="stat-label">Alive Cells</div>
+            </div>
+        </div>
+        
+        <div class="instructions">
+            <h3>How to Play</h3>
+            <ul>
+                <li><strong>Click</strong> on cells to toggle them alive/dead</li>
+                <li><strong>Pause/Play</strong> to control the simulation</li>
+                <li><strong>Step</strong> advances one generation when paused</li>
+                <li><strong>Random</strong> creates a random pattern</li>
+                <li><strong>Clear</strong> resets the grid</li>
+            </ul>
+            <p><strong>Rules:</strong> Each cell with 2-3 neighbors survives. Dead cells with exactly 3 neighbors become alive. All other cells die.</p>
+        </div>
+    </div>
+    
+    <script type="module">
+        import init, { Universe, render, Stats } from './pkg/wasm_game.js';
+        
+        async function run() {
+            await init();
+            
+            const canvas = document.getElementById('game-canvas');
+            const ctx = canvas.getContext('2d');
+            
+            const CELL_SIZE = 10;
+            const universe = Universe.new();
+            const stats = Stats.new();
+            
+            canvas.width = universe.width() * CELL_SIZE;
+            canvas.height = universe.height() * CELL_SIZE;
+            
+            let animationId = null;
+            let isPlaying = true;
+            let lastFrameTime = performance.now();
+            
+            const playPauseBtn = document.getElementById('play-pause');
+            const stepBtn = document.getElementById('step');
+            const randomBtn = document.getElementById('random');
+            const clearBtn = document.getElementById('clear');
+            
+            function renderLoop() {
+                const now = performance.now();
+                const deltaTime = now - lastFrameTime;
+                lastFrameTime = now;
+                
+                universe.tick();
+                stats.update(universe, deltaTime);
+                
+                render(universe, ctx, CELL_SIZE);
+                updateStats();
+                
+                if (isPlaying) {
+                    animationId = requestAnimationFrame(renderLoop);
+                }
+            }
+            
+            function updateStats() {
+                document.getElementById('generation').textContent = stats.generation();
+                document.getElementById('fps').textContent = Math.round(stats.fps());
+                document.getElementById('alive').textContent = stats.alive_cells();
+            }
+            
+            playPauseBtn.addEventListener('click', () => {
+                if (isPlaying) {
+                    isPlaying = false;
+                    playPauseBtn.textContent = '▶ Play';
+                    cancelAnimationFrame(animationId);
+                } else {
+                    isPlaying = true;
+                    playPauseBtn.textContent = '⏸ Pause';
+                    lastFrameTime = performance.now();
+                    renderLoop();
+                }
+            });
+            
+            stepBtn.addEventListener('click', () => {
+                if (!isPlaying) {
+                    const now = performance.now();
+                    stats.update(universe, now - lastFrameTime);
+                    lastFrameTime = now;
+                    universe.tick();
+                    render(universe, ctx, CELL_SIZE);
+                    updateStats();
+                }
+            });
+            
+            randomBtn.addEventListener('click', () => {
+                universe.randomize();
+                render(universe, ctx, CELL_SIZE);
+            });
+            
+            clearBtn.addEventListener('click', () => {
+                universe.reset();
+                render(universe, ctx, CELL_SIZE);
+            });
+            
+            canvas.addEventListener('click', (event) => {
+                const rect = canvas.getBoundingClientRect();
+                const x = event.clientX - rect.left;
+                const y = event.clientY - rect.top;
+                
+                const col = Math.floor(x / CELL_SIZE);
+                const row = Math.floor(y / CELL_SIZE);
+                
+                universe.toggle_cell(row, col);
+                render(universe, ctx, CELL_SIZE);
+            });
+            
+            // Initial render
+            render(universe, ctx, CELL_SIZE);
+            updateStats();
+            renderLoop();
+        }
+        
+        run();
+    </script>
+</body>
+</html>
+

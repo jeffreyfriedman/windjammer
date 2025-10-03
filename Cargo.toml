@@ -1,0 +1,26 @@
+[package]
+name = "windjammer"
+version = "0.1.0"
+edition = "2021"
+authors = ["Windjammer Contributors"]
+license = "MIT OR Apache-2.0"
+description = "A simple language inspired by Go, Ruby, and Elixir that transpiles to Rust - 80% of Rust's power with 20% of the complexity"
+repository = "https://github.com/yourusername/windjammer"
+homepage = "https://github.com/yourusername/windjammer"
+keywords = ["compiler", "transpiler", "rust", "go", "language"]
+categories = ["development-tools", "compilers"]
+readme = "README.md"
+
+[dependencies]
+# Parser combinator library
+nom = "7.1"
+# CLI argument parsing
+clap = { version = "4.5", features = ["derive"] }
+# Error handling
+anyhow = "1.0"
+thiserror = "1.0"
+# Code generation
+indoc = "2.0"
+# Pretty printing
+colored = "2.1"
+

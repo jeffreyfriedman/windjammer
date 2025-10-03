@@ -1,0 +1,125 @@
+{
+    "$schema": "https://raw.githubusercontent.com/martinring/tmlanguage/master/tmlanguage.json",
+    "name": "Windjammer",
+    "patterns": [
+        { "include": "#comments" },
+        { "include": "#decorators" },
+        { "include": "#keywords" },
+        { "include": "#types" },
+        { "include": "#functions" },
+        { "include": "#strings" },
+        { "include": "#numbers" },
+        { "include": "#operators" }
+    ],
+    "repository": {
+        "comments": {
+            "patterns": [
+                {
+                    "name": "comment.line.double-slash.windjammer",
+                    "match": "//.*$"
+                },
+                {
+                    "name": "comment.block.windjammer",
+                    "begin": "/\\*",
+                    "end": "\\*/"
+                }
+            ]
+        },
+        "decorators": {
+            "patterns": [
+                {
+                    "name": "meta.decorator.windjammer",
+                    "match": "@\\w+",
+                    "captures": {
+                        "0": { "name": "entity.name.function.decorator.windjammer" }
+                    }
+                }
+            ]
+        },
+        "keywords": {
+            "patterns": [
+                {
+                    "name": "keyword.control.windjammer",
+                    "match": "\\b(if|else|match|for|while|loop|break|continue|return|go|defer)\\b"
+                },
+                {
+                    "name": "keyword.other.windjammer",
+                    "match": "\\b(fn|let|mut|struct|enum|impl|use|async|await)\\b"
+                },
+                {
+                    "name": "constant.language.windjammer",
+                    "match": "\\b(true|false)\\b"
+                }
+            ]
+        },
+        "types": {
+            "patterns": [
+                {
+                    "name": "storage.type.windjammer",
+                    "match": "\\b(int|int32|uint|float|bool|string|Option|Result|Vec)\\b"
+                }
+            ]
+        },
+        "functions": {
+            "patterns": [
+                {
+                    "name": "meta.function.windjammer",
+                    "match": "\\b(fn)\\s+([a-zA-Z_][a-zA-Z0-9_]*)",
+                    "captures": {
+                        "1": { "name": "keyword.other.windjammer" },
+                        "2": { "name": "entity.name.function.windjammer" }
+                    }
+                },
+                {
+                    "name": "entity.name.function.call.windjammer",
+                    "match": "\\b([a-zA-Z_][a-zA-Z0-9_]*)\\s*\\("
+                }
+            ]
+        },
+        "strings": {
+            "patterns": [
+                {
+                    "name": "string.quoted.double.windjammer",
+                    "begin": "\"",
+                    "end": "\"",
+                    "patterns": [
+                        {
+                            "name": "constant.character.escape.windjammer",
+                            "match": "\\\\."
+                        }
+                    ]
+                }
+            ]
+        },
+        "numbers": {
+            "patterns": [
+                {
+                    "name": "constant.numeric.windjammer",
+                    "match": "\\b\\d+(\\.\\d+)?\\b"
+                }
+            ]
+        },
+        "operators": {
+            "patterns": [
+                {
+                    "name": "keyword.operator.windjammer",
+                    "match": "(\\+|-|\\*|/|%|==|!=|<|>|<=|>=|&&|\\|\\||!|&|\\|)"
+                },
+                {
+                    "name": "keyword.operator.assignment.windjammer",
+                    "match": "="
+                },
+                {
+                    "name": "keyword.operator.arrow.windjammer",
+                    "match": "(->|=>)"
+                },
+                {
+                    "name": "keyword.operator.question.windjammer",
+                    "match": "\\?"
+                }
+            ]
+        }
+    },
+    "scopeName": "source.windjammer"
+}
+

@@ -1,0 +1,105 @@
+{
+  "name": "windjammer",
+  "displayName": "Windjammer",
+  "description": "Language support for Windjammer - Go-like syntax that transpiles to Rust",
+  "version": "0.1.0",
+  "publisher": "windjammer-lang",
+  "engines": {
+    "vscode": "^1.75.0"
+  },
+  "categories": [
+    "Programming Languages"
+  ],
+  "keywords": [
+    "windjammer",
+    "rust",
+    "go",
+    "systems programming"
+  ],
+  "main": "./out/extension.js",
+  "contributes": {
+    "languages": [
+      {
+        "id": "windjammer",
+        "aliases": [
+          "Windjammer",
+          "wj"
+        ],
+        "extensions": [
+          ".wj"
+        ],
+        "configuration": "./language-configuration.json",
+        "icon": {
+          "light": "./icons/windjammer-light.png",
+          "dark": "./icons/windjammer-dark.png"
+        }
+      }
+    ],
+    "grammars": [
+      {
+        "language": "windjammer",
+        "scopeName": "source.windjammer",
+        "path": "./syntaxes/windjammer.tmLanguage.json"
+      }
+    ],
+    "configuration": {
+      "type": "object",
+      "title": "Windjammer",
+      "properties": {
+        "windjammer.server.path": {
+          "type": "string",
+          "default": "windjammer-lsp",
+          "description": "Path to the Windjammer language server executable"
+        },
+        "windjammer.trace.server": {
+          "type": "string",
+          "enum": [
+            "off",
+            "messages",
+            "verbose"
+          ],
+          "default": "off",
+          "description": "Traces the communication between VS Code and the language server"
+        },
+        "windjammer.inlayHints.enable": {
+          "type": "boolean",
+          "default": true,
+          "description": "Enable inlay hints showing inferred types and ownership"
+        }
+      }
+    },
+    "commands": [
+      {
+        "command": "windjammer.restartServer",
+        "title": "Restart Language Server",
+        "category": "Windjammer"
+      },
+      {
+        "command": "windjammer.showGeneratedRust",
+        "title": "Show Generated Rust Code",
+        "category": "Windjammer"
+      }
+    ]
+  },
+  "activationEvents": [
+    "onLanguage:windjammer"
+  ],
+  "dependencies": {
+    "vscode-languageclient": "^9.0.1"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "@types/vscode": "^1.75.0",
+    "@typescript-eslint/eslint-plugin": "^6.0.0",
+    "@typescript-eslint/parser": "^6.0.0",
+    "eslint": "^8.0.0",
+    "typescript": "^5.0.0"
+  },
+  "scripts": {
+    "vscode:prepublish": "npm run compile",
+    "compile": "tsc -p ./",
+    "watch": "tsc -watch -p ./",
+    "lint": "eslint src --ext ts"
+  }
+}
+

@@ -1,0 +1,118 @@
+// HTTP Server Example - RESTful API with decorators
+use axum.Router
+use axum.Json
+use axum.extract.Path
+use serde.Serialize
+use serde.Deserialize
+use tokio
+
+struct User {
+    id: int,
+    name: string,
+    email: string,
+}
+
+struct CreateUserRequest {
+    name: string,
+    email: string,
+}
+
+// In-memory user store (in real app, use database)
+static mut USERS: Vec<User> = Vec.new()
+static mut NEXT_ID: int = 1
+
+@get("/")
+async fn index() -> string {
+    "Welcome to Windjammer API!"
+}
+
+@get("/users")
+async fn list_users() -> Json<Vec<User>> {
+    let users = unsafe { USERS.clone() }
+    Json(users)
+}
+
+@get("/users/:id")
+async fn get_user(id: Path<int>) -> Result<Json<User>, StatusCode> {
+    let users = unsafe { &USERS }
+    
+    match users.iter().find(|u| u.id == *id) {
+        Some(user) => Ok(Json(user.clone())),
+        None => Err(StatusCode.NOT_FOUND),
+    }
+}
+
+@post("/users")
+@timing
+async fn create_user(req: Json<CreateUserRequest>) -> Result<Json<User>, StatusCode> {
+    unsafe {
+        let user = User {
+            id: NEXT_ID,
+            name: req.name.clone(),
+            email: req.email.clone(),
+        }
+        
+        NEXT_ID += 1
+        USERS.push(user.clone())
+        
+        Ok(Json(user))
+    }
+}
+
+@delete("/users/:id")
+async fn delete_user(id: Path<int>) -> Result<StatusCode, StatusCode> {
+    unsafe {
+        let original_len = USERS.len()
+        USERS.retain(|u| u.id != *id)
+        
+        if USERS.len() < original_len {
+            Ok(StatusCode.NO_CONTENT)
+        } else {
+            Err(StatusCode.NOT_FOUND)
+        }
+    }
+}
+
+// Middleware decorator
+@middleware
+async fn auth_middleware(req: Request, next: Next) -> Response {
+    // Simple API key check
+    match req.headers().get("X-API-Key") {
+        Some(key) if key == "secret-key" => next.run(req).await,
+        _ => Response.builder()
+            .status(401)
+            .body("Unauthorized")
+            .unwrap(),
+    }
+}
+
+@tokio.main
+async fn main() {
+    // Initialize with some sample data
+    unsafe {
+        USERS.push(User {
+            id: 1,
+            name: "Alice",
+            email: "alice@example.com",
+        })
+        USERS.push(User {
+            id: 2,
+            name: "Bob",
+            email: "bob@example.com",
+        })
+        NEXT_ID = 3
+    }
+    
+    let app = Router.new()
+        .route("/", get(index))
+        .route("/users", get(list_users).post(create_user))
+        .route("/users/:id", get(get_user).delete(delete_user))
+        .layer(auth_middleware)
+    
+    let listener = tokio.net.TcpListener.bind("127.0.0.1:3000").await.unwrap()
+    
+    println("Server running on http://127.0.0.1:3000")
+    
+    axum.serve(listener, app).await.unwrap()
+}
+

@@ -1,0 +1,205 @@
+// WebAssembly Game Example - Conway's Game of Life
+use wasm_bindgen.prelude
+use web_sys
+use js_sys
+
+const WIDTH: int = 64
+const HEIGHT: int = 64
+
+@wasm_bindgen
+struct Universe {
+    width: int,
+    height: int,
+    cells: Vec<bool>,
+}
+
+@wasm_bindgen
+impl Universe {
+    fn new() -> Universe {
+        let width = WIDTH
+        let height = HEIGHT
+        
+        let cells = (0..width * height)
+            .map(|i| i % 2 == 0 || i % 7 == 0)
+            .collect()
+        
+        Universe {
+            width,
+            height,
+            cells,
+        }
+    }
+    
+    fn width(&self) -> int {
+        self.width
+    }
+    
+    fn height(&self) -> int {
+        self.height
+    }
+    
+    fn cells(&self) -> &[bool] {
+        &self.cells
+    }
+    
+    @timing
+    fn tick(&mut self) {
+        let mut next = self.cells.clone()
+        
+        for row in 0..self.height {
+            for col in 0..self.width {
+                let idx = self.get_index(row, col)
+                let cell = self.cells[idx]
+                let live_neighbors = self.live_neighbor_count(row, col)
+                
+                let next_cell = match (cell, live_neighbors) {
+                    // Rule 1: Any live cell with fewer than 2 live neighbors dies
+                    (true, x) if x < 2 => false,
+                    // Rule 2: Any live cell with 2 or 3 live neighbors lives
+                    (true, 2) | (true, 3) => true,
+                    // Rule 3: Any live cell with more than 3 live neighbors dies
+                    (true, x) if x > 3 => false,
+                    // Rule 4: Any dead cell with exactly 3 live neighbors becomes alive
+                    (false, 3) => true,
+                    // All other cells remain in the same state
+                    (otherwise, _) => otherwise,
+                }
+                
+                next[idx] = next_cell
+            }
+        }
+        
+        self.cells = next
+    }
+    
+    fn toggle_cell(&mut self, row: int, col: int) {
+        let idx = self.get_index(row, col)
+        self.cells[idx] = !self.cells[idx]
+    }
+    
+    fn reset(&mut self) {
+        self.cells = (0..self.width * self.height)
+            .map(|_| false)
+            .collect()
+    }
+    
+    fn randomize(&mut self) {
+        self.cells = (0..self.width * self.height)
+            .map(|_| js_sys.Math.random() > 0.5)
+            .collect()
+    }
+}
+
+impl Universe {
+    fn get_index(&self, row: int, col: int) -> usize {
+        (row * self.width + col) as usize
+    }
+    
+    fn live_neighbor_count(&self, row: int, col: int) -> int {
+        let mut count = 0
+        
+        for delta_row in -1..=1 {
+            for delta_col in -1..=1 {
+                if delta_row == 0 && delta_col == 0 {
+                    continue
+                }
+                
+                let neighbor_row = (row + delta_row + self.height) % self.height
+                let neighbor_col = (col + delta_col + self.width) % self.width
+                let idx = self.get_index(neighbor_row, neighbor_col)
+                
+                if self.cells[idx] {
+                    count += 1
+                }
+            }
+        }
+        
+        count
+    }
+}
+
+// Render function for canvas
+@wasm_bindgen
+fn render(universe: &Universe, ctx: &web_sys.CanvasRenderingContext2d, cell_size: int) {
+    let alive_color = "black"
+    let dead_color = "white"
+    
+    ctx.begin_path()
+    
+    for row in 0..universe.height {
+        for col in 0..universe.width {
+            let idx = universe.get_index(row, col)
+            
+            ctx.set_fill_style(if universe.cells[idx] {
+                &alive_color.into()
+            } else {
+                &dead_color.into()
+            })
+            
+            ctx.fill_rect(
+                (col * cell_size) as f64,
+                (row * cell_size) as f64,
+                cell_size as f64,
+                cell_size as f64,
+            )
+        }
+    }
+    
+    // Draw grid lines
+    ctx.set_stroke_style(&"#CCCCCC".into())
+    ctx.begin_path()
+    
+    // Vertical lines
+    for i in 0..=universe.width {
+        let x = (i * cell_size) as f64
+        ctx.move_to(x, 0.0)
+        ctx.line_to(x, (universe.height * cell_size) as f64)
+    }
+    
+    // Horizontal lines
+    for i in 0..=universe.height {
+        let y = (i * cell_size) as f64
+        ctx.move_to(0.0, y)
+        ctx.line_to((universe.width * cell_size) as f64, y)
+    }
+    
+    ctx.stroke()
+}
+
+// Performance statistics
+@wasm_bindgen
+struct Stats {
+    generation: int,
+    fps: f64,
+    alive_cells: int,
+}
+
+@wasm_bindgen
+impl Stats {
+    fn new() -> Stats {
+        Stats {
+            generation: 0,
+            fps: 0.0,
+            alive_cells: 0,
+        }
+    }
+    
+    fn update(&mut self, universe: &Universe, delta_time: f64) {
+        self.generation += 1
+        self.fps = 1000.0 / delta_time
+        self.alive_cells = universe.cells.iter().filter(|&c| *c).count() as int
+    }
+    
+    fn generation(&self) -> int {
+        self.generation
+    }
+    
+    fn fps(&self) -> f64 {
+        self.fps
+    }
+    
+    fn alive_cells(&self) -> int {
+        self.alive_cells
+    }
+}
+
