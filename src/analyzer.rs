@@ -44,7 +44,8 @@ impl SignatureRegistry {
 }
 
 pub struct Analyzer {
-    // Track variable ownership modes
+    // Track variable ownership modes (reserved for future use)
+    #[allow(dead_code)]
     variables: HashMap<String, OwnershipMode>,
 }
 
@@ -292,7 +293,7 @@ mod tests {
         let body = vec![
             Statement::Expression(Expression::Call {
                 function: Box::new(Expression::Identifier("println".to_string())),
-                arguments: vec![Expression::Identifier("s".to_string())],
+                arguments: vec![(None, Expression::Identifier("s".to_string()))],
             })
         ];
         

@@ -11,6 +11,10 @@ keywords = ["compiler", "transpiler", "rust", "go", "language"]
 categories = ["development-tools", "compilers"]
 readme = "README.md"
 
+[lib]
+name = "windjammer"
+path = "src/main.rs"
+
 [dependencies]
 # Parser combinator library
 nom = "7.1"

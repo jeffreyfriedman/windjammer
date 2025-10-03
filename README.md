@@ -41,9 +41,10 @@ Zero-cost abstractions, memory safety, and blazing speed.
 - **Method syntax**: `impl` blocks with `&self` and `&mut self`
 - **String interpolation**: `"Hello, ${name}!"` ✨
 - **Pipe operator**: `value |> func1 |> func2` ✨
+- **Ternary operator**: `condition ? true_val : false_val` ✨
 - **Labeled arguments**: `create_user(name: "Alice", age: 30)` ✨
 - **Pattern matching in function parameters**: `fn process((x, y): (int, int))` ✨
-- **@auto derive**: Automatic trait derivation for structs ✨
+- **Smart @auto derive**: Zero-config trait inference (`@auto`) ✨
 - **Trait system**: Full trait definitions and implementations ✨
 
 ## Ownership Inference Strategy
@@ -58,20 +59,25 @@ The key innovation is **automatic ownership inference** with these rules:
 - **Function returns**: Owned by default
 
 ### 2. Mutation Detection
-```go
+```windjammer
 // Immutable borrow inferred
 fn print_length(s: string) {
-    println("{}", s.len())
+    println!("{}", s.len())
 }
 
-// Mutable borrow inferred from mutation
+// Mutable borrow inferred from assignment
+fn increment(x: int) {
+    x = x + 1  // Assignment detected → infers &mut
+}
+
+// Mutable borrow inferred from method call
 fn append_text(s: string) {
-    s.push_str("!")  // Transpiler sees mutation, uses &mut
+    s.push_str("!")  // Mutation detected → infers &mut
 }
 
 // Ownership transfer inferred from return
 fn take_ownership(s: string) -> string {
-    s  // Returned, so parameter must be owned
+    s  // Returned → infers owned parameter
 }
 ```
 
