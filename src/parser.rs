@@ -1125,7 +1125,7 @@ impl Parser {
     fn parse_match(&mut self) -> Result<Statement, String> {
         self.expect(Token::Match)?;
         
-        let value = self.parse_expression()?;
+        let value = self.parse_match_value()?;
         
         self.expect(Token::LBrace)?;
         
@@ -1309,6 +1309,49 @@ impl Parser {
                 let expr = self.parse_expression()?;
                 self.expect(Token::RParen)?;
                 expr
+            }
+            Token::Ampersand => {
+                // Handle & and &mut unary operators
+                self.advance();
+                let _mutable = if self.current_token() == &Token::Mut {
+                    self.advance();
+                    true
+                } else {
+                    false
+                };
+                // TODO: Properly handle &mut as separate UnaryOp variant
+                let inner = self.parse_match_value()?;
+                Expression::Unary {
+                    op: UnaryOp::Ref,
+                    operand: Box::new(inner),
+                }
+            }
+            Token::Star => {
+                // Handle * dereference operator
+                self.advance();
+                let inner = self.parse_match_value()?;
+                Expression::Unary {
+                    op: UnaryOp::Deref,
+                    operand: Box::new(inner),
+                }
+            }
+            Token::Minus => {
+                // Handle - negation operator
+                self.advance();
+                let inner = self.parse_match_value()?;
+                Expression::Unary {
+                    op: UnaryOp::Neg,
+                    operand: Box::new(inner),
+                }
+            }
+            Token::Bang => {
+                // Handle ! not operator
+                self.advance();
+                let inner = self.parse_match_value()?;
+                Expression::Unary {
+                    op: UnaryOp::Not,
+                    operand: Box::new(inner),
+                }
             }
             Token::Ident(name) => {
                 let name = name.clone();
