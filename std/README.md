@@ -2,124 +2,192 @@
 
 ## Philosophy
 
-**"Batteries Included"** - The Windjammer standard library aims to cover 80% of developer use cases without external dependencies.
+The Windjammer standard library provides a "batteries included" experience by wrapping best-in-class Rust crates with clean, idiomatic Windjammer APIs.
 
 ### Design Principles
 
-1. **Wrap Best-in-Class Rust Crates** - No need to reinvent the wheel
-2. **Consistent API** - Uniform patterns across all modules
-3. **Auto-included** - No manual Cargo.toml editing needed
-4. **Windjammer Ergonomics** - Leverage string interpolation, pipe operator, etc.
-5. **Zero Overhead** - Thin wrappers that compile away
-
-### Usage
-
-```windjammer
-use std.fs
-use std.http
-use std.json
-
-fn main() {
-    // File operations
-    let content = fs.read_to_string("data.txt")?
-    
-    // HTTP requests
-    let response = http.get("https://api.example.com/users")?
-    
-    // JSON parsing
-    let users = json.parse(response.body)?
-    
-    println!("Loaded ${users.len()} users")
-}
-```
-
-## Modules
-
-### Core I/O
-- **`std.fs`** - File system operations (wraps `std::fs`)
-- **`std.path`** - Path manipulation (wraps `std::path`)
-- **`std.io`** - Input/output traits and utilities (wraps `std::io`)
-
-### Networking
-- **`std.http`** - HTTP client (wraps `reqwest`)
-- **`std.net`** - TCP/UDP networking (wraps `std::net`)
-
-### Data Formats
-- **`std.json`** - JSON serialization (wraps `serde_json`)
-- **`std.toml`** - TOML parsing (wraps `toml`)
-- **`std.yaml`** - YAML parsing (wraps `serde_yaml`)
-
-### Collections
-- **`std.collections`** - HashMap, HashSet, etc. (wraps `std::collections`)
-
-### Utilities
-- **`std.fmt`** - Formatting and string manipulation
-- **`std.testing`** - Test framework and assertions
-- **`std.time`** - Time and duration (wraps `std::time`)
-- **`std.os`** - OS-specific functionality (wraps `std::env`, `std::process`)
-
-### Concurrency
-- **`std.sync`** - Synchronization primitives (wraps `std::sync`)
-- **`std.channels`** - Message passing (wraps `std::sync::mpsc`)
-
-### Crypto & Encoding
-- **`std.crypto`** - Cryptographic functions (wraps `sha2`, `blake3`)
-- **`std.encoding`** - Base64, hex, etc. (wraps `base64`, `hex`)
-
-### Development Tools
-- **`std.cli`** - CLI argument parsing (wraps `clap`)
-- **`std.log`** - Logging (wraps `tracing`)
-- **`std.regex`** - Regular expressions (wraps `regex`)
-
-## Implementation Strategy
-
-### Phase 1: Core Essentials (Current)
-- ✅ Directory structure
-- 🔄 `std.testing` - Basic test framework
-- 🔄 `std.fs` - File operations
-- 🔄 `std.json` - JSON handling
-
-### Phase 2: Network & Data
-- `std.http` - HTTP client
-- `std.collections` - Advanced data structures
-
-### Phase 3: Complete Coverage
-- All remaining modules
-- Full documentation
-- Comprehensive examples
-
-## Auto-inclusion Mechanism
-
-The Windjammer compiler automatically:
-1. Detects `use std.*` imports
-2. Adds corresponding Rust crate dependencies to `Cargo.toml`
-3. Generates appropriate `use` statements in Rust output
-
-Example:
-```windjammer
-use std.http
-use std.json
-```
-
-Automatically generates in `Cargo.toml`:
-```toml
-[dependencies]
-reqwest = { version = "0.11", features = ["blocking", "json"] }
-serde = { version = "1.0", features = ["derive"] }
-serde_json = "1.0"
-```
-
-## Benefits
-
-✅ **No Dependency Hell** - Curated, compatible versions  
-✅ **Instant Productivity** - Common tasks work out of the box  
-✅ **Consistent Experience** - Uniform APIs across domains  
-✅ **Best Practices** - Leverages proven Rust ecosystem  
-✅ **Zero Overhead** - Thin wrappers, zero runtime cost  
+1. **Abstraction over Implementation**: Users import `std.json`, not `serde_json`
+2. **Best-in-Class Wrapping**: We use the best Rust crates, not reinvent the wheel
+3. **100% Rust Compatibility**: Can still use Rust crates directly when needed
+4. **Consistent APIs**: All modules follow similar patterns
+5. **Zero Configuration**: Auto-included in projects
 
 ---
 
-*Status: In Development*  
-*Version: 0.1.0*  
-*Last Updated: October 2, 2025*
+## Structure
 
+```
+std/
+  ├── json.wj       - JSON parsing (wraps serde_json)
+  ├── http.wj       - HTTP client/server (wraps reqwest/hyper)
+  ├── fs.wj         - File system (wraps std::fs/tokio::fs)
+  ├── path.wj       - Path manipulation
+  ├── io.wj         - I/O operations
+  ├── time.wj       - Date/time (wraps chrono)
+  ├── crypto.wj     - Cryptography (wraps ring)
+  ├── encoding.wj   - Base64, hex, etc.
+  ├── net.wj        - Networking
+  ├── sync.wj       - Concurrency primitives
+  ├── testing.wj    - Test framework
+  ├── fmt.wj        - Formatting
+  ├── strings.wj    - String utilities
+  ├── math.wj       - Math functions
+  ├── collections.wj - Data structures
+  ├── regex.wj      - Regular expressions
+  ├── cli.wj        - Command-line parsing (wraps clap)
+  └── log.wj        - Logging (wraps tracing)
+```
+
+---
+
+## Usage
+
+### Explicit Import (Recommended)
+```windjammer
+use std.json
+
+fn main() {
+    let data = json.parse("{\"name\": \"Alice\"}")
+    println!("{:?}", data)
+}
+```
+
+### Future: Auto-Import (v0.5.0+)
+```windjammer
+// No import needed for common stdlib modules
+fn main() {
+    let data = json.parse("{\"name\": \"Alice\"}")
+}
+```
+
+---
+
+## Implementation
+
+Each `std/*.wj` module:
+1. Is a thin wrapper around a Rust crate
+2. Provides a clean, Windjammer-idiomatic API
+3. Re-exports types for advanced use
+4. Handles common cases simply
+
+### Example: std/json.wj
+
+```windjammer
+// User-facing API
+fn parse(json_str: string) -> Result<Value, Error> {
+    serde_json::from_str(json_str)  // Wraps Rust crate
+}
+
+fn stringify(value: &Value) -> Result<string, Error> {
+    serde_json::to_string(value)
+}
+
+// Re-export for advanced users
+type Value = serde_json::Value
+type Error = serde_json::Error
+```
+
+**Transpiles to pure Rust**:
+```rust
+pub fn parse(json_str: String) -> Result<serde_json::Value, serde_json::Error> {
+    serde_json::from_str(&json_str)
+}
+
+pub fn stringify(value: &serde_json::Value) -> Result<String, serde_json::Error> {
+    serde_json::to_string(value)
+}
+```
+
+---
+
+## Dependency Management
+
+### Auto-Inject Dependencies
+
+When a user imports a stdlib module, the compiler automatically:
+1. Detects which crates are needed
+2. Adds them to `Cargo.toml` (if building new project)
+3. Generates appropriate `use` statements
+
+Example:
+```windjammer
+use std.json  // Compiler adds serde_json to dependencies
+use std.http  // Compiler adds reqwest to dependencies
+```
+
+### Manual Override
+
+Users can still add dependencies manually if they want specific versions:
+```toml
+[dependencies]
+serde_json = "1.0.100"  # Override version
+reqwest = { version = "0.11", features = ["json"] }
+```
+
+---
+
+## Current Status (v0.4.0)
+
+### ✅ Implemented
+- `json.wj` - JSON parsing and serialization
+
+### 🚧 In Progress
+- `http.wj` - HTTP client
+- `fs.wj` - File system operations
+
+### 📋 Planned
+- All other modules (v0.5.0+)
+
+---
+
+## Testing
+
+Each stdlib module includes:
+1. Unit tests in Windjammer
+2. Integration tests with real usage
+3. Doc examples (Rust-style doctests)
+
+Example:
+```windjammer
+// std/json.wj
+@test
+fn test_parse() {
+    let result = parse("{\"name\": \"Alice\"}")
+    assert!(result.is_ok())
+}
+```
+
+---
+
+## Future Enhancements
+
+### v0.5.0: HTTP and FS Modules
+- Complete `http.wj` with client and server support
+- Complete `fs.wj` with async file operations
+
+### v0.6.0: More Modules
+- `time.wj`, `crypto.wj`, `regex.wj`
+- Auto-import for common modules
+
+### v1.0.0: Complete Standard Library
+- All planned modules implemented
+- Comprehensive documentation
+- Performance benchmarks
+
+---
+
+## Contributing
+
+When adding a new stdlib module:
+
+1. Choose the best-in-class Rust crate to wrap
+2. Create `std/your_module.wj`
+3. Provide simple, idiomatic API
+4. Re-export types for advanced use
+5. Add tests
+6. Update this README
+
+---
+
+**Version**: v0.4.0  
+**Status**: Foundation laid, initial modules in progress

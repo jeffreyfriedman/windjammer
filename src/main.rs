@@ -3,9 +3,21 @@ pub mod parser;
 pub mod analyzer;
 pub mod codegen;
 
-use clap::{Parser, Subcommand};
+use clap::{Parser, Subcommand, ValueEnum};
 use std::path::PathBuf;
 use anyhow::Result;
+
+#[derive(Debug, Clone, Copy, ValueEnum)]
+pub enum CompilationTarget {
+    /// WebAssembly (default)
+    Wasm,
+    /// Node.js native modules (future)
+    Node,
+    /// Python FFI via PyO3 (future)
+    Python,
+    /// C FFI (future)
+    C,
+}
 
 #[derive(Parser)]
 #[command(name = "windjammer")]
@@ -26,6 +38,10 @@ enum Commands {
         /// Output directory for generated Rust files
         #[arg(short, long, default_value = "output")]
         output: PathBuf,
+        
+        /// Compilation target (wasm, node, python, c)
+        #[arg(short, long, default_value = "wasm")]
+        target: CompilationTarget,
     },
     
     /// Check .wj files for errors without generating code
@@ -40,8 +56,8 @@ fn main() -> Result<()> {
     let cli = Cli::parse();
     
     match cli.command {
-        Commands::Build { path, output } => {
-            build_project(&path, &output)?;
+        Commands::Build { path, output, target } => {
+            build_project(&path, &output, target)?;
         }
         Commands::Check { path } => {
             check_project(&path)?;
@@ -51,10 +67,11 @@ fn main() -> Result<()> {
     Ok(())
 }
 
-fn build_project(path: &PathBuf, output: &PathBuf) -> Result<()> {
+fn build_project(path: &PathBuf, output: &PathBuf, target: CompilationTarget) -> Result<()> {
     use colored::*;
     
     println!("{} Windjammer files in: {:?}", "Building".green().bold(), path);
+    println!("Target: {:?}", target);
     
     // Find all .wj files
     let wj_files = find_wj_files(path)?;
@@ -75,7 +92,7 @@ fn build_project(path: &PathBuf, output: &PathBuf) -> Result<()> {
     for file_path in &wj_files {
         print!("  {} {:?}... ", "Compiling".cyan(), file_path.file_name().unwrap());
         
-        match compile_file(file_path, output) {
+        match compile_file(file_path, output, target) {
             Ok(_) => println!("{}", "✓".green()),
             Err(e) => {
                 println!("{}", "✗".red());
@@ -162,7 +179,7 @@ fn find_wj_files(path: &PathBuf) -> Result<Vec<PathBuf>> {
     Ok(wj_files)
 }
 
-fn compile_file(input_path: &PathBuf, output_dir: &PathBuf) -> Result<()> {
+fn compile_file(input_path: &PathBuf, output_dir: &PathBuf, target: CompilationTarget) -> Result<()> {
     // Read source file
     let source = std::fs::read_to_string(input_path)?;
     
@@ -181,7 +198,7 @@ fn compile_file(input_path: &PathBuf, output_dir: &PathBuf) -> Result<()> {
         .map_err(|e| anyhow::anyhow!("Analysis error: {}", e))?;
     
     // Generate Rust code
-    let mut codegen = codegen::CodeGenerator::new(registry);
+    let mut codegen = codegen::CodeGenerator::new(registry, target);
     let rust_code = codegen.generate_program(&program, &analyzed);
     
     // Write output file

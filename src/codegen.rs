@@ -1,24 +1,61 @@
 // Rust code generator
 use crate::parser::*;
 use crate::analyzer::*;
+use crate::CompilationTarget;
 
 pub struct CodeGenerator {
     indent_level: usize,
     signature_registry: SignatureRegistry,
     in_wasm_bindgen_impl: bool,
+    needs_wasm_imports: bool,
+    needs_web_imports: bool,
+    needs_js_imports: bool,
+    target: CompilationTarget,
 }
 
 impl CodeGenerator {
-    pub fn new(registry: SignatureRegistry) -> Self {
+    pub fn new(registry: SignatureRegistry, target: CompilationTarget) -> Self {
         CodeGenerator {
             indent_level: 0,
             signature_registry: registry,
             in_wasm_bindgen_impl: false,
+            needs_wasm_imports: false,
+            needs_web_imports: false,
+            needs_js_imports: false,
+            target,
         }
     }
     
     fn indent(&self) -> String {
         "    ".repeat(self.indent_level)
+    }
+    
+    /// Map Windjammer decorators to Rust attributes
+    /// This abstraction layer allows us to use semantic Windjammer names
+    /// while generating appropriate Rust attributes based on compilation target
+    fn map_decorator(&mut self, name: &str) -> String {
+        match (name, self.target) {
+            ("export", CompilationTarget::Wasm) => {
+                self.needs_wasm_imports = true;
+                "wasm_bindgen".to_string()
+            }
+            ("export", CompilationTarget::Node) => {
+                // Future: Node.js native modules via Neon
+                "neon::export".to_string()
+            }
+            ("export", CompilationTarget::Python) => {
+                // Future: Python bindings via PyO3
+                "pyfunction".to_string()
+            }
+            ("export", CompilationTarget::C) => {
+                // Future: C FFI
+                "no_mangle".to_string()
+            }
+            ("test", _) => "test".to_string(),
+            ("async", _) => "async".to_string(),
+            // Pass through other decorators as-is
+            (other, _) => other.to_string()
+        }
     }
     
     fn generate_block(&mut self, stmts: &[Statement]) -> String {
@@ -41,37 +78,34 @@ impl CodeGenerator {
     }
     
     pub fn generate_program(&mut self, program: &Program, analyzed: &[AnalyzedFunction]) -> String {
-        let mut output = String::new();
+        let mut imports = String::new();
+        let mut body = String::new();
         
-        // Generate use statements
+        // Generate explicit use statements
         for item in &program.items {
             if let Item::Use(path) = item {
-                output.push_str(&self.generate_use(path));
-                output.push('\n');
+                imports.push_str(&self.generate_use(path));
+                imports.push('\n');
             }
-        }
-        
-        if !output.is_empty() {
-            output.push('\n');
         }
         
         // Generate const and static declarations
         for item in &program.items {
             match item {
                 Item::Const { name, type_, value } => {
-                    output.push_str(&format!("const {}: {} = {};\n", 
+                    body.push_str(&format!("const {}: {} = {};\n", 
                         name, 
                         self.type_to_rust(type_), 
                         self.generate_expression_immut(value)));
                 }
                 Item::Static { name, mutable, type_, value } => {
                     if *mutable {
-                        output.push_str(&format!("static mut {}: {} = {};\n", 
+                        body.push_str(&format!("static mut {}: {} = {};\n", 
                             name, 
                             self.type_to_rust(type_), 
                             self.generate_expression_immut(value)));
                     } else {
-                        output.push_str(&format!("static {}: {} = {};\n", 
+                        body.push_str(&format!("static {}: {} = {};\n", 
                             name, 
                             self.type_to_rust(type_), 
                             self.generate_expression_immut(value)));
@@ -81,8 +115,8 @@ impl CodeGenerator {
             }
         }
         
-        if !output.is_empty() {
-            output.push('\n');
+        if !body.is_empty() {
+            body.push('\n');
         }
         
         // Collect names of functions in impl blocks to avoid generating them twice
@@ -99,20 +133,20 @@ impl CodeGenerator {
         for item in &program.items {
             match item {
                 Item::Struct(s) => {
-                    output.push_str(&self.generate_struct(s));
-                    output.push_str("\n\n");
+                    body.push_str(&self.generate_struct(s));
+                    body.push_str("\n\n");
                 }
                 Item::Enum(e) => {
-                    output.push_str(&self.generate_enum(e));
-                    output.push_str("\n\n");
+                    body.push_str(&self.generate_enum(e));
+                    body.push_str("\n\n");
                 }
                 Item::Trait(t) => {
-                    output.push_str(&self.generate_trait(t));
-                    output.push_str("\n\n");
+                    body.push_str(&self.generate_trait(t));
+                    body.push_str("\n\n");
                 }
                 Item::Impl(impl_block) => {
-                    output.push_str(&self.generate_impl(impl_block, analyzed));
-                    output.push_str("\n\n");
+                    body.push_str(&self.generate_impl(impl_block, analyzed));
+                    body.push_str("\n\n");
                 }
                 _ => {}
             }
@@ -121,10 +155,38 @@ impl CodeGenerator {
         // Generate top-level functions (skip impl methods)
         for analyzed_func in analyzed {
             if !impl_methods.contains(&analyzed_func.decl.name) {
-                output.push_str(&self.generate_function(&analyzed_func));
-                output.push_str("\n\n");
+                body.push_str(&self.generate_function(&analyzed_func));
+                body.push_str("\n\n");
             }
         }
+        
+        // Inject implicit imports if needed
+        let mut implicit_imports = String::new();
+        if self.needs_wasm_imports {
+            implicit_imports.push_str("use wasm_bindgen::prelude::*;\n");
+        }
+        if self.needs_web_imports {
+            implicit_imports.push_str("use web_sys::*;\n");
+        }
+        if self.needs_js_imports {
+            implicit_imports.push_str("use js_sys::*;\n");
+        }
+        
+        // Combine: implicit imports + explicit imports + body
+        let mut output = String::new();
+        if !implicit_imports.is_empty() {
+            output.push_str(&implicit_imports);
+            if !imports.is_empty() {
+                output.push('\n');
+            }
+        }
+        if !imports.is_empty() {
+            output.push_str(&imports);
+        }
+        if !output.is_empty() && !body.is_empty() {
+            output.push('\n');
+        }
+        output.push_str(&body);
         
         output
     }
@@ -135,7 +197,7 @@ impl CodeGenerator {
         format!("use {}::*;\n", path.join("::"))
     }
     
-    fn generate_struct(&self, s: &StructDecl) -> String {
+    fn generate_struct(&mut self, s: &StructDecl) -> String {
         let mut output = String::new();
         
         // Convert decorators to Rust attributes
@@ -160,11 +222,12 @@ impl CodeGenerator {
                     output.push_str(&format!("#[derive({})]\n", traits.join(", ")));
                 }
             } else {
-                // Generic decorator: convert to Rust attribute
+                // Map Windjammer decorator to Rust attribute
+                let rust_attr = self.map_decorator(&decorator.name);
                 if decorator.arguments.is_empty() {
-                    output.push_str(&format!("#[{}]\n", decorator.name));
+                    output.push_str(&format!("#[{}]\n", rust_attr));
                 } else {
-                    output.push_str(&format!("#[{}(", decorator.name));
+                    output.push_str(&format!("#[{}(", rust_attr));
                     let args: Vec<String> = decorator.arguments.iter()
                         .map(|(key, expr)| {
                             format!("{} = {}", key, self.generate_expression_immut(expr))
@@ -313,12 +376,14 @@ impl CodeGenerator {
     fn generate_impl(&mut self, impl_block: &ImplBlock, analyzed: &[AnalyzedFunction]) -> String {
         let mut output = String::new();
         
-        // Check if this impl block has @wasm_bindgen decorator
-        let has_wasm_bindgen = impl_block.decorators.iter().any(|d| d.name == "wasm_bindgen");
+        // Check if this impl block has @export or @wasm_bindgen decorator
+        let has_wasm_export = impl_block.decorators.iter()
+            .any(|d| d.name == "export" || d.name == "wasm_bindgen");
         
-        // Generate decorators (like #[wasm_bindgen])
+        // Generate decorators (map Windjammer decorators to Rust attributes)
         for decorator in &impl_block.decorators {
-            output.push_str(&format!("#[{}]\n", decorator.name));
+            let rust_attr = self.map_decorator(&decorator.name);
+            output.push_str(&format!("#[{}]\n", rust_attr));
         }
         
         if let Some(trait_name) = &impl_block.trait_name {
@@ -331,9 +396,9 @@ impl CodeGenerator {
         
         self.indent_level += 1;
         
-        // Store the wasm_bindgen flag for use in generate_function
+        // Store the wasm export flag for use in generate_function
         let old_in_wasm_impl = self.in_wasm_bindgen_impl;
-        self.in_wasm_bindgen_impl = has_wasm_bindgen;
+        self.in_wasm_bindgen_impl = has_wasm_export;
         
         for func in &impl_block.functions {
             // Find the analyzed version of this function
