@@ -554,6 +554,15 @@ impl CodeGenerator {
                 // Convert Windjammer module.Type syntax to Rust module::Type
                 name.replace('.', "::")
             }
+            Type::Generic(name) => name.clone(),  // Type parameter: T -> T
+            Type::Parameterized(base, args) => {
+                // Generic type: Vec<T> -> Vec<T>, HashMap<K, V> -> HashMap<K, V>
+                format!(
+                    "{}<{}>",
+                    base,
+                    args.iter().map(|t| self.type_to_rust(t)).collect::<Vec<_>>().join(", ")
+                )
+            }
             Type::Option(inner) => format!("Option<{}>", self.type_to_rust(inner)),
             Type::Result(ok, err) => format!("Result<{}, {}>", self.type_to_rust(ok), self.type_to_rust(err)),
             Type::Vec(inner) => format!("Vec<{}>", self.type_to_rust(inner)),
