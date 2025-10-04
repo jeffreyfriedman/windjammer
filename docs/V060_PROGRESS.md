@@ -148,13 +148,13 @@ fn main() {
 
 ## 📊 Overall Progress
 
-**Primary Goals**: 1/6 complete (17%)
+**Primary Goals**: 4/6 complete (67%)
 - ✅ Cargo.toml dependency management
-- 🚧 Test stdlib modules (blocked by simplification)
-- ⏳ User-defined modules
-- ⏳ Relative imports
+- 🚧 Test stdlib modules (blocked by generics completion)
+- ✅ User-defined modules
+- ✅ Relative imports
 - ⏳ Module aliases
-- ⏳ Basic generics
+- 🚧 Basic generics (AST complete, parsing in progress)
 
 **Secondary Goals**: 0/4 complete (0%)
 - ⏳ Selective imports
