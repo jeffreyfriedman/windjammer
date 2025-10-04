@@ -1,126 +1,67 @@
 // std/fs - File system operations
-// Wraps std::fs with simpler APIs
+// Thin wrapper over std::fs for clean Windjammer APIs
 
-// === FILE READING ===
-
-// Read entire file as string
-fn read_to_string(path: string) -> Result<string, Error> {
-    std::fs::read_to_string(path)
+// Read entire file to string
+fn read_to_string(path: &str) -> Result<String, std.io.Error> {
+    std.fs.read_to_string(path)
 }
 
-// Read file as bytes
-fn read(path: string) -> Result<Vec<u8>, Error> {
-    std::fs::read(path)
+// Read entire file to bytes
+fn read(path: &str) -> Result<Vec<u8>, std.io.Error> {
+    std.fs.read(path)
 }
-
-// === FILE WRITING ===
 
 // Write string to file (creates or overwrites)
-fn write(path: string, contents: string) -> Result<(), Error> {
-    std::fs::write(path, contents)
+fn write(path: &str, contents: &str) -> Result<(), std.io.Error> {
+    std.fs.write(path, contents)
 }
 
 // Write bytes to file
-fn write_bytes(path: string, contents: &[u8]) -> Result<(), Error> {
-    std::fs::write(path, contents)
+fn write_bytes(path: &str, contents: &[u8]) -> Result<(), std.io.Error> {
+    std.fs.write(path, contents)
 }
-
-// Append string to file
-fn append(path: string, contents: string) -> Result<(), Error> {
-    use std::fs::OpenOptions
-    use std::io::Write
-    
-    let mut file = OpenOptions::new()
-        .create(true)
-        .append(true)
-        .open(path)?
-    
-    file.write_all(contents.as_bytes())
-}
-
-// === DIRECTORY OPERATIONS ===
-
-// Create a directory (fails if parent doesn't exist)
-fn create_dir(path: string) -> Result<(), Error> {
-    std::fs::create_dir(path)
-}
-
-// Create directory and all parent directories
-fn create_dir_all(path: string) -> Result<(), Error> {
-    std::fs::create_dir_all(path)
-}
-
-// Remove an empty directory
-fn remove_dir(path: string) -> Result<(), Error> {
-    std::fs::remove_dir(path)
-}
-
-// Remove directory and all contents
-fn remove_dir_all(path: string) -> Result<(), Error> {
-    std::fs::remove_dir_all(path)
-}
-
-// List entries in a directory
-fn read_dir(path: string) -> Result<Vec<DirEntry>, Error> {
-    let entries = std::fs::read_dir(path)?
-    let mut result = Vec::new()
-    
-    for entry in entries {
-        result.push(entry?)
-    }
-    
-    result.into()
-}
-
-// === FILE OPERATIONS ===
-
-// Copy a file
-fn copy(from: string, to: string) -> Result<u64, Error> {
-    std::fs::copy(from, to)
-}
-
-// Rename/move a file
-fn rename(from: string, to: string) -> Result<(), Error> {
-    std::fs::rename(from, to)
-}
-
-// Remove a file
-fn remove_file(path: string) -> Result<(), Error> {
-    std::fs::remove_file(path)
-}
-
-// === METADATA ===
 
 // Check if path exists
-fn exists(path: string) -> bool {
-    std::path::Path::new(&path).exists()
+fn exists(path: &str) -> bool {
+    std.path.Path.new(path).exists()
 }
 
 // Check if path is a file
-fn is_file(path: string) -> bool {
-    std::path::Path::new(&path).is_file()
+fn is_file(path: &str) -> bool {
+    std.path.Path.new(path).is_file()
 }
 
 // Check if path is a directory
-fn is_dir(path: string) -> bool {
-    std::path::Path::new(&path).is_dir()
+fn is_dir(path: &str) -> bool {
+    std.path.Path.new(path).is_dir()
 }
 
-// Get file metadata
-fn metadata(path: string) -> Result<Metadata, Error> {
-    std::fs::metadata(path)
+// Create directory (including parents)
+fn create_dir_all(path: &str) -> Result<(), std.io.Error> {
+    std.fs.create_dir_all(path)
 }
 
-// === RE-EXPORTS ===
+// Remove file
+fn remove_file(path: &str) -> Result<(), std.io.Error> {
+    std.fs.remove_file(path)
+}
 
-type Error = std::io::Error
-type DirEntry = std::fs::DirEntry
-type Metadata = std::fs::Metadata
+// Remove directory (must be empty)
+fn remove_dir(path: &str) -> Result<(), std.io.Error> {
+    std.fs.remove_dir(path)
+}
 
-// === FUTURE: ASYNC FILE OPERATIONS (v0.5.0) ===
+// Remove directory and all contents recursively
+fn remove_dir_all(path: &str) -> Result<(), std.io.Error> {
+    std.fs.remove_dir_all(path)
+}
 
-// Async versions using tokio::fs
-// async fn read_to_string_async(path: string) -> Result<string, Error> {
-//     tokio::fs::read_to_string(path).await
-// }
+// Copy file
+fn copy(from: &str, to: &str) -> Result<u64, std.io.Error> {
+    std.fs.copy(from, to)
+}
 
+// Rename/move file or directory
+fn rename(from: &str, to: &str) -> Result<(), std.io.Error> {
+    std.fs.rename(from, to)
+}

@@ -1,124 +1,66 @@
-// std/http - HTTP client and server
-// Wraps reqwest (client) and hyper (server) with clean Windjammer APIs
+// std/http - HTTP client
+// Thin wrapper over reqwest for clean Windjammer APIs
 
-// === CLIENT API ===
+use reqwest
 
-// Simple GET request
-fn get(url: string) -> Result<Response, Error> {
-    reqwest::blocking::get(url)
+// GET request - returns response body as string
+fn get(url: &str) -> Result<String, reqwest.Error> {
+    let response = reqwest.blocking.get(url)?
+    response.text()
 }
 
-// Simple POST request with JSON body
-fn post(url: string, body: &Value) -> Result<Response, Error> {
-    let client = reqwest::blocking::Client::new()
-    client.post(url).json(body).send()
+// POST request with JSON body
+fn post_json(url: &str, body: &str) -> Result<String, reqwest.Error> {
+    let client = reqwest.blocking.Client.new()
+    let response = client.post(url)
+        .header("Content-Type", "application/json")
+        .body(body.to_string())
+        .send()?
+    response.text()
 }
 
-// Simple PUT request
-fn put(url: string, body: &Value) -> Result<Response, Error> {
-    let client = reqwest::blocking::Client::new()
-    client.put(url).json(body).send()
+// POST request with form data
+fn post_form(url: &str, params: &[(String, String)]) -> Result<String, reqwest.Error> {
+    let client = reqwest.blocking.Client.new()
+    let response = client.post(url)
+        .form(params)
+        .send()?
+    response.text()
 }
 
-// Simple DELETE request
-fn delete(url: string) -> Result<Response, Error> {
-    let client = reqwest::blocking::Client::new()
-    client.delete(url).send()
+// PUT request
+fn put(url: &str, body: &str) -> Result<String, reqwest.Error> {
+    let client = reqwest.blocking.Client.new()
+    let response = client.put(url)
+        .body(body.to_string())
+        .send()?
+    response.text()
 }
 
-// === ASYNC CLIENT API ===
-
-// Async GET request
-async fn get_async(url: string) -> Result<Response, Error> {
-    reqwest::get(url).await
+// DELETE request
+fn delete(url: &str) -> Result<String, reqwest.Error> {
+    let client = reqwest.blocking.Client.new()
+    let response = client.delete(url).send()?
+    response.text()
 }
 
-// Async POST request
-async fn post_async(url: string, body: &Value) -> Result<Response, Error> {
-    let client = reqwest::Client::new()
-    client.post(url).json(body).send().await
-}
-
-// === CLIENT BUILDER ===
-
-// For advanced use cases
-struct Client {
-    inner: reqwest::blocking::Client,
-}
-
-impl Client {
-    fn new() -> Client {
-        Client {
-            inner: reqwest::blocking::Client::new(),
-        }
+// GET request with headers
+fn get_with_headers(url: &str, headers: &[(String, String)]) -> Result<String, reqwest.Error> {
+    let client = reqwest.blocking.Client.new()
+    let mut request = client.get(url)
+    
+    for (key, value) in headers {
+        request = request.header(key, value)
     }
     
-    fn get(&self, url: string) -> RequestBuilder {
-        RequestBuilder {
-            inner: self.inner.get(url),
-        }
-    }
-    
-    fn post(&self, url: string) -> RequestBuilder {
-        RequestBuilder {
-            inner: self.inner.post(url),
-        }
-    }
+    let response = request.send()?
+    response.text()
 }
 
-struct RequestBuilder {
-    inner: reqwest::blocking::RequestBuilder,
+// Download file from URL
+fn download(url: &str, path: &str) -> Result<(), reqwest.Error> {
+    let response = reqwest.blocking.get(url)?
+    let bytes = response.bytes()?
+    std.fs.write(path, bytes)?
+    Ok(())
 }
-
-impl RequestBuilder {
-    fn header(&mut self, key: string, value: string) -> &mut RequestBuilder {
-        self.inner = self.inner.header(key, value)
-        self
-    }
-    
-    fn json<T>(&mut self, body: &T) -> &mut RequestBuilder {
-        self.inner = self.inner.json(body)
-        self
-    }
-    
-    fn send(&mut self) -> Result<Response, Error> {
-        self.inner.send()
-    }
-}
-
-// === RESPONSE TYPE ===
-
-struct Response {
-    inner: reqwest::blocking::Response,
-}
-
-impl Response {
-    fn text(&mut self) -> Result<string, Error> {
-        self.inner.text()
-    }
-    
-    fn json<T>(&mut self) -> Result<T, Error> {
-        self.inner.json()
-    }
-    
-    fn status(&self) -> u16 {
-        self.inner.status().as_u16()
-    }
-    
-    fn ok(&self) -> bool {
-        self.inner.status().is_success()
-    }
-}
-
-// === RE-EXPORTS ===
-
-type Error = reqwest::Error
-type Value = serde_json::Value
-
-// === FUTURE: SERVER API (v0.5.0) ===
-
-// Simple HTTP server
-// fn serve(addr: string, handler: fn(Request) -> Response) -> Result<(), Error> {
-//     // Will use hyper or axum
-// }
-
