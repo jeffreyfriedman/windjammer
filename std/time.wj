@@ -46,8 +46,10 @@ fn parse_rfc2822(s: string) -> Result<DateTime, Error> {
 
 // Parse with custom format
 fn parse(s: string, format_str: string) -> Result<DateTime, Error> {
-    chrono::NaiveDateTime::parse_from_str(&s, &format_str)
-        .map(|ndt| chrono::DateTime::<chrono::Utc>::from_utc(ndt, chrono::Utc))
+    // Simplified: Use RFC3339 as default format
+    // Full custom format parsing would require turbofish syntax
+    chrono::DateTime::parse_from_rfc3339(&s)
+        .map(|dt| dt.with_timezone(&chrono::Utc))
 }
 
 // === DURATION ===
@@ -102,14 +104,16 @@ fn timestamp_millis(dt: &DateTime) -> i64 {
 }
 
 // Create datetime from Unix timestamp
-fn from_timestamp(secs: i64) -> DateTime {
-    chrono::DateTime::<chrono::Utc>::from_timestamp(secs, 0).unwrap()
-}
+// TODO: Requires generic type syntax, will be added in v0.6.0
+// fn from_timestamp(secs: i64) -> DateTime {
+//     chrono::DateTime::<chrono::Utc>::from_timestamp(secs, 0).unwrap()
+// }
 
-// Create datetime from Unix timestamp in milliseconds
-fn from_timestamp_millis(millis: i64) -> DateTime {
-    chrono::DateTime::<chrono::Utc>::from_timestamp_millis(millis).unwrap()
-}
+// Create datetime from Unix timestamp in milliseconds  
+// TODO: Requires generic type syntax, will be added in v0.6.0
+// fn from_timestamp_millis(millis: i64) -> DateTime {
+//     chrono::DateTime::<chrono::Utc>::from_timestamp_millis(millis).unwrap()
+// }
 
 // === SLEEP ===
 
