@@ -1,0 +1,23 @@
+// Test std/fs module - file system operations
+
+use std.fs
+
+fn main() {
+    println!("=== File System Module Test ===\n")
+    
+    // Test: Check if /tmp exists (should always exist on Unix)
+    println!("1. Check /tmp directory:")
+    if fs.exists("/tmp") {
+        println!("✓ /tmp exists")
+    } else {
+        println!("✗ /tmp doesn't exist")
+    }
+    
+    if fs.is_dir("/tmp") {
+        println!("✓ /tmp is a directory")
+    } else {
+        println!("✗ /tmp is not a directory")
+    }
+    
+    println!("\n✅ File system test complete!")
+}

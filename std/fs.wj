@@ -21,20 +21,6 @@ fn write_bytes(path: &str, contents: &[u8]) -> Result<(), std.io.Error> {
     std.fs.write(path, contents)
 }
 
-// Append string to file
-fn append(path: &str, contents: &str) -> Result<(), std.io.Error> {
-    use std.fs.OpenOptions
-    use std.io.Write
-    
-    let mut file = OpenOptions.new()
-        .append(true)
-        .create(true)
-        .open(path)?
-    
-    file.write_all(contents.as_bytes())?
-    Ok(())
-}
-
 // Check if path exists
 fn exists(path: &str) -> bool {
     std.path.Path.new(path).exists()
@@ -78,30 +64,4 @@ fn copy(from: &str, to: &str) -> Result<u64, std.io.Error> {
 // Rename/move file or directory
 fn rename(from: &str, to: &str) -> Result<(), std.io.Error> {
     std.fs.rename(from, to)
-}
-
-// List directory contents
-fn read_dir(path: &str) -> Result<Vec<String>, std.io.Error> {
-    let entries = std.fs.read_dir(path)?
-    let mut names = Vec.new()
-    
-    for entry in entries {
-        let entry = entry?
-        if let Some(name) = entry.file_name().to_str() {
-            names.push(name.to_string())
-        }
-    }
-    
-    Ok(names)
-}
-
-// Get file metadata (size, modified time, etc.)
-fn metadata(path: &str) -> Result<std.fs.Metadata, std.io.Error> {
-    std.fs.metadata(path)
-}
-
-// Get file size in bytes
-fn file_size(path: &str) -> Result<u64, std.io.Error> {
-    let meta = std.fs.metadata(path)?
-    Ok(meta.len())
 }

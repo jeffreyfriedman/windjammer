@@ -814,7 +814,15 @@ impl CodeGenerator {
     fn generate_expression(&mut self, expr: &Expression) -> String {
         match expr {
             Expression::Literal(lit) => self.generate_literal(lit),
-            Expression::Identifier(name) => name.clone(),
+            Expression::Identifier(name) => {
+                // Convert qualified paths: std.fs.read -> std::fs::read
+                // But keep simple identifiers: variable_name -> variable_name
+                if name.contains('.') {
+                    name.replace('.', "::")
+                } else {
+                    name.clone()
+                }
+            }
             Expression::Binary { left, op, right } => {
                 // Wrap operands in parens if they have lower precedence
                 let left_str = match left.as_ref() {
@@ -897,19 +905,35 @@ impl CodeGenerator {
                     .map(|(_label, arg)| self.generate_expression(arg))
                     .collect();
                 
-                // If object is a simple identifier, it might be a module call
-                // Use :: for module calls (e.g., json::parse()) and . for method calls
-                let separator = if matches!(**object, Expression::Identifier(_)) {
-                    "::"
-                } else {
-                    "."
+                // Determine separator: :: for static calls, . for instance methods
+                // - FunctionCall result: instance, use .
+                // - Identifier/FieldAccess in module context: static, use ::
+                // - Everything else: instance method, use .
+                let separator = match **object {
+                    Expression::Call { .. } | Expression::MethodCall { .. } => ".", // Instance method on return value
+                    Expression::Identifier(_) | Expression::FieldAccess { .. } if self.is_module => "::", // Static call in stdlib
+                    Expression::Identifier(_) | Expression::FieldAccess { .. } => "::", // Module/type call
+                    _ => "."  // Instance method
                 };
                 
                 format!("{}{}{}({})", obj_str, separator, method, args.join(", "))
             }
             Expression::FieldAccess { object, field } => {
                 let obj_str = self.generate_expression_with_precedence(object);
-                format!("{}.{}", obj_str, field)
+                
+                // In module context (stdlib), always use :: for Rust paths
+                // Otherwise, use :: for module/type paths and . for field access
+                let separator = if self.is_module {
+                    "::"
+                } else {
+                    match **object {
+                        Expression::Identifier(ref name) if name.contains('.') || (!name.is_empty() && name.chars().next().unwrap().is_uppercase()) => "::",
+                        Expression::FieldAccess { .. } => "::", // Chained path
+                        _ => "."  // Actual field access
+                    }
+                };
+                
+                format!("{}{}{}", obj_str, separator, field)
             }
             Expression::StructLiteral { name, fields } => {
                 let field_str: Vec<String> = fields.iter()
