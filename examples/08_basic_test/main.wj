@@ -1,82 +1,79 @@
-// Basic Windjammer feature test (no stdlib dependencies)
-// Tests: functions, structs, impl blocks, enums, match, loops
+// Example 2: Structs, impl blocks, and methods
 
+// Struct with automatic trait derivation
+@auto
 struct Point {
-    x: i64,
-    y: i64,
+    x: int,
+    y: int,
 }
 
+// Impl block with associated functions and methods
 impl Point {
-    fn new(x: i64, y: i64) -> Point {
-        Point { x, y }
+    // Associated function (constructor)
+    fn new(x: int, y: int) -> Point {
+        Point { x, y }  // Struct shorthand
     }
     
-    fn sum(&self) -> i64 {
-        self.x + self.y
+    // Method with &self
+    fn distance_from_origin(&self) -> int {
+        self.x * self.x + self.y * self.y
+    }
+    
+    // Method with &mut self
+    fn translate(&mut self, dx: int, dy: int) {
+        self.x = self.x + dx
+        self.y = self.y + dy
+    }
+    
+    // Method that consumes self
+    fn into_tuple(self) -> (int, int) {
+        (self.x, self.y)
     }
 }
 
-enum Shape {
-    Circle(f64),
-    Square(f64),
+// Struct with explicit @auto traits
+@auto(Debug, Clone, PartialEq)
+struct Rectangle {
+    width: int,
+    height: int,
 }
 
-fn area(shape: &Shape) -> f64 {
-    match shape {
-        Shape.Circle(radius) => 3.14159 * radius * radius,
-        Shape.Square(side) => side * side,
+impl Rectangle {
+    fn new(width: int, height: int) -> Rectangle {
+        Rectangle { width, height }
     }
-}
-
-fn fibonacci(n: i64) -> i64 {
-    if n <= 1 {
-        n
-    } else {
-        fibonacci(n - 1) + fibonacci(n - 2)
+    
+    fn area(&self) -> int {
+        self.width * self.height
     }
-}
-
-fn factorial(n: i64) -> i64 {
-    if n <= 1 {
-        1
-    } else {
-        n * factorial(n - 1)
+    
+    fn is_square(&self) -> bool {
+        self.width == self.height
     }
-}
-
-fn sum_range(n: i64) -> i64 {
-    let mut sum = 0
-    for i in 0..n {
-        sum += i
-    }
-    sum
 }
 
 fn main() {
-    println!("=== Windjammer Basic Tests ===\n")
+    // Create points
+    let p1 = Point.new(3, 4)
+    println!("Point 1: (${p1.x}, ${p1.y})")
+    println!("Distance from origin: ${p1.distance_from_origin()}")
     
-    println!("1. Struct and Methods:")
-    let p = Point.new(3, 4)
-    println!("Point({}, {})", p.x, p.y)
-    let sum = p.sum()
-    println!("Sum: {}", sum)
-    println!("")
+    // Mutable point
+    let mut p2 = Point.new(0, 0)
+    p2.translate(5, 5)
+    println!("Point 2 after translation: (${p2.x}, ${p2.y})")
     
-    println!("2. Enums and Pattern Matching:")
-    let circle = Shape.Circle(5.0)
-    let square = Shape.Square(4.0)
-    println!("Circle area: {}", area(&circle))
-    println!("Square area: {}", area(&square))
-    println!("")
+    // Consuming self
+    let p3 = Point.new(1, 2)
+    let tuple = p3.into_tuple()
+    println!("As tuple: (${tuple.0}, ${tuple.1})")
     
-    println!("3. Recursion:")
-    println!("fibonacci(10) = {}", fibonacci(10))
-    println!("factorial(5) = {}", factorial(5))
-    println!("")
+    // Rectangles
+    let rect1 = Rectangle.new(10, 20)
+    let rect2 = Rectangle.new(15, 15)
     
-    println!("4. Loops:")
-    println!("sum(0..10) = {}", sum_range(10))
-    println!("")
-    
-    println!("✅ All tests passed!")
+    println!("Rectangle 1 area: ${rect1.area()}")
+    println!("Rectangle 1 is square: ${rect1.is_square()}")
+    println!("Rectangle 2 is square: ${rect2.is_square()}")
 }
+
