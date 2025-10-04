@@ -1,0 +1,243 @@
+// std/math - Mathematical functions and constants
+// Provides common math operations
+
+// === CONSTANTS ===
+
+const PI: f64 = std::f64::consts::PI
+const E: f64 = std::f64::consts::E
+const TAU: f64 = std::f64::consts::TAU
+const SQRT_2: f64 = std::f64::consts::SQRT_2
+
+// === BASIC OPERATIONS ===
+
+// Absolute value
+fn abs_f64(x: f64) -> f64 {
+    x.abs()
+}
+
+fn abs_i64(x: i64) -> i64 {
+    x.abs()
+}
+
+// Power
+fn pow(base: f64, exp: f64) -> f64 {
+    base.powf(exp)
+}
+
+// Square root
+fn sqrt(x: f64) -> f64 {
+    x.sqrt()
+}
+
+// Cube root
+fn cbrt(x: f64) -> f64 {
+    x.cbrt()
+}
+
+// === ROUNDING ===
+
+// Round to nearest integer
+fn round(x: f64) -> f64 {
+    x.round()
+}
+
+// Round down (floor)
+fn floor(x: f64) -> f64 {
+    x.floor()
+}
+
+// Round up (ceiling)
+fn ceil(x: f64) -> f64 {
+    x.ceil()
+}
+
+// Truncate (remove fractional part)
+fn trunc(x: f64) -> f64 {
+    x.trunc()
+}
+
+// === TRIGONOMETRY ===
+
+// Sine
+fn sin(x: f64) -> f64 {
+    x.sin()
+}
+
+// Cosine
+fn cos(x: f64) -> f64 {
+    x.cos()
+}
+
+// Tangent
+fn tan(x: f64) -> f64 {
+    x.tan()
+}
+
+// Arc sine
+fn asin(x: f64) -> f64 {
+    x.asin()
+}
+
+// Arc cosine
+fn acos(x: f64) -> f64 {
+    x.acos()
+}
+
+// Arc tangent
+fn atan(x: f64) -> f64 {
+    x.atan()
+}
+
+// Arc tangent of y/x
+fn atan2(y: f64, x: f64) -> f64 {
+    y.atan2(x)
+}
+
+// === HYPERBOLIC ===
+
+// Hyperbolic sine
+fn sinh(x: f64) -> f64 {
+    x.sinh()
+}
+
+// Hyperbolic cosine
+fn cosh(x: f64) -> f64 {
+    x.cosh()
+}
+
+// Hyperbolic tangent
+fn tanh(x: f64) -> f64 {
+    x.tanh()
+}
+
+// === EXPONENTIAL & LOGARITHMIC ===
+
+// e^x
+fn exp(x: f64) -> f64 {
+    x.exp()
+}
+
+// 2^x
+fn exp2(x: f64) -> f64 {
+    x.exp2()
+}
+
+// Natural logarithm (ln)
+fn ln(x: f64) -> f64 {
+    x.ln()
+}
+
+// Base-2 logarithm
+fn log2(x: f64) -> f64 {
+    x.log2()
+}
+
+// Base-10 logarithm
+fn log10(x: f64) -> f64 {
+    x.log10()
+}
+
+// Logarithm with custom base
+fn log(x: f64, base: f64) -> f64 {
+    x.log(base)
+}
+
+// === MIN/MAX ===
+
+// Minimum of two numbers
+fn min_f64(a: f64, b: f64) -> f64 {
+    a.min(b)
+}
+
+fn min_i64(a: i64, b: i64) -> i64 {
+    a.min(b)
+}
+
+// Maximum of two numbers
+fn max_f64(a: f64, b: f64) -> f64 {
+    a.max(b)
+}
+
+fn max_i64(a: i64, b: i64) -> i64 {
+    a.max(b)
+}
+
+// Clamp value between min and max
+fn clamp_f64(value: f64, min: f64, max: f64) -> f64 {
+    value.clamp(min, max)
+}
+
+fn clamp_i64(value: i64, min: i64, max: i64) -> i64 {
+    value.clamp(min, max)
+}
+
+// === SIGN ===
+
+// Sign of number (-1, 0, or 1)
+fn signum(x: f64) -> f64 {
+    x.signum()
+}
+
+// Copy sign from one number to another
+fn copysign(x: f64, y: f64) -> f64 {
+    x.copysign(y)
+}
+
+// === RANDOM ===
+
+// Random number between 0.0 and 1.0
+fn random() -> f64 {
+    use rand::Rng
+    rand::thread_rng().gen()
+}
+
+// Random integer in range [min, max)
+fn random_range(min: i64, max: i64) -> i64 {
+    use rand::Rng
+    rand::thread_rng().gen_range(min..max)
+}
+
+// Random float in range [min, max)
+fn random_range_f64(min: f64, max: f64) -> f64 {
+    use rand::Rng
+    rand::thread_rng().gen_range(min..max)
+}
+
+// === SPECIAL ===
+
+// Hypotenuse (sqrt(x^2 + y^2))
+fn hypot(x: f64, y: f64) -> f64 {
+    x.hypot(y)
+}
+
+// Fused multiply-add (x * y + z)
+fn fma(x: f64, y: f64, z: f64) -> f64 {
+    x.mul_add(y, z)
+}
+
+// Check if number is NaN
+fn is_nan(x: f64) -> bool {
+    x.is_nan()
+}
+
+// Check if number is infinite
+fn is_infinite(x: f64) -> bool {
+    x.is_infinite()
+}
+
+// Check if number is finite
+fn is_finite(x: f64) -> bool {
+    x.is_finite()
+}
+
+// === CONVERSION ===
+
+// Degrees to radians
+fn to_radians(degrees: f64) -> f64 {
+    degrees.to_radians()
+}
+
+// Radians to degrees
+fn to_degrees(radians: f64) -> f64 {
+    radians.to_degrees()
+}

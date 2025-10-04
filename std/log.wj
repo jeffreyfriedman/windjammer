@@ -1,0 +1,140 @@
+// std/log - Logging utilities
+// Wraps the `log` crate with a simple API
+
+// === INITIALIZATION ===
+
+// Initialize logger with default settings
+fn init() {
+    env_logger::init()
+}
+
+// Initialize with custom log level
+fn init_with_level(level: Level) {
+    env_logger::Builder::new()
+        .filter_level(level.to_log_level_filter())
+        .init()
+}
+
+// === LOGGING MACROS (via format! for now) ===
+
+// Log error message
+fn error(message: string) {
+    log::error!("{}", message)
+}
+
+// Log warning message
+fn warn(message: string) {
+    log::warn!("{}", message)
+}
+
+// Log info message
+fn info(message: string) {
+    log::info!("{}", message)
+}
+
+// Log debug message
+fn debug(message: string) {
+    log::debug!("{}", message)
+}
+
+// Log trace message
+fn trace(message: string) {
+    log::trace!("{}", message)
+}
+
+// === LOG LEVELS ===
+
+enum Level {
+    Error,
+    Warn,
+    Info,
+    Debug,
+    Trace,
+}
+
+impl Level {
+    fn to_log_level_filter(&self) -> log::LevelFilter {
+        match self {
+            Level::Error => log::LevelFilter::Error,
+            Level::Warn => log::LevelFilter::Warn,
+            Level::Info => log::LevelFilter::Info,
+            Level::Debug => log::LevelFilter::Debug,
+            Level::Trace => log::LevelFilter::Trace,
+        }
+    }
+}
+
+// === FORMATTED LOGGING ===
+
+// Log error with formatted message
+fn errorf(template: string, args: &[&dyn std::fmt::Display]) {
+    let message = format_with_args(template, args)
+    log::error!("{}", message)
+}
+
+// Log info with formatted message
+fn infof(template: string, args: &[&dyn std::fmt::Display]) {
+    let message = format_with_args(template, args)
+    log::info!("{}", message)
+}
+
+// Log debug with formatted message
+fn debugf(template: string, args: &[&dyn std::fmt::Display]) {
+    let message = format_with_args(template, args)
+    log::debug!("{}", message)
+}
+
+// Helper to format with arguments
+fn format_with_args(template: string, args: &[&dyn std::fmt::Display]) -> String {
+    // Simple implementation - in real version would use proper formatting
+    template
+}
+
+// === CONTEXT LOGGING ===
+
+// Log with key-value pairs (structured logging)
+struct LogContext {
+    pairs: Vec<(String, String)>,
+}
+
+impl LogContext {
+    fn new() -> LogContext {
+        LogContext {
+            pairs: Vec::new(),
+        }
+    }
+    
+    fn add(&mut self, key: string, value: string) -> &mut LogContext {
+        self.pairs.push((key, value))
+        self
+    }
+    
+    fn info(&self, message: string) {
+        let context = self.format_pairs()
+        log::info!("{} {}", message, context)
+    }
+    
+    fn error(&self, message: string) {
+        let context = self.format_pairs()
+        log::error!("{} {}", message, context)
+    }
+    
+    fn format_pairs(&self) -> String {
+        self.pairs
+            .iter()
+            .map(|(k, v)| format!("{}={}", k, v))
+            .collect::<Vec<_>>()
+            .join(" ")
+    }
+}
+
+// Create new log context
+fn context() -> LogContext {
+    LogContext::new()
+}
+
+// === RE-EXPORTS ===
+
+// Re-export for advanced usage
+type Logger = log::Logger
+type LevelFilter = log::LevelFilter

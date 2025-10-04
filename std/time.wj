@@ -1,0 +1,125 @@
+// std/time - Date and time operations
+// Wraps chrono with a clean Windjammer API
+
+// === CURRENT TIME ===
+
+// Get current UTC time
+fn now() -> DateTime {
+    chrono::Utc::now()
+}
+
+// Get current local time
+fn now_local() -> DateTime {
+    chrono::Local::now().into()
+}
+
+// === FORMATTING ===
+
+// Format datetime to string
+fn format(dt: &DateTime, format_str: string) -> string {
+    dt.format(format_str).to_string()
+}
+
+// Common format: "2025-10-04 15:30:00"
+fn to_rfc3339(dt: &DateTime) -> string {
+    dt.to_rfc3339()
+}
+
+// Common format: "Sat, 04 Oct 2025 15:30:00 GMT"
+fn to_rfc2822(dt: &DateTime) -> string {
+    dt.to_rfc2822()
+}
+
+// === PARSING ===
+
+// Parse from RFC3339 format
+fn parse_rfc3339(s: string) -> Result<DateTime, Error> {
+    chrono::DateTime::parse_from_rfc3339(&s)
+        .map(|dt| dt.with_timezone(&chrono::Utc))
+}
+
+// Parse from RFC2822 format
+fn parse_rfc2822(s: string) -> Result<DateTime, Error> {
+    chrono::DateTime::parse_from_rfc2822(&s)
+        .map(|dt| dt.with_timezone(&chrono::Utc))
+}
+
+// Parse with custom format
+fn parse(s: string, format_str: string) -> Result<DateTime, Error> {
+    chrono::NaiveDateTime::parse_from_str(&s, &format_str)
+        .map(|ndt| chrono::DateTime::<chrono::Utc>::from_utc(ndt, chrono::Utc))
+}
+
+// === DURATION ===
+
+// Create duration from seconds
+fn seconds(n: i64) -> Duration {
+    chrono::Duration::seconds(n)
+}
+
+// Create duration from minutes
+fn minutes(n: i64) -> Duration {
+    chrono::Duration::minutes(n)
+}
+
+// Create duration from hours
+fn hours(n: i64) -> Duration {
+    chrono::Duration::hours(n)
+}
+
+// Create duration from days
+fn days(n: i64) -> Duration {
+    chrono::Duration::days(n)
+}
+
+// === TIME ARITHMETIC ===
+
+// Add duration to datetime
+fn add(dt: &DateTime, dur: Duration) -> DateTime {
+    *dt + dur
+}
+
+// Subtract duration from datetime
+fn sub(dt: &DateTime, dur: Duration) -> DateTime {
+    *dt - dur
+}
+
+// Get difference between two datetimes
+fn diff(dt1: &DateTime, dt2: &DateTime) -> Duration {
+    *dt1 - *dt2
+}
+
+// === UNIX TIMESTAMP ===
+
+// Get Unix timestamp (seconds since epoch)
+fn timestamp(dt: &DateTime) -> i64 {
+    dt.timestamp()
+}
+
+// Get Unix timestamp in milliseconds
+fn timestamp_millis(dt: &DateTime) -> i64 {
+    dt.timestamp_millis()
+}
+
+// Create datetime from Unix timestamp
+fn from_timestamp(secs: i64) -> DateTime {
+    chrono::DateTime::<chrono::Utc>::from_timestamp(secs, 0).unwrap()
+}
+
+// Create datetime from Unix timestamp in milliseconds
+fn from_timestamp_millis(millis: i64) -> DateTime {
+    chrono::DateTime::<chrono::Utc>::from_timestamp_millis(millis).unwrap()
+}
+
+// === SLEEP ===
+
+// Sleep for duration (blocking)
+fn sleep(dur: Duration) {
+    std::thread::sleep(dur.to_std().unwrap())
+}
+
+// === RE-EXPORTS ===
+
+type DateTime = chrono::DateTime<chrono::Utc>
+type Duration = chrono::Duration
+type Error = chrono::ParseError
