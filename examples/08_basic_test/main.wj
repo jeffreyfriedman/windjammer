@@ -1,0 +1,98 @@
+// Basic Windjammer feature test (no stdlib dependencies)
+// Tests: functions, structs, impl blocks, enums, match, loops
+
+// === STRUCTS AND IMPL ===
+
+struct Point {
+    x: i64,
+    y: i64,
+}
+
+impl Point {
+    fn new(x: i64, y: i64) -> Point {
+        Point { x, y }
+    }
+    
+    fn distance_from_origin(&self) -> f64 {
+        let x_squared = (self.x * self.x) as f64
+        let y_squared = (self.y * self.y) as f64
+        (x_squared + y_squared).sqrt()
+    }
+}
+
+// === ENUMS AND PATTERN MATCHING ===
+
+enum Shape {
+    Circle(f64),  // radius
+    Square(f64),  // side length
+}
+
+fn area(shape: &Shape) -> f64 {
+    match shape {
+        Shape.Circle(radius) => 3.14159 * radius * radius,
+        Shape.Square(side) => side * side,
+    }
+}
+
+// === FUNCTIONS ===
+
+fn fibonacci(n: i64) -> i64 {
+    if n <= 1 {
+        n
+    } else {
+        fibonacci(n - 1) + fibonacci(n - 2)
+    }
+}
+
+fn factorial(n: i64) -> i64 {
+    if n <= 1 {
+        1
+    } else {
+        n * factorial(n - 1)
+    }
+}
+
+// === LOOPS ===
+
+fn sum_range(n: i64) -> i64 {
+    let mut sum = 0
+    for i in 0..n {
+        sum += i
+    }
+    sum
+}
+
+// === MAIN ===
+
+fn main() {
+    println!("=== Windjammer Basic Tests ===\n")
+    
+    // Test structs
+    println!("1. Struct and Methods:")
+    let p = Point.new(3, 4)
+    println!("Point({}, {})", p.x, p.y)
+    let dist = p.distance_from_origin()
+    println!("Distance from origin: {}", dist)
+    println!("")
+    
+    // Test enums and match
+    println!("2. Enums and Pattern Matching:")
+    let circle = Shape.Circle(5.0)
+    let square = Shape.Square(4.0)
+    println!("Circle area: {}", area(&circle))
+    println!("Square area: {}", area(&square))
+    println!("")
+    
+    // Test recursion
+    println!("3. Recursion:")
+    println!("fibonacci(10) = {}", fibonacci(10))
+    println!("factorial(5) = {}", factorial(5))
+    println!("")
+    
+    // Test loops
+    println!("4. Loops:")
+    println!("sum(0..10) = {}", sum_range(10))
+    println!("")
+    
+    println!("✅ All tests passed!")
+}

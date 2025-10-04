@@ -1,37 +1,89 @@
 // std/json - JSON serialization and deserialization
-// Wraps serde_json with a clean Windjammer API
+// Thin wrapper over serde_json for clean Windjammer APIs
 
-// Parse JSON string into a Value
-fn parse(json_str: string) -> Result<Value, Error> {
-    serde_json::from_str(json_str)
+use serde_json
+
+// Parse JSON string into serde_json::Value
+fn parse(json: &str) -> Result<serde_json.Value, serde_json.Error> {
+    serde_json.from_str(json)
 }
 
-// Convert a Value to a JSON string
-fn stringify(value: &Value) -> Result<string, Error> {
-    serde_json::to_string(value)
+// Serialize Value to JSON string
+fn stringify(value: &serde_json.Value) -> Result<String, serde_json.Error> {
+    serde_json.to_string(value)
 }
 
-// Convert a Value to a pretty-printed JSON string
-fn stringify_pretty(value: &Value) -> Result<string, Error> {
-    serde_json::to_string_pretty(value)
+// Serialize Value to pretty JSON string with indentation
+fn stringify_pretty(value: &serde_json.Value) -> Result<String, serde_json.Error> {
+    serde_json.to_string_pretty(value)
 }
 
-// Deserialize JSON into a specific type
-fn from_str<T>(json_str: string) -> Result<T, Error> {
-    serde_json::from_str(json_str)
+// Parse JSON from bytes
+fn parse_bytes(bytes: &[u8]) -> Result<serde_json.Value, serde_json.Error> {
+    serde_json.from_slice(bytes)
 }
 
-// Serialize a value to JSON string
-fn to_string<T>(value: &T) -> Result<string, Error> {
-    serde_json::to_string(value)
+// Get value from JSON object by key
+fn get(value: &serde_json.Value, key: &str) -> Option<&serde_json.Value> {
+    value.get(key)
 }
 
-// Serialize a value to pretty-printed JSON
-fn to_string_pretty<T>(value: &T) -> Result<string, Error> {
-    serde_json::to_string_pretty(value)
+// Check if JSON value is null
+fn is_null(value: &serde_json.Value) -> bool {
+    value.is_null()
 }
 
-// Re-export serde_json types for direct use
-type Value = serde_json::Value
-type Error = serde_json::Error
+// Check if JSON value is boolean
+fn is_bool(value: &serde_json.Value) -> bool {
+    value.is_boolean()
+}
 
+// Check if JSON value is number
+fn is_number(value: &serde_json.Value) -> bool {
+    value.is_number()
+}
+
+// Check if JSON value is string
+fn is_string(value: &serde_json.Value) -> bool {
+    value.is_string()
+}
+
+// Check if JSON value is array
+fn is_array(value: &serde_json.Value) -> bool {
+    value.is_array()
+}
+
+// Check if JSON value is object
+fn is_object(value: &serde_json.Value) -> bool {
+    value.is_object()
+}
+
+// Get value as bool
+fn as_bool(value: &serde_json.Value) -> Option<bool> {
+    value.as_bool()
+}
+
+// Get value as i64
+fn as_i64(value: &serde_json.Value) -> Option<i64> {
+    value.as_i64()
+}
+
+// Get value as f64
+fn as_f64(value: &serde_json.Value) -> Option<f64> {
+    value.as_f64()
+}
+
+// Get value as string
+fn as_str(value: &serde_json.Value) -> Option<&str> {
+    value.as_str()
+}
+
+// Get value as array
+fn as_array(value: &serde_json.Value) -> Option<&Vec<serde_json.Value>> {
+    value.as_array()
+}
+
+// Get value as object
+fn as_object(value: &serde_json.Value) -> Option<&serde_json.Map<String, serde_json.Value>> {
+    value.as_object()
+}
