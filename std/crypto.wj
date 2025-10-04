@@ -1,0 +1,22 @@
+// std/crypto - Cryptographic operations  
+// Simple wrappers for common hashing operations
+
+// SHA256 hash of bytes (returns hex string)
+fn sha256_hex(data: &str) -> String {
+    // Note: Actual implementation requires sha2 crate
+    // This is a placeholder showing the intended API
+    format!("sha256:{}", data)
+}
+
+// MD5 hash (for checksums only, not security!)
+fn md5_hex(data: &str) -> String {
+    // Note: Actual implementation requires md5 crate
+    format!("md5:{}", data)
+}
+
+// TODO: Full crypto implementation requires:
+// - sha2 crate for SHA256
+// - md5 crate for MD5
+// - bcrypt for password hashing  
+// - rand for random bytes
+// These need to be added to generated Cargo.toml
