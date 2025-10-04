@@ -200,10 +200,25 @@ impl CodeGenerator {
     }
     
     fn generate_use(&self, path: &[String]) -> String {
+        if path.is_empty() {
+            return String::new();
+        }
+        
         // Skip stdlib imports - they're handled by the compiler
         // std.* modules are built-in and don't need explicit imports
-        if !path.is_empty() && path[0] == "std" {
+        if path[0] == "std" {
             return String::new();
+        }
+        
+        // Handle relative imports: ./utils or ../utils
+        let full_path = path.join(".");
+        if full_path.starts_with("./") || full_path.starts_with("../") {
+            // Extract module name: ./utils -> utils, ../utils/helpers -> helpers  
+            let stripped = full_path.strip_prefix("./")
+                .or_else(|| full_path.strip_prefix("../"))
+                .unwrap_or(&full_path);
+            let module_name = stripped.split('/').last().unwrap_or(stripped);
+            return format!("use {}::*;\n", module_name);
         }
         
         // Convert Windjammer's Go-style imports to Rust's glob imports

@@ -345,6 +345,14 @@ impl Parser {
             decorators.push(self.parse_decorator()?);
         }
         
+        // Check for pub keyword (for module functions)
+        let _is_pub = if self.current_token() == &Token::Pub {
+            self.advance();
+            true
+        } else {
+            false
+        };
+        
         match self.current_token() {
             Token::Fn => {
                 self.advance(); // Consume the Fn token
@@ -631,21 +639,54 @@ impl Parser {
         // Note: Token::Use already consumed in parse_item
         
         let mut path = Vec::new();
+        let mut path_str = String::new();
         
+        // Handle relative imports: ./module or ../module
+        if self.current_token() == &Token::Dot {
+            path_str.push('.');
+            self.advance();
+            
+            // Check for ./ or ../
+            if self.current_token() == &Token::Slash {
+                path_str.push('/');
+                self.advance();
+            } else if self.current_token() == &Token::Dot {
+                // ../
+                path_str.push('.');
+                self.advance();
+                if self.current_token() == &Token::Slash {
+                    path_str.push('/');
+                    self.advance();
+                }
+            }
+        }
+        
+        // Parse the rest of the path (identifiers separated by . or /)
         loop {
             if let Token::Ident(name) = self.current_token() {
-                path.push(name.clone());
+                path_str.push_str(name);
                 self.advance();
                 
+                // Check for . or / as separator
                 if self.current_token() == &Token::Dot {
+                    path_str.push('.');
+                    self.advance();
+                } else if self.current_token() == &Token::Slash {
+                    path_str.push('/');
                     self.advance();
                 } else {
                     break;
                 }
-            } else {
+            } else if path_str.is_empty() {
                 return Err(format!("Expected identifier in use statement"));
+            } else {
+                break;
             }
         }
+        
+        // For now, return the path as a single-element vector
+        // This preserves the relative path structure
+        path.push(path_str);
         
         Ok(path)
     }
