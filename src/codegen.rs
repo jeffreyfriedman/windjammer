@@ -11,6 +11,7 @@ pub struct CodeGenerator {
     needs_web_imports: bool,
     needs_js_imports: bool,
     target: CompilationTarget,
+    is_module: bool,  // true if generating code for a reusable module (not main file)
 }
 
 impl CodeGenerator {
@@ -23,7 +24,14 @@ impl CodeGenerator {
             needs_web_imports: false,
             needs_js_imports: false,
             target,
+            is_module: false,
         }
+    }
+    
+    pub fn new_for_module(registry: SignatureRegistry, target: CompilationTarget) -> Self {
+        let mut gen = Self::new(registry, target);
+        gen.is_module = true;
+        gen
     }
     
     fn indent(&self) -> String {
@@ -192,6 +200,12 @@ impl CodeGenerator {
     }
     
     fn generate_use(&self, path: &[String]) -> String {
+        // Skip stdlib imports - they're handled by the compiler
+        // std.* modules are built-in and don't need explicit imports
+        if !path.is_empty() && path[0] == "std" {
+            return String::new();
+        }
+        
         // Convert Windjammer's Go-style imports to Rust's glob imports
         // e.g., "use wasm_bindgen.prelude" -> "use wasm_bindgen::prelude::*;"
         format!("use {}::*;\n", path.join("::"))
@@ -428,8 +442,8 @@ impl CodeGenerator {
         let func = &analyzed.decl;
         let mut output = String::new();
         
-        // Add `pub` if we're in a #[wasm_bindgen] impl block
-        if self.in_wasm_bindgen_impl {
+        // Add `pub` if we're in a #[wasm_bindgen] impl block OR compiling a module
+        if self.in_wasm_bindgen_impl || self.is_module {
             output.push_str("pub ");
         }
         
@@ -800,7 +814,15 @@ impl CodeGenerator {
     fn generate_expression(&mut self, expr: &Expression) -> String {
         match expr {
             Expression::Literal(lit) => self.generate_literal(lit),
-            Expression::Identifier(name) => name.clone(),
+            Expression::Identifier(name) => {
+                // Convert qualified paths: std.fs.read -> std::fs::read
+                // But keep simple identifiers: variable_name -> variable_name
+                if name.contains('.') {
+                    name.replace('.', "::")
+                } else {
+                    name.clone()
+                }
+            }
             Expression::Binary { left, op, right } => {
                 // Wrap operands in parens if they have lower precedence
                 let left_str = match left.as_ref() {
@@ -882,11 +904,36 @@ impl CodeGenerator {
                 let args: Vec<String> = arguments.iter()
                     .map(|(_label, arg)| self.generate_expression(arg))
                     .collect();
-                format!("{}.{}({})", obj_str, method, args.join(", "))
+                
+                // Determine separator: :: for static calls, . for instance methods
+                // - FunctionCall result: instance, use .
+                // - Identifier/FieldAccess in module context: static, use ::
+                // - Everything else: instance method, use .
+                let separator = match **object {
+                    Expression::Call { .. } | Expression::MethodCall { .. } => ".", // Instance method on return value
+                    Expression::Identifier(_) | Expression::FieldAccess { .. } if self.is_module => "::", // Static call in stdlib
+                    Expression::Identifier(_) | Expression::FieldAccess { .. } => "::", // Module/type call
+                    _ => "."  // Instance method
+                };
+                
+                format!("{}{}{}({})", obj_str, separator, method, args.join(", "))
             }
             Expression::FieldAccess { object, field } => {
                 let obj_str = self.generate_expression_with_precedence(object);
-                format!("{}.{}", obj_str, field)
+                
+                // In module context (stdlib), always use :: for Rust paths
+                // Otherwise, use :: for module/type paths and . for field access
+                let separator = if self.is_module {
+                    "::"
+                } else {
+                    match **object {
+                        Expression::Identifier(ref name) if name.contains('.') || (!name.is_empty() && name.chars().next().unwrap().is_uppercase()) => "::",
+                        Expression::FieldAccess { .. } => "::", // Chained path
+                        _ => "."  // Actual field access
+                    }
+                };
+                
+                format!("{}{}{}", obj_str, separator, field)
             }
             Expression::StructLiteral { name, fields } => {
                 let field_str: Vec<String> = fields.iter()
