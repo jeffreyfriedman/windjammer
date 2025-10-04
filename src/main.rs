@@ -5,6 +5,7 @@ pub mod codegen;
 
 use clap::{Parser, Subcommand, ValueEnum};
 use std::path::PathBuf;
+use std::collections::HashMap;
 use anyhow::Result;
 
 #[derive(Debug, Clone, Copy, ValueEnum)]
@@ -179,7 +180,104 @@ fn find_wj_files(path: &PathBuf) -> Result<Vec<PathBuf>> {
     Ok(wj_files)
 }
 
+/// Tracks compiled modules and their dependencies
+struct ModuleCompiler {
+    compiled_modules: HashMap<String, String>, // module path -> generated Rust code
+    target: CompilationTarget,
+    stdlib_path: PathBuf,
+}
+
+impl ModuleCompiler {
+    fn new(target: CompilationTarget) -> Self {
+        // Find stdlib directory
+        // Check WINDJAMMER_STDLIB env var first, then fallback to ./std
+        let stdlib_path = std::env::var("WINDJAMMER_STDLIB")
+            .map(PathBuf::from)
+            .unwrap_or_else(|_| PathBuf::from("std"));
+        
+        Self {
+            compiled_modules: HashMap::new(),
+            target,
+            stdlib_path,
+        }
+    }
+    
+    /// Compile a module and all its dependencies
+    fn compile_module(&mut self, module_path: &str) -> Result<()> {
+        // Skip if already compiled
+        if self.compiled_modules.contains_key(module_path) {
+            return Ok(());
+        }
+        
+        // Find the module file
+        let file_path = self.resolve_module_path(module_path)?;
+        
+        // Read and parse
+        let source = std::fs::read_to_string(&file_path)?;
+        let mut lexer = lexer::Lexer::new(&source);
+        let tokens = lexer.tokenize();
+        let mut parser = parser::Parser::new(tokens);
+        let program = parser.parse()
+            .map_err(|e| anyhow::anyhow!("Parse error in {}: {}", module_path, e))?;
+        
+        // Find dependencies (use statements) and compile them first
+        for item in &program.items {
+            if let parser::Item::Use(path) = item {
+                let dep_path = path.join(".");
+                // Only recursively compile std modules for now
+                if dep_path.starts_with("std.") {
+                    self.compile_module(&dep_path)?;
+                }
+            }
+        }
+        
+        // Analyze and generate code
+        let mut analyzer = analyzer::Analyzer::new();
+        let (analyzed, registry) = analyzer.analyze_program(&program)
+            .map_err(|e| anyhow::anyhow!("Analysis error in {}: {}", module_path, e))?;
+        
+        let mut codegen = codegen::CodeGenerator::new_for_module(registry, self.target);
+        let rust_code = codegen.generate_program(&program, &analyzed);
+        
+        // Wrap module code in a Rust mod block
+        // e.g., std.json becomes: pub mod json { ... }
+        let module_name = module_path.split('.').last().unwrap();
+        let wrapped_code = format!("pub mod {} {{\n{}\n}}\n", module_name, rust_code);
+        
+        // Store compiled module
+        self.compiled_modules.insert(module_path.to_string(), wrapped_code);
+        
+        Ok(())
+    }
+    
+    /// Resolve module path to file path
+    fn resolve_module_path(&self, module_path: &str) -> Result<PathBuf> {
+        if module_path.starts_with("std.") {
+            // stdlib module: std.json -> $STDLIB/json.wj
+            let module_name = module_path.strip_prefix("std.").unwrap();
+            let file_path = self.stdlib_path.join(format!("{}.wj", module_name));
+            if file_path.exists() {
+                Ok(file_path)
+            } else {
+                Err(anyhow::anyhow!("Stdlib module not found: {} (looked in {:?})", module_path, file_path))
+            }
+        } else {
+            // TODO: Relative imports for user modules
+            Err(anyhow::anyhow!("Only std.* imports are supported currently"))
+        }
+    }
+    
+    /// Get all compiled modules in dependency order
+    fn get_compiled_modules(&self) -> Vec<String> {
+        // For now, just return modules in any order
+        // TODO: Topological sort for proper dependency order
+        self.compiled_modules.values().cloned().collect()
+    }
+}
+
 fn compile_file(input_path: &PathBuf, output_dir: &PathBuf, target: CompilationTarget) -> Result<()> {
+    let mut module_compiler = ModuleCompiler::new(target);
+    
     // Read source file
     let source = std::fs::read_to_string(input_path)?;
     
@@ -192,14 +290,36 @@ fn compile_file(input_path: &PathBuf, output_dir: &PathBuf, target: CompilationT
     let program = parser.parse()
         .map_err(|e| anyhow::anyhow!("Parse error: {}", e))?;
     
-    // Analyze
+    // Compile dependencies first
+    for item in &program.items {
+        if let parser::Item::Use(path) = item {
+            let module_path = path.join(".");
+            if module_path.starts_with("std.") {
+                module_compiler.compile_module(&module_path)?;
+            }
+        }
+    }
+    
+    // Analyze main file
     let mut analyzer = analyzer::Analyzer::new();
     let (analyzed, registry) = analyzer.analyze_program(&program)
         .map_err(|e| anyhow::anyhow!("Analysis error: {}", e))?;
     
-    // Generate Rust code
+    // Generate Rust code for main file
     let mut codegen = codegen::CodeGenerator::new(registry, target);
-    let rust_code = codegen.generate_program(&program, &analyzed);
+    let main_code = codegen.generate_program(&program, &analyzed);
+    
+    // Combine modules: dependencies first, then main code
+    let mut final_code = String::new();
+    
+    // Add compiled dependencies
+    for module_code in module_compiler.get_compiled_modules() {
+        final_code.push_str(&module_code);
+        final_code.push_str("\n\n");
+    }
+    
+    // Add main code
+    final_code.push_str(&main_code);
     
     // Write output file
     let output_filename = input_path
@@ -208,7 +328,7 @@ fn compile_file(input_path: &PathBuf, output_dir: &PathBuf, target: CompilationT
         .ok_or_else(|| anyhow::anyhow!("Invalid filename"))?;
     
     let output_path = output_dir.join(format!("{}.rs", output_filename));
-    std::fs::write(output_path, rust_code)?;
+    std::fs::write(output_path, final_code)?;
     
     Ok(())
 }

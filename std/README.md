@@ -126,17 +126,35 @@ reqwest = { version = "0.11", features = ["json"] }
 
 ---
 
-## Current Status (v0.4.0)
+## Current Status
 
-### ✅ Implemented
+### ✅ Implemented (v0.4.0)
 - `json.wj` - JSON parsing and serialization
-
-### 🚧 In Progress
-- `http.wj` - HTTP client
+- `http.wj` - HTTP client (server coming in v0.5.0)
 - `fs.wj` - File system operations
 
-### 📋 Planned
-- All other modules (v0.5.0+)
+### ✅ Implemented (v0.5.0) - Module System Complete!
+- `time.wj` - Date/time operations (wraps chrono)
+- `strings.wj` - String manipulation utilities
+- `math.wj` - Mathematical functions and constants
+- `log.wj` - Logging (wraps log/env_logger)
+- `csv.wj` - CSV parsing and writing
+- `regex.wj` - Regular expressions (wraps regex crate)
+- `encoding.wj` - Base64, hex, URL encoding
+- `crypto.wj` - Hashing functions (SHA256, MD5)
+
+**✅ Module System**: Real Windjammer code, transpiled to Rust
+**✅ Tested**: std/fs module working end-to-end!
+
+### 📋 Planned (v0.6.0)
+- `cli.wj` - Command-line parsing (wraps clap)
+
+### 📋 Future (v0.6.0+)
+- HTTP server support in `http.wj`
+- `collections.wj` - Extended data structures
+- `path.wj` - Path manipulation
+- `sync.wj` - Concurrency primitives
+- `testing.wj` - Test framework
 
 ---
 

@@ -1,0 +1,40 @@
+// std/regex - Regular expression matching
+// Thin wrapper over the regex crate
+
+use regex
+
+// Check if pattern matches string
+fn is_match(pattern: &str, text: &str) -> Result<bool, regex::Error> {
+    let re = regex::Regex::new(pattern)?
+    Ok(re.is_match(text))
+}
+
+// Find first match in string
+fn find(pattern: &str, text: &str) -> Result<Option<String>, regex::Error> {
+    let re = regex::Regex::new(pattern)?
+    Ok(re.find(text).map(|m| m.as_str().to_string()))
+}
+
+// Find all matches in string
+fn find_all(pattern: &str, text: &str) -> Result<Vec<String>, regex::Error> {
+    let re = regex::Regex::new(pattern)?
+    Ok(re.find_iter(text).map(|m| m.as_str().to_string()).collect())
+}
+
+// Replace first match
+fn replace(pattern: &str, text: &str, replacement: &str) -> Result<String, regex::Error> {
+    let re = regex::Regex::new(pattern)?
+    Ok(re.replace(text, replacement).into_owned())
+}
+
+// Replace all matches
+fn replace_all(pattern: &str, text: &str, replacement: &str) -> Result<String, regex::Error> {
+    let re = regex::Regex::new(pattern)?
+    Ok(re.replace_all(text, replacement).into_owned())
+}
+
+// Split string by pattern
+fn split(pattern: &str, text: &str) -> Result<Vec<String>, regex::Error> {
+    let re = regex::Regex::new(pattern)?
+    Ok(re.split(text).map(|s| s.to_string()).collect())
+}
