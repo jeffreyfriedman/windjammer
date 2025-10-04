@@ -1,19 +1,17 @@
 // WebAssembly Game Example - Conway's Game of Life
-use wasm_bindgen.prelude
-use web_sys
-use js_sys
+// No imports needed! @export automatically handles everything
 
 const WIDTH: u32 = 64
 const HEIGHT: u32 = 64
 
-@wasm_bindgen
+@export
 struct Universe {
     width: u32,
     height: u32,
     cells: Vec<bool>,
 }
 
-@wasm_bindgen
+@export
 impl Universe {
     fn new() -> Universe {
         let width = WIDTH
@@ -121,7 +119,7 @@ impl Universe {
 }
 
 // Render function for canvas
-@wasm_bindgen
+@export
 fn render(universe: &Universe, ctx: &web_sys.CanvasRenderingContext2d, cell_size: u32) {
     let alive_color = "black"
     let dead_color = "white"
@@ -171,14 +169,14 @@ fn render(universe: &Universe, ctx: &web_sys.CanvasRenderingContext2d, cell_size
 }
 
 // Performance statistics
-@wasm_bindgen
+@export
 struct Stats {
     generation: u32,
     fps: f64,
     alive_cells: u32,
 }
 
-@wasm_bindgen
+@export
 impl Stats {
     fn new() -> Stats {
         Stats {

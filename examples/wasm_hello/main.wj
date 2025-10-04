@@ -1,22 +1,22 @@
 // Simple WASM Example
-use wasm_bindgen.prelude
+// No imports needed! @export automatically handles everything
 
-@wasm_bindgen
+@export
 fn greet(name: string) -> string {
     format!("Hello, {}! 👋 from Windjammer", name)
 }
 
-@wasm_bindgen
+@export
 fn add(a: i32, b: i32) -> i32 {
     a + b
 }
 
-@wasm_bindgen
+@export
 struct Counter {
     value: i32,
 }
 
-@wasm_bindgen
+@export
 impl Counter {
     fn new() -> Counter {
         Counter { value: 0 }
