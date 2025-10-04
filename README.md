@@ -46,6 +46,42 @@ Zero-cost abstractions, memory safety, and blazing speed.
 - **Pattern matching in function parameters**: `fn process((x, y): (int, int))` ✨
 - **Smart @auto derive**: Zero-config trait inference (`@auto`) ✨
 - **Trait system**: Full trait definitions and implementations ✨
+- **Module system**: Import and use standard library modules ✨
+
+### 📚 "Batteries Included" Standard Library
+Windjammer provides a comprehensive standard library that covers 80% of common use cases without external dependencies. **All stdlib modules are written in Windjammer itself**, proving the language is practical and providing transparent, readable implementations.
+
+**Core Modules** (v0.5.0):
+- `std.json` - JSON parsing and serialization
+- `std.csv` - CSV data processing
+- `std.http` - HTTP client for API requests
+- `std.fs` - File system operations
+- `std.time` - Date/time handling
+- `std.strings` - String manipulation utilities
+- `std.math` - Mathematical functions
+- `std.log` - Logging framework
+- `std.regex` - Regular expressions
+- `std.encoding` - Base64, hex, URL encoding
+- `std.crypto` - Cryptographic hashing
+
+**Example Usage**:
+```windjammer
+use std.fs
+use std.json
+
+fn main() {
+    // Read and parse JSON file
+    match fs.read_to_string("config.json") {
+        Ok(data) => {
+            match json.parse(&data) {
+                Ok(config) => println!("Loaded config: {:?}", config),
+                Err(e) => println!("Parse error: {}", e),
+            }
+        },
+        Err(e) => println!("Read error: {}", e),
+    }
+}
+```
 
 ## Ownership Inference Strategy
 
@@ -532,18 +568,17 @@ code --install-extension windjammer-*.vsix
 
 Create `hello.wj`:
 
-```go
-use std.println
-
+```windjammer
 fn main() {
-    println("Hello, Windjammer!")
+    let name = "Windjammer"
+    println!("Hello, {}!", name)
 }
 ```
 
 Transpile and run:
 
 ```bash
-windjammer build hello.wj
+windjammer build --path hello.wj --output output
 cd output
 cargo run
 ```
@@ -552,9 +587,21 @@ cargo run
 
 See the `examples/` directory for complete working examples:
 
-1. **[HTTP Server](examples/http_server/)** - RESTful API with decorators and async
-2. **[CLI Tool](examples/cli_tool/)** - Concurrent file processor with channels
-3. **[WASM Game](examples/wasm_game/)** - Conway's Game of Life compiled to WebAssembly
+**Language Basics:**
+1. **[Basic Features](examples/01_basics/)** - Variables, functions, control flow
+2. **[Structs & Methods](examples/02_structs/)** - Data structures and impl blocks
+3. **[Enums & Matching](examples/03_enums/)** - Enumerations and pattern matching
+4. **[Traits](examples/04_traits/)** - Trait definitions and implementations
+5. **[Modern Features](examples/05_modern/)** - String interpolation, pipe operator, ternary
+
+**Standard Library:**
+6. **[Module System](examples/10_module_test/)** - Module imports and usage
+7. **[File Operations](examples/11_fs_test/)** - Using std.fs for file I/O
+8. **[Core Language](examples/12_simple_test/)** - Basic language test
+
+**Advanced Examples:**
+9. **[WASM Hello](examples/wasm_hello/)** - WebAssembly "Hello World"
+10. **[WASM Game](examples/wasm_game/)** - Conway's Game of Life in the browser
 
 ## Development Tools
 
