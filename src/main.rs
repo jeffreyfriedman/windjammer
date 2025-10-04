@@ -210,14 +210,15 @@ impl ModuleCompiler {
     }
     
     /// Compile a module and all its dependencies
-    fn compile_module(&mut self, module_path: &str) -> Result<()> {
+    /// source_file: The file that is importing this module (for relative path resolution)
+    fn compile_module(&mut self, module_path: &str, source_file: Option<&PathBuf>) -> Result<()> {
         // Skip if already compiled
         if self.compiled_modules.contains_key(module_path) {
             return Ok(());
         }
         
         // Find the module file
-        let file_path = self.resolve_module_path(module_path)?;
+        let file_path = self.resolve_module_path(module_path, source_file)?;
         
         // Read and parse
         let source = std::fs::read_to_string(&file_path)?;
@@ -231,10 +232,8 @@ impl ModuleCompiler {
         for item in &program.items {
             if let parser::Item::Use(path) = item {
                 let dep_path = path.join(".");
-                // Only recursively compile std modules for now
-                if dep_path.starts_with("std.") {
-                    self.compile_module(&dep_path)?;
-                }
+                // Recursively compile both std modules and relative imports
+                self.compile_module(&dep_path, Some(&file_path))?;
             }
         }
         
@@ -248,7 +247,19 @@ impl ModuleCompiler {
         
         // Wrap module code in a Rust mod block
         // e.g., std.json becomes: pub mod json { ... }
-        let module_name = module_path.split('.').last().unwrap();
+        // For relative imports like ./utils or ../utils/helpers, extract module name
+        let module_name = if module_path.starts_with("./") || module_path.starts_with("../") {
+            // Extract final component: ./utils -> utils, ../utils/helpers -> helpers
+            let stripped = module_path.strip_prefix("./")
+                .or_else(|| module_path.strip_prefix("../"))
+                .unwrap_or(module_path);
+            stripped.split('/').last().unwrap_or(stripped)
+        } else if module_path.contains('.') {
+            // std.json -> json
+            module_path.split('.').last().unwrap()
+        } else {
+            module_path
+        };
         let wrapped_code = format!("pub mod {} {{\n{}\n}}\n", module_name, rust_code);
         
         // Store compiled module
@@ -263,7 +274,8 @@ impl ModuleCompiler {
     }
     
     /// Resolve module path to file path
-    fn resolve_module_path(&self, module_path: &str) -> Result<PathBuf> {
+    /// source_file: The file that is importing this module (for relative path resolution)
+    fn resolve_module_path(&self, module_path: &str, source_file: Option<&PathBuf>) -> Result<PathBuf> {
         if module_path.starts_with("std.") {
             // stdlib module: std.json -> $STDLIB/json.wj
             let module_name = module_path.strip_prefix("std.").unwrap();
@@ -273,9 +285,47 @@ impl ModuleCompiler {
             } else {
                 Err(anyhow::anyhow!("Stdlib module not found: {} (looked in {:?})", module_path, file_path))
             }
+        } else if module_path.starts_with("./") || module_path.starts_with("../") {
+            // Relative import: ./module or ../module
+            let source_dir = source_file
+                .and_then(|f| f.parent())
+                .ok_or_else(|| anyhow::anyhow!("Cannot resolve relative import without source file"))?;
+            
+            // module_path is already in form "./utils" or "./utils/helpers"
+            // Just strip the leading ./ or ../
+            let relative_part = if module_path.starts_with("./") {
+                module_path.strip_prefix("./").unwrap()
+            } else {
+                module_path.strip_prefix("../").unwrap()
+            };
+            
+            // Resolve relative path from source directory
+            let base_path = if module_path.starts_with("../") {
+                source_dir.parent().ok_or_else(|| anyhow::anyhow!("Cannot go up from root directory"))?
+            } else {
+                source_dir
+            };
+            
+            let resolved = base_path.join(relative_part).with_extension("wj");
+            
+            // Try file directly first
+            if resolved.exists() {
+                return Ok(resolved);
+            }
+            
+            // Try as directory module: ./utils -> utils/mod.wj
+            let mod_path = base_path.join(relative_part).join("mod.wj");
+            if mod_path.exists() {
+                return Ok(mod_path);
+            }
+            
+            Err(anyhow::anyhow!(
+                "User module not found: {} (looked in {:?} and {:?})",
+                module_path, resolved, mod_path
+            ))
         } else {
-            // TODO: Relative imports for user modules
-            Err(anyhow::anyhow!("Only std.* imports are supported currently"))
+            // Absolute import (future: github.com/user/repo style)
+            Err(anyhow::anyhow!("Absolute imports not yet supported: {}", module_path))
         }
     }
     
@@ -355,9 +405,8 @@ fn compile_file(input_path: &PathBuf, output_dir: &PathBuf, target: CompilationT
     for item in &program.items {
         if let parser::Item::Use(path) = item {
             let module_path = path.join(".");
-            if module_path.starts_with("std.") {
-                module_compiler.compile_module(&module_path)?;
-            }
+            // Compile both std.* and relative imports (./ or ../)
+            module_compiler.compile_module(&module_path, Some(input_path))?;
         }
     }
     
@@ -482,6 +531,12 @@ fn create_cargo_toml_with_deps(output_dir: &PathBuf, imported_modules: &HashSet<
     for dep in &deps {
         cargo_toml_content.push_str(dep);
         cargo_toml_content.push('\n');
+    }
+    
+    // Add [[bin]] section if main.rs exists
+    let main_rs = output_dir.join("main.rs");
+    if main_rs.exists() {
+        cargo_toml_content.push_str("\n[[bin]]\nname = \"windjammer-output\"\npath = \"main.rs\"\n");
     }
     
     std::fs::write(cargo_toml_path, cargo_toml_content)?;
