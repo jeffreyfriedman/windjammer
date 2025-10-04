@@ -9,6 +9,8 @@ pub enum Type {
     Bool,
     String,
     Custom(String),
+    Generic(String),  // Type parameter: T, U, V
+    Parameterized(String, Vec<Type>),  // Generic type: Vec<T>, HashMap<K, V>
     Option(Box<Type>),
     Result(Box<Type>, Box<Type>),
     Vec(Box<Type>),
@@ -42,6 +44,7 @@ pub struct Decorator {
 #[derive(Debug, Clone)]
 pub struct FunctionDecl {
     pub name: String,
+    pub type_params: Vec<String>,  // Generic type parameters: <T, U>
     pub decorators: Vec<Decorator>,
     pub is_async: bool,
     pub parameters: Vec<Parameter>,
@@ -59,6 +62,7 @@ pub struct StructField {
 #[derive(Debug, Clone)]
 pub struct StructDecl {
     pub name: String,
+    pub type_params: Vec<String>,  // Generic type parameters: <T>
     pub fields: Vec<StructField>,
     pub decorators: Vec<Decorator>,
 }
@@ -274,6 +278,7 @@ pub struct TraitMethod {
 #[derive(Debug, Clone)]
 pub struct ImplBlock {
     pub type_name: String,
+    pub type_params: Vec<String>,  // Generic type parameters: impl<T> Box<T>
     pub trait_name: Option<String>,  // None for inherent impl, Some for trait impl
     pub functions: Vec<FunctionDecl>,
     pub decorators: Vec<Decorator>,
@@ -486,7 +491,7 @@ impl Parser {
         
         self.expect(Token::RBrace)?;
         
-        Ok(ImplBlock { type_name, trait_name, functions, decorators: Vec::new() })
+        Ok(ImplBlock { type_name, type_params: Vec::new(), trait_name, functions, decorators: Vec::new() })
     }
     
     fn parse_trait(&mut self) -> Result<TraitDecl, String> {
@@ -719,6 +724,7 @@ impl Parser {
         
         Ok(FunctionDecl {
             name,
+            type_params: Vec::new(),  // TODO: Parse type parameters
             decorators: Vec::new(), // Set by parse_item
             is_async: false,        // Set by parse_item
             parameters,
@@ -960,7 +966,7 @@ impl Parser {
         
         self.expect(Token::RBrace)?;
         
-        Ok(StructDecl { name, fields, decorators: Vec::new() })
+        Ok(StructDecl { name, type_params: Vec::new(), fields, decorators: Vec::new() })
     }
     
     fn parse_enum(&mut self) -> Result<EnumDecl, String> {
