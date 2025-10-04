@@ -1,0 +1,37 @@
+// Simple WASM Example
+use wasm_bindgen.prelude
+
+@wasm_bindgen
+fn greet(name: string) -> string {
+    format!("Hello, {}! 👋 from Windjammer", name)
+}
+
+@wasm_bindgen
+fn add(a: i32, b: i32) -> i32 {
+    a + b
+}
+
+@wasm_bindgen
+struct Counter {
+    value: i32,
+}
+
+@wasm_bindgen
+impl Counter {
+    fn new() -> Counter {
+        Counter { value: 0 }
+    }
+    
+    fn increment(&mut self) {
+        self.value += 1
+    }
+    
+    fn get_value(&self) -> i32 {
+        self.value
+    }
+}
+
+
+
+
+

@@ -8,8 +8,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **WASM Examples**:
+  - `wasm_hello` - Simple WASM functions (greet, add, Counter)
+  - `wasm_game` - Conway's Game of Life running at 60 FPS in browser
 - Character literals with escape sequences (`'a'`, `'\n'`, `'\t'`, `'\''`, `'\\'`, `'\0'`)
 - Struct field decorators for CLI args, serialization, validation
+- Decorator support for `impl` blocks (e.g., `@wasm_bindgen`)
 - Comprehensive test suite (57 tests total):
   - 16 lexer tests (all token types)
   - 9 compiler integration tests
@@ -23,9 +27,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Comprehensive documentation:
   - SESSION_COMPLETE.md - Session summary
   - COMPREHENSIVE_STATUS.md - Detailed status
+  - WASM_FIXES.md - Detailed bug report from WASM development
   - Updated GUIDE.md with character literals and field decorators
 
 ### Fixed
+- **CRITICAL**: Binary operator precedence bug (e.g., `a + b % c` now generates correct parentheses)
+- **CRITICAL**: Glob imports for `use` statements (now generates `use crate::*;` for WASM compatibility)
+- **CRITICAL**: Impl block decorators weren't being parsed or generated
+- **CRITICAL**: Functions in `#[wasm_bindgen]` impl blocks now correctly marked as `pub`
 - **MAJOR**: Match expression parsing (confused `match x {}` with struct literals)
   - Now supports `match x {}`, `match &x {}`, `match *x {}`, etc.
   - Added unary operator support in match values

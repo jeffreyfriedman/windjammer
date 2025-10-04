@@ -265,10 +265,23 @@ impl Analyzer {
         let param_ownership: Vec<OwnershipMode> = func.decl.parameters
             .iter()
             .map(|param| {
-                func.inferred_ownership
+                let inferred = func.inferred_ownership
                     .get(&param.name)
                     .cloned()
-                    .unwrap_or(OwnershipMode::Owned)
+                    .unwrap_or(OwnershipMode::Owned);
+                
+                // Copy types are always passed by value (Owned) unless mutated
+                // This must match the logic in codegen.rs
+                if self.is_copy_type(&param.type_) {
+                    // Copy types: pass by value unless they need to be mutated
+                    if inferred == OwnershipMode::MutBorrowed {
+                        OwnershipMode::MutBorrowed
+                    } else {
+                        OwnershipMode::Owned
+                    }
+                } else {
+                    inferred
+                }
             })
             .collect();
         
@@ -276,6 +289,25 @@ impl Analyzer {
             name: func.decl.name.clone(),
             param_ownership,
             return_ownership: OwnershipMode::Owned, // For now, always owned
+        }
+    }
+    
+    fn is_copy_type(&self, ty: &Type) -> bool {
+        use crate::parser::Type;
+        match ty {
+            Type::Int | Type::Int32 | Type::Uint | Type::Float | Type::Bool => true,
+            Type::Reference(_) => true,
+            Type::MutableReference(_) => false,
+            Type::Tuple(types) => types.iter().all(|t| self.is_copy_type(t)),
+            Type::Custom(name) => {
+                // Recognize common Rust primitive types by name
+                matches!(name.as_str(), 
+                    "i8" | "i16" | "i32" | "i64" | "i128" | "isize" |
+                    "u8" | "u16" | "u32" | "u64" | "u128" | "usize" |
+                    "f32" | "f64" | "bool" | "char"
+                )
+            }
+            _ => false,
         }
     }
 }

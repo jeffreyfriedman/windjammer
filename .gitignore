@@ -1,12 +1,20 @@
 # Rust
 /target/
 Cargo.lock
+!examples/*/Cargo.lock
 **/*.rs.bk
 *.pdb
 
 # Generated output
 /output/
 /test_output/
+
+# WASM build artifacts
+examples/*/pkg/
+examples/*/target/
+examples/*/build/
+examples/*/build_output/
+examples/*/src/
 
 # Temporary test files
 test_*.wj

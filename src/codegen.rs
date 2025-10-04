@@ -5,6 +5,7 @@ use crate::analyzer::*;
 pub struct CodeGenerator {
     indent_level: usize,
     signature_registry: SignatureRegistry,
+    in_wasm_bindgen_impl: bool,
 }
 
 impl CodeGenerator {
@@ -12,6 +13,7 @@ impl CodeGenerator {
         CodeGenerator {
             indent_level: 0,
             signature_registry: registry,
+            in_wasm_bindgen_impl: false,
         }
     }
     
@@ -128,15 +130,18 @@ impl CodeGenerator {
     }
     
     fn generate_use(&self, path: &[String]) -> String {
-        format!("use {};\n", path.join("::"))
+        // Convert Windjammer's Go-style imports to Rust's glob imports
+        // e.g., "use wasm_bindgen.prelude" -> "use wasm_bindgen::prelude::*;"
+        format!("use {}::*;\n", path.join("::"))
     }
     
     fn generate_struct(&self, s: &StructDecl) -> String {
         let mut output = String::new();
         
-        // Check for @auto decorator and convert to #[derive(...)]
+        // Convert decorators to Rust attributes
         for decorator in &s.decorators {
             if decorator.name == "auto" {
+                // Special handling for @auto decorator
                 let traits = if decorator.arguments.is_empty() {
                     // Smart inference: no arguments, so infer traits based on field types
                     self.infer_derivable_traits(s)
@@ -153,6 +158,20 @@ impl CodeGenerator {
                 
                 if !traits.is_empty() {
                     output.push_str(&format!("#[derive({})]\n", traits.join(", ")));
+                }
+            } else {
+                // Generic decorator: convert to Rust attribute
+                if decorator.arguments.is_empty() {
+                    output.push_str(&format!("#[{}]\n", decorator.name));
+                } else {
+                    output.push_str(&format!("#[{}(", decorator.name));
+                    let args: Vec<String> = decorator.arguments.iter()
+                        .map(|(key, expr)| {
+                            format!("{} = {}", key, self.generate_expression_immut(expr))
+                        })
+                        .collect();
+                    output.push_str(&args.join(", "));
+                    output.push_str(")]\n");
                 }
             }
         }
@@ -292,15 +311,29 @@ impl CodeGenerator {
     }
     
     fn generate_impl(&mut self, impl_block: &ImplBlock, analyzed: &[AnalyzedFunction]) -> String {
-        let mut output = if let Some(trait_name) = &impl_block.trait_name {
+        let mut output = String::new();
+        
+        // Check if this impl block has @wasm_bindgen decorator
+        let has_wasm_bindgen = impl_block.decorators.iter().any(|d| d.name == "wasm_bindgen");
+        
+        // Generate decorators (like #[wasm_bindgen])
+        for decorator in &impl_block.decorators {
+            output.push_str(&format!("#[{}]\n", decorator.name));
+        }
+        
+        if let Some(trait_name) = &impl_block.trait_name {
             // Trait implementation: impl Trait for Type
-            format!("impl {} for {} {{\n", trait_name, impl_block.type_name)
+            output.push_str(&format!("impl {} for {} {{\n", trait_name, impl_block.type_name));
         } else {
             // Inherent implementation: impl Type
-            format!("impl {} {{\n", impl_block.type_name)
-        };
+            output.push_str(&format!("impl {} {{\n", impl_block.type_name));
+        }
         
         self.indent_level += 1;
+        
+        // Store the wasm_bindgen flag for use in generate_function
+        let old_in_wasm_impl = self.in_wasm_bindgen_impl;
+        self.in_wasm_bindgen_impl = has_wasm_bindgen;
         
         for func in &impl_block.functions {
             // Find the analyzed version of this function
@@ -309,6 +342,8 @@ impl CodeGenerator {
                 output.push('\n');
             }
         }
+        
+        self.in_wasm_bindgen_impl = old_in_wasm_impl;
         
         self.indent_level -= 1;
         output.push('}');
@@ -326,7 +361,14 @@ impl CodeGenerator {
     
     fn generate_function(&mut self, analyzed: &AnalyzedFunction) -> String {
         let func = &analyzed.decl;
-        let mut output = String::from("fn ");
+        let mut output = String::new();
+        
+        // Add `pub` if we're in a #[wasm_bindgen] impl block
+        if self.in_wasm_bindgen_impl {
+            output.push_str("pub ");
+        }
+        
+        output.push_str("fn ");
         output.push_str(&func.name);
         output.push('(');
         
@@ -356,10 +398,23 @@ impl CodeGenerator {
                     let ownership_mode = analyzed.inferred_ownership.get(&param.name)
                         .unwrap_or(&OwnershipMode::Borrowed);
                     
-                    match ownership_mode {
-                        OwnershipMode::Owned => self.type_to_rust(&param.type_),
-                        OwnershipMode::Borrowed => format!("&{}", self.type_to_rust(&param.type_)),
-                        OwnershipMode::MutBorrowed => format!("&mut {}", self.type_to_rust(&param.type_)),
+                    // Override for Copy types UNLESS they're mutated
+                    // Mutated parameters should be &mut even for Copy types
+                    if self.is_copy_type(&param.type_) && ownership_mode != &OwnershipMode::MutBorrowed {
+                        self.type_to_rust(&param.type_)
+                    } else {
+                        match ownership_mode {
+                            OwnershipMode::Owned => self.type_to_rust(&param.type_),
+                            OwnershipMode::Borrowed => {
+                                // For Copy types that are only read, pass by value
+                                if self.is_copy_type(&param.type_) {
+                                    self.type_to_rust(&param.type_)
+                                } else {
+                                    format!("&{}", self.type_to_rust(&param.type_))
+                                }
+                            }
+                            OwnershipMode::MutBorrowed => format!("&mut {}", self.type_to_rust(&param.type_)),
+                        }
                     }
                 }
             };
@@ -408,8 +463,22 @@ impl CodeGenerator {
             Type::Option(inner) => format!("Option<{}>", self.type_to_rust(inner)),
             Type::Result(ok, err) => format!("Result<{}, {}>", self.type_to_rust(ok), self.type_to_rust(err)),
             Type::Vec(inner) => format!("Vec<{}>", self.type_to_rust(inner)),
-            Type::Reference(inner) => format!("&{}", self.type_to_rust(inner)),
-            Type::MutableReference(inner) => format!("&mut {}", self.type_to_rust(inner)),
+            Type::Reference(inner) => {
+                // Special case: &[T] (slice) vs &Vec<T>
+                if let Type::Vec(elem) = &**inner {
+                    format!("&[{}]", self.type_to_rust(elem))
+                } else {
+                    format!("&{}", self.type_to_rust(inner))
+                }
+            }
+            Type::MutableReference(inner) => {
+                // Special case: &mut [T] (mutable slice) vs &mut Vec<T>
+                if let Type::Vec(elem) = &**inner {
+                    format!("&mut [{}]", self.type_to_rust(elem))
+                } else {
+                    format!("&mut {}", self.type_to_rust(inner))
+                }
+            }
             Type::Tuple(types) => {
                 let rust_types: Vec<String> = types.iter()
                     .map(|t| self.type_to_rust(t))
@@ -649,13 +718,46 @@ impl CodeGenerator {
         }
     }
     
+    fn generate_expression_with_precedence(&mut self, expr: &Expression) -> String {
+        // Wrap expressions in parentheses if they need them for proper precedence
+        // when used as the object of a method call or field access
+        match expr {
+            Expression::Range { .. } |
+            Expression::Binary { .. } |
+            Expression::Closure { .. } |
+            Expression::Ternary { .. } => {
+                format!("({})", self.generate_expression(expr))
+            }
+            _ => self.generate_expression(expr)
+        }
+    }
+    
     fn generate_expression(&mut self, expr: &Expression) -> String {
         match expr {
             Expression::Literal(lit) => self.generate_literal(lit),
             Expression::Identifier(name) => name.clone(),
             Expression::Binary { left, op, right } => {
-                let left_str = self.generate_expression(left);
-                let right_str = self.generate_expression(right);
+                // Wrap operands in parens if they have lower precedence
+                let left_str = match left.as_ref() {
+                    Expression::Binary { op: left_op, .. } => {
+                        if self.op_precedence(left_op) < self.op_precedence(op) {
+                            format!("({})", self.generate_expression(left))
+                        } else {
+                            self.generate_expression(left)
+                        }
+                    }
+                    _ => self.generate_expression(left)
+                };
+                let right_str = match right.as_ref() {
+                    Expression::Binary { op: right_op, .. } => {
+                        if self.op_precedence(right_op) < self.op_precedence(op) {
+                            format!("({})", self.generate_expression(right))
+                        } else {
+                            self.generate_expression(right)
+                        }
+                    }
+                    _ => self.generate_expression(right)
+                };
                 let op_str = self.binary_op_to_rust(op);
                 format!("{} {} {}", left_str, op_str, right_str)
             }
@@ -711,14 +813,14 @@ impl CodeGenerator {
                 format!("{}({})", func_str, args.join(", "))
             }
             Expression::MethodCall { object, method, arguments } => {
-                let obj_str = self.generate_expression(object);
+                let obj_str = self.generate_expression_with_precedence(object);
                 let args: Vec<String> = arguments.iter()
                     .map(|(_label, arg)| self.generate_expression(arg))
                     .collect();
                 format!("{}.{}({})", obj_str, method, args.join(", "))
             }
             Expression::FieldAccess { object, field } => {
-                let obj_str = self.generate_expression(object);
+                let obj_str = self.generate_expression_with_precedence(object);
                 format!("{}.{}", obj_str, field)
             }
             Expression::StructLiteral { name, fields } => {
@@ -798,7 +900,13 @@ impl CodeGenerator {
                 format!("{}!{}{}{}", name, open, arg_strs.join(", "), close)
             }
             Expression::Cast { expr, type_ } => {
-                let expr_str = self.generate_expression(expr);
+                // Add parentheses around binary expressions for correct precedence
+                let expr_str = match &**expr {
+                    Expression::Binary { .. } => {
+                        format!("({})", self.generate_expression(expr))
+                    }
+                    _ => self.generate_expression(expr)
+                };
                 let type_str = self.type_to_rust(type_);
                 format!("{} as {}", expr_str, type_str)
             }
@@ -850,7 +958,15 @@ impl CodeGenerator {
     fn generate_literal(&self, lit: &Literal) -> String {
         match lit {
             Literal::Int(n) => n.to_string(),
-            Literal::Float(f) => f.to_string(),
+            Literal::Float(f) => {
+                let s = f.to_string();
+                // Ensure float literals always have a decimal point
+                if !s.contains('.') && !s.contains('e') {
+                    format!("{}.0", s)
+                } else {
+                    s
+                }
+            }
             Literal::String(s) => format!("\"{}\"", s),
             Literal::Char(c) => {
                 // Escape special characters
@@ -883,6 +999,17 @@ impl CodeGenerator {
             BinaryOp::Ge => ">=",
             BinaryOp::And => "&&",
             BinaryOp::Or => "||",
+        }
+    }
+    
+    fn op_precedence(&self, op: &BinaryOp) -> i32 {
+        match op {
+            BinaryOp::Or => 1,
+            BinaryOp::And => 2,
+            BinaryOp::Eq | BinaryOp::Ne => 3,
+            BinaryOp::Lt | BinaryOp::Le | BinaryOp::Gt | BinaryOp::Ge => 4,
+            BinaryOp::Add | BinaryOp::Sub => 5,
+            BinaryOp::Mul | BinaryOp::Div | BinaryOp::Mod => 6,
         }
     }
     
@@ -962,7 +1089,15 @@ impl CodeGenerator {
             Type::Reference(_) => true,  // References are Copy
             Type::MutableReference(_) => false,  // Mutable references are not Copy
             Type::Tuple(types) => types.iter().all(|t| self.is_copy_type(t)),
-            _ => false,  // String, Vec, Option, Result, Custom types are not Copy
+            Type::Custom(name) => {
+                // Recognize common Rust primitive types by name
+                matches!(name.as_str(), 
+                    "i8" | "i16" | "i32" | "i64" | "i128" | "isize" |
+                    "u8" | "u16" | "u32" | "u64" | "u128" | "usize" |
+                    "f32" | "f64" | "bool" | "char"
+                )
+            }
+            _ => false,  // String, Vec, Option, Result, other Custom types are not Copy
         }
     }
     

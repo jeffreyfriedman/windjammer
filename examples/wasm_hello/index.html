@@ -1,0 +1,181 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <title>Windjammer WASM Hello</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            max-width: 600px;
+            margin: 50px auto;
+            padding: 20px;
+            background: #f5f5f5;
+        }
+        h1 { color: #333; }
+        .demo {
+            background: white;
+            padding: 20px;
+            margin: 20px 0;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        button {
+            background: #0066cc;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 4px;
+            cursor: pointer;
+            margin: 5px;
+        }
+        button:hover { background: #0052a3; }
+        input {
+            padding: 8px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            margin: 5px;
+        }
+        .result {
+            margin-top: 10px;
+            padding: 10px;
+            background: #e8f4f8;
+            border-radius: 4px;
+        }
+        .status {
+            padding: 10px;
+            margin: 10px 0;
+            border-radius: 4px;
+            background: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+        .error {
+            background: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+    </style>
+</head>
+<body>
+    <h1>🦀 Windjammer → Rust → WASM</h1>
+    <p>This page loads WebAssembly compiled from Windjammer code!</p>
+    
+    <div id="status" class="status">Loading WASM module...</div>
+    
+    <div class="demo" id="demos" style="display:none;">
+        <h3>String Function</h3>
+        <input type="text" id="name-input" placeholder="Your name" value="World">
+        <button onclick="testGreet()">Greet</button>
+        <div class="result" id="greet-result"></div>
+    </div>
+
+    <div class="demo" id="demos2" style="display:none;">
+        <h3>Math Function</h3>
+        <input type="number" id="num1" value="5" style="width: 60px">
+        +
+        <input type="number" id="num2" value="3" style="width: 60px">
+        <button onclick="testAdd()">Calculate</button>
+        <div class="result" id="add-result"></div>
+    </div>
+
+    <div class="demo" id="demos3" style="display:none;">
+        <h3>Stateful Object</h3>
+        <button onclick="createCounter()">New Counter</button>
+        <button onclick="incrementCounter()">Increment</button>
+        <button onclick="getCounterValue()">Get Value</button>
+        <div class="result" id="counter-result"></div>
+    </div>
+
+    <script type="module">
+        // Import the WASM module - note the different import syntax
+        import init, * as wasm from './pkg/wasm_hello.js';
+
+        let counter = null;
+
+        async function run() {
+            try {
+                // Initialize the WASM module
+                await init();
+                
+                const { greet, add, Counter } = wasm;
+                
+                // Show success and demos
+                document.getElementById('status').textContent = '✅ WASM module loaded successfully!';
+                document.getElementById('demos').style.display = 'block';
+                document.getElementById('demos2').style.display = 'block';
+                document.getElementById('demos3').style.display = 'block';
+                
+                console.log('✅ WASM module loaded successfully!');
+                
+                // Make functions global for button onclick handlers
+                window.testGreet = () => {
+                    try {
+                        const name = document.getElementById('name-input').value;
+                        const result = greet(name);
+                        document.getElementById('greet-result').textContent = result;
+                    } catch (e) {
+                        document.getElementById('greet-result').textContent = `Error: ${e.message}`;
+                    }
+                };
+
+                window.testAdd = () => {
+                    try {
+                        const a = parseInt(document.getElementById('num1').value);
+                        const b = parseInt(document.getElementById('num2').value);
+                        const result = add(a, b);
+                        document.getElementById('add-result').textContent = `${a} + ${b} = ${result}`;
+                    } catch (e) {
+                        document.getElementById('add-result').textContent = `Error: ${e.message}`;
+                    }
+                };
+
+                window.createCounter = () => {
+                    try {
+                        counter = Counter.new();
+                        document.getElementById('counter-result').textContent = 'Counter created!';
+                    } catch (e) {
+                        document.getElementById('counter-result').textContent = `Error: ${e.message}`;
+                    }
+                };
+
+                window.incrementCounter = () => {
+                    try {
+                        if (!counter) {
+                            document.getElementById('counter-result').textContent = 'Create a counter first!';
+                            return;
+                        }
+                        counter.increment();
+                        document.getElementById('counter-result').textContent = 'Incremented!';
+                    } catch (e) {
+                        document.getElementById('counter-result').textContent = `Error: ${e.message}`;
+                    }
+                };
+
+                window.getCounterValue = () => {
+                    try {
+                        if (!counter) {
+                            document.getElementById('counter-result').textContent = 'Create a counter first!';
+                            return;
+                        }
+                        const value = counter.get_value();
+                        document.getElementById('counter-result').textContent = `Counter value: ${value}`;
+                    } catch (e) {
+                        document.getElementById('counter-result').textContent = `Error: ${e.message}`;
+                    }
+                };
+
+                // Run initial tests
+                window.testGreet();
+                window.testAdd();
+            } catch (e) {
+                console.error('Failed to initialize WASM:', e);
+                document.getElementById('status').textContent = `❌ Failed to load WASM: ${e.message}`;
+                document.getElementById('status').className = 'status error';
+            }
+        }
+
+        run();
+    </script>
+</body>
+</html>
+
