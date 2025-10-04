@@ -11,6 +11,7 @@ pub struct CodeGenerator {
     needs_web_imports: bool,
     needs_js_imports: bool,
     target: CompilationTarget,
+    is_module: bool,  // true if generating code for a reusable module (not main file)
 }
 
 impl CodeGenerator {
@@ -23,7 +24,14 @@ impl CodeGenerator {
             needs_web_imports: false,
             needs_js_imports: false,
             target,
+            is_module: false,
         }
+    }
+    
+    pub fn new_for_module(registry: SignatureRegistry, target: CompilationTarget) -> Self {
+        let mut gen = Self::new(registry, target);
+        gen.is_module = true;
+        gen
     }
     
     fn indent(&self) -> String {
@@ -192,6 +200,12 @@ impl CodeGenerator {
     }
     
     fn generate_use(&self, path: &[String]) -> String {
+        // Skip stdlib imports - they're handled by the compiler
+        // std.* modules are built-in and don't need explicit imports
+        if !path.is_empty() && path[0] == "std" {
+            return String::new();
+        }
+        
         // Convert Windjammer's Go-style imports to Rust's glob imports
         // e.g., "use wasm_bindgen.prelude" -> "use wasm_bindgen::prelude::*;"
         format!("use {}::*;\n", path.join("::"))
@@ -428,8 +442,8 @@ impl CodeGenerator {
         let func = &analyzed.decl;
         let mut output = String::new();
         
-        // Add `pub` if we're in a #[wasm_bindgen] impl block
-        if self.in_wasm_bindgen_impl {
+        // Add `pub` if we're in a #[wasm_bindgen] impl block OR compiling a module
+        if self.in_wasm_bindgen_impl || self.is_module {
             output.push_str("pub ");
         }
         
@@ -882,7 +896,16 @@ impl CodeGenerator {
                 let args: Vec<String> = arguments.iter()
                     .map(|(_label, arg)| self.generate_expression(arg))
                     .collect();
-                format!("{}.{}({})", obj_str, method, args.join(", "))
+                
+                // If object is a simple identifier, it might be a module call
+                // Use :: for module calls (e.g., json::parse()) and . for method calls
+                let separator = if matches!(**object, Expression::Identifier(_)) {
+                    "::"
+                } else {
+                    "."
+                };
+                
+                format!("{}{}{}({})", obj_str, separator, method, args.join(", "))
             }
             Expression::FieldAccess { object, field } => {
                 let obj_str = self.generate_expression_with_precedence(object);
