@@ -1,6 +1,7 @@
 // Rust code generator
 use crate::parser::*;
 use crate::analyzer::*;
+use crate::CompilationTarget;
 
 pub struct CodeGenerator {
     indent_level: usize,
@@ -9,10 +10,11 @@ pub struct CodeGenerator {
     needs_wasm_imports: bool,
     needs_web_imports: bool,
     needs_js_imports: bool,
+    target: CompilationTarget,
 }
 
 impl CodeGenerator {
-    pub fn new(registry: SignatureRegistry) -> Self {
+    pub fn new(registry: SignatureRegistry, target: CompilationTarget) -> Self {
         CodeGenerator {
             indent_level: 0,
             signature_registry: registry,
@@ -20,6 +22,7 @@ impl CodeGenerator {
             needs_wasm_imports: false,
             needs_web_imports: false,
             needs_js_imports: false,
+            target,
         }
     }
     
@@ -29,18 +32,29 @@ impl CodeGenerator {
     
     /// Map Windjammer decorators to Rust attributes
     /// This abstraction layer allows us to use semantic Windjammer names
-    /// while generating appropriate Rust attributes
+    /// while generating appropriate Rust attributes based on compilation target
     fn map_decorator(&mut self, name: &str) -> String {
-        match name {
-            "export" => {
-                // @export maps to #[wasm_bindgen] for WASM targets
+        match (name, self.target) {
+            ("export", CompilationTarget::Wasm) => {
                 self.needs_wasm_imports = true;
                 "wasm_bindgen".to_string()
             }
-            "test" => "test".to_string(),
-            "async" => "async".to_string(),
+            ("export", CompilationTarget::Node) => {
+                // Future: Node.js native modules via Neon
+                "neon::export".to_string()
+            }
+            ("export", CompilationTarget::Python) => {
+                // Future: Python bindings via PyO3
+                "pyfunction".to_string()
+            }
+            ("export", CompilationTarget::C) => {
+                // Future: C FFI
+                "no_mangle".to_string()
+            }
+            ("test", _) => "test".to_string(),
+            ("async", _) => "async".to_string(),
             // Pass through other decorators as-is
-            other => other.to_string()
+            (other, _) => other.to_string()
         }
     }
     
