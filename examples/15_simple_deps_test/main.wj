@@ -1,0 +1,13 @@
+// Simpler test - just verify compilation works
+// We'll test Cargo.toml generation manually
+
+fn main() {
+    println!("Testing Cargo.toml generation...")
+    
+    // Simple code that doesn't require complex stdlib
+    let x = 42
+    let y = x + 10
+    
+    println!("Result: {}", y)
+    println!("Cargo.toml should contain wasm-bindgen dependencies")
+}

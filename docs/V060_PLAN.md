@@ -9,21 +9,74 @@ Building on the successful v0.5.0 module system, v0.6.0 will extend modules to s
 ## Goals
 
 ### Primary Goals
-1. **User-Defined Modules** - Allow developers to create their own modules
-2. **Relative Imports** - Import local modules with `use ./my_module`
-3. **Module Aliases** - `use std.fs as filesystem`
-4. **Basic Generics** - Generic functions and structs
+1. **Cargo.toml Dependency Management** - Auto-generate dependencies for stdlib crates
+2. **Test Remaining Stdlib Modules** - Runtime validation of json, csv, http, etc.
+3. **User-Defined Modules** - Allow developers to create their own modules
+4. **Relative Imports** - Import local modules with `use ./my_module`
+5. **Module Aliases** - `use std.fs as filesystem`
+6. **Basic Generics** - Generic functions and structs
 
 ### Secondary Goals
-5. **Selective Imports** - `use std.fs.{read, write}`
-6. **Re-exports** - `pub use` for module composition
-7. **Better Error Messages** - Map Rust errors back to Windjammer source
+7. **Selective Imports** - `use std.fs.{read, write}`
+8. **Re-exports** - `pub use` for module composition
+9. **Performance Benchmarks** - Compare Windjammer vs Rust vs Go
+10. **Better Error Messages** - Map Rust errors back to Windjammer source
 
 ---
 
 ## Feature Details
 
-### 1. User-Defined Modules
+### 1. Cargo.toml Dependency Management
+
+**Current**: Generated Cargo.toml is minimal, missing stdlib dependencies
+**Target**: Auto-generate dependencies based on imported stdlib modules
+
+**Design**:
+When user imports stdlib modules, automatically add required crates:
+```windjammer
+use std.json
+use std.http
+```
+
+Generated Cargo.toml should include:
+```toml
+[dependencies]
+serde = "1.0"
+serde_json = "1.0"
+reqwest = { version = "0.11", features = ["blocking"] }
+```
+
+**Implementation**:
+- Track which stdlib modules are imported
+- Map stdlib modules to required Rust crates
+- Generate comprehensive Cargo.toml with all dependencies
+- Include feature flags where needed
+
+### 2. Test Remaining Stdlib Modules
+
+**Current**: Only std/fs tested with runtime examples
+**Target**: All 11 stdlib modules validated
+
+**Modules to Test**:
+- ✅ std/fs (already tested)
+- ⏳ std/json
+- ⏳ std/csv
+- ⏳ std/http
+- ⏳ std/time
+- ⏳ std/strings
+- ⏳ std/math
+- ⏳ std/log
+- ⏳ std/regex
+- ⏳ std/encoding
+- ⏳ std/crypto
+
+**Implementation**:
+- Create test example for each module
+- Verify compilation with dependencies
+- Validate runtime behavior
+- Document any issues found
+
+### 3. User-Defined Modules
 
 **Current**: Only `std.*` modules work
 **Target**: Users can create their own modules
