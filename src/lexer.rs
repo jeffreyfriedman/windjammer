@@ -76,6 +76,11 @@ pub enum Token {
     Not,
     
     Assign,
+    PlusAssign,    // +=
+    MinusAssign,   // -=
+    StarAssign,    // *=
+    SlashAssign,   // /=
+    PercentAssign, // %=
     Arrow,      // ->
     LeftArrow,  // <-
     FatArrow,   // =>
@@ -405,15 +410,40 @@ impl Lexer {
                     Token::At
                 }
             }
+            Some('+') if self.peek(1) == Some('=') => {
+                self.advance();
+                self.advance();
+                Token::PlusAssign
+            }
             Some('+') => { self.advance(); Token::Plus }
+            Some('-') if self.peek(1) == Some('=') => {
+                self.advance();
+                self.advance();
+                Token::MinusAssign
+            }
             Some('-') if self.peek(1) == Some('>') => {
                 self.advance();
                 self.advance();
                 Token::Arrow
             }
             Some('-') => { self.advance(); Token::Minus }
+            Some('*') if self.peek(1) == Some('=') => {
+                self.advance();
+                self.advance();
+                Token::StarAssign
+            }
             Some('*') => { self.advance(); Token::Star }
+            Some('/') if self.peek(1) == Some('=') => {
+                self.advance();
+                self.advance();
+                Token::SlashAssign
+            }
             Some('/') => { self.advance(); Token::Slash }
+            Some('%') if self.peek(1) == Some('=') => {
+                self.advance();
+                self.advance();
+                Token::PercentAssign
+            }
             Some('%') => { self.advance(); Token::Percent }
             Some('=') if self.peek(1) == Some('=') => {
                 self.advance();

@@ -3,7 +3,7 @@
 A simple, high-level language that transpiles to Rust—combining Go's ergonomics, Ruby's expressiveness, and Rust's safety and performance.
 
 > **🎯 The 80/20 Language**: 80% of Rust's power with 20% of the complexity  
-> **📊 [Read the detailed comparison: Windjammer vs Rust vs Go](COMPARISON.md)**
+> **📊 [Read the detailed comparison: Windjammer vs Rust vs Go](docs/COMPARISON.md)**
 
 ## Philosophy
 
@@ -622,24 +622,23 @@ cargo run
 - **Rapid Prototypes** - Speed over safety
 - **Teams Unfamiliar with Systems** - Easiest learning curve
 
-**📊 See [COMPARISON.md](COMPARISON.md) for detailed analysis**
+**📊 See [COMPARISON.md](docs/COMPARISON.md) for detailed analysis**
 
 ---
 
 ## 📘 Documentation
 
 **For Users**:
-- 📖 **[GUIDE.md](GUIDE.md)** - Complete developer guide (Rust book style)
-- 🔄 **[COMPARISON.md](COMPARISON.md)** - Windjammer vs Rust vs Go (honest tradeoffs)
+- 📖 **[GUIDE.md](docs/GUIDE.md)** - Complete developer guide (Rust book style)
+- 🔄 **[COMPARISON.md](docs/COMPARISON.md)** - Windjammer vs Rust vs Go (honest tradeoffs)
 - 🎯 **[README.md](README.md)** - This file (quick start and overview)
 
 **For Contributors**:
-- 🚀 **[PROGRESS.md](PROGRESS.md)** - Current status and next steps
-- 🗺️ **[ROADMAP.md](ROADMAP.md)** - Development phases and timeline
-- ⚠️ **[KNOWN_ISSUES.md](KNOWN_ISSUES.md)** - Limitations and workarounds
-- 🎨 **[TRAITS_DESIGN.md](TRAITS_DESIGN.md)** - Ergonomic trait system design
-- 🔧 **[AUTO_REFERENCE_DESIGN.md](AUTO_REFERENCE_DESIGN.md)** - Automatic reference insertion (P0)
-- 📍 **[ERROR_MAPPING_DESIGN.md](ERROR_MAPPING_DESIGN.md)** - Rust→Windjammer error translation (P0)
+- 🚀 **[PROGRESS.md](docs/PROGRESS.md)** - Current status and next steps
+- 🗺️ **[ROADMAP.md](docs/ROADMAP.md)** - Development phases and timeline
+- 🎨 **[Traits Design](docs/design/traits.md)** - Ergonomic trait system design
+- 🔧 **[Auto-Reference Design](docs/design/auto-reference.md)** - Automatic reference insertion
+- 📍 **[Error Mapping Design](docs/design/error-mapping.md)** - Rust→Windjammer error translation
 
 **Standard Library**:
 - 📚 **[std/README.md](std/README.md)** - Philosophy and architecture

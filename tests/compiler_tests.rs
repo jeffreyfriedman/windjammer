@@ -33,19 +33,23 @@ fn compile_fixture(fixture_name: &str) -> Result<String, String> {
 fn test_automatic_reference_insertion() {
     let generated = compile_fixture("auto_reference").expect("Compilation failed");
     
-    // Check that function signatures have borrowed parameters
-    assert!(generated.contains("fn double(x: &i64) -> i64"), 
-        "Function should infer borrowed parameter");
+    // Check that Copy types are passed by value (not reference)
+    assert!(generated.contains("fn double(x: i64) -> i64"), 
+        "Copy types should be passed by value, not reference");
+    
+    // Check that non-Copy types (String) are inferred as borrowed
     assert!(generated.contains("fn greet(name: &String)"),
-        "Function should infer borrowed string parameter");
+        "Non-Copy types should be inferred as borrowed");
     
-    // Check that call sites have automatic & insertion
-    assert!(generated.contains("double(&x)"),
-        "Call site should auto-insert &");
+    // Check that call sites pass Copy types by value (no &)
+    assert!(generated.contains("double(x)"),
+        "Copy types should be passed by value at call site");
+    
+    // Check that call sites auto-insert & for non-Copy types
     assert!(generated.contains("greet(&name)"),
-        "Call site should auto-insert & for string");
+        "Call site should auto-insert & for non-Copy types");
     
-    println!("✓ Automatic reference insertion works");
+    println!("✓ Copy type handling and automatic reference insertion works");
 }
 
 #[test]
@@ -68,9 +72,10 @@ fn test_pipe_operator() {
     let generated = compile_fixture("pipe_operator").expect("Compilation failed");
     
     // Check that pipe operator is transformed to nested calls
-    // 5 |> double |> add_ten becomes add_ten(&double(&5))
-    assert!(generated.contains("add_ten(&double(&5))"),
-        "Pipe operator should transform to nested calls with auto-reference");
+    // 5 |> double |> add_ten becomes add_ten(double(5))
+    // No & needed because int/i64 is a Copy type
+    assert!(generated.contains("add_ten(double(5))"),
+        "Pipe operator should transform to nested calls (no & for Copy types)");
     
     println!("✓ Pipe operator works");
 }
@@ -119,8 +124,9 @@ fn main() {
     let generated = compile_fixture("temp_combined").expect("Compilation failed");
     
     // Check that both features work together
-    assert!(generated.contains("double(&5)"),
-        "Pipe operator should work with auto-reference");
+    // int/i64 is a Copy type, so no & is inserted
+    assert!(generated.contains("double(5)"),
+        "Pipe operator should work correctly (no & for Copy types)");
     assert!(generated.contains(r#"println!("Result: {}", result)"#),
         "String interpolation should work in combined test");
     
@@ -152,16 +158,16 @@ fn main() {
     
     let generated = compile_fixture("temp_borrowed").expect("Compilation failed");
     
-    // Should infer borrowed since x is only read
-    assert!(generated.contains("fn print_twice(x: &i64)"),
-        "Read-only parameter should be inferred as borrowed");
-    assert!(generated.contains("print_twice(&42)"),
-        "Call site should auto-insert &");
+    // Copy types should always be passed by value, regardless of usage
+    assert!(generated.contains("fn print_twice(x: i64)"),
+        "Copy types should be passed by value, not borrowed");
+    assert!(generated.contains("print_twice(42)"),
+        "Copy types should be passed by value at call site");
     
     // Clean up
     std::fs::remove_file(temp_path).ok();
     
-    println!("✓ Ownership inference (borrowed) works");
+    println!("✓ Copy type handling works correctly");
 }
 
 #[test]

@@ -276,6 +276,7 @@ pub struct ImplBlock {
     pub type_name: String,
     pub trait_name: Option<String>,  // None for inherent impl, Some for trait impl
     pub functions: Vec<FunctionDecl>,
+    pub decorators: Vec<Decorator>,
 }
 
 #[derive(Debug, Clone)]
@@ -375,7 +376,9 @@ impl Parser {
             }
             Token::Impl => {
                 self.advance();
-                Ok(Item::Impl(self.parse_impl()?))
+                let mut impl_block = self.parse_impl()?;
+                impl_block.decorators = decorators;
+                Ok(Item::Impl(impl_block))
             }
             Token::Const => {
                 self.advance();
@@ -393,7 +396,10 @@ impl Parser {
                 let (name, type_, value) = self.parse_const_or_static()?;
                 Ok(Item::Static { name, mutable, type_, value })
             }
-            Token::Use => Ok(Item::Use(self.parse_use()?)),
+            Token::Use => {
+                self.advance(); // consume 'use'
+                Ok(Item::Use(self.parse_use()?))
+            }
             _ => Err(format!("Unexpected token: {:?}", self.current_token())),
         }
     }
@@ -472,7 +478,7 @@ impl Parser {
         
         self.expect(Token::RBrace)?;
         
-        Ok(ImplBlock { type_name, trait_name, functions })
+        Ok(ImplBlock { type_name, trait_name, functions, decorators: Vec::new() })
     }
     
     fn parse_trait(&mut self) -> Result<TraitDecl, String> {
@@ -622,7 +628,7 @@ impl Parser {
     }
     
     fn parse_use(&mut self) -> Result<Vec<String>, String> {
-        self.expect(Token::Use)?;
+        // Note: Token::Use already consumed in parse_item
         
         let mut path = Vec::new();
         
@@ -735,17 +741,17 @@ impl Parser {
                     });
                 } else {
                     // Simple identifier parameter
-                    let name = if let Token::Ident(n) = self.current_token() {
-                        let name = n.clone();
-                        self.advance();
-                        name
-                    } else {
-                        return Err("Expected parameter name".to_string());
-                    };
-                    
-                    self.expect(Token::Colon)?;
-                    let type_ = self.parse_type()?;
-                    
+            let name = if let Token::Ident(n) = self.current_token() {
+                let name = n.clone();
+                self.advance();
+                name
+            } else {
+                return Err("Expected parameter name".to_string());
+            };
+            
+            self.expect(Token::Colon)?;
+            let type_ = self.parse_type()?;
+            
                     params.push(Parameter { name, pattern: None, type_, ownership });
                 }
             }
@@ -989,16 +995,45 @@ impl Parser {
                 // Try to parse as expression first
                 let expr = self.parse_expression()?;
                 
-                // Check if this is an assignment (expr = value)
-                if self.current_token() == &Token::Assign {
-                    self.advance(); // consume '='
-                    let value = self.parse_expression()?;
-                    Ok(Statement::Assignment {
-                        target: expr,
-                        value,
-                    })
-                } else {
-                    Ok(Statement::Expression(expr))
+                // Check if this is an assignment (expr = value) or compound assignment (expr += value)
+                match self.current_token() {
+                    Token::Assign => {
+                        self.advance(); // consume '='
+                        let value = self.parse_expression()?;
+                        Ok(Statement::Assignment {
+                            target: expr,
+                            value,
+                        })
+                    }
+                    Token::PlusAssign | Token::MinusAssign | Token::StarAssign | 
+                    Token::SlashAssign | Token::PercentAssign => {
+                        let op_token = self.current_token().clone();
+                        self.advance(); // consume compound operator
+                        
+                        let rhs = self.parse_expression()?;
+                        
+                        // Convert x += y to x = x + y
+                        let op = match op_token {
+                            Token::PlusAssign => BinaryOp::Add,
+                            Token::MinusAssign => BinaryOp::Sub,
+                            Token::StarAssign => BinaryOp::Mul,
+                            Token::SlashAssign => BinaryOp::Div,
+                            Token::PercentAssign => BinaryOp::Mod,
+                            _ => unreachable!(),
+                        };
+                        
+                        let value = Expression::Binary {
+                            left: Box::new(expr.clone()),
+                            op,
+                            right: Box::new(rhs),
+                        };
+                        
+                        Ok(Statement::Assignment {
+                            target: expr,
+                            value,
+                        })
+                    }
+                    _ => Ok(Statement::Expression(expr))
                 }
             }
         }
@@ -1306,9 +1341,37 @@ impl Parser {
         let mut left = match self.current_token() {
             Token::LParen => {
                 self.advance();
-                let expr = self.parse_expression()?;
-                self.expect(Token::RParen)?;
-                expr
+                
+                // Check for empty tuple ()
+                if self.current_token() == &Token::RParen {
+                    self.advance();
+                    return Ok(Expression::Tuple(vec![]));
+                }
+                
+                let first_expr = self.parse_expression()?;
+                
+                // Check if it's a tuple (has comma) or just a parenthesized expression
+                if self.current_token() == &Token::Comma {
+                    let mut elements = vec![first_expr];
+                    
+                    while self.current_token() == &Token::Comma {
+                        self.advance(); // consume comma
+                        
+                        // Allow trailing comma
+                        if self.current_token() == &Token::RParen {
+                            break;
+                        }
+                        
+                        elements.push(self.parse_expression()?);
+                    }
+                    
+                    self.expect(Token::RParen)?;
+                    Expression::Tuple(elements)
+                } else {
+                    // Just a parenthesized expression
+                    self.expect(Token::RParen)?;
+                    first_expr
+                }
             }
             Token::Ampersand => {
                 // Handle & and &mut unary operators
@@ -1356,13 +1419,61 @@ impl Parser {
             Token::Ident(name) => {
                 let name = name.clone();
                 self.advance();
-                // Don't check for { here - just return the identifier
+                // Don't check for { here - just create the identifier
+                // and continue to postfix operators
                 Expression::Identifier(name)
             }
             _ => return self.parse_primary_expression(),
         };
         
-        // Handle postfix and binary operators
+        // Handle postfix operators (., [, etc.) before binary operators
+        loop {
+            match self.current_token() {
+                Token::Dot => {
+                    self.advance();
+                    let field = if let Token::Ident(name) = self.current_token() {
+                        let name = name.clone();
+                        self.advance();
+                        name
+                    } else {
+                        return Err("Expected field name after .".to_string());
+                    };
+                    left = Expression::FieldAccess {
+                        object: Box::new(left),
+                        field,
+                    };
+                }
+                Token::LBracket => {
+                    self.advance();
+                    let index = Box::new(self.parse_expression()?);
+                    self.expect(Token::RBracket)?;
+                    left = Expression::Index {
+                        object: Box::new(left),
+                        index,
+                    };
+                }
+                Token::LParen => {
+                    // Function call
+                    self.advance();
+                    let mut arguments = Vec::new();
+                    while self.current_token() != &Token::RParen {
+                        let arg = self.parse_expression()?;
+                        arguments.push((None, arg));
+                        if self.current_token() == &Token::Comma {
+                            self.advance();
+                        }
+                    }
+                    self.expect(Token::RParen)?;
+                    left = Expression::Call {
+                        function: Box::new(left),
+                        arguments,
+                    };
+                }
+                _ => break,
+            }
+        }
+        
+        // Handle binary operators
         while let Some((op, precedence)) = self.get_binary_op() {
             self.advance();
             let right = self.parse_binary_expression(precedence + 1)?;
@@ -1694,15 +1805,41 @@ impl Parser {
                 let mut parameters = Vec::new();
                 
                 while self.current_token() != &Token::Pipe {
-                    if let Token::Ident(name) = self.current_token() {
-                        parameters.push(name.clone());
-                        self.advance();
-                        
-                        if self.current_token() == &Token::Comma {
+                    // Handle patterns like &x, &mut x, or just x
+                    let param_name = match self.current_token() {
+                        Token::Ampersand => {
                             self.advance();
+                            // Skip optional 'mut'
+                            if self.current_token() == &Token::Mut {
+                                self.advance();
+                            }
+                            // Get the identifier
+                            if let Token::Ident(name) = self.current_token() {
+                                let n = name.clone();
+                                self.advance();
+                                n
+                            } else {
+                                return Err("Expected identifier after & in closure parameter".to_string());
+                            }
                         }
-                    } else {
-                        return Err("Expected parameter name in closure".to_string());
+                        Token::Ident(name) => {
+                            let n = name.clone();
+                            self.advance();
+                            n
+                        }
+                        Token::Underscore => {
+                            self.advance();
+                            "_".to_string()
+                        }
+                        _ => {
+                            return Err("Expected parameter name in closure".to_string());
+                        }
+                    };
+                    
+                    parameters.push(param_name);
+                    
+                    if self.current_token() == &Token::Comma {
+                        self.advance();
                     }
                 }
                 
@@ -1710,6 +1847,36 @@ impl Parser {
                 let body = Box::new(self.parse_expression()?);
                 
                 Expression::Closure { parameters, body }
+            }
+            Token::If => {
+                // If expression: if cond { ... } else { ... }
+                self.advance(); // consume 'if'
+                // Use parse_match_value to avoid struct literal ambiguity
+                let condition = Box::new(self.parse_match_value()?);
+                
+                self.expect(Token::LBrace)?;
+                let then_block = self.parse_block_statements()?;
+                self.expect(Token::RBrace)?;
+                
+                let else_block = if self.current_token() == &Token::Else {
+                    self.advance();
+                    self.expect(Token::LBrace)?;
+                    let block = self.parse_block_statements()?;
+                    self.expect(Token::RBrace)?;
+                    Some(block)
+                } else {
+                    None
+                };
+                
+                // Convert to expression by wrapping in a block with an if statement
+                // that returns the value
+                let if_stmt = Statement::If {
+                    condition: *condition,
+                    then_block,
+                    else_block,
+                };
+                
+                Expression::Block(vec![if_stmt])
             }
             Token::Unsafe => {
                 // Unsafe block: unsafe { ... }
@@ -1789,9 +1956,9 @@ impl Parser {
                             }
                             _ => {
                                 // Likely TryOp
-                                self.advance();
-                                Expression::TryOp(Box::new(expr))
-                            }
+                    self.advance();
+                    Expression::TryOp(Box::new(expr))
+                }
                         }
                     } else {
                         // No next token, treat as TryOp
