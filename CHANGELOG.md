@@ -7,45 +7,86 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Planned
+- User-defined modules (not just stdlib)
+- Relative imports (`use ./my_module`)
+- Module aliases and selective imports
+- Generics support
+
+## [0.5.0] - 2025-10-04
+
+### Added - Module System & Standard Library 🎉
+- **Complete Module System**:
+  - Module resolution from `std/` directory
+  - Recursive dependency compilation
+  - Automatic `pub mod` wrapping
+  - Smart `::` vs `.` separator for Rust interop
+  - Context-aware code generation with `is_module` flag
+- **"Batteries Included" Standard Library** (11 modules, 910 lines):
+  - `std/json` - JSON parsing/serialization (serde_json wrapper)
+  - `std/csv` - CSV data processing
+  - `std/http` - HTTP client (reqwest wrapper)
+  - `std/fs` - File system operations ✅ **TESTED & WORKING**
+  - `std/time` - Date/time operations (chrono wrapper)
+  - `std/strings` - String manipulation utilities
+  - `std/math` - Mathematical functions
+  - `std/log` - Logging framework
+  - `std/regex` - Regular expressions
+  - `std/encoding` - Base64, hex, URL encoding
+  - `std/crypto` - Cryptographic hashing
+- **All stdlib modules written in Windjammer itself** (not compiler built-ins)
+- **New Examples**:
+  - `examples/10_module_test` - Module imports demo
+  - `examples/11_fs_test` - File system operations (100% working)
+  - `examples/12_simple_test` - Core language validation
+  - `examples/13_stdlib_demo` - Multiple module usage
+- **Comprehensive Documentation**:
+  - `docs/MODULE_SYSTEM.md` - Complete 366-line guide
+  - Updated README with "Batteries Included" section
+  - 5 progress/status documents
+
+### Fixed
+- **CRITICAL**: Qualified path handling for stdlib modules
+  - Windjammer paths (`std.fs.read`) now correctly convert to Rust (`std::fs::read`)
+  - Smart separator detection: `::` for static calls, `.` for instance methods
+  - Context-aware FieldAccess generation
+- **CRITICAL**: Module function visibility (auto-add `pub` in module context)
+
+### Changed
+- Codegen now tracks module context with `is_module` flag
+- Expression generation context-aware for paths vs field access
+- MethodCall generation distinguishes static vs instance calls
+
+## [0.4.0] - 2025-10-03
+
 ### Added
+- **Implementation-Agnostic Abstractions**:
+  - `@export` decorator replaces `@wasm_bindgen` for semantic external visibility
+  - Compilation target system (`--target wasm|node|python|c`)
+  - Implicit import injection based on decorators
+  - Multi-layered target detection system
+- **Standard Library Foundation**:
+  - Initial stdlib module specifications (json, http, fs, time, strings, math, log)
+  - Design for "batteries included" approach
 - **WASM Examples**:
   - `wasm_hello` - Simple WASM functions (greet, add, Counter)
   - `wasm_game` - Conway's Game of Life running at 60 FPS in browser
 - Character literals with escape sequences (`'a'`, `'\n'`, `'\t'`, `'\''`, `'\\'`, `'\0'`)
 - Struct field decorators for CLI args, serialization, validation
-- Decorator support for `impl` blocks (e.g., `@wasm_bindgen`)
-- Comprehensive test suite (57 tests total):
-  - 16 lexer tests (all token types)
-  - 9 compiler integration tests
-  - 32 feature test framework
-- 5 working example projects (385 lines total):
-  - 01_basics - Functions, loops, ternary, string interpolation
-  - 02_structs - Structs, impl blocks, methods
-  - 03_enums - Enums, pattern matching, OR patterns
-  - 04_traits - Trait definitions and implementations
-  - 05_modern - Pipe operator, labeled args, ranges, characters
-- Comprehensive documentation:
-  - SESSION_COMPLETE.md - Session summary
-  - COMPREHENSIVE_STATUS.md - Detailed status
-  - WASM_FIXES.md - Detailed bug report from WASM development
-  - Updated GUIDE.md with character literals and field decorators
+- Decorator support for `impl` blocks
+- Comprehensive test suite (57 tests total)
+- 5 working basic example projects
 
 ### Fixed
-- **CRITICAL**: Binary operator precedence bug (e.g., `a + b % c` now generates correct parentheses)
-- **CRITICAL**: Glob imports for `use` statements (now generates `use crate::*;` for WASM compatibility)
-- **CRITICAL**: Impl block decorators weren't being parsed or generated
-- **CRITICAL**: Functions in `#[wasm_bindgen]` impl blocks now correctly marked as `pub`
-- **MAJOR**: Match expression parsing (confused `match x {}` with struct literals)
-  - Now supports `match x {}`, `match &x {}`, `match *x {}`, etc.
-  - Added unary operator support in match values
-  - Fixed match as return expression
-- Parser now correctly handles match expressions in all contexts
-- Match expressions work with references and dereferences
+- **CRITICAL**: Binary operator precedence bug
+- **CRITICAL**: Glob imports for `use` statements
+- **CRITICAL**: Impl block decorators parsing and generation
+- **CRITICAL**: Functions in `#[wasm_bindgen]` impl blocks now `pub`
+- **MAJOR**: Match expression parsing (struct literal disambiguation)
 
 ### Changed
-- Updated `parse_match()` to use `parse_match_value()` instead of `parse_expression()`
-- Enhanced `parse_match_value()` with unary operator support (&, *, -, !)
-- Improved parser disambiguation for match vs struct literals
+- Removed `@wasm_bindgen` from examples, replaced with `@export`
+- Compiler now maps decorators based on compilation target
 
 ## [0.3.0] - 2025-10-03
 
@@ -102,6 +143,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Version History Summary
 
+- **v0.5** - Module system & "batteries included" standard library (11 modules)
+- **v0.4** - Implementation-agnostic abstractions, @export decorator, WASM examples
 - **v0.3** - Ergonomic improvements (ternary, smart derive)
 - **v0.2** - Modern features (interpolation, pipe, patterns)
 - **v0.1** - Core language and compiler
