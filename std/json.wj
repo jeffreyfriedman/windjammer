@@ -1,0 +1,37 @@
+// std/json - JSON serialization and deserialization
+// Wraps serde_json with a clean Windjammer API
+
+// Parse JSON string into a Value
+fn parse(json_str: string) -> Result<Value, Error> {
+    serde_json::from_str(json_str)
+}
+
+// Convert a Value to a JSON string
+fn stringify(value: &Value) -> Result<string, Error> {
+    serde_json::to_string(value)
+}
+
+// Convert a Value to a pretty-printed JSON string
+fn stringify_pretty(value: &Value) -> Result<string, Error> {
+    serde_json::to_string_pretty(value)
+}
+
+// Deserialize JSON into a specific type
+fn from_str<T>(json_str: string) -> Result<T, Error> {
+    serde_json::from_str(json_str)
+}
+
+// Serialize a value to JSON string
+fn to_string<T>(value: &T) -> Result<string, Error> {
+    serde_json::to_string(value)
+}
+
+// Serialize a value to pretty-printed JSON
+fn to_string_pretty<T>(value: &T) -> Result<string, Error> {
+    serde_json::to_string_pretty(value)
+}
+
+// Re-export serde_json types for direct use
+type Value = serde_json::Value
+type Error = serde_json::Error
+
