@@ -1,0 +1,21 @@
+// Test that Cargo.toml is generated with correct dependencies
+use std.json
+use std.math
+
+fn main() {
+    println!("Testing Cargo.toml dependency generation!")
+    
+    // Test JSON (requires serde_json dependency)
+    let data = json.parse("{\"name\": \"Windjammer\", \"version\": \"0.6.0\"}")
+    let json_str = json.stringify(data)
+    println!("JSON works: {}", json_str)
+    
+    // Test math (no external deps, uses Rust std)
+    let result = math.sqrt(16.0)
+    println!("Math works: sqrt(16) = {}", result)
+    
+    let pi = math.PI
+    println!("Math constant PI = {}", pi)
+    
+    println!("All stdlib modules working!")
+}
