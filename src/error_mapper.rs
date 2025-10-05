@@ -3,12 +3,21 @@ use serde::Deserialize;
 use colored::Colorize;
 use crate::source_map::SourceMap;
 
+/// Cargo message wrapper (top-level JSON structure)
+#[derive(Debug, Deserialize)]
+pub struct CargoMessage {
+    pub reason: String,
+    #[serde(default)]
+    pub message: Option<RustcDiagnostic>,
+}
+
 /// Rust compiler diagnostic (subset of rustc JSON output)
 #[derive(Debug, Deserialize)]
 pub struct RustcDiagnostic {
     pub message: String,
     pub level: String, // "error", "warning", "note"
     pub spans: Vec<DiagnosticSpan>,
+    #[serde(default)]
     pub code: Option<DiagnosticCode>,
 }
 
@@ -21,6 +30,8 @@ pub struct DiagnosticSpan {
     pub column_end: usize,
     pub text: Vec<DiagnosticText>,
     pub is_primary: bool,
+    #[serde(default)]
+    pub label: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]
