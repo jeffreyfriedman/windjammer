@@ -45,3 +45,15 @@ colored = "2.1"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 
+[dev-dependencies]
+# Benchmarking
+criterion = { version = "0.5", features = ["html_reports"] }
+
+[[bench]]
+name = "compilation"
+harness = false
+
+[[bench]]
+name = "runtime"
+harness = false
+
