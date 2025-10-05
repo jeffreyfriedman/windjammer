@@ -2,6 +2,7 @@ pub mod lexer;
 pub mod parser;
 pub mod analyzer;
 pub mod codegen;
+pub mod source_map;
 
 use clap::{Parser, Subcommand, ValueEnum};
 use std::path::PathBuf;
