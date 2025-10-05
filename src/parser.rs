@@ -175,6 +175,7 @@ pub enum Expression {
     MethodCall {
         object: Box<Expression>,
         method: String,
+        type_args: Option<Vec<Type>>,  // Turbofish: Vec::<int>::new()
         arguments: Vec<(Option<String>, Expression)>,  // (label, expr)
     },
     FieldAccess {
@@ -2075,16 +2076,40 @@ impl Parser {
                         let field = field.clone();
                         self.advance();
                         
+                        // Check for turbofish ::<Type>
+                        let type_args = if self.current_token() == &Token::ColonColon {
+                            self.advance();
+                            if self.current_token() == &Token::Lt {
+                                self.advance();
+                                let mut types = vec![self.parse_type()?];
+                                while self.current_token() == &Token::Comma {
+                                    self.advance();
+                                    if self.current_token() != &Token::Gt {
+                                        types.push(self.parse_type()?);
+                                    }
+                                }
+                                self.expect(Token::Gt)?;
+                                Some(types)
+                            } else {
+                                return Err("Expected '<' after '::'".to_string());
+                            }
+                        } else {
+                            None
+                        };
+                        
                         if self.current_token() == &Token::LParen {
-                            // Method call
+                            // Method call (possibly with turbofish)
                             self.advance();
                             let arguments = self.parse_arguments()?;
                             self.expect(Token::RParen)?;
                             Expression::MethodCall {
                                 object: Box::new(expr),
                                 method: field,
+                                type_args,
                                 arguments,
                             }
+                        } else if type_args.is_some() {
+                            return Err("Turbofish syntax only allowed on method calls".to_string());
                         } else {
                             // Field access
                             Expression::FieldAccess {
@@ -2095,6 +2120,93 @@ impl Parser {
                     } else {
                         return Err("Expected field or method name".to_string());
                         }
+                    }
+                }
+                Token::ColonColon => {
+                    // Turbofish on function/static method: func::<Type>() or Type::method::<T>()
+                    self.advance();
+                    if self.current_token() == &Token::Lt {
+                        self.advance();
+                        let mut types = vec![self.parse_type()?];
+                        while self.current_token() == &Token::Comma {
+                            self.advance();
+                            if self.current_token() != &Token::Gt {
+                                types.push(self.parse_type()?);
+                            }
+                        }
+                        self.expect(Token::Gt)?;
+                        
+                        // Now expect either () for call or :: for path continuation
+                        if self.current_token() == &Token::LParen {
+                            self.advance();
+                            let arguments = self.parse_arguments()?;
+                            self.expect(Token::RParen)?;
+                            // Convert to method call with turbofish
+                            // For func::<T>(), treat as a special method call on the function
+                            Expression::MethodCall {
+                                object: Box::new(expr),
+                                method: String::new(),  // Empty method name signals turbofish call
+                                type_args: Some(types),
+                                arguments,
+                            }
+                        } else if let Token::Ident(method) = self.current_token() {
+                            // Type::method or module::function continuation
+                            let method = method.clone();
+                            self.advance();
+                            Expression::MethodCall {
+                                object: Box::new(expr),
+                                method,
+                                type_args: None,
+                                arguments: vec![],
+                            }
+                        } else {
+                            return Err(format!("Expected '(' or identifier after '::<Type>', got {:?}", self.current_token()));
+                        }
+                    } else if let Token::Ident(method) = self.current_token() {
+                        // Type::method or module::function (no turbofish)
+                        let method = method.clone();
+                        self.advance();
+                        
+                        // Check for turbofish on this method
+                        let type_args = if self.current_token() == &Token::ColonColon {
+                            self.advance();
+                            if self.current_token() == &Token::Lt {
+                                self.advance();
+                                let mut types = vec![self.parse_type()?];
+                                while self.current_token() == &Token::Comma {
+                                    self.advance();
+                                    if self.current_token() != &Token::Gt {
+                                        types.push(self.parse_type()?);
+                                    }
+                                }
+                                self.expect(Token::Gt)?;
+                                Some(types)
+                            } else {
+                                return Err("Expected '<' after '::'".to_string());
+                            }
+                        } else {
+                            None
+                        };
+                        
+                        if self.current_token() == &Token::LParen {
+                            self.advance();
+                            let arguments = self.parse_arguments()?;
+                            self.expect(Token::RParen)?;
+                            Expression::MethodCall {
+                                object: Box::new(expr),
+                                method,
+                                type_args,
+                                arguments,
+                            }
+                        } else {
+                            // Just a path, treat as field access
+                            Expression::FieldAccess {
+                                object: Box::new(expr),
+                                field: method,
+                            }
+                        }
+                    } else {
+                        return Err(format!("Expected '<' or identifier after '::', got {:?}", self.current_token()));
                     }
                 }
                 Token::LParen => {
