@@ -230,7 +230,7 @@ impl ModuleCompiler {
         
         // Find dependencies (use statements) and compile them first
         for item in &program.items {
-            if let parser::Item::Use(path) = item {
+            if let parser::Item::Use { path, alias: _ } = item {
                 let dep_path = path.join(".");
                 // Recursively compile both std modules and relative imports
                 self.compile_module(&dep_path, Some(&file_path))?;
@@ -403,7 +403,7 @@ fn compile_file(input_path: &PathBuf, output_dir: &PathBuf, target: CompilationT
     
     // Compile dependencies first
     for item in &program.items {
-        if let parser::Item::Use(path) = item {
+        if let parser::Item::Use { path, alias: _ } = item {
             let module_path = path.join(".");
             // Compile both std.* and relative imports (./ or ../)
             module_compiler.compile_module(&module_path, Some(input_path))?;

@@ -543,25 +543,51 @@ impl Iterator<int> for Counter {
 
 ## Quick Start
 
-### Installation
+## Installation
+
+Windjammer is easy to install with multiple options for all platforms:
+
+### Quick Install
+
+**macOS / Linux:**
+```bash
+# Using Homebrew (recommended)
+brew tap jeffreyfriedman/windjammer
+brew install windjammer
+
+# Or using Cargo
+cargo install windjammer
+```
+
+**Windows:**
+```powershell
+# Using Scoop (recommended)
+scoop bucket add windjammer https://github.com/jeffreyfriedman/scoop-windjammer
+scoop install windjammer
+
+# Or using Cargo
+cargo install windjammer
+```
+
+### All Installation Methods
+
+| Method | Command | Best For |
+|--------|---------|----------|
+| **Homebrew** (macOS/Linux) | `brew install windjammer` | Mac/Linux users |
+| **Cargo** (All platforms) | `cargo install windjammer` | Rust developers |
+| **Docker** | `docker pull ghcr.io/jeffreyfriedman/windjammer` | Container workflows |
+| **Pre-built Binaries** | [Download from Releases](https://github.com/jeffreyfriedman/windjammer/releases) | Quick setup |
+| **Build from Source** | `git clone ... && ./install.sh` | Contributors |
+| **Snap** (Linux) | `snap install windjammer --classic` | Ubuntu/Linux |
+| **Scoop** (Windows) | `scoop install windjammer` | Windows users |
+
+📖 **Full installation guide**: [docs/INSTALLATION.md](docs/INSTALLATION.md)
+
+### Verify Installation
 
 ```bash
-# Clone the repository
-git clone https://github.com/windjammer-lang/windjammer
-cd windjammer
-
-# Build the compiler
-cargo build --release
-
-# Install the language server
-cd crates/windjammer-lsp
-cargo install --path .
-
-# Install VSCode extension
-cd ../../editors/vscode
-npm install
-npm run compile
-code --install-extension windjammer-*.vsix
+windjammer --version
+windjammer --help
 ```
 
 ### Your First Program

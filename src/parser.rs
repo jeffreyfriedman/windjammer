@@ -293,7 +293,7 @@ pub enum Item {
     Impl(ImplBlock),
     Const { name: String, type_: Type, value: Expression },
     Static { name: String, mutable: bool, type_: Type, value: Expression },
-    Use(Vec<String>), // use std.fs -> ["std", "fs"]
+    Use { path: Vec<String>, alias: Option<String> }, // use std.fs as fs -> path=["std", "fs"], alias=Some("fs")
 }
 
 #[derive(Debug, Clone)]
@@ -351,7 +351,7 @@ impl Parser {
         }
         
         // Check for pub keyword (for module functions)
-        let _is_pub = if self.current_token() == &Token::Pub {
+        let is_pub = if self.current_token() == &Token::Pub {
             self.advance();
             true
         } else {
@@ -396,6 +396,9 @@ impl Parser {
             Token::Const => {
                 self.advance();
                 let (name, type_, value) = self.parse_const_or_static()?;
+                // For now, we don't store is_pub in the AST (future enhancement)
+                // But at least we parse it correctly
+                let _ = is_pub; // Suppress unused warning
                 Ok(Item::Const { name, type_, value })
             }
             Token::Static => {
@@ -411,7 +414,8 @@ impl Parser {
             }
             Token::Use => {
                 self.advance(); // consume 'use'
-                Ok(Item::Use(self.parse_use()?))
+                let (path, alias) = self.parse_use()?;
+                Ok(Item::Use { path, alias })
             }
             _ => Err(format!("Unexpected token: {:?}", self.current_token())),
         }
@@ -697,7 +701,7 @@ impl Parser {
         Ok(args)
     }
     
-    fn parse_use(&mut self) -> Result<Vec<String>, String> {
+    fn parse_use(&mut self) -> Result<(Vec<String>, Option<String>), String> {
         // Note: Token::Use already consumed in parse_item
         
         let mut path = Vec::new();
@@ -750,7 +754,23 @@ impl Parser {
         // This preserves the relative path structure
         path.push(path_str);
         
-        Ok(path)
+        // Check for optional "as alias" syntax
+        let alias = if self.current_token() == &Token::As {
+            self.advance();
+            
+            // Parse the alias identifier
+            if let Token::Ident(alias_name) = self.current_token() {
+                let alias = alias_name.clone();
+                self.advance();
+                Some(alias)
+            } else {
+                return Err(format!("Expected alias identifier after 'as'"));
+            }
+        } else {
+            None
+        };
+        
+        Ok((path, alias))
     }
     
     fn parse_type_params(&mut self) -> Result<Vec<String>, String> {
