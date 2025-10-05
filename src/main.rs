@@ -24,7 +24,7 @@ pub enum CompilationTarget {
 
 #[derive(Parser)]
 #[command(name = "windjammer")]
-#[command(about = "A Go-like language that transpiles to Rust", long_about = None)]
+#[command(about = "Windjammer - A simple language that transpiles to Rust", long_about = None)]
 struct Cli {
     #[command(subcommand)]
     command: Commands,
@@ -32,26 +32,37 @@ struct Cli {
 
 #[derive(Subcommand)]
 enum Commands {
-    /// Build .wj files and transpile to Rust
+    /// Build a Windjammer project
     Build {
-        /// Directory containing .wj files (defaults to current directory)
-        #[arg(short, long, default_value = ".")]
+        /// Input directory or file
+        #[arg(short, long, value_name = "PATH")]
         path: PathBuf,
         
-        /// Output directory for generated Rust files
-        #[arg(short, long, default_value = "output")]
+        /// Output directory for generated Rust code
+        #[arg(short, long, value_name = "OUTPUT")]
         output: PathBuf,
         
         /// Compilation target (wasm, node, python, c)
-        #[arg(short, long, default_value = "wasm")]
+        #[arg(short, long, value_enum, default_value = "wasm")]
         target: CompilationTarget,
+        
+        /// Run cargo build after transpilation and show errors
+        #[arg(long)]
+        check: bool,
     },
-    
-    /// Check .wj files for errors without generating code
+    /// Check a Windjammer project for errors (transpile + cargo check)
     Check {
-        /// Directory containing .wj files (defaults to current directory)
-        #[arg(short, long, default_value = ".")]
+        /// Input directory or file
+        #[arg(short, long, value_name = "PATH")]
         path: PathBuf,
+        
+        /// Output directory for generated Rust code
+        #[arg(short, long, value_name = "OUTPUT")]
+        output: PathBuf,
+        
+        /// Compilation target
+        #[arg(short, long, value_enum, default_value = "wasm")]
+        target: CompilationTarget,
     },
 }
 
@@ -59,11 +70,15 @@ fn main() -> Result<()> {
     let cli = Cli::parse();
     
     match cli.command {
-        Commands::Build { path, output, target } => {
+        Commands::Build { path, output, target, check } => {
             build_project(&path, &output, target)?;
+            if check {
+                check_with_cargo(&output)?;
+            }
         }
-        Commands::Check { path } => {
-            check_project(&path)?;
+        Commands::Check { path, output, target } => {
+            build_project(&path, &output, target)?;
+            check_with_cargo(&output)?;
         }
     }
     
@@ -92,26 +107,25 @@ fn build_project(path: &PathBuf, output: &PathBuf, target: CompilationTarget) ->
     let mut has_errors = false;
     let mut all_stdlib_modules = HashSet::new();
     
-    // Process each file
-    for file_path in &wj_files {
-        print!("  {} {:?}... ", "Compiling".cyan(), file_path.file_name().unwrap());
+    for file in &wj_files {
+        let file_name = file.file_name().unwrap().to_str().unwrap();
+        print!("  Compiling {:?}... ", file_name);
         
-        match compile_file(file_path, output, target) {
-            Ok(imported_modules) => {
+        match compile_file(file, output, target) {
+            Ok(stdlib_modules) => {
                 println!("{}", "✓".green());
-                // Collect imported stdlib modules
-                all_stdlib_modules.extend(imported_modules);
+                all_stdlib_modules.extend(stdlib_modules);
             }
             Err(e) => {
                 println!("{}", "✗".red());
-                eprintln!("    {}: {}", "Error".red().bold(), e);
+                println!("    Error: {}", e);
                 has_errors = true;
             }
         }
     }
     
     if !has_errors {
-        // Create Cargo.toml with dependencies for imported stdlib modules
+        // Create Cargo.toml with stdlib dependencies
         create_cargo_toml_with_deps(output, &all_stdlib_modules)?;
         
         println!("\n{} Transpilation complete!", "Success!".green().bold());
@@ -119,6 +133,7 @@ fn build_project(path: &PathBuf, output: &PathBuf, target: CompilationTarget) ->
         println!("\nTo run the generated code:");
         println!("  cd {:?}", output);
         println!("  cargo run");
+        println!("\nOr use 'windjammer check' to see any Rust compilation errors");
     } else {
         println!("\n{} Compilation failed with errors", "Error:".red().bold());
     }
@@ -129,7 +144,7 @@ fn build_project(path: &PathBuf, output: &PathBuf, target: CompilationTarget) ->
 fn check_project(path: &PathBuf) -> Result<()> {
     use colored::*;
     
-    println!("{} Windjammer files in: {:?}", "Checking".green().bold(), path);
+    println!("{} Windjammer project: {:?}", "Checking".cyan().bold(), path);
     
     let wj_files = find_wj_files(path)?;
     
@@ -138,56 +153,62 @@ fn check_project(path: &PathBuf) -> Result<()> {
         return Ok(());
     }
     
-    println!("Found {} file(s)", wj_files.len());
+    println!("Found {} file(s) to check", wj_files.len());
     
+    // For now, just parse all files to check for syntax errors
     let mut has_errors = false;
     
-    for file_path in &wj_files {
-        print!("  {} {:?}... ", "Checking".cyan(), file_path.file_name().unwrap());
+    for file in &wj_files {
+        let file_name = file.file_name().unwrap().to_str().unwrap();
+        print!("  Checking {:?}... ", file_name);
         
-        match check_file(file_path) {
+        let source = std::fs::read_to_string(file)?;
+        let mut lexer = lexer::Lexer::new(&source);
+        let tokens = lexer.tokenize();
+        let mut parser = parser::Parser::new(tokens);
+        
+        match parser.parse() {
             Ok(_) => println!("{}", "✓".green()),
             Err(e) => {
                 println!("{}", "✗".red());
-                eprintln!("    {}: {}", "Error".red().bold(), e);
+                println!("    Error: {}", e);
                 has_errors = true;
             }
         }
     }
     
     if !has_errors {
-        println!("\n{} All files are valid", "Success!".green().bold());
+        println!("\n{} All files passed syntax check!", "Success!".green().bold());
     } else {
-        println!("\n{} Check failed with errors", "Error:".red().bold());
+        println!("\n{} Some files have errors", "Error:".red().bold());
     }
     
     Ok(())
 }
 
 fn find_wj_files(path: &PathBuf) -> Result<Vec<PathBuf>> {
-    let mut wj_files = Vec::new();
+    let mut files = Vec::new();
     
     if path.is_file() {
         if path.extension().and_then(|s| s.to_str()) == Some("wj") {
-            wj_files.push(path.clone());
+            files.push(path.clone());
         }
     } else if path.is_dir() {
         for entry in std::fs::read_dir(path)? {
             let entry = entry?;
-            let entry_path = entry.path();
+            let path = entry.path();
             
-            if entry_path.is_file() {
-                if entry_path.extension().and_then(|s| s.to_str()) == Some("wj") {
-                    wj_files.push(entry_path);
-                }
+            if path.is_file() && path.extension().and_then(|s| s.to_str()) == Some("wj") {
+                files.push(path);
             }
         }
     }
     
-    Ok(wj_files)
+    files.sort();
+    Ok(files)
 }
 
-/// Tracks compiled modules and their dependencies
+// Module compiler for handling dependencies
 struct ModuleCompiler {
     compiled_modules: HashMap<String, String>, // module path -> generated Rust code
     target: CompilationTarget,
@@ -197,12 +218,11 @@ struct ModuleCompiler {
 
 impl ModuleCompiler {
     fn new(target: CompilationTarget) -> Self {
-        // Find stdlib directory
-        // Check WINDJAMMER_STDLIB env var first, then fallback to ./std
+        // Check for WINDJAMMER_STDLIB env var, otherwise use ./std
         let stdlib_path = std::env::var("WINDJAMMER_STDLIB")
             .map(PathBuf::from)
-            .unwrap_or_else(|_| PathBuf::from("std"));
-        
+            .unwrap_or_else(|_| PathBuf::from("./std"));
+            
         Self {
             compiled_modules: HashMap::new(),
             target,
@@ -210,180 +230,164 @@ impl ModuleCompiler {
             imported_stdlib_modules: HashSet::new(),
         }
     }
-    
-    /// Compile a module and all its dependencies
-    /// source_file: The file that is importing this module (for relative path resolution)
+
     fn compile_module(&mut self, module_path: &str, source_file: Option<&PathBuf>) -> Result<()> {
         // Skip if already compiled
         if self.compiled_modules.contains_key(module_path) {
             return Ok(());
         }
-        
-        // Find the module file
+
+        // Resolve module path to file path
         let file_path = self.resolve_module_path(module_path, source_file)?;
         
-        // Read and parse
-        let source = std::fs::read_to_string(&file_path)?;
+        // Read and parse module
+        let source = std::fs::read_to_string(&file_path)
+            .map_err(|e| anyhow::anyhow!("Failed to read module {}: {}", module_path, e))?;
+        
         let mut lexer = lexer::Lexer::new(&source);
         let tokens = lexer.tokenize();
         let mut parser = parser::Parser::new(tokens);
         let program = parser.parse()
             .map_err(|e| anyhow::anyhow!("Parse error in {}: {}", module_path, e))?;
         
-        // Find dependencies (use statements) and compile them first
+        // Recursively compile dependencies
         for item in &program.items {
             if let parser::Item::Use { path, alias: _ } = item {
                 let dep_path = path.join(".");
-                // Recursively compile both std modules and relative imports
+                // Pass the current file's path for resolving relative imports
                 self.compile_module(&dep_path, Some(&file_path))?;
             }
         }
         
-        // Analyze and generate code
+        // Analyze
         let mut analyzer = analyzer::Analyzer::new();
-        let (analyzed, registry) = analyzer.analyze_program(&program)
-            .map_err(|e| anyhow::anyhow!("Analysis error in {}: {}", module_path, e))?;
+        let (analyzed, signatures) = analyzer.analyze_program(&program)
+            .map_err(|e| anyhow::anyhow!("Analysis error: {}", e))?;
         
-        let mut codegen = codegen::CodeGenerator::new_for_module(registry, self.target);
-        let rust_code = codegen.generate_program(&program, &analyzed);
+        // Generate Rust code (as a module)
+        let mut generator = codegen::CodeGenerator::new_for_module(signatures, self.target);
+        let rust_code = generator.generate_program(&program, &analyzed);
         
-        // Wrap module code in a Rust mod block
-        // e.g., std.json becomes: pub mod json { ... }
-        // For relative imports like ./utils or ../utils/helpers, extract module name
-        let module_name = if module_path.starts_with("./") || module_path.starts_with("../") {
-            // Extract final component: ./utils -> utils, ../utils/helpers -> helpers
-            let stripped = module_path.strip_prefix("./")
-                .or_else(|| module_path.strip_prefix("../"))
-                .unwrap_or(module_path);
-            stripped.split('/').last().unwrap_or(stripped)
-        } else if module_path.contains('.') {
-            // std.json -> json
-            module_path.split('.').last().unwrap()
+        // Extract module name from path
+        // For "std.json" -> "json"
+        // For "./utils" -> "utils"
+        let module_name = if module_path.starts_with("std.") {
+            module_path.strip_prefix("std.").unwrap().to_string()
         } else {
-            module_path
+            // For relative paths, use the last component
+            module_path.trim_start_matches("./").trim_start_matches("../")
+                .split('/').last().unwrap_or(module_path).to_string()
         };
-        let wrapped_code = format!("pub mod {} {{\n{}\n}}\n", module_name, rust_code);
         
-        // Store compiled module
-        self.compiled_modules.insert(module_path.to_string(), wrapped_code);
-        
-        // Track stdlib module for dependency generation
+        // Track stdlib imports for Cargo.toml generation
         if module_path.starts_with("std.") {
-            self.imported_stdlib_modules.insert(module_path.to_string());
+            self.imported_stdlib_modules.insert(module_name.clone());
         }
         
+        // Wrap in pub mod
+        let wrapped = format!("pub mod {} {{\n{}\n}}\n", module_name, rust_code);
+        
+        self.compiled_modules.insert(module_path.to_string(), wrapped);
         Ok(())
     }
-    
-    /// Resolve module path to file path
-    /// source_file: The file that is importing this module (for relative path resolution)
+
     fn resolve_module_path(&self, module_path: &str, source_file: Option<&PathBuf>) -> Result<PathBuf> {
         if module_path.starts_with("std.") {
-            // stdlib module: std.json -> $STDLIB/json.wj
+            // Stdlib module: std.json -> ./std/json.wj
             let module_name = module_path.strip_prefix("std.").unwrap();
-            let file_path = self.stdlib_path.join(format!("{}.wj", module_name));
-            if file_path.exists() {
-                Ok(file_path)
-            } else {
-                Err(anyhow::anyhow!("Stdlib module not found: {} (looked in {:?})", module_path, file_path))
+            let mut path = self.stdlib_path.clone();
+            path.push(format!("{}.wj", module_name));
+            
+            if !path.exists() {
+                return Err(anyhow::anyhow!(
+                    "Stdlib module not found: {} (looked in {:?})",
+                    module_path,
+                    path
+                ));
             }
+            
+            Ok(path)
         } else if module_path.starts_with("./") || module_path.starts_with("../") {
-            // Relative import: ./module or ../module
+            // Relative import: ./utils -> ./utils.wj or ./utils/mod.wj
             let source_dir = source_file
                 .and_then(|f| f.parent())
                 .ok_or_else(|| anyhow::anyhow!("Cannot resolve relative import without source file"))?;
             
-            // module_path is already in form "./utils" or "./utils/helpers"
-            // Just strip the leading ./ or ../
-            let relative_part = if module_path.starts_with("./") {
-                module_path.strip_prefix("./").unwrap()
-            } else {
-                module_path.strip_prefix("../").unwrap()
-            };
+            // Strip ./ or ../
+            let rel_path = module_path.trim_start_matches("./").trim_start_matches("../");
+            let mut candidate = source_dir.to_path_buf();
             
-            // Resolve relative path from source directory
-            let base_path = if module_path.starts_with("../") {
-                source_dir.parent().ok_or_else(|| anyhow::anyhow!("Cannot go up from root directory"))?
-            } else {
-                source_dir
-            };
-            
-            let resolved = base_path.join(relative_part).with_extension("wj");
-            
-            // Try file directly first
-            if resolved.exists() {
-                return Ok(resolved);
+            // Handle ../ by going up directories
+            if module_path.starts_with("../") {
+                candidate = candidate.parent()
+                    .ok_or_else(|| anyhow::anyhow!("Cannot go above root directory"))?
+                    .to_path_buf();
             }
             
-            // Try as directory module: ./utils -> utils/mod.wj
-            let mod_path = base_path.join(relative_part).join("mod.wj");
-            if mod_path.exists() {
-                return Ok(mod_path);
+            // Try direct file first: utils.wj
+            candidate.push(format!("{}.wj", rel_path));
+            if candidate.exists() {
+                return Ok(candidate);
+            }
+            
+            // Try directory module: utils/mod.wj
+            candidate.pop();
+            candidate.push(rel_path);
+            candidate.push("mod.wj");
+            if candidate.exists() {
+                return Ok(candidate);
             }
             
             Err(anyhow::anyhow!(
                 "User module not found: {} (looked in {:?} and {:?})",
-                module_path, resolved, mod_path
+                module_path,
+                source_dir.join(format!("{}.wj", rel_path)),
+                source_dir.join(rel_path).join("mod.wj")
             ))
         } else {
-            // Absolute import (future: github.com/user/repo style)
+            // Absolute imports not yet supported
             Err(anyhow::anyhow!("Absolute imports not yet supported: {}", module_path))
         }
     }
-    
-    /// Get all compiled modules in dependency order
+
     fn get_compiled_modules(&self) -> Vec<String> {
-        // For now, just return modules in any order
-        // TODO: Topological sort for proper dependency order
+        // Return modules in arbitrary order (should topologically sort in future)
         self.compiled_modules.values().cloned().collect()
     }
-    
-    /// Get Cargo dependencies for imported stdlib modules
+
     fn get_cargo_dependencies(&self) -> Vec<String> {
+        // Map stdlib module names to their Rust crate dependencies
         let mut deps = Vec::new();
         
         for module in &self.imported_stdlib_modules {
-            let module_deps = match module.as_str() {
-                "std.json" => vec![
-                    "serde = \"1.0\"",
-                    "serde_json = \"1.0\"",
-                ],
-                "std.csv" => vec![
-                    "csv = \"1.3\"",
-                ],
-                "std.http" => vec![
-                    "reqwest = { version = \"0.11\", features = [\"blocking\"] }",
-                ],
-                "std.time" => vec![
-                    "chrono = \"0.4\"",
-                ],
-                "std.log" => vec![
-                    "log = \"0.4\"",
-                    "env_logger = \"0.11\"",
-                ],
-                "std.regex" => vec![
-                    "regex = \"1.10\"",
-                ],
-                "std.encoding" => vec![
-                    "base64 = \"0.21\"",
-                    "hex = \"0.4\"",
-                    "urlencoding = \"2.1\"",
-                ],
-                "std.crypto" => vec![
-                    "sha2 = \"0.10\"",
-                    "md5 = \"0.7\"",
-                ],
-                // std.fs, std.strings, std.math don't need external dependencies (use std)
-                _ => vec![],
-            };
-            
-            for dep in module_deps {
-                if !deps.contains(&dep.to_string()) {
-                    deps.push(dep.to_string());
+            match module.as_str() {
+                "json" => {
+                    deps.push("serde = { version = \"1.0\", features = [\"derive\"] }".to_string());
+                    deps.push("serde_json = \"1.0\"".to_string());
                 }
+                "csv" => {
+                    deps.push("csv = \"1.3\"".to_string());
+                }
+                "http" => {
+                    deps.push("reqwest = { version = \"0.11\", features = [\"json\", \"blocking\"] }".to_string());
+                }
+                "time" => {
+                    deps.push("chrono = \"0.4\"".to_string());
+                }
+                "log" => {
+                    deps.push("log = \"0.4\"".to_string());
+                    deps.push("env_logger = \"0.11\"".to_string());
+                }
+                "regex" => {
+                    deps.push("regex = \"1.10\"".to_string());
+                }
+                // fs, strings, math use std library (no extra deps)
+                _ => {}
             }
         }
         
+        deps.sort();
+        deps.dedup();
         deps
     }
 }
@@ -412,137 +416,270 @@ fn compile_file(input_path: &PathBuf, output_dir: &PathBuf, target: CompilationT
         }
     }
     
-    // Analyze main file
+    // Analyze
     let mut analyzer = analyzer::Analyzer::new();
-    let (analyzed, registry) = analyzer.analyze_program(&program)
+    let (analyzed, signatures) = analyzer.analyze_program(&program)
         .map_err(|e| anyhow::anyhow!("Analysis error: {}", e))?;
     
     // Generate Rust code for main file
-    let mut codegen = codegen::CodeGenerator::new(registry, target);
-    let main_code = codegen.generate_program(&program, &analyzed);
+    let mut generator = codegen::CodeGenerator::new(signatures, target);
+    let rust_code = generator.generate_program(&program, &analyzed);
     
-    // Combine modules: dependencies first, then main code
-    let mut final_code = String::new();
+    // Combine module code with main code
+    let module_code = module_compiler.get_compiled_modules().join("\n");
+    let combined_code = if module_code.is_empty() {
+        rust_code
+    } else {
+        format!("{}\n\n{}", module_code, rust_code)
+    };
     
-    // Add compiled dependencies
-    for module_code in module_compiler.get_compiled_modules() {
-        final_code.push_str(&module_code);
-        final_code.push_str("\n\n");
-    }
+    // Write output
+    let output_file = output_dir.join(
+        input_path
+            .file_name()
+            .unwrap()
+            .to_str()
+            .unwrap()
+            .replace(".wj", ".rs")
+    );
     
-    // Add main code
-    final_code.push_str(&main_code);
+    std::fs::write(output_file, combined_code)?;
     
-    // Write output file
-    let output_filename = input_path
-        .file_stem()
-        .and_then(|s| s.to_str())
-        .ok_or_else(|| anyhow::anyhow!("Invalid filename"))?;
-    
-    let output_path = output_dir.join(format!("{}.rs", output_filename));
-    std::fs::write(output_path, final_code)?;
-    
-    // Return imported stdlib modules
+    // Return the set of imported stdlib modules for Cargo.toml generation
     Ok(module_compiler.imported_stdlib_modules)
 }
 
 fn check_file(file_path: &PathBuf) -> Result<()> {
     let source = std::fs::read_to_string(file_path)?;
     
-    // Lex
     let mut lexer = lexer::Lexer::new(&source);
     let tokens = lexer.tokenize();
     
-    // Parse
     let mut parser = parser::Parser::new(tokens);
-    let program = parser.parse()
+    let _program = parser.parse()
         .map_err(|e| anyhow::anyhow!("Parse error: {}", e))?;
-    
-    // Analyze
-    let mut analyzer = analyzer::Analyzer::new();
-    let (_analyzed, _registry) = analyzer.analyze_program(&program)
-        .map_err(|e| anyhow::anyhow!("Analysis error: {}", e))?;
     
     Ok(())
 }
 
 fn create_cargo_toml_with_deps(output_dir: &PathBuf, imported_modules: &HashSet<String>) -> Result<()> {
-    let cargo_toml_path = output_dir.join("Cargo.toml");
+    use std::fs;
     
-    // Get dependencies based on imported modules
+    // Map imported stdlib modules to their Cargo dependencies
     let mut deps = Vec::new();
     
     for module in imported_modules {
-        let module_deps = match module.as_str() {
-            "std.json" => vec![
-                "serde = { version = \"1.0\", features = [\"derive\"] }",
-                "serde_json = \"1.0\"",
-            ],
-            "std.csv" => vec![
-                "csv = \"1.3\"",
-            ],
-            "std.http" => vec![
-                "reqwest = { version = \"0.11\", features = [\"blocking\"] }",
-            ],
-            "std.time" => vec![
-                "chrono = \"0.4\"",
-            ],
-            "std.log" => vec![
-                "log = \"0.4\"",
-                "env_logger = \"0.11\"",
-            ],
-            "std.regex" => vec![
-                "regex = \"1.10\"",
-            ],
-            "std.encoding" => vec![
-                "base64 = \"0.21\"",
-                "hex = \"0.4\"",
-                "urlencoding = \"2.1\"",
-            ],
-            "std.crypto" => vec![
-                "sha2 = \"0.10\"",
-                "md5 = \"0.7\"",
-                "rand = \"0.8\"",
-            ],
-            _ => vec![],
-        };
-        
-        for dep in module_deps {
-            if !deps.contains(&dep.to_string()) {
-                deps.push(dep.to_string());
+        match module.as_str() {
+            "json" => {
+                deps.push("serde = { version = \"1.0\", features = [\"derive\"] }");
+                deps.push("serde_json = \"1.0\"");
             }
+            "csv" => {
+                deps.push("csv = \"1.3\"");
+            }
+            "http" => {
+                deps.push("reqwest = { version = \"0.11\", features = [\"json\", \"blocking\"] }");
+            }
+            "time" => {
+                deps.push("chrono = \"0.4\"");
+            }
+            "log" => {
+                deps.push("log = \"0.4\"");
+                deps.push("env_logger = \"0.11\"");
+            }
+            "regex" => {
+                deps.push("regex = \"1.10\"");
+            }
+            // fs, strings, math use std library (no extra deps needed)
+            _ => {}
         }
     }
     
-    // Always include WASM dependencies for @export support
-    if !deps.iter().any(|d| d.starts_with("wasm-bindgen")) {
-        deps.push("wasm-bindgen = \"0.2\"".to_string());
-    }
-    if !deps.iter().any(|d| d.starts_with("web-sys")) {
-        deps.push("web-sys = \"0.3\"".to_string());
-    }
-    if !deps.iter().any(|d| d.starts_with("js-sys")) {
-        deps.push("js-sys = \"0.3\"".to_string());
-    }
+    deps.sort();
+    deps.dedup();
     
-    // Build Cargo.toml content
-    let mut cargo_toml_content = String::from(
-        "[package]\nname = \"windjammer-output\"\nversion = \"0.1.0\"\nedition = \"2021\"\n\n[dependencies]\n"
+    let deps_section = if deps.is_empty() {
+        String::new()
+    } else {
+        format!("[dependencies]\n{}\n\n", deps.join("\n"))
+    };
+    
+    // Check if main.rs exists to determine if we need a [[bin]] section
+    let main_rs = output_dir.join("main.rs");
+    let bin_section = if main_rs.exists() {
+        "[[bin]]\nname = \"app\"\npath = \"main.rs\"\n\n"
+    } else {
+        ""
+    };
+    
+    let cargo_toml = format!(
+        r#"[package]
+name = "windjammer-app"
+version = "0.1.0"
+edition = "2021"
+
+{}{}[profile.release]
+opt-level = 3
+"#,
+        deps_section,
+        bin_section
     );
     
-    for dep in &deps {
-        cargo_toml_content.push_str(dep);
-        cargo_toml_content.push('\n');
-    }
-    
-    // Add [[bin]] section if main.rs exists
-    let main_rs = output_dir.join("main.rs");
-    if main_rs.exists() {
-        cargo_toml_content.push_str("\n[[bin]]\nname = \"windjammer-output\"\npath = \"main.rs\"\n");
-    }
-    
-    std::fs::write(cargo_toml_path, cargo_toml_content)?;
+    let cargo_toml_path = output_dir.join("Cargo.toml");
+    fs::write(cargo_toml_path, cargo_toml)?;
     
     Ok(())
 }
 
+/// Run cargo build on the generated Rust code and display errors
+fn check_with_cargo(output_dir: &PathBuf) -> Result<()> {
+    use colored::*;
+    use std::process::Command;
+    
+    println!("\n{} Rust compilation...", "Checking".cyan().bold());
+    
+    let output = Command::new("cargo")
+        .arg("build")
+        .arg("--message-format=json")
+        .current_dir(output_dir)
+        .output()?;
+    
+    if output.status.success() {
+        println!("{} No Rust compilation errors!", "Success!".green().bold());
+        return Ok(());
+    }
+    
+    // Parse JSON diagnostics
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    
+    // Combine stderr and stdout (cargo outputs to both)
+    let combined_output = format!("{}{}", stderr, stdout);
+    
+    let mut diagnostics = Vec::new();
+    for line in combined_output.lines() {
+        if line.trim().is_empty() {
+            continue;
+        }
+        
+        // Try to parse as cargo message
+        if let Ok(cargo_msg) = serde_json::from_str::<error_mapper::CargoMessage>(line) {
+            if cargo_msg.reason == "compiler-message" {
+                if let Some(diag) = cargo_msg.message {
+                    if diag.level == "error" || diag.level == "warning" {
+                        diagnostics.push(diag);
+                    }
+                }
+            }
+        }
+    }
+    
+    if diagnostics.is_empty() {
+        // Fallback: show raw output if we couldn't parse JSON
+        println!("{} Rust compilation errors (raw):", "Error:".red().bold());
+        println!("{}", combined_output);
+        return Err(anyhow::anyhow!("Rust compilation failed"));
+    }
+    
+    // For now, show translated errors without source mapping
+    // (Full source mapping requires line tracking through the entire pipeline)
+    let error_count = diagnostics.len();
+    println!("\n{} errors detected:\n", error_count);
+    
+    for diag in &diagnostics {
+        let level_str = match diag.level.as_str() {
+            "error" => "error".red().bold(),
+            "warning" => "warning".yellow().bold(),
+            _ => "note".cyan().bold(),
+        };
+        
+        // Translate the error message - pass spans for context
+        let translated = translate_error_message_with_spans(&diag.message, &diag.spans);
+        
+        println!("{}: {}", level_str, translated);
+        
+        if let Some(span) = diag.spans.iter().find(|s| s.is_primary) {
+            println!("  {} {}:{}:{}", 
+                "-->".blue().bold(),
+                span.file_name,
+                span.line_start,
+                span.column_start
+            );
+            
+            if let Some(text) = span.text.first() {
+                println!("   |");
+                println!("{:>4} | {}", span.line_start, text.text.trim());
+                println!("   |");
+            }
+        }
+        
+        println!();
+    }
+    
+    Err(anyhow::anyhow!("Rust compilation failed with {} errors", error_count))
+}
+
+/// Translate Rust compiler messages to Windjammer terminology
+fn translate_error_message_with_spans(rust_msg: &str, spans: &[error_mapper::DiagnosticSpan]) -> String {
+    // Check for type mismatch in span labels
+    if rust_msg.contains("mismatched types") {
+        // Try to extract from primary span label
+        if let Some(primary) = spans.iter().find(|s| s.is_primary) {
+            // Label format: "expected `i64`, found `&str`"
+            if let Some(ref label) = primary.label {
+                if let Some(expected) = extract_between(label, "expected `", "`") {
+                    if let Some(found) = extract_between(label, "found `", "`") {
+                        return format!(
+                            "Type mismatch: expected {}, found {}",
+                            rust_type_to_windjammer(expected),
+                            rust_type_to_windjammer(found)
+                        );
+                    }
+                }
+            }
+        }
+        // Fallback: just say type mismatch
+        return "Type mismatch".to_string();
+    }
+    
+    if rust_msg.contains("cannot find type") {
+        if let Some(type_name) = extract_between(rust_msg, "cannot find type `", "`") {
+            return format!("Type not found: {}", type_name);
+        }
+    }
+    
+    if rust_msg.contains("cannot find function") {
+        if let Some(func_name) = extract_between(rust_msg, "cannot find function `", "`") {
+            return format!("Function not found: {}", func_name);
+        }
+    }
+    
+    if rust_msg.contains("cannot move out of") {
+        return "Ownership error: value was moved".to_string();
+    }
+    
+    if rust_msg.contains("trait bounds were not satisfied") {
+        return "Missing trait implementation or type constraint".to_string();
+    }
+    
+    // Fallback: return original
+    rust_msg.to_string()
+}
+
+fn rust_type_to_windjammer(rust_type: &str) -> String {
+    match rust_type {
+        "i64" => "int",
+        "f64" => "float",
+        "bool" => "bool",
+        "&str" | "String" | "&String" => "string",
+        "()" => "()",
+        _ => rust_type,
+    }.to_string()
+}
+
+fn extract_between<'a>(text: &'a str, start: &str, end: &str) -> Option<&'a str> {
+    let start_pos = text.find(start)? + start.len();
+    let remaining = &text[start_pos..];
+    let end_pos = remaining.find(end)?;
+    Some(&remaining[..end_pos])
+}
