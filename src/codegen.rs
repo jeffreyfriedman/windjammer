@@ -12,6 +12,7 @@ pub struct CodeGenerator {
     needs_js_imports: bool,
     target: CompilationTarget,
     is_module: bool,  // true if generating code for a reusable module (not main file)
+    source_map: crate::source_map::SourceMap,
 }
 
 impl CodeGenerator {
@@ -25,6 +26,7 @@ impl CodeGenerator {
             needs_js_imports: false,
             target,
             is_module: false,
+            source_map: crate::source_map::SourceMap::new(),
         }
     }
     
