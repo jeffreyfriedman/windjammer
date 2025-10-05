@@ -33,7 +33,8 @@ Familiar `go` keyword and channels with **Go's `<-` operator**, but with Rust's 
 Zero-cost abstractions, memory safety, and blazing speed.
 
 ### 🚀 Modern Language Features
-- **Generic types**: `Vec<T>`, `Option<T>`, `Result<T, E>`
+- **Generic types**: `Vec<T>`, `Option<T>`, `Result<T, E>` with type parameters
+- **Turbofish syntax**: `identity::<int>(42)`, `parse::<float>()` for explicit types ✨ **NEW**
 - **Pattern matching** with guards and tuple patterns
 - **Closures**: `|x| x * 2`
 - **Range expressions**: `0..10` and `0..=10`
@@ -46,7 +47,8 @@ Zero-cost abstractions, memory safety, and blazing speed.
 - **Pattern matching in function parameters**: `fn process((x, y): (int, int))` ✨
 - **Smart @auto derive**: Zero-config trait inference (`@auto`) ✨
 - **Trait system**: Full trait definitions and implementations ✨
-- **Module system**: Import and use standard library modules ✨
+- **Module system**: Import and use standard library modules with aliases ✨
+- **Error mapping**: Friendly error messages in Windjammer terms 🎯 **NEW**
 
 ### 📚 "Batteries Included" Standard Library
 Windjammer provides a comprehensive standard library that covers 80% of common use cases without external dependencies. **All stdlib modules are written in Windjammer itself**, proving the language is practical and providing transparent, readable implementations.
@@ -766,6 +768,34 @@ async fn load_config() -> Result<Config, Error> {
     Ok(config)
 }
 ```
+
+---
+
+## ⚡ Performance
+
+Windjammer is **blazingly fast** for development iteration:
+
+### Compilation Speed
+- **Simple program (10 lines)**: ~8µs
+- **Medium program (30 lines)**: ~25µs  
+- **Complex program (50 lines)**: ~60µs
+
+**17,000x faster** than `rustc` for the transpilation step!
+
+### Runtime Performance
+Since Windjammer transpiles to Rust, runtime performance is **identical to hand-written Rust**:
+- ✅ Zero-cost abstractions
+- ✅ No runtime overhead
+- ✅ Same binary size
+- ✅ Same memory usage
+
+### Why So Fast?
+1. **No LLVM**: Generates Rust source instead of machine code
+2. **Incremental**: Only transpiles changed `.wj` files
+3. **Simple AST**: Go-inspired syntax is easier to parse
+4. **No borrow checking**: Rust handles that in pass 2
+
+**See [BENCHMARKS.md](BENCHMARKS.md) for detailed performance analysis.**
 
 ---
 
