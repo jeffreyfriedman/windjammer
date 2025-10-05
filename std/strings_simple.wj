@@ -4,29 +4,29 @@
 // === CASE CONVERSION ===
 
 // Convert to uppercase
-fn to_upper(s: &string) -> string {
+fn to_upper(s: string) -> string {
     s.to_uppercase()
 }
 
 // Convert to lowercase
-fn to_lower(s: &string) -> string {
+fn to_lower(s: string) -> string {
     s.to_lowercase()
 }
 
 // === WHITESPACE ===
 
 // Trim whitespace from both ends
-fn trim(s: &string) -> string {
+fn trim(s: string) -> string {
     s.trim().to_string()
 }
 
 // Trim whitespace from start
-fn trim_start(s: &string) -> string {
+fn trim_start(s: string) -> string {
     s.trim_start().to_string()
 }
 
 // Trim whitespace from end
-fn trim_end(s: &string) -> string {
+fn trim_end(s: string) -> string {
     s.trim_end().to_string()
 }
 
@@ -55,12 +55,12 @@ fn contains(s: &string, substring: &string) -> bool {
 // === REPLACEMENT ===
 
 // Replace all occurrences
-fn replace(s: &string, from: &string, to: &string) -> string {
+fn replace(s: string, from: &string, to: &string) -> string {
     s.replace(from, to)
 }
 
 // Replace first N occurrences
-fn replacen(s: &string, from: &string, to: &string, count: usize) -> string {
+fn replacen(s: string, from: &string, to: &string, count: usize) -> string {
     s.replacen(from, to, count)
 }
 

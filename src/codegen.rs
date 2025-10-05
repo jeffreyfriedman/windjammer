@@ -200,10 +200,31 @@ impl CodeGenerator {
     }
     
     fn generate_use(&self, path: &[String]) -> String {
-        // Skip stdlib imports - they're handled by the compiler
-        // std.* modules are built-in and don't need explicit imports
-        if !path.is_empty() && path[0] == "std" {
+        if path.is_empty() {
             return String::new();
+        }
+        
+        let full_path = path.join(".");
+        
+        // Handle stdlib imports: std.math -> use math::*;
+        if full_path.starts_with("std.") {
+            let module_name = full_path.strip_prefix("std.").unwrap();
+            return format!("use {}::*;\n", module_name);
+        }
+        
+        // Skip bare "std" imports
+        if full_path == "std" {
+            return String::new();
+        }
+        
+        // Handle relative imports: ./utils or ../utils
+        if full_path.starts_with("./") || full_path.starts_with("../") {
+            // Extract module name: ./utils -> utils, ../utils/helpers -> helpers  
+            let stripped = full_path.strip_prefix("./")
+                .or_else(|| full_path.strip_prefix("../"))
+                .unwrap_or(&full_path);
+            let module_name = stripped.split('/').last().unwrap_or(stripped);
+            return format!("use {}::*;\n", module_name);
         }
         
         // Convert Windjammer's Go-style imports to Rust's glob imports
@@ -253,7 +274,15 @@ impl CodeGenerator {
             }
         }
         
-        output.push_str(&format!("struct {} {{\n", s.name));
+        // Add struct declaration with type parameters
+        output.push_str("struct ");
+        output.push_str(&s.name);
+        if !s.type_params.is_empty() {
+            output.push('<');
+            output.push_str(&s.type_params.join(", "));
+            output.push('>');
+        }
+        output.push_str(" {\n");
         
         for field in &s.fields {
             // Generate decorators for the field (convert to Rust attributes)
@@ -400,12 +429,21 @@ impl CodeGenerator {
             output.push_str(&format!("#[{}]\n", rust_attr));
         }
         
+        // Generate impl with type parameters
+        output.push_str("impl");
+        if !impl_block.type_params.is_empty() {
+            output.push('<');
+            output.push_str(&impl_block.type_params.join(", "));
+            output.push('>');
+        }
+        output.push(' ');
+        
         if let Some(trait_name) = &impl_block.trait_name {
-            // Trait implementation: impl Trait for Type
-            output.push_str(&format!("impl {} for {} {{\n", trait_name, impl_block.type_name));
+            // Trait implementation: impl<T> Trait for Type<T>
+            output.push_str(&format!("{} for {} {{\n", trait_name, impl_block.type_name));
         } else {
-            // Inherent implementation: impl Type
-            output.push_str(&format!("impl {} {{\n", impl_block.type_name));
+            // Inherent implementation: impl<T> Type<T>
+            output.push_str(&format!("{} {{\n", impl_block.type_name));
         }
         
         self.indent_level += 1;
@@ -449,6 +487,14 @@ impl CodeGenerator {
         
         output.push_str("fn ");
         output.push_str(&func.name);
+        
+        // Add type parameters: fn foo<T, U>(...)
+        if !func.type_params.is_empty() {
+            output.push('<');
+            output.push_str(&func.type_params.join(", "));
+            output.push('>');
+        }
+        
         output.push('(');
         
         let params: Vec<String> = func.parameters.iter().map(|param| {
@@ -474,16 +520,16 @@ impl CodeGenerator {
                 }
                 OwnershipHint::Inferred => {
                     // Use analyzer's inference
-                    let ownership_mode = analyzed.inferred_ownership.get(&param.name)
-                        .unwrap_or(&OwnershipMode::Borrowed);
-                    
+            let ownership_mode = analyzed.inferred_ownership.get(&param.name)
+                .unwrap_or(&OwnershipMode::Borrowed);
+            
                     // Override for Copy types UNLESS they're mutated
                     // Mutated parameters should be &mut even for Copy types
                     if self.is_copy_type(&param.type_) && ownership_mode != &OwnershipMode::MutBorrowed {
                         self.type_to_rust(&param.type_)
                     } else {
                         match ownership_mode {
-                            OwnershipMode::Owned => self.type_to_rust(&param.type_),
+                OwnershipMode::Owned => self.type_to_rust(&param.type_),
                             OwnershipMode::Borrowed => {
                                 // For Copy types that are only read, pass by value
                                 if self.is_copy_type(&param.type_) {
@@ -492,7 +538,7 @@ impl CodeGenerator {
                                     format!("&{}", self.type_to_rust(&param.type_))
                                 }
                             }
-                            OwnershipMode::MutBorrowed => format!("&mut {}", self.type_to_rust(&param.type_)),
+                OwnershipMode::MutBorrowed => format!("&mut {}", self.type_to_rust(&param.type_)),
                         }
                     }
                 }
@@ -504,7 +550,7 @@ impl CodeGenerator {
                 format!("{}: {}", self.generate_pattern(pattern), type_str)
             } else {
                 // Simple name: type syntax
-                format!("{}: {}", param.name, type_str)
+            format!("{}: {}", param.name, type_str)
             }
         }).collect();
         
@@ -539,6 +585,15 @@ impl CodeGenerator {
                 // Convert Windjammer module.Type syntax to Rust module::Type
                 name.replace('.', "::")
             }
+            Type::Generic(name) => name.clone(),  // Type parameter: T -> T
+            Type::Parameterized(base, args) => {
+                // Generic type: Vec<T> -> Vec<T>, HashMap<K, V> -> HashMap<K, V>
+                format!(
+                    "{}<{}>",
+                    base,
+                    args.iter().map(|t| self.type_to_rust(t)).collect::<Vec<_>>().join(", ")
+                )
+            }
             Type::Option(inner) => format!("Option<{}>", self.type_to_rust(inner)),
             Type::Result(ok, err) => format!("Result<{}, {}>", self.type_to_rust(ok), self.type_to_rust(err)),
             Type::Vec(inner) => format!("Vec<{}>", self.type_to_rust(inner)),
@@ -546,6 +601,9 @@ impl CodeGenerator {
                 // Special case: &[T] (slice) vs &Vec<T>
                 if let Type::Vec(elem) = &**inner {
                     format!("&[{}]", self.type_to_rust(elem))
+                // Special case: &str instead of &String (more idiomatic Rust)
+                } else if matches!(**inner, Type::String) {
+                    "&str".to_string()
                 } else {
                     format!("&{}", self.type_to_rust(inner))
                 }
@@ -840,7 +898,7 @@ impl CodeGenerator {
                         if self.op_precedence(right_op) < self.op_precedence(op) {
                             format!("({})", self.generate_expression(right))
                         } else {
-                            self.generate_expression(right)
+                    self.generate_expression(right)
                         }
                     }
                     _ => self.generate_expression(right)
@@ -906,14 +964,20 @@ impl CodeGenerator {
                     .collect();
                 
                 // Determine separator: :: for static calls, . for instance methods
-                // - FunctionCall result: instance, use .
-                // - Identifier/FieldAccess in module context: static, use ::
-                // - Everything else: instance method, use .
+                // - Type/Module (starts with uppercase): use ::
+                // - Variable (starts with lowercase): use .
                 let separator = match **object {
                     Expression::Call { .. } | Expression::MethodCall { .. } => ".", // Instance method on return value
-                    Expression::Identifier(_) | Expression::FieldAccess { .. } if self.is_module => "::", // Static call in stdlib
-                    Expression::Identifier(_) | Expression::FieldAccess { .. } => "::", // Module/type call
-                    _ => "."  // Instance method
+                    Expression::Identifier(ref name) => {
+                        // Type or module (uppercase) vs variable (lowercase)
+                        if name.chars().next().map_or(false, |c| c.is_uppercase()) || name.contains('.') {
+                            "::" // Vec::new(), std::fs::read()
+                        } else {
+                            "."  // x.abs(), value.method()
+                        }
+                    }
+                    Expression::FieldAccess { .. } => "::", // Module path: std.fs.read() -> std::fs::read()
+                    _ => "."  // Instance method on expressions
                 };
                 
                 format!("{}{}{}({})", obj_str, separator, method, args.join(", "))

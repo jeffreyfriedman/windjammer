@@ -8,10 +8,65 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Planned
-- User-defined modules (not just stdlib)
-- Relative imports (`use ./my_module`)
-- Module aliases and selective imports
-- Generics support
+- Module aliases (`use X as Y`)
+- Turbofish syntax (`Vec::<T>::new()`)
+- Performance benchmarks vs Rust/Go
+- Full Rust crate interop for stdlib modules (json, http, csv, etc.)
+
+## [0.6.0] - 2025-10-05
+
+### Added - Generics, User Modules & Idiomatic Rust 🚀
+- **Basic Generics Support**:
+  - Generic type parameters on functions: `fn identity<T>(x: T) -> T`
+  - Generic type parameters on structs: `struct Box<T> { value: T }`
+  - Generic type parameters on impl blocks: `impl<T> Box<T> { ... }`
+  - Parameterized types: `Vec<T>`, `Option<T>`, `Result<T, E>`, custom types
+  - Full AST support and Rust code generation
+- **User-Defined Modules**:
+  - Relative imports: `use ./utils`, `use ../shared/helpers`
+  - Directory modules with `mod.wj` (similar to Rust's `mod.rs`)
+  - `pub` keyword for module functions
+  - Seamless integration with stdlib modules
+- **Automatic Cargo.toml Dependency Management**:
+  - Tracks stdlib module usage across all files
+  - Auto-generates `[dependencies]` for required Rust crates
+  - Creates `[[bin]]` section when `main.rs` exists
+  - Supports application-style projects with lock files
+- **Idiomatic Rust Type Generation**:
+  - `&string` → `&str` (not `&String`) for better Rust interop
+  - String literals and parameters now work seamlessly
+  - Follows Rust best practices for string handling
+- **Simplified Standard Library**:
+  - `std/math` - Mathematical functions (✅ fully tested)
+  - `std/strings` - String utilities (✅ fully tested)
+  - `std/log` - Logging framework (✅ fully tested)
+  - Deferred complex modules (json, http, csv) to post-v0.6.0
+
+### Changed
+- Updated `parse_type` to handle parameterized types
+- Extended `FunctionDecl`, `StructDecl`, `ImplBlock` with `type_params`
+- Added `Type::Generic` and `Type::Parameterized` variants
+- Enhanced module path resolution for relative imports
+- Refactored `ModuleCompiler` to track Cargo dependencies
+
+### Fixed
+- **Instance method calls** (`x.abs()`) vs **static calls** (`Type::method()`)
+  - Correctly distinguishes based on identifier case and context
+  - Fixed codegen bug where all method calls in modules used `::`
+- String type handling for better Rust compatibility
+- Module function visibility (`pub` prefix)
+
+### Examples
+- `examples/17_generics_test` - Basic generics demo
+- `examples/18_stdlib_math_test` - std/math validation
+- `examples/19_stdlib_strings_test` - std/strings validation
+- `examples/20_stdlib_log_test` - std/log validation
+- `examples/16_user_modules` - User-defined modules demo
+
+### Documentation
+- Updated `CHANGELOG.md` for all releases
+- `docs/GENERICS_IMPLEMENTATION.md` - Implementation plan
+- `docs/V060_PLAN.md` and `docs/V060_PROGRESS.md`
 
 ## [0.5.0] - 2025-10-04
 
