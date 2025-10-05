@@ -3,6 +3,7 @@ pub mod parser;
 pub mod analyzer;
 pub mod codegen;
 pub mod source_map;
+pub mod error_mapper;
 
 use clap::{Parser, Subcommand, ValueEnum};
 use std::path::PathBuf;
