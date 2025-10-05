@@ -204,14 +204,20 @@ impl CodeGenerator {
             return String::new();
         }
         
-        // Skip stdlib imports - they're handled by the compiler
-        // std.* modules are built-in and don't need explicit imports
-        if path[0] == "std" {
+        let full_path = path.join(".");
+        
+        // Handle stdlib imports: std.math -> use math::*;
+        if full_path.starts_with("std.") {
+            let module_name = full_path.strip_prefix("std.").unwrap();
+            return format!("use {}::*;\n", module_name);
+        }
+        
+        // Skip bare "std" imports
+        if full_path == "std" {
             return String::new();
         }
         
         // Handle relative imports: ./utils or ../utils
-        let full_path = path.join(".");
         if full_path.starts_with("./") || full_path.starts_with("../") {
             // Extract module name: ./utils -> utils, ../utils/helpers -> helpers  
             let stripped = full_path.strip_prefix("./")
@@ -955,14 +961,20 @@ impl CodeGenerator {
                     .collect();
                 
                 // Determine separator: :: for static calls, . for instance methods
-                // - FunctionCall result: instance, use .
-                // - Identifier/FieldAccess in module context: static, use ::
-                // - Everything else: instance method, use .
+                // - Type/Module (starts with uppercase): use ::
+                // - Variable (starts with lowercase): use .
                 let separator = match **object {
                     Expression::Call { .. } | Expression::MethodCall { .. } => ".", // Instance method on return value
-                    Expression::Identifier(_) | Expression::FieldAccess { .. } if self.is_module => "::", // Static call in stdlib
-                    Expression::Identifier(_) | Expression::FieldAccess { .. } => "::", // Module/type call
-                    _ => "."  // Instance method
+                    Expression::Identifier(ref name) => {
+                        // Type or module (uppercase) vs variable (lowercase)
+                        if name.chars().next().map_or(false, |c| c.is_uppercase()) || name.contains('.') {
+                            "::" // Vec::new(), std::fs::read()
+                        } else {
+                            "."  // x.abs(), value.method()
+                        }
+                    }
+                    Expression::FieldAccess { .. } => "::", // Module path: std.fs.read() -> std::fs::read()
+                    _ => "."  // Instance method on expressions
                 };
                 
                 format!("{}{}{}({})", obj_str, separator, method, args.join(", "))
