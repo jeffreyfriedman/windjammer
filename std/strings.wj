@@ -1,199 +1,84 @@
 // std/strings - String manipulation utilities
-// Provides common string operations with a clean API
-
-// === SPLITTING ===
-
-// Split string by delimiter
-fn split(s: string, delimiter: string) -> Vec<string> {
-    s.split(&delimiter).map(|s| s.to_string()).collect()
-}
-
-// Split string by whitespace
-fn split_whitespace(s: string) -> Vec<string> {
-    s.split_whitespace().map(|s| s.to_string()).collect()
-}
-
-// Split string into lines
-fn lines(s: string) -> Vec<string> {
-    s.lines().map(|s| s.to_string()).collect()
-}
-
-// Split into characters
-fn chars(s: string) -> Vec<char> {
-    s.chars().collect()
-}
-
-// === JOINING ===
-
-// Join strings with delimiter
-fn join(parts: &[string], delimiter: string) -> string {
-    parts.join(&delimiter)
-}
-
-// Join with space
-fn join_space(parts: &[string]) -> string {
-    parts.join(" ")
-}
-
-// Join with newline
-fn join_lines(parts: &[string]) -> string {
-    parts.join("\n")
-}
-
-// === TRIMMING ===
-
-// Remove whitespace from both ends
-fn trim(s: string) -> string {
-    s.trim().to_string()
-}
-
-// Remove whitespace from start
-fn trim_start(s: string) -> string {
-    s.trim_start().to_string()
-}
-
-// Remove whitespace from end
-fn trim_end(s: string) -> string {
-    s.trim_end().to_string()
-}
-
-// Remove specific characters from both ends
-fn trim_matches(s: string, pattern: string) -> string {
-    s.trim_matches(pattern.chars().next().unwrap()).to_string()
-}
+// Simplified version without closures/iterators for v0.6.0
 
 // === CASE CONVERSION ===
 
 // Convert to uppercase
-fn to_uppercase(s: string) -> string {
+fn to_upper(s: &string) -> string {
     s.to_uppercase()
 }
 
 // Convert to lowercase
-fn to_lowercase(s: string) -> string {
+fn to_lower(s: &string) -> string {
     s.to_lowercase()
 }
 
-// Capitalize first character
-fn capitalize(s: string) -> string {
-    let mut chars = s.chars()
-    match chars.next() {
-        None => String::new(),
-        Some(first) => first.to_uppercase().collect::<String>() + chars.as_str(),
-    }
+// === WHITESPACE ===
+
+// Trim whitespace from both ends
+fn trim(s: &string) -> string {
+    s.trim().to_string()
 }
 
-// === SEARCHING ===
-
-// Check if string contains substring
-fn contains(s: string, needle: string) -> bool {
-    s.contains(&needle)
+// Trim whitespace from start
+fn trim_start(s: &string) -> string {
+    s.trim_start().to_string()
 }
 
-// Check if string starts with prefix
-fn starts_with(s: string, prefix: string) -> bool {
-    s.starts_with(&prefix)
-}
-
-// Check if string ends with suffix
-fn ends_with(s: string, suffix: string) -> bool {
-    s.ends_with(&suffix)
-}
-
-// Find first occurrence of substring (returns index or None)
-fn find(s: string, needle: string) -> Option<usize> {
-    s.find(&needle)
-}
-
-// Find last occurrence of substring
-fn rfind(s: string, needle: string) -> Option<usize> {
-    s.rfind(&needle)
-}
-
-// === REPLACEMENT ===
-
-// Replace all occurrences
-fn replace(s: string, from: string, to: string) -> string {
-    s.replace(&from, &to)
-}
-
-// Replace first N occurrences
-fn replacen(s: string, from: string, to: string, count: usize) -> string {
-    s.replacen(&from, &to, count)
-}
-
-// === PADDING ===
-
-// Pad string to width with character
-fn pad_left(s: string, width: usize, pad_char: char) -> string {
-    format!("{:>width$}", s, width = width).replace(' ', &pad_char.to_string())
-}
-
-fn pad_right(s: string, width: usize, pad_char: char) -> string {
-    format!("{:<width$}", s, width = width).replace(' ', &pad_char.to_string())
+// Trim whitespace from end
+fn trim_end(s: &string) -> string {
+    s.trim_end().to_string()
 }
 
 // === CHECKING ===
 
 // Check if string is empty
-fn is_empty(s: string) -> bool {
+fn is_empty(s: &string) -> bool {
     s.is_empty()
 }
 
-// Check if string is whitespace only
-fn is_whitespace(s: string) -> bool {
-    s.trim().is_empty()
+// Check if string starts with prefix
+fn starts_with(s: &string, prefix: &string) -> bool {
+    s.starts_with(prefix)
 }
 
-// Check if string is alphanumeric
-fn is_alphanumeric(s: string) -> bool {
-    s.chars().all(|c| c.is_alphanumeric())
+// Check if string ends with suffix
+fn ends_with(s: &string, suffix: &string) -> bool {
+    s.ends_with(suffix)
 }
 
-// Check if string is numeric
-fn is_numeric(s: string) -> bool {
-    s.chars().all(|c| c.is_numeric())
+// Check if string contains substring
+fn contains(s: &string, substring: &string) -> bool {
+    s.contains(substring)
+}
+
+// === REPLACEMENT ===
+
+// Replace all occurrences
+fn replace(s: &string, from: &string, to: &string) -> string {
+    s.replace(from, to)
+}
+
+// Replace first N occurrences
+fn replacen(s: &string, from: &string, to: &string, count: usize) -> string {
+    s.replacen(from, to, count)
 }
 
 // === LENGTH ===
 
 // Get string length in bytes
-fn len(s: string) -> usize {
+fn len(s: &string) -> usize {
     s.len()
 }
 
 // Get string length in characters
-fn char_count(s: string) -> usize {
+fn char_count(s: &string) -> usize {
     s.chars().count()
 }
 
-// === SUBSTRING ===
-
-// Get substring by character range
-fn substring(s: string, start: usize, end: usize) -> string {
-    s.chars().skip(start).take(end - start).collect()
-}
-
-// Take first N characters
-fn take(s: string, n: usize) -> string {
-    s.chars().take(n).collect()
-}
-
-// Skip first N characters
-fn skip(s: string, n: usize) -> string {
-    s.chars().skip(n).collect()
-}
-
-// === REPETITION ===
+// === REPEAT ===
 
 // Repeat string N times
-fn repeat(s: string, n: usize) -> string {
+fn repeat(s: &string, n: usize) -> string {
     s.repeat(n)
-}
-
-// === REVERSAL ===
-
-// Reverse string
-fn reverse(s: string) -> string {
-    s.chars().rev().collect()
 }

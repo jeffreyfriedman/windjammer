@@ -520,16 +520,16 @@ impl CodeGenerator {
                 }
                 OwnershipHint::Inferred => {
                     // Use analyzer's inference
-                    let ownership_mode = analyzed.inferred_ownership.get(&param.name)
-                        .unwrap_or(&OwnershipMode::Borrowed);
-                    
+            let ownership_mode = analyzed.inferred_ownership.get(&param.name)
+                .unwrap_or(&OwnershipMode::Borrowed);
+            
                     // Override for Copy types UNLESS they're mutated
                     // Mutated parameters should be &mut even for Copy types
                     if self.is_copy_type(&param.type_) && ownership_mode != &OwnershipMode::MutBorrowed {
                         self.type_to_rust(&param.type_)
                     } else {
                         match ownership_mode {
-                            OwnershipMode::Owned => self.type_to_rust(&param.type_),
+                OwnershipMode::Owned => self.type_to_rust(&param.type_),
                             OwnershipMode::Borrowed => {
                                 // For Copy types that are only read, pass by value
                                 if self.is_copy_type(&param.type_) {
@@ -538,7 +538,7 @@ impl CodeGenerator {
                                     format!("&{}", self.type_to_rust(&param.type_))
                                 }
                             }
-                            OwnershipMode::MutBorrowed => format!("&mut {}", self.type_to_rust(&param.type_)),
+                OwnershipMode::MutBorrowed => format!("&mut {}", self.type_to_rust(&param.type_)),
                         }
                     }
                 }
@@ -550,7 +550,7 @@ impl CodeGenerator {
                 format!("{}: {}", self.generate_pattern(pattern), type_str)
             } else {
                 // Simple name: type syntax
-                format!("{}: {}", param.name, type_str)
+            format!("{}: {}", param.name, type_str)
             }
         }).collect();
         
@@ -601,6 +601,9 @@ impl CodeGenerator {
                 // Special case: &[T] (slice) vs &Vec<T>
                 if let Type::Vec(elem) = &**inner {
                     format!("&[{}]", self.type_to_rust(elem))
+                // Special case: &str instead of &String (more idiomatic Rust)
+                } else if matches!(**inner, Type::String) {
+                    "&str".to_string()
                 } else {
                     format!("&{}", self.type_to_rust(inner))
                 }
@@ -895,7 +898,7 @@ impl CodeGenerator {
                         if self.op_precedence(right_op) < self.op_precedence(op) {
                             format!("({})", self.generate_expression(right))
                         } else {
-                            self.generate_expression(right)
+                    self.generate_expression(right)
                         }
                     }
                     _ => self.generate_expression(right)
