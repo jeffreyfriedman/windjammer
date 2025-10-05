@@ -436,8 +436,12 @@ impl Parser {
     }
     
     fn parse_impl(&mut self) -> Result<ImplBlock, String> {
-        // Parse: impl Type { } or impl Trait for Type { }
-        let first_name = if let Token::Ident(name) = self.current_token() {
+        // Parse: impl<T> Type { } or impl Trait for Type { }
+        
+        // Parse type parameters: impl<T, U> Box<T, U> { ... }
+        let type_params = self.parse_type_params()?;
+        
+        let mut first_name = if let Token::Ident(name) = self.current_token() {
             let name = name.clone();
             self.advance();
             name
@@ -445,16 +449,69 @@ impl Parser {
             return Err("Expected type or trait name after impl".to_string());
         };
         
+        // Handle parameterized type name: Box<T>
+        if self.current_token() == &Token::Lt {
+            first_name.push('<');
+            self.advance();
+            
+            loop {
+                if let Token::Ident(param) = self.current_token() {
+                    first_name.push_str(param);
+                    self.advance();
+                    
+                    if self.current_token() == &Token::Comma {
+                        first_name.push_str(", ");
+                        self.advance();
+                    } else if self.current_token() == &Token::Gt {
+                        first_name.push('>');
+                        self.advance();
+                        break;
+                    } else {
+                        return Err("Expected ',' or '>' in impl type parameters".to_string());
+                    }
+                } else {
+                    return Err("Expected type parameter in impl type name".to_string());
+                }
+            }
+        }
+        
         // Check if this is "impl Trait for Type" or just "impl Type"
         let (trait_name, type_name) = if self.current_token() == &Token::For {
             self.advance(); // consume "for"
-            let type_name = if let Token::Ident(name) = self.current_token() {
+            let mut type_name = if let Token::Ident(name) = self.current_token() {
                 let name = name.clone();
                 self.advance();
                 name
             } else {
                 return Err("Expected type name after 'for'".to_string());
             };
+            
+            // Handle parameterized type name after 'for': impl<T> Trait for Box<T>
+            if self.current_token() == &Token::Lt {
+                type_name.push('<');
+                self.advance();
+                
+                loop {
+                    if let Token::Ident(param) = self.current_token() {
+                        type_name.push_str(param);
+                        self.advance();
+                        
+                        if self.current_token() == &Token::Comma {
+                            type_name.push_str(", ");
+                            self.advance();
+                        } else if self.current_token() == &Token::Gt {
+                            type_name.push('>');
+                            self.advance();
+                            break;
+                        } else {
+                            return Err("Expected ',' or '>' in type parameters after 'for'".to_string());
+                        }
+                    } else {
+                        return Err("Expected type parameter in type name after 'for'".to_string());
+                    }
+                }
+            }
+            
             (Some(first_name), type_name)
         } else {
             (None, first_name)
@@ -491,7 +548,7 @@ impl Parser {
         
         self.expect(Token::RBrace)?;
         
-        Ok(ImplBlock { type_name, type_params: Vec::new(), trait_name, functions, decorators: Vec::new() })
+        Ok(ImplBlock { type_name, type_params, trait_name, functions, decorators: Vec::new() })
     }
     
     fn parse_trait(&mut self) -> Result<TraitDecl, String> {
@@ -696,6 +753,36 @@ impl Parser {
         Ok(path)
     }
     
+    fn parse_type_params(&mut self) -> Result<Vec<String>, String> {
+        // Parse generic type parameters: <T> or <T, U>
+        if self.current_token() != &Token::Lt {
+            return Ok(Vec::new());
+        }
+        
+        self.advance(); // consume <
+        let mut params = Vec::new();
+        
+        loop {
+            if let Token::Ident(name) = self.current_token() {
+                params.push(name.clone());
+                self.advance();
+                
+                if self.current_token() == &Token::Comma {
+                    self.advance();
+                } else if self.current_token() == &Token::Gt {
+                    self.advance();
+                    break;
+                } else {
+                    return Err("Expected ',' or '>' in type parameters".to_string());
+                }
+            } else {
+                return Err("Expected type parameter name".to_string());
+            }
+        }
+        
+        Ok(params)
+    }
+    
     fn parse_function(&mut self) -> Result<FunctionDecl, String> {
         // Note: Token::Fn already consumed in parse_item
         
@@ -706,6 +793,9 @@ impl Parser {
         } else {
             return Err("Expected function name".to_string());
         };
+        
+        // Parse type parameters: fn foo<T, U>(...)
+        let type_params = self.parse_type_params()?;
         
         self.expect(Token::LParen)?;
         let parameters = self.parse_parameters()?;
@@ -724,7 +814,7 @@ impl Parser {
         
         Ok(FunctionDecl {
             name,
-            type_params: Vec::new(),  // TODO: Parse type parameters
+            type_params,  // Parsed generic type parameters
             decorators: Vec::new(), // Set by parse_item
             is_async: false,        // Set by parse_item
             parameters,
@@ -888,19 +978,23 @@ impl Parser {
                         self.expect(Token::Gt)?;
                         Type::Result(ok_type, err_type)
                     } else {
-                        // Generic custom type (not fully supported yet)
-                        // Skip the generic params for now
-                        let mut depth = 1;
-                        while depth > 0 {
-                            match self.current_token() {
-                                Token::Lt => depth += 1,
-                                Token::Gt => depth -= 1,
-                                Token::Eof => return Err("Unexpected EOF in generic type".to_string()),
-                                _ => {}
+                        // Generic custom type: Box<T>, HashMap<K, V>, etc.
+                        let mut type_args = Vec::new();
+                        
+                        loop {
+                            type_args.push(self.parse_type()?);
+                            
+                            if self.current_token() == &Token::Comma {
+                                self.advance();
+                            } else if self.current_token() == &Token::Gt {
+                                self.advance();
+                                break;
+                            } else {
+                                return Err("Expected ',' or '>' in type arguments".to_string());
                             }
-                            self.advance();
                         }
-                        Type::Custom(type_name)
+                        
+                        Type::Parameterized(type_name, type_args)
                     }
                 } else {
                     Type::Custom(type_name)
@@ -931,6 +1025,9 @@ impl Parser {
             return Err("Expected struct name".to_string());
         };
         
+        // Parse type parameters: struct Box<T> { ... }
+        let type_params = self.parse_type_params()?;
+
         self.expect(Token::LBrace)?;
         
         let mut fields = Vec::new();
@@ -966,7 +1063,7 @@ impl Parser {
         
         self.expect(Token::RBrace)?;
         
-        Ok(StructDecl { name, type_params: Vec::new(), fields, decorators: Vec::new() })
+        Ok(StructDecl { name, type_params, fields, decorators: Vec::new() })
     }
     
     fn parse_enum(&mut self) -> Result<EnumDecl, String> {
