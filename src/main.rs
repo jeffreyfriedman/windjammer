@@ -5,7 +5,7 @@ pub mod codegen;
 
 use clap::{Parser, Subcommand, ValueEnum};
 use std::path::PathBuf;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use anyhow::Result;
 
 #[derive(Debug, Clone, Copy, ValueEnum)]
@@ -88,13 +88,18 @@ fn build_project(path: &PathBuf, output: &PathBuf, target: CompilationTarget) ->
     std::fs::create_dir_all(output)?;
     
     let mut has_errors = false;
+    let mut all_stdlib_modules = HashSet::new();
     
     // Process each file
     for file_path in &wj_files {
         print!("  {} {:?}... ", "Compiling".cyan(), file_path.file_name().unwrap());
         
         match compile_file(file_path, output, target) {
-            Ok(_) => println!("{}", "✓".green()),
+            Ok(imported_modules) => {
+                println!("{}", "✓".green());
+                // Collect imported stdlib modules
+                all_stdlib_modules.extend(imported_modules);
+            }
             Err(e) => {
                 println!("{}", "✗".red());
                 eprintln!("    {}: {}", "Error".red().bold(), e);
@@ -104,8 +109,8 @@ fn build_project(path: &PathBuf, output: &PathBuf, target: CompilationTarget) ->
     }
     
     if !has_errors {
-        // Create Cargo.toml if it doesn't exist
-        create_cargo_toml(output)?;
+        // Create Cargo.toml with dependencies for imported stdlib modules
+        create_cargo_toml_with_deps(output, &all_stdlib_modules)?;
         
         println!("\n{} Transpilation complete!", "Success!".green().bold());
         println!("Output directory: {:?}", output);
@@ -185,6 +190,7 @@ struct ModuleCompiler {
     compiled_modules: HashMap<String, String>, // module path -> generated Rust code
     target: CompilationTarget,
     stdlib_path: PathBuf,
+    imported_stdlib_modules: HashSet<String>, // Track which stdlib modules are used
 }
 
 impl ModuleCompiler {
@@ -199,18 +205,20 @@ impl ModuleCompiler {
             compiled_modules: HashMap::new(),
             target,
             stdlib_path,
+            imported_stdlib_modules: HashSet::new(),
         }
     }
     
     /// Compile a module and all its dependencies
-    fn compile_module(&mut self, module_path: &str) -> Result<()> {
+    /// source_file: The file that is importing this module (for relative path resolution)
+    fn compile_module(&mut self, module_path: &str, source_file: Option<&PathBuf>) -> Result<()> {
         // Skip if already compiled
         if self.compiled_modules.contains_key(module_path) {
             return Ok(());
         }
         
         // Find the module file
-        let file_path = self.resolve_module_path(module_path)?;
+        let file_path = self.resolve_module_path(module_path, source_file)?;
         
         // Read and parse
         let source = std::fs::read_to_string(&file_path)?;
@@ -224,10 +232,8 @@ impl ModuleCompiler {
         for item in &program.items {
             if let parser::Item::Use(path) = item {
                 let dep_path = path.join(".");
-                // Only recursively compile std modules for now
-                if dep_path.starts_with("std.") {
-                    self.compile_module(&dep_path)?;
-                }
+                // Recursively compile both std modules and relative imports
+                self.compile_module(&dep_path, Some(&file_path))?;
             }
         }
         
@@ -241,17 +247,35 @@ impl ModuleCompiler {
         
         // Wrap module code in a Rust mod block
         // e.g., std.json becomes: pub mod json { ... }
-        let module_name = module_path.split('.').last().unwrap();
+        // For relative imports like ./utils or ../utils/helpers, extract module name
+        let module_name = if module_path.starts_with("./") || module_path.starts_with("../") {
+            // Extract final component: ./utils -> utils, ../utils/helpers -> helpers
+            let stripped = module_path.strip_prefix("./")
+                .or_else(|| module_path.strip_prefix("../"))
+                .unwrap_or(module_path);
+            stripped.split('/').last().unwrap_or(stripped)
+        } else if module_path.contains('.') {
+            // std.json -> json
+            module_path.split('.').last().unwrap()
+        } else {
+            module_path
+        };
         let wrapped_code = format!("pub mod {} {{\n{}\n}}\n", module_name, rust_code);
         
         // Store compiled module
         self.compiled_modules.insert(module_path.to_string(), wrapped_code);
         
+        // Track stdlib module for dependency generation
+        if module_path.starts_with("std.") {
+            self.imported_stdlib_modules.insert(module_path.to_string());
+        }
+        
         Ok(())
     }
     
     /// Resolve module path to file path
-    fn resolve_module_path(&self, module_path: &str) -> Result<PathBuf> {
+    /// source_file: The file that is importing this module (for relative path resolution)
+    fn resolve_module_path(&self, module_path: &str, source_file: Option<&PathBuf>) -> Result<PathBuf> {
         if module_path.starts_with("std.") {
             // stdlib module: std.json -> $STDLIB/json.wj
             let module_name = module_path.strip_prefix("std.").unwrap();
@@ -261,9 +285,47 @@ impl ModuleCompiler {
             } else {
                 Err(anyhow::anyhow!("Stdlib module not found: {} (looked in {:?})", module_path, file_path))
             }
+        } else if module_path.starts_with("./") || module_path.starts_with("../") {
+            // Relative import: ./module or ../module
+            let source_dir = source_file
+                .and_then(|f| f.parent())
+                .ok_or_else(|| anyhow::anyhow!("Cannot resolve relative import without source file"))?;
+            
+            // module_path is already in form "./utils" or "./utils/helpers"
+            // Just strip the leading ./ or ../
+            let relative_part = if module_path.starts_with("./") {
+                module_path.strip_prefix("./").unwrap()
+            } else {
+                module_path.strip_prefix("../").unwrap()
+            };
+            
+            // Resolve relative path from source directory
+            let base_path = if module_path.starts_with("../") {
+                source_dir.parent().ok_or_else(|| anyhow::anyhow!("Cannot go up from root directory"))?
+            } else {
+                source_dir
+            };
+            
+            let resolved = base_path.join(relative_part).with_extension("wj");
+            
+            // Try file directly first
+            if resolved.exists() {
+                return Ok(resolved);
+            }
+            
+            // Try as directory module: ./utils -> utils/mod.wj
+            let mod_path = base_path.join(relative_part).join("mod.wj");
+            if mod_path.exists() {
+                return Ok(mod_path);
+            }
+            
+            Err(anyhow::anyhow!(
+                "User module not found: {} (looked in {:?} and {:?})",
+                module_path, resolved, mod_path
+            ))
         } else {
-            // TODO: Relative imports for user modules
-            Err(anyhow::anyhow!("Only std.* imports are supported currently"))
+            // Absolute import (future: github.com/user/repo style)
+            Err(anyhow::anyhow!("Absolute imports not yet supported: {}", module_path))
         }
     }
     
@@ -273,9 +335,58 @@ impl ModuleCompiler {
         // TODO: Topological sort for proper dependency order
         self.compiled_modules.values().cloned().collect()
     }
+    
+    /// Get Cargo dependencies for imported stdlib modules
+    fn get_cargo_dependencies(&self) -> Vec<String> {
+        let mut deps = Vec::new();
+        
+        for module in &self.imported_stdlib_modules {
+            let module_deps = match module.as_str() {
+                "std.json" => vec![
+                    "serde = \"1.0\"",
+                    "serde_json = \"1.0\"",
+                ],
+                "std.csv" => vec![
+                    "csv = \"1.3\"",
+                ],
+                "std.http" => vec![
+                    "reqwest = { version = \"0.11\", features = [\"blocking\"] }",
+                ],
+                "std.time" => vec![
+                    "chrono = \"0.4\"",
+                ],
+                "std.log" => vec![
+                    "log = \"0.4\"",
+                    "env_logger = \"0.11\"",
+                ],
+                "std.regex" => vec![
+                    "regex = \"1.10\"",
+                ],
+                "std.encoding" => vec![
+                    "base64 = \"0.21\"",
+                    "hex = \"0.4\"",
+                    "urlencoding = \"2.1\"",
+                ],
+                "std.crypto" => vec![
+                    "sha2 = \"0.10\"",
+                    "md5 = \"0.7\"",
+                ],
+                // std.fs, std.strings, std.math don't need external dependencies (use std)
+                _ => vec![],
+            };
+            
+            for dep in module_deps {
+                if !deps.contains(&dep.to_string()) {
+                    deps.push(dep.to_string());
+                }
+            }
+        }
+        
+        deps
+    }
 }
 
-fn compile_file(input_path: &PathBuf, output_dir: &PathBuf, target: CompilationTarget) -> Result<()> {
+fn compile_file(input_path: &PathBuf, output_dir: &PathBuf, target: CompilationTarget) -> Result<HashSet<String>> {
     let mut module_compiler = ModuleCompiler::new(target);
     
     // Read source file
@@ -294,9 +405,8 @@ fn compile_file(input_path: &PathBuf, output_dir: &PathBuf, target: CompilationT
     for item in &program.items {
         if let parser::Item::Use(path) = item {
             let module_path = path.join(".");
-            if module_path.starts_with("std.") {
-                module_compiler.compile_module(&module_path)?;
-            }
+            // Compile both std.* and relative imports (./ or ../)
+            module_compiler.compile_module(&module_path, Some(input_path))?;
         }
     }
     
@@ -330,7 +440,8 @@ fn compile_file(input_path: &PathBuf, output_dir: &PathBuf, target: CompilationT
     let output_path = output_dir.join(format!("{}.rs", output_filename));
     std::fs::write(output_path, final_code)?;
     
-    Ok(())
+    // Return imported stdlib modules
+    Ok(module_compiler.imported_stdlib_modules)
 }
 
 fn check_file(file_path: &PathBuf) -> Result<()> {
@@ -353,31 +464,82 @@ fn check_file(file_path: &PathBuf) -> Result<()> {
     Ok(())
 }
 
-fn create_cargo_toml(output_dir: &PathBuf) -> Result<()> {
+fn create_cargo_toml_with_deps(output_dir: &PathBuf, imported_modules: &HashSet<String>) -> Result<()> {
     let cargo_toml_path = output_dir.join("Cargo.toml");
     
-    if !cargo_toml_path.exists() {
-        let cargo_toml_content = r#"[package]
-name = "windjammer-output"
-version = "0.1.0"
-edition = "2021"
-
-[dependencies]
-# Add common dependencies that Windjammer examples might use
-tokio = { version = "1", features = ["full"] }
-axum = "0.7"
-serde = { version = "1", features = ["derive"] }
-serde_json = "1"
-clap = { version = "4", features = ["derive"] }
-anyhow = "1"
-rayon = "1"
-wasm-bindgen = "0.2"
-web-sys = "0.3"
-js-sys = "0.3"
-"#;
+    // Get dependencies based on imported modules
+    let mut deps = Vec::new();
+    
+    for module in imported_modules {
+        let module_deps = match module.as_str() {
+            "std.json" => vec![
+                "serde = { version = \"1.0\", features = [\"derive\"] }",
+                "serde_json = \"1.0\"",
+            ],
+            "std.csv" => vec![
+                "csv = \"1.3\"",
+            ],
+            "std.http" => vec![
+                "reqwest = { version = \"0.11\", features = [\"blocking\"] }",
+            ],
+            "std.time" => vec![
+                "chrono = \"0.4\"",
+            ],
+            "std.log" => vec![
+                "log = \"0.4\"",
+                "env_logger = \"0.11\"",
+            ],
+            "std.regex" => vec![
+                "regex = \"1.10\"",
+            ],
+            "std.encoding" => vec![
+                "base64 = \"0.21\"",
+                "hex = \"0.4\"",
+                "urlencoding = \"2.1\"",
+            ],
+            "std.crypto" => vec![
+                "sha2 = \"0.10\"",
+                "md5 = \"0.7\"",
+                "rand = \"0.8\"",
+            ],
+            _ => vec![],
+        };
         
-        std::fs::write(cargo_toml_path, cargo_toml_content)?;
+        for dep in module_deps {
+            if !deps.contains(&dep.to_string()) {
+                deps.push(dep.to_string());
+            }
+        }
     }
+    
+    // Always include WASM dependencies for @export support
+    if !deps.iter().any(|d| d.starts_with("wasm-bindgen")) {
+        deps.push("wasm-bindgen = \"0.2\"".to_string());
+    }
+    if !deps.iter().any(|d| d.starts_with("web-sys")) {
+        deps.push("web-sys = \"0.3\"".to_string());
+    }
+    if !deps.iter().any(|d| d.starts_with("js-sys")) {
+        deps.push("js-sys = \"0.3\"".to_string());
+    }
+    
+    // Build Cargo.toml content
+    let mut cargo_toml_content = String::from(
+        "[package]\nname = \"windjammer-output\"\nversion = \"0.1.0\"\nedition = \"2021\"\n\n[dependencies]\n"
+    );
+    
+    for dep in &deps {
+        cargo_toml_content.push_str(dep);
+        cargo_toml_content.push('\n');
+    }
+    
+    // Add [[bin]] section if main.rs exists
+    let main_rs = output_dir.join("main.rs");
+    if main_rs.exists() {
+        cargo_toml_content.push_str("\n[[bin]]\nname = \"windjammer-output\"\npath = \"main.rs\"\n");
+    }
+    
+    std::fs::write(cargo_toml_path, cargo_toml_content)?;
     
     Ok(())
 }
