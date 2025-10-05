@@ -268,7 +268,15 @@ impl CodeGenerator {
             }
         }
         
-        output.push_str(&format!("struct {} {{\n", s.name));
+        // Add struct declaration with type parameters
+        output.push_str("struct ");
+        output.push_str(&s.name);
+        if !s.type_params.is_empty() {
+            output.push('<');
+            output.push_str(&s.type_params.join(", "));
+            output.push('>');
+        }
+        output.push_str(" {\n");
         
         for field in &s.fields {
             // Generate decorators for the field (convert to Rust attributes)
@@ -415,12 +423,21 @@ impl CodeGenerator {
             output.push_str(&format!("#[{}]\n", rust_attr));
         }
         
+        // Generate impl with type parameters
+        output.push_str("impl");
+        if !impl_block.type_params.is_empty() {
+            output.push('<');
+            output.push_str(&impl_block.type_params.join(", "));
+            output.push('>');
+        }
+        output.push(' ');
+        
         if let Some(trait_name) = &impl_block.trait_name {
-            // Trait implementation: impl Trait for Type
-            output.push_str(&format!("impl {} for {} {{\n", trait_name, impl_block.type_name));
+            // Trait implementation: impl<T> Trait for Type<T>
+            output.push_str(&format!("{} for {} {{\n", trait_name, impl_block.type_name));
         } else {
-            // Inherent implementation: impl Type
-            output.push_str(&format!("impl {} {{\n", impl_block.type_name));
+            // Inherent implementation: impl<T> Type<T>
+            output.push_str(&format!("{} {{\n", impl_block.type_name));
         }
         
         self.indent_level += 1;
@@ -464,6 +481,14 @@ impl CodeGenerator {
         
         output.push_str("fn ");
         output.push_str(&func.name);
+        
+        // Add type parameters: fn foo<T, U>(...)
+        if !func.type_params.is_empty() {
+            output.push('<');
+            output.push_str(&func.type_params.join(", "));
+            output.push('>');
+        }
+        
         output.push('(');
         
         let params: Vec<String> = func.parameters.iter().map(|param| {
