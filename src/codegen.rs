@@ -968,11 +968,26 @@ impl CodeGenerator {
                     .collect();
                 format!("{}({})", func_str, args.join(", "))
             }
-            Expression::MethodCall { object, method, arguments } => {
+            Expression::MethodCall { object, method, type_args, arguments } => {
                 let obj_str = self.generate_expression_with_precedence(object);
                 let args: Vec<String> = arguments.iter()
                     .map(|(_label, arg)| self.generate_expression(arg))
                     .collect();
+                
+                // Generate turbofish if present
+                let turbofish = if let Some(types) = type_args {
+                    let type_strs: Vec<String> = types.iter()
+                        .map(|t| self.type_to_rust(t))
+                        .collect();
+                    format!("::<{}>", type_strs.join(", "))
+                } else {
+                    String::new()
+                };
+                
+                // Special case: empty method name means turbofish on a function call (func::<T>())
+                if method.is_empty() {
+                    return format!("{}{}({})", obj_str, turbofish, args.join(", "));
+                }
                 
                 // Determine separator: :: for static calls, . for instance methods
                 // - Type/Module (starts with uppercase): use ::
@@ -991,7 +1006,7 @@ impl CodeGenerator {
                     _ => "."  // Instance method on expressions
                 };
                 
-                format!("{}{}{}({})", obj_str, separator, method, args.join(", "))
+                format!("{}{}{}{}({})", obj_str, separator, method, turbofish, args.join(", "))
             }
             Expression::FieldAccess { object, field } => {
                 let obj_str = self.generate_expression_with_precedence(object);

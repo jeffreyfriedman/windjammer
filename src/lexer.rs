@@ -102,6 +102,7 @@ pub enum Token {
     DotDot,      // ..
     DotDotEq,    // ..=
     Colon,
+    ColonColon,  // :: (for turbofish and paths)
     Semicolon,
     Question,
     Ampersand,   // &
@@ -515,7 +516,15 @@ impl Lexer {
                 Token::DotDot
             }
             Some('.') => { self.advance(); Token::Dot }
-            Some(':') => { self.advance(); Token::Colon }
+            Some(':') => {
+                self.advance();
+                if self.current_char == Some(':') {
+                    self.advance();
+                    Token::ColonColon
+                } else {
+                    Token::Colon
+                }
+            }
             Some(';') => { self.advance(); Token::Semicolon }
             Some('?') => { self.advance(); Token::Question }
             Some(ch) => {
