@@ -91,8 +91,8 @@ impl CodeGenerator {
         
         // Generate explicit use statements
         for item in &program.items {
-            if let Item::Use(path) = item {
-                imports.push_str(&self.generate_use(path));
+            if let Item::Use { path, alias } = item {
+                imports.push_str(&self.generate_use(path, alias.as_deref()));
                 imports.push('\n');
             }
         }
@@ -101,7 +101,9 @@ impl CodeGenerator {
         for item in &program.items {
             match item {
                 Item::Const { name, type_, value } => {
-                    body.push_str(&format!("const {}: {} = {};\n", 
+                    let pub_prefix = if self.is_module { "pub " } else { "" };
+                    body.push_str(&format!("{}const {}: {} = {};\n", 
+                        pub_prefix,
                         name, 
                         self.type_to_rust(type_), 
                         self.generate_expression_immut(value)));
@@ -199,17 +201,21 @@ impl CodeGenerator {
         output
     }
     
-    fn generate_use(&self, path: &[String]) -> String {
+    fn generate_use(&self, path: &[String], alias: Option<&str>) -> String {
         if path.is_empty() {
             return String::new();
         }
         
         let full_path = path.join(".");
         
-        // Handle stdlib imports: std.math -> use math::*;
+        // Handle stdlib imports: std.math -> use math::*; or std.math as m -> use math as m;
         if full_path.starts_with("std.") {
             let module_name = full_path.strip_prefix("std.").unwrap();
-            return format!("use {}::*;\n", module_name);
+            if let Some(alias_name) = alias {
+                return format!("use {} as {};\n", module_name, alias_name);
+            } else {
+                return format!("use {}::*;\n", module_name);
+            }
         }
         
         // Skip bare "std" imports
@@ -224,11 +230,16 @@ impl CodeGenerator {
                 .or_else(|| full_path.strip_prefix("../"))
                 .unwrap_or(&full_path);
             let module_name = stripped.split('/').last().unwrap_or(stripped);
-            return format!("use {}::*;\n", module_name);
+            if let Some(alias_name) = alias {
+                return format!("use {} as {};\n", module_name, alias_name);
+            } else {
+                return format!("use {}::*;\n", module_name);
+            }
         }
         
         // Convert Windjammer's Go-style imports to Rust's glob imports
         // e.g., "use wasm_bindgen.prelude" -> "use wasm_bindgen::prelude::*;"
+        // or "use wasm_bindgen.prelude as wb" -> "use wasm_bindgen::prelude as wb;"
         format!("use {}::*;\n", path.join("::"))
     }
     
