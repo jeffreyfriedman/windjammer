@@ -323,11 +323,12 @@ The module system will be expanded in future versions:
 - Private vs public module items
 - Cross-module visibility control
 
-### v1.0.0
+### v0.10.0
 - Module caching for faster compilation
 - Precompiled stdlib binaries
 - Module documentation generation
 - Workspace/package system
+- Production confidence-building before v1.0.0
 
 ## Contributing to Stdlib
 

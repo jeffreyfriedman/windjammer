@@ -187,10 +187,11 @@ fn test_parse() {
 - `time.wj`, `crypto.wj`, `regex.wj`
 - Auto-import for common modules
 
-### v1.0.0: Complete Standard Library
+### v0.10.0: Complete Standard Library
 - All planned modules implemented
 - Comprehensive documentation
 - Performance benchmarks
+- Production confidence-building period before v1.0.0
 
 ---
 
