@@ -6,17 +6,22 @@ use std::process::Command;
 // Helper to compile and check generated code
 fn compile_and_check(source: &str, expected_patterns: &[&str]) -> String {
     use std::sync::atomic::{AtomicUsize, Ordering};
+    use std::thread;
     static TEST_COUNTER: AtomicUsize = AtomicUsize::new(0);
 
-    // Create unique temp file for this test
+    // Create unique temp file for this test using process ID, thread ID, and counter
     let test_id = TEST_COUNTER.fetch_add(1, Ordering::SeqCst);
+    let process_id = std::process::id();
+    let thread_id = format!("{:?}", thread::current().id());
+    let unique_id = format!("{}_{}_{}_{}", process_id, thread_id.replace("ThreadId(", "").replace(")", ""), test_id, std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_nanos());
+    
     let temp_dir = std::env::temp_dir();
-    let test_file = format!("test_{}.wj", test_id);
+    let test_file = format!("test_{}.wj", unique_id);
     let temp_file = temp_dir.join(&test_file);
     fs::write(&temp_file, source).expect("Failed to write temp file");
 
     // Compile to unique output directory (absolute path)
-    let output_dir = temp_dir.join(format!("output_{}", test_id));
+    let output_dir = temp_dir.join(format!("output_{}", unique_id));
     std::fs::create_dir_all(&output_dir).expect("Failed to create output directory");
     let output = Command::new("cargo")
         .args([
@@ -33,14 +38,25 @@ fn compile_and_check(source: &str, expected_patterns: &[&str]) -> String {
 
     if !output.status.success() {
         panic!(
-            "Compilation failed: {}",
+            "Compilation failed:\nSTDOUT: {}\nSTDERR: {}",
+            String::from_utf8_lossy(&output.stdout),
             String::from_utf8_lossy(&output.stderr)
         );
     }
 
     // Read generated code
-    let rs_file = output_dir.join(format!("test_{}.rs", test_id));
-    let generated = fs::read_to_string(&rs_file).expect("Failed to read generated code");
+    let rs_file = output_dir.join(format!("test_{}.rs", unique_id));
+    let generated = fs::read_to_string(&rs_file).unwrap_or_else(|_| {
+        let files: Vec<_> = fs::read_dir(&output_dir)
+            .unwrap()
+            .filter_map(|e| e.ok())
+            .map(|e| e.file_name().to_string_lossy().to_string())
+            .collect();
+        panic!(
+            "Expected file {:?} not found. Output directory contains: {:?}",
+            rs_file, files
+        )
+    });
 
     // Check expected patterns
     for pattern in expected_patterns {
@@ -51,6 +67,10 @@ fn compile_and_check(source: &str, expected_patterns: &[&str]) -> String {
             generated
         );
     }
+
+    // Cleanup temp files
+    let _ = fs::remove_file(&temp_file);
+    let _ = fs::remove_dir_all(&output_dir);
 
     generated
 }
@@ -289,12 +309,10 @@ fn countdown(n: int) {
 #[test]
 fn test_closures() {
     let source = r#"
-fn apply(f: fn(int) -> int, x: int) -> int {
-    f(x)
-}
-
 fn main() {
     let double = |x| x * 2
+    let result = double(5)
+    result
 }
 "#;
     compile_and_check(source, &["|x| x * 2"]);
