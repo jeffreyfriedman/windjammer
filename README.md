@@ -50,6 +50,21 @@ Zero-cost abstractions, memory safety, and blazing speed.
       fn get(&self) -> Self::Item;
   }
   ```
+- **Trait objects**: Runtime polymorphism with `dyn Trait` 🆕 **v0.8.0**
+  ```windjammer
+  fn render(shape: &dyn Drawable) { shape.draw() }
+  fn create() -> dyn Shape { Circle { radius: 10 } }
+  ```
+- **Supertraits**: Trait inheritance for requirement hierarchies 🆕 **v0.8.0**
+  ```windjammer
+  trait Pet: Animal { fn play(&self); }
+  trait Manager: Worker + Clone { fn manage(&self); }
+  ```
+- **Generic traits**: Traits with type parameters 🆕 **v0.8.0**
+  ```windjammer
+  trait From<T> { fn from(value: T) -> Self; }
+  trait Converter<Input, Output> { fn convert(&self, input: Input) -> Output; }
+  ```
 - **Turbofish syntax**: `identity::<int>(42)`, `parse::<float>()` for explicit types ✨
 - **Pattern matching** with guards and tuple patterns
 - **Closures**: `|x| x * 2`
