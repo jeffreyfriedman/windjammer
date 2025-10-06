@@ -18,6 +18,9 @@ Welcome to Windjammer! This guide will take you from zero to hero, teaching you 
    - [Trait Bounds](#trait-bounds)
    - [Where Clauses](#where-clauses)
    - [Associated Types](#associated-types)
+   - [Trait Objects](#trait-objects)
+   - [Supertraits](#supertraits)
+   - [Generic Traits](#generic-traits)
 9. [String Interpolation](#string-interpolation)
 10. [Pipe Operator](#pipe-operator)
 11. [Labeled Arguments](#labeled-arguments)
@@ -1098,6 +1101,161 @@ trait Container {
     fn get(&self) -> Self::Item;
 }
 ```
+
+### Trait Objects
+
+Trait objects enable **runtime polymorphism** - calling different implementations through a common interface.
+
+**Syntax**: `dyn TraitName`
+
+**As function parameter (reference)**:
+
+```windjammer
+fn render_shape(shape: &dyn Drawable) {
+    shape.draw()
+}
+
+let circle = Circle { radius: 5 }
+let square = Square { side: 10 }
+
+render_shape(&circle)  // Works!
+render_shape(&square)  // Works!
+```
+
+**As return type (automatically boxed)**:
+
+```windjammer
+fn create_pet(choice: int) -> dyn Pet {
+    if choice == 1 {
+        Dog { name: "Buddy" }
+    } else {
+        Cat { name: "Whiskers" }
+    }
+}
+
+// Windjammer automatically boxes: dyn Pet -> Box<dyn Pet>
+```
+
+**In collections**:
+
+```windjammer
+let shapes: Vec<dyn Drawable> = vec![
+    Circle { radius: 5 },
+    Square { side: 10 }
+]
+
+for shape in shapes {
+    render_shape(&shape)
+}
+```
+
+**Generated Rust**:
+- `&dyn Trait` → `&dyn Trait` (reference, no boxing)
+- `dyn Trait` → `Box<dyn Trait>` (owned, automatically boxed)
+- `&mut dyn Trait` → `&mut dyn Trait` (mutable reference)
+
+### Supertraits
+
+Supertraits specify that implementing one trait requires implementing another.
+
+**Syntax**: `trait SubTrait: SuperTrait`
+
+**Single supertrait**:
+
+```windjammer
+trait Animal {
+    fn make_sound(&self);
+}
+
+trait Pet: Animal {
+    fn play(&self);
+}
+
+// Any type implementing Pet MUST also implement Animal
+struct Dog {
+    name: string
+}
+
+impl Animal for Dog {
+    fn make_sound(&self) {
+        println!("Woof!")
+    }
+}
+
+impl Pet for Dog {
+    fn play(&self) {
+        println!("{} is playing!", self.name)
+    }
+}
+```
+
+**Multiple supertraits**:
+
+```windjammer
+trait Manager: Worker + Clone {
+    fn manage(&self);
+}
+
+// Implementing Manager requires implementing both Worker AND Clone
+```
+
+**Why use supertraits?**
+- Express trait hierarchies (Pet IS AN Animal)
+- Ensure required capabilities (Manager must be a Worker)
+- Reuse trait methods (Pet can call Animal methods)
+
+### Generic Traits
+
+Generic traits have type parameters, allowing flexible reuse.
+
+**Single type parameter**:
+
+```windjammer
+trait From<T> {
+    fn from(value: T) -> Self;
+}
+
+// Different implementations for different types
+impl From<int> for String {
+    fn from(value: int) -> Self {
+        value.to_string()
+    }
+}
+
+impl From<float> for String {
+    fn from(value: float) -> Self {
+        value.to_string()
+    }
+}
+```
+
+**Multiple type parameters**:
+
+```windjammer
+trait Converter<Input, Output> {
+    fn convert(&self, input: Input) -> Output;
+}
+
+struct IntToString;
+
+impl Converter<int, string> for IntToString {
+    fn convert(&self, input: int) -> string {
+        input.to_string()
+    }
+}
+```
+
+**When to use generic traits vs associated types?**
+
+Use **generic traits** when:
+- Multiple implementations for the same type make sense
+- The type parameter is chosen by the caller
+- Example: `From<int>` and `From<string>` both for the same type
+
+Use **associated types** when:
+- Only one implementation makes sense
+- The type is determined by the trait implementation
+- Example: `Iterator` has one `Item` type per implementation
 
 ---
 

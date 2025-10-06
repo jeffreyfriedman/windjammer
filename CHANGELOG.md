@@ -7,26 +7,53 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-### In Progress for v0.8.0
-- **Trait Bounds** ✅ Complete
-  - Inline trait bounds: `T: Display`, `T: Display + Clone`
-  - Multiple type parameters with bounds
-  - Struct and impl block trait bounds
-- **Where Clauses** ✅ Complete
-  - Multi-line where clauses for complex constraints
-  - Multiple bounds per type parameter
-  - Function, struct, and impl where clauses
-- **Associated Types** ✅ Complete
-  - Trait associated type declarations: `type Item;`
-  - Impl associated type definitions: `type Item = T;`
-  - `Self::Item` and `T::Output` references in signatures
-- Examples 24-26 demonstrating trait system features ✅
-- Documentation updates for trait system (In progress)
+## [0.8.0] - 2025-10-06
 
-### Planned for v0.8.0
-- Advanced generics features (higher-kinded types, trait objects)
-- Error mapping Phase 2 (pattern detection, suggestions)
-- Stdlib expansion (collections, testing, async modules)
+### Added - Complete Trait System 🎯
+
+**Phase 1: Core Trait System**:
+- **Trait Bounds**: Inline trait bounds on generic parameters
+  - Single bound: `T: Display`
+  - Multiple bounds: `T: Display + Clone`
+  - Bounds on functions, structs, and impl blocks
+- **Where Clauses**: Complex trait constraints for readability
+  - Multi-line syntax: `where T: Display + Clone, U: Debug`
+  - Support for functions, structs, and impl blocks
+- **Associated Types**: Trait-level type declarations
+  - Trait declarations: `type Item;`
+  - Impl definitions: `type Item = T;`
+  - References in signatures: `Self::Item`, `T::Output`
+
+**Phase 2: Advanced Traits**:
+- **Trait Objects**: Runtime polymorphism with `dyn Trait`
+  - Trait object references: `&dyn Trait`
+  - Owned trait objects: `dyn Trait` (auto-boxed to `Box<dyn Trait>`)
+  - Mutable trait objects: `&mut dyn Trait`
+- **Supertraits**: Trait inheritance
+  - Single supertrait: `trait Pet: Animal`
+  - Multiple supertraits: `trait Manager: Worker + Clone`
+- **Generic Traits**: Traits with type parameters
+  - Single parameter: `trait From<T>`
+  - Multiple parameters: `trait Converter<Input, Output>`
+
+**Examples & Documentation**:
+- Example 24: Trait Bounds
+- Example 25: Where Clauses
+- Example 26: Associated Types
+- Example 28: Trait Objects
+- Example 29: Advanced Trait System (comprehensive)
+- GUIDE.md: 240+ lines of trait system documentation
+- Complete trait system coverage in README.md
+
+**Technical Details**:
+- Added `dyn` keyword to lexer
+- Extended AST with `TraitObject`, `supertraits` field
+- Fixed generic trait generation (was incorrectly converting to associated types)
+- Smart code generation: `&dyn Trait` vs `Box<dyn Trait>`
+
+### Changed
+- Trait generic parameters now generate as type parameters, not associated types
+- Improved trait method generation for default implementations
 
 ## [0.7.0] - 2025-10-05
 
