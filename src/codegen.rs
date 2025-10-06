@@ -307,7 +307,7 @@ impl CodeGenerator {
         output.push_str(&s.name);
         if !s.type_params.is_empty() {
             output.push('<');
-            output.push_str(&s.type_params.join(", "));
+            output.push_str(&self.format_type_params(&s.type_params));
             output.push('>');
         }
         output.push_str(" {\n");
@@ -477,7 +477,7 @@ impl CodeGenerator {
         output.push_str("impl");
         if !impl_block.type_params.is_empty() {
             output.push('<');
-            output.push_str(&impl_block.type_params.join(", "));
+            output.push_str(&self.format_type_params(&impl_block.type_params));
             output.push('>');
         }
         output.push(' ');
@@ -532,10 +532,10 @@ impl CodeGenerator {
         output.push_str("fn ");
         output.push_str(&func.name);
 
-        // Add type parameters: fn foo<T, U>(...)
+        // Add type parameters with bounds: fn foo<T: Display, U: Debug>(...)
         if !func.type_params.is_empty() {
             output.push('<');
-            output.push_str(&func.type_params.join(", "));
+            output.push_str(&self.format_type_params(&func.type_params));
             output.push('>');
         }
 
@@ -1481,5 +1481,21 @@ impl CodeGenerator {
             Type::Tuple(types) => types.iter().all(|t| self.has_default(t)),
             _ => false, // Refs don't have Default, Result/Custom types unknown
         }
+    }
+
+    // Format type parameters with trait bounds for Rust output
+    // Example: [TypeParam { name: "T", bounds: ["Display", "Clone"] }] -> "T: Display + Clone"
+    fn format_type_params(&self, type_params: &[crate::parser::TypeParam]) -> String {
+        type_params
+            .iter()
+            .map(|param| {
+                if param.bounds.is_empty() {
+                    param.name.clone()
+                } else {
+                    format!("{}: {}", param.name, param.bounds.join(" + "))
+                }
+            })
+            .collect::<Vec<_>>()
+            .join(", ")
     }
 }
