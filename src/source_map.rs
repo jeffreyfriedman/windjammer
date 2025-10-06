@@ -61,11 +61,11 @@ mod tests {
     fn test_source_map() {
         let mut map = SourceMap::new();
         map.set_current_file(PathBuf::from("test.wj"));
-        
+
         map.add_mapping(1, 1);
         map.add_mapping(5, 10);
         map.add_mapping(10, 20);
-        
+
         assert_eq!(map.get_location(5).unwrap().line, 10);
         assert_eq!(map.get_location(10).unwrap().line, 20);
         assert!(map.get_location(99).is_none());

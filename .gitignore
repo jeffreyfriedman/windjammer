@@ -8,6 +8,7 @@ Cargo.lock
 # Generated output
 /output/
 /test_output/
+/test_output_*/
 
 # WASM build artifacts
 examples/*/pkg/
