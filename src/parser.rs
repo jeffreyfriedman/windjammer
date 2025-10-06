@@ -52,6 +52,7 @@ pub struct Decorator {
 pub struct FunctionDecl {
     pub name: String,
     pub type_params: Vec<TypeParam>, // Generic type parameters with optional bounds: <T: Display, U>
+    pub where_clause: Vec<(String, Vec<String>)>, // Where clause: [(type_param, [trait_bounds])]
     pub decorators: Vec<Decorator>,
     pub is_async: bool,
     pub parameters: Vec<Parameter>,
@@ -70,6 +71,7 @@ pub struct StructField {
 pub struct StructDecl {
     pub name: String,
     pub type_params: Vec<TypeParam>, // Generic type parameters with optional bounds: <T: Clone>
+    pub where_clause: Vec<(String, Vec<String>)>, // Where clause: [(type_param, [trait_bounds])]
     pub fields: Vec<StructField>,
     pub decorators: Vec<Decorator>,
 }
@@ -287,6 +289,7 @@ pub struct TraitMethod {
 pub struct ImplBlock {
     pub type_name: String,
     pub type_params: Vec<TypeParam>, // Generic type parameters with optional bounds: impl<T: Display> Box<T>
+    pub where_clause: Vec<(String, Vec<String>)>, // Where clause: [(type_param, [trait_bounds])]
     pub trait_name: Option<String>, // None for inherent impl, Some for trait impl
     pub functions: Vec<FunctionDecl>,
     pub decorators: Vec<Decorator>,
@@ -333,17 +336,17 @@ impl Parser {
             position: 0,
         }
     }
-
+    
     fn current_token(&self) -> &Token {
         self.tokens.get(self.position).unwrap_or(&Token::Eof)
     }
-
+    
     fn advance(&mut self) {
         if self.position < self.tokens.len() {
             self.position += 1;
         }
     }
-
+    
     fn expect(&mut self, expected: Token) -> Result<(), String> {
         if self.current_token() == &expected {
             self.advance();
@@ -356,17 +359,17 @@ impl Parser {
             ))
         }
     }
-
+    
     pub fn parse(&mut self) -> Result<Program, String> {
         let mut items = Vec::new();
-
+        
         while self.current_token() != &Token::Eof {
             items.push(self.parse_item()?);
         }
-
+        
         Ok(Program { items })
     }
-
+    
     fn parse_item(&mut self) -> Result<Item, String> {
         // Check for decorators
         let mut decorators = Vec::new();
@@ -381,7 +384,7 @@ impl Parser {
         } else {
             false
         };
-
+        
         match self.current_token() {
             Token::Fn => {
                 self.advance(); // Consume the Fn token
@@ -552,6 +555,9 @@ impl Parser {
             (None, first_name)
         };
 
+        // Parse where clause (optional): where T: Clone, U: Debug
+        let where_clause = self.parse_where_clause()?;
+
         self.expect(Token::LBrace)?;
 
         let mut functions = Vec::new();
@@ -586,6 +592,7 @@ impl Parser {
         Ok(ImplBlock {
             type_name,
             type_params,
+            where_clause,
             trait_name,
             functions,
             decorators: Vec::new(),
@@ -686,12 +693,12 @@ impl Parser {
             methods,
         })
     }
-
+    
     fn parse_decorator(&mut self) -> Result<Decorator, String> {
         if let Token::Decorator(name) = self.current_token() {
             let name = name.clone();
             self.advance();
-
+            
             // Check for decorator arguments: @route("/path") or @cache(ttl: 60)
             let arguments = if self.current_token() == &Token::LParen {
                 self.advance();
@@ -699,22 +706,22 @@ impl Parser {
             } else {
                 Vec::new()
             };
-
+            
             Ok(Decorator { name, arguments })
         } else {
             Err("Expected decorator".to_string())
         }
     }
-
+    
     fn parse_decorator_arguments(&mut self) -> Result<Vec<(String, Expression)>, String> {
         let mut args = Vec::new();
-
+        
         while self.current_token() != &Token::RParen {
             // Check if it's a named argument (key: value)
             if let Token::Ident(key) = self.current_token() {
                 let key = key.clone();
                 self.advance();
-
+                
                 if self.current_token() == &Token::Colon {
                     self.advance();
                     let value = self.parse_expression()?;
@@ -730,21 +737,21 @@ impl Parser {
                 let expr = self.parse_expression()?;
                 args.push((String::new(), expr));
             }
-
+            
             if self.current_token() == &Token::Comma {
                 self.advance();
             } else {
                 break;
             }
         }
-
+        
         self.expect(Token::RParen)?;
         Ok(args)
     }
-
+    
     fn parse_use(&mut self) -> Result<(Vec<String>, Option<String>), String> {
         // Note: Token::Use already consumed in parse_item
-
+        
         let mut path = Vec::new();
         let mut path_str = String::new();
 
@@ -773,7 +780,7 @@ impl Parser {
             if let Token::Ident(name) = self.current_token() {
                 path_str.push_str(name);
                 self.advance();
-
+                
                 // Check for . or / as separator
                 if self.current_token() == &Token::Dot {
                     path_str.push('.');
@@ -873,9 +880,67 @@ impl Parser {
         Ok(params)
     }
 
+    fn parse_where_clause(&mut self) -> Result<Vec<(String, Vec<String>)>, String> {
+        // Parse where clause: where T: Display, U: Debug + Clone
+        if self.current_token() != &Token::Where {
+            return Ok(Vec::new());
+        }
+
+        self.advance(); // consume 'where'
+        let mut clauses = Vec::new();
+
+        loop {
+            // Parse type parameter name
+            if let Token::Ident(type_param) = self.current_token() {
+                let param_name = type_param.clone();
+                self.advance();
+
+                // Expect colon
+                if self.current_token() != &Token::Colon {
+                    return Err("Expected ':' after type parameter in where clause".to_string());
+                }
+                self.advance();
+
+                // Parse trait bounds separated by +
+                let mut bounds = Vec::new();
+                loop {
+                    if let Token::Ident(trait_name) = self.current_token() {
+                        bounds.push(trait_name.clone());
+                        self.advance();
+
+                        // Check for + (multiple bounds)
+                        if self.current_token() == &Token::Plus {
+                            self.advance();
+                            continue;
+                        } else {
+                            break;
+                        }
+                    } else {
+                        return Err("Expected trait name in where clause".to_string());
+                    }
+                }
+
+                clauses.push((param_name, bounds));
+
+                // Check for comma (more clauses) or end
+                if self.current_token() == &Token::Comma {
+                    self.advance();
+                    continue;
+                } else {
+                    // End of where clause
+                    break;
+                }
+            } else {
+                return Err("Expected type parameter name in where clause".to_string());
+            }
+        }
+
+        Ok(clauses)
+    }
+    
     fn parse_function(&mut self) -> Result<FunctionDecl, String> {
         // Note: Token::Fn already consumed in parse_item
-
+        
         let name = if let Token::Ident(n) = self.current_token() {
             let name = n.clone();
             self.advance();
@@ -886,11 +951,11 @@ impl Parser {
 
         // Parse type parameters: fn foo<T, U>(...)
         let type_params = self.parse_type_params()?;
-
+        
         self.expect(Token::LParen)?;
         let parameters = self.parse_parameters()?;
         self.expect(Token::RParen)?;
-
+        
         let return_type = if self.current_token() == &Token::Arrow {
             self.advance();
             Some(self.parse_type()?)
@@ -898,13 +963,17 @@ impl Parser {
             None
         };
 
+        // Parse where clause (optional): where T: Display, U: Debug
+        let where_clause = self.parse_where_clause()?;
+        
         self.expect(Token::LBrace)?;
         let body = self.parse_block_statements()?;
         self.expect(Token::RBrace)?;
-
+        
         Ok(FunctionDecl {
             name,
             type_params,            // Parsed generic type parameters
+            where_clause,           // Parsed where clause
             decorators: Vec::new(), // Set by parse_item
             is_async: false,        // Set by parse_item
             parameters,
@@ -912,10 +981,10 @@ impl Parser {
             body,
         })
     }
-
+    
     fn parse_parameters(&mut self) -> Result<Vec<Parameter>, String> {
         let mut params = Vec::new();
-
+        
         while self.current_token() != &Token::RParen {
             // Check for self parameters
             if self.current_token() == &Token::Ampersand {
@@ -968,17 +1037,17 @@ impl Parser {
                     });
                 } else {
                     // Simple identifier parameter
-                    let name = if let Token::Ident(n) = self.current_token() {
-                        let name = n.clone();
-                        self.advance();
-                        name
-                    } else {
-                        return Err("Expected parameter name".to_string());
-                    };
-
-                    self.expect(Token::Colon)?;
-                    let type_ = self.parse_type()?;
-
+            let name = if let Token::Ident(n) = self.current_token() {
+                let name = n.clone();
+                self.advance();
+                name
+            } else {
+                return Err("Expected parameter name".to_string());
+            };
+            
+            self.expect(Token::Colon)?;
+            let type_ = self.parse_type()?;
+            
                     params.push(Parameter {
                         name,
                         pattern: None,
@@ -987,17 +1056,17 @@ impl Parser {
                     });
                 }
             }
-
+            
             if self.current_token() == &Token::Comma {
                 self.advance();
             } else {
                 break;
             }
         }
-
+        
         Ok(params)
     }
-
+    
     fn parse_type(&mut self) -> Result<Type, String> {
         // Handle reference types
         if self.current_token() == &Token::Ampersand {
@@ -1126,10 +1195,10 @@ impl Parser {
 
         Ok(base_type)
     }
-
+    
     fn parse_struct(&mut self) -> Result<StructDecl, String> {
         // Token::Struct already consumed in parse_item
-
+        
         let name = if let Token::Ident(n) = self.current_token() {
             let name = n.clone();
             self.advance();
@@ -1141,8 +1210,11 @@ impl Parser {
         // Parse type parameters: struct Box<T> { ... }
         let type_params = self.parse_type_params()?;
 
+        // Parse where clause (optional): where T: Clone, U: Debug
+        let where_clause = self.parse_where_clause()?;
+        
         self.expect(Token::LBrace)?;
-
+        
         let mut fields = Vec::new();
         while self.current_token() != &Token::RBrace {
             // Parse decorators on fields
@@ -1159,34 +1231,35 @@ impl Parser {
             } else {
                 return Err("Expected field name".to_string());
             };
-
+            
             self.expect(Token::Colon)?;
             let field_type = self.parse_type()?;
-
+            
             fields.push(StructField {
                 name: field_name,
                 field_type,
                 decorators: field_decorators,
             });
-
+            
             if self.current_token() == &Token::Comma {
                 self.advance();
             }
         }
-
+        
         self.expect(Token::RBrace)?;
-
+        
         Ok(StructDecl {
             name,
             type_params,
+            where_clause,
             fields,
             decorators: Vec::new(),
         })
     }
-
+    
     fn parse_enum(&mut self) -> Result<EnumDecl, String> {
         // Token::Enum already consumed in parse_item
-
+        
         let name = if let Token::Ident(n) = self.current_token() {
             let name = n.clone();
             self.advance();
@@ -1194,9 +1267,9 @@ impl Parser {
         } else {
             return Err("Expected enum name".to_string());
         };
-
+        
         self.expect(Token::LBrace)?;
-
+        
         let mut variants = Vec::new();
         while self.current_token() != &Token::RBrace {
             let variant_name = if let Token::Ident(n) = self.current_token() {
@@ -1206,7 +1279,7 @@ impl Parser {
             } else {
                 return Err("Expected variant name".to_string());
             };
-
+            
             let data = if self.current_token() == &Token::LParen {
                 self.advance();
                 let type_ = self.parse_type()?;
@@ -1215,32 +1288,32 @@ impl Parser {
             } else {
                 None
             };
-
+            
             variants.push(EnumVariant {
                 name: variant_name,
                 data,
             });
-
+            
             if self.current_token() == &Token::Comma {
                 self.advance();
             }
         }
-
+        
         self.expect(Token::RBrace)?;
-
+        
         Ok(EnumDecl { name, variants })
     }
-
+    
     fn parse_block_statements(&mut self) -> Result<Vec<Statement>, String> {
         let mut statements = Vec::new();
-
+        
         while self.current_token() != &Token::RBrace && self.current_token() != &Token::Eof {
             statements.push(self.parse_statement()?);
         }
-
+        
         Ok(statements)
     }
-
+    
     fn parse_statement(&mut self) -> Result<Statement, String> {
         match self.current_token() {
             Token::Let => self.parse_let(),
@@ -1360,33 +1433,33 @@ impl Parser {
             body,
         })
     }
-
+    
     fn parse_go(&mut self) -> Result<Statement, String> {
         self.expect(Token::Go)?;
         self.expect(Token::LBrace)?;
         let body = self.parse_block_statements()?;
         self.expect(Token::RBrace)?;
-
+        
         Ok(Statement::Go { body })
     }
-
+    
     fn parse_defer(&mut self) -> Result<Statement, String> {
         self.expect(Token::Defer)?;
         let stmt = self.parse_statement()?;
-
+        
         Ok(Statement::Defer(Box::new(stmt)))
     }
-
+    
     fn parse_let(&mut self) -> Result<Statement, String> {
         self.expect(Token::Let)?;
-
+        
         let mutable = if self.current_token() == &Token::Mut {
             self.advance();
             true
         } else {
             false
         };
-
+        
         let name = if let Token::Ident(n) = self.current_token() {
             let name = n.clone();
             self.advance();
@@ -1394,17 +1467,17 @@ impl Parser {
         } else {
             return Err("Expected variable name".to_string());
         };
-
+        
         let type_ = if self.current_token() == &Token::Colon {
             self.advance();
             Some(self.parse_type()?)
         } else {
             None
         };
-
+        
         self.expect(Token::Assign)?;
         let value = self.parse_expression()?;
-
+        
         Ok(Statement::Let {
             name,
             mutable,
@@ -1412,26 +1485,26 @@ impl Parser {
             value,
         })
     }
-
+    
     fn parse_return(&mut self) -> Result<Statement, String> {
         self.advance();
-
+        
         if matches!(self.current_token(), Token::RBrace | Token::Semicolon) {
             Ok(Statement::Return(None))
         } else {
             Ok(Statement::Return(Some(self.parse_expression()?)))
         }
     }
-
+    
     fn parse_if(&mut self) -> Result<Statement, String> {
         self.expect(Token::If)?;
-
+        
         let condition = self.parse_expression()?;
-
+        
         self.expect(Token::LBrace)?;
         let then_block = self.parse_block_statements()?;
         self.expect(Token::RBrace)?;
-
+        
         let else_block = if self.current_token() == &Token::Else {
             self.advance();
             self.expect(Token::LBrace)?;
@@ -1441,21 +1514,21 @@ impl Parser {
         } else {
             None
         };
-
+        
         Ok(Statement::If {
             condition,
             then_block,
             else_block,
         })
     }
-
+    
     fn parse_match(&mut self) -> Result<Statement, String> {
         self.expect(Token::Match)?;
-
+        
         let value = self.parse_match_value()?;
-
+        
         self.expect(Token::LBrace)?;
-
+        
         let mut arms = Vec::new();
         while self.current_token() != &Token::RBrace {
             let pattern = self.parse_pattern_with_or()?;
@@ -1470,20 +1543,20 @@ impl Parser {
 
             self.expect(Token::FatArrow)?;
             let body = self.parse_expression()?;
-
+            
             arms.push(MatchArm {
                 pattern,
                 guard,
                 body,
             });
-
+            
             if self.current_token() == &Token::Comma {
                 self.advance();
             }
         }
-
+        
         self.expect(Token::RBrace)?;
-
+        
         Ok(Statement::Match { value, arms })
     }
 
@@ -1504,7 +1577,7 @@ impl Parser {
             Ok(first)
         }
     }
-
+    
     fn parse_pattern(&mut self) -> Result<Pattern, String> {
         match self.current_token() {
             Token::Underscore => {
@@ -1552,14 +1625,14 @@ impl Parser {
             Token::Ident(name) => {
                 let name = name.clone();
                 self.advance();
-
+                
                 // Check if it's an enum variant
                 if self.current_token() == &Token::Dot {
                     self.advance();
                     if let Token::Ident(variant) = self.current_token() {
                         let variant = variant.clone();
                         self.advance();
-
+                        
                         // Check for binding
                         let binding = if self.current_token() == &Token::LParen {
                             self.advance();
@@ -1574,7 +1647,7 @@ impl Parser {
                         } else {
                             None
                         };
-
+                        
                         Ok(Pattern::EnumVariant(
                             format!("{}.{}", name, variant),
                             binding,
@@ -1589,27 +1662,27 @@ impl Parser {
             _ => Err(format!("Expected pattern, got {:?}", self.current_token())),
         }
     }
-
+    
     fn parse_loop(&mut self) -> Result<Statement, String> {
         self.expect(Token::Loop)?;
         self.expect(Token::LBrace)?;
         let body = self.parse_block_statements()?;
         self.expect(Token::RBrace)?;
-
+        
         Ok(Statement::Loop { body })
     }
-
+    
     fn parse_while(&mut self) -> Result<Statement, String> {
         self.expect(Token::While)?;
         let condition = self.parse_expression()?;
-
+        
         self.expect(Token::LBrace)?;
         let body = self.parse_block_statements()?;
         self.expect(Token::RBrace)?;
-
+        
         Ok(Statement::While { condition, body })
     }
-
+    
     fn parse_expression(&mut self) -> Result<Expression, String> {
         self.parse_ternary_expression()
     }
@@ -1785,10 +1858,10 @@ impl Parser {
 
         Ok(left)
     }
-
+    
     fn parse_binary_expression(&mut self, min_precedence: u8) -> Result<Expression, String> {
         let mut left = self.parse_primary_expression()?;
-
+        
         loop {
             // Check for pipe operator: value |> func
             if self.current_token() == &Token::PipeOp {
@@ -1817,26 +1890,26 @@ impl Parser {
             }
 
             if let Some((op, precedence)) = self.get_binary_op() {
-                if precedence < min_precedence {
-                    break;
-                }
-
-                self.advance();
-                let right = self.parse_binary_expression(precedence + 1)?;
-
-                left = Expression::Binary {
-                    left: Box::new(left),
-                    op,
-                    right: Box::new(right),
-                };
+            if precedence < min_precedence {
+                break;
+            }
+            
+            self.advance();
+            let right = self.parse_binary_expression(precedence + 1)?;
+            
+            left = Expression::Binary {
+                left: Box::new(left),
+                op,
+                right: Box::new(right),
+            };
             } else {
                 break;
             }
         }
-
+        
         Ok(left)
     }
-
+    
     fn get_binary_op(&self) -> Option<(BinaryOp, u8)> {
         match self.current_token() {
             Token::Or => Some((BinaryOp::Or, 1)),
@@ -1855,7 +1928,7 @@ impl Parser {
             _ => None,
         }
     }
-
+    
     fn parse_primary_expression(&mut self) -> Result<Expression, String> {
         let mut expr = match self.current_token() {
             Token::LeftArrow => {
@@ -2020,7 +2093,7 @@ impl Parser {
                     self.expect(Token::RBrace)?;
                     Expression::StructLiteral { name, fields }
                 } else {
-                    Expression::Identifier(name)
+                Expression::Identifier(name)
                 }
             }
             Token::LParen => {
@@ -2047,7 +2120,7 @@ impl Parser {
                             exprs.push(self.parse_expression()?);
                         }
 
-                        self.expect(Token::RParen)?;
+                self.expect(Token::RParen)?;
                         Expression::Tuple(exprs)
                     } else {
                         // Just a parenthesized expression
@@ -2204,7 +2277,7 @@ impl Parser {
                 ))
             }
         };
-
+        
         // Handle postfix operators
         loop {
             expr = match self.current_token() {
@@ -2215,10 +2288,10 @@ impl Parser {
                         self.advance(); // consume 'await'
                         Expression::Await(Box::new(expr))
                     } else {
+                    self.advance();
+                    if let Token::Ident(field) = self.current_token() {
+                        let field = field.clone();
                         self.advance();
-                        if let Token::Ident(field) = self.current_token() {
-                            let field = field.clone();
-                            self.advance();
 
                             // Check for turbofish ::<Type>
                             let type_args = if self.current_token() == &Token::ColonColon {
@@ -2240,31 +2313,31 @@ impl Parser {
                             } else {
                                 None
                             };
-
-                            if self.current_token() == &Token::LParen {
+                        
+                        if self.current_token() == &Token::LParen {
                                 // Method call (possibly with turbofish)
-                                self.advance();
-                                let arguments = self.parse_arguments()?;
-                                self.expect(Token::RParen)?;
-                                Expression::MethodCall {
-                                    object: Box::new(expr),
-                                    method: field,
+                            self.advance();
+                            let arguments = self.parse_arguments()?;
+                            self.expect(Token::RParen)?;
+                            Expression::MethodCall {
+                                object: Box::new(expr),
+                                method: field,
                                     type_args,
-                                    arguments,
-                                }
+                                arguments,
+                            }
                             } else if type_args.is_some() {
                                 return Err(
                                     "Turbofish syntax only allowed on method calls".to_string()
                                 );
-                            } else {
-                                // Field access
-                                Expression::FieldAccess {
-                                    object: Box::new(expr),
-                                    field,
-                                }
-                            }
                         } else {
-                            return Err("Expected field or method name".to_string());
+                            // Field access
+                            Expression::FieldAccess {
+                                object: Box::new(expr),
+                                field,
+                            }
+                        }
+                    } else {
+                        return Err("Expected field or method name".to_string());
                         }
                     }
                 }
@@ -2391,9 +2464,9 @@ impl Parser {
                             }
                             _ => {
                                 // Likely TryOp
-                                self.advance();
-                                Expression::TryOp(Box::new(expr))
-                            }
+                    self.advance();
+                    Expression::TryOp(Box::new(expr))
+                }
                         }
                     } else {
                         // No next token, treat as TryOp
@@ -2468,17 +2541,17 @@ impl Parser {
                 _ => break,
             };
         }
-
+        
         Ok(expr)
     }
-
+    
     fn peek(&self, offset: usize) -> Option<&Token> {
         self.tokens.get(self.position + offset)
     }
-
+    
     fn parse_arguments(&mut self) -> Result<Vec<(Option<String>, Expression)>, String> {
         let mut args = Vec::new();
-
+        
         while self.current_token() != &Token::RParen {
             // Check for labeled argument: name: expr
             let label = if let Token::Ident(name) = self.current_token() {
@@ -2496,14 +2569,14 @@ impl Parser {
 
             let expr = self.parse_expression()?;
             args.push((label, expr));
-
+            
             if self.current_token() == &Token::Comma {
                 self.advance();
             } else {
                 break;
             }
         }
-
+        
         Ok(args)
     }
 
