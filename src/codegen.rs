@@ -364,6 +364,12 @@ impl CodeGenerator {
         let mut output = String::from("trait ");
         output.push_str(&trait_decl.name);
 
+        // Generate supertraits: trait Manager: Employee + Person
+        if !trait_decl.supertraits.is_empty() {
+            output.push_str(": ");
+            output.push_str(&trait_decl.supertraits.join(" + "));
+        }
+
         output.push_str(" {\n");
         self.indent_level += 1;
 
