@@ -1,4 +1,73 @@
+// Parser - Windjammer Language Parser
+//
+// This file contains the complete parser for Windjammer. It is organized into the following sections:
+//
+// 1. AST TYPES (lines ~3-340)
+//    - Type, TypeParam, Parameter, FunctionDecl, StructDecl, EnumDecl, TraitDecl, ImplBlock
+//    - Expression, Statement, Pattern, Item, Program
+//
+// 2. PARSER CORE (lines ~344-400)
+//    - Parser struct
+//    - Basic utilities: new(), current_token(), advance(), expect(), peek()
+//    - Helper: type_to_string()
+//
+// 3. TOP-LEVEL PARSING (lines ~400-700)
+//    - parse() - main entry point
+//    - parse_item() - dispatches to item parsers
+//    - parse_const_or_static()
+//    - parse_use()
+//    - parse_decorator() and parse_decorator_arguments()
+//
+// 4. ITEM PARSING (lines ~700-1500)
+//    - parse_impl() - impl blocks with generics and trait impls
+//    - parse_trait() - trait definitions
+//    - parse_function() - function declarations
+//    - parse_parameters()
+//    - parse_struct() - struct definitions
+//    - parse_enum() - enum definitions with generics
+//    - parse_type_params() - generic type parameters with bounds
+//    - parse_where_clause() - where clauses
+//
+// 5. STATEMENT PARSING (lines ~1500-1900)
+//    - parse_block_statements()
+//    - parse_statement() - dispatches to statement parsers
+//    - parse_const_statement(), parse_static_statement()
+//    - parse_let(), parse_return()
+//    - parse_if(), parse_match()
+//    - parse_for(), parse_loop(), parse_while()
+//    - parse_go(), parse_defer()
+//
+// 6. PATTERN PARSING (lines ~1900-2000)
+//    - parse_pattern_with_or() - OR patterns
+//    - parse_pattern() - all pattern types including enum variants
+//
+// 7. EXPRESSION PARSING (lines ~2000-2800)
+//    - parse_expression() - entry point
+//    - parse_ternary_expression() - ternary operator
+//    - parse_match_value() - match value with special handling
+//    - parse_binary_expression() - operator precedence climbing
+//    - get_binary_op() - operator precedence table
+//    - parse_primary_expression() - literals, identifiers, calls, etc.
+//    - parse_postfix_expression() - method calls, field access, indexing, turbofish
+//    - parse_arguments()
+//    - parse_closure()
+//
+// 8. TYPE PARSING (lines ~2800+)
+//    - parse_type() - all type variants
+//
+// TODO: Split this into modules:
+//   - parser/mod.rs - Parser struct and utilities
+//   - parser/types.rs - Type parsing
+//   - parser/patterns.rs - Pattern parsing
+//   - parser/expressions.rs - Expression parsing
+//   - parser/statements.rs - Statement parsing
+//   - parser/items.rs - Top-level item parsing
+
 use crate::lexer::Token;
+
+// ============================================================================
+// SECTION 1: AST TYPES
+// ============================================================================
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum Type {
@@ -338,6 +407,10 @@ pub struct Program {
     pub items: Vec<Item>,
 }
 
+// ============================================================================
+// SECTION 2: PARSER CORE
+// ============================================================================
+
 pub struct Parser {
     tokens: Vec<Token>,
     position: usize,
@@ -402,6 +475,10 @@ impl Parser {
             ))
         }
     }
+
+    // ========================================================================
+    // SECTION 3: TOP-LEVEL PARSING
+    // ========================================================================
 
     pub fn parse(&mut self) -> Result<Program, String> {
         let mut items = Vec::new();
@@ -513,6 +590,10 @@ impl Parser {
 
         Ok((name, type_, value))
     }
+
+    // ========================================================================
+    // SECTION 4: ITEM PARSING (Functions, Structs, Enums, Traits, Impls)
+    // ========================================================================
 
     fn parse_impl(&mut self) -> Result<ImplBlock, String> {
         // Parse: impl<T> Type { } or impl Trait for Type { } or impl Trait<TypeArgs> for Type { }
@@ -1226,6 +1307,10 @@ impl Parser {
         Ok(params)
     }
 
+    // ------------------------------------------------------------------------
+    // TYPE PARSING (used by multiple sections above)
+    // ------------------------------------------------------------------------
+
     fn parse_type(&mut self) -> Result<Type, String> {
         // Handle reference types
         if self.current_token() == &Token::Ampersand {
@@ -1489,6 +1574,10 @@ impl Parser {
         Ok(EnumDecl { name, type_params, variants })
     }
 
+    // ========================================================================
+    // SECTION 5: STATEMENT PARSING (Let, If, Match, For, While, etc.)
+    // ========================================================================
+
     fn parse_block_statements(&mut self) -> Result<Vec<Statement>, String> {
         let mut statements = Vec::new();
 
@@ -1745,6 +1834,10 @@ impl Parser {
         Ok(Statement::Match { value, arms })
     }
 
+    // ========================================================================
+    // SECTION 6: PATTERN PARSING
+    // ========================================================================
+
     fn parse_pattern_with_or(&mut self) -> Result<Pattern, String> {
         let first = self.parse_pattern()?;
 
@@ -1880,6 +1973,10 @@ impl Parser {
 
         Ok(Statement::While { condition, body })
     }
+
+    // ========================================================================
+    // SECTION 7: EXPRESSION PARSING
+    // ========================================================================
 
     fn parse_expression(&mut self) -> Result<Expression, String> {
         self.parse_ternary_expression()
