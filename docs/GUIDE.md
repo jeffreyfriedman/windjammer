@@ -14,6 +14,10 @@ Welcome to Windjammer! This guide will take you from zero to hero, teaching you 
 6. [Ownership and Borrowing](#ownership-and-borrowing)
 7. [Generic Types](#generic-types)
 8. [Traits](#traits)
+   - [Basic Trait Definitions](#basic-trait-definitions)
+   - [Trait Bounds](#trait-bounds)
+   - [Where Clauses](#where-clauses)
+   - [Associated Types](#associated-types)
 9. [String Interpolation](#string-interpolation)
 10. [Pipe Operator](#pipe-operator)
 11. [Labeled Arguments](#labeled-arguments)
@@ -856,16 +860,18 @@ struct Args {
 
 ## Traits
 
-Traits define shared behavior (like interfaces in Go or traits in Rust):
+Traits define shared behavior (like interfaces in Go or traits in Rust). Windjammer supports a powerful trait system with bounds, where clauses, and associated types.
+
+### Basic Trait Definitions
 
 ```windjammer
 trait Drawable {
     fn draw(&self)
-    fn area(&self) -> f64
+    fn area(&self) -> float
 }
 
 struct Circle {
-    radius: f64,
+    radius: float
 }
 
 impl Drawable for Circle {
@@ -873,18 +879,223 @@ impl Drawable for Circle {
         println!("Drawing circle with radius {}", self.radius)
     }
     
-    fn area(&self) -> f64 {
+    fn area(&self) -> float {
         3.14159 * self.radius * self.radius
     }
 }
 ```
 
-**Generic trait bounds:**
+### Trait Bounds
+
+Trait bounds specify requirements for generic type parameters:
+
+**Single trait bound:**
 
 ```windjammer
-fn print_drawable<T: Drawable>(item: T) {
-    item.draw()
-    println!("Area: {}", item.area())
+fn print_value<T: Display>(value: T) {
+    println!("{}", value)
+}
+```
+
+**Multiple trait bounds with `+`:**
+
+```windjammer
+fn display_and_clone<T: Display + Clone>(value: T) {
+    let copy = value.clone()
+    println!("Original: {}", value)
+    println!("Clone: {}", copy)
+}
+```
+
+**Trait bounds on structs:**
+
+```windjammer
+struct Container<T: Clone> {
+    value: T
+}
+
+impl<T: Clone> Container<T> {
+    fn duplicate(&self) -> T {
+        self.value.clone()
+    }
+}
+```
+
+**Multiple type parameters with bounds:**
+
+```windjammer
+fn compare<T: Display, U: Display>(a: T, b: U) {
+    println!("A: {}", a)
+    println!("B: {}", b)
+}
+```
+
+### Where Clauses
+
+For complex trait bounds, use `where` clauses for better readability:
+
+**Simple where clause:**
+
+```windjammer
+fn process<T, U>(first: T, second: U)
+where
+    T: Display,
+    U: Debug
+{
+    println!("First: {}", first)
+    println!("Second: {:?}", second)
+}
+```
+
+**Multiple bounds per type parameter:**
+
+```windjammer
+fn complex_operation<T, U>(a: T, b: U)
+where
+    T: Display + Clone,
+    U: Debug + Clone
+{
+    let a_copy = a.clone()
+    let b_copy = b.clone()
+    println!("Processing: {}, {:?}", a, b)
+}
+```
+
+**Struct with where clause:**
+
+```windjammer
+struct Pair<T, U>
+where
+    T: Clone,
+    U: Clone
+{
+    first: T,
+    second: U
+}
+
+impl<T, U> Pair<T, U>
+where
+    T: Clone + Display,
+    U: Clone + Display
+{
+    fn display_both(&self) {
+        println!("First: {}", self.first)
+        println!("Second: {}", self.second)
+    }
+}
+```
+
+### Associated Types
+
+Associated types allow traits to define placeholder types that implementers specify:
+
+**Trait with associated type:**
+
+```windjammer
+trait Container {
+    type Item;
+    
+    fn get(&self) -> Self::Item;
+    fn set(&mut self, item: Self::Item);
+}
+```
+
+**Generic implementation:**
+
+```windjammer
+struct Box<T> {
+    value: T
+}
+
+impl<T> Container for Box<T> {
+    type Item = T;
+    
+    fn get(&self) -> Self::Item {
+        self.value
+    }
+    
+    fn set(&mut self, item: Self::Item) {
+        self.value = item
+    }
+}
+```
+
+**Concrete implementation:**
+
+```windjammer
+struct IntBox {
+    number: int
+}
+
+impl Container for IntBox {
+    type Item = int;
+    
+    fn get(&self) -> Self::Item {
+        self.number
+    }
+    
+    fn set(&mut self, item: Self::Item) {
+        self.number = item
+    }
+}
+```
+
+**Multiple associated types:**
+
+```windjammer
+trait Converter {
+    type Input;
+    type Output;
+    
+    fn convert(&self, input: Self::Input) -> Self::Output;
+}
+
+struct Doubler {
+    multiplier: int
+}
+
+impl Converter for Doubler {
+    type Input = int;
+    type Output = int;
+    
+    fn convert(&self, input: Self::Input) -> Self::Output {
+        input * self.multiplier
+    }
+}
+```
+
+**Using associated types in bounds:**
+
+```windjammer
+fn process_container<C>(container: &C)
+where
+    C: Container,
+    C::Item: Display
+{
+    let item = container.get()
+    println!("Container item: {}", item)
+}
+```
+
+### Why Use Associated Types?
+
+Associated types are preferable when:
+- A trait has exactly one type that makes sense for an implementation
+- You want cleaner syntax without extra type parameters
+- The type is determined by the trait implementation, not by the caller
+
+Example comparison:
+
+```windjammer
+// Without associated types (more verbose)
+trait Container<Item> {
+    fn get(&self) -> Item;
+}
+
+// With associated types (cleaner)
+trait Container {
+    type Item;
+    fn get(&self) -> Self::Item;
 }
 ```
 
