@@ -1,0 +1,114 @@
+// Example 32: Testing Framework
+// Demonstrates testing utilities and assertions
+
+use std.testing
+
+// Function to test
+fn add(a: int, b: int) -> int {
+    a + b
+}
+
+fn divide(a: int, b: int) -> Result<int, string> {
+    if b == 0 {
+        Result::Err("division by zero")
+    } else {
+        Result::Ok(a / b)
+    }
+}
+
+fn find_user(id: int) -> Option<string> {
+    if id == 1 {
+        Option::Some("Alice")
+    } else {
+        Option::None
+    }
+}
+
+fn test_basic_assertions() {
+    println!("=== Basic Assertions ===")
+    
+    // Simple boolean assertions
+    assert(true)
+    assert(2 + 2 == 4)
+    println!("✓ Basic assertions passed")
+}
+
+fn test_equality() {
+    println!("\n=== Equality Assertions ===")
+    
+    let result = add(5, 3)
+    assert_eq(result, 8)
+    
+    let name = "Alice"
+    assert_eq(name, "Alice")
+    
+    // Inequality
+    assert_ne(5, 10)
+    
+    println!("✓ Equality assertions passed")
+}
+
+fn test_option_results() {
+    println!("\n=== Option and Result Assertions ===")
+    
+    // Test Some
+    let user = find_user(1)
+    let name = assert_some(user)
+    assert_eq(name, "Alice")
+    
+    // Test None
+    let no_user = find_user(999)
+    assert_none(no_user)
+    
+    // Test Ok
+    let result = divide(10, 2)
+    let value = assert_ok(result)
+    assert_eq(value, 5)
+    
+    // Test Err
+    let error_result = divide(10, 0)
+    let error_msg = assert_err(error_result)
+    assert_eq(error_msg, "division by zero")
+    
+    println!("✓ Option/Result assertions passed")
+}
+
+fn test_comparisons() {
+    println!("\n=== Comparison Assertions ===")
+    
+    let x = 10
+    let y = 5
+    
+    assert_gt(x, y)  // x > y
+    assert_lt(y, x)  // y < x
+    assert_ge(x, 10) // x >= 10
+    assert_le(y, 5)  // y <= 5
+    
+    println!("✓ Comparison assertions passed")
+}
+
+fn test_float_comparison() {
+    println!("\n=== Float Comparison ===")
+    
+    let pi = 3.14159
+    let approx_pi = 3.14
+    
+    // Approximately equal within epsilon
+    assert_approx_eq(pi, approx_pi, 0.01)
+    
+    println!("✓ Float comparison passed")
+}
+
+fn main() {
+    println!("Running Windjammer Test Suite\n")
+    
+    test_basic_assertions()
+    test_equality()
+    test_option_results()
+    test_comparisons()
+    test_float_comparison()
+    
+    println!("\n✅ All tests passed!")
+    println!("Total: 5 test functions")
+}
+
