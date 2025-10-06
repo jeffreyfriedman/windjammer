@@ -1,0 +1,36 @@
+# Ignore build artifacts
+target/
+*.rs.bk
+*.pdb
+
+# Ignore test outputs
+test_output_*/
+examples/*/build_output/
+examples/*/pkg/
+examples/*/target/
+
+# Ignore git
+.git/
+.gitignore
+
+# Ignore CI
+.github/
+
+# Ignore documentation
+docs/
+*.md
+!README.md
+
+# Ignore editor files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Ignore macOS
+.DS_Store
+
+# Ignore temporary files
+tmp/
+temp/

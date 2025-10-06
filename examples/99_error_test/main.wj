@@ -1,0 +1,14 @@
+// Test file with intentional errors for error mapping demo
+
+fn main() {
+    // Error 1: Type mismatch
+    let x: int = "hello"
+    
+    // Error 2: Unknown function
+    unknown_function()
+    
+    // Error 3: Unknown type
+    let y: UnknownType = 42
+    
+    println!("This won't compile")
+}
