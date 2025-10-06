@@ -1,0 +1,75 @@
+// Example 28: Trait Objects (dyn Trait)
+// Demonstrates runtime polymorphism with trait objects
+
+// Define a trait for drawable objects
+trait Drawable {
+    fn draw(&self) { println!("Drawing something") }
+    fn area(&self) -> int { 0 }
+}
+
+// Implement for Circle
+struct Circle {
+    radius: int
+}
+
+impl Drawable for Circle {
+    fn draw(&self) {
+        println!("Drawing circle with radius {}", self.radius)
+    }
+    
+    fn area(&self) -> int {
+        3 * self.radius * self.radius
+    }
+}
+
+// Implement for Square
+struct Square {
+    size: int
+}
+
+impl Drawable for Square {
+    fn draw(&self) {
+        println!("Drawing square with size {}", self.size)
+    }
+    
+    fn area(&self) -> int {
+        self.size * self.size
+    }
+}
+
+// Function taking trait object reference
+fn render_shape(shape: &dyn Drawable) {
+    shape.draw()
+    let a = shape.area()
+    println!("Area: {}", a)
+}
+
+// Function returning owned trait object
+fn create_circle(radius: int) -> dyn Drawable {
+    Circle { radius: radius }
+}
+
+fn main() {
+    println!("=== Trait Objects Example ===")
+    
+    // Test 1: Pass different types to same function
+    println!("\n1. Polymorphic function calls:")
+    let circle = Circle { radius: 5 }
+    let square = Square { size: 10 }
+    
+    render_shape(&circle)
+    render_shape(&square)
+    
+    // Test 2: Return trait object
+    println!("\n2. Function returning trait object:")
+    let shape = create_circle(7)
+    render_shape(&shape)
+    
+    println!("\n=== Done ===")
+    println!("Demonstrated:")
+    println!("- Trait object parameters: fn(shape: &dyn Trait)")
+    println!("- Trait object returns: fn() -> dyn Trait")
+    println!("- Runtime polymorphism with different types")
+    println!("- Automatic boxing in Windjammer")
+}
+

@@ -37,6 +37,9 @@ pub enum Token {
     Self_,
     Unsafe,
     As,
+    Where,
+    Type,
+    Dyn,
 
     // Types
     Int,
@@ -364,6 +367,9 @@ impl Lexer {
             "Self" => Token::Ident("Self".to_string()), // Capital Self is a type, not keyword
             "unsafe" => Token::Unsafe,
             "as" => Token::As,
+            "where" => Token::Where,
+            "type" => Token::Type,
+            "dyn" => Token::Dyn,
             "int" => Token::Int,
             "int32" => Token::Int32,
             "uint" => Token::Uint,
