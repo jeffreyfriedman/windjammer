@@ -364,20 +364,26 @@ impl CodeGenerator {
         let mut output = String::from("trait ");
         output.push_str(&trait_decl.name);
 
+        output.push_str(" {\n");
+        self.indent_level += 1;
+
+        // Generate associated type declarations: type Item;
+        for assoc_type in &trait_decl.associated_types {
+            output.push_str(&self.indent());
+            output.push_str(&format!("type {};\n", assoc_type.name));
+        }
+
         // Add generic parameters (these become associated types in Rust)
         if !trait_decl.generics.is_empty() {
-            output.push_str(" {\n");
-            self.indent_level += 1;
-
             // Convert generics to associated types
             for generic in &trait_decl.generics {
                 output.push_str(&self.indent());
                 output.push_str(&format!("type {};\n", generic));
             }
+        }
+
+        if !trait_decl.associated_types.is_empty() || !trait_decl.generics.is_empty() {
             output.push('\n');
-        } else {
-            output.push_str(" {\n");
-            self.indent_level += 1;
         }
 
         // Generate trait methods
@@ -500,6 +506,21 @@ impl CodeGenerator {
         output.push_str(" {\n");
 
         self.indent_level += 1;
+
+        // Generate associated type implementations: type Item = i32;
+        for assoc_type in &impl_block.associated_types {
+            output.push_str(&self.indent());
+            output.push_str(&format!("type {}", assoc_type.name));
+            if let Some(concrete_type) = &assoc_type.concrete_type {
+                output.push_str(&format!(" = {};\n", self.type_to_rust(concrete_type)));
+            } else {
+                output.push_str(";\n");
+            }
+        }
+
+        if !impl_block.associated_types.is_empty() {
+            output.push('\n');
+        }
 
         // Store the wasm export flag for use in generate_function
         let old_in_wasm_impl = self.in_wasm_bindgen_impl;
@@ -653,6 +674,10 @@ impl CodeGenerator {
                 name.replace('.', "::")
             }
             Type::Generic(name) => name.clone(), // Type parameter: T -> T
+            Type::Associated(base, assoc_name) => {
+                // Associated type: Self::Item -> Self::Item, T::Output -> T::Output
+                format!("{}::{}", base, assoc_name)
+            }
             Type::Parameterized(base, args) => {
                 // Generic type: Vec<T> -> Vec<T>, HashMap<K, V> -> HashMap<K, V>
                 format!(

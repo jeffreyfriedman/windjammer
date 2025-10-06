@@ -11,6 +11,7 @@ pub enum Type {
     Custom(String),
     Generic(String),                  // Type parameter: T, U, V
     Parameterized(String, Vec<Type>), // Generic type: Vec<T>, HashMap<K, V>
+    Associated(String, String),       // Associated type: Self::Item, T::Output (base, assoc_name)
     Option(Box<Type>),
     Result(Box<Type>, Box<Type>),
     Vec(Box<Type>),
@@ -24,6 +25,13 @@ pub enum Type {
 pub struct TypeParam {
     pub name: String,
     pub bounds: Vec<String>, // Trait bounds: ["Display", "Clone", "Send"]
+}
+
+// Associated type declaration in traits or implementation
+#[derive(Debug, Clone, PartialEq)]
+pub struct AssociatedType {
+    pub name: String,                  // e.g., "Item", "Output"
+    pub concrete_type: Option<Type>,   // None in trait declaration, Some(Type) in impl
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -273,6 +281,7 @@ pub enum UnaryOp {
 pub struct TraitDecl {
     pub name: String,
     pub generics: Vec<String>, // Generic parameters like <T, U>
+    pub associated_types: Vec<AssociatedType>, // Associated type declarations: type Item;
     pub methods: Vec<TraitMethod>,
 }
 
@@ -291,6 +300,7 @@ pub struct ImplBlock {
     pub type_params: Vec<TypeParam>, // Generic type parameters with optional bounds: impl<T: Display> Box<T>
     pub where_clause: Vec<(String, Vec<String>)>, // Where clause: [(type_param, [trait_bounds])]
     pub trait_name: Option<String>, // None for inherent impl, Some for trait impl
+    pub associated_types: Vec<AssociatedType>, // Associated type implementations: type Item = i32;
     pub functions: Vec<FunctionDecl>,
     pub decorators: Vec<Decorator>,
 }
@@ -560,8 +570,36 @@ impl Parser {
 
         self.expect(Token::LBrace)?;
 
+        let mut associated_types = Vec::new();
         let mut functions = Vec::new();
+        
         while self.current_token() != &Token::RBrace {
+            // Check if this is an associated type implementation: type Name = Type;
+            if self.current_token() == &Token::Type {
+                self.advance(); // consume 'type'
+                
+                let assoc_name = if let Token::Ident(n) = self.current_token() {
+                    let name = n.clone();
+                    self.advance();
+                    name
+                } else {
+                    return Err("Expected associated type name in impl".to_string());
+                };
+                
+                self.expect(Token::Assign)?;
+                
+                let concrete_type = self.parse_type()?;
+                
+                self.expect(Token::Semicolon)?;
+                
+                associated_types.push(AssociatedType {
+                    name: assoc_name,
+                    concrete_type: Some(concrete_type),
+                });
+                
+                continue;
+            }
+            
             // Skip decorators for now (could be added later)
             let mut decorators = Vec::new();
             while let Token::Decorator(_) = self.current_token() {
@@ -594,6 +632,7 @@ impl Parser {
             type_params,
             where_clause,
             trait_name,
+            associated_types,
             functions,
             decorators: Vec::new(),
         })
@@ -635,8 +674,32 @@ impl Parser {
 
         self.expect(Token::LBrace)?;
 
+        let mut associated_types = Vec::new();
         let mut methods = Vec::new();
+        
         while self.current_token() != &Token::RBrace {
+            // Check if this is an associated type declaration: type Name;
+            if self.current_token() == &Token::Type {
+                self.advance(); // consume 'type'
+                
+                let assoc_name = if let Token::Ident(n) = self.current_token() {
+                    let name = n.clone();
+                    self.advance();
+                    name
+                } else {
+                    return Err("Expected associated type name".to_string());
+                };
+                
+                self.expect(Token::Semicolon)?;
+                
+                associated_types.push(AssociatedType {
+                    name: assoc_name,
+                    concrete_type: None, // No concrete type in trait declaration
+                });
+                
+                continue;
+            }
+            
             // Parse trait method signature
             let is_async = if self.current_token() == &Token::Async {
                 self.advance();
@@ -690,6 +753,7 @@ impl Parser {
         Ok(TraitDecl {
             name,
             generics,
+            associated_types,
             methods,
         })
     }
@@ -1137,6 +1201,18 @@ impl Parser {
                         self.advance();
                     } else {
                         return Err("Expected identifier after '.' in type name".to_string());
+                    }
+                }
+
+                // Check for associated type: Self::Item, T::Output
+                if self.current_token() == &Token::ColonColon {
+                    self.advance();
+                    if let Token::Ident(assoc_name) = self.current_token() {
+                        let assoc_name = assoc_name.clone();
+                        self.advance();
+                        return Ok(Type::Associated(type_name, assoc_name));
+                    } else {
+                        return Err("Expected associated type name after '::'".to_string());
                     }
                 }
 

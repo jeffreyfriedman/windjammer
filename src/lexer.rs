@@ -38,6 +38,7 @@ pub enum Token {
     Unsafe,
     As,
     Where,
+    Type,
 
     // Types
     Int,
@@ -366,6 +367,7 @@ impl Lexer {
             "unsafe" => Token::Unsafe,
             "as" => Token::As,
             "where" => Token::Where,
+            "type" => Token::Type,
             "int" => Token::Int,
             "int32" => Token::Int32,
             "uint" => Token::Uint,
