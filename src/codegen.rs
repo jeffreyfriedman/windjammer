@@ -342,7 +342,16 @@ impl CodeGenerator {
     }
 
     fn generate_enum(&self, e: &EnumDecl) -> String {
-        let mut output = format!("enum {} {{\n", e.name);
+        let mut output = format!("enum {}", e.name);
+
+        // Generate generic parameters: enum Option<T>, enum Result<T, E>
+        if !e.type_params.is_empty() {
+            output.push('<');
+            output.push_str(&self.format_type_params(&e.type_params));
+            output.push('>');
+        }
+
+        output.push_str(" {\n");
 
         for variant in &e.variants {
             if let Some(data) = &variant.data {

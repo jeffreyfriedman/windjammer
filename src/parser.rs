@@ -94,6 +94,7 @@ pub struct EnumVariant {
 #[derive(Debug, Clone)]
 pub struct EnumDecl {
     pub name: String,
+    pub type_params: Vec<TypeParam>, // Generic type parameters: enum Option<T>, enum Result<T, E>
     pub variants: Vec<EnumVariant>,
 }
 
@@ -1449,6 +1450,9 @@ impl Parser {
             return Err("Expected enum name".to_string());
         };
 
+        // Parse type parameters: enum Option<T>, enum Result<T, E>
+        let type_params = self.parse_type_params()?;
+
         self.expect(Token::LBrace)?;
 
         let mut variants = Vec::new();
@@ -1482,7 +1486,7 @@ impl Parser {
 
         self.expect(Token::RBrace)?;
 
-        Ok(EnumDecl { name, variants })
+        Ok(EnumDecl { name, type_params, variants })
     }
 
     fn parse_block_statements(&mut self) -> Result<Vec<Statement>, String> {
@@ -1807,7 +1811,7 @@ impl Parser {
                 let name = name.clone();
                 self.advance();
 
-                // Check if it's an enum variant
+                // Check if it's a qualified enum variant: Result.Ok(x)
                 if self.current_token() == &Token::Dot {
                     self.advance();
                     if let Token::Ident(variant) = self.current_token() {
@@ -1836,7 +1840,20 @@ impl Parser {
                     } else {
                         Err("Expected variant name".to_string())
                     }
+                } else if self.current_token() == &Token::LParen {
+                    // Unqualified enum variant with parameter: Some(x), Ok(value), Err(e)
+                    self.advance();
+                    if let Token::Ident(b) = self.current_token() {
+                        let b = b.clone();
+                        self.advance();
+                        self.expect(Token::RParen)?;
+                        Ok(Pattern::EnumVariant(name, Some(b)))
+                    } else {
+                        Err("Expected binding name in enum pattern".to_string())
+                    }
                 } else {
+                    // Check if this could be an enum variant without parameters (None, Empty, etc.)
+                    // For now, treat as identifier - the analyzer will determine if it's an enum variant
                     Ok(Pattern::Identifier(name))
                 }
             }
