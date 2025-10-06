@@ -34,7 +34,23 @@ Zero-cost abstractions, memory safety, and blazing speed.
 
 ### 🚀 Modern Language Features
 - **Generic types**: `Vec<T>`, `Option<T>`, `Result<T, E>` with type parameters
-- **Turbofish syntax**: `identity::<int>(42)`, `parse::<float>()` for explicit types ✨ **NEW**
+- **Trait bounds**: `fn print<T: Display>(x: T)`, `T: Display + Clone` for flexible constraints 🆕 **v0.8.0**
+- **Where clauses**: Multi-line constraints for complex generic functions 🆕 **v0.8.0**
+  ```windjammer
+  fn process<T, U>(a: T, b: U)
+  where
+      T: Display + Clone,
+      U: Debug
+  { ... }
+  ```
+- **Associated types**: Trait-level type declarations for flexible APIs 🆕 **v0.8.0**
+  ```windjammer
+  trait Container {
+      type Item;
+      fn get(&self) -> Self::Item;
+  }
+  ```
+- **Turbofish syntax**: `identity::<int>(42)`, `parse::<float>()` for explicit types ✨
 - **Pattern matching** with guards and tuple patterns
 - **Closures**: `|x| x * 2`
 - **Range expressions**: `0..10` and `0..=10`
@@ -48,7 +64,7 @@ Zero-cost abstractions, memory safety, and blazing speed.
 - **Smart @auto derive**: Zero-config trait inference (`@auto`) ✨
 - **Trait system**: Full trait definitions and implementations ✨
 - **Module system**: Import and use standard library modules with aliases ✨
-- **Error mapping**: Friendly error messages in Windjammer terms 🎯 **NEW**
+- **Error mapping**: Friendly error messages in Windjammer terms 🎯
 
 ### 📚 "Batteries Included" Standard Library
 Windjammer provides a comprehensive standard library that covers 80% of common use cases without external dependencies. **All stdlib modules are written in Windjammer itself**, proving the language is practical and providing transparent, readable implementations.

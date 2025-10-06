@@ -7,10 +7,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### In Progress for v0.8.0
+- **Trait Bounds** ✅ Complete
+  - Inline trait bounds: `T: Display`, `T: Display + Clone`
+  - Multiple type parameters with bounds
+  - Struct and impl block trait bounds
+- **Where Clauses** ✅ Complete
+  - Multi-line where clauses for complex constraints
+  - Multiple bounds per type parameter
+  - Function, struct, and impl where clauses
+- **Associated Types** ✅ Complete
+  - Trait associated type declarations: `type Item;`
+  - Impl associated type definitions: `type Item = T;`
+  - `Self::Item` and `T::Output` references in signatures
+- Examples 24-26 demonstrating trait system features ✅
+- Documentation updates for trait system (In progress)
+
 ### Planned for v0.8.0
-- Full trait system with bounds and where clauses
-- Associated types in traits
-- Advanced generics features
+- Advanced generics features (higher-kinded types, trait objects)
+- Error mapping Phase 2 (pattern detection, suggestions)
+- Stdlib expansion (collections, testing, async modules)
 
 ## [0.7.0] - 2025-10-05
 
