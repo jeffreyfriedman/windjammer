@@ -1,17 +1,31 @@
 [package]
 name = "windjammer"
-version = "0.1.0"
+version = "0.7.0"
 edition = "2021"
-authors = ["Windjammer Contributors"]
+authors = ["Jeffrey Friedman <jeffrey@example.com>", "Windjammer Contributors"]
 license = "MIT OR Apache-2.0"
 description = "A simple language inspired by Go, Ruby, and Elixir that transpiles to Rust - 80% of Rust's power with 20% of the complexity"
-repository = "https://github.com/yourusername/windjammer"
-homepage = "https://github.com/yourusername/windjammer"
+repository = "https://github.com/jeffreyfriedman/windjammer"
+homepage = "https://github.com/jeffreyfriedman/windjammer"
+documentation = "https://github.com/jeffreyfriedman/windjammer/blob/main/docs/GUIDE.md"
 keywords = ["compiler", "transpiler", "rust", "go", "language"]
 categories = ["development-tools", "compilers"]
 readme = "README.md"
+rust-version = "1.70"
+exclude = [
+    "test_output_*",
+    "examples/*/build_output",
+    "examples/*/pkg",
+    "examples/*/target",
+    ".github",
+    "docs/*.md"
+]
 
 [lib]
+name = "windjammer"
+path = "src/main.rs"
+
+[[bin]]
 name = "windjammer"
 path = "src/main.rs"
 
@@ -27,4 +41,19 @@ thiserror = "1.0"
 indoc = "2.0"
 # Pretty printing
 colored = "2.1"
+# JSON parsing for rustc diagnostics
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+
+[dev-dependencies]
+# Benchmarking
+criterion = { version = "0.5", features = ["html_reports"] }
+
+[[bench]]
+name = "compilation"
+harness = false
+
+[[bench]]
+name = "runtime"
+harness = false
 

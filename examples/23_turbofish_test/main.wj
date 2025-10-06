@@ -1,0 +1,24 @@
+// Turbofish Syntax Test
+// Demonstrates explicit type parameters with ::<Type> syntax
+
+fn identity<T>(x: T) -> T {
+    x
+}
+
+fn main() {
+    // Example 1: Explicit type on generic function
+    let x = identity::<int>(42)
+    println!("Identity int: {}", x)
+    
+    let s = identity::<string>("Hello".to_string())
+    println!("Identity string: {}", s)
+    
+    // Example 2: Method with turbofish
+    let text = "42"
+    let parsed = text.parse::<int>()
+    println!("Parsed result: {:?}", parsed)
+    
+    // Note: Match expressions after turbofish calls currently have
+    // a parsing limitation and should use an intermediate variable
+    // as shown above (let parsed = ...; match parsed { ... })
+}
