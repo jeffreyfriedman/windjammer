@@ -12,6 +12,7 @@ pub enum Type {
     Generic(String),                  // Type parameter: T, U, V
     Parameterized(String, Vec<Type>), // Generic type: Vec<T>, HashMap<K, V>
     Associated(String, String),       // Associated type: Self::Item, T::Output (base, assoc_name)
+    TraitObject(String),              // Trait object: dyn Trait
     Option(Box<Type>),
     Result(Box<Type>, Box<Type>),
     Vec(Box<Type>),
@@ -1146,6 +1147,17 @@ impl Parser {
         }
 
         let base_type = match self.current_token() {
+            Token::Dyn => {
+                // Parse: dyn TraitName
+                self.advance();
+                if let Token::Ident(trait_name) = self.current_token() {
+                    let name = trait_name.clone();
+                    self.advance();
+                    Type::TraitObject(name)
+                } else {
+                    return Err("Expected trait name after 'dyn'".to_string());
+                }
+            }
             Token::Int => {
                 self.advance();
                 Type::Int

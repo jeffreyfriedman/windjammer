@@ -39,6 +39,7 @@ pub enum Token {
     As,
     Where,
     Type,
+    Dyn,
 
     // Types
     Int,
@@ -368,6 +369,7 @@ impl Lexer {
             "as" => Token::As,
             "where" => Token::Where,
             "type" => Token::Type,
+            "dyn" => Token::Dyn,
             "int" => Token::Int,
             "int32" => Token::Int32,
             "uint" => Token::Uint,
