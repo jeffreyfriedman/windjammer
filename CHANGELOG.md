@@ -7,6 +7,63 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.9.0] - 2025-10-06
+
+### Added - Enhanced Features & Stdlib Expansion 🚀
+
+**Generic Trait Implementations**:
+- Parse and generate `impl Trait<Type> for Target` syntax
+- Support concrete type arguments in trait implementations
+- Handle `impl From<int> for String`, `impl Converter<int, string> for IntToString`
+- Support primitive types (`int`, `string`, `bool`) after `for` keyword
+- Proper type mapping from Windjammer types to Rust types
+
+**Generic Enums**:
+- Generic type parameters on enums: `enum Option<T>`, `enum Result<T, E>`
+- Multiple type parameters: `enum Container<T, U, V>`
+- Trait bounds on enum type parameters
+- Idiomatic pattern matching with generic enums
+
+**Pattern Matching Enhancement**:
+- Unqualified enum patterns: `Some(x)`, `None`, `Ok(value)`, `Err(e)`
+- Qualified enum patterns: `Option.Some(x)`, `Result.Err(e)`
+- Support enum variants with and without parameters
+- Enable Rust-style idiomatic pattern matching in match expressions
+
+**Standard Library - Collections**:
+- `std/collections.wj` module with core data structures
+- `HashMap<K, V>`: Hash table (insert, get, remove, contains_key, len)
+- `HashSet<T>`: Hash set (insert, remove, contains, len)
+- `BTreeMap<K, V>`: Sorted map implementation
+- `BTreeSet<T>`: Sorted set implementation
+- `VecDeque<T>`: Double-ended queue (push/pop from both ends)
+
+**Standard Library - Testing**:
+- `std/testing.wj` module for unit testing
+- `assert(condition)`: Basic boolean assertions
+- `assert_eq/assert_ne`: Equality/inequality with debug output
+- `assert_some/assert_none`: Option validators
+- `assert_ok/assert_err`: Result validators
+- `assert_approx_eq`: Float comparison with epsilon
+- `assert_gt/lt/ge/le`: Comparison assertions
+- `fail(message)`: Explicit test failure
+
+### Examples
+- **Example 30**: Generic trait implementations (`From<T>`, `Converter<Input, Output>`, `Into<T>`)
+- **Example 31**: Collections module (HashMap, HashSet, BTreeMap, VecDeque usage)
+- **Example 32**: Testing framework (assertions, Option/Result testing, comparisons)
+- **Example 33**: Generic enums (`Option<T>`, `Result<T, E>`, `Container<T>`)
+
+### Improved
+- **Parser Organization**: Added comprehensive section markers and documentation to 2900+ line `parser.rs`
+  - Clear sections: AST Types, Parser Core, Top-Level, Items, Statements, Patterns, Expressions, Types
+  - Added TODO for future module split
+  - Improved navigation and maintainability
+
+### Documentation
+- Updated `std/README.md` with v0.9.0 module status
+- All examples tested and working
+
 ## [0.8.0] - 2025-10-06
 
 ### Added - Complete Trait System 🎯
