@@ -307,9 +307,13 @@ impl CodeGenerator {
         output.push_str(&s.name);
         if !s.type_params.is_empty() {
             output.push('<');
-            output.push_str(&s.type_params.join(", "));
+            output.push_str(&self.format_type_params(&s.type_params));
             output.push('>');
         }
+
+        // Add where clause if present
+        output.push_str(&self.format_where_clause(&s.where_clause));
+
         output.push_str(" {\n");
 
         for field in &s.fields {
@@ -360,20 +364,30 @@ impl CodeGenerator {
         let mut output = String::from("trait ");
         output.push_str(&trait_decl.name);
 
-        // Add generic parameters (these become associated types in Rust)
+        // Generate generic parameters: trait From<T> { ... }
         if !trait_decl.generics.is_empty() {
-            output.push_str(" {\n");
-            self.indent_level += 1;
+            output.push('<');
+            output.push_str(&trait_decl.generics.join(", "));
+            output.push('>');
+        }
 
-            // Convert generics to associated types
-            for generic in &trait_decl.generics {
-                output.push_str(&self.indent());
-                output.push_str(&format!("type {};\n", generic));
-            }
+        // Generate supertraits: trait Manager: Employee + Person
+        if !trait_decl.supertraits.is_empty() {
+            output.push_str(": ");
+            output.push_str(&trait_decl.supertraits.join(" + "));
+        }
+
+        output.push_str(" {\n");
+        self.indent_level += 1;
+
+        // Generate associated type declarations: type Item;
+        for assoc_type in &trait_decl.associated_types {
+            output.push_str(&self.indent());
+            output.push_str(&format!("type {};\n", assoc_type.name));
+        }
+
+        if !trait_decl.associated_types.is_empty() {
             output.push('\n');
-        } else {
-            output.push_str(" {\n");
-            self.indent_level += 1;
         }
 
         // Generate trait methods
@@ -477,20 +491,40 @@ impl CodeGenerator {
         output.push_str("impl");
         if !impl_block.type_params.is_empty() {
             output.push('<');
-            output.push_str(&impl_block.type_params.join(", "));
+            output.push_str(&self.format_type_params(&impl_block.type_params));
             output.push('>');
         }
         output.push(' ');
 
         if let Some(trait_name) = &impl_block.trait_name {
             // Trait implementation: impl<T> Trait for Type<T>
-            output.push_str(&format!("{} for {} {{\n", trait_name, impl_block.type_name));
+            output.push_str(&format!("{} for {}", trait_name, impl_block.type_name));
         } else {
             // Inherent implementation: impl<T> Type<T>
-            output.push_str(&format!("{} {{\n", impl_block.type_name));
+            output.push_str(&impl_block.type_name);
         }
 
+        // Add where clause if present
+        output.push_str(&self.format_where_clause(&impl_block.where_clause));
+
+        output.push_str(" {\n");
+
         self.indent_level += 1;
+
+        // Generate associated type implementations: type Item = i32;
+        for assoc_type in &impl_block.associated_types {
+            output.push_str(&self.indent());
+            output.push_str(&format!("type {}", assoc_type.name));
+            if let Some(concrete_type) = &assoc_type.concrete_type {
+                output.push_str(&format!(" = {};\n", self.type_to_rust(concrete_type)));
+            } else {
+                output.push_str(";\n");
+            }
+        }
+
+        if !impl_block.associated_types.is_empty() {
+            output.push('\n');
+        }
 
         // Store the wasm export flag for use in generate_function
         let old_in_wasm_impl = self.in_wasm_bindgen_impl;
@@ -532,10 +566,10 @@ impl CodeGenerator {
         output.push_str("fn ");
         output.push_str(&func.name);
 
-        // Add type parameters: fn foo<T, U>(...)
+        // Add type parameters with bounds: fn foo<T: Display, U: Debug>(...)
         if !func.type_params.is_empty() {
             output.push('<');
-            output.push_str(&func.type_params.join(", "));
+            output.push_str(&self.format_type_params(&func.type_params));
             output.push('>');
         }
 
@@ -616,6 +650,9 @@ impl CodeGenerator {
             output.push_str(&self.type_to_rust(return_type));
         }
 
+        // Add where clause if present
+        output.push_str(&self.format_where_clause(&func.where_clause));
+
         output.push_str(" {\n");
         self.indent_level += 1;
 
@@ -641,6 +678,15 @@ impl CodeGenerator {
                 name.replace('.', "::")
             }
             Type::Generic(name) => name.clone(), // Type parameter: T -> T
+            Type::Associated(base, assoc_name) => {
+                // Associated type: Self::Item -> Self::Item, T::Output -> T::Output
+                format!("{}::{}", base, assoc_name)
+            }
+            Type::TraitObject(trait_name) => {
+                // Trait object: dyn Trait -> Box<dyn Trait>
+                // Note: Windjammer automatically boxes trait objects for convenience
+                format!("Box<dyn {}>", trait_name)
+            }
             Type::Parameterized(base, args) => {
                 // Generic type: Vec<T> -> Vec<T>, HashMap<K, V> -> HashMap<K, V>
                 format!(
@@ -666,6 +712,9 @@ impl CodeGenerator {
                 // Special case: &str instead of &String (more idiomatic Rust)
                 } else if matches!(**inner, Type::String) {
                     "&str".to_string()
+                // Special case: &dyn Trait (don't box when already a reference)
+                } else if let Type::TraitObject(trait_name) = &**inner {
+                    format!("&dyn {}", trait_name)
                 } else {
                     format!("&{}", self.type_to_rust(inner))
                 }
@@ -674,6 +723,9 @@ impl CodeGenerator {
                 // Special case: &mut [T] (mutable slice) vs &mut Vec<T>
                 if let Type::Vec(elem) = &**inner {
                     format!("&mut [{}]", self.type_to_rust(elem))
+                // Special case: &mut dyn Trait (don't box when already a reference)
+                } else if let Type::TraitObject(trait_name) = &**inner {
+                    format!("&mut dyn {}", trait_name)
                 } else {
                     format!("&mut {}", self.type_to_rust(inner))
                 }
@@ -1481,5 +1533,36 @@ impl CodeGenerator {
             Type::Tuple(types) => types.iter().all(|t| self.has_default(t)),
             _ => false, // Refs don't have Default, Result/Custom types unknown
         }
+    }
+
+    // Format type parameters with trait bounds for Rust output
+    // Example: [TypeParam { name: "T", bounds: ["Display", "Clone"] }] -> "T: Display + Clone"
+    fn format_type_params(&self, type_params: &[crate::parser::TypeParam]) -> String {
+        type_params
+            .iter()
+            .map(|param| {
+                if param.bounds.is_empty() {
+                    param.name.clone()
+                } else {
+                    format!("{}: {}", param.name, param.bounds.join(" + "))
+                }
+            })
+            .collect::<Vec<_>>()
+            .join(", ")
+    }
+
+    // Format where clause for Rust output
+    // Example: [("T", ["Display"]), ("U", ["Debug", "Clone"])] -> "\nwhere\n    T: Display,\n    U: Debug + Clone"
+    fn format_where_clause(&self, where_clause: &[(String, Vec<String>)]) -> String {
+        if where_clause.is_empty() {
+            return String::new();
+        }
+
+        let clauses: Vec<String> = where_clause
+            .iter()
+            .map(|(type_param, bounds)| format!("    {}: {}", type_param, bounds.join(" + ")))
+            .collect();
+
+        format!("\nwhere\n{}", clauses.join(",\n"))
     }
 }

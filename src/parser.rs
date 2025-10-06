@@ -11,12 +11,28 @@ pub enum Type {
     Custom(String),
     Generic(String),                  // Type parameter: T, U, V
     Parameterized(String, Vec<Type>), // Generic type: Vec<T>, HashMap<K, V>
+    Associated(String, String),       // Associated type: Self::Item, T::Output (base, assoc_name)
+    TraitObject(String),              // Trait object: dyn Trait
     Option(Box<Type>),
     Result(Box<Type>, Box<Type>),
     Vec(Box<Type>),
     Reference(Box<Type>),
     MutableReference(Box<Type>),
     Tuple(Vec<Type>), // Tuple type: (T1, T2, T3)
+}
+
+// Type parameter with optional trait bounds
+#[derive(Debug, Clone, PartialEq)]
+pub struct TypeParam {
+    pub name: String,
+    pub bounds: Vec<String>, // Trait bounds: ["Display", "Clone", "Send"]
+}
+
+// Associated type declaration in traits or implementation
+#[derive(Debug, Clone, PartialEq)]
+pub struct AssociatedType {
+    pub name: String,                // e.g., "Item", "Output"
+    pub concrete_type: Option<Type>, // None in trait declaration, Some(Type) in impl
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -44,7 +60,8 @@ pub struct Decorator {
 #[derive(Debug, Clone)]
 pub struct FunctionDecl {
     pub name: String,
-    pub type_params: Vec<String>, // Generic type parameters: <T, U>
+    pub type_params: Vec<TypeParam>, // Generic type parameters with optional bounds: <T: Display, U>
+    pub where_clause: Vec<(String, Vec<String>)>, // Where clause: [(type_param, [trait_bounds])]
     pub decorators: Vec<Decorator>,
     pub is_async: bool,
     pub parameters: Vec<Parameter>,
@@ -62,7 +79,8 @@ pub struct StructField {
 #[derive(Debug, Clone)]
 pub struct StructDecl {
     pub name: String,
-    pub type_params: Vec<String>, // Generic type parameters: <T>
+    pub type_params: Vec<TypeParam>, // Generic type parameters with optional bounds: <T: Clone>
+    pub where_clause: Vec<(String, Vec<String>)>, // Where clause: [(type_param, [trait_bounds])]
     pub fields: Vec<StructField>,
     pub decorators: Vec<Decorator>,
 }
@@ -263,7 +281,9 @@ pub enum UnaryOp {
 #[derive(Debug, Clone)]
 pub struct TraitDecl {
     pub name: String,
-    pub generics: Vec<String>, // Generic parameters like <T, U>
+    pub generics: Vec<String>,    // Generic parameters like <T, U>
+    pub supertraits: Vec<String>, // Supertrait bounds: trait Manager: Employee
+    pub associated_types: Vec<AssociatedType>, // Associated type declarations: type Item;
     pub methods: Vec<TraitMethod>,
 }
 
@@ -279,8 +299,10 @@ pub struct TraitMethod {
 #[derive(Debug, Clone)]
 pub struct ImplBlock {
     pub type_name: String,
-    pub type_params: Vec<String>, // Generic type parameters: impl<T> Box<T>
-    pub trait_name: Option<String>, // None for inherent impl, Some for trait impl
+    pub type_params: Vec<TypeParam>, // Generic type parameters with optional bounds: impl<T: Display> Box<T>
+    pub where_clause: Vec<(String, Vec<String>)>, // Where clause: [(type_param, [trait_bounds])]
+    pub trait_name: Option<String>,  // None for inherent impl, Some for trait impl
+    pub associated_types: Vec<AssociatedType>, // Associated type implementations: type Item = i32;
     pub functions: Vec<FunctionDecl>,
     pub decorators: Vec<Decorator>,
 }
@@ -545,10 +567,41 @@ impl Parser {
             (None, first_name)
         };
 
+        // Parse where clause (optional): where T: Clone, U: Debug
+        let where_clause = self.parse_where_clause()?;
+
         self.expect(Token::LBrace)?;
 
+        let mut associated_types = Vec::new();
         let mut functions = Vec::new();
+
         while self.current_token() != &Token::RBrace {
+            // Check if this is an associated type implementation: type Name = Type;
+            if self.current_token() == &Token::Type {
+                self.advance(); // consume 'type'
+
+                let assoc_name = if let Token::Ident(n) = self.current_token() {
+                    let name = n.clone();
+                    self.advance();
+                    name
+                } else {
+                    return Err("Expected associated type name in impl".to_string());
+                };
+
+                self.expect(Token::Assign)?;
+
+                let concrete_type = self.parse_type()?;
+
+                self.expect(Token::Semicolon)?;
+
+                associated_types.push(AssociatedType {
+                    name: assoc_name,
+                    concrete_type: Some(concrete_type),
+                });
+
+                continue;
+            }
+
             // Skip decorators for now (could be added later)
             let mut decorators = Vec::new();
             while let Token::Decorator(_) = self.current_token() {
@@ -579,7 +632,9 @@ impl Parser {
         Ok(ImplBlock {
             type_name,
             type_params,
+            where_clause,
             trait_name,
+            associated_types,
             functions,
             decorators: Vec::new(),
         })
@@ -619,10 +674,59 @@ impl Parser {
             Vec::new()
         };
 
+        // Parse optional supertraits: trait Manager: Employee + Person { ... }
+        let supertraits = if self.current_token() == &Token::Colon {
+            self.advance(); // consume ':'
+            let mut traits = Vec::new();
+
+            loop {
+                if let Token::Ident(trait_name) = self.current_token() {
+                    traits.push(trait_name.clone());
+                    self.advance();
+
+                    if self.current_token() == &Token::Plus {
+                        self.advance(); // consume '+'
+                    } else {
+                        break;
+                    }
+                } else {
+                    return Err("Expected supertrait name after ':'".to_string());
+                }
+            }
+
+            traits
+        } else {
+            Vec::new()
+        };
+
         self.expect(Token::LBrace)?;
 
+        let mut associated_types = Vec::new();
         let mut methods = Vec::new();
+
         while self.current_token() != &Token::RBrace {
+            // Check if this is an associated type declaration: type Name;
+            if self.current_token() == &Token::Type {
+                self.advance(); // consume 'type'
+
+                let assoc_name = if let Token::Ident(n) = self.current_token() {
+                    let name = n.clone();
+                    self.advance();
+                    name
+                } else {
+                    return Err("Expected associated type name".to_string());
+                };
+
+                self.expect(Token::Semicolon)?;
+
+                associated_types.push(AssociatedType {
+                    name: assoc_name,
+                    concrete_type: None, // No concrete type in trait declaration
+                });
+
+                continue;
+            }
+
             // Parse trait method signature
             let is_async = if self.current_token() == &Token::Async {
                 self.advance();
@@ -676,6 +780,8 @@ impl Parser {
         Ok(TraitDecl {
             name,
             generics,
+            supertraits,
+            associated_types,
             methods,
         })
     }
@@ -807,8 +913,8 @@ impl Parser {
         Ok((path, alias))
     }
 
-    fn parse_type_params(&mut self) -> Result<Vec<String>, String> {
-        // Parse generic type parameters: <T> or <T, U>
+    fn parse_type_params(&mut self) -> Result<Vec<TypeParam>, String> {
+        // Parse generic type parameters: <T>, <T: Display>, <T: Display + Clone, U: Debug>
         if self.current_token() != &Token::Lt {
             return Ok(Vec::new());
         }
@@ -818,8 +924,37 @@ impl Parser {
 
         loop {
             if let Token::Ident(name) = self.current_token() {
-                params.push(name.clone());
+                let param_name = name.clone();
                 self.advance();
+
+                // Check for trait bounds: T: Display
+                let mut bounds = Vec::new();
+                if self.current_token() == &Token::Colon {
+                    self.advance(); // consume :
+
+                    // Parse trait bounds separated by +
+                    loop {
+                        if let Token::Ident(trait_name) = self.current_token() {
+                            bounds.push(trait_name.clone());
+                            self.advance();
+
+                            // Check for + (multiple bounds)
+                            if self.current_token() == &Token::Plus {
+                                self.advance();
+                                continue;
+                            } else {
+                                break;
+                            }
+                        } else {
+                            return Err("Expected trait name in bound".to_string());
+                        }
+                    }
+                }
+
+                params.push(TypeParam {
+                    name: param_name,
+                    bounds,
+                });
 
                 if self.current_token() == &Token::Comma {
                     self.advance();
@@ -835,6 +970,64 @@ impl Parser {
         }
 
         Ok(params)
+    }
+
+    fn parse_where_clause(&mut self) -> Result<Vec<(String, Vec<String>)>, String> {
+        // Parse where clause: where T: Display, U: Debug + Clone
+        if self.current_token() != &Token::Where {
+            return Ok(Vec::new());
+        }
+
+        self.advance(); // consume 'where'
+        let mut clauses = Vec::new();
+
+        loop {
+            // Parse type parameter name
+            if let Token::Ident(type_param) = self.current_token() {
+                let param_name = type_param.clone();
+                self.advance();
+
+                // Expect colon
+                if self.current_token() != &Token::Colon {
+                    return Err("Expected ':' after type parameter in where clause".to_string());
+                }
+                self.advance();
+
+                // Parse trait bounds separated by +
+                let mut bounds = Vec::new();
+                loop {
+                    if let Token::Ident(trait_name) = self.current_token() {
+                        bounds.push(trait_name.clone());
+                        self.advance();
+
+                        // Check for + (multiple bounds)
+                        if self.current_token() == &Token::Plus {
+                            self.advance();
+                            continue;
+                        } else {
+                            break;
+                        }
+                    } else {
+                        return Err("Expected trait name in where clause".to_string());
+                    }
+                }
+
+                clauses.push((param_name, bounds));
+
+                // Check for comma (more clauses) or end
+                if self.current_token() == &Token::Comma {
+                    self.advance();
+                    continue;
+                } else {
+                    // End of where clause
+                    break;
+                }
+            } else {
+                return Err("Expected type parameter name in where clause".to_string());
+            }
+        }
+
+        Ok(clauses)
     }
 
     fn parse_function(&mut self) -> Result<FunctionDecl, String> {
@@ -862,6 +1055,9 @@ impl Parser {
             None
         };
 
+        // Parse where clause (optional): where T: Display, U: Debug
+        let where_clause = self.parse_where_clause()?;
+
         self.expect(Token::LBrace)?;
         let body = self.parse_block_statements()?;
         self.expect(Token::RBrace)?;
@@ -869,6 +1065,7 @@ impl Parser {
         Ok(FunctionDecl {
             name,
             type_params,            // Parsed generic type parameters
+            where_clause,           // Parsed where clause
             decorators: Vec::new(), // Set by parse_item
             is_async: false,        // Set by parse_item
             parameters,
@@ -977,6 +1174,17 @@ impl Parser {
         }
 
         let base_type = match self.current_token() {
+            Token::Dyn => {
+                // Parse: dyn TraitName
+                self.advance();
+                if let Token::Ident(trait_name) = self.current_token() {
+                    let name = trait_name.clone();
+                    self.advance();
+                    Type::TraitObject(name)
+                } else {
+                    return Err("Expected trait name after 'dyn'".to_string());
+                }
+            }
             Token::Int => {
                 self.advance();
                 Type::Int
@@ -1032,6 +1240,18 @@ impl Parser {
                         self.advance();
                     } else {
                         return Err("Expected identifier after '.' in type name".to_string());
+                    }
+                }
+
+                // Check for associated type: Self::Item, T::Output
+                if self.current_token() == &Token::ColonColon {
+                    self.advance();
+                    if let Token::Ident(assoc_name) = self.current_token() {
+                        let assoc_name = assoc_name.clone();
+                        self.advance();
+                        return Ok(Type::Associated(type_name, assoc_name));
+                    } else {
+                        return Err("Expected associated type name after '::'".to_string());
                     }
                 }
 
@@ -1105,6 +1325,9 @@ impl Parser {
         // Parse type parameters: struct Box<T> { ... }
         let type_params = self.parse_type_params()?;
 
+        // Parse where clause (optional): where T: Clone, U: Debug
+        let where_clause = self.parse_where_clause()?;
+
         self.expect(Token::LBrace)?;
 
         let mut fields = Vec::new();
@@ -1143,6 +1366,7 @@ impl Parser {
         Ok(StructDecl {
             name,
             type_params,
+            where_clause,
             fields,
             decorators: Vec::new(),
         })
