@@ -13,8 +13,17 @@ fn compile_and_check(source: &str, expected_patterns: &[&str]) -> String {
     let test_id = TEST_COUNTER.fetch_add(1, Ordering::SeqCst);
     let process_id = std::process::id();
     let thread_id = format!("{:?}", thread::current().id());
-    let unique_id = format!("{}_{}_{}_{}", process_id, thread_id.replace("ThreadId(", "").replace(")", ""), test_id, std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_nanos());
-    
+    let unique_id = format!(
+        "{}_{}_{}_{}",
+        process_id,
+        thread_id.replace("ThreadId(", "").replace(")", ""),
+        test_id,
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_nanos()
+    );
+
     let temp_dir = std::env::temp_dir();
     let test_file = format!("test_{}.wj", unique_id);
     let temp_file = temp_dir.join(&test_file);
