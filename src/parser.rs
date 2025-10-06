@@ -435,6 +435,7 @@ impl Parser {
     }
 
     // Helper to convert Type AST back to string for impl parsing
+    #[allow(clippy::only_used_in_recursion)]
     fn type_to_string(&self, ty: &Type) -> String {
         match ty {
             Type::Int => "int".to_string(),
