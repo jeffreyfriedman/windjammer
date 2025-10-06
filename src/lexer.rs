@@ -3,7 +3,7 @@ use std::fmt;
 #[derive(Debug, Clone, PartialEq)]
 pub enum StringPart {
     Literal(String),
-    Expression(String),  // The expression text inside ${}
+    Expression(String), // The expression text inside ${}
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -37,7 +37,7 @@ pub enum Token {
     Self_,
     Unsafe,
     As,
-    
+
     // Types
     Int,
     Int32,
@@ -45,50 +45,50 @@ pub enum Token {
     Float,
     Bool,
     String,
-    
+
     // Literals
     IntLiteral(i64),
     FloatLiteral(f64),
     StringLiteral(String),
-    InterpolatedString(Vec<StringPart>),  // For strings with ${expr}
+    InterpolatedString(Vec<StringPart>), // For strings with ${expr}
     CharLiteral(char),
     BoolLiteral(bool),
-    
+
     // Identifiers
     Ident(String),
-    
+
     // Operators
     Plus,
     Minus,
     Star,
     Slash,
     Percent,
-    
+
     Eq,
     Ne,
     Lt,
     Le,
     Gt,
     Ge,
-    
+
     And,
     Or,
     Not,
-    
+
     Assign,
     PlusAssign,    // +=
     MinusAssign,   // -=
     StarAssign,    // *=
     SlashAssign,   // /=
     PercentAssign, // %=
-    Arrow,      // ->
-    LeftArrow,  // <-
-    FatArrow,   // =>
-    
+    Arrow,         // ->
+    LeftArrow,     // <-
+    FatArrow,      // =>
+
     // Decorators
-    At,         // @
-    Decorator(String),  // @route, @timing, etc.
-    
+    At,                // @
+    Decorator(String), // @route, @timing, etc.
+
     // Delimiters
     LParen,
     RParen,
@@ -96,21 +96,21 @@ pub enum Token {
     RBrace,
     LBracket,
     RBracket,
-    
+
     Comma,
     Dot,
-    DotDot,      // ..
-    DotDotEq,    // ..=
+    DotDot,   // ..
+    DotDotEq, // ..=
     Colon,
-    ColonColon,  // :: (for turbofish and paths)
+    ColonColon, // :: (for turbofish and paths)
     Semicolon,
     Question,
-    Ampersand,   // &
-    Pipe,        // |
-    PipeOp,      // |> (pipe operator)
-    Underscore,  // _
-    Bang,        // ! (for macro invocations)
-    
+    Ampersand,  // &
+    Pipe,       // |
+    PipeOp,     // |> (pipe operator)
+    Underscore, // _
+    Bang,       // ! (for macro invocations)
+
     // Special
     Eof,
     Newline,
@@ -136,24 +136,24 @@ pub struct Lexer {
 impl Lexer {
     pub fn new(input: &str) -> Self {
         let chars: Vec<char> = input.chars().collect();
-        let current_char = chars.get(0).copied();
-        
+        let current_char = chars.first().copied();
+
         Lexer {
             input: chars,
             position: 0,
             current_char,
         }
     }
-    
+
     fn advance(&mut self) {
         self.position += 1;
         self.current_char = self.input.get(self.position).copied();
     }
-    
+
     fn peek(&self, offset: usize) -> Option<char> {
         self.input.get(self.position + offset).copied()
     }
-    
+
     fn skip_whitespace(&mut self) {
         while let Some(ch) = self.current_char {
             if ch.is_whitespace() && ch != '\n' {
@@ -163,7 +163,7 @@ impl Lexer {
             }
         }
     }
-    
+
     fn skip_comment(&mut self) {
         // Skip until end of line
         while let Some(ch) = self.current_char {
@@ -173,16 +173,16 @@ impl Lexer {
             self.advance();
         }
     }
-    
+
     fn read_number(&mut self) -> Token {
         let mut num_str = String::new();
         let mut is_float = false;
-        
+
         while let Some(ch) = self.current_char {
             if ch.is_ascii_digit() {
                 num_str.push(ch);
                 self.advance();
-            } else if ch == '.' && !is_float && self.peek(1).map_or(false, |c| c.is_ascii_digit()) {
+            } else if ch == '.' && !is_float && self.peek(1).is_some_and(|c| c.is_ascii_digit()) {
                 is_float = true;
                 num_str.push(ch);
                 self.advance();
@@ -190,20 +190,20 @@ impl Lexer {
                 break;
             }
         }
-        
+
         if is_float {
             Token::FloatLiteral(num_str.parse().unwrap())
         } else {
             Token::IntLiteral(num_str.parse().unwrap())
         }
     }
-    
+
     fn read_string(&mut self) -> Token {
         self.advance(); // Skip opening quote
         let mut parts = Vec::new();
         let mut current_literal = String::new();
         let mut has_interpolation = false;
-        
+
         while let Some(ch) = self.current_char {
             if ch == '"' {
                 self.advance(); // Skip closing quote
@@ -225,17 +225,17 @@ impl Lexer {
             } else if ch == '$' && self.peek(1) == Some('{') {
                 // Found interpolation: ${expr}
                 has_interpolation = true;
-                
+
                 // Save current literal part
                 if !current_literal.is_empty() {
                     parts.push(StringPart::Literal(current_literal.clone()));
                     current_literal.clear();
                 }
-                
-                // Skip ${ 
+
+                // Skip ${
                 self.advance();
                 self.advance();
-                
+
                 // Read expression until }
                 let mut expr = String::new();
                 let mut brace_depth = 1;
@@ -257,19 +257,19 @@ impl Lexer {
                         self.advance();
                     }
                 }
-                
+
                 parts.push(StringPart::Expression(expr));
             } else {
                 current_literal.push(ch);
                 self.advance();
             }
         }
-        
+
         // Add final literal part if any
         if !current_literal.is_empty() || parts.is_empty() {
             parts.push(StringPart::Literal(current_literal));
         }
-        
+
         if has_interpolation {
             Token::InterpolatedString(parts)
         } else {
@@ -281,10 +281,10 @@ impl Lexer {
             }
         }
     }
-    
+
     fn read_char(&mut self) -> Token {
         self.advance(); // Skip opening quote
-        
+
         let ch = if let Some(c) = self.current_char {
             if c == '\\' {
                 // Handle escape sequences
@@ -312,18 +312,18 @@ impl Lexer {
         } else {
             '\0'
         };
-        
+
         // Skip closing quote
         if self.current_char == Some('\'') {
             self.advance();
         }
-        
+
         Token::CharLiteral(ch)
     }
-    
+
     fn read_identifier(&mut self) -> Token {
         let mut ident = String::new();
-        
+
         while let Some(ch) = self.current_char {
             if ch.is_alphanumeric() || ch == '_' {
                 ident.push(ch);
@@ -332,7 +332,7 @@ impl Lexer {
                 break;
             }
         }
-        
+
         // Check for keywords
         match ident.as_str() {
             "fn" => Token::Fn,
@@ -376,10 +376,10 @@ impl Lexer {
             _ => Token::Ident(ident),
         }
     }
-    
+
     pub fn next_token(&mut self) -> Token {
         self.skip_whitespace();
-        
+
         let token = match self.current_char {
             None => Token::Eof,
             Some('\n') => {
@@ -416,7 +416,10 @@ impl Lexer {
                 self.advance();
                 Token::PlusAssign
             }
-            Some('+') => { self.advance(); Token::Plus }
+            Some('+') => {
+                self.advance();
+                Token::Plus
+            }
             Some('-') if self.peek(1) == Some('=') => {
                 self.advance();
                 self.advance();
@@ -427,25 +430,37 @@ impl Lexer {
                 self.advance();
                 Token::Arrow
             }
-            Some('-') => { self.advance(); Token::Minus }
+            Some('-') => {
+                self.advance();
+                Token::Minus
+            }
             Some('*') if self.peek(1) == Some('=') => {
                 self.advance();
                 self.advance();
                 Token::StarAssign
             }
-            Some('*') => { self.advance(); Token::Star }
+            Some('*') => {
+                self.advance();
+                Token::Star
+            }
             Some('/') if self.peek(1) == Some('=') => {
                 self.advance();
                 self.advance();
                 Token::SlashAssign
             }
-            Some('/') => { self.advance(); Token::Slash }
+            Some('/') => {
+                self.advance();
+                Token::Slash
+            }
             Some('%') if self.peek(1) == Some('=') => {
                 self.advance();
                 self.advance();
                 Token::PercentAssign
             }
-            Some('%') => { self.advance(); Token::Percent }
+            Some('%') => {
+                self.advance();
+                Token::Percent
+            }
             Some('=') if self.peek(1) == Some('=') => {
                 self.advance();
                 self.advance();
@@ -456,13 +471,19 @@ impl Lexer {
                 self.advance();
                 Token::FatArrow
             }
-            Some('=') => { self.advance(); Token::Assign }
+            Some('=') => {
+                self.advance();
+                Token::Assign
+            }
             Some('!') if self.peek(1) == Some('=') => {
                 self.advance();
                 self.advance();
                 Token::Ne
             }
-            Some('!') => { self.advance(); Token::Bang }
+            Some('!') => {
+                self.advance();
+                Token::Bang
+            }
             Some('<') if self.peek(1) == Some('-') => {
                 self.advance();
                 self.advance();
@@ -473,19 +494,28 @@ impl Lexer {
                 self.advance();
                 Token::Le
             }
-            Some('<') => { self.advance(); Token::Lt }
+            Some('<') => {
+                self.advance();
+                Token::Lt
+            }
             Some('>') if self.peek(1) == Some('=') => {
                 self.advance();
                 self.advance();
                 Token::Ge
             }
-            Some('>') => { self.advance(); Token::Gt }
+            Some('>') => {
+                self.advance();
+                Token::Gt
+            }
             Some('&') if self.peek(1) == Some('&') => {
                 self.advance();
                 self.advance();
                 Token::And
             }
-            Some('&') => { self.advance(); Token::Ampersand }
+            Some('&') => {
+                self.advance();
+                Token::Ampersand
+            }
             Some('|') if self.peek(1) == Some('|') => {
                 self.advance();
                 self.advance();
@@ -496,14 +526,38 @@ impl Lexer {
                 self.advance();
                 Token::PipeOp
             }
-            Some('|') => { self.advance(); Token::Pipe }
-            Some('(') => { self.advance(); Token::LParen }
-            Some(')') => { self.advance(); Token::RParen }
-            Some('{') => { self.advance(); Token::LBrace }
-            Some('}') => { self.advance(); Token::RBrace }
-            Some('[') => { self.advance(); Token::LBracket }
-            Some(']') => { self.advance(); Token::RBracket }
-            Some(',') => { self.advance(); Token::Comma }
+            Some('|') => {
+                self.advance();
+                Token::Pipe
+            }
+            Some('(') => {
+                self.advance();
+                Token::LParen
+            }
+            Some(')') => {
+                self.advance();
+                Token::RParen
+            }
+            Some('{') => {
+                self.advance();
+                Token::LBrace
+            }
+            Some('}') => {
+                self.advance();
+                Token::RBrace
+            }
+            Some('[') => {
+                self.advance();
+                Token::LBracket
+            }
+            Some(']') => {
+                self.advance();
+                Token::RBracket
+            }
+            Some(',') => {
+                self.advance();
+                Token::Comma
+            }
             Some('.') if self.peek(1) == Some('.') && self.peek(2) == Some('=') => {
                 self.advance();
                 self.advance();
@@ -515,7 +569,10 @@ impl Lexer {
                 self.advance();
                 Token::DotDot
             }
-            Some('.') => { self.advance(); Token::Dot }
+            Some('.') => {
+                self.advance();
+                Token::Dot
+            }
             Some(':') => {
                 self.advance();
                 if self.current_char == Some(':') {
@@ -525,20 +582,26 @@ impl Lexer {
                     Token::Colon
                 }
             }
-            Some(';') => { self.advance(); Token::Semicolon }
-            Some('?') => { self.advance(); Token::Question }
+            Some(';') => {
+                self.advance();
+                Token::Semicolon
+            }
+            Some('?') => {
+                self.advance();
+                Token::Question
+            }
             Some(ch) => {
                 self.advance();
                 panic!("Unexpected character: {}", ch);
             }
         };
-        
+
         token
     }
-    
+
     pub fn tokenize(&mut self) -> Vec<Token> {
         let mut tokens = Vec::new();
-        
+
         loop {
             let token = self.next_token();
             if token == Token::Eof {
@@ -550,7 +613,7 @@ impl Lexer {
                 tokens.push(token);
             }
         }
-        
+
         tokens
     }
 }
@@ -558,36 +621,35 @@ impl Lexer {
 #[cfg(test)]
 mod tests {
     use super::*;
-    
+
     #[test]
     fn test_lexer_basic() {
         let mut lexer = Lexer::new("fn main() { let x = 42 }");
         let tokens = lexer.tokenize();
-        
+
         assert_eq!(tokens[0], Token::Fn);
         assert_eq!(tokens[1], Token::Ident("main".to_string()));
         assert_eq!(tokens[2], Token::LParen);
         assert_eq!(tokens[3], Token::RParen);
     }
-    
+
     #[test]
     fn test_lexer_decorators() {
         let mut lexer = Lexer::new("@route @timing @cache");
         let tokens = lexer.tokenize();
-        
+
         assert_eq!(tokens[0], Token::Decorator("route".to_string()));
         assert_eq!(tokens[1], Token::Decorator("timing".to_string()));
         assert_eq!(tokens[2], Token::Decorator("cache".to_string()));
     }
-    
+
     #[test]
     fn test_lexer_go_keyword() {
         let mut lexer = Lexer::new("go async await");
         let tokens = lexer.tokenize();
-        
+
         assert_eq!(tokens[0], Token::Go);
         assert_eq!(tokens[1], Token::Async);
         assert_eq!(tokens[2], Token::Await);
     }
 }
-

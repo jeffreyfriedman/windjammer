@@ -1,7 +1,7 @@
-use std::path::PathBuf;
-use serde::Deserialize;
-use colored::Colorize;
 use crate::source_map::SourceMap;
+use colored::Colorize;
+use serde::Deserialize;
+use std::path::PathBuf;
 
 /// Cargo message wrapper (top-level JSON structure)
 #[derive(Debug, Deserialize)]
@@ -72,12 +72,7 @@ impl WindjammerError {
             ErrorLevel::Note => "note".cyan().bold(),
         };
 
-        let location = format!(
-            "{}:{}:{}",
-            self.file.display(),
-            self.line,
-            self.column
-        );
+        let location = format!("{}:{}:{}", self.file.display(), self.line, self.column);
 
         let mut output = format!("{}: {}\n", level_str, self.message);
         output.push_str(&format!("  {} {}\n", "-->".blue().bold(), location));
@@ -103,10 +98,7 @@ pub fn map_rustc_errors(
         .collect()
 }
 
-fn map_single_error(
-    diag: RustcDiagnostic,
-    source_map: &SourceMap,
-) -> Option<WindjammerError> {
+fn map_single_error(diag: RustcDiagnostic, source_map: &SourceMap) -> Option<WindjammerError> {
     // Find the primary span
     let primary_span = diag.spans.iter().find(|s| s.is_primary)?;
 
@@ -117,10 +109,7 @@ fn map_single_error(
     let message = translate_error_message(&diag.message);
 
     // Extract code snippet from the primary span
-    let code_snippet = primary_span
-        .text
-        .first()
-        .map(|t| t.text.trim().to_string());
+    let code_snippet = primary_span.text.first().map(|t| t.text.trim().to_string());
 
     Some(WindjammerError {
         file: wj_location.file.clone(),

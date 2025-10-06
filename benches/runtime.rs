@@ -39,31 +39,31 @@ fn filter_and_map(arr: &[i64]) -> Vec<i64> {
 
 fn benchmark_fibonacci(c: &mut Criterion) {
     let mut group = c.benchmark_group("fibonacci");
-    
+
     group.bench_function("recursive_n20", |b| {
         b.iter(|| fibonacci_recursive(black_box(20)));
     });
-    
+
     group.bench_function("iterative_n1000", |b| {
         b.iter(|| fibonacci_iterative(black_box(1000)));
     });
-    
+
     group.finish();
 }
 
 fn benchmark_array_operations(c: &mut Criterion) {
     let mut group = c.benchmark_group("array_operations");
-    
+
     let data: Vec<i64> = (0..1000).collect();
-    
+
     group.bench_function("sum_1000_elements", |b| {
         b.iter(|| sum_array(black_box(&data)));
     });
-    
+
     group.bench_function("filter_and_map_1000_elements", |b| {
         b.iter(|| filter_and_map(black_box(&data)));
     });
-    
+
     group.finish();
 }
 
