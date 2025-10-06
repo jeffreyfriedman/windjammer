@@ -27,17 +27,23 @@ pub struct SignatureRegistry {
     signatures: HashMap<String, FunctionSignature>,
 }
 
+impl Default for SignatureRegistry {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl SignatureRegistry {
     pub fn new() -> Self {
         SignatureRegistry {
             signatures: HashMap::new(),
         }
     }
-    
+
     pub fn add_function(&mut self, name: String, sig: FunctionSignature) {
         self.signatures.insert(name, sig);
     }
-    
+
     pub fn get_signature(&self, name: &str) -> Option<&FunctionSignature> {
         self.signatures.get(name)
     }
@@ -49,17 +55,26 @@ pub struct Analyzer {
     variables: HashMap<String, OwnershipMode>,
 }
 
+impl Default for Analyzer {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl Analyzer {
     pub fn new() -> Self {
         Analyzer {
             variables: HashMap::new(),
         }
     }
-    
-    pub fn analyze_program(&mut self, program: &Program) -> Result<(Vec<AnalyzedFunction>, SignatureRegistry), String> {
+
+    pub fn analyze_program(
+        &mut self,
+        program: &Program,
+    ) -> Result<(Vec<AnalyzedFunction>, SignatureRegistry), String> {
         let mut analyzed = Vec::new();
         let mut registry = SignatureRegistry::new();
-        
+
         for item in &program.items {
             match item {
                 Item::Function(func) => {
@@ -80,13 +95,13 @@ impl Analyzer {
                 _ => {}
             }
         }
-        
+
         Ok((analyzed, registry))
     }
-    
+
     fn analyze_function(&mut self, func: &FunctionDecl) -> Result<AnalyzedFunction, String> {
         let mut inferred_ownership = HashMap::new();
-        
+
         // Analyze each parameter to infer ownership mode
         for param in &func.parameters {
             let mode = match param.ownership {
@@ -98,16 +113,16 @@ impl Analyzer {
                     self.infer_parameter_ownership(&param.name, &func.body, &func.return_type)?
                 }
             };
-            
+
             inferred_ownership.insert(param.name.clone(), mode);
         }
-        
+
         Ok(AnalyzedFunction {
             decl: func.clone(),
             inferred_ownership,
         })
     }
-    
+
     fn infer_parameter_ownership(
         &self,
         param_name: &str,
@@ -115,34 +130,35 @@ impl Analyzer {
         _return_type: &Option<Type>,
     ) -> Result<OwnershipMode, String> {
         // Simple heuristic-based inference
-        
+
         // 1. Check if parameter is mutated
         if self.is_mutated(param_name, body) {
             return Ok(OwnershipMode::MutBorrowed);
         }
-        
+
         // 2. Check if parameter is returned (escapes function)
         if self.is_returned(param_name, body) {
             return Ok(OwnershipMode::Owned);
         }
-        
+
         // 3. Check if parameter is stored in a struct or collection
         if self.is_stored(param_name, body) {
             return Ok(OwnershipMode::Owned);
         }
-        
+
         // 4. Default to borrowed for read-only access
         Ok(OwnershipMode::Borrowed)
     }
-    
+
     fn is_mutated(&self, name: &str, statements: &[Statement]) -> bool {
         for stmt in statements {
             match stmt {
-                Statement::Assignment { target, .. } => {
-                    if let Expression::Identifier(id) = target {
-                        if id == name {
-                            return true;
-                        }
+                Statement::Assignment {
+                    target: Expression::Identifier(id),
+                    ..
+                } => {
+                    if id == name {
+                        return true;
                     }
                 }
                 Statement::Expression(expr) => {
@@ -151,7 +167,11 @@ impl Analyzer {
                         return true;
                     }
                 }
-                Statement::If { then_block, else_block, .. } => {
+                Statement::If {
+                    then_block,
+                    else_block,
+                    ..
+                } => {
                     if self.is_mutated(name, then_block) {
                         return true;
                     }
@@ -161,7 +181,9 @@ impl Analyzer {
                         }
                     }
                 }
-                Statement::Loop { body } | Statement::While { body, .. } | Statement::For { body, .. } => {
+                Statement::Loop { body }
+                | Statement::While { body, .. }
+                | Statement::For { body, .. } => {
                     if self.is_mutated(name, body) {
                         return true;
                     }
@@ -171,7 +193,7 @@ impl Analyzer {
         }
         false
     }
-    
+
     fn has_mutable_method_call(&self, name: &str, expr: &Expression) -> bool {
         match expr {
             Expression::MethodCall { object, method, .. } => {
@@ -190,7 +212,7 @@ impl Analyzer {
             _ => false,
         }
     }
-    
+
     fn is_returned(&self, name: &str, statements: &[Statement]) -> bool {
         for stmt in statements {
             match stmt {
@@ -199,7 +221,11 @@ impl Analyzer {
                         return true;
                     }
                 }
-                Statement::If { then_block, else_block, .. } => {
+                Statement::If {
+                    then_block,
+                    else_block,
+                    ..
+                } => {
                     if self.is_returned(name, then_block) {
                         return true;
                     }
@@ -214,26 +240,26 @@ impl Analyzer {
         }
         false
     }
-    
+
     fn is_stored(&self, name: &str, statements: &[Statement]) -> bool {
         // Check if the parameter is stored in a struct field or collection
         for stmt in statements {
-            match stmt {
-                Statement::Let { value, .. } => {
-                    if let Expression::StructLiteral { fields, .. } = value {
-                        for (_, field_expr) in fields {
-                            if self.expression_uses_identifier(name, field_expr) {
-                                return true;
-                            }
-                        }
+            if let Statement::Let {
+                value: Expression::StructLiteral { fields, .. },
+                ..
+            } = stmt
+            {
+                for (_, field_expr) in fields {
+                    if self.expression_uses_identifier(name, field_expr) {
+                        return true;
                     }
                 }
-                _ => {}
             }
         }
         false
     }
-    
+
+    #[allow(clippy::only_used_in_recursion)]
     fn expression_uses_identifier(&self, name: &str, expr: &Expression) -> bool {
         match expr {
             Expression::Identifier(id) => id == name,
@@ -241,35 +267,36 @@ impl Analyzer {
                 self.expression_uses_identifier(name, left)
                     || self.expression_uses_identifier(name, right)
             }
-            Expression::Unary { operand, .. } => {
-                self.expression_uses_identifier(name, operand)
-            }
-            Expression::Call { arguments, .. } => {
-                arguments.iter().any(|(_label, arg)| self.expression_uses_identifier(name, arg))
-            }
-            Expression::MethodCall { object, arguments, .. } => {
+            Expression::Unary { operand, .. } => self.expression_uses_identifier(name, operand),
+            Expression::Call { arguments, .. } => arguments
+                .iter()
+                .any(|(_label, arg)| self.expression_uses_identifier(name, arg)),
+            Expression::MethodCall {
+                object, arguments, ..
+            } => {
                 self.expression_uses_identifier(name, object)
-                    || arguments.iter().any(|(_label, arg)| self.expression_uses_identifier(name, arg))
+                    || arguments
+                        .iter()
+                        .any(|(_label, arg)| self.expression_uses_identifier(name, arg))
             }
-            Expression::FieldAccess { object, .. } => {
-                self.expression_uses_identifier(name, object)
-            }
-            Expression::TryOp(inner) => {
-                self.expression_uses_identifier(name, inner)
-            }
+            Expression::FieldAccess { object, .. } => self.expression_uses_identifier(name, object),
+            Expression::TryOp(inner) => self.expression_uses_identifier(name, inner),
             _ => false,
         }
     }
-    
+
     fn build_signature(&self, func: &AnalyzedFunction) -> FunctionSignature {
-        let param_ownership: Vec<OwnershipMode> = func.decl.parameters
+        let param_ownership: Vec<OwnershipMode> = func
+            .decl
+            .parameters
             .iter()
             .map(|param| {
-                let inferred = func.inferred_ownership
+                let inferred = func
+                    .inferred_ownership
                     .get(&param.name)
                     .cloned()
                     .unwrap_or(OwnershipMode::Owned);
-                
+
                 // Copy types are always passed by value (Owned) unless mutated
                 // This must match the logic in codegen.rs
                 if self.is_copy_type(&param.type_) {
@@ -284,14 +311,15 @@ impl Analyzer {
                 }
             })
             .collect();
-        
+
         FunctionSignature {
             name: func.decl.name.clone(),
             param_ownership,
             return_ownership: OwnershipMode::Owned, // For now, always owned
         }
     }
-    
+
+    #[allow(clippy::only_used_in_recursion)]
     fn is_copy_type(&self, ty: &Type) -> bool {
         use crate::parser::Type;
         match ty {
@@ -301,10 +329,23 @@ impl Analyzer {
             Type::Tuple(types) => types.iter().all(|t| self.is_copy_type(t)),
             Type::Custom(name) => {
                 // Recognize common Rust primitive types by name
-                matches!(name.as_str(), 
-                    "i8" | "i16" | "i32" | "i64" | "i128" | "isize" |
-                    "u8" | "u16" | "u32" | "u64" | "u128" | "usize" |
-                    "f32" | "f64" | "bool" | "char"
+                matches!(
+                    name.as_str(),
+                    "i8" | "i16"
+                        | "i32"
+                        | "i64"
+                        | "i128"
+                        | "isize"
+                        | "u8"
+                        | "u16"
+                        | "u32"
+                        | "u64"
+                        | "u128"
+                        | "usize"
+                        | "f32"
+                        | "f64"
+                        | "bool"
+                        | "char"
                 )
             }
             _ => false,
@@ -315,22 +356,21 @@ impl Analyzer {
 #[cfg(test)]
 mod tests {
     use super::*;
-    
+
     #[test]
     fn test_infer_borrowed() {
         let analyzer = Analyzer::new();
-        
+
         // fn print(s: string) { println(s) }
         // Should infer borrowed
-        let body = vec![
-            Statement::Expression(Expression::Call {
-                function: Box::new(Expression::Identifier("println".to_string())),
-                arguments: vec![(None, Expression::Identifier("s".to_string()))],
-            })
-        ];
-        
-        let mode = analyzer.infer_parameter_ownership("s", &body, &None).unwrap();
+        let body = vec![Statement::Expression(Expression::Call {
+            function: Box::new(Expression::Identifier("println".to_string())),
+            arguments: vec![(None, Expression::Identifier("s".to_string()))],
+        })];
+
+        let mode = analyzer
+            .infer_parameter_ownership("s", &body, &None)
+            .unwrap();
         assert_eq!(mode, OwnershipMode::Borrowed);
     }
 }
-

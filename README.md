@@ -33,7 +33,8 @@ Familiar `go` keyword and channels with **Go's `<-` operator**, but with Rust's 
 Zero-cost abstractions, memory safety, and blazing speed.
 
 ### 🚀 Modern Language Features
-- **Generic types**: `Vec<T>`, `Option<T>`, `Result<T, E>`
+- **Generic types**: `Vec<T>`, `Option<T>`, `Result<T, E>` with type parameters
+- **Turbofish syntax**: `identity::<int>(42)`, `parse::<float>()` for explicit types ✨ **NEW**
 - **Pattern matching** with guards and tuple patterns
 - **Closures**: `|x| x * 2`
 - **Range expressions**: `0..10` and `0..=10`
@@ -46,7 +47,8 @@ Zero-cost abstractions, memory safety, and blazing speed.
 - **Pattern matching in function parameters**: `fn process((x, y): (int, int))` ✨
 - **Smart @auto derive**: Zero-config trait inference (`@auto`) ✨
 - **Trait system**: Full trait definitions and implementations ✨
-- **Module system**: Import and use standard library modules ✨
+- **Module system**: Import and use standard library modules with aliases ✨
+- **Error mapping**: Friendly error messages in Windjammer terms 🎯 **NEW**
 
 ### 📚 "Batteries Included" Standard Library
 Windjammer provides a comprehensive standard library that covers 80% of common use cases without external dependencies. **All stdlib modules are written in Windjammer itself**, proving the language is practical and providing transparent, readable implementations.
@@ -543,25 +545,51 @@ impl Iterator<int> for Counter {
 
 ## Quick Start
 
-### Installation
+## Installation
+
+Windjammer is easy to install with multiple options for all platforms:
+
+### Quick Install
+
+**macOS / Linux:**
+```bash
+# Using Homebrew (recommended)
+brew tap jeffreyfriedman/windjammer
+brew install windjammer
+
+# Or using Cargo
+cargo install windjammer
+```
+
+**Windows:**
+```powershell
+# Using Scoop (recommended)
+scoop bucket add windjammer https://github.com/jeffreyfriedman/scoop-windjammer
+scoop install windjammer
+
+# Or using Cargo
+cargo install windjammer
+```
+
+### All Installation Methods
+
+| Method | Command | Best For |
+|--------|---------|----------|
+| **Homebrew** (macOS/Linux) | `brew install windjammer` | Mac/Linux users |
+| **Cargo** (All platforms) | `cargo install windjammer` | Rust developers |
+| **Docker** | `docker pull ghcr.io/jeffreyfriedman/windjammer` | Container workflows |
+| **Pre-built Binaries** | [Download from Releases](https://github.com/jeffreyfriedman/windjammer/releases) | Quick setup |
+| **Build from Source** | `git clone ... && ./install.sh` | Contributors |
+| **Snap** (Linux) | `snap install windjammer --classic` | Ubuntu/Linux |
+| **Scoop** (Windows) | `scoop install windjammer` | Windows users |
+
+📖 **Full installation guide**: [docs/INSTALLATION.md](docs/INSTALLATION.md)
+
+### Verify Installation
 
 ```bash
-# Clone the repository
-git clone https://github.com/windjammer-lang/windjammer
-cd windjammer
-
-# Build the compiler
-cargo build --release
-
-# Install the language server
-cd crates/windjammer-lsp
-cargo install --path .
-
-# Install VSCode extension
-cd ../../editors/vscode
-npm install
-npm run compile
-code --install-extension windjammer-*.vsix
+windjammer --version
+windjammer --help
 ```
 
 ### Your First Program
@@ -740,6 +768,34 @@ async fn load_config() -> Result<Config, Error> {
     Ok(config)
 }
 ```
+
+---
+
+## ⚡ Performance
+
+Windjammer is **blazingly fast** for development iteration:
+
+### Compilation Speed
+- **Simple program (10 lines)**: ~8µs
+- **Medium program (30 lines)**: ~25µs  
+- **Complex program (50 lines)**: ~60µs
+
+**17,000x faster** than `rustc` for the transpilation step!
+
+### Runtime Performance
+Since Windjammer transpiles to Rust, runtime performance is **identical to hand-written Rust**:
+- ✅ Zero-cost abstractions
+- ✅ No runtime overhead
+- ✅ Same binary size
+- ✅ Same memory usage
+
+### Why So Fast?
+1. **No LLVM**: Generates Rust source instead of machine code
+2. **Incremental**: Only transpiles changed `.wj` files
+3. **Simple AST**: Go-inspired syntax is easier to parse
+4. **No borrow checking**: Rust handles that in pass 2
+
+**See [BENCHMARKS.md](BENCHMARKS.md) for detailed performance analysis.**
 
 ---
 
