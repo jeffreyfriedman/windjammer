@@ -310,10 +310,10 @@ impl CodeGenerator {
             output.push_str(&self.format_type_params(&s.type_params));
             output.push('>');
         }
-        
+
         // Add where clause if present
         output.push_str(&self.format_where_clause(&s.where_clause));
-        
+
         output.push_str(" {\n");
 
         for field in &s.fields {
@@ -506,7 +506,7 @@ impl CodeGenerator {
 
         // Add where clause if present
         output.push_str(&self.format_where_clause(&impl_block.where_clause));
-        
+
         output.push_str(" {\n");
 
         self.indent_level += 1;
@@ -1560,9 +1560,7 @@ impl CodeGenerator {
 
         let clauses: Vec<String> = where_clause
             .iter()
-            .map(|(type_param, bounds)| {
-                format!("    {}: {}", type_param, bounds.join(" + "))
-            })
+            .map(|(type_param, bounds)| format!("    {}: {}", type_param, bounds.join(" + ")))
             .collect();
 
         format!("\nwhere\n{}", clauses.join(",\n"))
