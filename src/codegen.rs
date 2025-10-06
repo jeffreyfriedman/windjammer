@@ -364,6 +364,13 @@ impl CodeGenerator {
         let mut output = String::from("trait ");
         output.push_str(&trait_decl.name);
 
+        // Generate generic parameters: trait From<T> { ... }
+        if !trait_decl.generics.is_empty() {
+            output.push('<');
+            output.push_str(&trait_decl.generics.join(", "));
+            output.push('>');
+        }
+
         // Generate supertraits: trait Manager: Employee + Person
         if !trait_decl.supertraits.is_empty() {
             output.push_str(": ");
@@ -379,16 +386,7 @@ impl CodeGenerator {
             output.push_str(&format!("type {};\n", assoc_type.name));
         }
 
-        // Add generic parameters (these become associated types in Rust)
-        if !trait_decl.generics.is_empty() {
-            // Convert generics to associated types
-            for generic in &trait_decl.generics {
-                output.push_str(&self.indent());
-                output.push_str(&format!("type {};\n", generic));
-            }
-        }
-
-        if !trait_decl.associated_types.is_empty() || !trait_decl.generics.is_empty() {
+        if !trait_decl.associated_types.is_empty() {
             output.push('\n');
         }
 
