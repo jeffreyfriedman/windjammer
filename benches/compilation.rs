@@ -1,5 +1,5 @@
-use criterion::{black_box, criterion_group, criterion_main, Criterion, BenchmarkId};
-use windjammer::{lexer, parser, analyzer, codegen, CompilationTarget};
+use criterion::{black_box, criterion_group, criterion_main, BenchmarkId, Criterion};
+use windjammer::{analyzer, codegen, lexer, parser, CompilationTarget};
 
 // Sample Windjammer programs of varying complexity
 const SIMPLE_PROGRAM: &str = r#"
@@ -106,125 +106,169 @@ fn main() {
 
 fn benchmark_lexer(c: &mut Criterion) {
     let mut group = c.benchmark_group("lexer");
-    
-    group.bench_with_input(BenchmarkId::new("simple", "10_lines"), &SIMPLE_PROGRAM, |b, source| {
-        b.iter(|| {
-            let mut lexer = lexer::Lexer::new(black_box(source));
-            lexer.tokenize()
-        });
-    });
-    
-    group.bench_with_input(BenchmarkId::new("medium", "30_lines"), &MEDIUM_PROGRAM, |b, source| {
-        b.iter(|| {
-            let mut lexer = lexer::Lexer::new(black_box(source));
-            lexer.tokenize()
-        });
-    });
-    
-    group.bench_with_input(BenchmarkId::new("complex", "50_lines"), &COMPLEX_PROGRAM, |b, source| {
-        b.iter(|| {
-            let mut lexer = lexer::Lexer::new(black_box(source));
-            lexer.tokenize()
-        });
-    });
-    
+
+    group.bench_with_input(
+        BenchmarkId::new("simple", "10_lines"),
+        &SIMPLE_PROGRAM,
+        |b, source| {
+            b.iter(|| {
+                let mut lexer = lexer::Lexer::new(black_box(source));
+                lexer.tokenize()
+            });
+        },
+    );
+
+    group.bench_with_input(
+        BenchmarkId::new("medium", "30_lines"),
+        &MEDIUM_PROGRAM,
+        |b, source| {
+            b.iter(|| {
+                let mut lexer = lexer::Lexer::new(black_box(source));
+                lexer.tokenize()
+            });
+        },
+    );
+
+    group.bench_with_input(
+        BenchmarkId::new("complex", "50_lines"),
+        &COMPLEX_PROGRAM,
+        |b, source| {
+            b.iter(|| {
+                let mut lexer = lexer::Lexer::new(black_box(source));
+                lexer.tokenize()
+            });
+        },
+    );
+
     group.finish();
 }
 
 fn benchmark_parser(c: &mut Criterion) {
     let mut group = c.benchmark_group("parser");
-    
+
     // Pre-lex the programs
     let simple_tokens = {
         let mut lexer = lexer::Lexer::new(SIMPLE_PROGRAM);
         lexer.tokenize()
     };
-    
+
     let medium_tokens = {
         let mut lexer = lexer::Lexer::new(MEDIUM_PROGRAM);
         lexer.tokenize()
     };
-    
+
     let complex_tokens = {
         let mut lexer = lexer::Lexer::new(COMPLEX_PROGRAM);
         lexer.tokenize()
     };
-    
-    group.bench_with_input(BenchmarkId::new("simple", "10_lines"), &simple_tokens, |b, tokens| {
-        b.iter(|| {
-            let mut parser = parser::Parser::new(black_box(tokens.clone()));
-            parser.parse().unwrap()
-        });
-    });
-    
-    group.bench_with_input(BenchmarkId::new("medium", "30_lines"), &medium_tokens, |b, tokens| {
-        b.iter(|| {
-            let mut parser = parser::Parser::new(black_box(tokens.clone()));
-            parser.parse().unwrap()
-        });
-    });
-    
-    group.bench_with_input(BenchmarkId::new("complex", "50_lines"), &complex_tokens, |b, tokens| {
-        b.iter(|| {
-            let mut parser = parser::Parser::new(black_box(tokens.clone()));
-            parser.parse().unwrap()
-        });
-    });
-    
+
+    group.bench_with_input(
+        BenchmarkId::new("simple", "10_lines"),
+        &simple_tokens,
+        |b, tokens| {
+            b.iter(|| {
+                let mut parser = parser::Parser::new(black_box(tokens.clone()));
+                parser.parse().unwrap()
+            });
+        },
+    );
+
+    group.bench_with_input(
+        BenchmarkId::new("medium", "30_lines"),
+        &medium_tokens,
+        |b, tokens| {
+            b.iter(|| {
+                let mut parser = parser::Parser::new(black_box(tokens.clone()));
+                parser.parse().unwrap()
+            });
+        },
+    );
+
+    group.bench_with_input(
+        BenchmarkId::new("complex", "50_lines"),
+        &complex_tokens,
+        |b, tokens| {
+            b.iter(|| {
+                let mut parser = parser::Parser::new(black_box(tokens.clone()));
+                parser.parse().unwrap()
+            });
+        },
+    );
+
     group.finish();
 }
 
 fn benchmark_full_compilation(c: &mut Criterion) {
     let mut group = c.benchmark_group("full_compilation");
-    
-    group.bench_with_input(BenchmarkId::new("simple", "10_lines"), &SIMPLE_PROGRAM, |b, source| {
-        b.iter(|| {
-            // Lex
-            let mut lexer = lexer::Lexer::new(black_box(source));
-            let tokens = lexer.tokenize();
-            
-            // Parse
-            let mut parser = parser::Parser::new(tokens);
-            let program = parser.parse().unwrap();
-            
-            // Analyze
-            let mut analyzer = analyzer::Analyzer::new();
-            let (analyzed, signatures) = analyzer.analyze_program(&program).unwrap();
-            
-            // Generate
-            let mut generator = codegen::CodeGenerator::new(signatures, CompilationTarget::Wasm);
-            generator.generate_program(&program, &analyzed)
-        });
-    });
-    
-    group.bench_with_input(BenchmarkId::new("medium", "30_lines"), &MEDIUM_PROGRAM, |b, source| {
-        b.iter(|| {
-            let mut lexer = lexer::Lexer::new(black_box(source));
-            let tokens = lexer.tokenize();
-            let mut parser = parser::Parser::new(tokens);
-            let program = parser.parse().unwrap();
-            let mut analyzer = analyzer::Analyzer::new();
-            let (analyzed, signatures) = analyzer.analyze_program(&program).unwrap();
-            let mut generator = codegen::CodeGenerator::new(signatures, CompilationTarget::Wasm);
-            generator.generate_program(&program, &analyzed)
-        });
-    });
-    
-    group.bench_with_input(BenchmarkId::new("complex", "50_lines"), &COMPLEX_PROGRAM, |b, source| {
-        b.iter(|| {
-            let mut lexer = lexer::Lexer::new(black_box(source));
-            let tokens = lexer.tokenize();
-            let mut parser = parser::Parser::new(tokens);
-            let program = parser.parse().unwrap();
-            let mut analyzer = analyzer::Analyzer::new();
-            let (analyzed, signatures) = analyzer.analyze_program(&program).unwrap();
-            let mut generator = codegen::CodeGenerator::new(signatures, CompilationTarget::Wasm);
-            generator.generate_program(&program, &analyzed)
-        });
-    });
-    
+
+    group.bench_with_input(
+        BenchmarkId::new("simple", "10_lines"),
+        &SIMPLE_PROGRAM,
+        |b, source| {
+            b.iter(|| {
+                // Lex
+                let mut lexer = lexer::Lexer::new(black_box(source));
+                let tokens = lexer.tokenize();
+
+                // Parse
+                let mut parser = parser::Parser::new(tokens);
+                let program = parser.parse().unwrap();
+
+                // Analyze
+                let mut analyzer = analyzer::Analyzer::new();
+                let (analyzed, signatures) = analyzer.analyze_program(&program).unwrap();
+
+                // Generate
+                let mut generator =
+                    codegen::CodeGenerator::new(signatures, CompilationTarget::Wasm);
+                generator.generate_program(&program, &analyzed)
+            });
+        },
+    );
+
+    group.bench_with_input(
+        BenchmarkId::new("medium", "30_lines"),
+        &MEDIUM_PROGRAM,
+        |b, source| {
+            b.iter(|| {
+                let mut lexer = lexer::Lexer::new(black_box(source));
+                let tokens = lexer.tokenize();
+                let mut parser = parser::Parser::new(tokens);
+                let program = parser.parse().unwrap();
+                let mut analyzer = analyzer::Analyzer::new();
+                let (analyzed, signatures) = analyzer.analyze_program(&program).unwrap();
+                let mut generator =
+                    codegen::CodeGenerator::new(signatures, CompilationTarget::Wasm);
+                generator.generate_program(&program, &analyzed)
+            });
+        },
+    );
+
+    group.bench_with_input(
+        BenchmarkId::new("complex", "50_lines"),
+        &COMPLEX_PROGRAM,
+        |b, source| {
+            b.iter(|| {
+                let mut lexer = lexer::Lexer::new(black_box(source));
+                let tokens = lexer.tokenize();
+                let mut parser = parser::Parser::new(tokens);
+                let program = parser.parse().unwrap();
+                let mut analyzer = analyzer::Analyzer::new();
+                let (analyzed, signatures) = analyzer.analyze_program(&program).unwrap();
+                let mut generator =
+                    codegen::CodeGenerator::new(signatures, CompilationTarget::Wasm);
+                generator.generate_program(&program, &analyzed)
+            });
+        },
+    );
+
     group.finish();
 }
 
-criterion_group!(benches, benchmark_lexer, benchmark_parser, benchmark_full_compilation);
+criterion_group!(
+    benches,
+    benchmark_lexer,
+    benchmark_parser,
+    benchmark_full_compilation
+);
 criterion_main!(benches);
