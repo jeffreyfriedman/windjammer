@@ -310,6 +310,10 @@ impl CodeGenerator {
             output.push_str(&self.format_type_params(&s.type_params));
             output.push('>');
         }
+        
+        // Add where clause if present
+        output.push_str(&self.format_where_clause(&s.where_clause));
+        
         output.push_str(" {\n");
 
         for field in &s.fields {
@@ -484,11 +488,16 @@ impl CodeGenerator {
 
         if let Some(trait_name) = &impl_block.trait_name {
             // Trait implementation: impl<T> Trait for Type<T>
-            output.push_str(&format!("{} for {} {{\n", trait_name, impl_block.type_name));
+            output.push_str(&format!("{} for {}", trait_name, impl_block.type_name));
         } else {
             // Inherent implementation: impl<T> Type<T>
-            output.push_str(&format!("{} {{\n", impl_block.type_name));
+            output.push_str(&impl_block.type_name);
         }
+
+        // Add where clause if present
+        output.push_str(&self.format_where_clause(&impl_block.where_clause));
+        
+        output.push_str(" {\n");
 
         self.indent_level += 1;
 
@@ -615,6 +624,9 @@ impl CodeGenerator {
             output.push_str(" -> ");
             output.push_str(&self.type_to_rust(return_type));
         }
+
+        // Add where clause if present
+        output.push_str(&self.format_where_clause(&func.where_clause));
 
         output.push_str(" {\n");
         self.indent_level += 1;
@@ -1497,5 +1509,22 @@ impl CodeGenerator {
             })
             .collect::<Vec<_>>()
             .join(", ")
+    }
+
+    // Format where clause for Rust output
+    // Example: [("T", ["Display"]), ("U", ["Debug", "Clone"])] -> "\nwhere\n    T: Display,\n    U: Debug + Clone"
+    fn format_where_clause(&self, where_clause: &[(String, Vec<String>)]) -> String {
+        if where_clause.is_empty() {
+            return String::new();
+        }
+
+        let clauses: Vec<String> = where_clause
+            .iter()
+            .map(|(type_param, bounds)| {
+                format!("    {}: {}", type_param, bounds.join(" + "))
+            })
+            .collect();
+
+        format!("\nwhere\n{}", clauses.join(",\n"))
     }
 }
