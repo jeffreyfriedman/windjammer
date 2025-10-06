@@ -301,7 +301,8 @@ pub struct ImplBlock {
     pub type_name: String,
     pub type_params: Vec<TypeParam>, // Generic type parameters with optional bounds: impl<T: Display> Box<T>
     pub where_clause: Vec<(String, Vec<String>)>, // Where clause: [(type_param, [trait_bounds])]
-    pub trait_name: Option<String>,  // None for inherent impl, Some for trait impl
+    pub trait_name: Option<String>,  // None for inherent impl, Some for trait impl (without type args)
+    pub trait_type_args: Option<Vec<Type>>, // Type arguments for generic trait impl: From<int> -> Some([Type::Int])
     pub associated_types: Vec<AssociatedType>, // Associated type implementations: type Item = i32;
     pub functions: Vec<FunctionDecl>,
     pub decorators: Vec<Decorator>,
@@ -356,6 +357,35 @@ impl Parser {
     fn advance(&mut self) {
         if self.position < self.tokens.len() {
             self.position += 1;
+        }
+    }
+
+    // Helper to convert Type AST back to string for impl parsing
+    fn type_to_string(&self, ty: &Type) -> String {
+        match ty {
+            Type::Int => "int".to_string(),
+            Type::Int32 => "i32".to_string(),
+            Type::Uint => "uint".to_string(),
+            Type::Float => "float".to_string(),
+            Type::Bool => "bool".to_string(),
+            Type::String => "string".to_string(),
+            Type::Custom(name) => name.clone(),
+            Type::Generic(name) => name.clone(),
+            Type::Reference(inner) => format!("&{}", self.type_to_string(inner)),
+            Type::MutableReference(inner) => format!("&mut {}", self.type_to_string(inner)),
+            Type::Option(inner) => format!("Option<{}>", self.type_to_string(inner)),
+            Type::Result(ok, err) => format!("Result<{}, {}>", self.type_to_string(ok), self.type_to_string(err)),
+            Type::Vec(inner) => format!("Vec<{}>", self.type_to_string(inner)),
+            Type::Tuple(types) => {
+                let type_strs: Vec<String> = types.iter().map(|t| self.type_to_string(t)).collect();
+                format!("({})", type_strs.join(", "))
+            }
+            Type::Parameterized(base, args) => {
+                let arg_strs: Vec<String> = args.iter().map(|t| self.type_to_string(t)).collect();
+                format!("{}<{}>", base, arg_strs.join(", "))
+            }
+            Type::Associated(base, name) => format!("{}::{}", base, name),
+            Type::TraitObject(trait_name) => format!("dyn {}", trait_name),
         }
     }
 
@@ -484,12 +514,12 @@ impl Parser {
     }
 
     fn parse_impl(&mut self) -> Result<ImplBlock, String> {
-        // Parse: impl<T> Type { } or impl Trait for Type { }
+        // Parse: impl<T> Type { } or impl Trait for Type { } or impl Trait<TypeArgs> for Type { }
 
         // Parse type parameters: impl<T, U> Box<T, U> { ... }
         let type_params = self.parse_type_params()?;
 
-        let mut first_name = if let Token::Ident(name) = self.current_token() {
+        let first_name = if let Token::Ident(name) = self.current_token() {
             let name = name.clone();
             self.advance();
             name
@@ -497,42 +527,80 @@ impl Parser {
             return Err("Expected type or trait name after impl".to_string());
         };
 
-        // Handle parameterized type name: Box<T>
-        if self.current_token() == &Token::Lt {
-            first_name.push('<');
+        // Handle parameterized name: Box<T>, From<int>, etc.
+        // This could be either:
+        // 1. impl Box<T> { ... } - inherent impl on generic type
+        // 2. impl From<int> for String - trait impl with type args
+        let (first_name_with_args, first_type_args) = if self.current_token() == &Token::Lt {
             self.advance();
+            let mut type_args = Vec::new();
 
             loop {
-                if let Token::Ident(param) = self.current_token() {
-                    first_name.push_str(param);
-                    self.advance();
+                // Parse a full type to handle both generic params (T) and concrete types (int)
+                let type_arg = self.parse_type()?;
+                type_args.push(type_arg);
 
-                    if self.current_token() == &Token::Comma {
-                        first_name.push_str(", ");
-                        self.advance();
-                    } else if self.current_token() == &Token::Gt {
-                        first_name.push('>');
-                        self.advance();
-                        break;
-                    } else {
-                        return Err("Expected ',' or '>' in impl type parameters".to_string());
-                    }
+                if self.current_token() == &Token::Comma {
+                    self.advance();
+                } else if self.current_token() == &Token::Gt {
+                    self.advance();
+                    break;
                 } else {
-                    return Err("Expected type parameter in impl type name".to_string());
+                    return Err("Expected ',' or '>' in impl type parameters".to_string());
                 }
             }
-        }
+
+            // For the full name with args (used if this is the type_name)
+            let args_str = type_args.iter()
+                .map(|t| self.type_to_string(t))
+                .collect::<Vec<_>>()
+                .join(", ");
+            (format!("{}<{}>", first_name, args_str), Some(type_args))
+        } else {
+            (first_name.clone(), None)
+        };
 
         // Check if this is "impl Trait for Type" or just "impl Type"
-        let (trait_name, type_name) = if self.current_token() == &Token::For {
+        let (trait_name, trait_type_args, type_name) = if self.current_token() == &Token::For {
             self.advance(); // consume "for"
-            let mut type_name = if let Token::Ident(name) = self.current_token() {
-                let name = name.clone();
-                self.advance();
-                name
-            } else {
-                return Err("Expected type name after 'for'".to_string());
+            
+            // Parse the type name after 'for' - could be primitive (int, string) or custom (MyType)
+            let base_type_name = match self.current_token() {
+                Token::Ident(name) => {
+                    let n = name.clone();
+                    self.advance();
+                    n
+                }
+                Token::Int => {
+                    self.advance();
+                    "int".to_string()
+                }
+                Token::Int32 => {
+                    self.advance();
+                    "i32".to_string()
+                }
+                Token::Uint => {
+                    self.advance();
+                    "uint".to_string()
+                }
+                Token::Float => {
+                    self.advance();
+                    "float".to_string()
+                }
+                Token::Bool => {
+                    self.advance();
+                    "bool".to_string()
+                }
+                Token::String => {
+                    self.advance();
+                    "string".to_string()
+                }
+                _ => {
+                    return Err("Expected type name after 'for'".to_string());
+                }
             };
+            
+            let mut type_name = base_type_name;
 
             // Handle parameterized type name after 'for': impl<T> Trait for Box<T>
             if self.current_token() == &Token::Lt {
@@ -540,31 +608,28 @@ impl Parser {
                 self.advance();
 
                 loop {
-                    if let Token::Ident(param) = self.current_token() {
-                        type_name.push_str(param);
-                        self.advance();
+                    // Parse full type to handle both generic params and concrete types
+                    let type_arg = self.parse_type()?;
+                    type_name.push_str(&self.type_to_string(&type_arg));
 
-                        if self.current_token() == &Token::Comma {
-                            type_name.push_str(", ");
-                            self.advance();
-                        } else if self.current_token() == &Token::Gt {
-                            type_name.push('>');
-                            self.advance();
-                            break;
-                        } else {
-                            return Err(
-                                "Expected ',' or '>' in type parameters after 'for'".to_string()
-                            );
-                        }
+                    if self.current_token() == &Token::Comma {
+                        type_name.push_str(", ");
+                        self.advance();
+                    } else if self.current_token() == &Token::Gt {
+                        type_name.push('>');
+                        self.advance();
+                        break;
                     } else {
-                        return Err("Expected type parameter in type name after 'for'".to_string());
+                        return Err(
+                            "Expected ',' or '>' in type parameters after 'for'".to_string()
+                        );
                     }
                 }
             }
 
-            (Some(first_name), type_name)
+            (Some(first_name), first_type_args, type_name)
         } else {
-            (None, first_name)
+            (None, None, first_name_with_args)
         };
 
         // Parse where clause (optional): where T: Clone, U: Debug
@@ -634,6 +699,7 @@ impl Parser {
             type_params,
             where_clause,
             trait_name,
+            trait_type_args,
             associated_types,
             functions,
             decorators: Vec::new(),
