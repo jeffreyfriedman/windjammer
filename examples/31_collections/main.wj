@@ -1,0 +1,109 @@
+// Example 31: Collections Module
+// Demonstrates HashMap, HashSet, and other collection types
+
+use std.collections
+
+fn demonstrate_hashmap() {
+    println!("=== HashMap ===")
+    
+    let mut map = HashMap::new()
+    
+    // Insert key-value pairs
+    map.insert("alice", 30)
+    map.insert("bob", 25)
+    map.insert("charlie", 35)
+    
+    println!("Map size: {}", map.len())
+    
+    // Get values
+    match map.get(&"alice") {
+        Some(age) => println!("Alice is {} years old", age),
+        None => println!("Alice not found")
+    }
+    
+    // Check if key exists
+    if map.contains_key(&"bob") {
+        println!("Bob is in the map")
+    }
+    
+    // Remove a key
+    map.remove(&"charlie")
+    println!("After removal, size: {}", map.len())
+}
+
+fn demonstrate_hashset() {
+    println!("\n=== HashSet ===")
+    
+    let mut set = HashSet::new()
+    
+    // Insert values
+    set.insert("apple")
+    set.insert("banana")
+    set.insert("orange")
+    set.insert("apple")  // Duplicate, won't be added
+    
+    println!("Set size: {}", set.len())
+    
+    // Check if value exists
+    if set.contains(&"banana") {
+        println!("Banana is in the set")
+    }
+    
+    // Remove a value
+    let removed = set.remove(&"orange")
+    println!("Removed orange: {}", removed)
+    println!("After removal, size: {}", set.len())
+}
+
+fn demonstrate_btreemap() {
+    println!("\n=== BTreeMap (Sorted) ===")
+    
+    let mut map = BTreeMap::new()
+    
+    // Insert in random order
+    map.insert(3, "three")
+    map.insert(1, "one")
+    map.insert(2, "two")
+    map.insert(5, "five")
+    map.insert(4, "four")
+    
+    println!("BTreeMap size: {}", map.len())
+    println!("Keys are stored in sorted order")
+}
+
+fn demonstrate_vecdeque() {
+    println!("\n=== VecDeque (Double-ended queue) ===")
+    
+    let mut deque = VecDeque::new()
+    
+    // Push to both ends
+    deque.push_back(1)
+    deque.push_back(2)
+    deque.push_front(0)
+    deque.push_front(-1)
+    
+    println!("Deque size: {}", deque.len())
+    
+    // Pop from both ends
+    match deque.pop_front() {
+        Some(val) => println!("Popped from front: {}", val),
+        None => println!("Deque is empty")
+    }
+    
+    match deque.pop_back() {
+        Some(val) => println!("Popped from back: {}", val),
+        None => println!("Deque is empty")
+    }
+    
+    println!("After pops, size: {}", deque.len())
+}
+
+fn main() {
+    demonstrate_hashmap()
+    demonstrate_hashset()
+    demonstrate_btreemap()
+    demonstrate_vecdeque()
+    
+    println!("\nAll collection examples completed!")
+}
+
