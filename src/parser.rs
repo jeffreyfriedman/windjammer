@@ -19,6 +19,13 @@ pub enum Type {
     Tuple(Vec<Type>), // Tuple type: (T1, T2, T3)
 }
 
+// Type parameter with optional trait bounds
+#[derive(Debug, Clone, PartialEq)]
+pub struct TypeParam {
+    pub name: String,
+    pub bounds: Vec<String>, // Trait bounds: ["Display", "Clone", "Send"]
+}
+
 #[derive(Debug, Clone, PartialEq)]
 pub enum OwnershipHint {
     Owned,
@@ -44,7 +51,7 @@ pub struct Decorator {
 #[derive(Debug, Clone)]
 pub struct FunctionDecl {
     pub name: String,
-    pub type_params: Vec<String>, // Generic type parameters: <T, U>
+    pub type_params: Vec<TypeParam>, // Generic type parameters with optional bounds: <T: Display, U>
     pub decorators: Vec<Decorator>,
     pub is_async: bool,
     pub parameters: Vec<Parameter>,
@@ -62,7 +69,7 @@ pub struct StructField {
 #[derive(Debug, Clone)]
 pub struct StructDecl {
     pub name: String,
-    pub type_params: Vec<String>, // Generic type parameters: <T>
+    pub type_params: Vec<TypeParam>, // Generic type parameters with optional bounds: <T: Clone>
     pub fields: Vec<StructField>,
     pub decorators: Vec<Decorator>,
 }
@@ -279,7 +286,7 @@ pub struct TraitMethod {
 #[derive(Debug, Clone)]
 pub struct ImplBlock {
     pub type_name: String,
-    pub type_params: Vec<String>, // Generic type parameters: impl<T> Box<T>
+    pub type_params: Vec<TypeParam>, // Generic type parameters with optional bounds: impl<T: Display> Box<T>
     pub trait_name: Option<String>, // None for inherent impl, Some for trait impl
     pub functions: Vec<FunctionDecl>,
     pub decorators: Vec<Decorator>,
@@ -807,8 +814,8 @@ impl Parser {
         Ok((path, alias))
     }
 
-    fn parse_type_params(&mut self) -> Result<Vec<String>, String> {
-        // Parse generic type parameters: <T> or <T, U>
+    fn parse_type_params(&mut self) -> Result<Vec<TypeParam>, String> {
+        // Parse generic type parameters: <T>, <T: Display>, <T: Display + Clone, U: Debug>
         if self.current_token() != &Token::Lt {
             return Ok(Vec::new());
         }
@@ -818,8 +825,37 @@ impl Parser {
 
         loop {
             if let Token::Ident(name) = self.current_token() {
-                params.push(name.clone());
+                let param_name = name.clone();
                 self.advance();
+
+                // Check for trait bounds: T: Display
+                let mut bounds = Vec::new();
+                if self.current_token() == &Token::Colon {
+                    self.advance(); // consume :
+
+                    // Parse trait bounds separated by +
+                    loop {
+                        if let Token::Ident(trait_name) = self.current_token() {
+                            bounds.push(trait_name.clone());
+                            self.advance();
+
+                            // Check for + (multiple bounds)
+                            if self.current_token() == &Token::Plus {
+                                self.advance();
+                                continue;
+                            } else {
+                                break;
+                            }
+                        } else {
+                            return Err("Expected trait name in bound".to_string());
+                        }
+                    }
+                }
+
+                params.push(TypeParam {
+                    name: param_name,
+                    bounds,
+                });
 
                 if self.current_token() == &Token::Comma {
                     self.advance();
