@@ -282,6 +282,7 @@ pub enum UnaryOp {
 pub struct TraitDecl {
     pub name: String,
     pub generics: Vec<String>, // Generic parameters like <T, U>
+    pub supertraits: Vec<String>, // Supertrait bounds: trait Manager: Employee
     pub associated_types: Vec<AssociatedType>, // Associated type declarations: type Item;
     pub methods: Vec<TraitMethod>,
 }
@@ -673,6 +674,31 @@ impl Parser {
             Vec::new()
         };
 
+        // Parse optional supertraits: trait Manager: Employee + Person { ... }
+        let supertraits = if self.current_token() == &Token::Colon {
+            self.advance(); // consume ':'
+            let mut traits = Vec::new();
+
+            loop {
+                if let Token::Ident(trait_name) = self.current_token() {
+                    traits.push(trait_name.clone());
+                    self.advance();
+
+                    if self.current_token() == &Token::Plus {
+                        self.advance(); // consume '+'
+                    } else {
+                        break;
+                    }
+                } else {
+                    return Err("Expected supertrait name after ':'".to_string());
+                }
+            }
+
+            traits
+        } else {
+            Vec::new()
+        };
+
         self.expect(Token::LBrace)?;
 
         let mut associated_types = Vec::new();
@@ -754,6 +780,7 @@ impl Parser {
         Ok(TraitDecl {
             name,
             generics,
+            supertraits,
             associated_types,
             methods,
         })
