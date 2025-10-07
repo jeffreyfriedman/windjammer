@@ -400,12 +400,23 @@ Before merging to main:
 
 ## 🔮 Looking Ahead to v0.10.0
 
-Features planned for v0.10.0:
-- More stdlib modules (async, networking)
-- Advanced error recovery
-- Performance optimizations
-- Trait bound inference
-- Named bound sets
+**New Strategic Direction: Inference Over Explicit Annotation**
+
+Based on research in `docs/INFERENCE_DESIGN.md`, v0.10.0 will focus on achieving **"80% simplicity through 80% inference"** rather than copying Rust features verbatim.
+
+### Core Features for v0.10.0:
+- **Inferred Trait Bounds** (FLAGSHIP): Analyze usage to infer `T: Display`, `T: Clone`, etc.
+- **Named Bound Sets**: `bound Printable = Display + Debug` for reusable constraints
+- **Smart Decorators**: `@test`, `@async` that expand to full boilerplate
+- **Enhanced stdlib** with pipeline-friendly methods
+
+### Philosophy:
+- Not "simpler than Rust" - "less repetitive than Rust"
+- Progressive disclosure: implicit by default, explicit when needed
+- Escape hatch: use explicit bounds or raw Rust for edge cases
+- 80% of developers never write trait bounds, 20% use advanced features
+
+See `docs/INFERENCE_DESIGN.md` for full research and implementation plan.
 
 ---
 
