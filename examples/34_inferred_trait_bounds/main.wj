@@ -1,0 +1,43 @@
+// Example 34: Inferred Trait Bounds
+// Demonstrates automatic trait bound inference - no explicit bounds needed!
+
+// NO explicit trait bounds required!
+// The compiler infers T: Display from println!("{}", item)
+fn print_item<T>(item: T) {
+    println!("{}", item)
+}
+
+// NO explicit trait bounds required!
+// The compiler infers T: Clone from x.clone()
+fn duplicate<T>(x: T) -> T {
+    x.clone()
+}
+
+// NO explicit trait bounds required!
+// The compiler infers T: PartialEq from x == y
+fn are_equal<T>(x: T, y: T) -> bool {
+    x == y
+}
+
+fn main() {
+    println!("--- Testing inferred trait bounds ---")
+    
+    // Test print_item (infers Display)
+    print_item(42)
+    print_item("Hello")
+    
+    // Test duplicate (infers Clone)
+    let x = duplicate(100)
+    println!("Duplicated: {}", x)
+    
+    // Test are_equal (infers PartialEq)
+    if are_equal(5, 5) {
+        println!("5 equals 5!")
+    }
+    
+    if !are_equal("foo", "bar") {
+        println!("foo does not equal bar!")
+    }
+    
+    println!("All inferred trait bounds working!")
+}
