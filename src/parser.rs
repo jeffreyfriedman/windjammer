@@ -514,7 +514,11 @@ impl Parser {
             Token::Fn => {
                 self.advance(); // Consume the Fn token
                 let mut func = self.parse_function()?;
-                func.decorators = decorators;
+                func.decorators = decorators.clone();
+                // Check if @async decorator is present
+                if decorators.iter().any(|d| d.name == "async") {
+                    func.is_async = true;
+                }
                 Ok(Item::Function(func))
             }
             Token::Async => {

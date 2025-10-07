@@ -324,7 +324,7 @@ impl Lexer {
         Token::CharLiteral(ch)
     }
 
-    fn read_identifier(&mut self) -> Token {
+    fn read_identifier_string(&mut self) -> String {
         let mut ident = String::new();
 
         while let Some(ch) = self.current_char {
@@ -335,6 +335,12 @@ impl Lexer {
                 break;
             }
         }
+
+        ident
+    }
+
+    fn read_identifier(&mut self) -> Token {
+        let ident = self.read_identifier_string();
 
         // Check for keywords
         match ident.as_str() {
@@ -404,12 +410,9 @@ impl Lexer {
                 self.advance();
                 if let Some(ch) = self.current_char {
                     if ch.is_alphabetic() || ch == '_' {
-                        let ident_token = self.read_identifier();
-                        if let Token::Ident(name) = ident_token {
-                            Token::Decorator(name)
-                        } else {
-                            ident_token
-                        }
+                        // Read decorator name - don't treat as keyword
+                        let name = self.read_identifier_string();
+                        Token::Decorator(name)
                     } else {
                         Token::At
                     }
