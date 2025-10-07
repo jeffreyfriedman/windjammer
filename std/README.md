@@ -146,15 +146,15 @@ reqwest = { version = "0.11", features = ["json"] }
 **✅ Module System**: Real Windjammer code, transpiled to Rust
 **✅ Tested**: std/fs module working end-to-end!
 
-### 📋 Planned (v0.6.0)
-- `cli.wj` - Command-line parsing (wraps clap)
+### ✅ Implemented (v0.9.0) - Collections & Testing!
+- `collections.wj` - HashMap, HashSet, BTreeMap, BTreeSet, VecDeque
+- `testing.wj` - Testing framework with assertions
 
-### 📋 Future (v0.6.0+)
+### 📋 Planned (v0.10.0)
+- `cli.wj` - Command-line parsing (wraps clap)
 - HTTP server support in `http.wj`
-- `collections.wj` - Extended data structures
 - `path.wj` - Path manipulation
 - `sync.wj` - Concurrency primitives
-- `testing.wj` - Test framework
 
 ---
 
