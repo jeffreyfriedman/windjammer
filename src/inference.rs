@@ -57,7 +57,7 @@ impl InferredBounds {
     pub fn add_constraint(&mut self, type_param: String, trait_name: String) {
         self.bounds
             .entry(type_param)
-            .or_insert_with(HashSet::new)
+            .or_default()
             .insert(trait_name);
     }
 
@@ -170,10 +170,11 @@ impl InferenceEngine {
             Statement::Let { value, .. } => {
                 self.collect_constraints_from_expression(value, bounds);
             }
-            Statement::Return(expr) => {
-                if let Some(expr) = expr {
-                    self.collect_constraints_from_expression(expr, bounds);
-                }
+            Statement::Return(Some(expr)) => {
+                self.collect_constraints_from_expression(expr, bounds);
+            }
+            Statement::Return(None) => {
+                // No constraints from bare return
             }
             Statement::If {
                 condition,
@@ -195,9 +196,7 @@ impl InferenceEngine {
                     }
                 }
             }
-            Statement::For {
-                iterable, body, ..
-            } => {
+            Statement::For { iterable, body, .. } => {
                 // for x in iterable requires IntoIterator
                 self.infer_trait_for_expression(iterable, "IntoIterator", bounds);
                 self.collect_constraints_from_statements(body, bounds);
@@ -289,14 +288,13 @@ impl InferenceEngine {
             Expression::MacroInvocation { name, args, .. } => {
                 if name == "println" || name == "format" {
                     // Analyze format string for Display vs Debug
-                    if let Some(first_arg) = args.first() {
-                        if let Expression::Literal(crate::parser::Literal::String(fmt)) = first_arg
-                        {
-                            // Convert Vec<Expression> to Vec<(Option<String>, Expression)>
-                            let labeled_args: Vec<(Option<String>, Expression)> =
-                                args[1..].iter().map(|e| (None, e.clone())).collect();
-                            self.analyze_format_string(fmt, &labeled_args, bounds);
-                        }
+                    if let Some(Expression::Literal(crate::parser::Literal::String(fmt))) =
+                        args.first()
+                    {
+                        // Convert Vec<Expression> to Vec<(Option<String>, Expression)>
+                        let labeled_args: Vec<(Option<String>, Expression)> =
+                            args[1..].iter().map(|e| (None, e.clone())).collect();
+                        self.analyze_format_string(fmt, &labeled_args, bounds);
                     }
                 }
 
@@ -375,7 +373,7 @@ impl InferenceEngine {
         // If we see a trait usage and the function has type parameters,
         // assume ALL type parameters might need this trait.
         // This is conservative but simple and works for most cases.
-        
+
         // Try to extract type parameter from expression
         if let Some(type_param) = self.extract_type_param(expr) {
             bounds.add_constraint(type_param, trait_name.to_string());
@@ -525,4 +523,3 @@ mod tests {
         assert!(t_bounds.contains(&"Add".to_string()));
     }
 }
-

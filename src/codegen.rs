@@ -198,7 +198,7 @@ impl CodeGenerator {
 
         // Inject implicit imports if needed
         let mut implicit_imports = String::new();
-        
+
         // Add trait imports for inferred bounds
         if !self.needs_trait_imports.is_empty() {
             let mut sorted_traits: Vec<_> = self.needs_trait_imports.iter().collect();
@@ -226,7 +226,7 @@ impl CodeGenerator {
                 }
             }
         }
-        
+
         if self.needs_wasm_imports {
             implicit_imports.push_str("use wasm_bindgen::prelude::*;\n");
         }
@@ -628,7 +628,7 @@ impl CodeGenerator {
             if decorator.name == "async" {
                 continue;
             }
-            
+
             let rust_attr = self.map_decorator(&decorator.name);
             output.push_str(&format!("#[{}]\n", rust_attr));
         }
