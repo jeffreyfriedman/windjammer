@@ -1,6 +1,7 @@
 pub mod analyzer;
 pub mod codegen;
 pub mod error_mapper;
+pub mod inference;
 pub mod lexer;
 pub mod parser;
 pub mod source_map;
@@ -475,8 +476,21 @@ fn compile_file(
         .analyze_program(&program)
         .map_err(|e| anyhow::anyhow!("Analysis error: {}", e))?;
 
+    // Infer trait bounds
+    let mut inference_engine = inference::InferenceEngine::new();
+    let mut inferred_bounds_map = std::collections::HashMap::new();
+    for item in &program.items {
+        if let parser::Item::Function(func) = item {
+            let bounds = inference_engine.infer_function_bounds(func);
+            if !bounds.is_empty() {
+                inferred_bounds_map.insert(func.name.clone(), bounds);
+            }
+        }
+    }
+
     // Generate Rust code for main file
     let mut generator = codegen::CodeGenerator::new(signatures, target);
+    generator.set_inferred_bounds(inferred_bounds_map);
     let rust_code = generator.generate_program(&program, &analyzed);
 
     // Combine module code with main code
