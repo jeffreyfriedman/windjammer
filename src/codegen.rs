@@ -619,9 +619,28 @@ impl CodeGenerator {
         let func = &analyzed.decl;
         let mut output = String::new();
 
+        // Check for @async decorator (special case: it's a keyword, not an attribute)
+        let is_async = func.decorators.iter().any(|d| d.name == "async");
+
+        // Generate decorators (map Windjammer decorators to Rust attributes)
+        for decorator in &func.decorators {
+            // Skip @async, it's handled as a keyword
+            if decorator.name == "async" {
+                continue;
+            }
+            
+            let rust_attr = self.map_decorator(&decorator.name);
+            output.push_str(&format!("#[{}]\n", rust_attr));
+        }
+
         // Add `pub` if we're in a #[wasm_bindgen] impl block OR compiling a module
         if self.in_wasm_bindgen_impl || self.is_module {
             output.push_str("pub ");
+        }
+
+        // Add async keyword if decorator present
+        if is_async {
+            output.push_str("async ");
         }
 
         output.push_str("fn ");
