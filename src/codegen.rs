@@ -16,6 +16,7 @@ pub struct CodeGenerator {
     source_map: crate::source_map::SourceMap,
     inferred_bounds: std::collections::HashMap<String, crate::inference::InferredBounds>,
     needs_trait_imports: std::collections::HashSet<String>, // Tracks which traits need imports
+    bound_aliases: std::collections::HashMap<String, Vec<String>>, // bound Name = Trait + Trait
 }
 
 impl CodeGenerator {
@@ -32,6 +33,7 @@ impl CodeGenerator {
             source_map: crate::source_map::SourceMap::new(),
             inferred_bounds: std::collections::HashMap::new(),
             needs_trait_imports: std::collections::HashSet::new(),
+            bound_aliases: std::collections::HashMap::new(),
         }
     }
 
@@ -103,6 +105,13 @@ impl CodeGenerator {
     pub fn generate_program(&mut self, program: &Program, analyzed: &[AnalyzedFunction]) -> String {
         let mut imports = String::new();
         let mut body = String::new();
+
+        // Collect bound aliases first (bound Name = Trait + Trait)
+        for item in &program.items {
+            if let Item::BoundAlias { name, traits } = item {
+                self.bound_aliases.insert(name.clone(), traits.clone());
+            }
+        }
 
         // Generate explicit use statements
         for item in &program.items {
@@ -1644,7 +1653,20 @@ impl CodeGenerator {
                 if param.bounds.is_empty() {
                     param.name.clone()
                 } else {
-                    format!("{}: {}", param.name, param.bounds.join(" + "))
+                    // Expand bound aliases
+                    let expanded_bounds: Vec<String> = param
+                        .bounds
+                        .iter()
+                        .flat_map(|bound| {
+                            // Check if this bound is an alias
+                            if let Some(traits) = self.bound_aliases.get(bound) {
+                                traits.clone()
+                            } else {
+                                vec![bound.clone()]
+                            }
+                        })
+                        .collect();
+                    format!("{}: {}", param.name, expanded_bounds.join(" + "))
                 }
             })
             .collect::<Vec<_>>()
