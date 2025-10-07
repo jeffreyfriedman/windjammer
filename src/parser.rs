@@ -1,4 +1,73 @@
+// Parser - Windjammer Language Parser
+//
+// This file contains the complete parser for Windjammer. It is organized into the following sections:
+//
+// 1. AST TYPES (lines ~3-340)
+//    - Type, TypeParam, Parameter, FunctionDecl, StructDecl, EnumDecl, TraitDecl, ImplBlock
+//    - Expression, Statement, Pattern, Item, Program
+//
+// 2. PARSER CORE (lines ~344-400)
+//    - Parser struct
+//    - Basic utilities: new(), current_token(), advance(), expect(), peek()
+//    - Helper: type_to_string()
+//
+// 3. TOP-LEVEL PARSING (lines ~400-700)
+//    - parse() - main entry point
+//    - parse_item() - dispatches to item parsers
+//    - parse_const_or_static()
+//    - parse_use()
+//    - parse_decorator() and parse_decorator_arguments()
+//
+// 4. ITEM PARSING (lines ~700-1500)
+//    - parse_impl() - impl blocks with generics and trait impls
+//    - parse_trait() - trait definitions
+//    - parse_function() - function declarations
+//    - parse_parameters()
+//    - parse_struct() - struct definitions
+//    - parse_enum() - enum definitions with generics
+//    - parse_type_params() - generic type parameters with bounds
+//    - parse_where_clause() - where clauses
+//
+// 5. STATEMENT PARSING (lines ~1500-1900)
+//    - parse_block_statements()
+//    - parse_statement() - dispatches to statement parsers
+//    - parse_const_statement(), parse_static_statement()
+//    - parse_let(), parse_return()
+//    - parse_if(), parse_match()
+//    - parse_for(), parse_loop(), parse_while()
+//    - parse_go(), parse_defer()
+//
+// 6. PATTERN PARSING (lines ~1900-2000)
+//    - parse_pattern_with_or() - OR patterns
+//    - parse_pattern() - all pattern types including enum variants
+//
+// 7. EXPRESSION PARSING (lines ~2000-2800)
+//    - parse_expression() - entry point
+//    - parse_ternary_expression() - ternary operator
+//    - parse_match_value() - match value with special handling
+//    - parse_binary_expression() - operator precedence climbing
+//    - get_binary_op() - operator precedence table
+//    - parse_primary_expression() - literals, identifiers, calls, etc.
+//    - parse_postfix_expression() - method calls, field access, indexing, turbofish
+//    - parse_arguments()
+//    - parse_closure()
+//
+// 8. TYPE PARSING (lines ~2800+)
+//    - parse_type() - all type variants
+//
+// TODO: Split this into modules:
+//   - parser/mod.rs - Parser struct and utilities
+//   - parser/types.rs - Type parsing
+//   - parser/patterns.rs - Pattern parsing
+//   - parser/expressions.rs - Expression parsing
+//   - parser/statements.rs - Statement parsing
+//   - parser/items.rs - Top-level item parsing
+
 use crate::lexer::Token;
+
+// ============================================================================
+// SECTION 1: AST TYPES
+// ============================================================================
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum Type {
@@ -94,6 +163,7 @@ pub struct EnumVariant {
 #[derive(Debug, Clone)]
 pub struct EnumDecl {
     pub name: String,
+    pub type_params: Vec<TypeParam>, // Generic type parameters: enum Option<T>, enum Result<T, E>
     pub variants: Vec<EnumVariant>,
 }
 
@@ -301,7 +371,8 @@ pub struct ImplBlock {
     pub type_name: String,
     pub type_params: Vec<TypeParam>, // Generic type parameters with optional bounds: impl<T: Display> Box<T>
     pub where_clause: Vec<(String, Vec<String>)>, // Where clause: [(type_param, [trait_bounds])]
-    pub trait_name: Option<String>,  // None for inherent impl, Some for trait impl
+    pub trait_name: Option<String>, // None for inherent impl, Some for trait impl (without type args)
+    pub trait_type_args: Option<Vec<Type>>, // Type arguments for generic trait impl: From<int> -> Some([Type::Int])
     pub associated_types: Vec<AssociatedType>, // Associated type implementations: type Item = i32;
     pub functions: Vec<FunctionDecl>,
     pub decorators: Vec<Decorator>,
@@ -336,6 +407,10 @@ pub struct Program {
     pub items: Vec<Item>,
 }
 
+// ============================================================================
+// SECTION 2: PARSER CORE
+// ============================================================================
+
 pub struct Parser {
     tokens: Vec<Token>,
     position: usize,
@@ -359,6 +434,40 @@ impl Parser {
         }
     }
 
+    // Helper to convert Type AST back to string for impl parsing
+    #[allow(clippy::only_used_in_recursion)]
+    fn type_to_string(&self, ty: &Type) -> String {
+        match ty {
+            Type::Int => "int".to_string(),
+            Type::Int32 => "i32".to_string(),
+            Type::Uint => "uint".to_string(),
+            Type::Float => "float".to_string(),
+            Type::Bool => "bool".to_string(),
+            Type::String => "string".to_string(),
+            Type::Custom(name) => name.clone(),
+            Type::Generic(name) => name.clone(),
+            Type::Reference(inner) => format!("&{}", self.type_to_string(inner)),
+            Type::MutableReference(inner) => format!("&mut {}", self.type_to_string(inner)),
+            Type::Option(inner) => format!("Option<{}>", self.type_to_string(inner)),
+            Type::Result(ok, err) => format!(
+                "Result<{}, {}>",
+                self.type_to_string(ok),
+                self.type_to_string(err)
+            ),
+            Type::Vec(inner) => format!("Vec<{}>", self.type_to_string(inner)),
+            Type::Tuple(types) => {
+                let type_strs: Vec<String> = types.iter().map(|t| self.type_to_string(t)).collect();
+                format!("({})", type_strs.join(", "))
+            }
+            Type::Parameterized(base, args) => {
+                let arg_strs: Vec<String> = args.iter().map(|t| self.type_to_string(t)).collect();
+                format!("{}<{}>", base, arg_strs.join(", "))
+            }
+            Type::Associated(base, name) => format!("{}::{}", base, name),
+            Type::TraitObject(trait_name) => format!("dyn {}", trait_name),
+        }
+    }
+
     fn expect(&mut self, expected: Token) -> Result<(), String> {
         if self.current_token() == &expected {
             self.advance();
@@ -371,6 +480,10 @@ impl Parser {
             ))
         }
     }
+
+    // ========================================================================
+    // SECTION 3: TOP-LEVEL PARSING
+    // ========================================================================
 
     pub fn parse(&mut self) -> Result<Program, String> {
         let mut items = Vec::new();
@@ -483,13 +596,17 @@ impl Parser {
         Ok((name, type_, value))
     }
 
+    // ========================================================================
+    // SECTION 4: ITEM PARSING (Functions, Structs, Enums, Traits, Impls)
+    // ========================================================================
+
     fn parse_impl(&mut self) -> Result<ImplBlock, String> {
-        // Parse: impl<T> Type { } or impl Trait for Type { }
+        // Parse: impl<T> Type { } or impl Trait for Type { } or impl Trait<TypeArgs> for Type { }
 
         // Parse type parameters: impl<T, U> Box<T, U> { ... }
         let type_params = self.parse_type_params()?;
 
-        let mut first_name = if let Token::Ident(name) = self.current_token() {
+        let first_name = if let Token::Ident(name) = self.current_token() {
             let name = name.clone();
             self.advance();
             name
@@ -497,42 +614,81 @@ impl Parser {
             return Err("Expected type or trait name after impl".to_string());
         };
 
-        // Handle parameterized type name: Box<T>
-        if self.current_token() == &Token::Lt {
-            first_name.push('<');
+        // Handle parameterized name: Box<T>, From<int>, etc.
+        // This could be either:
+        // 1. impl Box<T> { ... } - inherent impl on generic type
+        // 2. impl From<int> for String - trait impl with type args
+        let (first_name_with_args, first_type_args) = if self.current_token() == &Token::Lt {
             self.advance();
+            let mut type_args = Vec::new();
 
             loop {
-                if let Token::Ident(param) = self.current_token() {
-                    first_name.push_str(param);
-                    self.advance();
+                // Parse a full type to handle both generic params (T) and concrete types (int)
+                let type_arg = self.parse_type()?;
+                type_args.push(type_arg);
 
-                    if self.current_token() == &Token::Comma {
-                        first_name.push_str(", ");
-                        self.advance();
-                    } else if self.current_token() == &Token::Gt {
-                        first_name.push('>');
-                        self.advance();
-                        break;
-                    } else {
-                        return Err("Expected ',' or '>' in impl type parameters".to_string());
-                    }
+                if self.current_token() == &Token::Comma {
+                    self.advance();
+                } else if self.current_token() == &Token::Gt {
+                    self.advance();
+                    break;
                 } else {
-                    return Err("Expected type parameter in impl type name".to_string());
+                    return Err("Expected ',' or '>' in impl type parameters".to_string());
                 }
             }
-        }
+
+            // For the full name with args (used if this is the type_name)
+            let args_str = type_args
+                .iter()
+                .map(|t| self.type_to_string(t))
+                .collect::<Vec<_>>()
+                .join(", ");
+            (format!("{}<{}>", first_name, args_str), Some(type_args))
+        } else {
+            (first_name.clone(), None)
+        };
 
         // Check if this is "impl Trait for Type" or just "impl Type"
-        let (trait_name, type_name) = if self.current_token() == &Token::For {
+        let (trait_name, trait_type_args, type_name) = if self.current_token() == &Token::For {
             self.advance(); // consume "for"
-            let mut type_name = if let Token::Ident(name) = self.current_token() {
-                let name = name.clone();
-                self.advance();
-                name
-            } else {
-                return Err("Expected type name after 'for'".to_string());
+
+            // Parse the type name after 'for' - could be primitive (int, string) or custom (MyType)
+            let base_type_name = match self.current_token() {
+                Token::Ident(name) => {
+                    let n = name.clone();
+                    self.advance();
+                    n
+                }
+                Token::Int => {
+                    self.advance();
+                    "int".to_string()
+                }
+                Token::Int32 => {
+                    self.advance();
+                    "i32".to_string()
+                }
+                Token::Uint => {
+                    self.advance();
+                    "uint".to_string()
+                }
+                Token::Float => {
+                    self.advance();
+                    "float".to_string()
+                }
+                Token::Bool => {
+                    self.advance();
+                    "bool".to_string()
+                }
+                Token::String => {
+                    self.advance();
+                    "string".to_string()
+                }
+                _ => {
+                    return Err("Expected type name after 'for'".to_string());
+                }
             };
+
+            let mut type_name = base_type_name;
 
             // Handle parameterized type name after 'for': impl<T> Trait for Box<T>
             if self.current_token() == &Token::Lt {
@@ -540,31 +696,28 @@ impl Parser {
                 self.advance();
 
                 loop {
-                    if let Token::Ident(param) = self.current_token() {
-                        type_name.push_str(param);
-                        self.advance();
+                    // Parse full type to handle both generic params and concrete types
+                    let type_arg = self.parse_type()?;
+                    type_name.push_str(&self.type_to_string(&type_arg));
 
-                        if self.current_token() == &Token::Comma {
-                            type_name.push_str(", ");
-                            self.advance();
-                        } else if self.current_token() == &Token::Gt {
-                            type_name.push('>');
-                            self.advance();
-                            break;
-                        } else {
-                            return Err(
-                                "Expected ',' or '>' in type parameters after 'for'".to_string()
-                            );
-                        }
+                    if self.current_token() == &Token::Comma {
+                        type_name.push_str(", ");
+                        self.advance();
+                    } else if self.current_token() == &Token::Gt {
+                        type_name.push('>');
+                        self.advance();
+                        break;
                     } else {
-                        return Err("Expected type parameter in type name after 'for'".to_string());
+                        return Err(
+                            "Expected ',' or '>' in type parameters after 'for'".to_string()
+                        );
                     }
                 }
             }
 
-            (Some(first_name), type_name)
+            (Some(first_name), first_type_args, type_name)
         } else {
-            (None, first_name)
+            (None, None, first_name_with_args)
         };
 
         // Parse where clause (optional): where T: Clone, U: Debug
@@ -634,6 +787,7 @@ impl Parser {
             type_params,
             where_clause,
             trait_name,
+            trait_type_args,
             associated_types,
             functions,
             decorators: Vec::new(),
@@ -1159,6 +1313,10 @@ impl Parser {
         Ok(params)
     }
 
+    // ------------------------------------------------------------------------
+    // TYPE PARSING (used by multiple sections above)
+    // ------------------------------------------------------------------------
+
     fn parse_type(&mut self) -> Result<Type, String> {
         // Handle reference types
         if self.current_token() == &Token::Ampersand {
@@ -1383,6 +1541,9 @@ impl Parser {
             return Err("Expected enum name".to_string());
         };
 
+        // Parse type parameters: enum Option<T>, enum Result<T, E>
+        let type_params = self.parse_type_params()?;
+
         self.expect(Token::LBrace)?;
 
         let mut variants = Vec::new();
@@ -1416,8 +1577,16 @@ impl Parser {
 
         self.expect(Token::RBrace)?;
 
-        Ok(EnumDecl { name, variants })
+        Ok(EnumDecl {
+            name,
+            type_params,
+            variants,
+        })
     }
+
+    // ========================================================================
+    // SECTION 5: STATEMENT PARSING (Let, If, Match, For, While, etc.)
+    // ========================================================================
 
     fn parse_block_statements(&mut self) -> Result<Vec<Statement>, String> {
         let mut statements = Vec::new();
@@ -1675,6 +1844,10 @@ impl Parser {
         Ok(Statement::Match { value, arms })
     }
 
+    // ========================================================================
+    // SECTION 6: PATTERN PARSING
+    // ========================================================================
+
     fn parse_pattern_with_or(&mut self) -> Result<Pattern, String> {
         let first = self.parse_pattern()?;
 
@@ -1741,7 +1914,7 @@ impl Parser {
                 let name = name.clone();
                 self.advance();
 
-                // Check if it's an enum variant
+                // Check if it's a qualified enum variant: Result.Ok(x)
                 if self.current_token() == &Token::Dot {
                     self.advance();
                     if let Token::Ident(variant) = self.current_token() {
@@ -1770,7 +1943,20 @@ impl Parser {
                     } else {
                         Err("Expected variant name".to_string())
                     }
+                } else if self.current_token() == &Token::LParen {
+                    // Unqualified enum variant with parameter: Some(x), Ok(value), Err(e)
+                    self.advance();
+                    if let Token::Ident(b) = self.current_token() {
+                        let b = b.clone();
+                        self.advance();
+                        self.expect(Token::RParen)?;
+                        Ok(Pattern::EnumVariant(name, Some(b)))
+                    } else {
+                        Err("Expected binding name in enum pattern".to_string())
+                    }
                 } else {
+                    // Check if this could be an enum variant without parameters (None, Empty, etc.)
+                    // For now, treat as identifier - the analyzer will determine if it's an enum variant
                     Ok(Pattern::Identifier(name))
                 }
             }
@@ -1797,6 +1983,10 @@ impl Parser {
 
         Ok(Statement::While { condition, body })
     }
+
+    // ========================================================================
+    // SECTION 7: EXPRESSION PARSING
+    // ========================================================================
 
     fn parse_expression(&mut self) -> Result<Expression, String> {
         self.parse_ternary_expression()

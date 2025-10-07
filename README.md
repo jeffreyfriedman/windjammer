@@ -84,7 +84,7 @@ Zero-cost abstractions, memory safety, and blazing speed.
 ### 📚 "Batteries Included" Standard Library
 Windjammer provides a comprehensive standard library that covers 80% of common use cases without external dependencies. **All stdlib modules are written in Windjammer itself**, proving the language is practical and providing transparent, readable implementations.
 
-**Core Modules** (v0.5.0):
+**Core Modules** (v0.9.0):
 - `std.json` - JSON parsing and serialization
 - `std.csv` - CSV data processing
 - `std.http` - HTTP client for API requests
@@ -96,6 +96,8 @@ Windjammer provides a comprehensive standard library that covers 80% of common u
 - `std.regex` - Regular expressions
 - `std.encoding` - Base64, hex, URL encoding
 - `std.crypto` - Cryptographic hashing
+- `std.collections` - HashMap, HashSet, BTreeMap, BTreeSet, VecDeque ✨ **NEW**
+- `std.testing` - Testing framework with assertions ✨ **NEW**
 
 **Example Usage**:
 ```windjammer
@@ -554,6 +556,61 @@ trait Iterator<Item> {
 impl Iterator<int> for Counter {
     fn next(&mut self) -> Option<int> {
         // ...
+    }
+}
+```
+
+### Generic Trait Implementations ✨
+```go
+// Implement generic traits with concrete types
+trait From<T> {
+    fn from(value: T) -> Self
+}
+
+impl From<int> for String {
+    fn from(value: int) -> Self {
+        value.to_string()
+    }
+}
+
+// Multiple type parameters
+trait Converter<Input, Output> {
+    fn convert(&self, input: Input) -> Output
+}
+
+impl Converter<int, string> for IntToString {
+    fn convert(&self, input: int) -> string {
+        format!("Number: {}", input)
+    }
+}
+```
+
+### Generic Enums ✨
+```go
+// Define generic enums
+enum Option<T> {
+    Some(T),
+    None
+}
+
+enum Result<T, E> {
+    Ok(T),
+    Err(E)
+}
+
+// Use with pattern matching
+fn safe_divide(a: int, b: int) -> Result<int, string> {
+    if b == 0 {
+        Result::Err("division by zero")
+    } else {
+        Result::Ok(a / b)
+    }
+}
+
+fn main() {
+    match safe_divide(10, 2) {
+        Ok(value) => println!("Result: {}", value),
+        Err(msg) => println!("Error: {}", msg)
     }
 }
 ```
