@@ -20,11 +20,44 @@ Windjammer takes the best ideas from modern languages:
 
 ## Key Features
 
+### ✨ Automatic Trait Bound Inference 🆕 **v0.10.0**
+**No more explicit trait bounds!** The compiler infers them from usage.
+
+```windjammer
+// Write this:
+fn print<T>(x: T) {
+    println!("{}", x)  // Compiler infers T: Display
+}
+
+// Get this (automatically):
+fn print<T: Display>(x: T) { ... }
+```
+
+**Supported inference:**
+- `Display` from `println!("{}", x)`
+- `Clone` from `x.clone()`
+- `Add`, `Sub`, `Mul`, `Div` from operators
+- `PartialEq`, `PartialOrd` from comparisons
+- `IntoIterator` from `for` loops
+- Automatic trait imports!
+
 ### 🎯 Automatic Ownership Inference
 No need to think about borrowing in most cases - the compiler figures it out.
 
-### 🎨 Python-style Decorators
-Clean, intuitive syntax for cross-cutting concerns like routing, caching, and logging.
+### 🎨 Enhanced Decorators 🆕 **v0.10.0**
+Clean, intuitive syntax for tests, async, and more.
+
+```windjammer
+@test
+fn test_addition() {
+    assert_eq!(add(2, 2), 4)
+}
+
+@async
+fn fetch_data() -> string {
+    // async function
+}
+```
 
 ### ⚡ Go-style Concurrency
 Familiar `go` keyword and channels with **Go's `<-` operator**, but with Rust's safety guarantees.
