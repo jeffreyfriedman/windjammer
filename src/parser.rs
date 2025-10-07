@@ -371,7 +371,7 @@ pub struct ImplBlock {
     pub type_name: String,
     pub type_params: Vec<TypeParam>, // Generic type parameters with optional bounds: impl<T: Display> Box<T>
     pub where_clause: Vec<(String, Vec<String>)>, // Where clause: [(type_param, [trait_bounds])]
-    pub trait_name: Option<String>,  // None for inherent impl, Some for trait impl (without type args)
+    pub trait_name: Option<String>, // None for inherent impl, Some for trait impl (without type args)
     pub trait_type_args: Option<Vec<Type>>, // Type arguments for generic trait impl: From<int> -> Some([Type::Int])
     pub associated_types: Vec<AssociatedType>, // Associated type implementations: type Item = i32;
     pub functions: Vec<FunctionDecl>,
@@ -449,7 +449,11 @@ impl Parser {
             Type::Reference(inner) => format!("&{}", self.type_to_string(inner)),
             Type::MutableReference(inner) => format!("&mut {}", self.type_to_string(inner)),
             Type::Option(inner) => format!("Option<{}>", self.type_to_string(inner)),
-            Type::Result(ok, err) => format!("Result<{}, {}>", self.type_to_string(ok), self.type_to_string(err)),
+            Type::Result(ok, err) => format!(
+                "Result<{}, {}>",
+                self.type_to_string(ok),
+                self.type_to_string(err)
+            ),
             Type::Vec(inner) => format!("Vec<{}>", self.type_to_string(inner)),
             Type::Tuple(types) => {
                 let type_strs: Vec<String> = types.iter().map(|t| self.type_to_string(t)).collect();
@@ -634,7 +638,8 @@ impl Parser {
             }
 
             // For the full name with args (used if this is the type_name)
-            let args_str = type_args.iter()
+            let args_str = type_args
+                .iter()
                 .map(|t| self.type_to_string(t))
                 .collect::<Vec<_>>()
                 .join(", ");
@@ -646,7 +651,7 @@ impl Parser {
         // Check if this is "impl Trait for Type" or just "impl Type"
         let (trait_name, trait_type_args, type_name) = if self.current_token() == &Token::For {
             self.advance(); // consume "for"
-            
+
             // Parse the type name after 'for' - could be primitive (int, string) or custom (MyType)
             let base_type_name = match self.current_token() {
                 Token::Ident(name) => {
@@ -682,7 +687,7 @@ impl Parser {
                     return Err("Expected type name after 'for'".to_string());
                 }
             };
-            
+
             let mut type_name = base_type_name;
 
             // Handle parameterized type name after 'for': impl<T> Trait for Box<T>
@@ -1572,7 +1577,11 @@ impl Parser {
 
         self.expect(Token::RBrace)?;
 
-        Ok(EnumDecl { name, type_params, variants })
+        Ok(EnumDecl {
+            name,
+            type_params,
+            variants,
+        })
     }
 
     // ========================================================================

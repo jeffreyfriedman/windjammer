@@ -508,17 +508,16 @@ impl CodeGenerator {
         if let Some(trait_name) = &impl_block.trait_name {
             // Trait implementation: impl<T> Trait<TypeArgs> for Type<T>
             output.push_str(trait_name);
-            
+
             // Generate trait type arguments if present: From<int> -> From<i64>
             if let Some(type_args) = &impl_block.trait_type_args {
                 output.push('<');
-                let args_str: Vec<String> = type_args.iter()
-                    .map(|t| self.type_to_rust(t))
-                    .collect();
+                let args_str: Vec<String> =
+                    type_args.iter().map(|t| self.type_to_rust(t)).collect();
                 output.push_str(&args_str.join(", "));
                 output.push('>');
             }
-            
+
             output.push_str(&format!(" for {}", impl_block.type_name));
         } else {
             // Inherent implementation: impl<T> Type<T>
