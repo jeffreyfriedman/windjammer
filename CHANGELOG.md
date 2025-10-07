@@ -7,6 +7,61 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.10.0] - 2025-10-07
+
+### Added - Automatic Inference & Enhanced Decorators ✨
+
+**FLAGSHIP: Automatic Trait Bound Inference**:
+- Infer `Display` from `println!("{}", x)`
+- Infer `Debug` from `println!("{:?}", x)`
+- Infer `Clone` from `x.clone()`
+- Infer `Add`, `Sub`, `Mul`, `Div` from binary operators (`x + y`, `x - y`, etc.)
+- Infer `PartialEq` from comparison (`x == y`, `x != y`)
+- Infer `PartialOrd` from ordering (`x < y`, `x > y`, etc.)
+- Infer `IntoIterator` from `for x in items` loops
+- Automatic trait imports (`std::fmt::Display`, `std::ops::Add`, etc.)
+- Conservative fallback: applies to all type parameters when uncertain
+- Write `fn print<T>(x: T)` and get `fn print<T: Display>(x: T)` automatically!
+
+**@test Decorator**:
+- Mark test functions with `@test` decorator
+- Generates `#[test]` attribute in Rust
+- Seamless integration with `cargo test`
+- Example: `@test fn test_addition() { assert_eq!(add(2, 2), 4) }`
+
+**@async Decorator**:
+- Mark async functions with `@async` decorator
+- Generates `async fn` keyword in Rust
+- Works with `.await` expressions
+- Example: `@async fn fetch_data() -> string { ... }`
+
+**Critical Lexer Fix**:
+- Fixed decorator parsing to not treat keywords as keywords after `@`
+- `@async`, `@test`, `@const`, etc. now correctly tokenize as decorators
+- Added `read_identifier_string()` for raw identifier reading without keyword checking
+
+**Codegen Enhancements**:
+- Merge inferred + explicit trait bounds seamlessly
+- Track trait usage and auto-generate imports
+- Support for decorator-based async functions
+- Improved decorator mapping system
+
+**New Examples**:
+- Example 34: Inferred trait bounds (Display, Clone, PartialEq)
+- Example 35: @test decorator with unit tests
+- Example 36: @async decorator with async functions
+- Example 37: Combined features (inference + decorators)
+
+### Philosophy
+- **80% simplicity through 80% inference**: Most developers never write trait bounds
+- **Progressive disclosure**: Compiler infers complexity, advanced users can be explicit
+- **Ergonomic by default**: Smart defaults with escape hatches
+
+### Documentation
+- `docs/INFERENCE_DESIGN.md`: Complete research and algorithm documentation
+- Comprehensive inference testing (Display, Clone, Add, etc.)
+- All 16 tests passing
+
 ## [0.9.0] - 2025-10-06
 
 ### Added - Enhanced Features & Stdlib Expansion 🚀
