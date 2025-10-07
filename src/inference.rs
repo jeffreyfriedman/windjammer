@@ -285,25 +285,32 @@ impl InferenceEngine {
                 }
             }
 
-            // Function calls (including println!)
-            Expression::Call {
-                function,
-                arguments,
-            } => {
-                // Check for println! and format! macros
-                if let Expression::Identifier(name) = &**function {
-                    if name == "println!" || name == "format!" {
-                        // Analyze format string for Display vs Debug
-                        if let Some((_, first_arg)) = arguments.first() {
-                            if let Expression::Literal(crate::parser::Literal::String(fmt)) =
-                                first_arg
-                            {
-                                self.analyze_format_string(fmt, &arguments[1..], bounds);
-                            }
+            // Macro invocations (println!, format!, etc.)
+            Expression::MacroInvocation { name, args, .. } => {
+                if name == "println" || name == "format" {
+                    // Analyze format string for Display vs Debug
+                    if let Some(first_arg) = args.first() {
+                        if let Expression::Literal(crate::parser::Literal::String(fmt)) = first_arg
+                        {
+                            // Convert Vec<Expression> to Vec<(Option<String>, Expression)>
+                            let labeled_args: Vec<(Option<String>, Expression)> =
+                                args[1..].iter().map(|e| (None, e.clone())).collect();
+                            self.analyze_format_string(fmt, &labeled_args, bounds);
                         }
                     }
                 }
 
+                // Recurse into macro arguments
+                for arg in args {
+                    self.collect_constraints_from_expression(arg, bounds);
+                }
+            }
+
+            // Function calls
+            Expression::Call {
+                function,
+                arguments,
+            } => {
                 // Recurse
                 self.collect_constraints_from_expression(function, bounds);
                 for (_, arg) in arguments {
@@ -343,15 +350,14 @@ impl InferenceEngine {
     ) {
         // Simple heuristic: check for {:?} (Debug) vs {} (Display)
         let has_debug = format_str.contains("{:?}") || format_str.contains("{:#?}");
-        let has_display = format_str.contains("{}") && !has_debug;
+        let has_display = format_str.contains("{}");
 
         if has_debug {
             for (_, arg) in arguments {
                 self.infer_trait_for_expression(arg, "Debug", bounds);
             }
-        }
-
-        if has_display {
+        } else if has_display {
+            // Only infer Display if not Debug (Debug takes precedence)
             for (_, arg) in arguments {
                 self.infer_trait_for_expression(arg, "Display", bounds);
             }
@@ -365,10 +371,19 @@ impl InferenceEngine {
         trait_name: &str,
         bounds: &mut InferredBounds,
     ) {
+        // CONSERVATIVE APPROACH for v0.10.0:
+        // If we see a trait usage and the function has type parameters,
+        // assume ALL type parameters might need this trait.
+        // This is conservative but simple and works for most cases.
+        
         // Try to extract type parameter from expression
         if let Some(type_param) = self.extract_type_param(expr) {
-            if self.type_params.contains(&type_param) {
-                bounds.add_constraint(type_param, trait_name.to_string());
+            bounds.add_constraint(type_param, trait_name.to_string());
+        } else {
+            // Fallback: if we can't determine which variable, apply to ALL type parameters
+            // This is conservative: better to over-constrain than under-constrain
+            for type_param in &self.type_params {
+                bounds.add_constraint(type_param.clone(), trait_name.to_string());
             }
         }
     }
@@ -415,15 +430,13 @@ mod tests {
             }],
             return_type: None,
             is_async: false,
-            body: vec![Statement::Expression(Expression::Call {
-                function: Box::new(Expression::Identifier("println!".to_string())),
-                arguments: vec![
-                    (
-                        None,
-                        Expression::Literal(Literal::String("{}".to_string())),
-                    ),
-                    (None, Expression::Identifier("x".to_string())),
+            body: vec![Statement::Expression(Expression::MacroInvocation {
+                name: "println".to_string(),
+                args: vec![
+                    Expression::Literal(Literal::String("{}".to_string())),
+                    Expression::Identifier("x".to_string()),
                 ],
+                delimiter: crate::parser::MacroDelimiter::Parens,
             })],
             where_clause: vec![],
         };
