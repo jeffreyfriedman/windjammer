@@ -14,6 +14,8 @@ pub struct CodeGenerator {
     is_module: bool, // true if generating code for a reusable module (not main file)
     #[allow(dead_code)] // TODO: Use for error mapping Phase 3
     source_map: crate::source_map::SourceMap,
+    inferred_bounds: std::collections::HashMap<String, crate::inference::InferredBounds>,
+    needs_trait_imports: std::collections::HashSet<String>, // Tracks which traits need imports
 }
 
 impl CodeGenerator {
@@ -28,7 +30,17 @@ impl CodeGenerator {
             target,
             is_module: false,
             source_map: crate::source_map::SourceMap::new(),
+            inferred_bounds: std::collections::HashMap::new(),
+            needs_trait_imports: std::collections::HashSet::new(),
         }
+    }
+
+    /// Set inferred trait bounds for functions
+    pub fn set_inferred_bounds(
+        &mut self,
+        bounds: std::collections::HashMap<String, crate::inference::InferredBounds>,
+    ) {
+        self.inferred_bounds = bounds;
     }
 
     pub fn new_for_module(registry: SignatureRegistry, target: CompilationTarget) -> Self {
@@ -186,6 +198,35 @@ impl CodeGenerator {
 
         // Inject implicit imports if needed
         let mut implicit_imports = String::new();
+
+        // Add trait imports for inferred bounds
+        if !self.needs_trait_imports.is_empty() {
+            let mut sorted_traits: Vec<_> = self.needs_trait_imports.iter().collect();
+            sorted_traits.sort();
+            for trait_name in sorted_traits {
+                match trait_name.as_str() {
+                    "Display" | "Debug" => {
+                        implicit_imports.push_str(&format!("use std::fmt::{};\n", trait_name));
+                    }
+                    "Clone" => {
+                        // Clone is in prelude, no import needed
+                    }
+                    "Add" | "Sub" | "Mul" | "Div" => {
+                        implicit_imports.push_str(&format!("use std::ops::{};\n", trait_name));
+                    }
+                    "PartialEq" | "Eq" | "PartialOrd" | "Ord" => {
+                        // These are in prelude, no import needed
+                    }
+                    "IntoIterator" | "Iterator" => {
+                        // These are in prelude, no import needed
+                    }
+                    _ => {
+                        // Custom trait, assume it's already in scope
+                    }
+                }
+            }
+        }
+
         if self.needs_wasm_imports {
             implicit_imports.push_str("use wasm_bindgen::prelude::*;\n");
         }
@@ -578,18 +619,57 @@ impl CodeGenerator {
         let func = &analyzed.decl;
         let mut output = String::new();
 
+        // Check for @async decorator (special case: it's a keyword, not an attribute)
+        let is_async = func.decorators.iter().any(|d| d.name == "async");
+
+        // Generate decorators (map Windjammer decorators to Rust attributes)
+        for decorator in &func.decorators {
+            // Skip @async, it's handled as a keyword
+            if decorator.name == "async" {
+                continue;
+            }
+
+            let rust_attr = self.map_decorator(&decorator.name);
+            output.push_str(&format!("#[{}]\n", rust_attr));
+        }
+
         // Add `pub` if we're in a #[wasm_bindgen] impl block OR compiling a module
         if self.in_wasm_bindgen_impl || self.is_module {
             output.push_str("pub ");
+        }
+
+        // Add async keyword if decorator present
+        if is_async {
+            output.push_str("async ");
         }
 
         output.push_str("fn ");
         output.push_str(&func.name);
 
         // Add type parameters with bounds: fn foo<T: Display, U: Debug>(...)
-        if !func.type_params.is_empty() {
+        // Merge inferred bounds with explicit bounds
+        let type_params = if let Some(inferred) = self.inferred_bounds.get(&func.name) {
+            let merged = inferred.merge_with_explicit(&func.type_params);
+            // Track which traits need imports
+            for param in &merged {
+                for trait_name in &param.bounds {
+                    self.needs_trait_imports.insert(trait_name.clone());
+                }
+            }
+            merged
+        } else {
+            // Still track explicit bounds
+            for param in &func.type_params {
+                for trait_name in &param.bounds {
+                    self.needs_trait_imports.insert(trait_name.clone());
+                }
+            }
+            func.type_params.clone()
+        };
+
+        if !type_params.is_empty() {
             output.push('<');
-            output.push_str(&self.format_type_params(&func.type_params));
+            output.push_str(&self.format_type_params(&type_params));
             output.push('>');
         }
 
