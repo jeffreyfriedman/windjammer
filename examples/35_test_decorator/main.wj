@@ -1,0 +1,42 @@
+// Example 35: @test Decorator
+// Demonstrates the @test decorator for unit testing
+
+fn add(a: int, b: int) -> int {
+    a + b
+}
+
+fn multiply(a: int, b: int) -> int {
+    a * b
+}
+
+// Use @test decorator to mark test functions
+@test
+fn test_add() {
+    assert_eq!(add(2, 3), 5)
+    assert_eq!(add(0, 0), 0)
+    assert_eq!(add(-1, 1), 0)
+}
+
+@test
+fn test_multiply() {
+    assert_eq!(multiply(2, 3), 6)
+    assert_eq!(multiply(0, 5), 0)
+    assert_eq!(multiply(-2, 3), -6)
+}
+
+@test
+fn test_edge_cases() {
+    assert_eq!(add(1000000, 1), 1000001)
+    assert_eq!(multiply(100, 100), 10000)
+}
+
+fn main() {
+    println!("Run tests with: cargo test")
+    println!("Functions defined:")
+    println!("  - add(a, b)")
+    println!("  - multiply(a, b)")
+    println!("  - test_add()")
+    println!("  - test_multiply()")
+    println!("  - test_edge_cases()")
+}
+
