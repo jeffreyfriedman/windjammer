@@ -1,6 +1,7 @@
 pub mod analyzer;
 pub mod codegen;
 pub mod error_mapper;
+pub mod inference;
 pub mod lexer;
 pub mod parser;
 pub mod source_map;
