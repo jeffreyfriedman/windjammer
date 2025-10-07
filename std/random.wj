@@ -1,0 +1,40 @@
+// std/random - Random number generation
+// Wraps rand crate from Rust
+
+/// Generate a random integer between min and max (inclusive)
+pub fn range(min: int, max: int) -> int {
+    use rand::Rng;
+    let mut rng = rand::thread_rng();
+    rng.gen_range(min..=max)
+}
+
+/// Generate a random float between 0.0 and 1.0
+pub fn float() -> float {
+    use rand::Rng;
+    let mut rng = rand::thread_rng();
+    rng.gen::<f64>()
+}
+
+/// Generate a random boolean
+pub fn bool() -> bool {
+    use rand::Rng;
+    let mut rng = rand::thread_rng();
+    rng.gen::<bool>()
+}
+
+/// Shuffle a vector in place
+pub fn shuffle<T>(vec: Vec<T>) -> Vec<T> {
+    use rand::seq::SliceRandom;
+    let mut rng = rand::thread_rng();
+    let mut result = vec;
+    result.shuffle(&mut rng);
+    result
+}
+
+/// Pick a random element from a vector
+pub fn choice<T>(vec: Vec<T>) -> Option<T> {
+    use rand::seq::SliceRandom;
+    let mut rng = rand::thread_rng();
+    vec.choose(&mut rng).cloned()
+}
+

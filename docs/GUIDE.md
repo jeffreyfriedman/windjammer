@@ -1259,6 +1259,194 @@ Use **associated types** when:
 
 ---
 
+## Named Bound Sets
+
+**Version**: v0.11.0+
+
+Define reusable trait bound combinations to reduce boilerplate in generic code.
+
+### Basic Usage
+
+```windjammer
+// Define common trait combinations
+bound Printable = Display + Debug
+bound Copyable = Clone + Copy
+bound Comparable = PartialEq + PartialOrd
+
+// Use in function signatures
+fn log<T: Printable>(value: T) {
+    println!("Display: {}", value)
+    println!("Debug: {:?}", value)
+}
+
+fn duplicate<T: Copyable>(value: T) -> T {
+    value.clone()
+}
+```
+
+### Multiple Bounds
+
+Combine named bounds just like regular traits:
+
+```windjammer
+bound Serializable = Serialize + Deserialize
+bound Printable = Display + Debug
+
+// Use both
+fn save_and_log<T: Serializable + Printable>(item: T) {
+    println!("Saving: {:?}", item);
+    // ... serialize and save ...
+}
+```
+
+### How It Works
+
+Named bounds are **compile-time aliases** that expand during code generation:
+
+```windjammer
+bound Printable = Display + Debug
+
+fn log<T: Printable>(x: T) { ... }
+
+// Expands to:
+fn log<T: Display + Debug>(x: T) { ... }
+```
+
+**No runtime overhead** - it's pure syntactic sugar!
+
+### When to Use Named Bounds
+
+✅ **Good use cases:**
+- Common trait combinations used across your codebase
+- Documenting intent (e.g., `Printable` is clearer than `Display + Debug`)
+- Reducing boilerplate in large generic APIs
+
+❌ **When not to use:**
+- One-off trait bounds
+- Overly generic names that don't add clarity
+
+### Example: Web Service Traits
+
+```windjammer
+// Define domain-specific bounds
+bound Storable = Serialize + Deserialize + Clone + Debug
+bound Cacheable = Storable + Hash + Eq
+bound ApiResource = Cacheable + Send + Sync
+
+struct User { ... }
+struct Post { ... }
+
+// Use throughout your API
+fn save_to_db<T: Storable>(item: T) { ... }
+fn cache<T: Cacheable>(item: T) { ... }
+fn handle_request<T: ApiResource>(resource: T) { ... }
+```
+
+---
+
+## Standard Library Modules
+
+**Version**: v0.11.0+
+
+Windjammer provides a growing standard library for common tasks.
+
+### Environment Variables (`std/env`)
+
+```windjammer
+use std.env
+
+fn main() {
+    // Get with default
+    let path = env.get_or("PATH", "/usr/bin")
+    
+    // Get optional
+    match env.get("HOME") {
+        Some(home) => println!("Home: {}", home),
+        None => println!("No HOME set")
+    }
+    
+    // Set and remove
+    env.set("MY_VAR", "value")
+    env.remove("MY_VAR")
+    
+    // Current directory
+    let cwd = env.current_dir()
+    
+    // All variables
+    let all_vars = env.vars()
+}
+```
+
+### Process Execution (`std/process`)
+
+```windjammer
+use std.process
+
+fn main() {
+    // Run shell command
+    match process.run("ls -la") {
+        Ok(output) => println!("Output: {}", output),
+        Err(err) => println!("Error: {}", err)
+    }
+    
+    // Run with explicit arguments
+    let args = vec!["--version"]
+    match process.run_with_args("rustc", args) {
+        Ok(output) => println!("{}", output),
+        Err(err) => eprintln!("{}", err)
+    }
+    
+    // Process info
+    println!("PID: {}", process.pid())
+    
+    // Exit (use sparingly!)
+    // process.exit(0)
+}
+```
+
+### Random Numbers (`std/random`)
+
+```windjammer
+use std.random
+
+fn main() {
+    // Random integer in range
+    let dice = random.range(1, 6)
+    
+    // Random float (0.0 to 1.0)
+    let chance = random.float()
+    
+    // Random boolean
+    let coin_flip = random.bool()
+    
+    // Shuffle a vector
+    let numbers = vec![1, 2, 3, 4, 5]
+    let shuffled = random.shuffle(numbers)
+    
+    // Pick random element
+    let items = vec!["apple", "banana", "cherry"]
+    match random.choice(items) {
+        Some(fruit) => println!("Picked: {}", fruit),
+        None => println!("Empty list!")
+    }
+}
+```
+
+### Async Utilities (`std/async`)
+
+```windjammer
+use std.async
+
+@async
+fn main() {
+    println!("Waiting...")
+    async.sleep_ms(1000).await
+    println!("Done!")
+}
+```
+
+---
+
 ## String Interpolation
 
 Make strings more readable with `${}` syntax:

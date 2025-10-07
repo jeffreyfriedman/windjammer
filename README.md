@@ -57,6 +57,39 @@ fn test_addition() {
 fn fetch_data() -> string {
     // async function
 }
+
+@derive(Clone, Debug, PartialEq)
+struct Point { x: int, y: int }
+```
+
+### 📦 Named Bound Sets 🆕 **v0.11.0**
+Reusable trait bound combinations for cleaner generic code.
+
+```windjammer
+// Define once:
+bound Printable = Display + Debug
+bound Copyable = Clone + Copy
+
+// Use everywhere:
+fn process<T: Printable + Copyable>(value: T) { ... }
+```
+
+### 🛠️ Expanded Standard Library 🆕 **v0.11.0**
+Batteries included for common tasks:
+
+```windjammer
+use std.env
+use std.process
+use std.random
+
+// Environment variables
+let path = env.get_or("PATH", "/usr/bin")
+
+// Process execution
+let output = process.run("ls -la")?
+
+// Random generation
+let dice = random.range(1, 6)
 ```
 
 ### ⚡ Go-style Concurrency

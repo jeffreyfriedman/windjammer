@@ -400,6 +400,10 @@ pub enum Item {
         path: Vec<String>,
         alias: Option<String>,
     }, // use std.fs as fs -> path=["std", "fs"], alias=Some("fs")
+    BoundAlias {
+        name: String,
+        traits: Vec<String>,
+    }, // bound Printable = Display + Debug
 }
 
 #[derive(Debug, Clone)]
@@ -578,8 +582,44 @@ impl Parser {
                 let (path, alias) = self.parse_use()?;
                 Ok(Item::Use { path, alias })
             }
+            Token::Bound => {
+                self.advance(); // consume 'bound'
+                self.parse_bound_alias()
+            }
             _ => Err(format!("Unexpected token: {:?}", self.current_token())),
         }
+    }
+
+    fn parse_bound_alias(&mut self) -> Result<Item, String> {
+        // bound Name = Trait + Trait + ...
+        let name = if let Token::Ident(n) = self.current_token() {
+            let name = n.clone();
+            self.advance();
+            name
+        } else {
+            return Err("Expected bound alias name".to_string());
+        };
+
+        self.expect(Token::Assign)?;
+
+        // Parse trait list: Trait + Trait + ...
+        let mut traits = Vec::new();
+        loop {
+            if let Token::Ident(trait_name) = self.current_token() {
+                traits.push(trait_name.clone());
+                self.advance();
+            } else {
+                return Err("Expected trait name in bound alias".to_string());
+            }
+
+            if self.current_token() == &Token::Plus {
+                self.advance(); // consume +
+            } else {
+                break;
+            }
+        }
+
+        Ok(Item::BoundAlias { name, traits })
     }
 
     fn parse_const_or_static(&mut self) -> Result<(String, Type, Expression), String> {

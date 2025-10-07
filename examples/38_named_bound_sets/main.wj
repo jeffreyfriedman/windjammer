@@ -1,0 +1,33 @@
+// Example 38: Named Bound Sets
+// Define reusable trait bound combinations
+
+// Define common bound sets
+bound Printable = Display + Debug  
+bound Copyable = Clone + Copy
+
+// Use bound aliases in function signatures
+fn log<T: Printable>(value: T) {
+    println!("Display: {}", value)
+    println!("Debug: {:?}", value)
+}
+
+fn duplicate<T: Copyable>(value: T) -> T {
+    let copy = value.clone()
+    copy
+}
+
+fn main() {
+    println!("=== Named Bound Sets Demo ===")
+    println!()
+    
+    println!("1. Printable bound (Display + Debug):")
+    log(42)
+    println!()
+    
+    println!("2. Copyable bound (Clone + Copy):")
+    let x = duplicate(100)
+    println!("   Duplicated: {}", x)
+    println!()
+    
+    println!("✨ Named bound sets reduce boilerplate!")
+}
