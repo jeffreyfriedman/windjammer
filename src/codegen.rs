@@ -332,6 +332,17 @@ impl CodeGenerator {
                 if !traits.is_empty() {
                     output.push_str(&format!("#[derive({})]\n", traits.join(", ")));
                 }
+            } else if decorator.name == "derive" {
+                // Special handling for @derive decorator - generates #[derive(Trait1, Trait2)]
+                let mut traits = Vec::new();
+                for (_key, expr) in &decorator.arguments {
+                    if let Expression::Identifier(trait_name) = expr {
+                        traits.push(trait_name.clone());
+                    }
+                }
+                if !traits.is_empty() {
+                    output.push_str(&format!("#[derive({})]\n", traits.join(", ")));
+                }
             } else {
                 // Map Windjammer decorator to Rust attribute
                 let rust_attr = self.map_decorator(&decorator.name);

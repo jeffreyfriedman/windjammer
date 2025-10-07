@@ -1,0 +1,52 @@
+// std/process - Process management
+// Wraps std::process from Rust
+
+/// Execute a command and return its output as a string
+/// Returns Result<string, string> (Ok(output) or Err(error))
+pub fn run(command: string) -> Result<string, string> {
+    let output = std::process::Command::new("sh")
+        .arg("-c")
+        .arg(command)
+        .output();
+    
+    match output {
+        Ok(out) => {
+            if out.status.success() {
+                Ok(String::from_utf8_lossy(&out.stdout).to_string())
+            } else {
+                Err(String::from_utf8_lossy(&out.stderr).to_string())
+            }
+        }
+        Err(e) => Err(e.to_string())
+    }
+}
+
+/// Execute a command with arguments
+/// Returns Result<string, string>
+pub fn run_with_args(program: string, args: Vec<string>) -> Result<string, string> {
+    let output = std::process::Command::new(program)
+        .args(args)
+        .output();
+    
+    match output {
+        Ok(out) => {
+            if out.status.success() {
+                Ok(String::from_utf8_lossy(&out.stdout).to_string())
+            } else {
+                Err(String::from_utf8_lossy(&out.stderr).to_string())
+            }
+        }
+        Err(e) => Err(e.to_string())
+    }
+}
+
+/// Get the current process ID
+pub fn pid() -> int {
+    std::process::id() as i64
+}
+
+/// Exit the process with a status code
+pub fn exit(code: int) {
+    std::process::exit(code as i32)
+}
+
