@@ -7,6 +7,40 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.11.0] - 2025-10-07
+
+### Added - Practical Ergonomics & Stdlib Expansion 🛠️
+
+**Named Bound Sets**:
+- Define reusable trait bound combinations
+- `bound Printable = Display + Debug`
+- `fn log<T: Printable>(x: T) { ... }`
+- Expands to full trait list at compile time
+- Reduces boilerplate in generic code
+
+**New Stdlib Modules**:
+- `std/env`: Environment variables (`get`, `set`, `vars`, `current_dir`)
+- `std/process`: Process execution (`run`, `run_with_args`, `pid`, `exit`)
+- `std/random`: Random generation (`range`, `float`, `bool`, `shuffle`, `choice`)
+- `std/async`: Async utilities (`sleep_ms`) - foundation for tokio integration
+
+**@derive Decorator**:
+- Explicit trait derivation: `@derive(Clone, Debug, PartialEq)`
+- Alternative to `@auto` for manual control
+- Generates `#[derive(...)]` in Rust
+
+**New Examples**:
+- Example 38: Named bound sets
+- Example 39: Stdlib modules (env, process, random)
+- Example 40: @derive decorator
+
+### Philosophy
+- **80/20 Focus**: Practical features for common use cases
+- **Stdlib First**: Make common tasks easy out of the box
+- **Progressive Disclosure**: Simple for beginners, powerful for experts
+
+---
+
 ## [0.10.0] - 2025-10-07
 
 ### Added - Automatic Inference & Enhanced Decorators ✨
