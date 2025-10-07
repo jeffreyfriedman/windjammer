@@ -27,7 +27,7 @@
 //
 // Infers: `fn print_and_clone<T: Display + Clone>(x: T)`
 
-use crate::parser::{BinaryOp, Expression, FunctionDecl, Statement, TypeParam};
+use crate::parser::{BinaryOp, Expression, FunctionDecl, Statement, Type, TypeParam};
 use std::collections::{HashMap, HashSet};
 
 /// A trait constraint on a type parameter
