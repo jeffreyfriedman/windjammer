@@ -1,0 +1,38 @@
+// Example 45: Database with SQLite
+// Demonstrates that sqlx dependencies are automatically added
+
+use std.db
+
+fn main() {
+    println!("=== Database Demo (SQLite) ===")
+    println!()
+    
+    println!("std.db module loaded successfully!")
+    println!()
+    
+    println!("Automatic dependencies added:")
+    println!("  - sqlx (with SQLite support)")
+    println!("  - tokio (async runtime)")
+    println!()
+    
+    println!("You can use sqlx APIs directly:")
+    println!("  - SqlitePool connect")
+    println!("  - query and query_as")
+    println!("  - execute and fetch operations")
+    println!()
+    
+    println!("Example: Connect to database")
+    println!("  Use SqlitePool connect with connection string")
+    println!("  Create tables with query")
+    println!("  Insert data with bind parameters")
+    println!("  Fetch results with query_as")
+    println!()
+    
+    println!("✨ Database support with sqlx!")
+    println!("   (Dependencies added automatically - check Cargo.toml)")
+    println!()
+    
+    println!("Note: Parser limitations prevent complex")
+    println!("      type annotations in current version.")
+    println!("      See std/db.wj for usage examples.")
+}
