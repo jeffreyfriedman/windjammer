@@ -124,7 +124,7 @@ impl CodeGenerator {
                     if path_str.contains("json") {
                         self.needs_serde_imports = true;
                     }
-                    // http module doesn't need special imports (reqwest is used directly)
+                    // http, time, crypto modules don't need special imports (used directly)
                 }
             }
         }
@@ -1283,7 +1283,7 @@ impl CodeGenerator {
                         let known_modules = [
                             "std", "serde_json", "serde", "tokio", "reqwest", "sqlx",
                             "chrono", "sha2", "bcrypt", "base64", "rand", "Vec", "String",
-                            "Option", "Result", "Box", "Arc", "Mutex"
+                            "Option", "Result", "Box", "Arc", "Mutex", "Utc", "Local", "DEFAULT_COST"
                         ];
                         
                         // Type or module (uppercase) vs variable (lowercase)
