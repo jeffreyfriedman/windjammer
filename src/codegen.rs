@@ -10,6 +10,7 @@ pub struct CodeGenerator {
     needs_wasm_imports: bool,
     needs_web_imports: bool,
     needs_js_imports: bool,
+    needs_serde_imports: bool, // For JSON support
     target: CompilationTarget,
     is_module: bool, // true if generating code for a reusable module (not main file)
     #[allow(dead_code)] // TODO: Use for error mapping Phase 3
@@ -28,6 +29,7 @@ impl CodeGenerator {
             needs_wasm_imports: false,
             needs_web_imports: false,
             needs_js_imports: false,
+            needs_serde_imports: false,
             target,
             is_module: false,
             source_map: crate::source_map::SourceMap::new(),
@@ -50,11 +52,11 @@ impl CodeGenerator {
         gen.is_module = true;
         gen
     }
-
+    
     fn indent(&self) -> String {
         "    ".repeat(self.indent_level)
     }
-
+    
     /// Map Windjammer decorators to Rust attributes
     /// This abstraction layer allows us to use semantic Windjammer names
     /// while generating appropriate Rust attributes based on compilation target
@@ -110,6 +112,19 @@ impl CodeGenerator {
         for item in &program.items {
             if let Item::BoundAlias { name, traits } = item {
                 self.bound_aliases.insert(name.clone(), traits.clone());
+            }
+        }
+        
+        // Check for stdlib modules that need special imports
+        for item in &program.items {
+            if let Item::Use { path, .. } = item {
+                // Path can be either ["std", "json"] or ["std.json"] depending on parsing
+                let path_str = path.join(".");
+                if path_str.starts_with("std.") || path_str == "std" {
+                    if path_str.contains("json") {
+                        self.needs_serde_imports = true;
+                    }
+                }
             }
         }
 
@@ -196,7 +211,7 @@ impl CodeGenerator {
                 _ => {}
             }
         }
-
+        
         // Generate top-level functions (skip impl methods)
         for analyzed_func in analyzed {
             if !impl_methods.contains(&analyzed_func.decl.name) {
@@ -245,6 +260,9 @@ impl CodeGenerator {
         if self.needs_js_imports {
             implicit_imports.push_str("use js_sys::*;\n");
         }
+        if self.needs_serde_imports {
+            implicit_imports.push_str("use serde::{Serialize, Deserialize};\n");
+        }
 
         // Combine: implicit imports + explicit imports + body
         let mut output = String::new();
@@ -261,10 +279,10 @@ impl CodeGenerator {
             output.push('\n');
         }
         output.push_str(&body);
-
+        
         output
     }
-
+    
     fn generate_use(&self, path: &[String], alias: Option<&str>) -> String {
         if path.is_empty() {
             return String::new();
@@ -401,7 +419,7 @@ impl CodeGenerator {
         output.push('}');
         output
     }
-
+    
     fn generate_enum(&self, e: &EnumDecl) -> String {
         let mut output = format!("enum {}", e.name);
 
@@ -413,7 +431,7 @@ impl CodeGenerator {
         }
 
         output.push_str(" {\n");
-
+        
         for variant in &e.variants {
             if let Some(data) = &variant.data {
                 output.push_str(&format!(
@@ -425,7 +443,7 @@ impl CodeGenerator {
                 output.push_str(&format!("    {},\n", variant.name));
             }
         }
-
+        
         output.push('}');
         output
     }
@@ -634,7 +652,7 @@ impl CodeGenerator {
             _ => "/* expression */".to_string(),
         }
     }
-
+    
     fn generate_function(&mut self, analyzed: &AnalyzedFunction) -> String {
         let func = &analyzed.decl;
         let mut output = String::new();
@@ -694,7 +712,7 @@ impl CodeGenerator {
         }
 
         output.push('(');
-
+        
         let params: Vec<String> = func
             .parameters
             .iter()
@@ -724,8 +742,8 @@ impl CodeGenerator {
                         let ownership_mode = analyzed
                             .inferred_ownership
                             .get(&param.name)
-                            .unwrap_or(&OwnershipMode::Borrowed);
-
+                .unwrap_or(&OwnershipMode::Borrowed);
+            
                         // Override for Copy types UNLESS they're mutated
                         // Mutated parameters should be &mut even for Copy types
                         if self.is_copy_type(&param.type_)
@@ -734,7 +752,7 @@ impl CodeGenerator {
                             self.type_to_rust(&param.type_)
                         } else {
                             match ownership_mode {
-                                OwnershipMode::Owned => self.type_to_rust(&param.type_),
+                OwnershipMode::Owned => self.type_to_rust(&param.type_),
                                 OwnershipMode::Borrowed => {
                                     // For Copy types that are only read, pass by value
                                     if self.is_copy_type(&param.type_) {
@@ -757,14 +775,14 @@ impl CodeGenerator {
                     format!("{}: {}", self.generate_pattern(pattern), type_str)
                 } else {
                     // Simple name: type syntax
-                    format!("{}: {}", param.name, type_str)
+            format!("{}: {}", param.name, type_str)
                 }
             })
             .collect();
-
+        
         output.push_str(&params.join(", "));
         output.push(')');
-
+        
         if let Some(return_type) = &func.return_type {
             output.push_str(" -> ");
             output.push_str(&self.type_to_rust(return_type));
@@ -772,18 +790,18 @@ impl CodeGenerator {
 
         // Add where clause if present
         output.push_str(&self.format_where_clause(&func.where_clause));
-
+        
         output.push_str(" {\n");
         self.indent_level += 1;
-
+        
         output.push_str(&self.generate_block(&func.body));
-
+        
         self.indent_level -= 1;
         output.push('}');
-
+        
         output
     }
-
+    
     #[allow(clippy::only_used_in_recursion)]
     fn type_to_rust(&self, type_: &Type) -> String {
         match type_ {
@@ -856,7 +874,7 @@ impl CodeGenerator {
             }
         }
     }
-
+    
     fn generate_statement(&mut self, stmt: &Statement) -> String {
         match stmt {
             Statement::Let {
@@ -871,12 +889,12 @@ impl CodeGenerator {
                     output.push_str("mut ");
                 }
                 output.push_str(name);
-
+                
                 if let Some(t) = type_ {
                     output.push_str(": ");
                     output.push_str(&self.type_to_rust(t));
                 }
-
+                
                 output.push_str(" = ");
                 output.push_str(&self.generate_expression(value));
                 output.push_str(";\n");
@@ -941,14 +959,14 @@ impl CodeGenerator {
                 output.push_str("if ");
                 output.push_str(&self.generate_expression(condition));
                 output.push_str(" {\n");
-
+                
                 self.indent_level += 1;
                 output.push_str(&self.generate_block(then_block));
                 self.indent_level -= 1;
-
+                
                 output.push_str(&self.indent());
                 output.push('}');
-
+                
                 if let Some(else_b) = else_block {
                     output.push_str(" else {\n");
                     self.indent_level += 1;
@@ -957,7 +975,7 @@ impl CodeGenerator {
                     output.push_str(&self.indent());
                     output.push('}');
                 }
-
+                
                 output.push('\n');
                 output
             }
@@ -966,7 +984,7 @@ impl CodeGenerator {
                 output.push_str("match ");
                 output.push_str(&self.generate_expression(value));
                 output.push_str(" {\n");
-
+                
                 self.indent_level += 1;
                 for arm in arms {
                     output.push_str(&self.indent());
@@ -983,7 +1001,7 @@ impl CodeGenerator {
                     output.push_str(",\n");
                 }
                 self.indent_level -= 1;
-
+                
                 output.push_str(&self.indent());
                 output.push_str("}\n");
                 output
@@ -991,13 +1009,13 @@ impl CodeGenerator {
             Statement::Loop { body } => {
                 let mut output = self.indent();
                 output.push_str("loop {\n");
-
+                
                 self.indent_level += 1;
                 for stmt in body {
                     output.push_str(&self.generate_statement(stmt));
                 }
                 self.indent_level -= 1;
-
+                
                 output.push_str(&self.indent());
                 output.push_str("}\n");
                 output
@@ -1029,13 +1047,13 @@ impl CodeGenerator {
                 output.push_str(" in ");
                 output.push_str(&self.generate_expression(iterable));
                 output.push_str(" {\n");
-
+                
                 self.indent_level += 1;
                 for stmt in body {
                     output.push_str(&self.generate_statement(stmt));
                 }
                 self.indent_level -= 1;
-
+                
                 output.push_str(&self.indent());
                 output.push_str("}\n");
                 output
@@ -1083,7 +1101,7 @@ impl CodeGenerator {
             }
         }
     }
-
+    
     fn generate_pattern(&self, pattern: &Pattern) -> String {
         match pattern {
             Pattern::Wildcard => "_".to_string(),
@@ -1152,7 +1170,7 @@ impl CodeGenerator {
                         if self.op_precedence(right_op) < self.op_precedence(op) {
                             format!("({})", self.generate_expression(right))
                         } else {
-                            self.generate_expression(right)
+                    self.generate_expression(right)
                         }
                     }
                     _ => self.generate_expression(right),
@@ -1255,11 +1273,19 @@ impl CodeGenerator {
                 let separator = match **object {
                     Expression::Call { .. } | Expression::MethodCall { .. } => ".", // Instance method on return value
                     Expression::Identifier(ref name) => {
+                        // Check for known module/crate names that should use ::
+                        let known_modules = [
+                            "std", "serde_json", "serde", "tokio", "reqwest", "sqlx",
+                            "chrono", "sha2", "bcrypt", "base64", "rand", "Vec", "String",
+                            "Option", "Result", "Box", "Arc", "Mutex"
+                        ];
+                        
                         // Type or module (uppercase) vs variable (lowercase)
                         if name.chars().next().is_some_and(|c| c.is_uppercase())
                             || name.contains('.')
+                            || known_modules.contains(&name.as_str())
                         {
-                            "::" // Vec::new(), std::fs::read()
+                            "::" // Vec::new(), std::fs::read(), serde_json::to_string()
                         } else {
                             "." // x.abs(), value.method()
                         }
@@ -1446,7 +1472,7 @@ impl CodeGenerator {
             }
         }
     }
-
+    
     fn generate_literal(&self, lit: &Literal) -> String {
         match lit {
             Literal::Int(n) => n.to_string(),
@@ -1475,7 +1501,7 @@ impl CodeGenerator {
             Literal::Bool(b) => b.to_string(),
         }
     }
-
+    
     fn binary_op_to_rust(&self, op: &BinaryOp) -> &str {
         match op {
             BinaryOp::Add => "+",
@@ -1504,7 +1530,7 @@ impl CodeGenerator {
             BinaryOp::Mul | BinaryOp::Div | BinaryOp::Mod => 6,
         }
     }
-
+    
     fn unary_op_to_rust(&self, op: &UnaryOp) -> &str {
         match op {
             UnaryOp::Not => "!",
