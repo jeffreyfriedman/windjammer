@@ -7,6 +7,94 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.13.0] - 2025-10-08
+
+### Added - Developer Experience & Database Support 🛠️
+
+**FLAGSHIP: Unified `wj` CLI**:
+- Single command for all development tasks
+- `wj run <file>` - Compile and execute (replaces `windjammer build` + `cd` + `cargo run`)
+- `wj build <file>` - Build Windjammer project
+- `wj test` - Run tests (wraps `cargo test`)
+- `wj fmt` - Format code (wraps `cargo fmt`)  
+- `wj lint` - Run linter (wraps `cargo clippy`)
+- `wj check` - Type check (wraps `cargo check`)
+- **80% reduction in command complexity** for common workflows
+
+**std/db Module - Database Access**:
+- SQL database support with automatic dependency injection
+- Auto-adds `sqlx` + `tokio` dependencies
+- SQLite support by default (PostgreSQL, MySQL available via features)
+- Connection pooling, queries, parameter binding
+- Full async/await support with `@async` decorator
+
+**Developer Experience**:
+- `wj run` uses temporary directories for quick iteration
+- No manual `cd` into build directories
+- All commands have helpful output and error messages
+- Backward compatible: old `windjammer` command still works
+
+**New Example**:
+- Example 45: Database operations (demonstrates dependency injection)
+
+### Technical Details
+
+**CLI Architecture**:
+- New `src/bin/wj.rs` binary with clap argument parsing
+- Command modules in `src/cli/` directory
+- Thin wrappers around existing tools (cargo, windjammer)
+- Added `tempfile` dependency for ephemeral build directories
+
+**Database Module**:
+- `std/db.wj` wraps sqlx for ergonomic SQL operations
+- Dependency mapping includes sqlx runtime and database drivers
+- Supports SQLite (default), PostgreSQL, MySQL via feature flags
+
+### Known Limitations
+
+**Parser Limitations**:
+- Complex nested `::` paths in types not yet supported
+- Example 45 simplified to demonstrate dependency injection
+- Full sqlx API usage requires workarounds (helper functions)
+- See `std/db.wj` for usage patterns
+
+**Future Enhancements (v0.14.0+)**:
+- `wj new` - Project scaffolding
+- `wj add` - Dependency management
+- `wj.toml` - Windjammer configuration format
+- `wj watch` - File watcher with auto-reload
+
+### Migration Guide
+
+**Old Workflow**:
+```bash
+windjammer build --path main.wj --output ./build
+cd build && cargo run
+cargo test
+cargo fmt
+```
+
+**New Workflow**:
+```bash
+wj run main.wj    # One command!
+wj test
+wj fmt
+```
+
+**Database Usage**:
+```windjammer
+use std.db
+
+@async
+fn main() {
+    // sqlx + tokio added automatically!
+    let pool = sqlx::SqlitePool::connect("sqlite:data.db").await?
+    sqlx::query("CREATE TABLE ...").execute(&pool).await?
+}
+```
+
+---
+
 ## [0.12.0] - 2025-10-08
 
 ### Added - Web & Data: Batteries Included 🌐

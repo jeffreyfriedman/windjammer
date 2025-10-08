@@ -26,4 +26,3 @@ pub fn execute(path: &Path, output: Option<&Path>, _release: bool) -> Result<()>
 
     Ok(())
 }
-

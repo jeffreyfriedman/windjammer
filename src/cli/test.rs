@@ -24,4 +24,3 @@ pub fn execute(filter: Option<&str>) -> Result<()> {
 
     Ok(())
 }
-
