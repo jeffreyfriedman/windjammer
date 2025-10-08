@@ -1,0 +1,32 @@
+// Example 42: HTTP Client
+// Demonstrates making HTTP requests with reqwest
+
+use std.http
+
+@async
+fn fetch_data() {
+    println!("Fetching data from httpbin.org...")
+    
+    let url = "https://httpbin.org/get"
+    let result = reqwest::get(url).await
+    
+    match result {
+        Ok(response) => {
+            let status = response.status()
+            println!("Status: {}", status)
+        }
+        Err(e) => println!("Error: {}", e)
+    }
+}
+
+@async
+fn main() {
+    println!("=== HTTP Client Demo ===")
+    println!()
+    
+    fetch_data().await
+    
+    println!()
+    println!("✨ HTTP client with reqwest!")
+    println!("   (std.http automatically adds reqwest + tokio dependencies)")
+}
