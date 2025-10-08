@@ -197,7 +197,7 @@ fn complex<T, U>(x: T, y: U) -> Iterator<String>
 - **What**: `[T; N]` where N is a generic constant
 - **Impact**: Some array size abstractions not available
 - **Workaround**: Use `Vec<T>` or fixed sizes
-- **Future**: Planned for v0.3
+- **Future**: Not yet implemented (lower priority)
 
 **4. Higher-Kinded Types**
 - **What**: Types that abstract over type constructors
@@ -222,17 +222,18 @@ fn complex<T, U>(x: T, y: U) -> Iterator<String>
 
 ```windjammer
 // Your Windjammer code
-use tokio.runtime
-use serde.json
+use std.json
+use std.http
 
-@auto(Serialize, Deserialize)
+@derive(Serialize, Deserialize)
 struct User {
     name: string,
     age: int,
 }
 
-async fn fetch_user(id: int) -> Result<User, Error> {
-    let response = http.get("https://api.example.com/users/${id}").await?
+@async
+fn fetch_user(id: int) -> Result<User, Error> {
+    let response = reqwest::get("https://api.example.com/users/${id}").await?
     let user = serde_json::from_str(&response.text().await?)?
     Ok(user)
 }
@@ -240,7 +241,6 @@ async fn fetch_user(id: int) -> Result<User, Error> {
 
 **Compiles to:**
 ```rust
-use tokio::runtime;
 use serde::{Serialize, Deserialize};
 
 #[derive(Serialize, Deserialize)]
@@ -249,7 +249,7 @@ struct User {
     age: i64,
 }
 
-async fn fetch_user(id: &i64) -> Result<User, Error> {
+async fn fetch_user(id: i64) -> Result<User, Error> {
     let response = reqwest::get(format!("https://api.example.com/users/{}", id)).await?;
     let user = serde_json::from_str(&response.text().await?)?;
     Ok(user)
@@ -258,10 +258,15 @@ async fn fetch_user(id: &i64) -> Result<User, Error> {
 
 ### Using Rust Crates
 
-**Method 1: Via Standard Library**
+**Method 1: Via Standard Library (v0.12.0+)**
 ```windjammer
-use std.http  // Wraps reqwest
-use std.json  // Wraps serde_json
+use std.json    // JSON serialization (serde + serde_json)
+use std.http    // HTTP client (reqwest + tokio)
+use std.time    // Time/date utilities (chrono)
+use std.crypto  // Cryptography (sha2, bcrypt, base64)
+use std.random  // Random generation (rand)
+use std.async   // Async utilities (tokio)
+// All dependencies added automatically!
 ```
 
 **Method 2: Direct Import**
@@ -287,7 +292,7 @@ my_project/
 
 ### Expected Performance (Projected)
 
-⚠️ **Note**: The following are **projections** based on Windjammer's design, not actual benchmarks. Real benchmarks will be conducted for v0.2 release.
+⚠️ **Note**: The following are **projections** based on Windjammer's design, not actual benchmarks. Real benchmarks are planned for a future release.
 
 | Language | Expected RPS | Expected Memory | Expected Latency (p99) |
 |----------|--------------|-----------------|------------------------|
@@ -319,9 +324,10 @@ my_project/
 
 ### Benchmark Plan
 
-We will benchmark for v0.2 release:
+Planned benchmarks for future releases:
 - [ ] Web server (actix-web vs equivalent Windjammer)
-- [ ] JSON parsing throughput
+- [ ] JSON parsing throughput (now possible with std.json!)
+- [ ] HTTP client performance (now possible with std.http!)
 - [ ] File I/O operations  
 - [ ] Concurrent processing (channels)
 - [ ] Memory allocation patterns
@@ -515,14 +521,14 @@ A: Yes! It compiles to Rust functions.
 A: Rarely. 95% of use cases fully supported.
 
 **Q: Is it production-ready?**  
-A: v0.2 alpha - use for new projects, not mission-critical yet.
+A: v0.12.0 pre-release - suitable for new projects and prototypes. Growing feature set with JSON, HTTP, and crypto support. Approaching v1.0.0 stability (planned within 6-8 months).
 
 **Q: What about hiring?**  
 A: Easier than Rust, harder than Go. But Rust devs can learn it in days.
 
 ---
 
-*Last Updated: October 2, 2025*  
-*Windjammer Version: 0.2.0-dev*  
+*Last Updated: October 8, 2025*  
+*Windjammer Version: 0.12.0*  
 *Status: Honest assessment based on current implementation*
 
