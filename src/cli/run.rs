@@ -37,4 +37,3 @@ pub fn execute(path: &Path, args: &[String]) -> Result<()> {
 
     Ok(())
 }
-
