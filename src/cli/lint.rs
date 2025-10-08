@@ -35,4 +35,3 @@ pub fn execute(fix: bool) -> Result<()> {
 
     Ok(())
 }
-

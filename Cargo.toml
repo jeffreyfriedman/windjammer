@@ -1,7 +1,8 @@
 [package]
 name = "windjammer"
-version = "0.12.0"
+version = "0.13.0"
 edition = "2021"
+default-run = "windjammer"
 authors = ["Jeffrey Friedman <jeffrey@example.com>", "Windjammer Contributors"]
 license = "MIT OR Apache-2.0"
 description = "A simple language inspired by Go, Ruby, and Elixir that transpiles to Rust - 80% of Rust's power with 20% of the complexity"
