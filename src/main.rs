@@ -587,7 +587,18 @@ fn create_cargo_toml_with_deps(
             "regex" => {
                 deps.push("regex = \"1.10\"");
             }
-            // fs, strings, math use std library (no extra deps needed)
+            "crypto" => {
+                deps.push("sha2 = \"0.10\"");
+                deps.push("bcrypt = \"0.15\"");
+                deps.push("base64 = \"0.21\"");
+            }
+            "random" => {
+                deps.push("rand = \"0.8\"");
+            }
+            "async" => {
+                deps.push("tokio = { version = \"1\", features = [\"full\"] }");
+            }
+            // fs, strings, math, env, process use std library (no extra deps needed)
             _ => {}
         }
     }
