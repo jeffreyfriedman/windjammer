@@ -34,4 +34,3 @@ pub fn execute(check: bool) -> Result<()> {
 
     Ok(())
 }
-

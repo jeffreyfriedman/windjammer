@@ -451,10 +451,6 @@ impl ModuleCompiler {
                 "async" => {
                     deps.push("tokio = { version = \"1\", features = [\"full\"] }".to_string());
                 }
-                "db" => {
-                    deps.push("sqlx = { version = \"0.7\", features = [\"runtime-tokio-native-tls\", \"sqlite\"] }".to_string());
-                    deps.push("tokio = { version = \"1\", features = [\"full\"] }".to_string());
-                }
                 // fs, strings, math use std library (no extra deps)
                 _ => {}
             }
