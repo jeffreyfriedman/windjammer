@@ -415,8 +415,7 @@ impl ModuleCompiler {
                 }
                 "http" => {
                     deps.push(
-                        "reqwest = { version = \"0.11\", features = [\"json\"] }"
-                            .to_string(),
+                        "reqwest = { version = \"0.11\", features = [\"json\"] }".to_string(),
                     );
                     deps.push("tokio = { version = \"1\", features = [\"full\"] }".to_string());
                 }

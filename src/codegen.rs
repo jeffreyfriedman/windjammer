@@ -114,18 +114,16 @@ impl CodeGenerator {
                 self.bound_aliases.insert(name.clone(), traits.clone());
             }
         }
-        
+
         // Check for stdlib modules that need special imports
         for item in &program.items {
             if let Item::Use { path, .. } = item {
                 // Path can be either ["std", "json"] or ["std.json"] depending on parsing
                 let path_str = path.join(".");
-                if path_str.starts_with("std.") || path_str == "std" {
-                    if path_str.contains("json") {
-                        self.needs_serde_imports = true;
-                    }
-                    // http, time, crypto modules don't need special imports (used directly)
+                if (path_str.starts_with("std.") || path_str == "std") && path_str.contains("json") {
+                    self.needs_serde_imports = true;
                 }
+                // http, time, crypto modules don't need special imports (used directly)
             }
         }
 
@@ -1281,11 +1279,29 @@ impl CodeGenerator {
                     Expression::Identifier(ref name) => {
                         // Check for known module/crate names that should use ::
                         let known_modules = [
-                            "std", "serde_json", "serde", "tokio", "reqwest", "sqlx",
-                            "chrono", "sha2", "bcrypt", "base64", "rand", "Vec", "String",
-                            "Option", "Result", "Box", "Arc", "Mutex", "Utc", "Local", "DEFAULT_COST"
+                            "std",
+                            "serde_json",
+                            "serde",
+                            "tokio",
+                            "reqwest",
+                            "sqlx",
+                            "chrono",
+                            "sha2",
+                            "bcrypt",
+                            "base64",
+                            "rand",
+                            "Vec",
+                            "String",
+                            "Option",
+                            "Result",
+                            "Box",
+                            "Arc",
+                            "Mutex",
+                            "Utc",
+                            "Local",
+                            "DEFAULT_COST",
                         ];
-                        
+
                         // Type or module (uppercase) vs variable (lowercase)
                         if name.chars().next().is_some_and(|c| c.is_uppercase())
                             || name.contains('.')
