@@ -429,6 +429,27 @@ impl ModuleCompiler {
                 "regex" => {
                     deps.push("regex = \"1.10\"".to_string());
                 }
+                "db" => {
+                    deps.push("sqlx = { version = \"0.7\", features = [\"runtime-tokio-native-tls\", \"postgres\", \"sqlite\", \"mysql\"] }".to_string());
+                    deps.push("tokio = { version = \"1\", features = [\"full\"] }".to_string());
+                }
+                "random" => {
+                    deps.push("rand = \"0.8\"".to_string());
+                }
+                "crypto" => {
+                    deps.push("sha2 = \"0.10\"".to_string());
+                    deps.push("bcrypt = \"0.15\"".to_string());
+                    deps.push("base64 = \"0.21\"".to_string());
+                }
+                "process" => {
+                    // Uses std::process, no extra deps
+                }
+                "env" => {
+                    // Uses std::env, no extra deps
+                }
+                "async" => {
+                    deps.push("tokio = { version = \"1\", features = [\"full\"] }".to_string());
+                }
                 // fs, strings, math use std library (no extra deps)
                 _ => {}
             }
