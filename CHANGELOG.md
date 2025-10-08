@@ -7,6 +7,60 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.12.0] - 2025-10-08
+
+### Added - Web & Data: Batteries Included 🌐
+
+**New Stdlib Modules for Building Real Apps**:
+- `std/json`: JSON parsing and serialization (serde_json)
+  - Auto-adds serde + serde_json dependencies
+  - Auto-injects `use serde::{Serialize, Deserialize};`
+  - Use `@derive(Serialize, Deserialize)` on structs
+- `std/http`: HTTP client for web requests (reqwest)
+  - Auto-adds reqwest + tokio dependencies
+  - Full async/await support
+  - Example: `reqwest::get("https://example.com").await`
+- `std/time`: Time and date utilities (chrono)
+  - Auto-adds chrono dependency
+  - Foundation for time/date operations
+- `std/crypto`: Cryptographic operations (sha2, bcrypt, base64)
+  - Auto-adds sha2, bcrypt, base64 dependencies
+  - Base64 encoding/decoding
+  - Password hashing with bcrypt
+
+**Async/Await Improvements**:
+- `@async fn main()` generates `#[tokio::main]`
+- Full tokio runtime integration
+- Seamless async function support
+
+**New Examples**:
+- Example 41: JSON serialization with serde
+- Example 42: HTTP client with reqwest
+- Example 43: Time utilities with chrono  
+- Example 44: Cryptography with base64
+
+**Automatic Dependency Injection**:
+- Compiler detects stdlib module imports
+- Automatically generates Cargo.toml with required dependencies
+- No manual dependency management needed
+
+### Philosophy
+- **Batteries Included**: Common web/data tasks work out of the box
+- **Zero Boilerplate**: Auto-dependency injection eliminates setup
+- **Production Ready**: JSON + HTTP = foundation for real apps
+
+### Technical Notes
+- All stdlib modules are thin wrappers around best-in-class Rust crates
+- Parser has some limitations with nested paths (e.g., `chrono::Utc::now()`)
+- Workarounds documented in examples
+- Future parser improvements will unlock full API access
+
+### Deferred to Future Releases
+- `std/db` (database access) - deferred due to complexity
+- Pattern matching sugar (`if-let`, `else` in match) - future enhancement
+
+---
+
 ## [0.11.0] - 2025-10-07
 
 ### Added - Practical Ergonomics & Stdlib Expansion 🛠️
