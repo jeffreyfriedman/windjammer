@@ -415,9 +415,10 @@ impl ModuleCompiler {
                 }
                 "http" => {
                     deps.push(
-                        "reqwest = { version = \"0.11\", features = [\"json\", \"blocking\"] }"
+                        "reqwest = { version = \"0.11\", features = [\"json\"] }"
                             .to_string(),
                     );
+                    deps.push("tokio = { version = \"1\", features = [\"full\"] }".to_string());
                 }
                 "time" => {
                     deps.push("chrono = \"0.4\"".to_string());
@@ -573,7 +574,8 @@ fn create_cargo_toml_with_deps(
                 deps.push("csv = \"1.3\"");
             }
             "http" => {
-                deps.push("reqwest = { version = \"0.11\", features = [\"json\", \"blocking\"] }");
+                deps.push("reqwest = { version = \"0.11\", features = [\"json\"] }");
+                deps.push("tokio = { version = \"1\", features = [\"full\"] }");
             }
             "time" => {
                 deps.push("chrono = \"0.4\"");
