@@ -1,0 +1,51 @@
+// std/db - Database access with sqlx
+// Wraps sqlx for ergonomic SQL database operations
+
+// Re-export sqlx for direct use
+// Users can call sqlx::query, sqlx::SqlitePool, etc.
+// Example: let pool = sqlx::SqlitePool::connect("sqlite::memory:").await?
+
+// Supported databases (via feature flags):
+// - SQLite (default)
+// - PostgreSQL  
+// - MySQL
+
+// Connection pooling examples:
+//
+// SQLite:
+//   let pool = sqlx::SqlitePool::connect("sqlite::memory:").await?
+//   let pool = sqlx::SqlitePool::connect("sqlite:data.db").await?
+//
+// PostgreSQL:
+//   let pool = sqlx::PgPool::connect("postgres://user:pass@localhost/db").await?
+//
+// MySQL:
+//   let pool = sqlx::MySqlPool::connect("mysql://user:pass@localhost/db").await?
+
+// Query examples:
+//
+// Execute (no results):
+//   sqlx::query("CREATE TABLE users (id INTEGER PRIMARY KEY, name TEXT)")
+//       .execute(&pool)
+//       .await?
+//
+// Insert with parameters:
+//   sqlx::query("INSERT INTO users (name) VALUES (?)")
+//       .bind("Alice")
+//       .execute(&pool)
+//       .await?
+//
+// Fetch all:
+//   let rows = sqlx::query_as::<_, (i64, String)>("SELECT * FROM users")
+//       .fetch_all(&pool)
+//       .await?
+//
+// Fetch one:
+//   let row = sqlx::query_as::<_, (i64, String)>("SELECT * FROM users WHERE id = ?")
+//       .bind(1)
+//       .fetch_one(&pool)
+//       .await?
+
+// Note: All sqlx functions are async and require @async decorator
+// See Example 45 for a working demonstration
+
