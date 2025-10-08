@@ -415,9 +415,9 @@ impl ModuleCompiler {
                 }
                 "http" => {
                     deps.push(
-                        "reqwest = { version = \"0.11\", features = [\"json\", \"blocking\"] }"
-                            .to_string(),
+                        "reqwest = { version = \"0.11\", features = [\"json\"] }".to_string(),
                     );
+                    deps.push("tokio = { version = \"1\", features = [\"full\"] }".to_string());
                 }
                 "time" => {
                     deps.push("chrono = \"0.4\"".to_string());
@@ -428,6 +428,27 @@ impl ModuleCompiler {
                 }
                 "regex" => {
                     deps.push("regex = \"1.10\"".to_string());
+                }
+                "db" => {
+                    deps.push("sqlx = { version = \"0.7\", features = [\"runtime-tokio-native-tls\", \"postgres\", \"sqlite\", \"mysql\"] }".to_string());
+                    deps.push("tokio = { version = \"1\", features = [\"full\"] }".to_string());
+                }
+                "random" => {
+                    deps.push("rand = \"0.8\"".to_string());
+                }
+                "crypto" => {
+                    deps.push("sha2 = \"0.10\"".to_string());
+                    deps.push("bcrypt = \"0.15\"".to_string());
+                    deps.push("base64 = \"0.21\"".to_string());
+                }
+                "process" => {
+                    // Uses std::process, no extra deps
+                }
+                "env" => {
+                    // Uses std::env, no extra deps
+                }
+                "async" => {
+                    deps.push("tokio = { version = \"1\", features = [\"full\"] }".to_string());
                 }
                 // fs, strings, math use std library (no extra deps)
                 _ => {}
@@ -552,7 +573,8 @@ fn create_cargo_toml_with_deps(
                 deps.push("csv = \"1.3\"");
             }
             "http" => {
-                deps.push("reqwest = { version = \"0.11\", features = [\"json\", \"blocking\"] }");
+                deps.push("reqwest = { version = \"0.11\", features = [\"json\"] }");
+                deps.push("tokio = { version = \"1\", features = [\"full\"] }");
             }
             "time" => {
                 deps.push("chrono = \"0.4\"");
@@ -564,7 +586,18 @@ fn create_cargo_toml_with_deps(
             "regex" => {
                 deps.push("regex = \"1.10\"");
             }
-            // fs, strings, math use std library (no extra deps needed)
+            "crypto" => {
+                deps.push("sha2 = \"0.10\"");
+                deps.push("bcrypt = \"0.15\"");
+                deps.push("base64 = \"0.21\"");
+            }
+            "random" => {
+                deps.push("rand = \"0.8\"");
+            }
+            "async" => {
+                deps.push("tokio = { version = \"1\", features = [\"full\"] }");
+            }
+            // fs, strings, math, env, process use std library (no extra deps needed)
             _ => {}
         }
     }

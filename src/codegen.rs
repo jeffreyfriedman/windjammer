@@ -10,6 +10,7 @@ pub struct CodeGenerator {
     needs_wasm_imports: bool,
     needs_web_imports: bool,
     needs_js_imports: bool,
+    needs_serde_imports: bool, // For JSON support
     target: CompilationTarget,
     is_module: bool, // true if generating code for a reusable module (not main file)
     #[allow(dead_code)] // TODO: Use for error mapping Phase 3
@@ -28,6 +29,7 @@ impl CodeGenerator {
             needs_wasm_imports: false,
             needs_web_imports: false,
             needs_js_imports: false,
+            needs_serde_imports: false,
             target,
             is_module: false,
             source_map: crate::source_map::SourceMap::new(),
@@ -110,6 +112,19 @@ impl CodeGenerator {
         for item in &program.items {
             if let Item::BoundAlias { name, traits } = item {
                 self.bound_aliases.insert(name.clone(), traits.clone());
+            }
+        }
+
+        // Check for stdlib modules that need special imports
+        for item in &program.items {
+            if let Item::Use { path, .. } = item {
+                // Path can be either ["std", "json"] or ["std.json"] depending on parsing
+                let path_str = path.join(".");
+                if (path_str.starts_with("std.") || path_str == "std") && path_str.contains("json")
+                {
+                    self.needs_serde_imports = true;
+                }
+                // http, time, crypto modules don't need special imports (used directly)
             }
         }
 
@@ -244,6 +259,9 @@ impl CodeGenerator {
         }
         if self.needs_js_imports {
             implicit_imports.push_str("use js_sys::*;\n");
+        }
+        if self.needs_serde_imports {
+            implicit_imports.push_str("use serde::{Serialize, Deserialize};\n");
         }
 
         // Combine: implicit imports + explicit imports + body
@@ -642,9 +660,14 @@ impl CodeGenerator {
         // Check for @async decorator (special case: it's a keyword, not an attribute)
         let is_async = func.decorators.iter().any(|d| d.name == "async");
 
+        // Special case: async main requires #[tokio::main]
+        if is_async && func.name == "main" {
+            output.push_str("#[tokio::main]\n");
+        }
+
         // Generate decorators (map Windjammer decorators to Rust attributes)
         for decorator in &func.decorators {
-            // Skip @async, it's handled as a keyword
+            // Skip @async, it's handled specially
             if decorator.name == "async" {
                 continue;
             }
@@ -1255,11 +1278,37 @@ impl CodeGenerator {
                 let separator = match **object {
                     Expression::Call { .. } | Expression::MethodCall { .. } => ".", // Instance method on return value
                     Expression::Identifier(ref name) => {
+                        // Check for known module/crate names that should use ::
+                        let known_modules = [
+                            "std",
+                            "serde_json",
+                            "serde",
+                            "tokio",
+                            "reqwest",
+                            "sqlx",
+                            "chrono",
+                            "sha2",
+                            "bcrypt",
+                            "base64",
+                            "rand",
+                            "Vec",
+                            "String",
+                            "Option",
+                            "Result",
+                            "Box",
+                            "Arc",
+                            "Mutex",
+                            "Utc",
+                            "Local",
+                            "DEFAULT_COST",
+                        ];
+
                         // Type or module (uppercase) vs variable (lowercase)
                         if name.chars().next().is_some_and(|c| c.is_uppercase())
                             || name.contains('.')
+                            || known_modules.contains(&name.as_str())
                         {
-                            "::" // Vec::new(), std::fs::read()
+                            "::" // Vec::new(), std::fs::read(), serde_json::to_string()
                         } else {
                             "." // x.abs(), value.method()
                         }
