@@ -1,0 +1,20 @@
+// Example 44: Cryptography
+// Demonstrates encoding with base64
+
+use std.crypto
+
+fn main() {
+    println!("=== Cryptography Demo ===")
+    println!()
+    
+    // Base64 encoding
+    println!("Base64 encoding:")
+    let data = "Hello, Windjammer!"
+    let encoded = base64::encode(data)
+    println!("   Original: {}", data)
+    println!("   Encoded: {}", encoded)
+    println!()
+    
+    println!("✨ Cryptography with base64!")
+    println!("   (std.crypto automatically adds crypto dependencies)")
+}
