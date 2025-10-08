@@ -124,6 +124,7 @@ impl CodeGenerator {
                     if path_str.contains("json") {
                         self.needs_serde_imports = true;
                     }
+                    // http module doesn't need special imports (reqwest is used directly)
                 }
             }
         }
@@ -660,9 +661,14 @@ impl CodeGenerator {
         // Check for @async decorator (special case: it's a keyword, not an attribute)
         let is_async = func.decorators.iter().any(|d| d.name == "async");
 
+        // Special case: async main requires #[tokio::main]
+        if is_async && func.name == "main" {
+            output.push_str("#[tokio::main]\n");
+        }
+
         // Generate decorators (map Windjammer decorators to Rust attributes)
         for decorator in &func.decorators {
-            // Skip @async, it's handled as a keyword
+            // Skip @async, it's handled specially
             if decorator.name == "async" {
                 continue;
             }
