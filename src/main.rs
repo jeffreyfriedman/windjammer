@@ -1,4 +1,5 @@
 pub mod analyzer;
+pub mod cli;
 pub mod codegen;
 pub mod error_mapper;
 pub mod inference;
@@ -450,6 +451,10 @@ impl ModuleCompiler {
                 "async" => {
                     deps.push("tokio = { version = \"1\", features = [\"full\"] }".to_string());
                 }
+                "db" => {
+                    deps.push("sqlx = { version = \"0.7\", features = [\"runtime-tokio-native-tls\", \"sqlite\"] }".to_string());
+                    deps.push("tokio = { version = \"1\", features = [\"full\"] }".to_string());
+                }
                 // fs, strings, math use std library (no extra deps)
                 _ => {}
             }
@@ -595,6 +600,10 @@ fn create_cargo_toml_with_deps(
                 deps.push("rand = \"0.8\"");
             }
             "async" => {
+                deps.push("tokio = { version = \"1\", features = [\"full\"] }");
+            }
+            "db" => {
+                deps.push("sqlx = { version = \"0.7\", features = [\"runtime-tokio-native-tls\", \"sqlite\"] }");
                 deps.push("tokio = { version = \"1\", features = [\"full\"] }");
             }
             // fs, strings, math, env, process use std library (no extra deps needed)
