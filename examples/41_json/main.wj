@@ -1,5 +1,5 @@
 // Example 41: JSON Serialization
-// Demonstrates JSON handling with serde_json
+// Demonstrates JSON handling with Windjammer's std.json abstraction
 
 use std.json
 
@@ -22,16 +22,27 @@ fn main() {
         email: "alice@example.com".to_string()
     }
     
-    let json_compact = serde_json::to_string(&user).unwrap()
-    println!("   Compact: {}", json_compact)
-    println!()
+    // Use Windjammer's json abstraction - no direct serde_json access!
+    match json.stringify(&user) {
+        Ok(json_compact) => {
+            println!("   Compact: {}", json_compact)
+            println!()
+        },
+        Err(e) => println!("   Error: {}", e)
+    }
     
     // 2. Pretty-print JSON
     println!("2. Pretty-print JSON:")
-    let json_pretty = serde_json::to_string_pretty(&user).unwrap()
-    println!("{}", json_pretty)
-    println!()
+    match json.pretty(&user) {
+        Ok(json_pretty) => {
+            println!("{}", json_pretty)
+            println!()
+        },
+        Err(e) => println!("   Error: {}", e)
+    }
     
-    println!("✨ JSON serialization with serde_json!")
-    println!("   (std.json automatically adds serde + serde_json dependencies)")
+    println!("✨ JSON serialization with Windjammer!")
+    println!("   ✅ Using std.json abstraction (not serde_json directly)")
+    println!("   ✅ Dependencies added automatically")
+    println!("   ✅ Clean, Windjammer-native API")
 }
