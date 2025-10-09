@@ -1,6 +1,6 @@
 [package]
 name = "windjammer"
-version = "0.14.0"
+version = "0.15.0"
 edition = "2021"
 default-run = "windjammer"
 authors = ["Jeffrey Friedman <jeffrey@example.com>", "Windjammer Contributors"]
