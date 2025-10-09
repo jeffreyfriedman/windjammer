@@ -81,12 +81,32 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 3. **This Shows The Path** - Compiler optimizations can match/exceed SQLx's efficiency
 4. **Benchmarking Is Essential** - Can't improve what you don't measure
 
-### Next Steps
+### Baseline Performance Results
 
-- ⏳ Run baseline performance benchmarks
-- ⏳ Implement compiler optimizations to match Rust's LOC efficiency
-- ⏳ Prove performance parity (within 5%)
-- ⏳ Document optimization opportunities
+**Rust Implementation (Criterion Microbenchmarks):**
+- JSON Serialization: 149-281 ns
+- JSON Deserialization: 135-291 ns
+- Password Hashing (bcrypt): 254.62 ms
+- JWT Generate: 1.0046 µs
+- JWT Verify: 1.8997 µs
+- Query Building: 40-75 ns
+
+**Key Findings:**
+- ✅ Bcrypt dominates auth latency (99.9% of login time)
+- ✅ JSON operations are extremely fast (135-291 ns)
+- ✅ JWT operations are efficient (1-2 µs)
+- ✅ Query building has negligible overhead (40-75 ns)
+
+**See:** `benchmarks/README.md` for complete baseline documentation
+
+### Next Steps (v0.17.0)
+
+- 🎯 Build equivalent Windjammer benchmarks
+- 🎯 Compare Windjammer vs Rust performance
+- 🎯 Implement compiler optimizations to match Rust's LOC efficiency
+- 🎯 Add HTTP load testing (`wrk`)
+- 🎯 Prove performance parity (within 5%)
+- 🎯 Document optimization opportunities
 
 **See:** `examples/taskflow/` for complete implementation, comparison, and benchmarks.
 
