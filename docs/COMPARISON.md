@@ -258,20 +258,33 @@ async fn fetch_user(id: i64) -> Result<User, Error> {
 
 ### Using Rust Crates
 
-**Method 1: Via Standard Library (v0.14.0+) - RECOMMENDED**
+**Method 1: Via Standard Library (v0.15.0+) - RECOMMENDED**
 ```windjammer
-use std.json    // Clean API: json.stringify(), json.parse()
-use std.http    // Clean API: http.get(), http.post()
-use std.time    // Clean API: time.now(), time.utc_now()
-use std.crypto  // Clean API: crypto.sha256(), crypto.hash_password()
-use std.random  // Clean API: random.range(), random.shuffle()
-use std.db      // Clean API: db.connect(), query.fetch_all()
+// Web Development
+use std.http    // HTTP server + client: http.serve(), http.get() 🆕 **Server!**
+use std.json    // JSON: json.stringify(), json.parse()
+
+// File System & I/O
+use std.fs      // File system: fs.read_to_string(), fs.write() 🆕
+use std.log     // Logging: log.info(), log.error() 🆕
+
+// Data & Patterns
+use std.regex   // Regex: regex.compile(), regex.is_match() 🆕
+use std.db      // Database: db.connect(), query.fetch_all()
+use std.time    // Time: time.now(), time.utc_now()
+use std.crypto  // Crypto: crypto.sha256(), crypto.hash_password()
+use std.random  // Random: random.range(), random.shuffle()
+
+// Developer Tools
+use std.cli     // CLI parsing: cli.parse() 🆕
+
 // All dependencies added automatically!
-// NO serde_json::, reqwest::, or chrono:: in your code!
+// NO axum::, std::fs::, log::, regex::, or clap:: in your code!
 ```
 
 **Why Use Stdlib?**:
-- ✅ **Proper Abstractions** (v0.14.0) - Windjammer-native APIs, no crate leakage
+- ✅ **Proper Abstractions** - Windjammer-native APIs, zero crate leakage
+- ✅ **Complete Stack** (v0.15.0) - HTTP server, file I/O, logging, regex, CLI
 - ✅ **API Stability** - Windjammer controls the contract
 - ✅ **Automatic Dependencies** - Added to Cargo.toml automatically
 - ✅ **Future Flexibility** - Can swap implementations without breaking code
@@ -528,7 +541,7 @@ A: Yes! It compiles to Rust functions.
 A: Rarely. 95% of use cases fully supported.
 
 **Q: Is it production-ready?**  
-A: v0.14.0 pre-release - suitable for new projects and prototypes. Comprehensive stdlib with proper abstractions (JSON, HTTP, DB, crypto, time, random). Full project management tooling (`wj new`, `wj add`, etc.). Approaching v1.0.0 stability (planned within 4-6 months).
+A: v0.15.0 "Server-Side Complete" - **Ready for production web services, CLI tools, and data processing applications!** Complete stdlib with proper abstractions: HTTP server + client, file system, logging, regex, CLI parsing, JSON, database, crypto, time, and more. Full project management tooling (`wj new`, `wj add`, `wj run`). Pre-commit hooks for code quality. The language is feature-complete for server-side development. v1.0.0 planned after production confidence-building period (4-6 months).
 
 **Q: What about hiring?**  
 A: Easier than Rust, harder than Go. But Rust devs can learn it in days.
@@ -536,6 +549,6 @@ A: Easier than Rust, harder than Go. But Rust devs can learn it in days.
 ---
 
 *Last Updated: October 9, 2025*  
-*Windjammer Version: 0.14.0*  
+*Windjammer Version: 0.15.0*  
 *Status: Honest assessment based on current implementation*
 
