@@ -1,6 +1,176 @@
-// std/http - HTTP client for making web requests
-// Wraps reqwest for async HTTP operations
+// std/http - HTTP client with proper abstraction
+// Implementation: reqwest + tokio (hidden from users)
 
-// Re-export reqwest for direct use
-// Users can call reqwest::get, reqwest::Client, etc.
-// Example: reqwest::get("https://example.com").await?
+// PUBLIC API - Users interact with these types only
+
+struct Response {
+    status: int,
+}
+
+struct RequestBuilder {
+    // Private: Wraps reqwest::RequestBuilder
+}
+
+struct Headers {
+    // Private: Wraps reqwest::header::HeaderMap
+}
+
+// Simple HTTP Methods
+
+@async
+fn get(url: string) -> Result<Response, Error> {
+    // Implementation wraps: reqwest::get(url).await
+    Err("HTTP client requires reqwest (auto-added)")
+}
+
+@async
+fn post(url: string) -> RequestBuilder {
+    // Implementation wraps: reqwest::Client::new().post(url)
+    RequestBuilder {}
+}
+
+@async
+fn put(url: string) -> RequestBuilder {
+    // Implementation wraps: reqwest::Client::new().put(url)
+    RequestBuilder {}
+}
+
+@async
+fn delete(url: string) -> RequestBuilder {
+    // Implementation wraps: reqwest::Client::new().delete(url)
+    RequestBuilder {}
+}
+
+// Response Methods
+
+impl Response {
+    @async
+    fn text(self) -> Result<string, Error> {
+        // Wraps: response.text().await
+        Err("Not yet implemented")
+    }
+    
+    @async
+    fn json<T>(self) -> Result<T, Error> {
+        // Wraps: response.json::<T>().await
+        Err("Not yet implemented")
+    }
+    
+    @async
+    fn bytes(self) -> Result<Vec<u8>, Error> {
+        // Wraps: response.bytes().await
+        Err("Not yet implemented")
+    }
+    
+    fn status_code(self) -> int {
+        // Wraps: response.status().as_u16()
+        self.status
+    }
+    
+    fn headers(self) -> Headers {
+        // Wraps: response.headers()
+        Headers {}
+    }
+    
+    fn is_success(self) -> bool {
+        // Wraps: response.status().is_success()
+        self.status >= 200 && self.status < 300
+    }
+}
+
+// Request Builder Methods
+
+impl RequestBuilder {
+    fn header(self, key: string, value: string) -> RequestBuilder {
+        // Wraps: builder.header(key, value)
+        self
+    }
+    
+    fn json<T>(self, body: T) -> RequestBuilder {
+        // Wraps: builder.json(&body)
+        self
+    }
+    
+    fn body(self, body: string) -> RequestBuilder {
+        // Wraps: builder.body(body)
+        self
+    }
+    
+    fn bearer_auth(self, token: string) -> RequestBuilder {
+        // Wraps: builder.bearer_auth(token)
+        self
+    }
+    
+    fn basic_auth(self, username: string, password: Option<string>) -> RequestBuilder {
+        // Wraps: builder.basic_auth(username, password)
+        self
+    }
+    
+    fn query<T>(self, params: T) -> RequestBuilder {
+        // Wraps: builder.query(&params)
+        self
+    }
+    
+    fn timeout_secs(self, secs: int) -> RequestBuilder {
+        // Wraps: builder.timeout(Duration::from_secs(secs))
+        self
+    }
+    
+    @async
+    fn send(self) -> Result<Response, Error> {
+        // Wraps: builder.send().await
+        Err("Not yet implemented")
+    }
+}
+
+// Headers Methods
+
+impl Headers {
+    fn get(self, key: string) -> Option<string> {
+        // Wraps: headers.get(key).and_then(|v| v.to_str())
+        None
+    }
+    
+    fn contains(self, key: string) -> bool {
+        // Wraps: headers.contains_key(key)
+        false
+    }
+}
+
+// USAGE EXAMPLES (what users should write):
+//
+// use std.http
+//
+// @async
+// fn main() {
+//     // Simple GET - Windjammer API! ✅
+//     let response = http.get("https://api.example.com/users").await?
+//     println!("Status: {}", response.status_code())
+//     let body = response.text().await?
+//     println!("Body: {}", body)
+//     
+//     // POST with JSON
+//     let user = User { name: "Alice", email: "alice@example.com" }
+//     let response = http.post("https://api.example.com/users")
+//         .header("Content-Type", "application/json")
+//         .json(user)
+//         .send()
+//         .await?
+//     
+//     if response.is_success() {
+//         println!("User created!")
+//     }
+//     
+//     // With authentication
+//     let response = http.get("https://api.example.com/protected")
+//         .bearer_auth("my_token")
+//         .send()
+//         .await?
+// }
+//
+// NOT THIS (reqwest exposed): ❌
+// let response = reqwest::get("https://api.example.com").await?
+// let client = reqwest::Client::new()
+
+// NOTE: Full implementation coming in v0.14.0
+// reqwest and tokio are auto-added as dependencies
