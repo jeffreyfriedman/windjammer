@@ -1,0 +1,247 @@
+// Authentication handlers
+
+use std.http
+use std.log
+use std.db
+use ../models.user.{RegisterRequest, LoginRequest, AuthResponse}
+use ../auth.password
+use ../auth.jwt
+use ../db.users
+use ../config
+
+// User registration endpoint
+pub async fn register(req: Request) -> ServerResponse {
+    log.info("POST /api/v1/auth/register")
+    
+    // Parse request body
+    let body = match req.body_json::<RegisterRequest>().await {
+        Ok(data) => data,
+        Err(e) => {
+            log.warn_with("Invalid request body", "error", &e)
+            return ServerResponse::bad_request("Invalid request body")
+        }
+    }
+    
+    // Validate input
+    if body.username.is_empty() || body.email.is_empty() || body.password.is_empty() {
+        return ServerResponse::bad_request("Username, email, and password are required")
+    }
+    
+    if body.password.len() < 8 {
+        return ServerResponse::bad_request("Password must be at least 8 characters")
+    }
+    
+    // Connect to database
+    let config = config.load()
+    let conn = match db.connect(&config.database_url).await {
+        Ok(c) => c,
+        Err(e) => {
+            log.error_with("Database connection failed", "error", &e)
+            return ServerResponse::internal_error("Database connection failed")
+        }
+    }
+    
+    // Check if username already exists
+    let username_taken = match users.username_exists(conn.clone(), body.username.clone()).await {
+        Ok(exists) => exists,
+        Err(e) => {
+            log.error_with("Database query failed", "error", &e)
+            return ServerResponse::internal_error("Database error")
+        }
+    }
+    
+    if username_taken {
+        return ServerResponse::bad_request("Username already taken")
+    }
+    
+    // Check if email already exists
+    let email_taken = match users.email_exists(conn.clone(), body.email.clone()).await {
+        Ok(exists) => exists,
+        Err(e) => {
+            log.error_with("Database query failed", "error", &e)
+            return ServerResponse::internal_error("Database error")
+        }
+    }
+    
+    if email_taken {
+        return ServerResponse::bad_request("Email already registered")
+    }
+    
+    // Hash password
+    let password_hash = match password.hash(body.password.clone()) {
+        Ok(hash) => hash,
+        Err(e) => {
+            log.error_with("Password hashing failed", "error", &e)
+            return ServerResponse::internal_error("Password hashing failed")
+        }
+    }
+    
+    // Create user
+    let user = match users.create(conn, body, password_hash).await {
+        Ok(u) => u,
+        Err(e) => {
+            log.error_with("User creation failed", "error", &e)
+            return ServerResponse::internal_error("Failed to create user")
+        }
+    }
+    
+    // Generate JWT token
+    let token = match jwt.generate_token(user.id, user.username.clone(), user.role.clone(), config.jwt_secret) {
+        Ok(t) => t,
+        Err(e) => {
+            log.error_with("Token generation failed", "error", &e)
+            return ServerResponse::internal_error("Failed to generate token")
+        }
+    }
+    
+    log.info_with("User registered successfully", "user_id", &user.id.to_string())
+    
+    let response = AuthResponse {
+        user: user,
+        token: token,
+    }
+    
+    ServerResponse::created(response)
+}
+
+// User login endpoint
+pub async fn login(req: Request) -> ServerResponse {
+    log.info("POST /api/v1/auth/login")
+    
+    // Parse request body
+    let body = match req.body_json::<LoginRequest>().await {
+        Ok(data) => data,
+        Err(e) => {
+            log.warn_with("Invalid request body", "error", &e)
+            return ServerResponse::bad_request("Invalid request body")
+        }
+    }
+    
+    // Validate input
+    if body.username.is_empty() || body.password.is_empty() {
+        return ServerResponse::bad_request("Username and password are required")
+    }
+    
+    // Connect to database
+    let config = config.load()
+    let conn = match db.connect(&config.database_url).await {
+        Ok(c) => c,
+        Err(e) => {
+            log.error_with("Database connection failed", "error", &e)
+            return ServerResponse::internal_error("Database connection failed")
+        }
+    }
+    
+    // Find user by username
+    let user_with_password = match users.find_by_username(conn, body.username.clone()).await {
+        Ok(Some(u)) => u,
+        Ok(None) => {
+            log.warn_with("Login failed: user not found", "username", &body.username)
+            return ServerResponse::unauthorized("Invalid username or password")
+        },
+        Err(e) => {
+            log.error_with("Database query failed", "error", &e)
+            return ServerResponse::internal_error("Database error")
+        }
+    }
+    
+    // Verify password
+    let password_valid = match password.verify(body.password, user_with_password.password_hash.clone()) {
+        Ok(valid) => valid,
+        Err(e) => {
+            log.error_with("Password verification failed", "error", &e)
+            return ServerResponse::internal_error("Password verification failed")
+        }
+    }
+    
+    if !password_valid {
+        log.warn_with("Login failed: invalid password", "username", &body.username)
+        return ServerResponse::unauthorized("Invalid username or password")
+    }
+    
+    let user = user_with_password.to_user()
+    
+    // Generate JWT token
+    let token = match jwt.generate_token(user.id, user.username.clone(), user.role.clone(), config.jwt_secret) {
+        Ok(t) => t,
+        Err(e) => {
+            log.error_with("Token generation failed", "error", &e)
+            return ServerResponse::internal_error("Failed to generate token")
+        }
+    }
+    
+    log.info_with("User logged in successfully", "user_id", &user.id.to_string())
+    
+    let response = AuthResponse {
+        user: user,
+        token: token,
+    }
+    
+    ServerResponse::ok(response)
+}
+
+// Get current user (requires authentication)
+pub async fn me(req: Request) -> ServerResponse {
+    log.info("GET /api/v1/auth/me")
+    
+    // Extract token from Authorization header
+    let token = match extract_bearer_token(&req) {
+        Some(t) => t,
+        None => {
+            return ServerResponse::unauthorized("Missing or invalid Authorization header")
+        }
+    }
+    
+    // Verify token and extract user ID
+    let config = config.load()
+    let user_id = match jwt.extract_user_id_from_token(token, config.jwt_secret) {
+        Ok(id) => id,
+        Err(e) => {
+            log.warn_with("Token validation failed", "error", &e)
+            return ServerResponse::unauthorized("Invalid or expired token")
+        }
+    }
+    
+    // Connect to database
+    let conn = match db.connect(&config.database_url).await {
+        Ok(c) => c,
+        Err(e) => {
+            log.error_with("Database connection failed", "error", &e)
+            return ServerResponse::internal_error("Database connection failed")
+        }
+    }
+    
+    // Find user
+    let user = match users.find_by_id(conn, user_id).await {
+        Ok(Some(u)) => u,
+        Ok(None) => {
+            return ServerResponse::not_found()
+        },
+        Err(e) => {
+            log.error_with("Database query failed", "error", &e)
+            return ServerResponse::internal_error("Database error")
+        }
+    }
+    
+    ServerResponse::json(user.to_public())
+}
+
+// Logout endpoint (client should discard token)
+pub async fn logout(req: Request) -> ServerResponse {
+    log.info("POST /api/v1/auth/logout")
+    
+    // In a stateless JWT system, logout is handled client-side
+    // Server just acknowledges the request
+    ServerResponse::no_content()
+}
+
+// Helper function to extract Bearer token from Authorization header
+fn extract_bearer_token(req: &Request) -> Option<string> {
+    let auth_header = req.header("Authorization")?
+    
+    if auth_header.starts_with("Bearer ") {
+        Some(auth_header[7..].to_string())
+    } else {
+        None
+    }
+}
