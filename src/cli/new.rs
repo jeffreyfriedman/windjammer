@@ -62,7 +62,7 @@ fn create_project(name: &str, template: &str) -> Result<(), String> {
         .ok_or_else(|| "Failed to get executable directory".to_string())?;
 
     // Try multiple locations for templates
-    let possible_template_dirs = vec![
+    let possible_template_dirs = [
         exe_dir.join("templates").join(template),
         exe_dir.join("..").join("templates").join(template),
         exe_dir
