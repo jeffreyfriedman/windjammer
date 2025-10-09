@@ -1,0 +1,8 @@
+[package]
+name = "taskflow-api"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+# Dependencies will be automatically added by Windjammer stdlib
+
