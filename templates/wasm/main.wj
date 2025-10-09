@@ -1,0 +1,24 @@
+// WebAssembly application template
+
+@export
+fn greet(name: string) -> string {
+    "Hello from Windjammer, ${name}!"
+}
+
+@export
+fn add(a: i32, b: i32) -> i32 {
+    a + b
+}
+
+@export
+fn fibonacci(n: i32) -> i32 {
+    if n <= 1 {
+        n
+    } else {
+        fibonacci(n - 1) + fibonacci(n - 2)
+    }
+}
+
+// Note: Use i32 for WASM compatibility with JavaScript
+// JavaScript numbers are represented as i32/f64 in WASM
+

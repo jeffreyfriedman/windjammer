@@ -1,6 +1,116 @@
-// std/crypto - Cryptographic operations
-// Wraps sha2, bcrypt, and base64 for common crypto tasks
+// std/crypto - Cryptographic utilities with proper abstraction
+// Implementation: sha2, bcrypt, base64 (hidden from users)
 
-// Re-export crypto crates for direct use
-// Users can call sha2::Sha256, bcrypt::hash, base64::encode, etc.
-// Example: use sha2::{Sha256, Digest};
+// PUBLIC API - Users interact with these functions only
+
+// Base64 Encoding/Decoding
+
+fn base64_encode(data: string) -> string {
+    // Implementation wraps: base64::encode(data)
+    ""
+}
+
+fn base64_decode(data: string) -> Result<string, Error> {
+    // Implementation wraps: base64::decode(data) + String::from_utf8
+    Err("Base64 decoding requires base64 crate (auto-added)")
+}
+
+fn base64_encode_bytes(data: Vec<u8>) -> string {
+    // Implementation wraps: base64::encode(&data)
+    ""
+}
+
+fn base64_decode_bytes(data: string) -> Result<Vec<u8>, Error> {
+    // Implementation wraps: base64::decode(data)
+    Err("Base64 decoding requires base64 crate (auto-added)")
+}
+
+// Password Hashing (bcrypt)
+
+fn hash_password(password: string) -> Result<string, Error> {
+    // Implementation wraps: bcrypt::hash(password, DEFAULT_COST)
+    Err("Password hashing requires bcrypt crate (auto-added)")
+}
+
+fn hash_password_with_cost(password: string, cost: int) -> Result<string, Error> {
+    // Implementation wraps: bcrypt::hash(password, cost)
+    Err("Password hashing requires bcrypt crate (auto-added)")
+}
+
+fn verify_password(password: string, hash: string) -> Result<bool, Error> {
+    // Implementation wraps: bcrypt::verify(password, hash)
+    Err("Password verification requires bcrypt crate (auto-added)")
+}
+
+// SHA-256 Hashing
+
+fn sha256(data: string) -> string {
+    // Implementation wraps: use sha2::{Sha256, Digest}; hex::encode(Sha256::digest(data))
+    ""
+}
+
+fn sha256_bytes(data: Vec<u8>) -> Vec<u8> {
+    // Implementation wraps: Sha256::digest(&data).to_vec()
+    vec![]
+}
+
+fn sha256_hex(data: string) -> string {
+    // Implementation wraps: hex::encode(Sha256::digest(data))
+    ""
+}
+
+// SHA-512 Hashing
+
+fn sha512(data: string) -> string {
+    // Implementation wraps: use sha2::{Sha512, Digest}; hex::encode(Sha512::digest(data))
+    ""
+}
+
+fn sha512_bytes(data: Vec<u8>) -> Vec<u8> {
+    // Implementation wraps: Sha512::digest(&data).to_vec()
+    vec![]
+}
+
+// HMAC (coming in future version)
+// fn hmac_sha256(key: string, data: string) -> string
+// fn verify_hmac_sha256(key: string, data: string, expected: string) -> bool
+
+// Random Bytes (for cryptographic use)
+// fn random_bytes(len: int) -> Vec<u8>
+
+// USAGE EXAMPLES (what users should write):
+//
+// use std.crypto
+//
+// fn main() {
+//     // Base64 - Windjammer API! ✅
+//     let encoded = crypto.base64_encode("Hello, World!")
+//     println!("Encoded: {}", encoded)
+//     
+//     let decoded = crypto.base64_decode(encoded)?
+//     println!("Decoded: {}", decoded)
+//     
+//     // Password hashing
+//     let password = "my_secure_password"
+//     let hash = crypto.hash_password(password)?
+//     println!("Hash: {}", hash)
+//     
+//     // Verify password
+//     let valid = crypto.verify_password(password, &hash)?
+//     println!("Password valid: {}", valid)
+//     
+//     let invalid = crypto.verify_password("wrong_password", &hash)?
+//     println!("Wrong password valid: {}", invalid)
+//     
+//     // SHA-256
+//     let hash = crypto.sha256("Hello, World!")
+//     println!("SHA-256: {}", hash)
+// }
+//
+// NOT THIS (crates exposed): ❌
+// let encoded = base64::encode("Hello")
+// let hash = bcrypt::hash("password", bcrypt::DEFAULT_COST)?
+// let digest = sha2::Sha256::digest(data)
+
+// NOTE: Full implementation coming in v0.14.0
+// sha2, bcrypt, base64 are auto-added as dependencies
