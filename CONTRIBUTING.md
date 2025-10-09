@@ -23,6 +23,9 @@ git clone https://github.com/yourusername/windjammer.git
 cd windjammer
 cargo build
 cargo test
+
+# Install pre-commit hooks (HIGHLY RECOMMENDED)
+./scripts/install-hooks.sh
 ```
 
 ### Running
@@ -62,14 +65,32 @@ We prefer features that:
 
 #### Development Guidelines
 
+**Pre-Commit Hook (Required):**
+We use a pre-commit hook to ensure code quality. **Install it first**:
+```bash
+./scripts/install-hooks.sh
+```
+
+The hook automatically runs before each commit:
+- ✅ `cargo fmt --all -- --check` - Ensures consistent formatting
+- ✅ `cargo clippy --all-targets --all-features` - Catches common mistakes
+- ✅ `cargo test` - Verifies all tests pass
+
+This prevents broken code from being pushed. **Never skip the hook** (unless you have a very good reason).
+
+To skip the hook (not recommended):
+```bash
+git commit --no-verify
+```
+
 **Code Style:**
 - Follow Rust conventions (rustfmt, clippy)
 - Add comments for complex logic
 - Use descriptive variable names
 
 **Testing:**
-- Add tests for every feature in `tests/compiler_tests.rs`
-- Add test fixtures in `tests/fixtures/`
+- Add tests for every feature in `tests/feature_tests.rs`
+- Add test fixtures in `tests/fixtures/` if needed
 - Ensure all tests pass: `cargo test`
 - Test with real examples when possible
 

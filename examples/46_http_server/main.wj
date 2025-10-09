@@ -1,0 +1,102 @@
+// Example 46: HTTP Server
+// Demonstrates Windjammer's std.http server abstraction
+
+use std.http
+
+// Handler functions
+fn handle_index(req: Request) -> ServerResponse {
+    ServerResponse::ok("Welcome to Windjammer HTTP Server!\n")
+}
+
+fn handle_hello(req: Request) -> ServerResponse {
+    match req.query("name") {
+        Some(name) => ServerResponse::ok(format!("Hello, {}!\n", name)),
+        None => ServerResponse::ok("Hello, World!\n")
+    }
+}
+
+fn handle_echo(req: Request) -> ServerResponse {
+    let method = req.method()
+    let path = req.path()
+    
+    let response_body = format!(
+        "Echo:\n  Method: {}\n  Path: {}\n",
+        method,
+        path
+    )
+    
+    ServerResponse::ok(response_body)
+}
+
+fn handle_json(req: Request) -> ServerResponse {
+    // In a real app, you'd use @derive(Serialize) on a struct
+    let json_response = r#"{"status": "ok", "message": "JSON response from Windjammer!"}"#
+    
+    ServerResponse::json(json_response)
+        .with_header("Content-Type", "application/json")
+}
+
+fn handle_status(req: Request) -> ServerResponse {
+    match req.path_param("code") {
+        Some(code) => {
+            match code.as_str() {
+                "200" => ServerResponse::ok("OK\n"),
+                "201" => ServerResponse::created("Created\n"),
+                "400" => ServerResponse::bad_request("Bad Request\n"),
+                "404" => ServerResponse::not_found(),
+                "500" => ServerResponse::internal_error("Internal Error\n"),
+                _ => ServerResponse::with_status(200, "Unknown status code\n")
+            }
+        },
+        None => ServerResponse::bad_request("Missing status code\n")
+    }
+}
+
+fn handle_not_found(req: Request) -> ServerResponse {
+    ServerResponse::not_found()
+}
+
+@async
+fn main() {
+    println!("=== HTTP Server Demo ===")
+    println!()
+    
+    println!("Setting up routes...")
+    
+    let router = Router::new()
+        .get("/", handle_index)
+        .get("/hello", handle_hello)
+        .get("/echo", handle_echo)
+        .any("/echo", handle_echo)
+        .get("/json", handle_json)
+        .get("/status/:code", handle_status)
+        .any("/*", handle_not_found)
+    
+    println!("Server ready!")
+    println!()
+    println!("Try these endpoints:")
+    println!("  GET  http://localhost:3000/")
+    println!("  GET  http://localhost:3000/hello")
+    println!("  GET  http://localhost:3000/hello?name=Alice")
+    println!("  GET  http://localhost:3000/echo")
+    println!("  POST http://localhost:3000/echo")
+    println!("  GET  http://localhost:3000/json")
+    println!("  GET  http://localhost:3000/status/200")
+    println!("  GET  http://localhost:3000/status/404")
+    println!()
+    println!("Starting server on http://0.0.0.0:3000...")
+    println!()
+    
+    match http.serve("0.0.0.0:3000", router).await {
+        Ok(_) => println!("Server stopped"),
+        Err(e) => println!("Server error: {}", e)
+    }
+    
+    println!()
+    println!("✨ HTTP Server with Windjammer!")
+    println!("   ✅ Using std.http abstraction (not axum directly)")
+    println!("   ✅ Dependencies added automatically")
+    println!("   ✅ Clean, Windjammer-native API")
+    println!("   ✅ Client + Server in one module!")
+}
+

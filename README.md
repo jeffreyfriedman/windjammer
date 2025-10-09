@@ -147,61 +147,113 @@ Zero-cost abstractions, memory safety, and blazing speed.
 - **Module system**: Import and use standard library modules with aliases ✨
 - **Error mapping**: Friendly error messages in Windjammer terms 🎯
 
-### 📚 "Batteries Included" Standard Library 🆕 **v0.14.0: Proper Abstractions!**
+### 📚 "Batteries Included" Standard Library 🆕 **v0.15.0: Server-Side Complete!**
 
-Windjammer provides a comprehensive standard library that **abstracts over best-in-class Rust crates** with clean, Windjammer-native APIs. v0.14.0 fixes the critical issue where stdlib modules leaked implementation details - now all APIs are properly abstracted!
+Windjammer provides a comprehensive standard library that **abstracts over best-in-class Rust crates** with clean, Windjammer-native APIs. All stdlib modules properly abstract their implementations - you write pure Windjammer code!
 
-**What Changed in v0.14.0**: ✅ All stdlib modules now hide their underlying Rust crate implementations, giving you:
-- **API Stability** - Windjammer controls the contract
+**What's New in v0.15.0**: 🚀 Complete web development stack!
+- ✅ **HTTP Server** - Build web services with `http.serve()` and routing
+- ✅ **File System** - Full file I/O with `std.fs`
+- ✅ **Logging** - Production-ready logging with `std.log`
+- ✅ **Regex** - Pattern matching with `std.regex`
+- ✅ **CLI Parsing** - Argument parsing with `std.cli`
+
+**Why Proper Abstractions Matter**:
+- **API Stability** - Windjammer controls the contract, not external crates
 - **Future Flexibility** - Can swap implementations without breaking your code
 - **True 80/20** - Simple APIs for 80% of use cases
+- **No Crate Leakage** - Never see `reqwest::`, `axum::`, or `clap::` in your code
 
-**Core Modules** (v0.14.0):
-- `std.json` - JSON parsing and serialization (wraps serde_json) ✅ **Abstracted**
-- `std.http` - HTTP client for API requests (wraps reqwest) ✅ **Abstracted**
-- `std.time` - Date/time handling (wraps chrono) ✅ **Abstracted**
-- `std.crypto` - Cryptography (wraps sha2, bcrypt, base64) ✅ **Abstracted**
-- `std.random` - Random generation (wraps rand) ✅ **Abstracted**
-- `std.db` - Database access (wraps sqlx) ✅ **Abstracted**
-- `std.collections` - HashMap, HashSet, BTreeMap, BTreeSet, VecDeque
+**Complete Modules** (v0.15.0):
+
+**Web Development:**
+- `std.http` - HTTP client + server (wraps reqwest + axum) ✅ **Complete Stack**
+- `std.json` - JSON parsing and serialization (wraps serde_json)
+
+**File System & I/O:**
+- `std.fs` - File operations, directories, metadata (Rust stdlib) 🆕 **v0.15.0**
+- `std.log` - Logging with multiple levels (wraps env_logger) 🆕 **v0.15.0**
+
+**Data & Patterns:**
+- `std.regex` - Regular expressions (wraps regex) 🆕 **v0.15.0**
+- `std.db` - Database access (wraps sqlx)
+- `std.time` - Date/time utilities (wraps chrono)
+- `std.crypto` - Cryptography (wraps sha2, bcrypt, base64)
+- `std.random` - Random generation (wraps rand)
+
+**Developer Tools:**
+- `std.cli` - CLI argument parsing (wraps clap) 🆕 **v0.15.0**
 - `std.testing` - Testing framework with assertions
-- `std.async` - Async utilities (sleep, timers)
+- `std.collections` - HashMap, HashSet, BTreeMap, BTreeSet, VecDeque
+
+**System:**
 - `std.env` - Environment variables
 - `std.process` - Process execution
-- `std.math` - Mathematical functions
-- `std.strings` - String manipulation utilities
+- `std.async` - Async utilities
 
-**Example - Clean Windjammer APIs (No Crate Leakage!)**:
+**Utilities:**
+- `std.math` - Mathematical functions
+- `std.strings` - String manipulation
+
+**Example - Complete Web Service (v0.15.0)**:
 ```windjammer
-use std.json
 use std.http
+use std.json
+use std.log
+use std.fs
 
 @derive(Serialize, Deserialize, Debug)
 struct User {
+    id: int,
     name: string,
     email: string
 }
 
+// HTTP Server handlers
+fn handle_index(req: Request) -> ServerResponse {
+    log.info("GET /")
+    ServerResponse::ok("Welcome to Windjammer API!")
+}
+
+fn handle_user(req: Request) -> ServerResponse {
+    let id = req.path_param("id")?
+    log.info_with("GET /users/:id", "id", id)
+    
+    let user = User { id: 1, name: "Alice", email: "alice@example.com" }
+    ServerResponse::json(user)
+}
+
 @async
 fn main() {
-    // Clean Windjammer API - no serde_json:: or reqwest::
-    let user = User {
-        name: "Alice".to_string(),
-        email: "alice@example.com".to_string()
+    // Initialize logging
+    log.init_with_level("info")
+    
+    // Read configuration
+    match fs.read_to_string("config.json") {
+        Ok(config) => log.info("Configuration loaded"),
+        Err(e) => log.warn_with("Using defaults", "error", e)
     }
     
-    // JSON - uses json.stringify(), not serde_json::to_string()
-    match json.stringify(&user) {
-        Ok(json_str) => println!("JSON: {}", json_str),
-        Err(e) => println!("Error: {}", e)
-    }
+    // Setup HTTP server with routing - NO axum:: in your code!
+    let router = Router::new()
+        .get("/", handle_index)
+        .get("/users/:id", handle_user)
     
-    // HTTP - uses http.get(), not reqwest::get()
-    match http.get("https://api.example.com/data").await {
-        Ok(response) => println!("Status: {}", response.status_code()),
-        Err(e) => println!("Error: {}", e)
-    }
+    log.info("Server starting on http://0.0.0.0:3000")
+    http.serve("0.0.0.0:3000", router).await
 }
+
+// NO THIS (crates leaked): ❌
+// axum::Router::new()
+// reqwest::get()
+// serde_json::to_string()
+// env_logger::init()
+
+// YES THIS (clean Windjammer): ✅
+// http.serve()
+// http.get()
+// json.stringify()
+// log.init()
 ```
 
 ### 🛠️ Unified Project Management 🆕 **v0.13.0-v0.14.0**
