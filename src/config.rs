@@ -112,13 +112,13 @@ impl WjConfig {
         cargo_toml.push_str(&format!("name = \"{}\"\n", self.package.name));
         cargo_toml.push_str(&format!("version = \"{}\"\n", self.package.version));
         cargo_toml.push_str("edition = \"2021\"  # Rust edition\n");
-        cargo_toml.push_str("\n");
+        cargo_toml.push('\n');
 
         // [lib] section if this is a library
         if self.lib.is_some() {
             cargo_toml.push_str("[lib]\n");
             cargo_toml.push_str("crate-type = [\"lib\"]\n");
-            cargo_toml.push_str("\n");
+            cargo_toml.push('\n');
         }
 
         // [dependencies] section
@@ -160,7 +160,7 @@ impl WjConfig {
                     }
                 }
             }
-            cargo_toml.push_str("\n");
+            cargo_toml.push('\n');
         }
 
         // [dev-dependencies] section
@@ -202,7 +202,7 @@ impl WjConfig {
                     }
                 }
             }
-            cargo_toml.push_str("\n");
+            cargo_toml.push('\n');
         }
 
         // [profile.*] sections
@@ -224,7 +224,7 @@ impl WjConfig {
                 cargo_toml.push_str(&format!("lto = {}\n", lto));
             }
 
-            cargo_toml.push_str("\n");
+            cargo_toml.push('\n');
         }
 
         cargo_toml
