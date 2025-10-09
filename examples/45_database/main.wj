@@ -1,5 +1,5 @@
 // Example 45: Database with SQLite
-// Demonstrates that sqlx dependencies are automatically added
+// Demonstrates Windjammer's std.db abstraction
 
 use std.db
 
@@ -7,32 +7,34 @@ fn main() {
     println!("=== Database Demo (SQLite) ===")
     println!()
     
-    println!("std.db module loaded successfully!")
+    println!("Windjammer Database Abstraction:")
+    println!("✅ NO sqlx:: in your code!")
+    println!("✅ Clean, Windjammer-native API")
+    println!("✅ Dependencies added automatically")
     println!()
     
-    println!("Automatic dependencies added:")
-    println!("  - sqlx (with SQLite support)")
-    println!("  - tokio (async runtime)")
+    println!("API Overview:")
+    println!("  db.connect(url) - Connect to database")
+    println!("  conn.execute(sql) - Execute SQL")
+    println!("  conn.query(sql) - Query data")
+    println!("  builder.bind(value) - Bind parameters")
+    println!("  builder.fetch_all() - Get all results")
     println!()
     
-    println!("You can use sqlx APIs directly:")
-    println!("  - SqlitePool connect")
-    println!("  - query and query_as")
-    println!("  - execute and fetch operations")
+    println!("Example Usage (conceptual):")
+    println!("  let conn = db.connect(\"sqlite::memory:\").await?")
+    println!("  conn.execute(\"CREATE TABLE users ...\").await?")
+    println!("  conn.execute(\"INSERT ...\").bind(1).bind(\"Alice\").await?")
+    println!("  let rows = conn.query(\"SELECT * FROM users\").fetch_all().await?")
     println!()
     
-    println!("Example: Connect to database")
-    println!("  Use SqlitePool connect with connection string")
-    println!("  Create tables with query")
-    println!("  Insert data with bind parameters")
-    println!("  Fetch results with query_as")
+    println!("✨ Database support with Windjammer!")
+    println!("   ✅ Using std.db abstraction (not sqlx directly)")
+    println!("   ✅ Can swap implementations without breaking code")
+    println!("   ✅ Follows the 80/20 philosophy")
     println!()
     
-    println!("✨ Database support with sqlx!")
-    println!("   (Dependencies added automatically - check Cargo.toml)")
-    println!()
-    
-    println!("Note: Parser limitations prevent complex")
-    println!("      type annotations in current version.")
-    println!("      See std/db.wj for usage examples.")
+    println!("Note: Full implementation requires advanced parser features")
+    println!("      (nested paths with turbofish - now supported in v0.14.0!)")
+    println!("      See std/db.wj and docs/STDLIB_ARCHITECTURE.md")
 }

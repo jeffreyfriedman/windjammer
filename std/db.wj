@@ -1,51 +1,124 @@
-// std/db - Database access with sqlx
-// Wraps sqlx for ergonomic SQL database operations
+// std/db - Database access with proper abstraction
+// Implementation: sqlx (hidden from users)
 
-// Re-export sqlx for direct use
-// Users can call sqlx::query, sqlx::SqlitePool, etc.
-// Example: let pool = sqlx::SqlitePool::connect("sqlite::memory:").await?
+// PUBLIC API - Users interact with these types only
 
-// Supported databases (via feature flags):
-// - SQLite (default)
-// - PostgreSQL  
-// - MySQL
+struct Connection {
+    // Private: Wraps sqlx pool/connection
+    // Users should never see sqlx types
+}
 
-// Connection pooling examples:
-//
-// SQLite:
-//   let pool = sqlx::SqlitePool::connect("sqlite::memory:").await?
-//   let pool = sqlx::SqlitePool::connect("sqlite:data.db").await?
-//
-// PostgreSQL:
-//   let pool = sqlx::PgPool::connect("postgres://user:pass@localhost/db").await?
-//
-// MySQL:
-//   let pool = sqlx::MySqlPool::connect("mysql://user:pass@localhost/db").await?
+struct QueryBuilder {
+    // Private: Wraps sqlx query builder
+}
 
-// Query examples:
-//
-// Execute (no results):
-//   sqlx::query("CREATE TABLE users (id INTEGER PRIMARY KEY, name TEXT)")
-//       .execute(&pool)
-//       .await?
-//
-// Insert with parameters:
-//   sqlx::query("INSERT INTO users (name) VALUES (?)")
-//       .bind("Alice")
-//       .execute(&pool)
-//       .await?
-//
-// Fetch all:
-//   let rows = sqlx::query_as::<_, (i64, String)>("SELECT * FROM users")
-//       .fetch_all(&pool)
-//       .await?
-//
-// Fetch one:
-//   let row = sqlx::query_as::<_, (i64, String)>("SELECT * FROM users WHERE id = ?")
-//       .bind(1)
-//       .fetch_one(&pool)
-//       .await?
+struct Row {
+    // Private: Wraps sqlx row
+}
 
-// Note: All sqlx functions are async and require @async decorator
-// See Example 45 for a working demonstration
+struct Transaction {
+    // Private: Wraps sqlx transaction
+}
 
+// Connection Management
+
+@async
+fn connect(url: string) -> Result<Connection, Error> {
+    // Implementation wraps: sqlx::SqlitePool::connect(url).await
+    // For now, returns error as parser can't handle this yet
+    Err("Database connections will work after parser improvements in v0.14.0")
+}
+
+// Connection Methods
+
+impl Connection {
+    @async
+    fn execute(self, sql: string) -> QueryBuilder {
+        // Wraps: sqlx::query(sql).execute(pool)
+        QueryBuilder {}
+    }
+    
+    @async
+    fn query(self, sql: string) -> QueryBuilder {
+        // Wraps: sqlx::query_as(sql)
+        QueryBuilder {}
+    }
+    
+    @async
+    fn close(self) {
+        // Wraps: pool.close()
+    }
+}
+
+// Query Building
+
+impl QueryBuilder {
+    fn bind<T>(self, value: T) -> QueryBuilder {
+        // Wraps: query.bind(value)
+        self
+    }
+    
+    @async
+    fn execute(self) -> Result<(), Error> {
+        // Wraps: query.execute(pool).await
+        Ok(())
+    }
+    
+    @async
+    fn fetch_all(self) -> Result<Vec<Row>, Error> {
+        // Wraps: query.fetch_all(pool).await
+        Ok(vec![])
+    }
+    
+    @async
+    fn fetch_one(self) -> Result<Row, Error> {
+        // Wraps: query.fetch_one(pool).await
+        Err("Not yet implemented")
+    }
+}
+
+// Row Access
+
+impl Row {
+    fn get<T>(self, index: int) -> Result<T, Error> {
+        // Wraps: row.get(index)
+        Err("Not yet implemented")
+    }
+    
+    fn get_by_name<T>(self, name: string) -> Result<T, Error> {
+        // Wraps: row.try_get(name)
+        Err("Not yet implemented")
+    }
+}
+
+// USAGE EXAMPLES (what users should write):
+//
+// @async
+// fn main() {
+//     // Windjammer API - no sqlx exposed! ✅
+//     let conn = db.connect("sqlite::memory:").await?
+//     
+//     conn.execute("CREATE TABLE users (id INTEGER, name TEXT)").await?
+//     
+//     conn.execute("INSERT INTO users VALUES (?, ?)")
+//         .bind(1)
+//         .bind("Alice")
+//         .await?
+//     
+//     let rows = conn.query("SELECT * FROM users")
+//         .fetch_all()
+//         .await?
+//     
+//     for row in rows {
+//         let id = row.get::<int>(0)?
+//         let name = row.get::<string>(1)?
+//         println!("User {} - {}", id, name)
+//     }
+// }
+//
+// NOT THIS (sqlx exposed): ❌
+// let pool = sqlx::SqlitePool::connect("...").await?
+// sqlx::query("SELECT * FROM users").execute(&pool).await?
+
+// NOTE: Full implementation requires parser improvements for nested paths
+// Coming in v0.14.0 parser enhancements

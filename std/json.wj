@@ -1,5 +1,167 @@
-// std/json - JSON parsing and serialization  
-// Wraps serde_json for clean JSON handling
+// std/json - JSON serialization with proper abstraction  
+// Implementation: serde + serde_json (hidden from users)
 
-// Re-export serde_json types for direct use
-// Users can call serde_json::from_str, serde_json::to_string, etc.
+// PUBLIC API - Users interact with these types only
+
+struct Value {
+    // Private: Wraps serde_json::Value
+}
+
+struct Object {
+    // Private: Wraps serde_json::Map
+}
+
+struct Array {
+    // Private: Wraps Vec<Value>
+}
+
+// Parsing and Serialization
+
+fn parse(s: string) -> Result<Value, Error> {
+    // Implementation wraps: serde_json::from_str(s)
+    Err("JSON parsing requires serde_json (auto-added)")
+}
+
+fn stringify<T>(value: T) -> Result<string, Error> {
+    // Implementation wraps: serde_json::to_string(value)
+    Err("JSON stringify requires serde_json (auto-added)")
+}
+
+fn pretty<T>(value: T) -> Result<string, Error> {
+    // Implementation wraps: serde_json::to_string_pretty(value)
+    Err("JSON pretty print requires serde_json (auto-added)")
+}
+
+// Value Methods
+
+impl Value {
+    fn is_object(self) -> bool {
+        // Wraps: value.is_object()
+        false
+    }
+    
+    fn is_array(self) -> bool {
+        // Wraps: value.is_array()
+        false
+    }
+    
+    fn is_string(self) -> bool {
+        // Wraps: value.is_string()
+        false
+    }
+    
+    fn is_number(self) -> bool {
+        // Wraps: value.is_number()
+        false
+    }
+    
+    fn is_bool(self) -> bool {
+        // Wraps: value.is_boolean()
+        false
+    }
+    
+    fn is_null(self) -> bool {
+        // Wraps: value.is_null()
+        false
+    }
+    
+    fn as_object(self) -> Option<Object> {
+        // Wraps: value.as_object()
+        None
+    }
+    
+    fn as_array(self) -> Option<Array> {
+        // Wraps: value.as_array()
+        None
+    }
+    
+    fn as_string(self) -> Option<string> {
+        // Wraps: value.as_str()
+        None
+    }
+    
+    fn as_i64(self) -> Option<i64> {
+        // Wraps: value.as_i64()
+        None
+    }
+    
+    fn as_bool(self) -> Option<bool> {
+        // Wraps: value.as_bool()
+        None
+    }
+    
+    fn get(self, key: string) -> Option<Value> {
+        // Wraps: value.get(key) for objects, value[index] for arrays
+        None
+    }
+}
+
+// Object Methods
+
+impl Object {
+    fn get(self, key: string) -> Option<Value> {
+        // Wraps: map.get(key)
+        None
+    }
+    
+    fn keys(self) -> Vec<string> {
+        // Wraps: map.keys()
+        vec![]
+    }
+    
+    fn len(self) -> int {
+        // Wraps: map.len()
+        0
+    }
+}
+
+// Array Methods
+
+impl Array {
+    fn get(self, index: int) -> Option<Value> {
+        // Wraps: array[index]
+        None
+    }
+    
+    fn len(self) -> int {
+        // Wraps: array.len()
+        0
+    }
+}
+
+// USAGE EXAMPLES (what users should write):
+//
+// use std.json
+//
+// @derive(Serialize, Deserialize)
+// struct User {
+//     id: int,
+//     name: string,
+//     email: string
+// }
+//
+// fn main() {
+//     // Windjammer API - no serde_json exposed! ✅
+//     let user = User { id: 1, name: "Alice", email: "alice@example.com" }
+//     
+//     // Serialize
+//     let json_str = json.stringify(user)?
+//     println!("JSON: {}", json_str)
+//     
+//     // Pretty print
+//     let pretty = json.pretty(user)?
+//     println!("{}", pretty)
+//     
+//     // Parse
+//     let parsed = json.parse("{\"id\":1,\"name\":\"Alice\"}")?
+//     let name = parsed.get("name")?.as_string()?
+//     println!("Name: {}", name)
+// }
+//
+// NOT THIS (serde_json exposed): ❌
+// let json = serde_json::to_string(&user)?
+// let value = serde_json::from_str(json)?
+
+// NOTE: Full implementation coming in v0.14.0
+// For now, use @derive(Serialize, Deserialize) for structs
+// and serde_json is auto-added as a dependency

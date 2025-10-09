@@ -1,6 +1,6 @@
 [package]
 name = "windjammer"
-version = "0.13.0"
+version = "0.14.0"
 edition = "2021"
 default-run = "windjammer"
 authors = ["Jeffrey Friedman <jeffrey@example.com>", "Windjammer Contributors"]
@@ -49,6 +49,8 @@ colored = "2.1"
 # JSON parsing for rustc diagnostics
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
+# TOML parsing for wj.toml
+toml = "0.8"
 # Temporary directories for wj run
 tempfile = "3.8"
 
