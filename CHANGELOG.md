@@ -7,6 +7,260 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.14.0] - 2025-10-09
+
+### 🎯 CRITICAL: Stdlib Abstraction Layer
+
+**THE BIG FIX**: v0.13.0 stdlib leaked implementation details (`sqlx::`, `reqwest::`, `chrono::`), breaking the 80/20 philosophy. v0.14.0 fixes this with **proper abstractions** for ALL stdlib modules.
+
+**What Changed**:
+- ❌ **Before**: Users had to use Rust crate APIs directly
+- ✅ **After**: Clean, Windjammer-native APIs that hide implementation
+
+**Example - Database (Before vs After)**:
+```windjammer
+// v0.13.0 (BAD) - Rust crates leaked ❌
+let pool = sqlx::SqlitePool::connect("...").await?
+let query = sqlx::query("SELECT *").fetch_all(&pool).await?
+
+// v0.14.0 (GOOD) - Windjammer abstraction ✅
+let conn = db.connect("...").await?
+let rows = conn.query("SELECT *").fetch_all().await?
+```
+
+**Why This Matters**:
+- ✅ **API Stability**: Windjammer controls the contract, not external crates
+- ✅ **Future Flexibility**: Can swap underlying implementations without breaking code
+- ✅ **80/20 Philosophy**: Simple, curated API for 80% of use cases
+- ✅ **True Abstraction**: Implementation details completely hidden
+
+### Added - Stdlib Abstractions
+
+**All stdlib modules now have proper abstractions**:
+
+1. **`std/json`** - JSON operations (hides serde_json)
+   - `json.parse(string) -> Result<Value>` 
+   - `json.stringify<T>(value) -> Result<string>`
+   - `json.pretty<T>(value) -> Result<string>`
+   - `Value`, `Object`, `Array` types
+
+2. **`std/http`** - HTTP client (hides reqwest)
+   - `http.get(url) -> Response`
+   - `http.post(url) -> RequestBuilder`
+   - `Response.text() -> string`, `Response.json<T>() -> T`
+   - `RequestBuilder.header()`, `.json()`, `.send()`
+
+3. **`std/time`** - Time/date utilities (hides chrono)
+   - `time.now() -> DateTime` (local time)
+   - `time.utc_now() -> DateTime` (UTC time)
+   - `DateTime.format(fmt)`, `.timestamp()`, `.year()`, etc.
+
+4. **`std/crypto`** - Cryptography (hides base64, bcrypt, sha2)
+   - `crypto.base64_encode(data) -> string`
+   - `crypto.hash_password(pwd) -> Result<string>`
+   - `crypto.sha256(data) -> string`
+   - `crypto.verify_password(pwd, hash) -> bool`
+
+5. **`std/random`** - Random generation (hides rand)
+   - `random.range(min, max) -> int`
+   - `random.shuffle<T>(vec) -> Vec<T>`
+   - `random.choice<T>(vec) -> Option<T>`
+   - `random.bool()`, `.float()`, `.alphanumeric(len)`
+
+6. **`std/db`** - Database access (hides sqlx)
+   - `db.connect(url) -> Connection`
+   - `Connection.execute(sql)`, `.query(sql)`
+   - `QueryBuilder.bind(value)`, `.fetch_all()`
+
+### Added - Project Management
+
+**Unified `wj` CLI Extended**:
+- ✅ `wj new <name>` - Scaffold new projects
+  - Templates: `cli`, `web`, `lib`, `wasm`
+  - Auto-generates `wj.toml`, `.gitignore`, `README.md`
+  - Initializes git repository
+- ✅ `wj add <package>` - Add dependencies
+  - `wj add reqwest --features json`
+  - Updates `wj.toml` and regenerates `Cargo.toml`
+- ✅ `wj remove <package>` - Remove dependencies
+
+**`wj.toml` Configuration**:
+- Windjammer-native config format
+- Automatically translates to `Cargo.toml`
+- Clean syntax for dependencies, profiles, targets
+
+**Example Workflow**:
+```bash
+$ wj new my-app --template web
+Creating Windjammer project: my-app
+  ✓ Created src/main.wj
+  ✓ Created wj.toml
+  ✓ Created README.md
+  ✓ Initialized git repository
+
+$ cd my-app
+$ wj add serde --features derive
+✓ Added serde to wj.toml
+✓ Updated Cargo.toml
+
+$ wj run src/main.wj
+```
+
+### Added - Parser Improvements
+
+**Nested Path Parsing**:
+- ✅ `sqlx::SqlitePool::connect()` - Multi-level paths
+- ✅ `std::fs::File::open()` - Standard library paths
+- ✅ `chrono::Utc::now()` - Complex nested paths
+
+**Turbofish in Nested Paths**:
+- ✅ `response.json::<User>()` - Method turbofish
+- ✅ `Vec::<int>::new()` - Static method turbofish
+- ✅ `Option::<string>::Some("test")` - Enum variant turbofish
+- ✅ `parse::<int>("42")` - Function turbofish
+
+**Enhanced Type Parsing**:
+- Mixed `.` and `::` syntax in types
+- Associated types vs path segments disambiguation
+- Improved lookahead for complex type expressions
+
+### Added - Documentation
+
+**New Documentation**:
+- `docs/STDLIB_ARCHITECTURE.md` - Abstraction principles and patterns
+- `docs/TOOLING_VISION.md` - Future CLI features
+- `docs/V140_PLAN.md` - This release's roadmap
+
+**Updated Documentation**:
+- All stdlib examples (41-45) now use proper abstractions
+- No more `sqlx::`, `reqwest::`, `chrono::` in examples
+- Examples demonstrate Windjammer APIs exclusively
+
+### Changed - Breaking Changes ⚠️
+
+**Stdlib API Changes** (intentional):
+```windjammer
+// OLD (v0.13.0) - BROKEN ❌
+let json = serde_json::to_string(&data)?
+let response = reqwest::get(url).await?
+let now = chrono::Utc::now()
+
+// NEW (v0.14.0) - CORRECT ✅
+let json = json.stringify(&data)?
+let response = http.get(url).await?
+let now = time.utc_now()
+```
+
+**Why Break Compatibility?**
+- v0.13.0 was fundamentally flawed (leaked implementations)
+- Better to fix now before v1.0.0
+- Migration is straightforward (mechanical changes)
+- Enables future flexibility (can swap crates)
+
+### Migration Guide
+
+**Step 1: Update JSON code**:
+```windjammer
+// Replace:
+serde_json::to_string(&x)
+serde_json::to_string_pretty(&x)
+serde_json::from_str(s)
+
+// With:
+json.stringify(&x)
+json.pretty(&x)
+json.parse(s)
+```
+
+**Step 2: Update HTTP code**:
+```windjammer
+// Replace:
+reqwest::get(url).await?
+response.status()
+response.text().await?
+
+// With:
+http.get(url).await?
+response.status_code()
+response.text().await?
+```
+
+**Step 3: Update Time code**:
+```windjammer
+// Replace:
+chrono::Utc::now()
+chrono::Local::now()
+
+// With:
+time.utc_now()
+time.now()
+```
+
+**Step 4: Update Crypto code**:
+```windjammer
+// Replace:
+base64::encode(data)
+bcrypt::hash(pwd, DEFAULT_COST)
+Sha256::digest(data)
+
+// With:
+crypto.base64_encode(data)
+crypto.hash_password(pwd)
+crypto.sha256(data)
+```
+
+### Technical Details
+
+**Abstraction Architecture**:
+- Stdlib modules define Windjammer-native types
+- Private `_inner` fields hold Rust crate objects
+- Public methods delegate to underlying crate
+- Users never see implementation details
+
+**Parser Improvements**:
+- Extended primary expression parsing for `::` paths
+- Turbofish support in postfix operator loop
+- Type parser handles nested `::` with lookahead
+- Distinguishes associated types from path segments
+
+**Project Management**:
+- Templates in `templates/` directory (cli, web, lib, wasm)
+- `wj.toml` parser in `src/config.rs` using `toml` crate
+- Dependency commands in `src/cli/add.rs` and `remove.rs`
+- Automatic `Cargo.toml` generation from `wj.toml`
+
+### Testing
+
+**Updated Examples**:
+- Example 41: JSON - uses `json.stringify()`
+- Example 42: HTTP - uses `http.get()`
+- Example 43: Time - uses `time.now()`
+- Example 44: Crypto - uses `crypto.base64_encode()`
+- Example 45: Database - showcases `db.connect()` API
+
+**All examples verified**:
+- No direct crate access (`::` from external crates)
+- Clean Windjammer APIs only
+- Proper error handling with `Result`
+
+### Performance
+
+**Zero Overhead**:
+- Abstractions are thin wrappers
+- Compile-time delegation
+- Same generated Rust code
+- No runtime cost
+
+### Future Work
+
+**v0.15.0 Planned**:
+- HTTP server abstraction (`http.serve()`)
+- More stdlib modules (regex, cli, log)
+- Advanced tooling (`wj watch`, `wj docs`)
+- Parser improvements for edge cases
+
+---
+
 ## [0.13.0] - 2025-10-08
 
 ### Added - Developer Experience & Database Support 🛠️

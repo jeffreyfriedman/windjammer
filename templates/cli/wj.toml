@@ -1,0 +1,16 @@
+[package]
+name = "{{PROJECT_NAME}}"
+version = "0.1.0"
+edition = "2025"
+
+[dependencies]
+# Add your dependencies here
+# Example:
+# reqwest = "0.11"
+# serde = { version = "1.0", features = ["derive"] }
+
+[dev-dependencies]
+
+[profile.release]
+opt-level = 3
+lto = true
