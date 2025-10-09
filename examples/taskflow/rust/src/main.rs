@@ -10,7 +10,7 @@ mod models;
 use axum::{
     extract::Extension,
     http::StatusCode,
-    routing::{get, post},
+    routing::{delete, get, patch, post},
     Router,
 };
 use sqlx::postgres::PgPoolOptions;
@@ -54,6 +54,39 @@ async fn main() {
         .route("/api/v1/auth/login", post(handlers::auth::login))
         .route("/api/v1/auth/me", get(handlers::auth::me))
         .route("/api/v1/auth/logout", post(handlers::auth::logout))
+        // User endpoints
+        .route("/api/v1/users", get(handlers::users::list))
+        .route("/api/v1/users/:id", get(handlers::users::get))
+        .route("/api/v1/users/:id", patch(handlers::users::update))
+        .route("/api/v1/users/:id", delete(handlers::users::delete))
+        // Project endpoints
+        .route("/api/v1/projects", get(handlers::projects::list))
+        .route("/api/v1/projects", post(handlers::projects::create))
+        .route("/api/v1/projects/:id", get(handlers::projects::get))
+        .route("/api/v1/projects/:id", patch(handlers::projects::update))
+        .route("/api/v1/projects/:id", delete(handlers::projects::delete))
+        .route(
+            "/api/v1/projects/:id/members",
+            post(handlers::projects::add_member),
+        )
+        .route(
+            "/api/v1/projects/:id/members/:user_id",
+            delete(handlers::projects::remove_member),
+        )
+        // Task endpoints
+        .route(
+            "/api/v1/projects/:project_id/tasks",
+            get(handlers::tasks::list_by_project),
+        )
+        .route(
+            "/api/v1/projects/:project_id/tasks",
+            post(handlers::tasks::create),
+        )
+        .route("/api/v1/tasks/:id", get(handlers::tasks::get))
+        .route("/api/v1/tasks/:id", patch(handlers::tasks::update))
+        .route("/api/v1/tasks/:id", delete(handlers::tasks::delete))
+        .route("/api/v1/tasks/:id/assign", post(handlers::tasks::assign))
+        .route("/api/v1/tasks/search", get(handlers::tasks::search))
         // Share state
         .layer(Extension(pool))
         .layer(Extension(config.clone()));
