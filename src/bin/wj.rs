@@ -4,6 +4,7 @@
 // more cohesive development experience.
 //
 // Usage:
+//   wj new <name>        Create a new project
 //   wj build <file>      Build Windjammer project
 //   wj run <file>        Compile and execute
 //   wj test              Run tests
@@ -25,6 +26,17 @@ struct Cli {
 
 #[derive(Subcommand)]
 enum Commands {
+    /// Create a new Windjammer project
+    New {
+        /// Project name
+        #[arg(value_name = "NAME")]
+        name: String,
+
+        /// Project template (cli, web, lib, wasm)
+        #[arg(short, long, default_value = "cli")]
+        template: String,
+    },
+
     /// Build a Windjammer project
     Build {
         /// Path to .wj file or directory
@@ -74,12 +86,42 @@ enum Commands {
 
     /// Type check without building
     Check,
+
+    /// Add a dependency to wj.toml
+    Add {
+        /// Package name
+        #[arg(value_name = "PACKAGE")]
+        package: String,
+
+        /// Package version
+        #[arg(short, long)]
+        version: Option<String>,
+
+        /// Comma-separated list of features
+        #[arg(short, long)]
+        features: Option<String>,
+
+        /// Local path dependency
+        #[arg(short, long)]
+        path: Option<String>,
+    },
+
+    /// Remove a dependency from wj.toml
+    Remove {
+        /// Package name
+        #[arg(value_name = "PACKAGE")]
+        package: String,
+    },
 }
 
 fn main() -> anyhow::Result<()> {
     let cli = Cli::parse();
 
     match cli.command {
+        Commands::New { name, template } => {
+            windjammer::cli::new::handle_new_command(&name, &template)
+                .map_err(|e| anyhow::anyhow!("{}", e))?;
+        }
         Commands::Build {
             path,
             output,
@@ -101,6 +143,22 @@ fn main() -> anyhow::Result<()> {
         }
         Commands::Check => {
             windjammer::cli::check::execute()?;
+        }
+        Commands::Add {
+            package,
+            version,
+            features,
+            path,
+        } => {
+            windjammer::cli::add::execute(
+                &package,
+                version.as_deref(),
+                features.as_deref(),
+                path.as_deref(),
+            )?;
+        }
+        Commands::Remove { package } => {
+            windjammer::cli::remove::execute(&package)?;
         }
     }
 

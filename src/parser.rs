@@ -1433,27 +1433,83 @@ impl Parser {
                 let mut type_name = name.clone();
                 self.advance();
 
-                // Handle qualified type names (module.Type)
-                while self.current_token() == &Token::Dot {
-                    self.advance();
-                    if let Token::Ident(segment) = self.current_token() {
-                        type_name.push('.');
-                        type_name.push_str(segment);
+                // Handle qualified type names with both . and :: (module.Type or module::Type)
+                loop {
+                    if self.current_token() == &Token::Dot {
                         self.advance();
-                    } else {
-                        return Err("Expected identifier after '.' in type name".to_string());
-                    }
-                }
+                        if let Token::Ident(segment) = self.current_token() {
+                            type_name.push('.');
+                            type_name.push_str(segment);
+                            self.advance();
+                        } else {
+                            return Err("Expected identifier after '.' in type name".to_string());
+                        }
+                    } else if self.current_token() == &Token::ColonColon {
+                        // Look ahead to check if this is an associated type or path segment
+                        if self.position + 1 < self.tokens.len() {
+                            if let Token::Ident(next_segment) = &self.tokens[self.position + 1] {
+                                let next_segment_str = next_segment.clone(); // Clone before any mutable borrows
 
-                // Check for associated type: Self::Item, T::Output
-                if self.current_token() == &Token::ColonColon {
-                    self.advance();
-                    if let Token::Ident(assoc_name) = self.current_token() {
-                        let assoc_name = assoc_name.clone();
-                        self.advance();
-                        return Ok(Type::Associated(type_name, assoc_name));
+                                // Could be either:
+                                // 1. Path segment: std::fs::File
+                                // 2. Associated type: Self::Item
+
+                                // For now, check if the next token after the identifier is a generic or end
+                                // to determine if this is the final segment (associated type)
+                                if self.position + 2 < self.tokens.len() {
+                                    let after_next = &self.tokens[self.position + 2];
+                                    match after_next {
+                                        Token::Lt
+                                        | Token::Comma
+                                        | Token::Gt
+                                        | Token::RParen
+                                        | Token::RBrace
+                                        | Token::Semicolon
+                                        | Token::FatArrow
+                                        | Token::LBrace
+                                        | Token::Where => {
+                                            // This looks like an associated type (final segment)
+                                            self.advance(); // consume ::
+                                            self.advance(); // consume identifier
+                                            return Ok(Type::Associated(
+                                                type_name,
+                                                next_segment_str,
+                                            ));
+                                        }
+                                        Token::ColonColon => {
+                                            // More path segments to come
+                                            type_name.push_str("::");
+                                            type_name.push_str(&next_segment_str);
+                                            self.advance(); // consume ::
+                                            self.advance(); // consume identifier
+                                            continue;
+                                        }
+                                        _ => {
+                                            // Assume associated type
+                                            self.advance(); // consume ::
+                                            self.advance(); // consume identifier
+                                            return Ok(Type::Associated(
+                                                type_name,
+                                                next_segment_str,
+                                            ));
+                                        }
+                                    }
+                                } else {
+                                    // End of tokens, treat as associated type
+                                    self.advance(); // consume ::
+                                    self.advance(); // consume identifier
+                                    return Ok(Type::Associated(type_name, next_segment_str));
+                                }
+                            } else {
+                                return Err(
+                                    "Expected identifier after '::' in type name".to_string()
+                                );
+                            }
+                        } else {
+                            return Err("Expected identifier after '::' in type name".to_string());
+                        }
                     } else {
-                        return Err("Expected associated type name after '::'".to_string());
+                        break;
                     }
                 }
 
@@ -2407,8 +2463,31 @@ impl Parser {
                 Expression::Literal(Literal::Bool(b))
             }
             Token::Ident(name) => {
-                let name = name.clone();
+                let mut qualified_name = name.clone();
                 self.advance();
+
+                // Handle qualified paths with :: (e.g., sqlx::SqlitePool, std::fs::File)
+                while self.current_token() == &Token::ColonColon {
+                    // Look ahead to see if there's an identifier after ::
+                    if self.position + 1 < self.tokens.len() {
+                        if let Token::Ident(next_name) = &self.tokens[self.position + 1] {
+                            // This is a qualified path segment
+                            qualified_name.push_str("::");
+                            qualified_name.push_str(next_name);
+                            self.advance(); // consume ::
+                            self.advance(); // consume identifier
+                        } else if let Token::Lt = &self.tokens[self.position + 1] {
+                            // This is turbofish (e.g., Type::<T>), stop here
+                            break;
+                        } else {
+                            // Unknown token after ::, stop here
+                            break;
+                        }
+                    } else {
+                        // No more tokens, stop
+                        break;
+                    }
+                }
 
                 // Check for struct literal
                 if self.current_token() == &Token::LBrace {
@@ -2440,9 +2519,12 @@ impl Parser {
                     }
 
                     self.expect(Token::RBrace)?;
-                    Expression::StructLiteral { name, fields }
+                    Expression::StructLiteral {
+                        name: qualified_name,
+                        fields,
+                    }
                 } else {
-                    Expression::Identifier(name)
+                    Expression::Identifier(qualified_name)
                 }
             }
             Token::LParen => {
@@ -2704,7 +2786,7 @@ impl Parser {
                         }
                         self.expect(Token::Gt)?;
 
-                        // Now expect either () for call or :: for path continuation
+                        // Now expect either () for call, :: for path continuation, or identifier
                         if self.current_token() == &Token::LParen {
                             self.advance();
                             let arguments = self.parse_arguments()?;
@@ -2717,6 +2799,31 @@ impl Parser {
                                 type_args: Some(types),
                                 arguments,
                             }
+                        } else if self.current_token() == &Token::ColonColon {
+                            // Vec::<int>::new() - another :: after turbofish
+                            // Continue parsing in the loop, the :: will be handled on next iteration
+                            // We need to represent this as a turbofish-qualified path
+                            // For now, convert the types to a string and append to the identifier
+                            let mut type_str = String::new();
+                            type_str.push_str("::<");
+                            for (i, ty) in types.iter().enumerate() {
+                                if i > 0 {
+                                    type_str.push_str(", ");
+                                }
+                                type_str.push_str(&self.type_to_string(ty));
+                            }
+                            type_str.push('>');
+
+                            // Update the expression to include the turbofish
+                            if let Expression::Identifier(name) = expr {
+                                expr = Expression::Identifier(format!("{}{}", name, type_str));
+                            } else {
+                                return Err(
+                                    "Turbofish can only be applied to identifiers".to_string()
+                                );
+                            }
+                            // Continue the loop to handle the next ::
+                            continue;
                         } else if let Token::Ident(method) = self.current_token() {
                             // Type::method or module::function continuation
                             let method = method.clone();
@@ -2729,7 +2836,7 @@ impl Parser {
                             }
                         } else {
                             return Err(format!(
-                                "Expected '(' or identifier after '::<Type>', got {:?}",
+                                "Expected '(', '::', or identifier after '::<Type>', got {:?}",
                                 self.current_token()
                             ));
                         }
