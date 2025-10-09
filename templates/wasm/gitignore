@@ -1,0 +1,27 @@
+# Windjammer build output
+build_output/
+target/
+
+# Generated Rust files
+*.rs
+Cargo.toml
+Cargo.lock
+
+# WASM build artifacts
+pkg/
+www/node_modules/
+www/package-lock.json
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# IDE files
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Logs
+*.log
+

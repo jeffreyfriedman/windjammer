@@ -1,5 +1,5 @@
 // Example 42: HTTP Client
-// Demonstrates making HTTP requests with reqwest
+// Demonstrates making HTTP requests with Windjammer's std.http abstraction
 
 use std.http
 
@@ -8,12 +8,14 @@ fn fetch_data() {
     println!("Fetching data from httpbin.org...")
     
     let url = "https://httpbin.org/get"
-    let result = reqwest::get(url).await
+    // Use Windjammer's http abstraction - no direct reqwest access!
+    let result = http.get(url).await
     
     match result {
         Ok(response) => {
-            let status = response.status()
+            let status = response.status_code()
             println!("Status: {}", status)
+            println!("Request successful!")
         }
         Err(e) => println!("Error: {}", e)
     }
@@ -27,6 +29,8 @@ fn main() {
     fetch_data().await
     
     println!()
-    println!("✨ HTTP client with reqwest!")
-    println!("   (std.http automatically adds reqwest + tokio dependencies)")
+    println!("✨ HTTP client with Windjammer!")
+    println!("   ✅ Using std.http abstraction (not reqwest directly)")
+    println!("   ✅ Dependencies added automatically")
+    println!("   ✅ Clean, Windjammer-native API")
 }
