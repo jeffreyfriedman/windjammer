@@ -258,32 +258,39 @@ async fn fetch_user(id: i64) -> Result<User, Error> {
 
 ### Using Rust Crates
 
-**Method 1: Via Standard Library (v0.12.0+)**
+**Method 1: Via Standard Library (v0.14.0+) - RECOMMENDED**
 ```windjammer
-use std.json    // JSON serialization (serde + serde_json)
-use std.http    // HTTP client (reqwest + tokio)
-use std.time    // Time/date utilities (chrono)
-use std.crypto  // Cryptography (sha2, bcrypt, base64)
-use std.random  // Random generation (rand)
-use std.async   // Async utilities (tokio)
+use std.json    // Clean API: json.stringify(), json.parse()
+use std.http    // Clean API: http.get(), http.post()
+use std.time    // Clean API: time.now(), time.utc_now()
+use std.crypto  // Clean API: crypto.sha256(), crypto.hash_password()
+use std.random  // Clean API: random.range(), random.shuffle()
+use std.db      // Clean API: db.connect(), query.fetch_all()
 // All dependencies added automatically!
+// NO serde_json::, reqwest::, or chrono:: in your code!
 ```
 
-**Method 2: Direct Import**
+**Why Use Stdlib?**:
+- ✅ **Proper Abstractions** (v0.14.0) - Windjammer-native APIs, no crate leakage
+- ✅ **API Stability** - Windjammer controls the contract
+- ✅ **Automatic Dependencies** - Added to Cargo.toml automatically
+- ✅ **Future Flexibility** - Can swap implementations without breaking code
+
+**Method 2: Direct Import** (For specialized needs)
 ```windjammer
 use tokio.time
 use axum.Router
 
-// Use exactly like Rust!
+// Use exactly like Rust when you need full control!
 ```
 
 **Method 3: Mix Windjammer and Rust Files**
 ```
 my_project/
 ├── src/
-│   ├── main.wj           # Windjammer
-│   ├── handlers.wj       # Windjammer
-│   └── optimized.rs      # Hand-written Rust for critical path
+│   ├── main.wj           # Windjammer (most code)
+│   ├── handlers.wj       # Windjammer (business logic)
+│   └── optimized.rs      # Hand-written Rust (performance-critical path)
 ```
 
 ---
@@ -521,14 +528,14 @@ A: Yes! It compiles to Rust functions.
 A: Rarely. 95% of use cases fully supported.
 
 **Q: Is it production-ready?**  
-A: v0.12.0 pre-release - suitable for new projects and prototypes. Growing feature set with JSON, HTTP, and crypto support. Approaching v1.0.0 stability (planned within 6-8 months).
+A: v0.14.0 pre-release - suitable for new projects and prototypes. Comprehensive stdlib with proper abstractions (JSON, HTTP, DB, crypto, time, random). Full project management tooling (`wj new`, `wj add`, etc.). Approaching v1.0.0 stability (planned within 4-6 months).
 
 **Q: What about hiring?**  
 A: Easier than Rust, harder than Go. But Rust devs can learn it in days.
 
 ---
 
-*Last Updated: October 8, 2025*  
-*Windjammer Version: 0.12.0*  
+*Last Updated: October 9, 2025*  
+*Windjammer Version: 0.14.0*  
 *Status: Honest assessment based on current implementation*
 

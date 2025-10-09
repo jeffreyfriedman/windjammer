@@ -1,0 +1,17 @@
+[package]
+name = "{{PROJECT_NAME}}"
+version = "0.1.0"
+edition = "2025"
+
+[dependencies]
+# wasm-bindgen is auto-added for WASM targets
+
+[dev-dependencies]
+
+[target.wasm]
+enabled = true
+
+[profile.release]
+opt-level = "z"  # Optimize for size in WASM
+lto = true
+

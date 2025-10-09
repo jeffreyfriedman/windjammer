@@ -1,0 +1,22 @@
+# Windjammer build output
+build_output/
+target/
+
+# Generated Rust files
+*.rs
+Cargo.toml
+Cargo.lock
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# IDE files
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Logs
+*.log
+

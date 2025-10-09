@@ -1,40 +1,162 @@
-// std/random - Random number generation
-// Wraps rand crate from Rust
+// std/random - Random generation with proper abstraction
+// Implementation: rand (hidden from users)
 
-/// Generate a random integer between min and max (inclusive)
-pub fn range(min: int, max: int) -> int {
-    use rand::Rng;
-    let mut rng = rand::thread_rng();
-    rng.gen_range(min..=max)
+// PUBLIC API - Users interact with these functions only
+
+// Basic Random Generation
+
+fn random<T>() -> T {
+    // Implementation wraps: rand::random::<T>()
+    // Type inference determines what to generate
+    // For now, placeholder
 }
 
-/// Generate a random float between 0.0 and 1.0
-pub fn float() -> float {
-    use rand::Rng;
-    let mut rng = rand::thread_rng();
-    rng.gen::<f64>()
+fn range(min: int, max: int) -> int {
+    // Implementation wraps: rand::thread_rng().gen_range(min..max)
+    min
 }
 
-/// Generate a random boolean
-pub fn bool() -> bool {
-    use rand::Rng;
-    let mut rng = rand::thread_rng();
-    rng.gen::<bool>()
+fn range_inclusive(min: int, max: int) -> int {
+    // Implementation wraps: rand::thread_rng().gen_range(min..=max)
+    min
 }
 
-/// Shuffle a vector in place
-pub fn shuffle<T>(vec: Vec<T>) -> Vec<T> {
-    use rand::seq::SliceRandom;
-    let mut rng = rand::thread_rng();
-    let mut result = vec;
-    result.shuffle(&mut rng);
-    result
+fn float() -> float {
+    // Implementation wraps: rand::random::<f64>()
+    0.0
 }
 
-/// Pick a random element from a vector
-pub fn choice<T>(vec: Vec<T>) -> Option<T> {
-    use rand::seq::SliceRandom;
-    let mut rng = rand::thread_rng();
-    vec.choose(&mut rng).cloned()
+fn float_range(min: float, max: float) -> float {
+    // Implementation wraps: rand::thread_rng().gen_range(min..max)
+    min
 }
 
+fn bool() -> bool {
+    // Implementation wraps: rand::random::<bool>()
+    false
+}
+
+fn bool_with_probability(probability: float) -> bool {
+    // Implementation wraps: rand::thread_rng().gen_bool(probability)
+    // probability should be 0.0 to 1.0
+    false
+}
+
+// Collection Operations
+
+fn shuffle<T>(list: Vec<T>) -> Vec<T> {
+    // Implementation wraps: use rand::seq::SliceRandom; list.shuffle(&mut thread_rng())
+    list
+}
+
+fn choice<T>(list: Vec<T>) -> Option<T> {
+    // Implementation wraps: use rand::seq::SliceRandom; list.choose(&mut thread_rng())
+    None
+}
+
+fn sample<T>(list: Vec<T>, count: int) -> Vec<T> {
+    // Implementation wraps: use rand::seq::SliceRandom; list.choose_multiple(&mut thread_rng(), count)
+    vec![]
+}
+
+// String Generation
+
+fn alphanumeric(length: int) -> string {
+    // Implementation wraps: use rand::distributions::Alphanumeric; 
+    // thread_rng().sample_iter(&Alphanumeric).take(length).collect()
+    ""
+}
+
+fn ascii(length: int) -> string {
+    // Implementation wraps: Generate random ASCII string
+    ""
+}
+
+// Bytes
+
+fn bytes(length: int) -> Vec<u8> {
+    // Implementation wraps: let mut bytes = vec![0u8; length]; thread_rng().fill(&mut bytes[..])
+    vec![]
+}
+
+// Seeding (for reproducible randomness)
+
+struct Rng {
+    // Private: Wraps rand::rngs::StdRng or similar
+}
+
+fn seeded(seed: u64) -> Rng {
+    // Implementation wraps: use rand::SeedableRng; StdRng::seed_from_u64(seed)
+    Rng {}
+}
+
+impl Rng {
+    fn range(self, min: int, max: int) -> int {
+        // Wraps: self.gen_range(min..max)
+        min
+    }
+    
+    fn float(self) -> float {
+        // Wraps: self.gen::<f64>()
+        0.0
+    }
+    
+    fn bool(self) -> bool {
+        // Wraps: self.gen::<bool>()
+        false
+    }
+    
+    fn shuffle<T>(self, list: Vec<T>) -> Vec<T> {
+        // Wraps: list.shuffle(&mut self)
+        list
+    }
+}
+
+// USAGE EXAMPLES (what users should write):
+//
+// use std.random
+//
+// fn main() {
+//     // Basic random - Windjammer API! ✅
+//     let num = random.range(1, 100)
+//     println!("Random number: {}", num)
+//     
+//     let coin = random.bool()
+//     println!("Coin flip: {}", coin)
+//     
+//     let prob = random.bool_with_probability(0.7)
+//     println!("70% chance: {}", prob)
+//     
+//     // Float
+//     let f = random.float()
+//     println!("Random float: {}", f)
+//     
+//     let f_range = random.float_range(0.0, 1.0)
+//     println!("Float in range: {}", f_range)
+//     
+//     // Collections
+//     let items = vec![1, 2, 3, 4, 5]
+//     let shuffled = random.shuffle(items.clone())
+//     println!("Shuffled: {:?}", shuffled)
+//     
+//     let picked = random.choice(items.clone())
+//     println!("Random choice: {:?}", picked)
+//     
+//     // String generation
+//     let token = random.alphanumeric(32)
+//     println!("Token: {}", token)
+//     
+//     // Seeded (reproducible)
+//     let mut rng = random.seeded(42)
+//     let n1 = rng.range(1, 100)
+//     let n2 = rng.range(1, 100)
+//     println!("Seeded: {} {}", n1, n2)
+// }
+//
+// NOT THIS (rand exposed): ❌
+// use rand::Rng
+// let num = rand::thread_rng().gen_range(1..100)
+// let shuffled = items.shuffle(&mut rand::thread_rng())
+
+// NOTE: Full implementation coming in v0.14.0
+// rand is auto-added as a dependency

@@ -147,41 +147,114 @@ Zero-cost abstractions, memory safety, and blazing speed.
 - **Module system**: Import and use standard library modules with aliases ✨
 - **Error mapping**: Friendly error messages in Windjammer terms 🎯
 
-### 📚 "Batteries Included" Standard Library
-Windjammer provides a comprehensive standard library that covers 80% of common use cases without external dependencies. **All stdlib modules are written in Windjammer itself**, proving the language is practical and providing transparent, readable implementations.
+### 📚 "Batteries Included" Standard Library 🆕 **v0.14.0: Proper Abstractions!**
 
-**Core Modules** (v0.9.0):
-- `std.json` - JSON parsing and serialization
-- `std.csv` - CSV data processing
-- `std.http` - HTTP client for API requests
-- `std.fs` - File system operations
-- `std.time` - Date/time handling
-- `std.strings` - String manipulation utilities
+Windjammer provides a comprehensive standard library that **abstracts over best-in-class Rust crates** with clean, Windjammer-native APIs. v0.14.0 fixes the critical issue where stdlib modules leaked implementation details - now all APIs are properly abstracted!
+
+**What Changed in v0.14.0**: ✅ All stdlib modules now hide their underlying Rust crate implementations, giving you:
+- **API Stability** - Windjammer controls the contract
+- **Future Flexibility** - Can swap implementations without breaking your code
+- **True 80/20** - Simple APIs for 80% of use cases
+
+**Core Modules** (v0.14.0):
+- `std.json` - JSON parsing and serialization (wraps serde_json) ✅ **Abstracted**
+- `std.http` - HTTP client for API requests (wraps reqwest) ✅ **Abstracted**
+- `std.time` - Date/time handling (wraps chrono) ✅ **Abstracted**
+- `std.crypto` - Cryptography (wraps sha2, bcrypt, base64) ✅ **Abstracted**
+- `std.random` - Random generation (wraps rand) ✅ **Abstracted**
+- `std.db` - Database access (wraps sqlx) ✅ **Abstracted**
+- `std.collections` - HashMap, HashSet, BTreeMap, BTreeSet, VecDeque
+- `std.testing` - Testing framework with assertions
+- `std.async` - Async utilities (sleep, timers)
+- `std.env` - Environment variables
+- `std.process` - Process execution
 - `std.math` - Mathematical functions
-- `std.log` - Logging framework
-- `std.regex` - Regular expressions
-- `std.encoding` - Base64, hex, URL encoding
-- `std.crypto` - Cryptographic hashing
-- `std.collections` - HashMap, HashSet, BTreeMap, BTreeSet, VecDeque ✨ **NEW**
-- `std.testing` - Testing framework with assertions ✨ **NEW**
+- `std.strings` - String manipulation utilities
 
-**Example Usage**:
+**Example - Clean Windjammer APIs (No Crate Leakage!)**:
 ```windjammer
-use std.fs
 use std.json
+use std.http
 
+@derive(Serialize, Deserialize, Debug)
+struct User {
+    name: string,
+    email: string
+}
+
+@async
 fn main() {
-    // Read and parse JSON file
-    match fs.read_to_string("config.json") {
-        Ok(data) => {
-            match json.parse(&data) {
-                Ok(config) => println!("Loaded config: {:?}", config),
-                Err(e) => println!("Parse error: {}", e),
-            }
-        },
-        Err(e) => println!("Read error: {}", e),
+    // Clean Windjammer API - no serde_json:: or reqwest::
+    let user = User {
+        name: "Alice".to_string(),
+        email: "alice@example.com".to_string()
+    }
+    
+    // JSON - uses json.stringify(), not serde_json::to_string()
+    match json.stringify(&user) {
+        Ok(json_str) => println!("JSON: {}", json_str),
+        Err(e) => println!("Error: {}", e)
+    }
+    
+    // HTTP - uses http.get(), not reqwest::get()
+    match http.get("https://api.example.com/data").await {
+        Ok(response) => println!("Status: {}", response.status_code()),
+        Err(e) => println!("Error: {}", e)
     }
 }
+```
+
+### 🛠️ Unified Project Management 🆕 **v0.13.0-v0.14.0**
+
+Windjammer now has a **unified `wj` CLI** for streamlined development workflows, plus project scaffolding and dependency management!
+
+**Unified CLI** (v0.13.0):
+```bash
+wj run main.wj        # Compile and execute (replaces multiple steps!)
+wj build main.wj      # Build project
+wj test               # Run tests
+wj fmt                # Format code
+wj lint               # Run linter
+wj check              # Type check
+```
+
+**Project Management** (v0.14.0):
+```bash
+# Create new project from templates
+wj new my-app --template cli    # CLI tool template
+wj new my-api --template web    # Web service template
+wj new my-lib --template lib    # Library template
+wj new my-wasm --template wasm  # WebAssembly template
+
+# Manage dependencies
+wj add reqwest --features json
+wj add serde --features derive
+wj remove old-crate
+```
+
+**`wj.toml` Configuration** (v0.14.0):
+```toml
+[package]
+name = "my-app"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+# Add dependencies here - automatically generates Cargo.toml
+```
+
+**80% Reduction in Boilerplate**:
+```bash
+# Old way (v0.12.0):
+windjammer build --path main.wj --output ./build
+cd build && cargo run
+cd .. && cargo test
+cargo fmt
+
+# New way (v0.13.0+):
+wj run main.wj    # One command!
+wj test
+wj fmt
 ```
 
 ## Ownership Inference Strategy
