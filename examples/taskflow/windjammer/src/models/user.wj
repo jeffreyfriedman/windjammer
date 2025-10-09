@@ -1,0 +1,57 @@
+// User data model
+
+@derive(Debug, Clone, Serialize, Deserialize)
+struct User {
+    id: int,
+    username: string,
+    email: string,
+    full_name: Option<string>,
+    role: string,
+    created_at: string,
+    updated_at: string,
+}
+
+@derive(Debug, Deserialize)
+struct RegisterRequest {
+    username: string,
+    email: string,
+    password: string,
+    full_name: Option<string>,
+}
+
+@derive(Debug, Deserialize)
+struct LoginRequest {
+    username: string,
+    password: string,
+}
+
+@derive(Debug, Serialize)
+struct AuthResponse {
+    user: User,
+    token: string,
+}
+
+// User without sensitive data (for API responses)
+@derive(Debug, Serialize)
+struct UserPublic {
+    id: int,
+    username: string,
+    email: string,
+    full_name: Option<string>,
+    role: string,
+    created_at: string,
+}
+
+impl User {
+    pub fn to_public(self) -> UserPublic {
+        UserPublic {
+            id: self.id,
+            username: self.username,
+            email: self.email,
+            full_name: self.full_name,
+            role: self.role,
+            created_at: self.created_at,
+        }
+    }
+}
+
