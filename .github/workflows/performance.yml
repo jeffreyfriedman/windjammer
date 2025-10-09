@@ -1,0 +1,226 @@
+name: Performance Benchmarks
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  schedule:
+    # Run nightly at 2 AM UTC
+    - cron: '0 2 * * *'
+  workflow_dispatch:
+
+env:
+  RUST_VERSION: 1.90.0
+
+jobs:
+  benchmark:
+    name: Run Performance Benchmarks
+    runs-on: ubuntu-latest
+    
+    services:
+      postgres:
+        image: postgres:15
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: taskflow_bench
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 5432:5432
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: ${{ env.RUST_VERSION }}
+      
+      - name: Cache Rust dependencies
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: |
+            examples/taskflow/rust
+      
+      - name: Install wrk
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y wrk
+      
+      - name: Install SQLx CLI
+        run: cargo install sqlx-cli --no-default-features --features postgres
+      
+      - name: Run database migrations
+        working-directory: examples/taskflow/rust
+        env:
+          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/taskflow_bench
+        run: |
+          sqlx database create || true
+          sqlx migrate run --source ../windjammer/migrations
+      
+      - name: Build Rust implementation
+        working-directory: examples/taskflow/rust
+        run: cargo build --release
+      
+      - name: Build Windjammer implementation  
+        run: |
+          cargo build --release
+          # TODO: Compile Windjammer TaskFlow when compiler is ready
+          # For now, we'll just build the Windjammer compiler itself
+      
+      - name: Start Rust server
+        working-directory: examples/taskflow/rust
+        env:
+          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/taskflow_bench
+          PORT: 3001
+        run: |
+          ./target/release/taskflow-api &
+          echo $! > /tmp/rust_server.pid
+          sleep 5
+      
+      - name: Run benchmarks
+        working-directory: examples/taskflow/benchmarks
+        run: |
+          # For now, just benchmark the Rust implementation
+          # Once Windjammer TaskFlow is compiled, we'll benchmark both
+          
+          # Health check benchmark
+          wrk -t4 -c100 -d30s --latency http://localhost:3001/health \
+            > results/rust_health.txt
+          
+          echo "Benchmark results:"
+          cat results/rust_health.txt
+      
+      - name: Analyze results
+        id: analyze
+        run: |
+          # Extract RPS
+          RPS=$(grep "Requests/sec:" examples/taskflow/benchmarks/results/rust_health.txt | awk '{print $2}')
+          P99=$(grep "99%" examples/taskflow/benchmarks/results/rust_health.txt | awk '{print $2}')
+          
+          echo "rps=$RPS" >> $GITHUB_OUTPUT
+          echo "p99=$P99" >> $GITHUB_OUTPUT
+          
+          echo "## Performance Results" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "- **Throughput:** $RPS requests/sec" >> $GITHUB_STEP_SUMMARY
+          echo "- **Latency (p99):** $P99" >> $GITHUB_STEP_SUMMARY
+      
+      - name: Check for regressions
+        run: |
+          # TODO: Compare with baseline from previous runs
+          # For now, just check basic thresholds
+          
+          RPS=$(grep "Requests/sec:" examples/taskflow/benchmarks/results/rust_health.txt | awk '{print $2}' | tr -d '\n')
+          
+          # Expect at least 5000 RPS for health endpoint
+          THRESHOLD=5000
+          
+          if (( $(echo "$RPS < $THRESHOLD" | bc -l) )); then
+            echo "::warning::Performance below threshold: $RPS < $THRESHOLD RPS"
+          else
+            echo "::notice::Performance good: $RPS RPS"
+          fi
+      
+      - name: Upload results
+        uses: actions/upload-artifact@v4
+        with:
+          name: benchmark-results-${{ github.sha }}
+          path: examples/taskflow/benchmarks/results/
+          retention-days: 90
+      
+      - name: Stop servers
+        if: always()
+        run: |
+          if [ -f /tmp/rust_server.pid ]; then
+            kill $(cat /tmp/rust_server.pid) || true
+          fi
+      
+      - name: Comment PR with results
+        if: github.event_name == 'pull_request'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            
+            // Read benchmark results
+            let results = '';
+            try {
+              results = fs.readFileSync('examples/taskflow/benchmarks/results/rust_health.txt', 'utf8');
+            } catch (e) {
+              results = 'Could not read results';
+            }
+            
+            // Extract key metrics
+            const rpsMatch = results.match(/Requests\/sec:\s+([\d.]+)/);
+            const p50Match = results.match(/50%\s+([\d.]+\w+)/);
+            const p99Match = results.match(/99%\s+([\d.]+\w+)/);
+            
+            const rps = rpsMatch ? rpsMatch[1] : 'N/A';
+            const p50 = p50Match ? p50Match[1] : 'N/A';
+            const p99 = p99Match ? p99Match[1] : 'N/A';
+            
+            const comment = `## 📊 Performance Benchmark Results
+            
+            | Metric | Value |
+            |--------|-------|
+            | Throughput | ${rps} req/s |
+            | Latency (p50) | ${p50} |
+            | Latency (p99) | ${p99} |
+            
+            <details>
+            <summary>Full Results</summary>
+            
+            \`\`\`
+            ${results.substring(0, 2000)}
+            \`\`\`
+            </details>
+            
+            _Benchmarked on: ${new Date().toISOString()}_`;
+            
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: comment
+            });
+
+  compare:
+    name: Performance Comparison
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request'
+    needs: benchmark
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Download current results
+        uses: actions/download-artifact@v4
+        with:
+          name: benchmark-results-${{ github.sha }}
+          path: current-results
+      
+      - name: Download baseline results
+        uses: dawidd6/action-download-artifact@v3
+        continue-on-error: true
+        with:
+          workflow: performance.yml
+          branch: main
+          name: benchmark-results-*
+          path: baseline-results
+      
+      - name: Compare results
+        run: |
+          echo "## Performance Comparison" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "Comparing against main branch baseline..." >> $GITHUB_STEP_SUMMARY
+          
+          # TODO: Implement detailed comparison logic
+          echo "Comparison logic to be implemented" >> $GITHUB_STEP_SUMMARY
+
