@@ -1,0 +1,39 @@
+// Task management handlers (Phase 2)
+
+use std.http
+use std.log
+
+pub async fn list_by_project(req: Request) -> ServerResponse {
+    log.info("GET /api/v1/projects/:project_id/tasks")
+    ServerResponse::json(vec![])  // TODO: Implement in Phase 2
+}
+
+pub async fn create(req: Request) -> ServerResponse {
+    log.info("POST /api/v1/projects/:project_id/tasks")
+    ServerResponse::not_found()  // TODO: Implement in Phase 2
+}
+
+pub async fn get(req: Request) -> ServerResponse {
+    log.info("GET /api/v1/tasks/:id")
+    ServerResponse::not_found()  // TODO: Implement in Phase 2
+}
+
+pub async fn update(req: Request) -> ServerResponse {
+    log.info("PATCH /api/v1/tasks/:id")
+    ServerResponse::not_found()  // TODO: Implement in Phase 2
+}
+
+pub async fn delete(req: Request) -> ServerResponse {
+    log.info("DELETE /api/v1/tasks/:id")
+    ServerResponse::not_found()  // TODO: Implement in Phase 2
+}
+
+pub async fn assign(req: Request) -> ServerResponse {
+    log.info("POST /api/v1/tasks/:id/assign")
+    ServerResponse::not_found()  // TODO: Implement in Phase 2
+}
+
+pub async fn search(req: Request) -> ServerResponse {
+    log.info("GET /api/v1/tasks/search")
+    ServerResponse::json(vec![])  // TODO: Implement in Phase 2
+}

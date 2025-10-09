@@ -1,0 +1,24 @@
+// User management handlers (Phase 2)
+
+use std.http
+use std.log
+
+pub async fn list(req: Request) -> ServerResponse {
+    log.info("GET /api/v1/users")
+    ServerResponse::json(vec![])  // TODO: Implement in Phase 2
+}
+
+pub async fn get(req: Request) -> ServerResponse {
+    log.info("GET /api/v1/users/:id")
+    ServerResponse::not_found()  // TODO: Implement in Phase 2
+}
+
+pub async fn update(req: Request) -> ServerResponse {
+    log.info("PATCH /api/v1/users/:id")
+    ServerResponse::not_found()  // TODO: Implement in Phase 2
+}
+
+pub async fn delete(req: Request) -> ServerResponse {
+    log.info("DELETE /api/v1/users/:id")
+    ServerResponse::not_found()  // TODO: Implement in Phase 2
+}
