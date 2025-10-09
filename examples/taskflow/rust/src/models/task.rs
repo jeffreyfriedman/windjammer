@@ -16,7 +16,7 @@ pub struct Task {
     pub updated_at: DateTime<Utc>,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct CreateTaskRequest {
     pub title: String,
     pub description: Option<String>,
