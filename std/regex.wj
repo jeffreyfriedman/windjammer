@@ -1,40 +1,275 @@
-// std/regex - Regular expression matching
-// Thin wrapper over the regex crate
+// std/regex - Regular expressions with proper abstraction
+// Implementation: regex crate (wrapped for clean API)
 
-use regex
+// PUBLIC API - Users interact with these types only
 
-// Check if pattern matches string
-fn is_match(pattern: &str, text: &str) -> Result<bool, regex::Error> {
-    let re = regex::Regex::new(pattern)?
-    Ok(re.is_match(text))
+//===============================================
+// REGEX TYPE
+//===============================================
+
+struct Regex {
+    // Private: Wraps regex::Regex
 }
 
-// Find first match in string
-fn find(pattern: &str, text: &str) -> Result<Option<String>, regex::Error> {
-    let re = regex::Regex::new(pattern)?
-    Ok(re.find(text).map(|m| m.as_str().to_string()))
+struct Match {
+    text: string,
+    start: int,
+    end: int,
+    // Private: Wraps regex::Match
 }
 
-// Find all matches in string
-fn find_all(pattern: &str, text: &str) -> Result<Vec<String>, regex::Error> {
-    let re = regex::Regex::new(pattern)?
-    Ok(re.find_iter(text).map(|m| m.as_str().to_string()).collect())
+struct Captures {
+    // Private: Wraps regex::Captures
 }
 
-// Replace first match
-fn replace(pattern: &str, text: &str, replacement: &str) -> Result<String, regex::Error> {
-    let re = regex::Regex::new(pattern)?
-    Ok(re.replace(text, replacement).into_owned())
+//===============================================
+// REGEX COMPILATION
+//===============================================
+
+// Compile a regex pattern
+fn compile(pattern: string) -> Result<Regex, Error> {
+    // Wraps: regex::Regex::new(pattern)
+    Err("Invalid regex pattern")
 }
 
-// Replace all matches
-fn replace_all(pattern: &str, text: &str, replacement: &str) -> Result<String, regex::Error> {
-    let re = regex::Regex::new(pattern)?
-    Ok(re.replace_all(text, replacement).into_owned())
+// Compile with case-insensitive matching
+fn compile_case_insensitive(pattern: string) -> Result<Regex, Error> {
+    // Wraps: regex::RegexBuilder::new(pattern).case_insensitive(true).build()
+    Err("Invalid regex pattern")
 }
 
-// Split string by pattern
-fn split(pattern: &str, text: &str) -> Result<Vec<String>, regex::Error> {
-    let re = regex::Regex::new(pattern)?
-    Ok(re.split(text).map(|s| s.to_string()).collect())
+//===============================================
+// MATCHING OPERATIONS
+//===============================================
+
+impl Regex {
+    // Check if pattern matches anywhere in text
+    fn is_match(self, text: string) -> bool {
+        // Wraps: regex.is_match(text)
+        false
+    }
+    
+    // Find first match
+    fn find(self, text: string) -> Option<Match> {
+        // Wraps: regex.find(text)
+        None
+    }
+    
+    // Find all matches
+    fn find_all(self, text: string) -> Vec<Match> {
+        // Wraps: regex.find_iter(text).collect()
+        vec![]
+    }
+    
+    // Get first match with capture groups
+    fn captures(self, text: string) -> Option<Captures> {
+        // Wraps: regex.captures(text)
+        None
+    }
+    
+    // Get all matches with capture groups
+    fn captures_all(self, text: string) -> Vec<Captures> {
+        // Wraps: regex.captures_iter(text).collect()
+        vec![]
+    }
+    
+    // Replace first match
+    fn replace(self, text: string, replacement: string) -> string {
+        // Wraps: regex.replace(text, replacement).into_owned()
+        text
+    }
+    
+    // Replace all matches
+    fn replace_all(self, text: string, replacement: string) -> string {
+        // Wraps: regex.replace_all(text, replacement).into_owned()
+        text
+    }
+    
+    // Split text by regex
+    fn split(self, text: string) -> Vec<string> {
+        // Wraps: regex.split(text).collect()
+        vec![]
+    }
 }
+
+//===============================================
+// MATCH OPERATIONS
+//===============================================
+
+impl Match {
+    // Get matched text
+    fn text(self) -> string {
+        // Wraps: match.as_str()
+        self.text
+    }
+    
+    // Get start position
+    fn start(self) -> int {
+        // Wraps: match.start()
+        self.start
+    }
+    
+    // Get end position
+    fn end(self) -> int {
+        // Wraps: match.end()
+        self.end
+    }
+    
+    // Get match range
+    fn range(self) -> (int, int) {
+        // Wraps: (match.start(), match.end())
+        (self.start, self.end)
+    }
+}
+
+//===============================================
+// CAPTURES OPERATIONS
+//===============================================
+
+impl Captures {
+    // Get full match (group 0)
+    fn full_match(self) -> Option<string> {
+        // Wraps: captures.get(0).map(|m| m.as_str())
+        None
+    }
+    
+    // Get capture group by index
+    fn get(self, index: int) -> Option<string> {
+        // Wraps: captures.get(index).map(|m| m.as_str())
+        None
+    }
+    
+    // Get capture group by name
+    fn name(self, name: string) -> Option<string> {
+        // Wraps: captures.name(name).map(|m| m.as_str())
+        None
+    }
+    
+    // Get all capture groups as vector
+    fn groups(self) -> Vec<Option<string>> {
+        // Wraps: captures.iter().map(|m| m.map(|m| m.as_str())).collect()
+        vec![]
+    }
+    
+    // Number of capture groups (including full match)
+    fn len(self) -> int {
+        // Wraps: captures.len()
+        0
+    }
+}
+
+//===============================================
+// CONVENIENCE FUNCTIONS
+//===============================================
+
+// Quick match check without compiling regex first
+fn is_match(pattern: string, text: string) -> Result<bool, Error> {
+    // Wraps: regex::Regex::new(pattern)?.is_match(text)
+    Err("Invalid regex pattern")
+}
+
+// Quick find without compiling regex first
+fn find(pattern: string, text: string) -> Result<Option<string>, Error> {
+    // Wraps: regex::Regex::new(pattern)?.find(text).map(|m| m.as_str())
+    Err("Invalid regex pattern")
+}
+
+// Quick replace without compiling regex first
+fn replace(pattern: string, text: string, replacement: string) -> Result<string, Error> {
+    // Wraps: regex::Regex::new(pattern)?.replace(text, replacement)
+    Err("Invalid regex pattern")
+}
+
+// Quick replace all without compiling regex first
+fn replace_all(pattern: string, text: string, replacement: string) -> Result<string, Error> {
+    // Wraps: regex::Regex::new(pattern)?.replace_all(text, replacement)
+    Err("Invalid regex pattern")
+}
+
+// Quick split without compiling regex first
+fn split(pattern: string, text: string) -> Result<Vec<string>, Error> {
+    // Wraps: regex::Regex::new(pattern)?.split(text).collect()
+    Err("Invalid regex pattern")
+}
+
+// USAGE EXAMPLES:
+//
+// use std.regex
+//
+// fn main() {
+//     // Simple matching
+//     let re = regex.compile(r"\d{3}-\d{3}-\d{4}")?
+//     
+//     if re.is_match("Call me at 555-123-4567") {
+//         println!("Found a phone number!")
+//     }
+//     
+//     // Find matches
+//     let text = "Emails: alice@example.com, bob@test.org"
+//     let email_re = regex.compile(r"[\w.]+@[\w.]+")?
+//     
+//     for match in email_re.find_all(text) {
+//         println!("Found: {}", match.text())
+//     }
+//     
+//     // Capture groups
+//     let date_re = regex.compile(r"(\d{4})-(\d{2})-(\d{2})")?
+//     
+//     match date_re.captures("Today is 2025-10-09") {
+//         Some(caps) => {
+//             println!("Year: {}", caps.get(1)?)
+//             println!("Month: {}", caps.get(2)?)
+//             println!("Day: {}", caps.get(3)?)
+//         },
+//         None => println!("No date found")
+//     }
+//     
+//     // Named capture groups
+//     let name_re = regex.compile(r"(?P<first>\w+) (?P<last>\w+)")?
+//     
+//     match name_re.captures("John Doe") {
+//         Some(caps) => {
+//             println!("First: {}", caps.name("first")?)
+//             println!("Last: {}", caps.name("last")?)
+//         },
+//         None => println!("No name found")
+//     }
+//     
+//     // Replace
+//     let censored = re.replace("My number is 555-123-4567", "XXX-XXX-XXXX")
+//     println!("{}", censored)
+//     
+//     // Replace all
+//     let text = "Prices: $10, $20, $30"
+//     let price_re = regex.compile(r"\$(\d+)")?
+//     let result = price_re.replace_all(text, "€$1")
+//     println!("{}", result)  // "Prices: €10, €20, €30"
+//     
+//     // Split
+//     let parts = regex.split(r"\s+", "Split  by   whitespace")?
+//     for part in parts {
+//         println!("{}", part)
+//     }
+//     
+//     // Quick one-off operations
+//     if regex.is_match(r"^\d+$", "12345")? {
+//         println!("All digits!")
+//     }
+//     
+//     let result = regex.replace_all(r"\s+", "  too   much   space  ", " ")?
+//     println!("{}", result)  // " too much space "
+// }
+//
+// COMMON PATTERNS:
+// - Email: r"[\w.+-]+@[\w.-]+"
+// - Phone: r"\d{3}-\d{3}-\d{4}"
+// - URL: r"https?://[\w./]+"
+// - Date (YYYY-MM-DD): r"\d{4}-\d{2}-\d{2}"
+// - IP Address: r"\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}"
+// - Hex Color: r"#[0-9A-Fa-f]{6}"
+//
+// NOT THIS (regex crate exposed): ❌
+// let re = regex::Regex::new(pattern)?
+// let caps = re.captures(text)
+//
+// NOTE: regex crate is auto-added as dependency

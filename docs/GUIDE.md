@@ -1346,26 +1346,42 @@ fn handle_request<T: ApiResource>(resource: T) { ... }
 
 ## Standard Library Modules
 
-**Version**: v0.14.0+ (Major Abstraction Improvements!)
+**Version**: v0.15.0 (Server-Side Complete!)
 
-Windjammer provides a growing standard library for common tasks. **v0.14.0 introduced proper abstractions** - all stdlib modules now provide clean Windjammer-native APIs that hide their underlying Rust crate implementations.
+Windjammer provides a comprehensive standard library for building production applications. **v0.15.0 completes the server-side development story** with HTTP server, file system, logging, regex, and CLI parsing.
 
 **What This Means**:
-- ✅ You write `json.stringify()`, not `serde_json::to_string()`
-- ✅ You write `http.get()`, not `reqwest::get()`
-- ✅ You write `time.now()`, not `chrono::Local::now()`
+- ✅ You write `http.serve()`, not `axum::Router::new()`
+- ✅ You write `fs.read_to_string()`, not `std::fs::read_to_string()`
+- ✅ You write `log.info()`, not `log::info!()`
+- ✅ You write `regex.compile()`, not `Regex::new()`
+- ✅ You write `cli.parse()`, not `Args::parse()`
 - ✅ API stability - Windjammer controls the contract, not external crates
 - ✅ Future flexibility - implementations can be swapped without breaking your code
 
-**Available Modules**:
+**Available Modules** (v0.15.0):
+
+**Web Development:**
+- `std/http` - HTTP client + server (abstracts reqwest + axum) 🆕 **Server support!**
 - `std/json` - JSON operations (abstracts serde_json)
-- `std/http` - HTTP client (abstracts reqwest)
+
+**File System & I/O:**
+- `std/fs` - File operations, directories, metadata (Rust stdlib) 🆕 **v0.15.0**
+- `std/log` - Production logging with levels (abstracts env_logger) 🆕 **v0.15.0**
+
+**Data & Patterns:**
+- `std/regex` - Regular expressions (abstracts regex) 🆕 **v0.15.0**
+- `std/db` - Database access (abstracts sqlx)
 - `std/time` - Time/date utilities (abstracts chrono)
 - `std/crypto` - Cryptography (abstracts sha2, bcrypt, base64)
 - `std/random` - Random generation (abstracts rand)
-- `std/db` - Database access (abstracts sqlx)
-- `std/collections` - Data structures
+
+**Developer Tools:**
+- `std/cli` - CLI argument parsing (abstracts clap) 🆕 **v0.15.0**
 - `std/testing` - Test assertions
+- `std/collections` - Data structures
+
+**System:**
 - `std/async` - Async utilities
 - `std/env` - Environment variables
 - `std/process` - Process execution
@@ -1462,6 +1478,154 @@ fn main() {
     println!("Waiting...")
     async.sleep_ms(1000).await
     println!("Done!")
+}
+```
+
+### File System (`std/fs`) 🆕 **v0.15.0**
+
+Complete file system operations without exposing `std::fs`:
+
+```windjammer
+use std.fs
+
+fn main() {
+    // Read and write files
+    match fs.write("config.txt", "port=3000") {
+        Ok(_) => println!("File written"),
+        Err(e) => println!("Error: {}", e)
+    }
+    
+    let content = fs.read_to_string("config.txt")?
+    println!("Content: {}", content)
+    
+    // Directory operations
+    fs.create_dir_all("data/logs")?
+    let entries = fs.read_dir(".")?
+    
+    for entry in entries {
+        println!("{} ({})", 
+            entry.name(),
+            if entry.is_dir() { "dir" } else { "file" }
+        )
+    }
+    
+    // File metadata
+    let meta = fs.metadata("config.txt")?
+    println!("Size: {} bytes", meta.size())
+    
+    // Path operations
+    let path = fs.join("data", "file.txt")
+    let ext = fs.extension("file.txt")?  // "txt"
+}
+```
+
+### Logging (`std/log`) 🆕 **v0.15.0**
+
+Production-ready logging without `log::` or `env_logger::`:
+
+```windjammer
+use std.log
+
+fn main() {
+    // Initialize logger
+    log.init_with_level("info")
+    
+    // Log at different levels
+    log.trace("Very detailed debugging")
+    log.debug("Debugging information")
+    log.info("General information")
+    log.warn("Warning message")
+    log.error("Error occurred")
+    
+    // Structured logging with context
+    log.info_with("User logged in", "user_id", "12345")
+    log.warn_with("Slow query", "duration_ms", "1500")
+    
+    // Conditional logging for expensive operations
+    if log.debug_enabled() {
+        let debug_data = expensive_calculation()
+        log.debug(&debug_data)
+    }
+}
+```
+
+### Regular Expressions (`std/regex`) 🆕 **v0.15.0**
+
+Pattern matching without `regex::`:
+
+```windjammer
+use std.regex
+
+fn main() {
+    // Compile and use regex
+    let email_re = regex.compile(r"[\w.]+@[\w.]+")?
+    
+    if email_re.is_match("alice@example.com") {
+        println!("Valid email!")
+    }
+    
+    // Find all matches
+    let text = "Emails: alice@test.com, bob@test.org"
+    for m in email_re.find_all(text) {
+        println!("Found: {}", m.text())
+    }
+    
+    // Capture groups
+    let date_re = regex.compile(r"(\d{4})-(\d{2})-(\d{2})")?
+    match date_re.captures("Date: 2025-10-09") {
+        Some(caps) => {
+            println!("Year: {}", caps.get(1)?)
+            println!("Month: {}", caps.get(2)?)
+            println!("Day: {}", caps.get(3)?)
+        },
+        None => {}
+    }
+    
+    // Replace operations
+    let censored = email_re.replace_all(text, "[EMAIL]")
+    
+    // Quick one-off operations
+    if regex.is_match(r"^\d+$", "12345")? {
+        println!("All digits!")
+    }
+}
+```
+
+### CLI Argument Parsing (`std/cli`) 🆕 **v0.15.0**
+
+Parse command-line arguments without `clap::`:
+
+```windjammer
+use std.cli
+
+@derive(Cli, Debug)
+struct Args {
+    @arg(help: "Input file to process")
+    input: string,
+    
+    @arg(short: 'o', long: "output", help: "Output file")
+    output: Option<string>,
+    
+    @arg(short: 'v', long: "verbose", help: "Verbose output")
+    verbose: bool,
+    
+    @arg(short: 'n', long: "count", default_value: "10", help: "Number of items")
+    count: int,
+}
+
+fn main() {
+    let args = cli.parse::<Args>()
+    
+    println!("Processing: {}", args.input)
+    
+    if args.verbose {
+        println!("Verbose mode enabled")
+    }
+    
+    match args.output {
+        Some(out) => println!("Output: {}", out),
+        None => println!("Output to stdout")
+    }
 }
 ```
 

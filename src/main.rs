@@ -416,9 +416,12 @@ impl ModuleCompiler {
                     deps.push("csv = \"1.3\"".to_string());
                 }
                 "http" => {
+                    // HTTP client (reqwest)
                     deps.push(
                         "reqwest = { version = \"0.11\", features = [\"json\"] }".to_string(),
                     );
+                    // HTTP server (axum)
+                    deps.push("axum = \"0.7\"".to_string());
                     deps.push("tokio = { version = \"1\", features = [\"full\"] }".to_string());
                 }
                 "time" => {
@@ -430,6 +433,9 @@ impl ModuleCompiler {
                 }
                 "regex" => {
                     deps.push("regex = \"1.10\"".to_string());
+                }
+                "cli" => {
+                    deps.push("clap = { version = \"4.5\", features = [\"derive\"] }".to_string());
                 }
                 "db" => {
                     deps.push("sqlx = { version = \"0.7\", features = [\"runtime-tokio-native-tls\", \"postgres\", \"sqlite\", \"mysql\"] }".to_string());
@@ -575,7 +581,9 @@ fn create_cargo_toml_with_deps(
                 deps.push("csv = \"1.3\"");
             }
             "http" => {
+                // HTTP client (reqwest) + HTTP server (axum)
                 deps.push("reqwest = { version = \"0.11\", features = [\"json\"] }");
+                deps.push("axum = \"0.7\"");
                 deps.push("tokio = { version = \"1\", features = [\"full\"] }");
             }
             "time" => {
@@ -587,6 +595,9 @@ fn create_cargo_toml_with_deps(
             }
             "regex" => {
                 deps.push("regex = \"1.10\"");
+            }
+            "cli" => {
+                deps.push("clap = { version = \"4.5\", features = [\"derive\"] }");
             }
             "crypto" => {
                 deps.push("sha2 = \"0.10\"");
