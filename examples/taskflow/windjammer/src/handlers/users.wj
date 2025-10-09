@@ -1,24 +1,98 @@
-// User management handlers (Phase 2)
+// User management handlers
 
 use std.http
 use std.log
+use std.db
+use ../models.user
+use ../db.users
+use ../config
 
+// List all users (admin only - simplified for now)
 pub async fn list(req: Request) -> ServerResponse {
     log.info("GET /api/v1/users")
-    ServerResponse::json(vec![])  // TODO: Implement in Phase 2
+    
+    // Connect to database
+    let config = config.load_config()
+    let conn = match db.connect(&config.database_url).await {
+        Ok(c) => c,
+        Err(e) => {
+            log.error_with("Database connection failed", "error", &e)
+            return ServerResponse::internal_error("Database connection failed")
+        }
+    }
+    
+    // For now, return empty list (would need proper admin auth check)
+    ServerResponse::json(vec![])
 }
 
+// Get user by ID
 pub async fn get(req: Request) -> ServerResponse {
     log.info("GET /api/v1/users/:id")
-    ServerResponse::not_found()  // TODO: Implement in Phase 2
+    
+    // Extract user ID from path
+    let user_id = match req.path_param("id") {
+        Some(id) => match id.parse::<int>() {
+            Ok(parsed_id) => parsed_id,
+            Err(_) => {
+                return ServerResponse::bad_request("Invalid user ID")
+            }
+        },
+        None => {
+            return ServerResponse::bad_request("Missing user ID")
+        }
+    }
+    
+    // Connect to database
+    let config = config.load_config()
+    let conn = match db.connect(&config.database_url).await {
+        Ok(c) => c,
+        Err(e) => {
+            log.error_with("Database connection failed", "error", &e)
+            return ServerResponse::internal_error("Database connection failed")
+        }
+    }
+    
+    // Find user
+    let user = match users.find_by_id(conn, user_id).await {
+        Ok(Some(u)) => u,
+        Ok(None) => {
+            return ServerResponse::not_found()
+        },
+        Err(e) => {
+            log.error_with("Database query failed", "error", &e)
+            return ServerResponse::internal_error("Database error")
+        }
+    }
+    
+    ServerResponse::json(user.to_public())
 }
 
+// Update user (users can only update themselves for now)
 pub async fn update(req: Request) -> ServerResponse {
     log.info("PATCH /api/v1/users/:id")
-    ServerResponse::not_found()  // TODO: Implement in Phase 2
+    
+    // Extract user ID from path
+    let user_id = match req.path_param("id") {
+        Some(id) => match id.parse::<int>() {
+            Ok(parsed_id) => parsed_id,
+            Err(_) => {
+                return ServerResponse::bad_request("Invalid user ID")
+            }
+        },
+        None => {
+            return ServerResponse::bad_request("Missing user ID")
+        }
+    }
+    
+    // TODO: Check that authenticated user matches user_id
+    // For now, just return not implemented
+    
+    ServerResponse::json({"message": "Update not yet implemented"})
 }
 
+// Delete user (admin only - not implemented for Phase 2)
 pub async fn delete(req: Request) -> ServerResponse {
     log.info("DELETE /api/v1/users/:id")
-    ServerResponse::not_found()  // TODO: Implement in Phase 2
-}
+    
+    // Admin-only operation, not implemented in Phase 2
+    ServerResponse::json({"message": "Delete not yet implemented (admin only)"})
