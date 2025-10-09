@@ -7,6 +7,165 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.15.0] - 2025-10-09
+
+### 🚀 Server-Side Complete: Web Stack + Essential Tools
+
+**THE BIG MILESTONE**: v0.15.0 completes the server-side development story with HTTP server, file system, logging, regex, and CLI parsing. Windjammer is now a **complete language for building web services, CLI tools, and production applications**.
+
+**What's New**:
+- ✅ **HTTP Server** - Full web service development with routing (`std.http`)
+- ✅ **File System** - Complete file I/O operations (`std.fs`)
+- ✅ **Logging** - Production-ready logging with levels (`std.log`)
+- ✅ **Regex** - Pattern matching and text processing (`std.regex`)
+- ✅ **CLI Parsing** - Argument parsing for CLI tools (`std.cli`)
+
+### Added
+
+#### HTTP Server (`std.http` extension)
+- **Server Functions**:
+  - `http.serve(addr, router)` - Start HTTP server with routing
+  - `http.serve_fn(addr, handler)` - Simple one-handler server
+- **Router API**:
+  - `Router::new()` - Create router
+  - `.get()`, `.post()`, `.put()`, `.delete()`, `.patch()`, `.any()` - HTTP methods
+  - `.nest(path, router)` - Nested routing
+- **Request Type**:
+  - `.method()`, `.path()` - Basic info
+  - `.query(key)`, `.header(key)` - Extract data
+  - `.body_string()`, `.body_json()` - Parse body
+  - `.path_param(key)` - Path parameters
+- **ServerResponse Type**:
+  - `.ok()`, `.json()`, `.created()`, `.no_content()` - Success responses
+  - `.bad_request()`, `.unauthorized()`, `.forbidden()`, `.not_found()` - Error responses
+  - `.internal_error()`, `.with_status()`, `.with_header()` - Custom responses
+- **Dependency**: `axum = "0.7"` (auto-added)
+- **Examples**: Example 46 (full server), Example 47 (simple server)
+
+#### File System Module (`std/fs.wj`)
+- **File Operations**:
+  - `fs.read_to_string()`, `fs.read()` - Read files
+  - `fs.write()`, `fs.write_bytes()`, `fs.append()` - Write files
+  - `fs.copy()`, `fs.rename()`, `fs.remove_file()` - File management
+  - `fs.exists()`, `fs.is_file()`, `fs.is_dir()` - Existence checks
+- **Directory Operations**:
+  - `fs.create_dir()`, `fs.create_dir_all()` - Create directories
+  - `fs.remove_dir()`, `fs.remove_dir_all()` - Remove directories
+  - `fs.read_dir()` - List directory contents
+  - `fs.current_dir()`, `fs.set_current_dir()` - Working directory
+- **Metadata**:
+  - `fs.metadata()` - File/directory metadata
+  - `Metadata` type with `.size()`, `.is_file()`, `.is_dir()`, `.is_readonly()`
+  - `DirEntry` type for directory listings
+- **Path Utilities**:
+  - `fs.join()`, `fs.extension()`, `fs.file_name()`, `fs.file_stem()`
+  - `fs.parent()`, `fs.canonicalize()`, `fs.is_absolute()`, `fs.is_relative()`
+- **Dependency**: None (uses Rust `std::fs` and `std::path`)
+- **Example**: Example 48 (comprehensive filesystem demo)
+
+#### Logging Module (`std/log.wj`)
+- **Initialization**:
+  - `log.init()` - Initialize with RUST_LOG env var
+  - `log.init_with_level(level)` - Initialize with specific level
+- **Log Levels**:
+  - `log.trace()`, `log.debug()`, `log.info()`, `log.warn()`, `log.error()`
+- **Structured Logging**:
+  - `log.trace_with()`, `log.debug_with()`, `log.info_with()` - With key-value pairs
+  - `log.warn_with()`, `log.error_with()`
+- **Level Checking**:
+  - `log.trace_enabled()`, `log.debug_enabled()`, `log.info_enabled()`
+  - `log.warn_enabled()`, `log.error_enabled()`
+- **Dependencies**: `log = "0.4"`, `env_logger = "0.11"` (auto-added)
+- **Example**: Example 49 (logging with all features)
+
+#### Regular Expressions Module (`std/regex.wj`)
+- **Regex Compilation**:
+  - `regex.compile(pattern)` - Compile regex
+  - `regex.compile_case_insensitive(pattern)` - Case-insensitive
+- **Matching Operations**:
+  - `.is_match()`, `.find()`, `.find_all()` - Find matches
+  - `.captures()`, `.captures_all()` - Capture groups
+- **Transformations**:
+  - `.replace()`, `.replace_all()` - Replace matches
+  - `.split()` - Split by regex
+- **Convenience Functions**:
+  - `regex.is_match()`, `regex.find()`, `regex.replace()` - One-off operations
+  - `regex.replace_all()`, `regex.split()`
+- **Types**:
+  - `Regex`, `Match`, `Captures` - Properly abstracted types
+  - Named capture groups support
+- **Dependency**: `regex = "1.10"` (auto-added)
+- **Example**: Example 50 (regex patterns and operations)
+
+#### CLI Argument Parsing Module (`std/cli.wj`)
+- **Parsing Functions**:
+  - `cli.parse<T>()` - Parse arguments into struct
+  - `cli.parse_from<T>(args)` - Parse from specific args
+  - `cli.try_parse<T>()` - Parse with Result (no exit on error)
+- **Decorators**:
+  - `@derive(Cli)` - Mark struct for CLI parsing
+  - `@arg(...)` - Configure individual arguments
+- **Argument Types**:
+  - Positional arguments
+  - Options with short/long forms (`-o`, `--output`)
+  - Flags (boolean)
+  - Multiple values
+  - Default values
+- **Utilities**:
+  - `cli.args()` - Get raw arguments as vector
+  - `cli.arg(index)` - Get specific argument
+- **Dependency**: `clap = { version = "4.5", features = ["derive"] }` (auto-added)
+- **Example**: Example 51 (CLI parsing with decorators)
+
+### Changed
+
+- **Pre-commit Hook**: Now automatically runs on all commits
+  - Formatting check (`cargo fmt`)
+  - Linting check (`cargo clippy`)
+  - Test suite (`cargo test`)
+  - Prevents broken code from entering the repository
+
+### Documentation
+
+- **README.md**: Updated stdlib section to highlight v0.15.0 features
+- **README.md**: Added complete web service example showcasing HTTP server + logging + fs
+- **stdlib section**: Reorganized by category (Web, File System, Data, Tools, System, Utilities)
+
+### Philosophy
+
+**80/20 Principle Achieved**:
+- HTTP server without touching `axum::`
+- File I/O without touching `std::fs::`
+- Logging without touching `log::` or `env_logger::`
+- Regex without touching `regex::`
+- CLI parsing without touching `clap::`
+
+**Result**: Clean, maintainable Windjammer code with zero Rust crate leakage.
+
+### Examples
+
+- Example 46: Full HTTP server with routing, path params, and error handling
+- Example 47: Simple HTTP server (minimal code)
+- Example 48: Comprehensive file system operations (read, write, dirs, metadata)
+- Example 49: Logging with all levels and structured logging
+- Example 50: Regular expressions (matching, captures, replace, split)
+- Example 51: CLI argument parsing with decorators
+
+### Production Readiness
+
+With v0.15.0, Windjammer has:
+- ✅ Complete web development stack (client + server)
+- ✅ File system operations
+- ✅ Production logging
+- ✅ Pattern matching (regex)
+- ✅ CLI tool development
+- ✅ Database access (`std.db`)
+- ✅ JSON, crypto, time, random
+- ✅ Project management tooling (`wj` CLI)
+- ✅ Pre-commit hooks for code quality
+
+**Next**: Focus on tooling polish, error messages, and real-world usage for v1.0.0.
+
 ## [0.14.0] - 2025-10-09
 
 ### 🎯 CRITICAL: Stdlib Abstraction Layer
