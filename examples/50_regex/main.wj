@@ -1,0 +1,194 @@
+// Example 50: Regular Expressions
+// Demonstrates Windjammer's std.regex module
+
+use std.regex
+
+fn main() {
+    println!("=== Regular Expressions Demo ===")
+    println!()
+    
+    // 1. Simple matching
+    println!("1. Simple Matching:")
+    
+    let phone_pattern = r"\d{3}-\d{3}-\d{4}"
+    match regex.compile(phone_pattern) {
+        Ok(re) => {
+            let text = "Call me at 555-123-4567 or 555-987-6543"
+            
+            if re.is_match(text) {
+                println!("   ✓ Found phone number in text")
+            }
+            
+            // Find first match
+            match re.find(text) {
+                Some(m) => println!("   First: {} (at position {})", m.text(), m.start()),
+                None => println!("   No match found")
+            }
+            
+            // Find all matches
+            let matches = re.find_all(text)
+            println!("   Found {} phone numbers:", matches.len())
+            for m in matches {
+                println!("     - {}", m.text())
+            }
+        },
+        Err(e) => println!("   ✗ Regex error: {}", e)
+    }
+    println!()
+    
+    // 2. Capture groups
+    println!("2. Capture Groups:")
+    
+    let date_pattern = r"(\d{4})-(\d{2})-(\d{2})"
+    match regex.compile(date_pattern) {
+        Ok(re) => {
+            let text = "Important dates: 2025-10-09 and 2025-12-25"
+            
+            match re.captures(text) {
+                Some(caps) => {
+                    println!("   Date found:")
+                    match caps.full_match() {
+                        Some(full) => println!("     Full: {}", full),
+                        None => {}
+                    }
+                    match caps.get(1) {
+                        Some(year) => println!("     Year: {}", year),
+                        None => {}
+                    }
+                    match caps.get(2) {
+                        Some(month) => println!("     Month: {}", month),
+                        None => {}
+                    }
+                    match caps.get(3) {
+                        Some(day) => println!("     Day: {}", day),
+                        None => {}
+                    }
+                },
+                None => println!("   No date found")
+            }
+        },
+        Err(e) => println!("   ✗ Regex error: {}", e)
+    }
+    println!()
+    
+    // 3. Named capture groups
+    println!("3. Named Capture Groups:")
+    
+    let email_pattern = r"(?P<user>[\w.]+)@(?P<domain>[\w.]+)"
+    match regex.compile(email_pattern) {
+        Ok(re) => {
+            let text = "Contact: alice@example.com"
+            
+            match re.captures(text) {
+                Some(caps) => {
+                    println!("   Email found:")
+                    match caps.name("user") {
+                        Some(user) => println!("     User: {}", user),
+                        None => {}
+                    }
+                    match caps.name("domain") {
+                        Some(domain) => println!("     Domain: {}", domain),
+                        None => {}
+                    }
+                },
+                None => println!("   No email found")
+            }
+        },
+        Err(e) => println!("   ✗ Regex error: {}", e)
+    }
+    println!()
+    
+    // 4. Replace operations
+    println!("4. Replace Operations:")
+    
+    match regex.compile(r"\d{3}-\d{3}-\d{4}") {
+        Ok(re) => {
+            let text = "My number is 555-123-4567"
+            
+            // Replace first
+            let censored = re.replace(text, "XXX-XXX-XXXX")
+            println!("   Replace first: {}", censored)
+            
+            // Replace all
+            let multi = "Numbers: 555-123-4567 and 555-987-6543"
+            let all_censored = re.replace_all(multi, "XXX-XXX-XXXX")
+            println!("   Replace all: {}", all_censored)
+        },
+        Err(e) => println!("   ✗ Regex error: {}", e)
+    }
+    println!()
+    
+    // 5. Split operations
+    println!("5. Split Operations:")
+    
+    match regex.compile(r"\s+") {
+        Ok(re) => {
+            let text = "Split   by    whitespace"
+            let parts = re.split(text)
+            println!("   Parts:")
+            for part in parts {
+                println!("     - '{}'", part)
+            }
+        },
+        Err(e) => println!("   ✗ Regex error: {}", e)
+    }
+    println!()
+    
+    // 6. Quick one-off operations
+    println!("6. Quick Operations (no pre-compilation):")
+    
+    match regex.is_match(r"^\d+$", "12345") {
+        Ok(true) => println!("   ✓ '12345' is all digits"),
+        Ok(false) => println!("   ✗ Not all digits"),
+        Err(e) => println!("   ✗ Error: {}", e)
+    }
+    
+    match regex.replace_all(r"\s+", "  too   much   space  ", " ") {
+        Ok(result) => println!("   Normalized spaces: '{}'", result),
+        Err(e) => println!("   ✗ Error: {}", e)
+    }
+    println!()
+    
+    // 7. Case-insensitive matching
+    println!("7. Case-Insensitive Matching:")
+    
+    match regex.compile_case_insensitive(r"hello") {
+        Ok(re) => {
+            let texts = vec!["hello", "HELLO", "Hello", "HeLLo"]
+            for text in texts {
+                if re.is_match(text) {
+                    println!("   ✓ Matched: '{}'", text)
+                }
+            }
+        },
+        Err(e) => println!("   ✗ Regex error: {}", e)
+    }
+    println!()
+    
+    // 8. Common patterns
+    println!("8. Common Patterns:")
+    
+    let patterns = vec![
+        ("Email", r"[\w.+-]+@[\w.-]+", "alice@example.com"),
+        ("URL", r"https?://[\w./]+", "https://example.com/path"),
+        ("IP", r"\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}", "192.168.1.1"),
+        ("Hex Color", r"#[0-9A-Fa-f]{6}", "#FF5733")
+    ]
+    
+    for (name, pattern, example) in patterns {
+        match regex.is_match(pattern, example) {
+            Ok(true) => println!("   ✓ {}: '{}'", name, example),
+            Ok(false) => println!("   ✗ {} failed", name),
+            Err(e) => println!("   ✗ {}: {}", name, e)
+        }
+    }
+    
+    println!()
+    println!("✨ Regular expressions with Windjammer!")
+    println!("   ✅ Using std.regex abstraction (not regex:: directly)")
+    println!("   ✅ Clean, Windjammer-native API")
+    println!("   ✅ Pattern matching, capture groups, replace, split")
+    println!("   ✅ Named captures for better readability")
+    println!("   ✅ Case-insensitive matching")
+}
+
