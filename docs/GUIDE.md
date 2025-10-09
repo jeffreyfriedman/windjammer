@@ -1346,9 +1346,29 @@ fn handle_request<T: ApiResource>(resource: T) { ... }
 
 ## Standard Library Modules
 
-**Version**: v0.11.0+
+**Version**: v0.14.0+ (Major Abstraction Improvements!)
 
-Windjammer provides a growing standard library for common tasks.
+Windjammer provides a growing standard library for common tasks. **v0.14.0 introduced proper abstractions** - all stdlib modules now provide clean Windjammer-native APIs that hide their underlying Rust crate implementations.
+
+**What This Means**:
+- ✅ You write `json.stringify()`, not `serde_json::to_string()`
+- ✅ You write `http.get()`, not `reqwest::get()`
+- ✅ You write `time.now()`, not `chrono::Local::now()`
+- ✅ API stability - Windjammer controls the contract, not external crates
+- ✅ Future flexibility - implementations can be swapped without breaking your code
+
+**Available Modules**:
+- `std/json` - JSON operations (abstracts serde_json)
+- `std/http` - HTTP client (abstracts reqwest)
+- `std/time` - Time/date utilities (abstracts chrono)
+- `std/crypto` - Cryptography (abstracts sha2, bcrypt, base64)
+- `std/random` - Random generation (abstracts rand)
+- `std/db` - Database access (abstracts sqlx)
+- `std/collections` - Data structures
+- `std/testing` - Test assertions
+- `std/async` - Async utilities
+- `std/env` - Environment variables
+- `std/process` - Process execution
 
 ### Environment Variables (`std/env`)
 

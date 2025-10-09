@@ -1,6 +1,7 @@
 pub mod analyzer;
 pub mod cli;
 pub mod codegen;
+pub mod config;
 pub mod error_mapper;
 pub mod inference;
 pub mod lexer;
