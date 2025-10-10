@@ -665,6 +665,12 @@ impl CodeGenerator {
             output.push_str("#[tokio::main]\n");
         }
 
+        // OPTIMIZATION: Add inline hints for hot path functions
+        // This is Phase 1 optimization: Generate Inlinable Code
+        if self.should_inline_function(func, analyzed) {
+            output.push_str("#[inline]\n");
+        }
+
         // Generate decorators (map Windjammer decorators to Rust attributes)
         for decorator in &func.decorators {
             // Skip @async, it's handled specially
@@ -1702,6 +1708,84 @@ impl CodeGenerator {
             Type::Tuple(types) => types.iter().all(|t| self.has_default(t)),
             _ => false, // Refs don't have Default, Result/Custom types unknown
         }
+    }
+
+    /// OPTIMIZATION: Determine if a function should be marked #[inline]
+    /// Phase 1: Generate Inlinable Code
+    ///
+    /// Heuristics for inlining:
+    /// 1. Module functions (stdlib wrappers) - always inline for zero-cost abstraction
+    /// 2. Small functions (< 10 statements) - likely to benefit from inlining
+    /// 3. Trivial getters/setters - always inline
+    /// 4. Functions with only one return statement - simple enough to inline
+    /// 5. Don't inline: main(), test functions, async functions, large functions
+    fn should_inline_function(&self, func: &FunctionDecl, _analyzed: &AnalyzedFunction) -> bool {
+        // Never inline main
+        if func.name == "main" {
+            return false;
+        }
+
+        // Never inline test functions
+        if func.decorators.iter().any(|d| d.name == "test") {
+            return false;
+        }
+
+        // Don't inline async functions (they're already state machines)
+        if func.decorators.iter().any(|d| d.name == "async") {
+            return false;
+        }
+
+        // ALWAYS inline module functions (stdlib wrappers)
+        // These are thin wrappers around Rust stdlib and should have zero overhead
+        if self.is_module {
+            return true;
+        }
+
+        // Count statements in function body
+        let statement_count = self.count_statements(&func.body);
+
+        // Inline small functions (< 10 statements)
+        if statement_count < 10 {
+            return true;
+        }
+
+        // Inline trivial single-expression functions
+        if statement_count == 1 {
+            if let Statement::Return(Some(_)) = &func.body[0] {
+                return true;
+            }
+            if let Statement::Expression(_) = &func.body[0] {
+                return true;
+            }
+        }
+
+        // Default: don't inline large functions
+        false
+    }
+
+    /// Count statements in a function body (for inline heuristics)
+    fn count_statements(&self, body: &[Statement]) -> usize {
+        let mut count = 0;
+        for stmt in body {
+            count += match stmt {
+                Statement::Let { .. } => 1,
+                Statement::Const { .. } => 1,
+                Statement::Static { .. } => 1,
+                Statement::Return(_) => 1,
+                Statement::Expression(_) => 1,
+                Statement::If { .. } => 3, // Weighted more heavily
+                Statement::While { .. } => 3,
+                Statement::Loop { .. } => 3,
+                Statement::For { .. } => 3,
+                Statement::Match { .. } => 5, // Match statements are complex
+                Statement::Assignment { .. } => 1,
+                Statement::Go { .. } => 2, // Goroutine spawn
+                Statement::Defer(_) => 1,
+                Statement::Break => 1,
+                Statement::Continue => 1,
+            };
+        }
+        count
     }
 
     // Format type parameters with trait bounds for Rust output
