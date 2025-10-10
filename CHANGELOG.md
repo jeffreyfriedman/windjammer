@@ -7,7 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-## [0.16.0] - In Progress
+### Planned for 0.17.0
+- Compiler optimizations for performance parity with Rust
+- Svelte benchmark visualization UI
+- Comprehensive load testing suite
+
+## [0.16.0] - 2025-10-10
 
 ### 🎯 Production Validation: TaskFlow API
 
@@ -529,7 +534,7 @@ crypto.sha256(data)
 
 **FLAGSHIP: Unified `wj` CLI**:
 - Single command for all development tasks
-- `wj run <file>` - Compile and execute (replaces `windjammer build` + `cd` + `cargo run`)
+- `wj run <file>` - Compile and execute (replaces `wj build` + `cd` + `cargo run`)
 - `wj build <file>` - Build Windjammer project
 - `wj test` - Run tests (wraps `cargo test`)
 - `wj fmt` - Format code (wraps `cargo fmt`)  
@@ -584,7 +589,7 @@ crypto.sha256(data)
 
 **Old Workflow**:
 ```bash
-windjammer build --path main.wj --output ./build
+wj build --path main.wj --output ./build
 cd build && cargo run
 cargo test
 cargo fmt

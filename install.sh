@@ -74,11 +74,11 @@ echo ""
 # Verify installation
 if command -v windjammer &> /dev/null; then
     echo -e "${GREEN}✓${NC} Verification successful"
-    windjammer --version
+    wj --version
     echo ""
     echo "Try it out:"
-    echo "  windjammer --help"
-    echo "  windjammer build --path examples/01_basics"
+    echo "  wj --help"
+    echo "  wj build --path examples/01_basics"
 else
     echo -e "${RED}✗ Installation verification failed${NC}"
     echo "Please ensure $INSTALL_DIR is in your PATH"
