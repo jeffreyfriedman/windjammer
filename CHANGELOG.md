@@ -7,10 +7,32 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-### Planned for 0.17.0
-- Compiler optimizations for performance parity with Rust
+## [0.17.0] - In Progress
+
+### 🚀 Compiler Optimizations & Performance Validation
+
+**Goal:** Achieve ≥95% of Rust performance through intelligent code generation.
+
+### Planned Features
+
+#### Compiler Optimizations
+- Smart borrow insertion (eliminate unnecessary clones)
+- Inline hints for generated code
+- Dead code elimination
+- Struct mapping optimization (FromRow support)
+- Method call devirtualization
+- String interpolation optimization
+- Async/await optimization
+- SIMD and vectorization hints
+
+#### Benchmarking & Validation
 - Svelte benchmark visualization UI
 - Comprehensive load testing suite
+- Real-time performance comparison
+- Side-by-side Windjammer vs Rust benchmarks
+- Historical results tracking
+
+**Target:** ≥110,750 req/s (95% of Rust's 116,579 req/s baseline)
 
 ## [0.16.0] - 2025-10-10
 
