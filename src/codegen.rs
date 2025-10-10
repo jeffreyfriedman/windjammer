@@ -22,6 +22,8 @@ pub struct CodeGenerator {
     clone_optimizations: std::collections::HashSet<String>, // Variables that don't need .clone()
     // PHASE 3 OPTIMIZATION: Track struct mapping optimizations
     struct_mapping_hints: std::collections::HashMap<String, crate::analyzer::MappingStrategy>, // Struct name -> strategy
+    // PHASE 4 OPTIMIZATION: Track string operation optimizations
+    string_capacity_hints: std::collections::HashMap<usize, usize>, // Statement idx -> capacity
 }
 
 impl CodeGenerator {
@@ -42,6 +44,7 @@ impl CodeGenerator {
             bound_aliases: std::collections::HashMap::new(),
             clone_optimizations: std::collections::HashSet::new(),
             struct_mapping_hints: std::collections::HashMap::new(),
+            string_capacity_hints: std::collections::HashMap::new(),
         }
     }
 
@@ -676,6 +679,15 @@ impl CodeGenerator {
         for opt in &analyzed.struct_mapping_optimizations {
             self.struct_mapping_hints
                 .insert(opt.target_struct.clone(), opt.strategy.clone());
+        }
+
+        // PHASE 4 OPTIMIZATION: Load string operation optimizations
+        // Track capacity hints for string operations
+        self.string_capacity_hints.clear();
+        for opt in &analyzed.string_optimizations {
+            if let Some(capacity) = opt.estimated_capacity {
+                self.string_capacity_hints.insert(opt.location, capacity);
+            }
         }
 
         // Check for @async decorator (special case: it's a keyword, not an attribute)
