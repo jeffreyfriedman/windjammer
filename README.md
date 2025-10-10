@@ -7,18 +7,34 @@ A simple, high-level language that transpiles to Rust—combining Go's ergonomic
 
 ## 📊 Production Validation: TaskFlow API
 
-**Empirical proof of Windjammer's 80/20 thesis!**
+**Empirical proof of Windjammer's 80/20 thesis!** 🎯
 
 We built a production-quality REST API in **both Windjammer and Rust** to compare:
 - **Windjammer:** 2,144 lines with clean `std.*` abstractions
 - **Rust:** 1,907 lines with exposed crate APIs (axum, sqlx, tracing, etc.)
 
-**Result:** Rust is 11% less code, but Windjammer wins on:
+### Results (v0.16.0)
+
+**Code Quality:** Rust is 11% less code, but Windjammer wins on:
 - ✅ **Zero crate leakage** - `std.http`, `std.db`, `std.log` only
 - ✅ **Stable APIs** - No breaking changes when crates update
 - ✅ **60-70% faster onboarding** - 3 APIs vs 8+ crates to learn
 - ✅ **Better abstractions** - Cleaner, more maintainable code
-- ⏳ **Performance** - Benchmarking in progress
+
+**Performance:** Rust baseline measured (v0.16.0):
+- ✅ **116,579 req/s** throughput (`/health` endpoint)
+- ✅ **707 µs** median latency (p50)
+- ✅ **2.61 ms** p99 latency
+- ⏳ **Windjammer validation in progress** (target: ≥ 95% of Rust = ≥110k req/s)
+
+**Microbenchmarks (Rust):**
+- JSON: 135-291 ns
+- JWT: 1-2 µs
+- bcrypt: 254 ms
+
+**v0.17.0 Goals:**
+- Prove Windjammer ≥ 95% of Rust performance
+- Reduce LOC gap from 11% to ≤ 5% via compiler optimizations
 
 **See:** [`examples/taskflow/`](examples/taskflow/) for complete details and benchmarks.
 
