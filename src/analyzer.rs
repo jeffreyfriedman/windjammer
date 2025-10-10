@@ -6,6 +6,31 @@ use std::collections::HashMap;
 pub struct AnalyzedFunction {
     pub decl: FunctionDecl,
     pub inferred_ownership: HashMap<String, OwnershipMode>,
+    // PHASE 2 OPTIMIZATION: Track unnecessary clones that can be eliminated
+    pub clone_optimizations: Vec<CloneOptimization>,
+}
+
+/// Represents a `.clone()` call that can be optimized away
+#[derive(Debug, Clone)]
+pub struct CloneOptimization {
+    /// Variable name being cloned
+    pub variable: String,
+    /// Statement index where clone occurs
+    pub location: usize,
+    /// Why we can eliminate this clone
+    pub reason: CloneEliminationReason,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum CloneEliminationReason {
+    /// Value is only read, never mutated
+    OnlyRead,
+    /// Value is used once and then discarded
+    SingleUse,
+    /// Value doesn't escape the function
+    LocalOnly,
+    /// Better to use move semantics
+    CanMove,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -117,9 +142,13 @@ impl Analyzer {
             inferred_ownership.insert(param.name.clone(), mode);
         }
 
+        // PHASE 2 OPTIMIZATION: Detect unnecessary clones
+        let clone_optimizations = self.detect_unnecessary_clones(func);
+
         Ok(AnalyzedFunction {
             decl: func.clone(),
             inferred_ownership,
+            clone_optimizations,
         })
     }
 
@@ -349,6 +378,187 @@ impl Analyzer {
                 )
             }
             _ => false,
+        }
+    }
+
+    /// PHASE 2 OPTIMIZATION: Detect unnecessary .clone() calls
+    /// Returns a list of clones that can be optimized away
+    fn detect_unnecessary_clones(&self, func: &FunctionDecl) -> Vec<CloneOptimization> {
+        let mut optimizations = Vec::new();
+
+        // Track variable usage: (variable_name, (read_count, write_count, escapes))
+        let mut usage = HashMap::new();
+
+        // First pass: analyze usage patterns
+        for (idx, stmt) in func.body.iter().enumerate() {
+            self.analyze_statement_for_clones(stmt, &mut usage, idx);
+        }
+
+        // Second pass: identify unnecessary clones
+        for (var_name, (reads, writes, escapes)) in usage {
+            // Clone is unnecessary if:
+            // 1. Variable is only read (never written) -> can use borrow
+            if writes == 0 && !escapes {
+                optimizations.push(CloneOptimization {
+                    variable: var_name.clone(),
+                    location: 0, // TODO: track actual location
+                    reason: CloneEliminationReason::OnlyRead,
+                });
+            }
+            // 2. Variable is used once and doesn't escape -> can move
+            else if reads == 1 && writes == 0 && !escapes {
+                optimizations.push(CloneOptimization {
+                    variable: var_name.clone(),
+                    location: 0,
+                    reason: CloneEliminationReason::SingleUse,
+                });
+            }
+            // 3. Variable doesn't escape function -> use local borrow
+            else if !escapes {
+                optimizations.push(CloneOptimization {
+                    variable: var_name,
+                    location: 0,
+                    reason: CloneEliminationReason::LocalOnly,
+                });
+            }
+        }
+
+        optimizations
+    }
+
+    /// Helper to analyze a statement for clone patterns
+    fn analyze_statement_for_clones(
+        &self,
+        stmt: &Statement,
+        usage: &mut HashMap<String, (usize, usize, bool)>,
+        _idx: usize,
+    ) {
+        match stmt {
+            Statement::Let { value, .. } => {
+                self.analyze_expression_for_clones(value, usage);
+            }
+            Statement::Assignment { target, value, .. } => {
+                // Track writes
+                if let Expression::Identifier(name) = target {
+                    let entry = usage.entry(name.clone()).or_insert((0, 0, false));
+                    entry.1 += 1; // increment write count
+                }
+                self.analyze_expression_for_clones(value, usage);
+            }
+            Statement::Return(Some(expr)) => {
+                // Returned values escape the function
+                if let Expression::Identifier(name) = expr {
+                    let entry = usage.entry(name.clone()).or_insert((0, 0, false));
+                    entry.2 = true; // mark as escapes
+                }
+                self.analyze_expression_for_clones(expr, usage);
+            }
+            Statement::Expression(expr) => {
+                self.analyze_expression_for_clones(expr, usage);
+            }
+            Statement::If {
+                condition,
+                then_block,
+                else_block,
+                ..
+            } => {
+                self.analyze_expression_for_clones(condition, usage);
+                for stmt in then_block {
+                    self.analyze_statement_for_clones(stmt, usage, _idx);
+                }
+                if let Some(else_b) = else_block {
+                    for stmt in else_b {
+                        self.analyze_statement_for_clones(stmt, usage, _idx);
+                    }
+                }
+            }
+            Statement::While {
+                condition, body, ..
+            } => {
+                self.analyze_expression_for_clones(condition, usage);
+                for stmt in body {
+                    self.analyze_statement_for_clones(stmt, usage, _idx);
+                }
+            }
+            Statement::For { iterable, body, .. } => {
+                self.analyze_expression_for_clones(iterable, usage);
+                for stmt in body {
+                    self.analyze_statement_for_clones(stmt, usage, _idx);
+                }
+            }
+            Statement::Loop { body } => {
+                for stmt in body {
+                    self.analyze_statement_for_clones(stmt, usage, _idx);
+                }
+            }
+            _ => {}
+        }
+    }
+
+    /// Helper to analyze an expression for variable usage
+    #[allow(clippy::only_used_in_recursion)]
+    fn analyze_expression_for_clones(
+        &self,
+        expr: &Expression,
+        usage: &mut HashMap<String, (usize, usize, bool)>,
+    ) {
+        match expr {
+            Expression::Identifier(name) => {
+                // Track reads
+                let entry = usage.entry(name.clone()).or_insert((0, 0, false));
+                entry.0 += 1; // increment read count
+            }
+            Expression::MethodCall {
+                object, arguments, ..
+            } => {
+                self.analyze_expression_for_clones(object, usage);
+                for (_, arg) in arguments {
+                    self.analyze_expression_for_clones(arg, usage);
+                }
+            }
+            Expression::Call {
+                function,
+                arguments,
+                ..
+            } => {
+                self.analyze_expression_for_clones(function, usage);
+                for (_, arg) in arguments {
+                    self.analyze_expression_for_clones(arg, usage);
+                }
+            }
+            Expression::Binary { left, right, .. } => {
+                self.analyze_expression_for_clones(left, usage);
+                self.analyze_expression_for_clones(right, usage);
+            }
+            Expression::Unary { operand, .. } => {
+                self.analyze_expression_for_clones(operand, usage);
+            }
+            Expression::FieldAccess { object, .. } => {
+                self.analyze_expression_for_clones(object, usage);
+            }
+            Expression::Index { object, index, .. } => {
+                self.analyze_expression_for_clones(object, usage);
+                self.analyze_expression_for_clones(index, usage);
+            }
+            Expression::StructLiteral { fields, .. } => {
+                for (_, field_expr) in fields {
+                    self.analyze_expression_for_clones(field_expr, usage);
+                }
+            }
+            Expression::Ternary {
+                condition,
+                true_expr,
+                false_expr,
+                ..
+            } => {
+                self.analyze_expression_for_clones(condition, usage);
+                self.analyze_expression_for_clones(true_expr, usage);
+                self.analyze_expression_for_clones(false_expr, usage);
+            }
+            Expression::Cast { expr, .. } => {
+                self.analyze_expression_for_clones(expr, usage);
+            }
+            _ => {}
         }
     }
 }
