@@ -365,6 +365,12 @@ fn optimize_method_chain(&self, expr: &Expression) -> Expression {
 - `benchmarks/compare.sh` - Comparison script
 - `benchmarks/load_test.sh` - wrk test scripts
 - `docs/OPTIMIZATION_GUIDE.md` - Tips for users
+- `examples/taskflow/frontend/` - Svelte UI for triggering and visualizing benchmarks 🆕
+  - Real-time load test execution
+  - Side-by-side performance comparison
+  - Visual charts (RPS, latency, etc.)
+  - Start/stop both Windjammer and Rust servers
+  - Historical results tracking
 
 ### Modified Files
 
