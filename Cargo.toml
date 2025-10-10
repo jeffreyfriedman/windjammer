@@ -12,7 +12,7 @@ documentation = "https://github.com/jeffreyfriedman/windjammer/blob/main/docs/GU
 keywords = ["compiler", "transpiler", "rust", "go", "language"]
 categories = ["development-tools", "compilers"]
 readme = "README.md"
-rust-version = "1.70"
+rust-version = "1.90"
 exclude = [
     "test_output_*",
     "examples/*/build_output",
