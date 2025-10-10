@@ -1,0 +1,77 @@
+// TaskFlow API - Windjammer Implementation
+// A production-quality task management REST API
+
+use std.http
+use std.log
+use std.env
+
+// Import our modules
+use ./config
+use ./handlers.health
+use ./handlers.auth
+use ./handlers.users
+use ./handlers.projects
+use ./handlers.tasks
+
+@async
+fn main() {
+    // Initialize logging
+    log.init_with_level("info")
+    log.info("Starting TaskFlow API (Windjammer)")
+    
+    // Load configuration
+    let config = config.load()
+    log.info_with("Configuration loaded", "port", config.port.to_string())
+    
+    // Build router with all endpoints
+    let router = build_router()
+    
+    // Start server
+    let addr = format!("{}:{}", config.host, config.port)
+    log.info_with("Server listening", "address", &addr)
+    
+    match http.serve(&addr, router).await {
+        Ok(_) => log.info("Server stopped gracefully"),
+        Err(e) => {
+            log.error_with("Server error", "error", &e)
+            std.process.exit(1)
+        }
+    }
+}
+
+fn build_router() -> Router {
+    Router::new()
+        // Health check
+        .get("/health", health.check)
+        
+        // Auth endpoints
+        .post("/api/v1/auth/register", auth.register)
+        .post("/api/v1/auth/login", auth.login)
+        .post("/api/v1/auth/logout", auth.logout)
+        .get("/api/v1/auth/me", auth.me)
+        
+        // User endpoints
+        .get("/api/v1/users", users.list)
+        .get("/api/v1/users/:id", users.get)
+        .patch("/api/v1/users/:id", users.update)
+        .delete("/api/v1/users/:id", users.delete)
+        
+        // Project endpoints
+        .get("/api/v1/projects", projects.list)
+        .post("/api/v1/projects", projects.create)
+        .get("/api/v1/projects/:id", projects.get)
+        .patch("/api/v1/projects/:id", projects.update)
+        .delete("/api/v1/projects/:id", projects.delete)
+        .post("/api/v1/projects/:id/members", projects.add_member)
+        .delete("/api/v1/projects/:id/members/:user_id", projects.remove_member)
+        
+        // Task endpoints
+        .get("/api/v1/projects/:project_id/tasks", tasks.list_by_project)
+        .post("/api/v1/projects/:project_id/tasks", tasks.create)
+        .get("/api/v1/tasks/:id", tasks.get)
+        .patch("/api/v1/tasks/:id", tasks.update)
+        .delete("/api/v1/tasks/:id", tasks.delete)
+        .post("/api/v1/tasks/:id/assign", tasks.assign)
+        .get("/api/v1/tasks/search", tasks.search)
+}
+

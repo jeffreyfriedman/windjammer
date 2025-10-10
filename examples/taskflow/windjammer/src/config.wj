@@ -1,0 +1,22 @@
+// Configuration management for TaskFlow API
+
+use std.env
+
+struct Config {
+    host: string,
+    port: int,
+    database_url: string,
+    jwt_secret: string,
+    log_level: string,
+}
+
+pub fn load() -> Config {
+    Config {
+        host: env.get_or("HOST", "0.0.0.0"),
+        port: env.get_or("PORT", "3000").parse().unwrap_or(3000),
+        database_url: env.get_or("DATABASE_URL", "postgresql://postgres:postgres@localhost/taskflow"),
+        jwt_secret: env.get_or("JWT_SECRET", "your-secret-key-change-in-production"),
+        log_level: env.get_or("LOG_LEVEL", "info"),
+    }
+}
+
