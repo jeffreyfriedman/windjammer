@@ -10,6 +10,31 @@ pub struct AnalyzedFunction {
     pub clone_optimizations: Vec<CloneOptimization>,
     // PHASE 3 OPTIMIZATION: Track struct mapping opportunities
     pub struct_mapping_optimizations: Vec<StructMappingOptimization>,
+    // PHASE 4 OPTIMIZATION: Track string operations for optimization
+    pub string_optimizations: Vec<StringOptimization>,
+}
+
+/// Represents a string operation that can be optimized
+#[derive(Debug, Clone)]
+pub struct StringOptimization {
+    /// Type of string optimization
+    pub optimization_type: StringOptimizationType,
+    /// Estimated capacity needed
+    pub estimated_capacity: Option<usize>,
+    /// Location in the function
+    pub location: usize,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum StringOptimizationType {
+    /// String interpolation that can pre-allocate capacity
+    InterpolationWithCapacity,
+    /// Multiple string concatenations
+    ConcatenationChain,
+    /// String building in a loop
+    LoopAccumulation,
+    /// Repeated format! calls
+    RepeatedFormatting,
 }
 
 /// Represents a struct-to-struct mapping that can be optimized
@@ -175,11 +200,15 @@ impl Analyzer {
         // PHASE 3 OPTIMIZATION: Detect struct mapping opportunities
         let struct_mapping_optimizations = self.detect_struct_mappings(func);
 
+        // PHASE 4 OPTIMIZATION: Detect string operation opportunities
+        let string_optimizations = self.detect_string_optimizations(func);
+
         Ok(AnalyzedFunction {
             decl: func.clone(),
             inferred_ownership,
             clone_optimizations,
             struct_mapping_optimizations,
+            string_optimizations,
         })
     }
 
@@ -610,6 +639,103 @@ impl Analyzer {
             Expression::Literal(lit) => format!("{:?}", lit),
             _ => "expr".to_string(),
         }
+    }
+
+    /// PHASE 4 OPTIMIZATION: Detect string operation opportunities
+    /// Identifies patterns where string operations can be optimized
+    fn detect_string_optimizations(&self, func: &FunctionDecl) -> Vec<StringOptimization> {
+        let mut optimizations = Vec::new();
+
+        for (idx, stmt) in func.body.iter().enumerate() {
+            self.analyze_statement_for_string_ops(stmt, &mut optimizations, idx);
+        }
+
+        optimizations
+    }
+
+    /// Analyze a statement for string optimization opportunities
+    fn analyze_statement_for_string_ops(
+        &self,
+        stmt: &Statement,
+        optimizations: &mut Vec<StringOptimization>,
+        idx: usize,
+    ) {
+        match stmt {
+            Statement::Let { value, .. } | Statement::Return(Some(value)) => {
+                // Check for format! macro calls (string interpolation is converted to format!)
+                if let Expression::MacroInvocation { name, .. } = value {
+                    if name == "format" {
+                        // String interpolation detected - could pre-allocate capacity
+                        optimizations.push(StringOptimization {
+                            optimization_type: StringOptimizationType::InterpolationWithCapacity,
+                            estimated_capacity: Some(64), // Default estimate
+                            location: idx,
+                        });
+                    }
+                }
+
+                // Check for concatenation chains (a + b + c)
+                self.detect_concatenation_chain(value, optimizations, idx);
+            }
+            Statement::For { body, .. }
+            | Statement::While { body, .. }
+            | Statement::Loop { body } => {
+                // Check for string building in loops
+                for s in body {
+                    if self.is_string_accumulation(s) {
+                        optimizations.push(StringOptimization {
+                            optimization_type: StringOptimizationType::LoopAccumulation,
+                            estimated_capacity: Some(256), // Default for loop accumulation
+                            location: idx,
+                        });
+                    }
+                }
+            }
+            _ => {}
+        }
+    }
+
+    /// Detect concatenation chains (a + b + c + ...)
+    fn detect_concatenation_chain(
+        &self,
+        expr: &Expression,
+        optimizations: &mut Vec<StringOptimization>,
+        idx: usize,
+    ) {
+        let mut concat_count = 0;
+        self.count_concatenations(expr, &mut concat_count);
+
+        if concat_count >= 3 {
+            // Multiple concatenations, could benefit from pre-allocation
+            optimizations.push(StringOptimization {
+                optimization_type: StringOptimizationType::ConcatenationChain,
+                estimated_capacity: Some(concat_count * 32), // Rough estimate
+                location: idx,
+            });
+        }
+    }
+
+    /// Count the number of concatenation operations
+    #[allow(clippy::only_used_in_recursion)]
+    fn count_concatenations(&self, expr: &Expression, count: &mut usize) {
+        if let Expression::Binary { op, left, right } = expr {
+            if matches!(op, BinaryOp::Add) {
+                *count += 1;
+                self.count_concatenations(left, count);
+                self.count_concatenations(right, count);
+            }
+        }
+    }
+
+    /// Check if a statement is accumulating strings (s += ...)
+    fn is_string_accumulation(&self, stmt: &Statement) -> bool {
+        matches!(
+            stmt,
+            Statement::Assignment {
+                target: Expression::Identifier(_),
+                ..
+            }
+        )
     }
 
     /// Helper to analyze a statement for clone patterns
