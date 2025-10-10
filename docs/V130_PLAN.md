@@ -68,7 +68,7 @@ Both features address key pain points and move Windjammer closer to production r
 **Tasks:**
 1. Create new binary crate structure
 2. Implement command-line argument parsing (clap)
-3. Implement `wj build` - wrap existing windjammer build logic
+3. Implement `wj build` - wrap existing wj build logic
 4. Implement `wj run` - compile + execute
 5. Implement `wj test` - wrap `cargo test`
 6. Implement `wj fmt` - wrap `cargo fmt`
@@ -166,7 +166,7 @@ examples/
 
 ```bash
 # Complex workflow
-$ windjammer build --path main.wj --output ./build
+$ wj build --path main.wj --output ./build
 $ cd build && cargo run
 $ cd .. && cargo test
 $ cargo fmt
@@ -429,7 +429,7 @@ wj build --features mysql     # MySQL
 **Before:**
 ```bash
 # 5 commands, context switching
-windjammer build --path main.wj --output ./build
+wj build --path main.wj --output ./build
 cd build
 cargo run
 cd ..
