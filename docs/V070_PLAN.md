@@ -161,7 +161,7 @@ ENTRYPOINT ["windjammer"]
 **Usage**:
 ```bash
 docker pull ghcr.io/jeffreyfriedman/windjammer:latest
-docker run -v $(pwd):/workspace windjammer build --path /workspace
+docker run -v $(pwd):/workspace wj build --path /workspace
 ```
 
 #### 1.6 Build from Source
@@ -174,7 +174,7 @@ echo "Installing Windjammer from source..."
 cargo build --release
 sudo cp target/release/windjammer /usr/local/bin/
 echo "✓ Windjammer installed to /usr/local/bin/windjammer"
-windjammer --version
+wj --version
 ```
 
 **Usage**:

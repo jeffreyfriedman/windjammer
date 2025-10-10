@@ -375,7 +375,7 @@ Instead of juggling `cargo`, `rustc`, `clippy`, `rustfmt`, wrap them in a brande
 
 ```bash
 # Current (multiple tools):
-windjammer build --path main.wj --output ./out
+wj build --path main.wj --output ./out
 cd out && cargo run
 cargo test
 cargo clippy

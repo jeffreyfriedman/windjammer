@@ -64,7 +64,7 @@ fn main() {
 Compile and run:
 
 ```bash
-windjammer build --path hello.wj
+wj build --path hello.wj
 cd output
 cargo run
 ```
