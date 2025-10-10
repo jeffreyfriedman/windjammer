@@ -18,6 +18,8 @@ pub struct CodeGenerator {
     inferred_bounds: std::collections::HashMap<String, crate::inference::InferredBounds>,
     needs_trait_imports: std::collections::HashSet<String>, // Tracks which traits need imports
     bound_aliases: std::collections::HashMap<String, Vec<String>>, // bound Name = Trait + Trait
+    // PHASE 2 OPTIMIZATION: Track variables that can avoid cloning
+    clone_optimizations: std::collections::HashSet<String>, // Variables that don't need .clone()
 }
 
 impl CodeGenerator {
@@ -36,6 +38,7 @@ impl CodeGenerator {
             inferred_bounds: std::collections::HashMap::new(),
             needs_trait_imports: std::collections::HashSet::new(),
             bound_aliases: std::collections::HashMap::new(),
+            clone_optimizations: std::collections::HashSet::new(),
         }
     }
 
@@ -656,6 +659,13 @@ impl CodeGenerator {
     fn generate_function(&mut self, analyzed: &AnalyzedFunction) -> String {
         let func = &analyzed.decl;
         let mut output = String::new();
+
+        // PHASE 2 OPTIMIZATION: Load clone optimizations for this function
+        // Variables in this set can safely avoid .clone() calls
+        self.clone_optimizations.clear();
+        for opt in &analyzed.clone_optimizations {
+            self.clone_optimizations.insert(opt.variable.clone());
+        }
 
         // Check for @async decorator (special case: it's a keyword, not an attribute)
         let is_async = func.decorators.iter().any(|d| d.name == "async");
@@ -1322,6 +1332,17 @@ impl CodeGenerator {
                     Expression::FieldAccess { .. } => "::", // Module path: std.fs.read() -> std::fs::read()
                     _ => ".",                               // Instance method on expressions
                 };
+
+                // PHASE 2 OPTIMIZATION: Eliminate unnecessary .clone() calls
+                // If this is a .clone() on a variable that doesn't need cloning, skip it
+                if method == "clone" && arguments.is_empty() {
+                    if let Expression::Identifier(ref var_name) = **object {
+                        if self.clone_optimizations.contains(var_name) {
+                            // Skip the .clone(), just return the variable (or borrow if needed)
+                            return obj_str;
+                        }
+                    }
+                }
 
                 format!(
                     "{}{}{}{}({})",
