@@ -197,7 +197,7 @@ impl Point {
             "impl Point",
             "fn new",
             "fn distance(&self)",
-            "Point { x: x, y: y }", // Shorthand is expanded to full notation
+            "Point { x, y }", // Phase 3: Uses idiomatic Rust struct shorthand
         ],
     );
 }
