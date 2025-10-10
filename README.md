@@ -331,7 +331,7 @@ edition = "2021"
 **80% Reduction in Boilerplate**:
 ```bash
 # Old way (v0.12.0):
-windjammer build --path main.wj --output ./build
+wj build --path main.wj --output ./build
 cd build && cargo run
 cd .. && cargo test
 cargo fmt
@@ -900,8 +900,8 @@ cargo install windjammer
 ### Verify Installation
 
 ```bash
-windjammer --version
-windjammer --help
+wj --version
+wj --help
 ```
 
 ### Your First Program
@@ -918,7 +918,7 @@ fn main() {
 Transpile and run:
 
 ```bash
-windjammer build --path hello.wj --output output
+wj build --path hello.wj --output output
 cd output
 cargo run
 ```
@@ -971,13 +971,13 @@ Install from `editors/vscode/` or search "Windjammer" in the marketplace (coming
 
 ```bash
 # Transpile .wj files to .rs
-windjammer build
+wj build
 
 # Or specify files
-windjammer build src/main.wj
+wj build src/main.wj
 
 # Check for errors without generating code
-windjammer check
+wj check
 
 # Run the generated Rust code
 cd output

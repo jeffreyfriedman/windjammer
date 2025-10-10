@@ -36,8 +36,8 @@
   - `go { }` → `tokio::spawn(async move { })`
 
 - **CLI**: Command-line interface
-  - `windjammer build` - Transpile .wj files to Rust
-  - `windjammer check` - Validate syntax without code generation
+  - `wj build` - Transpile .wj files to Rust
+  - `wj check` - Validate syntax without code generation
   - Colorful output with progress indicators
   - Automatic Cargo.toml generation
 
@@ -155,7 +155,7 @@ Goal: "Batteries Included" - Cover 80% of use cases without external dependencie
 ### Doctest Support (Planned)
 - ⏳ Rust-style documentation tests
 - ⏳ Extract and run code examples from `///` comments
-- ⏳ Integrate with `windjammer test` command
+- ⏳ Integrate with `wj test` command
 
 ### Advanced Features
 - ⏳ Trait-like interfaces
