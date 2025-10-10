@@ -8,6 +8,33 @@ pub struct AnalyzedFunction {
     pub inferred_ownership: HashMap<String, OwnershipMode>,
     // PHASE 2 OPTIMIZATION: Track unnecessary clones that can be eliminated
     pub clone_optimizations: Vec<CloneOptimization>,
+    // PHASE 3 OPTIMIZATION: Track struct mapping opportunities
+    pub struct_mapping_optimizations: Vec<StructMappingOptimization>,
+}
+
+/// Represents a struct-to-struct mapping that can be optimized
+#[derive(Debug, Clone)]
+pub struct StructMappingOptimization {
+    /// Target struct being created
+    pub target_struct: String,
+    /// Source of data (variable name or "row")
+    pub source: String,
+    /// Field mappings: (target_field, source_expression)
+    pub field_mappings: Vec<(String, String)>,
+    /// Optimization strategy to use
+    pub strategy: MappingStrategy,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum MappingStrategy {
+    /// Direct field-to-field mapping (zero-cost)
+    DirectMapping,
+    /// Database row extraction (use FromRow trait)
+    FromRow,
+    /// Builder pattern optimization
+    Builder,
+    /// Simple field copy with type conversion
+    TypeConversion,
 }
 
 /// Represents a `.clone()` call that can be optimized away
@@ -145,10 +172,14 @@ impl Analyzer {
         // PHASE 2 OPTIMIZATION: Detect unnecessary clones
         let clone_optimizations = self.detect_unnecessary_clones(func);
 
+        // PHASE 3 OPTIMIZATION: Detect struct mapping opportunities
+        let struct_mapping_optimizations = self.detect_struct_mappings(func);
+
         Ok(AnalyzedFunction {
             decl: func.clone(),
             inferred_ownership,
             clone_optimizations,
+            struct_mapping_optimizations,
         })
     }
 
@@ -424,6 +455,161 @@ impl Analyzer {
         }
 
         optimizations
+    }
+
+    /// PHASE 3 OPTIMIZATION: Detect struct mapping opportunities
+    /// Identifies patterns where struct literals can be optimized
+    fn detect_struct_mappings(&self, func: &FunctionDecl) -> Vec<StructMappingOptimization> {
+        let mut optimizations = Vec::new();
+
+        // Scan function body for struct literal expressions
+        for stmt in &func.body {
+            self.analyze_statement_for_struct_mappings(stmt, &mut optimizations);
+        }
+
+        optimizations
+    }
+
+    /// Helper to analyze statements for struct mapping patterns
+    fn analyze_statement_for_struct_mappings(
+        &self,
+        stmt: &Statement,
+        optimizations: &mut Vec<StructMappingOptimization>,
+    ) {
+        match stmt {
+            Statement::Let { value, .. } | Statement::Return(Some(value)) => {
+                self.analyze_expression_for_struct_mappings(value, optimizations);
+            }
+            Statement::Expression(expr) => {
+                self.analyze_expression_for_struct_mappings(expr, optimizations);
+            }
+            Statement::If {
+                then_block,
+                else_block,
+                ..
+            } => {
+                for s in then_block {
+                    self.analyze_statement_for_struct_mappings(s, optimizations);
+                }
+                if let Some(else_b) = else_block {
+                    for s in else_b {
+                        self.analyze_statement_for_struct_mappings(s, optimizations);
+                    }
+                }
+            }
+            _ => {}
+        }
+    }
+
+    /// Analyze an expression for struct mapping opportunities
+    fn analyze_expression_for_struct_mappings(
+        &self,
+        expr: &Expression,
+        optimizations: &mut Vec<StructMappingOptimization>,
+    ) {
+        match expr {
+            Expression::StructLiteral { name, fields } => {
+                // Detect patterns:
+                // 1. All fields come from a single source (direct mapping)
+                // 2. Fields extracted from database row (FromRow pattern)
+                // 3. Builder pattern (chained method calls)
+
+                let mut field_mappings = Vec::new();
+                let mut source_candidates = HashMap::new();
+
+                for (field_name, field_expr) in fields {
+                    let field_source = self.extract_field_source(field_expr);
+                    field_mappings
+                        .push((field_name.clone(), self.expression_to_string(field_expr)));
+
+                    // Track which variables are used as field sources
+                    if let Some(src) = &field_source {
+                        *source_candidates.entry(src.clone()).or_insert(0) += 1;
+                    }
+                }
+
+                // Determine optimization strategy
+                let strategy = if let Some((dominant_source, count)) =
+                    source_candidates.iter().max_by_key(|(_, c)| *c)
+                {
+                    if *count == fields.len() {
+                        // All fields from same source -> DirectMapping
+                        MappingStrategy::DirectMapping
+                    } else if dominant_source == "row" || dominant_source.starts_with("row.") {
+                        // Database row extraction
+                        MappingStrategy::FromRow
+                    } else {
+                        // Mixed sources, use type conversion
+                        MappingStrategy::TypeConversion
+                    }
+                } else {
+                    // No clear source pattern
+                    MappingStrategy::TypeConversion
+                };
+
+                // Only optimize if we have a clear source
+                if !source_candidates.is_empty() {
+                    let source = source_candidates
+                        .keys()
+                        .next()
+                        .cloned()
+                        .unwrap_or_else(|| "unknown".to_string());
+
+                    optimizations.push(StructMappingOptimization {
+                        target_struct: name.clone(),
+                        source,
+                        field_mappings,
+                        strategy,
+                    });
+                }
+            }
+            Expression::Call { arguments, .. } | Expression::MethodCall { arguments, .. } => {
+                // Check arguments for struct literals
+                for (_, arg) in arguments {
+                    self.analyze_expression_for_struct_mappings(arg, optimizations);
+                }
+            }
+            _ => {}
+        }
+    }
+
+    /// Extract the source variable/expression from a field expression
+    fn extract_field_source(&self, expr: &Expression) -> Option<String> {
+        match expr {
+            Expression::Identifier(name) => Some(name.clone()),
+            Expression::FieldAccess { object, .. } => {
+                // Extract base object
+                if let Expression::Identifier(name) = &**object {
+                    Some(name.clone())
+                } else {
+                    None
+                }
+            }
+            Expression::MethodCall { object, .. } => {
+                if let Expression::Identifier(name) = &**object {
+                    Some(name.clone())
+                } else {
+                    None
+                }
+            }
+            _ => None,
+        }
+    }
+
+    /// Convert expression to string for field mapping tracking
+    #[allow(clippy::only_used_in_recursion)]
+    fn expression_to_string(&self, expr: &Expression) -> String {
+        match expr {
+            Expression::Identifier(name) => name.clone(),
+            Expression::FieldAccess { object, field } => {
+                format!("{}.{}", self.expression_to_string(object), field)
+            }
+            Expression::MethodCall { object, method, .. } => {
+                format!("{}.{}()", self.expression_to_string(object), method)
+            }
+            Expression::Literal(lit) => format!("{:?}", lit),
+            _ => "expr".to_string(),
+        }
     }
 
     /// Helper to analyze a statement for clone patterns
