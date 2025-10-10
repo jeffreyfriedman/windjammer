@@ -13,13 +13,35 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 **Goal:** Achieve ≥95% of Rust performance through intelligent code generation.
 
-### Planned Features
+### Implemented Features
 
-#### Compiler Optimizations
-- Smart borrow insertion (eliminate unnecessary clones)
-- Inline hints for generated code
+#### Phase 1: Inline Hints ✅
+- ✅ Smart `#[inline]` generation based on heuristics
+- ✅ ALWAYS inline module functions (stdlib wrappers)
+- ✅ Inline small functions (< 10 statements)
+- ✅ Inline trivial single-expression functions
+- ✅ Never inline: main(), test functions, async functions, large functions
+- **Expected Impact:** 2-5% performance improvement for hot paths, 5-10% for stdlib-heavy code
+
+#### Phase 2: Smart Borrow Insertion ✅
+- ✅ Escape analysis to detect unnecessary `.clone()` calls
+- ✅ Automatic elimination of clones for:
+  - Variables that are only read (never mutated)
+  - Variables used once and don't escape
+  - Variables that don't escape the function
+- ✅ Three-pass analysis: track reads/writes/escapes
+- ✅ Safe optimization: only eliminates provably unnecessary clones
+- **Expected Impact:** 10-15% performance improvement by eliminating allocations
+
+#### Planned Features (Remaining)
+
+**Phase 3: Struct Mapping Optimization**
+- Smart struct-to-struct mapping (FromRow support)
+- Eliminate intermediate allocations
+- Direct field mapping
+
+**Phase 4: Advanced Optimizations**
 - Dead code elimination
-- Struct mapping optimization (FromRow support)
 - Method call devirtualization
 - String interpolation optimization
 - Async/await optimization
