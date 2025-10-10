@@ -20,6 +20,8 @@ pub struct CodeGenerator {
     bound_aliases: std::collections::HashMap<String, Vec<String>>, // bound Name = Trait + Trait
     // PHASE 2 OPTIMIZATION: Track variables that can avoid cloning
     clone_optimizations: std::collections::HashSet<String>, // Variables that don't need .clone()
+    // PHASE 3 OPTIMIZATION: Track struct mapping optimizations
+    struct_mapping_hints: std::collections::HashMap<String, crate::analyzer::MappingStrategy>, // Struct name -> strategy
 }
 
 impl CodeGenerator {
@@ -39,6 +41,7 @@ impl CodeGenerator {
             needs_trait_imports: std::collections::HashSet::new(),
             bound_aliases: std::collections::HashMap::new(),
             clone_optimizations: std::collections::HashSet::new(),
+            struct_mapping_hints: std::collections::HashMap::new(),
         }
     }
 
@@ -665,6 +668,14 @@ impl CodeGenerator {
         self.clone_optimizations.clear();
         for opt in &analyzed.clone_optimizations {
             self.clone_optimizations.insert(opt.variable.clone());
+        }
+
+        // PHASE 3 OPTIMIZATION: Load struct mapping optimizations
+        // Track which structs can use optimized construction strategies
+        self.struct_mapping_hints.clear();
+        for opt in &analyzed.struct_mapping_optimizations {
+            self.struct_mapping_hints
+                .insert(opt.target_struct.clone(), opt.strategy.clone());
         }
 
         // Check for @async decorator (special case: it's a keyword, not an attribute)
@@ -1377,12 +1388,29 @@ impl CodeGenerator {
                 format!("{}{}{}", obj_str, separator, field)
             }
             Expression::StructLiteral { name, fields } => {
+                // PHASE 3 OPTIMIZATION: Check if we have optimization hints for this struct
+                let _has_optimization_hint = self.struct_mapping_hints.get(name);
+
+                // Generate field assignments
                 let field_str: Vec<String> = fields
                     .iter()
                     .map(|(field_name, expr)| {
-                        format!("{}: {}", field_name, self.generate_expression(expr))
+                        // For simple direct field access (e.g., source.field -> target.field),
+                        // we can generate cleaner code
+                        let expr_str = self.generate_expression(expr);
+
+                        // Check for field shorthand: if expr is just the field name, use shorthand
+                        if let Expression::Identifier(id) = expr {
+                            if id == field_name {
+                                // Shorthand: User { name } instead of User { name: name }
+                                return field_name.clone();
+                            }
+                        }
+
+                        format!("{}: {}", field_name, expr_str)
                     })
                     .collect();
+
                 format!("{} {{ {} }}", name, field_str.join(", "))
             }
             Expression::TryOp(inner) => {
