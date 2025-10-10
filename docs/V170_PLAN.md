@@ -202,21 +202,51 @@
 
 ### Phase 4: Documentation & Release (Week 2)
 
-1. **Update Documentation**
-   - `CHANGELOG.md` with optimization details
-   - `README.md` with performance claims
-   - `benchmarks/README.md` with full results
-   - `docs/GUIDE.md` with optimization tips
+1. **Update Documentation (CRITICAL)**
+   
+   **README.md Updates:**
+   - Add "Compiler Optimizations" section showcasing automatic features
+   - Update performance claims with actual v0.16.0 baseline numbers
+   - Add LOC comparison (before: 11% gap, after: ≤5% gap)
+   - Update "Key Features" with optimization highlights
+   - Link to TaskFlow comparison for proof
+   
+   **GUIDE.md Updates:**
+   - New section: "Automatic Optimizations"
+   - Document smart struct mapping (how to use, what it does)
+   - Document automatic serde derives (inference rules)
+   - Add examples of optimized code generation
+   - Best practices for performance
+   - Show before/after optimization examples
+   
+   **COMPARISON.md Updates:**
+   - Replace "Expected Performance (Projected)" with actual v0.16.0 baseline
+   - Update with v0.17.0 benchmarks (Windjammer vs Rust comparison)
+   - Update "Performance Comparison" table with real numbers
+   - Update "What You're Giving Up" section (now even less!)
+   - Add "Compiler Optimizations" section explaining smart codegen
+   - Update LOC analysis (from 11% gap to ≤5%)
+   - Update production readiness assessment
+   
+   **CHANGELOG.md:**
+   - Complete v0.17.0 entry with optimization details
+   - Performance comparison results
+   - LOC reduction achieved
+   
+   **benchmarks/README.md:**
+   - Add v0.17.0 Windjammer results
+   - Side-by-side comparison with Rust
+   - Analysis of performance parity
 
 2. **Create Comparison Report**
-   - Side-by-side metrics
-   - LOC reduction achieved
-   - Performance parity proof
+   - Side-by-side metrics (v0.16.0 Rust vs v0.17.0 Windjammer)
+   - LOC reduction achieved (target: 11% → ≤5%)
+   - Performance parity proof (target: within 5%)
    - Real-world recommendations
 
 3. **Release Preparation**
-   - PR summary
-   - Release notes
+   - PR summary with before/after
+   - Release notes highlighting optimizations
    - Tag v0.17.0
    - Publish
 
@@ -337,12 +367,18 @@ fn optimize_method_chain(&self, expr: &Expression) -> Expression {
 - `docs/OPTIMIZATION_GUIDE.md` - Tips for users
 
 ### Modified Files
+
+**Compiler:**
 - `src/codegen.rs` - Smart struct mapping, auto derives
 - `src/analyzer.rs` - Usage analysis, optimization passes
 - `src/parser.rs` - Any needed AST extensions
+
+**Documentation (CRITICAL - Must Update):**
+- `README.md` - Updated performance claims, optimization features
+- `docs/GUIDE.md` - Document new automatic optimizations, usage patterns
+- `docs/COMPARISON.md` - Update performance comparison with actual v0.16.0 baseline results
 - `benchmarks/README.md` - Updated with v0.17.0 results
-- `CHANGELOG.md` - v0.17.0 entry
-- `README.md` - Updated performance claims
+- `CHANGELOG.md` - v0.17.0 entry with optimization details
 
 ---
 
