@@ -1,0 +1,76 @@
+// Task data models
+
+use std.json
+
+@derive(Debug, Clone, PartialEq, Serialize, Deserialize)
+struct Task {
+    id: int,
+    project_id: int,
+    title: string,
+    description: Option<string>,
+    status: string,
+    priority: string,
+    assigned_to: Option<int>,
+    created_at: string,
+    updated_at: string,
+}
+
+@derive(Debug, Clone, PartialEq, Serialize, Deserialize)
+struct CreateTaskRequest {
+    title: string,
+    description: Option<string>,
+    status: Option<string>,
+    priority: Option<string>,
+    assigned_to: Option<int>,
+}
+
+@derive(Debug, Clone, PartialEq, Serialize, Deserialize)
+struct UpdateTaskRequest {
+    title: Option<string>,
+    description: Option<string>,
+    status: Option<string>,
+    priority: Option<string>,
+    assigned_to: Option<int>,
+}
+
+@derive(Debug, Clone, PartialEq, Serialize, Deserialize)
+struct AssignTaskRequest {
+    user_id: int,
+}
+
+@derive(Debug, Clone, PartialEq, Serialize, Deserialize)
+struct TaskSearchQuery {
+    status: Option<string>,
+    priority: Option<string>,
+    assigned_to: Option<int>,
+}
+
+impl Task {
+    pub fn to_public(self) -> TaskPublic {
+        TaskPublic {
+            id: self.id,
+            project_id: self.project_id,
+            title: self.title,
+            description: self.description,
+            status: self.status,
+            priority: self.priority,
+            assigned_to: self.assigned_to,
+            created_at: self.created_at,
+            updated_at: self.updated_at,
+        }
+    }
+}
+
+@derive(Debug, Serialize)
+struct TaskPublic {
+    id: int,
+    project_id: int,
+    title: string,
+    description: Option<string>,
+    status: string,
+    priority: string,
+    assigned_to: Option<int>,
+    created_at: string,
+    updated_at: string,
+}
+
