@@ -20,10 +20,10 @@ fn greet(name: string) -> string { ... }
 
 ### Layer 1: CLI Flag (Highest Priority)
 ```bash
-windjammer build --target wasm main.wj     # Force WASM
-windjammer build --target node main.wj     # Force Node.js FFI
-windjammer build --target python main.wj   # Force Python bindings
-windjammer build --target c main.wj        # Force C FFI
+wj build --target wasm main.wj     # Force WASM
+wj build --target node main.wj     # Force Node.js FFI
+wj build --target python main.wj   # Force Python bindings
+wj build --target c main.wj        # Force C FFI
 ```
 
 ### Layer 2: Project Config File
@@ -152,7 +152,7 @@ fn greet(name: string) -> string {
 ```
 
 ```bash
-windjammer build main.wj  # Auto-detects WASM from Cargo.toml
+wj build main.wj  # Auto-detects WASM from Cargo.toml
 ```
 
 **Generates**:
@@ -177,7 +177,7 @@ fn add(a: int, b: int) -> int {
 ```
 
 ```bash
-windjammer build --target node main.wj
+wj build --target node main.wj
 ```
 
 **Generates**:
@@ -208,7 +208,7 @@ fn fibonacci(n: int) -> int {
 ```
 
 ```bash
-windjammer build --target python main.wj
+wj build --target python main.wj
 ```
 
 **Generates**:
@@ -243,7 +243,7 @@ fn compute(x: f64, y: f64) -> f64 {
 ```
 
 ```bash
-windjammer build --target c main.wj
+wj build --target c main.wj
 ```
 
 **Generates**:

@@ -423,7 +423,7 @@ fn add(a: int, b: int) -> int {
 - Parse `///` doc comments
 - Extract code blocks
 - Generate test functions
-- Run as part of `windjammer test`
+- Run as part of `wj test`
 
 **Files to modify:**
 - `src/parser.rs` - Parse doc comments
@@ -499,12 +499,12 @@ json = "0.1"
 
 ### 5.3 Formatter
 ```bash
-windjammer fmt
+wj fmt
 ```
 
 ### 5.4 Linter
 ```bash
-windjammer lint
+wj lint
 ```
 
 ### 5.5 Documentation Generator

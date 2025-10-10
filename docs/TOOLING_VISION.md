@@ -12,7 +12,7 @@ Currently, Windjammer users must juggle multiple tools:
 
 ```bash
 # Today's workflow:
-windjammer build --path main.wj --output ./out    # Transpile
+wj build --path main.wj --output ./out    # Transpile
 cd out && cargo run                                 # Run
 cargo test                                          # Test
 cargo clippy                                        # Lint
@@ -332,7 +332,7 @@ help: The function `add` expects to return an `int`, but you're returning a `str
 | **Install** | `cargo install windjammer` + know rustup | `curl install.sh \| sh` |
 | **New project** | Manual file creation | `wj new my-app` |
 | **Add dependency** | Edit Cargo.toml | `wj add reqwest` |
-| **Build + run** | `windjammer build ...` + `cd` + `cargo run` | `wj run main.wj` |
+| **Build + run** | `wj build ...` + `cd` + `cargo run` | `wj run main.wj` |
 | **Test** | `cargo test` | `wj test` |
 | **Lint** | `cargo clippy` | `wj lint` |
 | **Format** | `cargo fmt` | `wj fmt` |

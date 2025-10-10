@@ -35,12 +35,13 @@ fn compile_and_check(source: &str, expected_patterns: &[&str]) -> String {
     let output = Command::new("cargo")
         .args([
             "run",
+            "--bin",
+            "wj",
             "--",
             "build",
-            "--path",
-            temp_file.to_str().unwrap(),
             "--output",
             output_dir.to_str().unwrap(),
+            temp_file.to_str().unwrap(),
         ])
         .output()
         .expect("Failed to run compiler");
