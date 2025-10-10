@@ -1,0 +1,254 @@
+// Database operations for tasks
+
+use std.db
+use std.log
+use ../models.task.{Task, CreateTaskRequest, TaskSearchQuery}
+
+// Create a new task
+pub async fn create(conn: Connection, project_id: int, req: CreateTaskRequest) -> Result<Task, Error> {
+    log.debug_with("Creating task", "title", &req.title)
+    
+    let query = r#"
+        INSERT INTO tasks (project_id, title, description, status, priority, assigned_to)
+        VALUES ($1, $2, $3, $4, $5, $6)
+        RETURNING id, project_id, title, description, status, priority, assigned_to,
+                  created_at::text, updated_at::text
+    "#
+    
+    let result = conn.query(query)
+        .bind(project_id)
+        .bind(&req.title)
+        .bind(&req.description.unwrap_or("".to_string()))
+        .bind(&req.status.unwrap_or("todo".to_string()))
+        .bind(&req.priority.unwrap_or("medium".to_string()))
+        .bind(&req.assigned_to)
+        .fetch_one()
+        .await?
+    
+    Ok(Task {
+        id: result.get("id")?,
+        project_id: result.get("project_id")?,
+        title: result.get("title")?,
+        description: result.get("description")?,
+        status: result.get("status")?,
+        priority: result.get("priority")?,
+        assigned_to: result.get("assigned_to")?,
+        created_at: result.get("created_at")?,
+        updated_at: result.get("updated_at")?,
+    })
+}
+
+// Find task by ID
+pub async fn find_by_id(conn: Connection, task_id: int) -> Result<Option<Task>, Error> {
+    log.debug_with("Finding task by ID", "id", &task_id.to_string())
+    
+    let query = r#"
+        SELECT id, project_id, title, description, status, priority, assigned_to,
+               created_at::text, updated_at::text
+        FROM tasks
+        WHERE id = $1
+    "#
+    
+    let result = conn.query(query)
+        .bind(task_id)
+        .fetch_optional()
+        .await?
+    
+    match result {
+        Some(row) => {
+            Ok(Some(Task {
+                id: row.get("id")?,
+                project_id: row.get("project_id")?,
+                title: row.get("title")?,
+                description: row.get("description")?,
+                status: row.get("status")?,
+                priority: row.get("priority")?,
+                assigned_to: row.get("assigned_to")?,
+                created_at: row.get("created_at")?,
+                updated_at: row.get("updated_at")?,
+            }))
+        },
+        None => Ok(None)
+    }
+}
+
+// List tasks for a project
+pub async fn list_by_project(conn: Connection, project_id: int) -> Result<Vec<Task>, Error> {
+    log.debug_with("Listing tasks for project", "project_id", &project_id.to_string())
+    
+    let query = r#"
+        SELECT id, project_id, title, description, status, priority, assigned_to,
+               created_at::text, updated_at::text
+        FROM tasks
+        WHERE project_id = $1
+        ORDER BY created_at DESC
+    "#
+    
+    let results = conn.query(query)
+        .bind(project_id)
+        .fetch_all()
+        .await?
+    
+    let mut tasks = Vec::new()
+    for row in results {
+        tasks.push(Task {
+            id: row.get("id")?,
+            project_id: row.get("project_id")?,
+            title: row.get("title")?,
+            description: row.get("description")?,
+            status: row.get("status")?,
+            priority: row.get("priority")?,
+            assigned_to: row.get("assigned_to")?,
+            created_at: row.get("created_at")?,
+            updated_at: row.get("updated_at")?,
+        })
+    }
+    
+    Ok(tasks)
+}
+
+// Update task
+pub async fn update(
+    conn: Connection,
+    task_id: int,
+    title: Option<string>,
+    description: Option<string>,
+    status: Option<string>,
+    priority: Option<string>,
+    assigned_to: Option<int>
+) -> Result<Task, Error> {
+    log.debug_with("Updating task", "id", &task_id.to_string())
+    
+    let query = r#"
+        UPDATE tasks
+        SET title = COALESCE($2, title),
+            description = COALESCE($3, description),
+            status = COALESCE($4, status),
+            priority = COALESCE($5, priority),
+            assigned_to = COALESCE($6, assigned_to),
+            updated_at = NOW()
+        WHERE id = $1
+        RETURNING id, project_id, title, description, status, priority, assigned_to,
+                  created_at::text, updated_at::text
+    "#
+    
+    let result = conn.query(query)
+        .bind(task_id)
+        .bind(&title.unwrap_or("".to_string()))
+        .bind(&description.unwrap_or("".to_string()))
+        .bind(&status.unwrap_or("".to_string()))
+        .bind(&priority.unwrap_or("".to_string()))
+        .bind(&assigned_to)
+        .fetch_one()
+        .await?
+    
+    Ok(Task {
+        id: result.get("id")?,
+        project_id: result.get("project_id")?,
+        title: result.get("title")?,
+        description: result.get("description")?,
+        status: result.get("status")?,
+        priority: result.get("priority")?,
+        assigned_to: result.get("assigned_to")?,
+        created_at: result.get("created_at")?,
+        updated_at: result.get("updated_at")?,
+    })
+}
+
+// Delete task
+pub async fn delete(conn: Connection, task_id: int) -> Result<(), Error> {
+    log.debug_with("Deleting task", "id", &task_id.to_string())
+    
+    let query = "DELETE FROM tasks WHERE id = $1"
+    
+    conn.execute(query)
+        .bind(task_id)
+        .await?
+    
+    Ok(())
+}
+
+// Assign task to user
+pub async fn assign(conn: Connection, task_id: int, user_id: int) -> Result<Task, Error> {
+    log.debug_with("Assigning task", "task_id", &task_id.to_string())
+    
+    let query = r#"
+        UPDATE tasks
+        SET assigned_to = $2,
+            updated_at = NOW()
+        WHERE id = $1
+        RETURNING id, project_id, title, description, status, priority, assigned_to,
+                  created_at::text, updated_at::text
+    "#
+    
+    let result = conn.query(query)
+        .bind(task_id)
+        .bind(user_id)
+        .fetch_one()
+        .await?
+    
+    Ok(Task {
+        id: result.get("id")?,
+        project_id: result.get("project_id")?,
+        title: result.get("title")?,
+        description: result.get("description")?,
+        status: result.get("status")?,
+        priority: result.get("priority")?,
+        assigned_to: result.get("assigned_to")?,
+        created_at: result.get("created_at")?,
+        updated_at: result.get("updated_at")?,
+    })
+}
+
+// Search tasks with filters
+pub async fn search(conn: Connection, query: TaskSearchQuery) -> Result<Vec<Task>, Error> {
+    log.debug("Searching tasks with filters")
+    
+    let mut sql = "SELECT id, project_id, title, description, status, priority, assigned_to, created_at::text, updated_at::text FROM tasks WHERE 1=1".to_string()
+    let mut params = Vec::new()
+    let mut param_idx = 1
+    
+    if let Some(status) = query.status {
+        sql.push_str(&format!(" AND status = ${}", param_idx))
+        params.push(status)
+        param_idx += 1
+    }
+    
+    if let Some(priority) = query.priority {
+        sql.push_str(&format!(" AND priority = ${}", param_idx))
+        params.push(priority)
+        param_idx += 1
+    }
+    
+    if let Some(assigned_to) = query.assigned_to {
+        sql.push_str(&format!(" AND assigned_to = ${}", param_idx))
+        params.push(assigned_to.to_string())
+    }
+    
+    sql.push_str(" ORDER BY created_at DESC")
+    
+    let mut query_builder = conn.query(&sql)
+    for param in params {
+        query_builder = query_builder.bind(&param)
+    }
+    
+    let results = query_builder.fetch_all().await?
+    
+    let mut tasks = Vec::new()
+    for row in results {
+        tasks.push(Task {
+            id: row.get("id")?,
+            project_id: row.get("project_id")?,
+            title: row.get("title")?,
+            description: row.get("description")?,
+            status: row.get("status")?,
+            priority: row.get("priority")?,
+            assigned_to: row.get("assigned_to")?,
+            created_at: row.get("created_at")?,
+            updated_at: row.get("updated_at")?,
+        })
+    }
+    
+    Ok(tasks)
+}
+

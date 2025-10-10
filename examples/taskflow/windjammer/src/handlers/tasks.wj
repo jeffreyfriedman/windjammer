@@ -1,0 +1,395 @@
+// Task management handlers
+
+use std.http
+use std.log
+use std.db
+use ../models.task.{CreateTaskRequest, UpdateTaskRequest, AssignTaskRequest, TaskSearchQuery}
+use ../db.{tasks, projects}
+use ../config
+
+// List tasks for a project
+pub async fn list_by_project(req: Request) -> ServerResponse {
+    log.info("GET /api/v1/projects/:project_id/tasks")
+    
+    let project_id = match req.path_param("project_id") {
+        Some(id) => match id.parse::<int>() {
+            Ok(parsed_id) => parsed_id,
+            Err(_) => return ServerResponse::bad_request("Invalid project ID")
+        },
+        None => return ServerResponse::bad_request("Missing project ID")
+    }
+    
+    // TODO: Check user has access to project
+    let user_id = 1
+    
+    let config = config.load_config()
+    let conn = match db.connect(&config.database_url).await {
+        Ok(c) => c,
+        Err(e) => {
+            log.error_with("Database connection failed", "error", &e)
+            return ServerResponse::internal_error("Database connection failed")
+        }
+    }
+    
+    // Verify access
+    let has_access = match projects.user_has_access(conn.clone(), project_id, user_id).await {
+        Ok(access) => access,
+        Err(e) => {
+            log.error_with("Access check failed", "error", &e)
+            return ServerResponse::internal_error("Access check failed")
+        }
+    }
+    
+    if !has_access {
+        return ServerResponse::forbidden("Access denied")
+    }
+    
+    let task_list = match tasks.list_by_project(conn, project_id).await {
+        Ok(t) => t,
+        Err(e) => {
+            log.error_with("Database query failed", "error", &e)
+            return ServerResponse::internal_error("Database error")
+        }
+    }
+    
+    let public_tasks = task_list.iter().map(|t| t.clone().to_public()).collect()
+    ServerResponse::json(public_tasks)
+}
+
+// Create new task
+pub async fn create(req: Request) -> ServerResponse {
+    log.info("POST /api/v1/projects/:project_id/tasks")
+    
+    let project_id = match req.path_param("project_id") {
+        Some(id) => match id.parse::<int>() {
+            Ok(parsed_id) => parsed_id,
+            Err(_) => return ServerResponse::bad_request("Invalid project ID")
+        },
+        None => return ServerResponse::bad_request("Missing project ID")
+    }
+    
+    let body = match req.body_json::<CreateTaskRequest>().await {
+        Ok(data) => data,
+        Err(e) => {
+            log.warn_with("Invalid request body", "error", &e)
+            return ServerResponse::bad_request("Invalid request body")
+        }
+    }
+    
+    // Validate
+    if body.title.is_empty() {
+        return ServerResponse::bad_request("Task title is required")
+    }
+    
+    // TODO: Check user has access to project
+    let user_id = 1
+    
+    let config = config.load_config()
+    let conn = match db.connect(&config.database_url).await {
+        Ok(c) => c,
+        Err(e) => {
+            log.error_with("Database connection failed", "error", &e)
+            return ServerResponse::internal_error("Database connection failed")
+        }
+    }
+    
+    // Verify access
+    let has_access = match projects.user_has_access(conn.clone(), project_id, user_id).await {
+        Ok(access) => access,
+        Err(e) => {
+            log.error_with("Access check failed", "error", &e)
+            return ServerResponse::internal_error("Access check failed")
+        }
+    }
+    
+    if !has_access {
+        return ServerResponse::forbidden("Access denied")
+    }
+    
+    let task = match tasks.create(conn, project_id, body).await {
+        Ok(t) => t,
+        Err(e) => {
+            log.error_with("Task creation failed", "error", &e)
+            return ServerResponse::internal_error("Failed to create task")
+        }
+    }
+    
+    log.info_with("Task created successfully", "task_id", &task.id.to_string())
+    ServerResponse::created(task.to_public())
+}
+
+// Get task by ID
+pub async fn get(req: Request) -> ServerResponse {
+    log.info("GET /api/v1/tasks/:id")
+    
+    let task_id = match req.path_param("id") {
+        Some(id) => match id.parse::<int>() {
+            Ok(parsed_id) => parsed_id,
+            Err(_) => return ServerResponse::bad_request("Invalid task ID")
+        },
+        None => return ServerResponse::bad_request("Missing task ID")
+    }
+    
+    // TODO: Check user has access
+    let user_id = 1
+    
+    let config = config.load_config()
+    let conn = match db.connect(&config.database_url).await {
+        Ok(c) => c,
+        Err(e) => {
+            log.error_with("Database connection failed", "error", &e)
+            return ServerResponse::internal_error("Database connection failed")
+        }
+    }
+    
+    // Get task
+    let task = match tasks.find_by_id(conn.clone(), task_id).await {
+        Ok(Some(t)) => t,
+        Ok(None) => return ServerResponse::not_found(),
+        Err(e) => {
+            log.error_with("Database query failed", "error", &e)
+            return ServerResponse::internal_error("Database error")
+        }
+    }
+    
+    // Check project access
+    let has_access = match projects.user_has_access(conn, task.project_id, user_id).await {
+        Ok(access) => access,
+        Err(e) => {
+            log.error_with("Access check failed", "error", &e)
+            return ServerResponse::internal_error("Access check failed")
+        }
+    }
+    
+    if !has_access {
+        return ServerResponse::forbidden("Access denied")
+    }
+    
+    ServerResponse::json(task.to_public())
+}
+
+// Update task
+pub async fn update(req: Request) -> ServerResponse {
+    log.info("PATCH /api/v1/tasks/:id")
+    
+    let task_id = match req.path_param("id") {
+        Some(id) => match id.parse::<int>() {
+            Ok(parsed_id) => parsed_id,
+            Err(_) => return ServerResponse::bad_request("Invalid task ID")
+        },
+        None => return ServerResponse::bad_request("Missing task ID")
+    }
+    
+    let body = match req.body_json::<UpdateTaskRequest>().await {
+        Ok(data) => data,
+        Err(e) => {
+            log.warn_with("Invalid request body", "error", &e)
+            return ServerResponse::bad_request("Invalid request body")
+        }
+    }
+    
+    // TODO: Check user has access
+    let user_id = 1
+    
+    let config = config.load_config()
+    let conn = match db.connect(&config.database_url).await {
+        Ok(c) => c,
+        Err(e) => {
+            log.error_with("Database connection failed", "error", &e)
+            return ServerResponse::internal_error("Database connection failed")
+        }
+    }
+    
+    // Get task to check project access
+    let existing_task = match tasks.find_by_id(conn.clone(), task_id).await {
+        Ok(Some(t)) => t,
+        Ok(None) => return ServerResponse::not_found(),
+        Err(e) => {
+            log.error_with("Database query failed", "error", &e)
+            return ServerResponse::internal_error("Database error")
+        }
+    }
+    
+    // Check project access
+    let has_access = match projects.user_has_access(conn.clone(), existing_task.project_id, user_id).await {
+        Ok(access) => access,
+        Err(e) => {
+            log.error_with("Access check failed", "error", &e)
+            return ServerResponse::internal_error("Access check failed")
+        }
+    }
+    
+    if !has_access {
+        return ServerResponse::forbidden("Access denied")
+    }
+    
+    let task = match tasks.update(conn, task_id, body.title, body.description, body.status, body.priority, body.assigned_to).await {
+        Ok(t) => t,
+        Err(e) => {
+            log.error_with("Task update failed", "error", &e)
+            return ServerResponse::internal_error("Failed to update task")
+        }
+    }
+    
+    ServerResponse::json(task.to_public())
+}
+
+// Delete task
+pub async fn delete(req: Request) -> ServerResponse {
+    log.info("DELETE /api/v1/tasks/:id")
+    
+    let task_id = match req.path_param("id") {
+        Some(id) => match id.parse::<int>() {
+            Ok(parsed_id) => parsed_id,
+            Err(_) => return ServerResponse::bad_request("Invalid task ID")
+        },
+        None => return ServerResponse::bad_request("Missing task ID")
+    }
+    
+    // TODO: Check user has access
+    let user_id = 1
+    
+    let config = config.load_config()
+    let conn = match db.connect(&config.database_url).await {
+        Ok(c) => c,
+        Err(e) => {
+            log.error_with("Database connection failed", "error", &e)
+            return ServerResponse::internal_error("Database connection failed")
+        }
+    }
+    
+    // Get task to check project access
+    let existing_task = match tasks.find_by_id(conn.clone(), task_id).await {
+        Ok(Some(t)) => t,
+        Ok(None) => return ServerResponse::not_found(),
+        Err(e) => {
+            log.error_with("Database query failed", "error", &e)
+            return ServerResponse::internal_error("Database error")
+        }
+    }
+    
+    // Check project access
+    let has_access = match projects.user_has_access(conn.clone(), existing_task.project_id, user_id).await {
+        Ok(access) => access,
+        Err(e) => {
+            log.error_with("Access check failed", "error", &e)
+            return ServerResponse::internal_error("Access check failed")
+        }
+    }
+    
+    if !has_access {
+        return ServerResponse::forbidden("Access denied")
+    }
+    
+    match tasks.delete(conn, task_id).await {
+        Ok(_) => {},
+        Err(e) => {
+            log.error_with("Task deletion failed", "error", &e)
+            return ServerResponse::internal_error("Failed to delete task")
+        }
+    }
+    
+    ServerResponse::no_content()
+}
+
+// Assign task to user
+pub async fn assign(req: Request) -> ServerResponse {
+    log.info("POST /api/v1/tasks/:id/assign")
+    
+    let task_id = match req.path_param("id") {
+        Some(id) => match id.parse::<int>() {
+            Ok(parsed_id) => parsed_id,
+            Err(_) => return ServerResponse::bad_request("Invalid task ID")
+        },
+        None => return ServerResponse::bad_request("Missing task ID")
+    }
+    
+    let body = match req.body_json::<AssignTaskRequest>().await {
+        Ok(data) => data,
+        Err(e) => {
+            log.warn_with("Invalid request body", "error", &e)
+            return ServerResponse::bad_request("Invalid request body")
+        }
+    }
+    
+    // TODO: Check user has access
+    let user_id = 1
+    
+    let config = config.load_config()
+    let conn = match db.connect(&config.database_url).await {
+        Ok(c) => c,
+        Err(e) => {
+            log.error_with("Database connection failed", "error", &e)
+            return ServerResponse::internal_error("Database connection failed")
+        }
+    }
+    
+    // Get task to check project access
+    let existing_task = match tasks.find_by_id(conn.clone(), task_id).await {
+        Ok(Some(t)) => t,
+        Ok(None) => return ServerResponse::not_found(),
+        Err(e) => {
+            log.error_with("Database query failed", "error", &e)
+            return ServerResponse::internal_error("Database error")
+        }
+    }
+    
+    // Check project access
+    let has_access = match projects.user_has_access(conn.clone(), existing_task.project_id, user_id).await {
+        Ok(access) => access,
+        Err(e) => {
+            log.error_with("Access check failed", "error", &e)
+            return ServerResponse::internal_error("Access check failed")
+        }
+    }
+    
+    if !has_access {
+        return ServerResponse::forbidden("Access denied")
+    }
+    
+    let task = match tasks.assign(conn, task_id, body.user_id).await {
+        Ok(t) => t,
+        Err(e) => {
+            log.error_with("Task assignment failed", "error", &e)
+            return ServerResponse::internal_error("Failed to assign task")
+        }
+    }
+    
+    ServerResponse::json(task.to_public())
+}
+
+// Search tasks with filters
+pub async fn search(req: Request) -> ServerResponse {
+    log.info("GET /api/v1/tasks/search")
+    
+    // Parse query parameters
+    let status = req.query("status")
+    let priority = req.query("priority")
+    let assigned_to = req.query("assigned_to").and_then(|s| s.parse::<int>().ok())
+    
+    let query = TaskSearchQuery {
+        status: status,
+        priority: priority,
+        assigned_to: assigned_to,
+    }
+    
+    let config = config.load_config()
+    let conn = match db.connect(&config.database_url).await {
+        Ok(c) => c,
+        Err(e) => {
+            log.error_with("Database connection failed", "error", &e)
+            return ServerResponse::internal_error("Database connection failed")
+        }
+    }
+    
+    let task_list = match tasks.search(conn, query).await {
+        Ok(t) => t,
+        Err(e) => {
+            log.error_with("Search query failed", "error", &e)
+            return ServerResponse::internal_error("Search failed")
+        }
+    }
+    
+    let public_tasks = task_list.iter().map(|t| t.clone().to_public()).collect()
+    ServerResponse::json(public_tasks)
+}

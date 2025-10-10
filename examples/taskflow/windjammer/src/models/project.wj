@@ -1,0 +1,63 @@
+// Project data models
+
+use std.json
+
+@derive(Debug, Clone, PartialEq, Serialize, Deserialize)
+struct Project {
+    id: int,
+    owner_id: int,
+    name: string,
+    description: Option<string>,
+    created_at: string,
+    updated_at: string,
+}
+
+@derive(Debug, Clone, PartialEq, Serialize, Deserialize)
+struct CreateProjectRequest {
+    name: string,
+    description: Option<string>,
+}
+
+@derive(Debug, Clone, PartialEq, Serialize, Deserialize)
+struct UpdateProjectRequest {
+    name: Option<string>,
+    description: Option<string>,
+}
+
+@derive(Debug, Clone, PartialEq, Serialize, Deserialize)
+struct ProjectMember {
+    project_id: int,
+    user_id: int,
+    role: string,
+    created_at: string,
+}
+
+@derive(Debug, Clone, PartialEq, Serialize, Deserialize)
+struct AddMemberRequest {
+    user_id: int,
+    role: string,
+}
+
+impl Project {
+    pub fn to_public(self) -> ProjectPublic {
+        ProjectPublic {
+            id: self.id,
+            owner_id: self.owner_id,
+            name: self.name,
+            description: self.description,
+            created_at: self.created_at,
+            updated_at: self.updated_at,
+        }
+    }
+}
+
+@derive(Debug, Serialize)
+struct ProjectPublic {
+    id: int,
+    owner_id: int,
+    name: string,
+    description: Option<string>,
+    created_at: string,
+    updated_at: string,
+}
+

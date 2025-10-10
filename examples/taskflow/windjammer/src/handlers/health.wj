@@ -1,0 +1,22 @@
+// Health check endpoint
+
+use std.http
+use std.time
+
+pub fn check(req: Request) -> ServerResponse {
+    let health_status = HealthStatus {
+        status: "healthy".to_string(),
+        timestamp: time.now().timestamp(),
+        version: "0.1.0".to_string(),
+    }
+    
+    ServerResponse::json(health_status)
+}
+
+@derive(Serialize, Debug)
+struct HealthStatus {
+    status: string,
+    timestamp: int,
+    version: string,
+}
+
