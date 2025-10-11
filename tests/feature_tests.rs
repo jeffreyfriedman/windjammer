@@ -102,7 +102,7 @@ fn increment(x: int) {
     x = x + 1
 }
 "#;
-    compile_and_check(source, &["fn increment(x: &mut i64)", "x = x + 1"]);
+    compile_and_check(source, &["fn increment(x: &mut i64)", "x += 1"]); // Phase 5 optimization!
 }
 
 #[test]
@@ -304,7 +304,7 @@ fn main() {
 "#;
     compile_and_check(
         source,
-        &["let mut total = 0", "for i in 0..5", "total = total + i"],
+        &["let mut total = 0", "for i in 0..5", "total += i"], // Phase 5 optimization!
     );
 }
 
@@ -317,7 +317,7 @@ fn countdown(n: int) {
     }
 }
 "#;
-    compile_and_check(source, &["while n > 0", "n = n - 1"]);
+    compile_and_check(source, &["while n > 0", "n -= 1"]);
 }
 
 #[test]
@@ -375,7 +375,7 @@ fn test() {
     x = x + 1
 }
 "#;
-    compile_and_check(source, &["let mut x = 0", "x = x + 1"]);
+    compile_and_check(source, &["let mut x = 0", "x += 1"]); // Phase 5 optimization!
 }
 
 #[test]

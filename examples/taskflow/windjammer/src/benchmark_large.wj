@@ -1,0 +1,112 @@
+// Large-scale benchmark - enough work to measure accurately
+
+@derive(Debug, Clone)
+struct User {
+    pub id: int,
+    pub username: string,
+    pub email: string,
+}
+
+@derive(Debug, Clone)
+struct Project {
+    pub id: int,
+    pub name: string,
+    pub description: string,
+    pub owner_id: int,
+}
+
+@derive(Debug, Clone)
+struct Task {
+    pub id: int,
+    pub project_id: int,
+    pub title: string,
+    pub description: string,
+    pub status: string,
+    pub priority: string,
+    pub created_by: int,
+}
+
+fn main() {
+    println!("TaskFlow Large-Scale Benchmark - Windjammer")
+    
+    // Scale up to 10x for measurable timing
+    let user_count = benchmark_users()
+    let project_count = benchmark_projects()
+    let task_count = benchmark_tasks()
+    
+    println!("User operations: {}", user_count)
+    println!("Project operations: {}", project_count)
+    println!("Task operations: {}", task_count)
+    println!("Benchmark complete!")
+}
+
+fn benchmark_users() -> int {
+    let mut count = 0
+    let username = String::from("user")
+    let email = String::from("user@example.com")
+    
+    // 10,000 iterations
+    for i in 0..10000 {
+        let user = User {
+            id: i,
+            username: username.clone(),
+            email: email.clone(),
+        }
+        
+        if user.id >= 0 {
+            count += 1
+        }
+    }
+    
+    count
+}
+
+fn benchmark_projects() -> int {
+    let mut count = 0
+    let name = String::from("Project")
+    let description = String::from("Description")
+    
+    // 5,000 iterations
+    for i in 0..5000 {
+        let project = Project {
+            id: i,
+            name: name.clone(),
+            description: description.clone(),
+            owner_id: i % 10,
+        }
+        
+        if project.id >= 0 {
+            count += 1
+        }
+    }
+    
+    count
+}
+
+fn benchmark_tasks() -> int {
+    let mut count = 0
+    let title = String::from("Task")
+    let description = String::from("Description")
+    let status = String::from("open")
+    let priority = String::from("medium")
+    
+    // 20,000 iterations
+    for i in 0..20000 {
+        let task = Task {
+            id: i,
+            project_id: i % 50,
+            title: title.clone(),
+            description: description.clone(),
+            status: status.clone(),
+            priority: priority.clone(),
+            created_by: i % 100,
+        }
+        
+        if task.id >= 0 {
+            count += 1
+        }
+    }
+    
+    count
+}
+

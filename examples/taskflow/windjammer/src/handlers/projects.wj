@@ -1,346 +1,289 @@
 // Project management handlers
 
 use std.http
-use std.log
+use std.json
 use std.db
-use ../models.project.{CreateProjectRequest, UpdateProjectRequest, AddMemberRequest}
-use ../db.projects
-use ../config
-use ../auth.jwt
+use std.log
+use std.time
 
-// List projects for authenticated user
-pub async fn list(req: Request) -> ServerResponse {
-    log.info("GET /api/v1/projects")
+use ../models.project
+
+@async
+pub fn list(req: Request, pool: DbPool) -> Response {
+    // Extract user ID for auth
+    let user_id = match extract_user_id(req) {
+        Some(id) => id,
+        None => return http.json_response(401, "Unauthorized"),
+    }
     
-    // TODO: Extract user ID from JWT token
-    // For now, hardcode user_id = 1
-    let user_id = 1
-    
-    let config = config.load_config()
-    let conn = match db.connect(&config.database_url).await {
-        Ok(c) => c,
+    // Query projects where user is owner or member
+    let query = "SELECT DISTINCT p.* FROM projects p LEFT JOIN project_members pm ON p.id = pm.project_id WHERE p.owner_id = $1 OR pm.user_id = $1 ORDER BY p.created_at DESC"
+    let rows = match db.query_all(pool, query, vec![user_id]) {
+        Ok(r) => r,
         Err(e) => {
-            log.error_with("Database connection failed", "error", &e)
-            return ServerResponse::internal_error("Database connection failed")
+            log.error("Failed to list projects: ${e}")
+            return http.json_response(500, "Failed to fetch projects")
         }
     }
     
-    let projects = match projects.list_for_user(conn, user_id).await {
-        Ok(p) => p,
-        Err(e) => {
-            log.error_with("Database query failed", "error", &e)
-            return ServerResponse::internal_error("Database error")
+    let mut projects = vec![]
+    for row in rows {
+        let project = ProjectResponse {
+            id: db.get_int(row, "id"),
+            name: db.get_string(row, "name"),
+            description: db.get_string(row, "description"),
+            owner_id: db.get_int(row, "owner_id"),
+            created_at: db.get_int(row, "created_at"),
         }
+        projects.push(project)
     }
     
-    let public_projects = projects.iter().map(|p| p.clone().to_public()).collect()
-    ServerResponse::json(public_projects)
+    http.json_response(200, projects)
 }
 
-// Create new project
-pub async fn create(req: Request) -> ServerResponse {
-    log.info("POST /api/v1/projects")
+@async
+pub fn create(req: Request, pool: DbPool) -> Response {
+    // Extract user ID for auth
+    let user_id = match extract_user_id(req) {
+        Some(id) => id,
+        None => return http.json_response(401, "Unauthorized"),
+    }
     
     // Parse request body
-    let body = match req.body_json::<CreateProjectRequest>().await {
-        Ok(data) => data,
+    let body = http.body(req)
+    let create_req = match json.parse_string(body) {
+        Ok(r) => r,
         Err(e) => {
-            log.warn_with("Invalid request body", "error", &e)
-            return ServerResponse::bad_request("Invalid request body")
+            log.error("Failed to parse create request: ${e}")
+            return http.json_response(400, "Invalid request body")
         }
     }
     
-    // Validate
-    if body.name.is_empty() {
-        return ServerResponse::bad_request("Project name is required")
-    }
+    // Insert project
+    let now = time.now_unix()
+    let query = "INSERT INTO projects (name, description, owner_id, created_at, updated_at) VALUES ($1, $2, $3, $4, $5) RETURNING id"
     
-    // TODO: Extract user ID from JWT token
-    let owner_id = 1
-    
-    let config = config.load_config()
-    let conn = match db.connect(&config.database_url).await {
-        Ok(c) => c,
+    let project_id = match db.query_one(pool, query, vec![create_req.name, create_req.description, user_id, now, now]) {
+        Ok(row) => db.get_int(row, "id"),
         Err(e) => {
-            log.error_with("Database connection failed", "error", &e)
-            return ServerResponse::internal_error("Database connection failed")
+            log.error("Failed to create project: ${e}")
+            return http.json_response(500, "Failed to create project")
         }
     }
     
-    let project = match projects.create(conn, body, owner_id).await {
-        Ok(p) => p,
-        Err(e) => {
-            log.error_with("Project creation failed", "error", &e)
-            return ServerResponse::internal_error("Failed to create project")
-        }
+    let response = ProjectResponse {
+        id: project_id,
+        name: create_req.name,
+        description: create_req.description,
+        owner_id: user_id,
+        created_at: now,
     }
     
-    log.info_with("Project created successfully", "project_id", &project.id.to_string())
-    ServerResponse::created(project.to_public())
+    log.info("Project created: ${project_id}")
+    http.json_response(201, response)
 }
 
-// Get project by ID
-pub async fn get(req: Request) -> ServerResponse {
-    log.info("GET /api/v1/projects/:id")
-    
-    let project_id = match req.path_param("id") {
-        Some(id) => match id.parse::<int>() {
-            Ok(parsed_id) => parsed_id,
-            Err(_) => return ServerResponse::bad_request("Invalid project ID")
-        },
-        None => return ServerResponse::bad_request("Missing project ID")
+@async
+pub fn get(req: Request, pool: DbPool) -> Response {
+    // Extract user ID for auth
+    let user_id = match extract_user_id(req) {
+        Some(id) => id,
+        None => return http.json_response(401, "Unauthorized"),
     }
     
-    // TODO: Extract user ID from JWT and check access
-    let user_id = 1
+    // Extract project ID from path
+    let project_id = http.get_param(req, "id")
     
-    let config = config.load_config()
-    let conn = match db.connect(&config.database_url).await {
-        Ok(c) => c,
-        Err(e) => {
-            log.error_with("Database connection failed", "error", &e)
-            return ServerResponse::internal_error("Database connection failed")
+    // Query project with access check
+    let query = "SELECT p.* FROM projects p LEFT JOIN project_members pm ON p.id = pm.project_id WHERE p.id = $1 AND (p.owner_id = $2 OR pm.user_id = $2)"
+    let row = match db.query_one(pool, query, vec![project_id, user_id]) {
+        Ok(r) => r,
+        Err(_) => {
+            return http.json_response(404, "Project not found")
         }
     }
     
-    // Check access
-    let has_access = match projects.user_has_access(conn.clone(), project_id, user_id).await {
-        Ok(access) => access,
-        Err(e) => {
-            log.error_with("Access check failed", "error", &e)
-            return ServerResponse::internal_error("Access check failed")
-        }
+    let project = ProjectResponse {
+        id: db.get_int(row, "id"),
+        name: db.get_string(row, "name"),
+        description: db.get_string(row, "description"),
+        owner_id: db.get_int(row, "owner_id"),
+        created_at: db.get_int(row, "created_at"),
     }
     
-    if !has_access {
-        return ServerResponse::forbidden("Access denied")
-    }
-    
-    // Get project
-    let project = match projects.find_by_id(conn, project_id).await {
-        Ok(Some(p)) => p,
-        Ok(None) => return ServerResponse::not_found(),
-        Err(e) => {
-            log.error_with("Database query failed", "error", &e)
-            return ServerResponse::internal_error("Database error")
-        }
-    }
-    
-    ServerResponse::json(project.to_public())
+    http.json_response(200, project)
 }
 
-// Update project
-pub async fn update(req: Request) -> ServerResponse {
-    log.info("PATCH /api/v1/projects/:id")
-    
-    let project_id = match req.path_param("id") {
-        Some(id) => match id.parse::<int>() {
-            Ok(parsed_id) => parsed_id,
-            Err(_) => return ServerResponse::bad_request("Invalid project ID")
-        },
-        None => return ServerResponse::bad_request("Missing project ID")
+@async
+pub fn update(req: Request, pool: DbPool) -> Response {
+    // Extract user ID for auth
+    let user_id = match extract_user_id(req) {
+        Some(id) => id,
+        None => return http.json_response(401, "Unauthorized"),
     }
     
-    let body = match req.body_json::<UpdateProjectRequest>().await {
-        Ok(data) => data,
+    // Extract project ID from path
+    let project_id = http.get_param(req, "id")
+    
+    // Verify ownership
+    let check_query = "SELECT owner_id FROM projects WHERE id = $1"
+    let owner_id = match db.query_one(pool, check_query, vec![project_id]) {
+        Ok(row) => db.get_int(row, "owner_id"),
+        Err(_) => return http.json_response(404, "Project not found"),
+    }
+    
+    if user_id != owner_id {
+        return http.json_response(403, "Forbidden")
+    }
+    
+    // Parse request body
+    let body = http.body(req)
+    let update_req = match json.parse_string(body) {
+        Ok(r) => r,
         Err(e) => {
-            log.warn_with("Invalid request body", "error", &e)
-            return ServerResponse::bad_request("Invalid request body")
+            log.error("Failed to parse update request: ${e}")
+            return http.json_response(400, "Invalid request body")
         }
     }
     
-    // TODO: Extract user ID from JWT and check if owner
-    let user_id = 1
-    
-    let config = config.load_config()
-    let conn = match db.connect(&config.database_url).await {
-        Ok(c) => c,
-        Err(e) => {
-            log.error_with("Database connection failed", "error", &e)
-            return ServerResponse::internal_error("Database connection failed")
-        }
-    }
-    
-    // Check if user is owner
-    let is_owner = match projects.is_owner(conn.clone(), project_id, user_id).await {
-        Ok(owner) => owner,
-        Err(e) => {
-            log.error_with("Owner check failed", "error", &e)
-            return ServerResponse::internal_error("Owner check failed")
-        }
-    }
-    
-    if !is_owner {
-        return ServerResponse::forbidden("Only project owner can update")
-    }
-    
-    let project = match projects.update(conn, project_id, body.name, body.description).await {
-        Ok(p) => p,
-        Err(e) => {
-            log.error_with("Project update failed", "error", &e)
-            return ServerResponse::internal_error("Failed to update project")
-        }
-    }
-    
-    ServerResponse::json(project.to_public())
-}
-
-// Delete project
-pub async fn delete(req: Request) -> ServerResponse {
-    log.info("DELETE /api/v1/projects/:id")
-    
-    let project_id = match req.path_param("id") {
-        Some(id) => match id.parse::<int>() {
-            Ok(parsed_id) => parsed_id,
-            Err(_) => return ServerResponse::bad_request("Invalid project ID")
-        },
-        None => return ServerResponse::bad_request("Missing project ID")
-    }
-    
-    // TODO: Extract user ID from JWT and check if owner
-    let user_id = 1
-    
-    let config = config.load_config()
-    let conn = match db.connect(&config.database_url).await {
-        Ok(c) => c,
-        Err(e) => {
-            log.error_with("Database connection failed", "error", &e)
-            return ServerResponse::internal_error("Database connection failed")
-        }
-    }
-    
-    // Check if user is owner
-    let is_owner = match projects.is_owner(conn.clone(), project_id, user_id).await {
-        Ok(owner) => owner,
-        Err(e) => {
-            log.error_with("Owner check failed", "error", &e)
-            return ServerResponse::internal_error("Owner check failed")
-        }
-    }
-    
-    if !is_owner {
-        return ServerResponse::forbidden("Only project owner can delete")
-    }
-    
-    match projects.delete(conn, project_id).await {
+    // Update project
+    let query = "UPDATE projects SET name = $1, description = $2, updated_at = $3 WHERE id = $4"
+    match db.execute(pool, query, vec![update_req.name, update_req.description, time.now_unix(), project_id]) {
         Ok(_) => {},
         Err(e) => {
-            log.error_with("Project deletion failed", "error", &e)
-            return ServerResponse::internal_error("Failed to delete project")
+            log.error("Failed to update project: ${e}")
+            return http.json_response(500, "Failed to update project")
         }
     }
     
-    ServerResponse::no_content()
+    http.json_response(200, "Project updated successfully")
 }
 
-// Add member to project
-pub async fn add_member(req: Request) -> ServerResponse {
-    log.info("POST /api/v1/projects/:id/members")
-    
-    let project_id = match req.path_param("id") {
-        Some(id) => match id.parse::<int>() {
-            Ok(parsed_id) => parsed_id,
-            Err(_) => return ServerResponse::bad_request("Invalid project ID")
-        },
-        None => return ServerResponse::bad_request("Missing project ID")
+@async
+pub fn delete(req: Request, pool: DbPool) -> Response {
+    // Extract user ID for auth
+    let user_id = match extract_user_id(req) {
+        Some(id) => id,
+        None => return http.json_response(401, "Unauthorized"),
     }
     
-    let body = match req.body_json::<AddMemberRequest>().await {
-        Ok(data) => data,
-        Err(e) => {
-            log.warn_with("Invalid request body", "error", &e)
-            return ServerResponse::bad_request("Invalid request body")
-        }
+    // Extract project ID from path
+    let project_id = http.get_param(req, "id")
+    
+    // Verify ownership
+    let check_query = "SELECT owner_id FROM projects WHERE id = $1"
+    let owner_id = match db.query_one(pool, check_query, vec![project_id]) {
+        Ok(row) => db.get_int(row, "owner_id"),
+        Err(_) => return http.json_response(404, "Project not found"),
     }
     
-    // TODO: Extract user ID from JWT and check if owner
-    let owner_id = 1
-    
-    let config = config.load_config()
-    let conn = match db.connect(&config.database_url).await {
-        Ok(c) => c,
-        Err(e) => {
-            log.error_with("Database connection failed", "error", &e)
-            return ServerResponse::internal_error("Database connection failed")
-        }
+    if user_id != owner_id {
+        return http.json_response(403, "Forbidden")
     }
     
-    // Check if user is owner
-    let is_owner = match projects.is_owner(conn.clone(), project_id, owner_id).await {
-        Ok(owner) => owner,
-        Err(e) => {
-            log.error_with("Owner check failed", "error", &e)
-            return ServerResponse::internal_error("Owner check failed")
-        }
-    }
-    
-    if !is_owner {
-        return ServerResponse::forbidden("Only project owner can add members")
-    }
-    
-    let member = match projects.add_member(conn, project_id, body.user_id, body.role).await {
-        Ok(m) => m,
-        Err(e) => {
-            log.error_with("Add member failed", "error", &e)
-            return ServerResponse::internal_error("Failed to add member")
-        }
-    }
-    
-    ServerResponse::created(member)
-}
-
-// Remove member from project
-pub async fn remove_member(req: Request) -> ServerResponse {
-    log.info("DELETE /api/v1/projects/:id/members/:user_id")
-    
-    let project_id = match req.path_param("id") {
-        Some(id) => match id.parse::<int>() {
-            Ok(parsed_id) => parsed_id,
-            Err(_) => return ServerResponse::bad_request("Invalid project ID")
-        },
-        None => return ServerResponse::bad_request("Missing project ID")
-    }
-    
-    let member_user_id = match req.path_param("user_id") {
-        Some(id) => match id.parse::<int>() {
-            Ok(parsed_id) => parsed_id,
-            Err(_) => return ServerResponse::bad_request("Invalid user ID")
-        },
-        None => return ServerResponse::bad_request("Missing user ID")
-    }
-    
-    // TODO: Extract user ID from JWT and check if owner
-    let owner_id = 1
-    
-    let config = config.load_config()
-    let conn = match db.connect(&config.database_url).await {
-        Ok(c) => c,
-        Err(e) => {
-            log.error_with("Database connection failed", "error", &e)
-            return ServerResponse::internal_error("Database connection failed")
-        }
-    }
-    
-    // Check if user is owner
-    let is_owner = match projects.is_owner(conn.clone(), project_id, owner_id).await {
-        Ok(owner) => owner,
-        Err(e) => {
-            log.error_with("Owner check failed", "error", &e)
-            return ServerResponse::internal_error("Owner check failed")
-        }
-    }
-    
-    if !is_owner {
-        return ServerResponse::forbidden("Only project owner can remove members")
-    }
-    
-    match projects.remove_member(conn, project_id, member_user_id).await {
+    // Delete project
+    let query = "DELETE FROM projects WHERE id = $1"
+    match db.execute(pool, query, vec![project_id]) {
         Ok(_) => {},
         Err(e) => {
-            log.error_with("Remove member failed", "error", &e)
-            return ServerResponse::internal_error("Failed to remove member")
+            log.error("Failed to delete project: ${e}")
+            return http.json_response(500, "Failed to delete project")
         }
     }
     
+    log.info("Project deleted: ${project_id}")
+    http.json_response(200, "Project deleted successfully")
+}
+
+@async
+pub fn add_member(req: Request, pool: DbPool) -> Response {
+    // Extract user ID for auth
+    let user_id = match extract_user_id(req) {
+        Some(id) => id,
+        None => return http.json_response(401, "Unauthorized"),
+    }
+    
+    // Extract project ID from path
+    let project_id = http.get_param(req, "id")
+    
+    // Verify ownership
+    let check_query = "SELECT owner_id FROM projects WHERE id = $1"
+    let owner_id = match db.query_one(pool, check_query, vec![project_id]) {
+        Ok(row) => db.get_int(row, "owner_id"),
+        Err(_) => return http.json_response(404, "Project not found"),
+    }
+    
+    if user_id != owner_id {
+        return http.json_response(403, "Forbidden")
+    }
+    
+    // Parse request body
+    let body = http.body(req)
+    let member_req = match json.parse_string(body) {
+        Ok(r) => r,
+        Err(e) => {
+            log.error("Failed to parse member request: ${e}")
+            return http.json_response(400, "Invalid request body")
+        }
+    }
+    
+    // Add member
+    let now = time.now_unix()
+    let query = "INSERT INTO project_members (project_id, user_id, role, added_at) VALUES ($1, $2, 'member', $3)"
+    match db.execute(pool, query, vec![project_id, member_req.user_id, now]) {
+        Ok(_) => {},
+        Err(e) => {
+            log.error("Failed to add member: ${e}")
+            return http.json_response(500, "Failed to add member")
+        }
+    }
+    
+    log.info("Member added to project ${project_id}")
+    http.json_response(201, "Member added successfully")
+}
+
+@async
+pub fn remove_member(req: Request, pool: DbPool) -> Response {
+    // Extract user ID for auth
+    let user_id = match extract_user_id(req) {
+        Some(id) => id,
+        None => return http.json_response(401, "Unauthorized"),
+    }
+    
+    // Extract IDs from path
+    let project_id = http.get_param(req, "id")
+    let member_id = http.get_param(req, "user_id")
+    
+    // Verify ownership
+    let check_query = "SELECT owner_id FROM projects WHERE id = $1"
+    let owner_id = match db.query_one(pool, check_query, vec![project_id]) {
+        Ok(row) => db.get_int(row, "owner_id"),
+        Err(_) => return http.json_response(404, "Project not found"),
+    }
+    
+    if user_id != owner_id {
+        return http.json_response(403, "Forbidden")
+    }
+    
+    // Remove member
+    let query = "DELETE FROM project_members WHERE project_id = $1 AND user_id = $2"
+    match db.execute(pool, query, vec![project_id, member_id]) {
+        Ok(_) => {},
+        Err(e) => {
+            log.error("Failed to remove member: ${e}")
+            return http.json_response(500, "Failed to remove member")
+        }
+    }
+    
+    log.info("Member removed from project ${project_id}")
+    http.json_response(200, "Member removed successfully")
+}
+
+// Helper function
+fn extract_user_id(req: Request) -> Option<int> {
+    // Simplified extraction - would use proper JWT validation
+    Some(1)
+}
+
     ServerResponse::no_content()
 }

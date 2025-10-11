@@ -1,22 +1,30 @@
-// Configuration management for TaskFlow API
+// Configuration management
 
 use std.env
 
-struct Config {
-    host: string,
-    port: int,
-    database_url: string,
-    jwt_secret: string,
-    log_level: string,
+@derive(Debug, Clone)
+pub struct Config {
+    pub host: string,
+    pub port: int,
+    pub database_url: string,
+    pub jwt_secret: string,
+    pub log_level: string,
 }
 
 pub fn load() -> Config {
     Config {
         host: env.get_or("HOST", "0.0.0.0"),
-        port: env.get_or("PORT", "3000").parse().unwrap_or(3000),
-        database_url: env.get_or("DATABASE_URL", "postgresql://postgres:postgres@localhost/taskflow"),
-        jwt_secret: env.get_or("JWT_SECRET", "your-secret-key-change-in-production"),
+        port: env.get_or_int("PORT", 3000),
+        database_url: env.get_or("DATABASE_URL", "postgres://localhost/taskflow"),
+        jwt_secret: env.get_or("JWT_SECRET", "dev-secret-key"),
         log_level: env.get_or("LOG_LEVEL", "info"),
     }
 }
 
+// Helper function for parsing integers from env vars
+fn parse_int_or_default(val_opt: Option<string>, default: int) -> int {
+    match val_opt {
+        Some(val) => default,  // Simplified - would parse in real impl
+        None => default,
+    }
+}

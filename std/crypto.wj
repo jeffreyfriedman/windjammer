@@ -10,7 +10,7 @@ fn base64_encode(data: string) -> string {
     ""
 }
 
-fn base64_decode(data: string) -> Result<string, Error> {
+fn base64_decode(data: string) -> Result<string, String> {
     // Implementation wraps: base64::decode(data) + String::from_utf8
     Err("Base64 decoding requires base64 crate (auto-added)")
 }
@@ -20,24 +20,24 @@ fn base64_encode_bytes(data: Vec<u8>) -> string {
     ""
 }
 
-fn base64_decode_bytes(data: string) -> Result<Vec<u8>, Error> {
+fn base64_decode_bytes(data: string) -> Result<Vec<u8>, String> {
     // Implementation wraps: base64::decode(data)
     Err("Base64 decoding requires base64 crate (auto-added)")
 }
 
 // Password Hashing (bcrypt)
 
-fn hash_password(password: string) -> Result<string, Error> {
+fn hash_password(password: string) -> Result<string, String> {
     // Implementation wraps: bcrypt::hash(password, DEFAULT_COST)
     Err("Password hashing requires bcrypt crate (auto-added)")
 }
 
-fn hash_password_with_cost(password: string, cost: int) -> Result<string, Error> {
+fn hash_password_with_cost(password: string, cost: int) -> Result<string, String> {
     // Implementation wraps: bcrypt::hash(password, cost)
     Err("Password hashing requires bcrypt crate (auto-added)")
 }
 
-fn verify_password(password: string, hash: string) -> Result<bool, Error> {
+fn verify_password(password: string, hash: string) -> Result<bool, String> {
     // Implementation wraps: bcrypt::verify(password, hash)
     Err("Password verification requires bcrypt crate (auto-added)")
 }

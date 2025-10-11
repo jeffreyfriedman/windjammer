@@ -1,53 +1,61 @@
-// Task data models
+// Task model
 
-use std.json
+use std.time
 
-@derive(Debug, Clone, PartialEq, Serialize, Deserialize)
-struct Task {
-    id: int,
-    project_id: int,
-    title: string,
-    description: Option<string>,
-    status: string,
-    priority: string,
-    assigned_to: Option<int>,
-    created_at: string,
-    updated_at: string,
+@derive(Debug, Clone, Serialize, Deserialize)
+pub struct Task {
+    pub id: int,
+    pub project_id: int,
+    pub title: string,
+    pub description: string,
+    pub status: string,
+    pub priority: string,
+    pub assigned_to: Option<int>,
+    pub created_by: int,
+    pub created_at: int,
+    pub updated_at: int,
+    pub due_date: Option<int>,
 }
 
-@derive(Debug, Clone, PartialEq, Serialize, Deserialize)
-struct CreateTaskRequest {
-    title: string,
-    description: Option<string>,
-    status: Option<string>,
-    priority: Option<string>,
-    assigned_to: Option<int>,
+@derive(Debug, Serialize, Deserialize)
+pub struct CreateTaskRequest {
+    pub title: string,
+    pub description: string,
+    pub priority: string,
+    pub due_date: Option<int>,
 }
 
-@derive(Debug, Clone, PartialEq, Serialize, Deserialize)
-struct UpdateTaskRequest {
-    title: Option<string>,
-    description: Option<string>,
-    status: Option<string>,
-    priority: Option<string>,
-    assigned_to: Option<int>,
+@derive(Debug, Serialize, Deserialize)
+pub struct UpdateTaskRequest {
+    pub title: Option<string>,
+    pub description: Option<string>,
+    pub status: Option<string>,
+    pub priority: Option<string>,
+    pub due_date: Option<int>,
 }
 
-@derive(Debug, Clone, PartialEq, Serialize, Deserialize)
-struct AssignTaskRequest {
-    user_id: int,
+@derive(Debug, Serialize, Deserialize)
+pub struct AssignTaskRequest {
+    pub user_id: int,
 }
 
-@derive(Debug, Clone, PartialEq, Serialize, Deserialize)
-struct TaskSearchQuery {
-    status: Option<string>,
-    priority: Option<string>,
-    assigned_to: Option<int>,
+@derive(Debug, Serialize, Deserialize)
+pub struct TaskResponse {
+    pub id: int,
+    pub project_id: int,
+    pub title: string,
+    pub description: string,
+    pub status: string,
+    pub priority: string,
+    pub assigned_to: Option<int>,
+    pub created_by: int,
+    pub created_at: int,
+    pub due_date: Option<int>,
 }
 
 impl Task {
-    pub fn to_public(self) -> TaskPublic {
-        TaskPublic {
+    pub fn to_response(self) -> TaskResponse {
+        TaskResponse {
             id: self.id,
             project_id: self.project_id,
             title: self.title,
@@ -55,22 +63,9 @@ impl Task {
             status: self.status,
             priority: self.priority,
             assigned_to: self.assigned_to,
+            created_by: self.created_by,
             created_at: self.created_at,
-            updated_at: self.updated_at,
+            due_date: self.due_date,
         }
     }
 }
-
-@derive(Debug, Serialize)
-struct TaskPublic {
-    id: int,
-    project_id: int,
-    title: string,
-    description: Option<string>,
-    status: string,
-    priority: string,
-    assigned_to: Option<int>,
-    created_at: string,
-    updated_at: string,
-}
-
