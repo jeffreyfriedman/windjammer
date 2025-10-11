@@ -1237,8 +1237,115 @@ impl CodeGenerator {
         }
     }
 
-    fn generate_expression(&mut self, expr: &Expression) -> String {
+    // PHASE 7: Constant folding - evaluate constant expressions at compile time
+    #[allow(clippy::only_used_in_recursion)]
+    fn try_fold_constant(&self, expr: &Expression) -> Option<Expression> {
         match expr {
+            Expression::Binary { left, op, right } => {
+                // Try to fold both sides first
+                let left_folded = self
+                    .try_fold_constant(left)
+                    .unwrap_or_else(|| (**left).clone());
+                let right_folded = self
+                    .try_fold_constant(right)
+                    .unwrap_or_else(|| (**right).clone());
+
+                // If both sides are literals, try to evaluate
+                if let (Expression::Literal(l), Expression::Literal(r)) =
+                    (&left_folded, &right_folded)
+                {
+                    use BinaryOp::*;
+                    use Literal::*;
+
+                    let result = match (l, op, r) {
+                        // Integer arithmetic
+                        (Int(a), Add, Int(b)) => Some(Literal::Int(a + b)),
+                        (Int(a), Sub, Int(b)) => Some(Literal::Int(a - b)),
+                        (Int(a), Mul, Int(b)) => Some(Literal::Int(a * b)),
+                        (Int(a), Div, Int(b)) if *b != 0 => Some(Literal::Int(a / b)),
+                        (Int(a), Mod, Int(b)) if *b != 0 => Some(Literal::Int(a % b)),
+
+                        // Float arithmetic
+                        (Float(a), Add, Float(b)) => Some(Literal::Float(a + b)),
+                        (Float(a), Sub, Float(b)) => Some(Literal::Float(a - b)),
+                        (Float(a), Mul, Float(b)) => Some(Literal::Float(a * b)),
+                        (Float(a), Div, Float(b)) if *b != 0.0 => Some(Literal::Float(a / b)),
+
+                        // Integer comparisons
+                        (Int(a), Eq, Int(b)) => Some(Literal::Bool(a == b)),
+                        (Int(a), Ne, Int(b)) => Some(Literal::Bool(a != b)),
+                        (Int(a), Lt, Int(b)) => Some(Literal::Bool(a < b)),
+                        (Int(a), Le, Int(b)) => Some(Literal::Bool(a <= b)),
+                        (Int(a), Gt, Int(b)) => Some(Literal::Bool(a > b)),
+                        (Int(a), Ge, Int(b)) => Some(Literal::Bool(a >= b)),
+
+                        // Boolean operations
+                        (Bool(a), And, Bool(b)) => Some(Literal::Bool(*a && *b)),
+                        (Bool(a), Or, Bool(b)) => Some(Literal::Bool(*a || *b)),
+
+                        _ => None,
+                    };
+
+                    return result.map(Expression::Literal);
+                }
+                None
+            }
+            Expression::Unary { op, operand } => {
+                let operand_folded = self
+                    .try_fold_constant(operand)
+                    .unwrap_or_else(|| (**operand).clone());
+
+                if let Expression::Literal(lit) = &operand_folded {
+                    use Literal::*;
+                    use UnaryOp::*;
+
+                    let result = match (op, lit) {
+                        (Neg, Int(n)) => Some(Literal::Int(-n)),
+                        (Neg, Float(f)) => Some(Literal::Float(-f)),
+                        (Not, Bool(b)) => Some(Literal::Bool(!b)),
+                        _ => None,
+                    };
+
+                    return result.map(Expression::Literal);
+                }
+                None
+            }
+            Expression::Ternary {
+                condition,
+                true_expr,
+                false_expr,
+            } => {
+                let cond_folded = self
+                    .try_fold_constant(condition)
+                    .unwrap_or_else(|| (**condition).clone());
+
+                if let Expression::Literal(Literal::Bool(b)) = &cond_folded {
+                    // If condition is constant, return the appropriate branch
+                    if *b {
+                        return self
+                            .try_fold_constant(true_expr)
+                            .or_else(|| Some((**true_expr).clone()));
+                    } else {
+                        return self
+                            .try_fold_constant(false_expr)
+                            .or_else(|| Some((**false_expr).clone()));
+                    }
+                }
+                None
+            }
+            // Already a literal - can't fold further
+            Expression::Literal(_) => None,
+            // Can't fold non-constant expressions
+            _ => None,
+        }
+    }
+
+    fn generate_expression(&mut self, expr: &Expression) -> String {
+        // PHASE 7: Try constant folding first
+        let folded_expr = self.try_fold_constant(expr);
+        let expr_to_generate = folded_expr.as_ref().unwrap_or(expr);
+
+        match expr_to_generate {
             Expression::Literal(lit) => self.generate_literal(lit),
             Expression::Identifier(name) => {
                 // Convert qualified paths: std.fs.read -> std::fs::read
