@@ -8,6 +8,7 @@ use crate::analysis::AnalysisDatabase;
 use crate::completion::CompletionProvider;
 use crate::diagnostics::DiagnosticsEngine;
 use crate::hover::HoverProvider;
+use crate::inlay_hints::InlayHintsProvider;
 
 /// The Windjammer Language Server
 ///
@@ -18,6 +19,7 @@ pub struct WindjammerLanguageServer {
     diagnostics: Arc<DiagnosticsEngine>,
     hover_providers: Arc<RwLock<DashMap<Url, HoverProvider>>>,
     completion_providers: Arc<RwLock<DashMap<Url, CompletionProvider>>>,
+    inlay_hints_providers: Arc<RwLock<DashMap<Url, InlayHintsProvider>>>,
     /// Map of file URIs to their content
     documents: DashMap<Url, String>,
 }
@@ -32,6 +34,7 @@ impl WindjammerLanguageServer {
             diagnostics: Arc::new(DiagnosticsEngine::new(client.clone())),
             hover_providers: Arc::new(RwLock::new(DashMap::new())),
             completion_providers: Arc::new(RwLock::new(DashMap::new())),
+            inlay_hints_providers: Arc::new(RwLock::new(DashMap::new())),
             documents: DashMap::new(),
         }
     }
@@ -44,18 +47,28 @@ impl WindjammerLanguageServer {
             // Analyze the file
             let diagnostics = self.analysis_db.analyze_file(&uri, &content);
 
-            // Update hover provider with parsed program
+            // Update providers with parsed program and analysis results
             if let Some(program) = self.analysis_db.get_program(&uri) {
+                // Update hover provider
                 let mut hover_provider = HoverProvider::new();
                 hover_provider.update_program(program.clone());
                 let hover_providers = self.hover_providers.write().unwrap();
                 hover_providers.insert(uri.clone(), hover_provider);
 
-                // Update completion provider with parsed program
+                // Update completion provider
                 let mut completion_provider = CompletionProvider::new();
                 completion_provider.update_program(program);
                 let completion_providers = self.completion_providers.write().unwrap();
                 completion_providers.insert(uri.clone(), completion_provider);
+            }
+
+            // Update inlay hints provider with ownership analysis
+            let analyzed_functions = self.analysis_db.get_analyzed_functions(&uri);
+            if !analyzed_functions.is_empty() {
+                let mut inlay_hints_provider = InlayHintsProvider::new();
+                inlay_hints_provider.update_analyzed_functions(analyzed_functions);
+                let inlay_hints_providers = self.inlay_hints_providers.write().unwrap();
+                inlay_hints_providers.insert(uri.clone(), inlay_hints_provider);
             }
 
             // Publish diagnostics to the client
@@ -364,13 +377,19 @@ impl LanguageServer for WindjammerLanguageServer {
     }
 
     async fn inlay_hint(&self, params: InlayHintParams) -> Result<Option<Vec<InlayHint>>> {
-        tracing::debug!("Inlay hint: {}", params.text_document.uri);
+        let uri = params.text_document.uri.clone();
+        let range = params.range;
 
-        // TODO: Implement ownership inference hints
-        // - Show inferred & and &mut on parameters
-        // - This is our unique feature!
+        tracing::debug!("Inlay hint request: {} for range {:?}", uri, range);
 
-        Ok(None)
+        // Get the inlay hints provider for this file
+        let providers = self.inlay_hints_providers.read().unwrap();
+        let result = providers
+            .get(&uri)
+            .map(|provider| provider.get_inlay_hints(range));
+        drop(providers); // Explicitly drop the lock
+
+        Ok(result)
     }
 
     async fn semantic_tokens_full(
