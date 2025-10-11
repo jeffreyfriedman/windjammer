@@ -1,10 +1,23 @@
-[package]
-name = "windjammer"
-version = "0.18.0"
+[workspace]
+members = [
+    ".",
+    "crates/windjammer-lsp",
+]
+
+[workspace.package]
+version = "0.19.0"
 edition = "2021"
-default-run = "wj"
 authors = ["Jeffrey Friedman <jeffrey@example.com>", "Windjammer Contributors"]
 license = "MIT OR Apache-2.0"
+rust-version = "1.90"
+
+[package]
+name = "windjammer"
+version.workspace = true
+edition.workspace = true
+default-run = "wj"
+authors.workspace = true
+license.workspace = true
 description = "A simple language inspired by Go, Ruby, and Elixir that transpiles to Rust - 80% of Rust's power with 20% of the complexity"
 repository = "https://github.com/jeffreyfriedman/windjammer"
 homepage = "https://github.com/jeffreyfriedman/windjammer"
@@ -12,12 +25,14 @@ documentation = "https://github.com/jeffreyfriedman/windjammer/blob/main/docs/GU
 keywords = ["compiler", "transpiler", "rust", "go", "language"]
 categories = ["development-tools", "compilers"]
 readme = "README.md"
-rust-version = "1.90"
+rust-version.workspace = true
 exclude = [
     "test_output_*",
     "examples/*/build_output",
     "examples/*/pkg",
     "examples/*/target",
+    "examples/taskflow/rust",
+    "examples/taskflow/windjammer",
     ".github",
     "docs/*.md"
 ]

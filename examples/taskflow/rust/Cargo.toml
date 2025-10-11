@@ -3,6 +3,9 @@ name = "taskflow-api"
 version = "0.1.0"
 edition = "2021"
 
+# This is a standalone example, not part of the Windjammer workspace
+[workspace]
+
 [dependencies]
 # Web framework
 axum = { version = "0.7", features = ["macros"] }
