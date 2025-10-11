@@ -7,6 +7,8 @@ use windjammer::{
     parser::{Parser, Program},
 };
 
+use crate::symbol_table::SymbolTable;
+
 /// Analysis database for incremental compilation
 ///
 /// This will eventually use Salsa for query-based incremental compilation,
@@ -25,6 +27,8 @@ struct FileAnalysis {
     program: Option<Program>,
     /// Analyzed functions with ownership inference
     analyzed_functions: Vec<AnalyzedFunction>,
+    /// Symbol table for go-to-definition
+    symbol_table: SymbolTable,
     /// Analysis diagnostics
     diagnostics: Vec<Diagnostic>,
 }
@@ -42,11 +46,18 @@ impl AnalysisDatabase {
 
         let (diagnostics, program, analyzed_functions) = self.full_analysis(content);
 
+        // Build symbol table
+        let mut symbol_table = SymbolTable::new();
+        if let Some(ref prog) = program {
+            symbol_table.build_from_program(prog, uri);
+        }
+
         // Cache the results
         let analysis = FileAnalysis {
             source: content.to_string(),
             program,
             analyzed_functions,
+            symbol_table,
             diagnostics: diagnostics.clone(),
         };
 
@@ -150,6 +161,15 @@ impl AnalysisDatabase {
             .get(uri)
             .map(|analysis| analysis.analyzed_functions.clone())
             .unwrap_or_default()
+    }
+
+    /// Get cached symbol table for a file
+    pub fn get_symbol_table(&self, uri: &Url) -> Option<SymbolTable> {
+        self.cache
+            .read()
+            .unwrap()
+            .get(uri)
+            .map(|analysis| analysis.symbol_table.clone())
     }
 }
 
