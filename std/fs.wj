@@ -8,49 +8,49 @@
 //===============================================
 
 // Read entire file as string
-fn read_to_string(path: string) -> Result<string, Error> {
+fn read_to_string(path: string) -> Result<string, String> {
     // Wraps: std::fs::read_to_string(path)
     Err("File system operation failed")
 }
 
 // Read entire file as bytes
-fn read(path: string) -> Result<Vec<u8>, Error> {
+fn read(path: string) -> Result<Vec<u8>, String> {
     // Wraps: std::fs::read(path)
     Err("File system operation failed")
 }
 
 // Write string to file (creates or truncates)
-fn write(path: string, contents: string) -> Result<(), Error> {
+fn write(path: string, contents: string) -> Result<(), String> {
     // Wraps: std::fs::write(path, contents)
     Err("File system operation failed")
 }
 
 // Write bytes to file (creates or truncates)
-fn write_bytes(path: string, contents: Vec<u8>) -> Result<(), Error> {
+fn write_bytes(path: string, contents: Vec<u8>) -> Result<(), String> {
     // Wraps: std::fs::write(path, contents)
     Err("File system operation failed")
 }
 
 // Append string to file
-fn append(path: string, contents: string) -> Result<(), Error> {
+fn append(path: string, contents: string) -> Result<(), String> {
     // Wraps: OpenOptions::new().append(true).write().open() + write_all
     Err("File system operation failed")
 }
 
 // Copy file from source to destination
-fn copy(from: string, to: string) -> Result<(), Error> {
+fn copy(from: string, to: string) -> Result<(), String> {
     // Wraps: std::fs::copy(from, to)
     Err("File system operation failed")
 }
 
 // Move/rename file
-fn rename(from: string, to: string) -> Result<(), Error> {
+fn rename(from: string, to: string) -> Result<(), String> {
     // Wraps: std::fs::rename(from, to)
     Err("File system operation failed")
 }
 
 // Delete file
-fn remove_file(path: string) -> Result<(), Error> {
+fn remove_file(path: string) -> Result<(), String> {
     // Wraps: std::fs::remove_file(path)
     Err("File system operation failed")
 }
@@ -78,43 +78,43 @@ fn is_dir(path: string) -> bool {
 //===============================================
 
 // Create directory (fails if parent doesn't exist)
-fn create_dir(path: string) -> Result<(), Error> {
+fn create_dir(path: string) -> Result<(), String> {
     // Wraps: std::fs::create_dir(path)
     Err("Directory operation failed")
 }
 
 // Create directory and all parent directories
-fn create_dir_all(path: string) -> Result<(), Error> {
+fn create_dir_all(path: string) -> Result<(), String> {
     // Wraps: std::fs::create_dir_all(path)
     Err("Directory operation failed")
 }
 
 // Remove empty directory
-fn remove_dir(path: string) -> Result<(), Error> {
+fn remove_dir(path: string) -> Result<(), String> {
     // Wraps: std::fs::remove_dir(path)
     Err("Directory operation failed")
 }
 
 // Remove directory and all contents
-fn remove_dir_all(path: string) -> Result<(), Error> {
+fn remove_dir_all(path: string) -> Result<(), String> {
     // Wraps: std::fs::remove_dir_all(path)
     Err("Directory operation failed")
 }
 
 // List directory contents
-fn read_dir(path: string) -> Result<Vec<DirEntry>, Error> {
+fn read_dir(path: string) -> Result<Vec<DirEntry>, String> {
     // Wraps: std::fs::read_dir(path) and collect
     Err("Directory operation failed")
 }
 
 // Get current working directory
-fn current_dir() -> Result<string, Error> {
+fn current_dir() -> Result<string, String> {
     // Wraps: std::env::current_dir()
     Err("Directory operation failed")
 }
 
 // Set current working directory
-fn set_current_dir(path: string) -> Result<(), Error> {
+fn set_current_dir(path: string) -> Result<(), String> {
     // Wraps: std::env::set_current_dir(path)
     Err("Directory operation failed")
 }
@@ -140,7 +140,7 @@ struct DirEntry {
 }
 
 // Get file/directory metadata
-fn metadata(path: string) -> Result<Metadata, Error> {
+fn metadata(path: string) -> Result<Metadata, String> {
     // Wraps: std::fs::metadata(path)
     Err("Metadata operation failed")
 }
@@ -188,7 +188,7 @@ impl DirEntry {
         self.is_dir
     }
     
-    fn metadata(self) -> Result<Metadata, Error> {
+    fn metadata(self) -> Result<Metadata, String> {
         // Wraps: entry.metadata()
         Err("Metadata operation failed")
     }
@@ -229,7 +229,7 @@ fn parent(path: string) -> Option<string> {
 }
 
 // Convert to absolute path
-fn canonicalize(path: string) -> Result<string, Error> {
+fn canonicalize(path: string) -> Result<string, String> {
     // Wraps: std::fs::canonicalize(path)
     Err("Path operation failed")
 }

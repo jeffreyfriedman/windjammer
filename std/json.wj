@@ -17,17 +17,17 @@ struct Array {
 
 // Parsing and Serialization
 
-fn parse(s: string) -> Result<Value, Error> {
+fn parse(s: string) -> Result<Value, String> {
     // Implementation wraps: serde_json::from_str(s)
     Err("JSON parsing requires serde_json (auto-added)")
 }
 
-fn stringify<T>(value: T) -> Result<string, Error> {
+fn stringify<T>(value: T) -> Result<string, String> {
     // Implementation wraps: serde_json::to_string(value)
     Err("JSON stringify requires serde_json (auto-added)")
 }
 
-fn pretty<T>(value: T) -> Result<string, Error> {
+fn pretty<T>(value: T) -> Result<string, String> {
     // Implementation wraps: serde_json::to_string_pretty(value)
     Err("JSON pretty print requires serde_json (auto-added)")
 }
