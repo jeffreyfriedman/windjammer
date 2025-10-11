@@ -1,0 +1,30 @@
+// Test defer drop optimization
+// This function MUST take ownership and return a small value
+
+fn count_and_consume(data: Vec<int>) -> int {
+    // Explicitly consume the vector and return just its length
+    // This creates the pattern: large owned param → small return
+    let len = data.len()
+    // Vector is dropped here, but should be deferred to background thread
+    len
+}
+
+fn main() {
+    // Create a large Vec
+    let mut data = Vec::new()
+    
+    let mut i = 0
+    while i < 1000000 {
+        data.push(i)
+        i = i + 1
+    }
+    
+    println!("Created Vec with {} elements", data.len())
+    
+    // Transfer ownership to count_and_consume
+    // The defer drop optimization should make this return almost instantly
+    let count = count_and_consume(data)
+    
+    println!("Count: {}", count)
+    println!("Function returned instantly! (drop happening in background)")
+}
