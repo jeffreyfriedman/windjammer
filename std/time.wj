@@ -25,12 +25,12 @@ fn utc_now() -> DateTime {
 
 // Parsing
 
-fn parse(s: string, format: string) -> Result<DateTime, Error> {
+fn parse(s: string, format: string) -> Result<DateTime, String> {
     // Implementation wraps: DateTime::parse_from_str(s, format)
     Err("Time parsing requires chrono (auto-added)")
 }
 
-fn parse_rfc3339(s: string) -> Result<DateTime, Error> {
+fn parse_rfc3339(s: string) -> Result<DateTime, String> {
     // Implementation wraps: DateTime::parse_from_rfc3339(s)
     Err("Time parsing requires chrono (auto-added)")
 }

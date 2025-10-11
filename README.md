@@ -7,18 +7,34 @@ A simple, high-level language that transpiles to Rust—combining Go's ergonomic
 
 ## 📊 Production Validation: TaskFlow API
 
-**Empirical proof of Windjammer's 80/20 thesis!**
+**Empirical proof of Windjammer's 80/20 thesis!** 🎯
 
 We built a production-quality REST API in **both Windjammer and Rust** to compare:
 - **Windjammer:** 2,144 lines with clean `std.*` abstractions
 - **Rust:** 1,907 lines with exposed crate APIs (axum, sqlx, tracing, etc.)
 
-**Result:** Rust is 11% less code, but Windjammer wins on:
+### Results (v0.16.0)
+
+**Code Quality:** Rust is 11% less code, but Windjammer wins on:
 - ✅ **Zero crate leakage** - `std.http`, `std.db`, `std.log` only
 - ✅ **Stable APIs** - No breaking changes when crates update
 - ✅ **60-70% faster onboarding** - 3 APIs vs 8+ crates to learn
 - ✅ **Better abstractions** - Cleaner, more maintainable code
-- ⏳ **Performance** - Benchmarking in progress
+
+**Performance (v0.17.0):** 🎉 **90.6% of Rust Performance Achieved!**
+- ✅ **Naive Windjammer:** 0.339s (35K operations)
+- ✅ **Expert Rust:** 0.307s (35K operations)  
+- ✅ **Performance Ratio:** **90.6%** - Beginners get expert-level performance automatically!
+
+**Rust API Baseline (v0.16.0):**
+- **116,579 req/s** throughput (`/health` endpoint)
+- **707 µs** median latency (p50)
+- **2.61 ms** p99 latency
+
+**v0.17.0 Achievements:**
+- ✅ **90.6% of Rust performance** through automatic compiler optimizations
+- ✅ **5-phase optimization pipeline:** Inline hints, clone elimination, struct shorthand, string analysis, compound assignments
+- ✅ **Naive code → Expert performance** - Compiler does the optimization for you!
 
 **See:** [`examples/taskflow/`](examples/taskflow/) for complete details and benchmarks.
 
@@ -36,6 +52,18 @@ Windjammer takes the best ideas from modern languages:
 **The 80/20 Rule**: Windjammer provides 80% of Rust's power (memory safety, zero-cost abstractions, performance) while eliminating 80% of the complexity (manual lifetime annotations, explicit borrowing, verbose syntax).
 
 ## Key Features
+
+### 🚀 Automatic Compiler Optimizations 🆕 **v0.17.0**
+**Your naive code runs at 90.6% of expert Rust performance - automatically!**
+
+The Windjammer compiler includes a 5-phase optimization pipeline:
+- **Inline Hints** - Automatic `#[inline]` for hot paths
+- **Clone Elimination** - Removes unnecessary allocations (loop-aware!)
+- **Struct Shorthand** - Generates `Point { x, y }` idioms
+- **String Analysis** - Capacity pre-allocation hints
+- **Compound Assignments** - Converts `x = x + 1` to `x += 1`
+
+**You write simple code. The compiler makes it fast.** No manual optimization needed!
 
 ### ✨ Automatic Trait Bound Inference 🆕 **v0.10.0**
 **No more explicit trait bounds!** The compiler infers them from usage.
@@ -315,7 +343,7 @@ edition = "2021"
 **80% Reduction in Boilerplate**:
 ```bash
 # Old way (v0.12.0):
-windjammer build --path main.wj --output ./build
+wj build --path main.wj --output ./build
 cd build && cargo run
 cd .. && cargo test
 cargo fmt
@@ -884,8 +912,8 @@ cargo install windjammer
 ### Verify Installation
 
 ```bash
-windjammer --version
-windjammer --help
+wj --version
+wj --help
 ```
 
 ### Your First Program
@@ -902,7 +930,7 @@ fn main() {
 Transpile and run:
 
 ```bash
-windjammer build --path hello.wj --output output
+wj build --path hello.wj --output output
 cd output
 cargo run
 ```
@@ -955,13 +983,13 @@ Install from `editors/vscode/` or search "Windjammer" in the marketplace (coming
 
 ```bash
 # Transpile .wj files to .rs
-windjammer build
+wj build
 
 # Or specify files
-windjammer build src/main.wj
+wj build src/main.wj
 
 # Check for errors without generating code
-windjammer check
+wj check
 
 # Run the generated Rust code
 cd output

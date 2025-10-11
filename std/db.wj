@@ -23,7 +23,7 @@ struct Transaction {
 // Connection Management
 
 @async
-fn connect(url: string) -> Result<Connection, Error> {
+fn connect(url: string) -> Result<Connection, String> {
     // Implementation wraps: sqlx::SqlitePool::connect(url).await
     // For now, returns error as parser can't handle this yet
     Err("Database connections will work after parser improvements in v0.14.0")
@@ -59,19 +59,19 @@ impl QueryBuilder {
     }
     
     @async
-    fn execute(self) -> Result<(), Error> {
+    fn execute(self) -> Result<(), String> {
         // Wraps: query.execute(pool).await
         Ok(())
     }
     
     @async
-    fn fetch_all(self) -> Result<Vec<Row>, Error> {
+    fn fetch_all(self) -> Result<Vec<Row>, String> {
         // Wraps: query.fetch_all(pool).await
         Ok(vec![])
     }
     
     @async
-    fn fetch_one(self) -> Result<Row, Error> {
+    fn fetch_one(self) -> Result<Row, String> {
         // Wraps: query.fetch_one(pool).await
         Err("Not yet implemented")
     }
@@ -80,12 +80,12 @@ impl QueryBuilder {
 // Row Access
 
 impl Row {
-    fn get<T>(self, index: int) -> Result<T, Error> {
+    fn get<T>(self, index: int) -> Result<T, String> {
         // Wraps: row.get(index)
         Err("Not yet implemented")
     }
     
-    fn get_by_name<T>(self, name: string) -> Result<T, Error> {
+    fn get_by_name<T>(self, name: string) -> Result<T, String> {
         // Wraps: row.try_get(name)
         Err("Not yet implemented")
     }

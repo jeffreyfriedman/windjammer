@@ -1,57 +1,45 @@
-// User data model
+// User model
+
+use std.time
 
 @derive(Debug, Clone, Serialize, Deserialize)
-struct User {
-    id: int,
-    username: string,
-    email: string,
-    full_name: Option<string>,
-    role: string,
-    created_at: string,
-    updated_at: string,
+pub struct User {
+    pub id: int,
+    pub username: string,
+    pub email: string,
+    pub password_hash: string,
+    pub created_at: int,
+    pub updated_at: int,
 }
 
-@derive(Debug, Deserialize)
-struct RegisterRequest {
-    username: string,
-    email: string,
-    password: string,
-    full_name: Option<string>,
+@derive(Debug, Serialize, Deserialize)
+pub struct CreateUserRequest {
+    pub username: string,
+    pub email: string,
+    pub password: string,
 }
 
-@derive(Debug, Deserialize)
-struct LoginRequest {
-    username: string,
-    password: string,
+@derive(Debug, Serialize, Deserialize)
+pub struct UpdateUserRequest {
+    pub username: Option<string>,
+    pub email: Option<string>,
 }
 
-@derive(Debug, Serialize)
-struct AuthResponse {
-    user: User,
-    token: string,
-}
-
-// User without sensitive data (for API responses)
-@derive(Debug, Serialize)
-struct UserPublic {
-    id: int,
-    username: string,
-    email: string,
-    full_name: Option<string>,
-    role: string,
-    created_at: string,
+@derive(Debug, Serialize, Deserialize)
+pub struct UserResponse {
+    pub id: int,
+    pub username: string,
+    pub email: string,
+    pub created_at: int,
 }
 
 impl User {
-    pub fn to_public(self) -> UserPublic {
-        UserPublic {
+    pub fn to_response(self) -> UserResponse {
+        UserResponse {
             id: self.id,
             username: self.username,
             email: self.email,
-            full_name: self.full_name,
-            role: self.role,
             created_at: self.created_at,
         }
     }
 }
-

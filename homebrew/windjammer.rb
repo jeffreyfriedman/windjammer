@@ -27,14 +27,14 @@ class Windjammer < Formula
         export WINDJAMMER_STDLIB=#{lib}/windjammer/std
 
       To get started:
-        windjammer --help
-        windjammer build --path <your_project>
+        wj --help
+        wj build --path <your_project>
     EOS
   end
 
   test do
     # Test that the binary runs
-    assert_match "windjammer", shell_output("#{bin}/windjammer --version")
+    assert_match "windjammer", shell_output("#{bin}/wj --version")
     
     # Test basic compilation
     (testpath/"test.wj").write <<~EOS

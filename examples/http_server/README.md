@@ -12,7 +12,7 @@ A RESTful API server built with Windjammer, demonstrating:
 ## Running
 
 ```bash
-windjammer build
+wj build
 cd output
 cargo run
 ```

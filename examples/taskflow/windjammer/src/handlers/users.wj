@@ -1,98 +1,146 @@
 // User management handlers
 
 use std.http
-use std.log
+use std.json
 use std.db
+use std.log
+
 use ../models.user
-use ../db.users
-use ../config
 
-// List all users (admin only - simplified for now)
-pub async fn list(req: Request) -> ServerResponse {
-    log.info("GET /api/v1/users")
+@async
+pub fn list(req: Request, pool: DbPool) -> Response {
+    // Extract user ID for auth
+    let user_id = match extract_user_id(req) {
+        Some(id) => id,
+        None => return http.json_response(401, "Unauthorized"),
+    }
     
-    // Connect to database
-    let config = config.load_config()
-    let conn = match db.connect(&config.database_url).await {
-        Ok(c) => c,
+    // Query all users
+    let query = "SELECT id, username, email, created_at FROM users ORDER BY created_at DESC"
+    let rows = match db.query_all(pool, query, vec![]) {
+        Ok(r) => r,
         Err(e) => {
-            log.error_with("Database connection failed", "error", &e)
-            return ServerResponse::internal_error("Database connection failed")
+            log.error("Failed to list users: ${e}")
+            return http.json_response(500, "Failed to fetch users")
         }
     }
     
-    // For now, return empty list (would need proper admin auth check)
-    ServerResponse::json(vec![])
+    let mut users = vec![]
+    for row in rows {
+        let user = UserResponse {
+            id: db.get_int(row, "id"),
+            username: db.get_string(row, "username"),
+            email: db.get_string(row, "email"),
+            created_at: db.get_int(row, "created_at"),
+        }
+        users.push(user)
+    }
+    
+    http.json_response(200, users)
 }
 
-// Get user by ID
-pub async fn get(req: Request) -> ServerResponse {
-    log.info("GET /api/v1/users/:id")
+@async
+pub fn get(req: Request, pool: DbPool) -> Response {
+    // Extract user ID for auth
+    let auth_user_id = match extract_user_id(req) {
+        Some(id) => id,
+        None => return http.json_response(401, "Unauthorized"),
+    }
     
-    // Extract user ID from path
-    let user_id = match req.path_param("id") {
-        Some(id) => match id.parse::<int>() {
-            Ok(parsed_id) => parsed_id,
-            Err(_) => {
-                return ServerResponse::bad_request("Invalid user ID")
-            }
-        },
-        None => {
-            return ServerResponse::bad_request("Missing user ID")
+    // Extract target user ID from path
+    let target_id = http.get_param(req, "id")
+    
+    // Query user
+    let query = "SELECT id, username, email, created_at FROM users WHERE id = $1"
+    let row = match db.query_one(pool, query, vec![target_id]) {
+        Ok(r) => r,
+        Err(_) => {
+            return http.json_response(404, "User not found")
         }
     }
     
-    // Connect to database
-    let config = config.load_config()
-    let conn = match db.connect(&config.database_url).await {
-        Ok(c) => c,
-        Err(e) => {
-            log.error_with("Database connection failed", "error", &e)
-            return ServerResponse::internal_error("Database connection failed")
-        }
+    let user = UserResponse {
+        id: db.get_int(row, "id"),
+        username: db.get_string(row, "username"),
+        email: db.get_string(row, "email"),
+        created_at: db.get_int(row, "created_at"),
     }
     
-    // Find user
-    let user = match users.find_by_id(conn, user_id).await {
-        Ok(Some(u)) => u,
-        Ok(None) => {
-            return ServerResponse::not_found()
-        },
-        Err(e) => {
-            log.error_with("Database query failed", "error", &e)
-            return ServerResponse::internal_error("Database error")
-        }
-    }
-    
-    ServerResponse::json(user.to_public())
+    http.json_response(200, user)
 }
 
-// Update user (users can only update themselves for now)
-pub async fn update(req: Request) -> ServerResponse {
-    log.info("PATCH /api/v1/users/:id")
+@async
+pub fn update(req: Request, pool: DbPool) -> Response {
+    // Extract user ID for auth
+    let user_id = match extract_user_id(req) {
+        Some(id) => id,
+        None => return http.json_response(401, "Unauthorized"),
+    }
     
-    // Extract user ID from path
-    let user_id = match req.path_param("id") {
-        Some(id) => match id.parse::<int>() {
-            Ok(parsed_id) => parsed_id,
-            Err(_) => {
-                return ServerResponse::bad_request("Invalid user ID")
-            }
-        },
-        None => {
-            return ServerResponse::bad_request("Missing user ID")
+    // Extract target user ID from path
+    let target_id = http.get_param(req, "id")
+    
+    // Verify user can only update their own profile
+    if user_id != target_id {
+        return http.json_response(403, "Forbidden")
+    }
+    
+    // Parse request body
+    let body = http.body(req)
+    let update_req = match json.parse_string(body) {
+        Ok(r) => r,
+        Err(e) => {
+            log.error("Failed to parse update request: ${e}")
+            return http.json_response(400, "Invalid request body")
         }
     }
     
-    // TODO: Check that authenticated user matches user_id
-    // For now, just return not implemented
+    // Update user in database
+    let query = "UPDATE users SET username = $1, email = $2, updated_at = $3 WHERE id = $4"
+    match db.execute(pool, query, vec![update_req.username, update_req.email, time.now_unix(), target_id]) {
+        Ok(_) => {},
+        Err(e) => {
+            log.error("Failed to update user: ${e}")
+            return http.json_response(500, "Failed to update user")
+        }
+    }
     
-    ServerResponse::json({"message": "Update not yet implemented"})
+    http.json_response(200, "User updated successfully")
 }
 
-// Delete user (admin only - not implemented for Phase 2)
-pub async fn delete(req: Request) -> ServerResponse {
-    log.info("DELETE /api/v1/users/:id")
+@async
+pub fn delete(req: Request, pool: DbPool) -> Response {
+    // Extract user ID for auth
+    let user_id = match extract_user_id(req) {
+        Some(id) => id,
+        None => return http.json_response(401, "Unauthorized"),
+    }
     
-    // Admin-only operation, not implemented in Phase 2
-    ServerResponse::json({"message": "Delete not yet implemented (admin only)"})
+    // Extract target user ID from path
+    let target_id = http.get_param(req, "id")
+    
+    // Verify user can only delete their own account
+    if user_id != target_id {
+        return http.json_response(403, "Forbidden")
+    }
+    
+    // Delete user from database
+    let query = "DELETE FROM users WHERE id = $1"
+    match db.execute(pool, query, vec![target_id]) {
+        Ok(_) => {},
+        Err(e) => {
+            log.error("Failed to delete user: ${e}")
+            return http.json_response(500, "Failed to delete user")
+        }
+    }
+    
+    log.info("User deleted: ${target_id}")
+    http.json_response(200, "User deleted successfully")
+}
+
+// Helper function
+fn extract_user_id(req: Request) -> Option<int> {
+    // Simplified extraction - would use proper JWT validation
+    Some(1)
+}
+
