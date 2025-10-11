@@ -37,7 +37,7 @@ impl InlayHintsProvider {
                 };
 
                 // Find the parameter in the function declaration
-                if let Some(param) = func.decl.parameters.iter().find(|p| &p.name == param_name) {
+                if let Some(_param) = func.decl.parameters.iter().find(|p| &p.name == param_name) {
                     // Create a hint at the parameter's position
                     // TODO: Get actual position from AST
                     // For now, create a placeholder hint
