@@ -748,6 +748,7 @@ impl Analyzer {
     }
 
     /// Analyze a statement for string optimization opportunities
+    #[allow(clippy::only_used_in_recursion)]
     fn analyze_statement_for_string_ops(
         &self,
         stmt: &Statement,
@@ -795,6 +796,7 @@ impl Analyzer {
     }
 
     /// Detect concatenation chains (a + b + c + ...)
+    #[allow(dead_code)] // TODO: Implement concatenation optimization in future version
     fn detect_concatenation_chain(
         &self,
         expr: &Expression,
@@ -815,6 +817,7 @@ impl Analyzer {
     }
 
     /// Count the number of concatenation operations
+    #[allow(dead_code)] // TODO: Implement concatenation optimization in future version
     #[allow(clippy::only_used_in_recursion)]
     fn count_concatenations(&self, expr: &Expression, count: &mut usize) {
         if let Expression::Binary { op, left, right } = expr {
@@ -827,6 +830,7 @@ impl Analyzer {
     }
 
     /// Check if a statement is accumulating strings (s += ...)
+    #[allow(dead_code)] // TODO: Implement loop accumulation optimization in future version
     fn is_string_accumulation(&self, stmt: &Statement) -> bool {
         matches!(
             stmt,
