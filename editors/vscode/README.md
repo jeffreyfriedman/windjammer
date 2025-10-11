@@ -1,180 +1,148 @@
-# Windjammer VSCode Extension
+# Windjammer for Visual Studio Code
 
-Official Visual Studio Code extension for the Windjammer programming language.
+The official Visual Studio Code extension for the Windjammer programming language.
 
 ## Features
 
-### 🎨 Syntax Highlighting
-Beautiful syntax highlighting for Windjammer code with proper support for:
-- Keywords (`fn`, `let`, `struct`, `enum`, `match`, `go`, `async`, etc.)
-- Decorators (`@route`, `@timing`, `@cache`, etc.)
-- Types (`int`, `string`, `Option<T>`, `Result<T, E>`)
-- Comments and strings
-- Operators
+### 🌊 **Syntax Highlighting**
+- Full syntax highlighting for Windjammer (`.wj` files)
+- Color-coded keywords, types, strings, comments, decorators
+- Smart indentation and bracket matching
 
-### 🔍 IntelliSense
-Powered by the Windjammer Language Server:
-- **Auto-completion** for keywords, types, functions, and decorators
-- **Hover information** showing type signatures and documentation
-- **Error diagnostics** for syntax and semantic errors
-- **Ownership hints** showing inferred `&`, `&mut`, or owned parameters
+### 🧠 **Language Server Protocol (LSP)**
+- **Real-time Diagnostics** - Errors and warnings as you type
+- **Auto-completion** - Intelligent code completion for keywords, stdlib, and user code
+- **Go to Definition** - Jump to function, struct, enum, and trait definitions
+- **Find References** - Find all usages of a symbol
+- **Rename Symbol** - Safe refactoring across your codebase
+- **Hover Information** - See function signatures and type information
 
-### 🚀 Code Navigation
-- **Document outline** showing all functions, structs, and enums
-- **Go to definition** (coming soon)
-- **Find all references** (coming soon)
+### ✨ **Ownership Inference Hints** (Unique!)
+- See inferred `&` (borrowed), `&mut` (mutable borrow), and `owned` (moved) annotations inline
+- **No other language shows this!** - Makes Rust-like ownership intuitive
+- Real-time feedback on ownership decisions
 
-### ⚡ Fast & Responsive
-- Incremental compilation using Salsa
-- Only recomputes what changed
-- Instant feedback as you type
+### 📝 **Code Snippets**
+- Quick scaffolding for common patterns:
+  - `fn` - Function declaration
+  - `struct` - Struct definition
+  - `enum` - Enum definition
+  - `impl` - Implementation block
+  - `match` - Match expression
+  - `for` - For loop
+  - `test` - Test function
+  - And many more!
 
 ## Installation
 
-### From VSIX (Development)
+### From VSCode Marketplace (coming soon)
+1. Open VSCode
+2. Go to Extensions (Cmd+Shift+X / Ctrl+Shift+X)
+3. Search for "Windjammer"
+4. Click Install
 
-1. Build the extension:
+### From VSIX (manual)
+1. Download the `.vsix` file from releases
+2. In VSCode, go to Extensions
+3. Click the `...` menu → "Install from VSIX..."
+4. Select the downloaded `.vsix` file
+
+### From Source
 ```bash
 cd editors/vscode
 npm install
 npm run compile
+npm run package
+code --install-extension windjammer-0.19.0.vsix
 ```
-
-2. Package the extension:
-```bash
-npx vsce package
-```
-
-3. Install in VSCode:
-   - Open VSCode
-   - Press `Cmd+Shift+P` (Mac) or `Ctrl+Shift+P` (Windows/Linux)
-   - Type "Extensions: Install from VSIX"
-   - Select the generated `.vsix` file
-
-### From Marketplace (Coming Soon)
-
-Search for "Windjammer" in the VSCode Extensions marketplace.
 
 ## Requirements
 
-The Windjammer Language Server must be installed and accessible in your PATH:
-
-```bash
-cargo install --path crates/windjammer-lsp
-```
-
-Or specify a custom path in settings:
-
-```json
-{
-  "windjammer.server.path": "/path/to/windjammer-lsp"
-}
-```
+- **Windjammer LSP Server**: Install the `windjammer-lsp` binary:
+  ```bash
+  cargo install windjammer
+  ```
+  
+- The extension will automatically start the LSP server when you open a `.wj` file.
 
 ## Configuration
 
-### Settings
-
-- `windjammer.server.path`: Path to the language server executable
-- `windjammer.trace.server`: Enable LSP tracing for debugging
-- `windjammer.inlayHints.enable`: Show inferred types and ownership inline
-
-### Example Settings
+Configure the extension in VSCode settings:
 
 ```json
 {
-  "windjammer.server.path": "windjammer-lsp",
-  "windjammer.trace.server": "verbose",
-  "windjammer.inlayHints.enable": true
+  // Path to the Windjammer LSP server binary
+  "windjammer.lsp.serverPath": "windjammer-lsp",
+  
+  // Enable ownership inference hints (shows &, &mut, owned inline)
+  "windjammer.inlayHints.enable": true,
+  
+  // Enable auto-completion
+  "windjammer.completion.enable": true,
+  
+  // Trace LSP communication (for debugging)
+  "windjammer.lsp.trace.server": "off" // "off" | "messages" | "verbose"
+}
+```
+
+## Usage
+
+1. Create a new file with `.wj` extension
+2. Start typing Windjammer code
+3. Enjoy real-time diagnostics, completion, and ownership hints!
+
+### Example
+
+```windjammer
+fn greet(name: string) {
+    println!("Hello, {}!", name)
+}
+
+fn main() {
+    greet("World")
 }
 ```
 
 ## Commands
 
-- **Windjammer: Restart Language Server** - Restart the LSP
-- **Windjammer: Show Generated Rust Code** - View transpiled Rust output
-
-## File Association
-
-The extension automatically activates for `.wj` files.
-
-To manually associate files:
-
-```json
-{
-  "files.associations": {
-    "*.wj": "windjammer"
-  }
-}
-```
-
-## Themes
-
-Windjammer syntax highlighting works with all VSCode themes. For the best experience, try:
-- **Dark+** (default dark theme)
-- **Light+** (default light theme)
-- **Monokai**
-- **Dracula**
+- **Restart Language Server**: `Windjammer: Restart Language Server` (Cmd+Shift+P)
 
 ## Troubleshooting
 
-### Language Server Not Starting
+### LSP server not starting
+- Check that `windjammer-lsp` is in your PATH:
+  ```bash
+  which windjammer-lsp
+  ```
+- Set the full path in settings:
+  ```json
+  {
+    "windjammer.lsp.serverPath": "/full/path/to/windjammer-lsp"
+  }
+  ```
 
-1. Check that `windjammer-lsp` is in your PATH:
-```bash
-which windjammer-lsp
-```
+### Syntax highlighting not working
+- Make sure the file extension is `.wj`
+- Reload VSCode: `Developer: Reload Window`
 
-2. Check the Output panel:
-   - View → Output
-   - Select "Windjammer Language Server" from dropdown
-
-3. Enable LSP tracing:
-```json
-{
-  "windjammer.trace.server": "verbose"
-}
-```
-
-### No Syntax Highlighting
-
-1. Ensure the file has a `.wj` extension
-2. Try reloading VSCode: `Cmd+Shift+P` → "Reload Window"
-3. Check language mode in bottom right corner
-
-### Performance Issues
-
-The language server is designed to be fast, but if you experience slowness:
-
-1. Check that incremental compilation is working (should see minimal recomputation)
-2. Check the Output panel for errors
-3. Try restarting the language server: `Cmd+Shift+P` → "Windjammer: Restart Language Server"
-
-## Development
-
-### Building from Source
-
-```bash
-cd editors/vscode
-npm install
-npm run compile
-```
-
-### Watching for Changes
-
-```bash
-npm run watch
-```
-
-### Running Extension
-
-Press `F5` in VSCode to open an Extension Development Host window.
+### Ownership hints not showing
+- Enable inlay hints in settings:
+  ```json
+  {
+    "windjammer.inlayHints.enable": true
+  }
+  ```
+- Check VSCode's native inlay hints are enabled:
+  ```json
+  {
+    "editor.inlayHints.enabled": "on"
+  }
+  ```
 
 ## Contributing
 
-Contributions are welcome! Please see the main Windjammer repository for guidelines.
+Found a bug or have a feature request? [Open an issue](https://github.com/jeffreyfriedman/windjammer/issues)!
 
 ## License
 
-MIT
-
+MIT OR Apache-2.0
