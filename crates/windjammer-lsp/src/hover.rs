@@ -1,5 +1,5 @@
 use tower_lsp::lsp_types::{Hover, HoverContents, MarkupContent, MarkupKind, Position};
-use windjammer::parser::{FunctionDecl, Item, Program, Statement, Type};
+use windjammer::parser::{FunctionDecl, Item, Program, Type};
 
 /// Hover provider for Windjammer code
 pub struct HoverProvider {

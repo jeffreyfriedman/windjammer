@@ -9,6 +9,7 @@ use crate::completion::CompletionProvider;
 use crate::diagnostics::DiagnosticsEngine;
 use crate::hover::HoverProvider;
 use crate::inlay_hints::InlayHintsProvider;
+use crate::refactoring::RefactoringProvider;
 
 /// The Windjammer Language Server
 ///
@@ -20,6 +21,7 @@ pub struct WindjammerLanguageServer {
     hover_providers: Arc<RwLock<DashMap<Url, HoverProvider>>>,
     completion_providers: Arc<RwLock<DashMap<Url, CompletionProvider>>>,
     inlay_hints_providers: Arc<RwLock<DashMap<Url, InlayHintsProvider>>>,
+    refactoring_providers: Arc<RwLock<DashMap<Url, RefactoringProvider>>>,
     /// Map of file URIs to their content
     documents: DashMap<Url, String>,
 }
@@ -35,6 +37,7 @@ impl WindjammerLanguageServer {
             hover_providers: Arc::new(RwLock::new(DashMap::new())),
             completion_providers: Arc::new(RwLock::new(DashMap::new())),
             inlay_hints_providers: Arc::new(RwLock::new(DashMap::new())),
+            refactoring_providers: Arc::new(RwLock::new(DashMap::new())),
             documents: DashMap::new(),
         }
     }
@@ -57,9 +60,15 @@ impl WindjammerLanguageServer {
 
                 // Update completion provider
                 let mut completion_provider = CompletionProvider::new();
-                completion_provider.update_program(program);
+                completion_provider.update_program(program.clone());
                 let completion_providers = self.completion_providers.write().unwrap();
                 completion_providers.insert(uri.clone(), completion_provider);
+
+                // Update refactoring provider
+                let mut refactoring_provider = RefactoringProvider::new();
+                refactoring_provider.update_program(program);
+                let refactoring_providers = self.refactoring_providers.write().unwrap();
+                refactoring_providers.insert(uri.clone(), refactoring_provider);
             }
 
             // Update inlay hints provider with ownership analysis
@@ -489,9 +498,31 @@ impl LanguageServer for WindjammerLanguageServer {
     }
 
     async fn code_action(&self, params: CodeActionParams) -> Result<Option<CodeActionResponse>> {
-        tracing::debug!("Code action: {}", params.text_document.uri);
+        let uri = params.text_document.uri.clone();
+        let range = params.range;
 
-        // TODO: Implement code actions (quick fixes)
+        tracing::debug!("Code action request: {} for range {:?}", uri, range);
+
+        // Get the refactoring provider for this file
+        let providers = self.refactoring_providers.read().unwrap();
+        let result = if let Some(provider) = providers.get(&uri) {
+            if let Some(content) = self.documents.get(&uri) {
+                Some(provider.get_code_actions(&uri, range, &content))
+            } else {
+                None
+            }
+        } else {
+            None
+        };
+        drop(providers); // Explicitly drop the lock
+
+        if let Some(actions) = result {
+            if !actions.is_empty() {
+                return Ok(Some(actions));
+            }
+        }
+
+        // TODO: Implement more code actions
         // - Add missing import
         // - Implement missing trait methods
         // - Fix ownership annotations
