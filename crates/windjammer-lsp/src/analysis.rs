@@ -1,6 +1,7 @@
 use std::collections::HashMap;
 use std::sync::RwLock;
 use tower_lsp::lsp_types::{Diagnostic, DiagnosticSeverity, Position, Range, Url};
+use windjammer::{lexer::Lexer, parser::Parser};
 
 /// Analysis database for incremental compilation
 ///
@@ -55,55 +56,47 @@ impl AnalysisDatabase {
         diagnostics
     }
 
-    /// Simple analysis for initial testing
-    /// This will be replaced with full compiler integration
+    /// Real analysis using the Windjammer compiler
     fn simple_analysis(&self, content: &str) -> Vec<Diagnostic> {
         let mut diagnostics = Vec::new();
 
-        // Example: Check for common mistakes
-        for (line_idx, line) in content.lines().enumerate() {
-            // Check for missing semicolons (example)
-            if line.trim_end().ends_with("let") && !line.contains(";") {
-                diagnostics.push(Diagnostic {
-                    range: Range {
-                        start: Position {
-                            line: line_idx as u32,
-                            character: 0,
-                        },
-                        end: Position {
-                            line: line_idx as u32,
-                            character: line.len() as u32,
-                        },
-                    },
-                    severity: Some(DiagnosticSeverity::ERROR),
-                    code: None,
-                    code_description: None,
-                    source: Some("windjammer".to_string()),
-                    message: "Incomplete let statement".to_string(),
-                    related_information: None,
-                    tags: None,
-                    data: None,
-                });
-            }
+        // Lex the file
+        let mut lexer = Lexer::new(content);
+        let tokens = lexer.tokenize();
 
-            // Check for undefined functions (example)
-            if line.contains("undefined_function") {
+        // Parse the file
+        let mut parser = Parser::new(tokens);
+        match parser.parse() {
+            Ok(_program) => {
+                // Success! No parsing errors
+                // TODO: Add semantic analysis here
+                // - Type checking
+                // - Ownership inference
+                // - Undefined symbol detection
+                tracing::debug!("File parsed successfully");
+            }
+            Err(error) => {
+                // Parse error - convert to diagnostic
+                tracing::debug!("Parse error: {}", error);
+
+                // For now, create a diagnostic for the whole file
+                // TODO: Extract line/column info from error message
                 diagnostics.push(Diagnostic {
                     range: Range {
                         start: Position {
-                            line: line_idx as u32,
+                            line: 0,
                             character: 0,
                         },
                         end: Position {
-                            line: line_idx as u32,
-                            character: line.len() as u32,
+                            line: 0,
+                            character: 100,
                         },
                     },
                     severity: Some(DiagnosticSeverity::ERROR),
                     code: None,
                     code_description: None,
                     source: Some("windjammer".to_string()),
-                    message: "Undefined function: undefined_function".to_string(),
+                    message: format!("Parse error: {}", error),
                     related_information: None,
                     tags: None,
                     data: None,
