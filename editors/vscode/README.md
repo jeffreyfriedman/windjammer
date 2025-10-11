@@ -16,6 +16,15 @@ The official Visual Studio Code extension for the Windjammer programming languag
 - **Find References** - Find all usages of a symbol
 - **Rename Symbol** - Safe refactoring across your codebase
 - **Hover Information** - See function signatures and type information
+- **Code Actions** - Quick fixes, extract function, inline variable
+
+### 🐛 **Debug Adapter Protocol (DAP)**
+- **Breakpoints** - Set breakpoints in `.wj` files
+- **Step Through Code** - Step over, step into, step out
+- **Variable Inspection** - View local variables and their values
+- **Call Stack** - Navigate the call stack
+- **Watch Expressions** - Evaluate expressions in debug context
+- **Source Mapping** - Maps Windjammer code to generated Rust for seamless debugging
 
 ### ✨ **Ownership Inference Hints** (Unique!)
 - See inferred `&` (borrowed), `&mut` (mutable borrow), and `owned` (moved) annotations inline
@@ -106,6 +115,44 @@ fn main() {
 ## Commands
 
 - **Restart Language Server**: `Windjammer: Restart Language Server` (Cmd+Shift+P)
+- **Extract Function**: Right-click selected code → "Extract Function"
+- **Inline Variable**: Right-click variable usage → "Inline Variable"
+
+## Debugging
+
+### Quick Start
+1. Open a `.wj` file
+2. Click in the gutter to set a breakpoint (red dot)
+3. Press F5 or go to Run → Start Debugging
+4. Use the debug toolbar to step through your code
+
+### Debug Configuration
+Create or edit `.vscode/launch.json`:
+```json
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "type": "windjammer",
+      "request": "launch",
+      "name": "Debug Windjammer Program",
+      "program": "${workspaceFolder}/build_output/target/debug/${workspaceFolderBasename}",
+      "cwd": "${workspaceFolder}",
+      "preLaunchTask": "windjammer: build"
+    }
+  ]
+}
+```
+
+### Debug Features
+- **Breakpoints**: Click gutter to set/unset
+- **Conditional Breakpoints**: Right-click breakpoint → "Edit Breakpoint"
+- **Step Over (F10)**: Execute current line, don't enter functions
+- **Step Into (F11)**: Enter function calls
+- **Step Out (Shift+F11)**: Return to caller
+- **Continue (F5)**: Resume execution until next breakpoint
+- **Variable Inspection**: Hover over variables or check Debug sidebar
+- **Watch Expressions**: Add expressions to watch their values change
 
 ## Troubleshooting
 
