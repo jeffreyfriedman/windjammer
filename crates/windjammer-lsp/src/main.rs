@@ -6,6 +6,7 @@ mod completion;
 mod diagnostics;
 mod hover;
 mod inlay_hints;
+mod refactoring;
 mod server;
 mod symbol_table;
 
