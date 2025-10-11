@@ -31,6 +31,8 @@ exclude = [
     "examples/*/build_output",
     "examples/*/pkg",
     "examples/*/target",
+    "examples/taskflow/rust",
+    "examples/taskflow/windjammer",
     ".github",
     "docs/*.md"
 ]
