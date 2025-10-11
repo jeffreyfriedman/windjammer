@@ -24,6 +24,8 @@ pub struct CodeGenerator {
     struct_mapping_hints: std::collections::HashMap<String, crate::analyzer::MappingStrategy>, // Struct name -> strategy
     // PHASE 4 OPTIMIZATION: Track string operation optimizations
     string_capacity_hints: std::collections::HashMap<usize, usize>, // Statement idx -> capacity
+    // PHASE 5 OPTIMIZATION: Track assignment operations that can use compound operators
+    assignment_optimizations: std::collections::HashMap<String, crate::analyzer::CompoundOp>, // Variable -> compound op
 }
 
 impl CodeGenerator {
@@ -45,6 +47,7 @@ impl CodeGenerator {
             clone_optimizations: std::collections::HashSet::new(),
             struct_mapping_hints: std::collections::HashMap::new(),
             string_capacity_hints: std::collections::HashMap::new(),
+            assignment_optimizations: std::collections::HashMap::new(),
         }
     }
 
@@ -418,8 +421,10 @@ impl CodeGenerator {
                 output.push_str(&args.join(", "));
                 output.push_str(")]\n");
             }
+            let pub_keyword = if field.is_pub { "pub " } else { "" };
             output.push_str(&format!(
-                "    {}: {},\n",
+                "    {}{}: {},\n",
+                pub_keyword,
                 field.name,
                 self.type_to_rust(&field.field_type)
             ));
@@ -684,6 +689,14 @@ impl CodeGenerator {
         // PHASE 4 OPTIMIZATION: Load string operation optimizations
         // Track capacity hints for string operations
         self.string_capacity_hints.clear();
+
+        // PHASE 5 OPTIMIZATION: Load assignment operation optimizations
+        // Track which variables can use compound assignment operators
+        self.assignment_optimizations.clear();
+        for opt in &analyzed.assignment_optimizations {
+            self.assignment_optimizations
+                .insert(opt.variable.clone(), opt.operation.clone());
+        }
         for opt in &analyzed.string_optimizations {
             if let Some(capacity) = opt.estimated_capacity {
                 self.string_capacity_hints.insert(opt.location, capacity);
@@ -1114,6 +1127,34 @@ impl CodeGenerator {
             }
             Statement::Assignment { target, value } => {
                 let mut output = self.indent();
+
+                // PHASE 5 OPTIMIZATION: Check if this can use a compound operator
+                if let Expression::Identifier(var_name) = target {
+                    if let Expression::Binary { left, right, op } = value {
+                        if let Expression::Identifier(left_var) = &**left {
+                            if left_var == var_name {
+                                // Check if we have this optimization hint
+                                if self.assignment_optimizations.contains_key(var_name) {
+                                    // Generate compound assignment
+                                    output.push_str(&self.generate_expression(target));
+                                    output.push_str(match op {
+                                        crate::parser::BinaryOp::Add => " += ",
+                                        crate::parser::BinaryOp::Sub => " -= ",
+                                        crate::parser::BinaryOp::Mul => " *= ",
+                                        crate::parser::BinaryOp::Div => " /= ",
+                                        _ => " = ",
+                                    });
+                                    output.push_str(&self.generate_expression(right));
+                                    output.push_str(";\n");
+                                    return output;
+                                }
+                            }
+                        }
+                    }
+                }
+                // If no optimization applied, fall through to regular assignment
+
+                // Fall back to regular assignment
                 output.push_str(&self.generate_expression(target));
                 output.push_str(" = ");
                 output.push_str(&self.generate_expression(value));

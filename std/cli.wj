@@ -20,7 +20,7 @@ fn parse_from<T>(args: Vec<string>) -> T {
 }
 
 // Try to parse, return Result instead of exiting on error
-fn try_parse<T>() -> Result<T, Error> {
+fn try_parse<T>() -> Result<T, String> {
     // Wraps: T::try_parse()
     Err("Parse error")
 }

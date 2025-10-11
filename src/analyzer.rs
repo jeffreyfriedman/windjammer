@@ -12,6 +12,24 @@ pub struct AnalyzedFunction {
     pub struct_mapping_optimizations: Vec<StructMappingOptimization>,
     // PHASE 4 OPTIMIZATION: Track string operations for optimization
     pub string_optimizations: Vec<StringOptimization>,
+    // PHASE 5 OPTIMIZATION: Track assignment operations that can use compound operators
+    pub assignment_optimizations: Vec<AssignmentOptimization>,
+}
+
+/// PHASE 5: Assignment operation that can be optimized to compound operator
+#[derive(Debug, Clone)]
+pub struct AssignmentOptimization {
+    pub variable: String,
+    pub location: usize,
+    pub operation: CompoundOp,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum CompoundOp {
+    AddAssign, // +=
+    SubAssign, // -=
+    MulAssign, // *=
+    DivAssign, // /=
 }
 
 /// Represents a string operation that can be optimized
@@ -203,12 +221,16 @@ impl Analyzer {
         // PHASE 4 OPTIMIZATION: Detect string operation opportunities
         let string_optimizations = self.detect_string_optimizations(func);
 
+        // PHASE 5: Detect assignment operations that can use compound operators
+        let assignment_optimizations = self.detect_assignment_optimizations(func);
+
         Ok(AnalyzedFunction {
             decl: func.clone(),
             inferred_ownership,
             clone_optimizations,
             struct_mapping_optimizations,
             string_optimizations,
+            assignment_optimizations,
         })
     }
 
@@ -446,8 +468,8 @@ impl Analyzer {
     fn detect_unnecessary_clones(&self, func: &FunctionDecl) -> Vec<CloneOptimization> {
         let mut optimizations = Vec::new();
 
-        // Track variable usage: (variable_name, (read_count, write_count, escapes))
-        let mut usage = HashMap::new();
+        // Track variable usage: (variable_name, (read_count, write_count, escapes, in_loop))
+        let mut usage: HashMap<String, (usize, usize, bool, bool)> = HashMap::new();
 
         // First pass: analyze usage patterns
         for (idx, stmt) in func.body.iter().enumerate() {
@@ -455,9 +477,15 @@ impl Analyzer {
         }
 
         // Second pass: identify unnecessary clones
-        for (var_name, (reads, writes, escapes)) in usage {
+        for (var_name, (reads, writes, escapes, in_loop)) in usage {
+            // NEVER optimize away clones for variables used in loops
+            // Each loop iteration needs its own copy
+            if in_loop {
+                continue;
+            }
+
             // Clone is unnecessary if:
-            // 1. Variable is only read (never written) -> can use borrow
+            // 1. Variable is only read (never written) AND not in loop -> can use borrow
             if writes == 0 && !escapes {
                 optimizations.push(CloneOptimization {
                     variable: var_name.clone(),
@@ -465,20 +493,12 @@ impl Analyzer {
                     reason: CloneEliminationReason::OnlyRead,
                 });
             }
-            // 2. Variable is used once and doesn't escape -> can move
+            // 2. Variable is used once and doesn't escape AND not in loop -> can move
             else if reads == 1 && writes == 0 && !escapes {
                 optimizations.push(CloneOptimization {
                     variable: var_name.clone(),
                     location: 0,
                     reason: CloneEliminationReason::SingleUse,
-                });
-            }
-            // 3. Variable doesn't escape function -> use local borrow
-            else if !escapes {
-                optimizations.push(CloneOptimization {
-                    variable: var_name,
-                    location: 0,
-                    reason: CloneEliminationReason::LocalOnly,
                 });
             }
         }
@@ -641,6 +661,80 @@ impl Analyzer {
         }
     }
 
+    /// PHASE 5 OPTIMIZATION: Detect assignment operations (x = x + 1 → x += 1)
+    fn detect_assignment_optimizations(&self, func: &FunctionDecl) -> Vec<AssignmentOptimization> {
+        let mut optimizations = Vec::new();
+
+        for (idx, stmt) in func.body.iter().enumerate() {
+            self.analyze_statement_for_assignments(stmt, &mut optimizations, idx);
+        }
+
+        optimizations
+    }
+
+    #[allow(clippy::only_used_in_recursion)]
+    fn analyze_statement_for_assignments(
+        &self,
+        stmt: &Statement,
+        optimizations: &mut Vec<AssignmentOptimization>,
+        idx: usize,
+    ) {
+        match stmt {
+            Statement::Assignment {
+                target: Expression::Identifier(var_name),
+                value: Expression::Binary { left, right: _, op },
+                ..
+            } => {
+                // Check if it's pattern: x = x op y
+                if let Expression::Identifier(left_var) = &**left {
+                    if left_var == var_name {
+                        // Pattern matched: x = x op y
+                        let compound_op = match op {
+                            BinaryOp::Add => Some(CompoundOp::AddAssign),
+                            BinaryOp::Sub => Some(CompoundOp::SubAssign),
+                            BinaryOp::Mul => Some(CompoundOp::MulAssign),
+                            BinaryOp::Div => Some(CompoundOp::DivAssign),
+                            _ => None,
+                        };
+
+                        if let Some(operation) = compound_op {
+                            optimizations.push(AssignmentOptimization {
+                                variable: var_name.clone(),
+                                location: idx,
+                                operation,
+                            });
+                        }
+                    }
+                }
+            }
+            Statement::If {
+                then_block,
+                else_block,
+                ..
+            } => {
+                for stmt in then_block {
+                    self.analyze_statement_for_assignments(stmt, optimizations, idx);
+                }
+                if let Some(else_b) = else_block {
+                    for stmt in else_b {
+                        self.analyze_statement_for_assignments(stmt, optimizations, idx);
+                    }
+                }
+            }
+            Statement::While { body, .. } | Statement::Loop { body } => {
+                for stmt in body {
+                    self.analyze_statement_for_assignments(stmt, optimizations, idx);
+                }
+            }
+            Statement::For { body, .. } => {
+                for stmt in body {
+                    self.analyze_statement_for_assignments(stmt, optimizations, idx);
+                }
+            }
+            _ => {}
+        }
+    }
+
     /// PHASE 4 OPTIMIZATION: Detect string operation opportunities
     /// Identifies patterns where string operations can be optimized
     fn detect_string_optimizations(&self, func: &FunctionDecl) -> Vec<StringOptimization> {
@@ -742,7 +836,7 @@ impl Analyzer {
     fn analyze_statement_for_clones(
         &self,
         stmt: &Statement,
-        usage: &mut HashMap<String, (usize, usize, bool)>,
+        usage: &mut HashMap<String, (usize, usize, bool, bool)>,
         _idx: usize,
     ) {
         match stmt {
@@ -752,7 +846,7 @@ impl Analyzer {
             Statement::Assignment { target, value, .. } => {
                 // Track writes
                 if let Expression::Identifier(name) = target {
-                    let entry = usage.entry(name.clone()).or_insert((0, 0, false));
+                    let entry = usage.entry(name.clone()).or_insert((0, 0, false, false));
                     entry.1 += 1; // increment write count
                 }
                 self.analyze_expression_for_clones(value, usage);
@@ -760,7 +854,7 @@ impl Analyzer {
             Statement::Return(Some(expr)) => {
                 // Returned values escape the function
                 if let Expression::Identifier(name) = expr {
-                    let entry = usage.entry(name.clone()).or_insert((0, 0, false));
+                    let entry = usage.entry(name.clone()).or_insert((0, 0, false, false));
                     entry.2 = true; // mark as escapes
                 }
                 self.analyze_expression_for_clones(expr, usage);
@@ -788,20 +882,141 @@ impl Analyzer {
                 condition, body, ..
             } => {
                 self.analyze_expression_for_clones(condition, usage);
+                // Mark all variables used in loop body as in_loop
                 for stmt in body {
-                    self.analyze_statement_for_clones(stmt, usage, _idx);
+                    self.analyze_statement_for_clones_in_loop(stmt, usage, _idx);
                 }
             }
             Statement::For { iterable, body, .. } => {
                 self.analyze_expression_for_clones(iterable, usage);
+                // Mark all variables used in loop body as in_loop
                 for stmt in body {
-                    self.analyze_statement_for_clones(stmt, usage, _idx);
+                    self.analyze_statement_for_clones_in_loop(stmt, usage, _idx);
+                }
+            }
+            Statement::Loop { body } => {
+                // Mark all variables used in loop body as in_loop
+                for stmt in body {
+                    self.analyze_statement_for_clones_in_loop(stmt, usage, _idx);
+                }
+            }
+            _ => {}
+        }
+    }
+
+    /// Helper to analyze a statement in loop context (marks variables as in_loop)
+    fn analyze_statement_for_clones_in_loop(
+        &self,
+        stmt: &Statement,
+        usage: &mut HashMap<String, (usize, usize, bool, bool)>,
+        _idx: usize,
+    ) {
+        match stmt {
+            Statement::Let { value, .. } => {
+                self.analyze_expression_for_clones_in_loop(value, usage);
+            }
+            Statement::Assignment { target, value, .. } => {
+                if let Expression::Identifier(name) = target {
+                    let entry = usage.entry(name.clone()).or_insert((0, 0, false, false));
+                    entry.1 += 1; // increment write count
+                    entry.3 = true; // mark as in_loop
+                }
+                self.analyze_expression_for_clones_in_loop(value, usage);
+            }
+            Statement::Return(Some(expr)) => {
+                if let Expression::Identifier(name) = expr {
+                    let entry = usage.entry(name.clone()).or_insert((0, 0, false, false));
+                    entry.2 = true; // mark as escapes
+                    entry.3 = true; // mark as in_loop
+                }
+                self.analyze_expression_for_clones_in_loop(expr, usage);
+            }
+            Statement::Expression(expr) => {
+                self.analyze_expression_for_clones_in_loop(expr, usage);
+            }
+            Statement::If {
+                condition,
+                then_block,
+                else_block,
+                ..
+            } => {
+                self.analyze_expression_for_clones_in_loop(condition, usage);
+                for stmt in then_block {
+                    self.analyze_statement_for_clones_in_loop(stmt, usage, _idx);
+                }
+                if let Some(else_b) = else_block {
+                    for stmt in else_b {
+                        self.analyze_statement_for_clones_in_loop(stmt, usage, _idx);
+                    }
+                }
+            }
+            Statement::While {
+                condition, body, ..
+            } => {
+                self.analyze_expression_for_clones_in_loop(condition, usage);
+                for stmt in body {
+                    self.analyze_statement_for_clones_in_loop(stmt, usage, _idx);
+                }
+            }
+            Statement::For { iterable, body, .. } => {
+                self.analyze_expression_for_clones_in_loop(iterable, usage);
+                for stmt in body {
+                    self.analyze_statement_for_clones_in_loop(stmt, usage, _idx);
                 }
             }
             Statement::Loop { body } => {
                 for stmt in body {
-                    self.analyze_statement_for_clones(stmt, usage, _idx);
+                    self.analyze_statement_for_clones_in_loop(stmt, usage, _idx);
                 }
+            }
+            _ => {}
+        }
+    }
+
+    /// Helper to analyze an expression for variable usage in loop context
+    #[allow(clippy::only_used_in_recursion)]
+    fn analyze_expression_for_clones_in_loop(
+        &self,
+        expr: &Expression,
+        usage: &mut HashMap<String, (usize, usize, bool, bool)>,
+    ) {
+        match expr {
+            Expression::Identifier(name) => {
+                let entry = usage.entry(name.clone()).or_insert((0, 0, false, false));
+                entry.0 += 1; // increment read count
+                entry.3 = true; // mark as in_loop
+            }
+            Expression::Binary { left, right, .. } => {
+                self.analyze_expression_for_clones_in_loop(left, usage);
+                self.analyze_expression_for_clones_in_loop(right, usage);
+            }
+            Expression::Unary { operand, .. } => {
+                self.analyze_expression_for_clones_in_loop(operand, usage);
+            }
+            Expression::Call { arguments, .. } | Expression::MethodCall { arguments, .. } => {
+                for (_, arg) in arguments {
+                    self.analyze_expression_for_clones_in_loop(arg, usage);
+                }
+            }
+            Expression::FieldAccess { object, .. } => {
+                self.analyze_expression_for_clones_in_loop(object, usage);
+            }
+            Expression::StructLiteral { fields, .. } => {
+                for (_, value) in fields {
+                    self.analyze_expression_for_clones_in_loop(value, usage);
+                }
+            }
+            Expression::Ternary {
+                condition,
+                true_expr,
+                false_expr,
+            } => {
+                self.analyze_expression_for_clones_in_loop(condition, usage);
+                self.analyze_expression_for_clones_in_loop(true_expr, usage);
+                self.analyze_expression_for_clones_in_loop(false_expr, usage);
+            }
+            Expression::Cast { expr, .. } => {
+                self.analyze_expression_for_clones_in_loop(expr, usage);
             }
             _ => {}
         }
@@ -812,12 +1027,12 @@ impl Analyzer {
     fn analyze_expression_for_clones(
         &self,
         expr: &Expression,
-        usage: &mut HashMap<String, (usize, usize, bool)>,
+        usage: &mut HashMap<String, (usize, usize, bool, bool)>,
     ) {
         match expr {
             Expression::Identifier(name) => {
                 // Track reads
-                let entry = usage.entry(name.clone()).or_insert((0, 0, false));
+                let entry = usage.entry(name.clone()).or_insert((0, 0, false, false));
                 entry.0 += 1; // increment read count
             }
             Expression::MethodCall {
