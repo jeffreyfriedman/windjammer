@@ -7,6 +7,7 @@ mod diagnostics;
 mod hover;
 mod inlay_hints;
 mod server;
+mod symbol_table;
 
 use server::WindjammerLanguageServer;
 
