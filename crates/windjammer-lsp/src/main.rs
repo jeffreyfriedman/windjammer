@@ -1,32 +1,37 @@
-mod database;
-mod handlers;
-mod diagnostics;
-mod completion;
-mod hover;
-
 use tower_lsp::{LspService, Server};
-use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
+use tracing_subscriber::{fmt, prelude::*, EnvFilter};
+
+mod analysis;
+mod completion;
+mod debug_adapter;
+mod diagnostics;
+mod hover;
+mod inlay_hints;
+mod refactoring;
+mod server;
+mod symbol_table;
+
+use server::WindjammerLanguageServer;
 
 #[tokio::main]
 async fn main() {
-    // Initialize tracing for logging
+    // Initialize logging
     tracing_subscriber::registry()
-        .with(
-            tracing_subscriber::EnvFilter::try_from_default_env()
-                .unwrap_or_else(|_| "windjammer_lsp=info".into()),
-        )
-        .with(tracing_subscriber::fmt::layer().with_writer(std::io::stderr))
+        .with(fmt::layer())
+        .with(EnvFilter::from_default_env())
         .init();
 
     tracing::info!("Starting Windjammer Language Server");
 
+    // Set up stdin/stdout for LSP communication
     let stdin = tokio::io::stdin();
     let stdout = tokio::io::stdout();
 
-    let (service, socket) = LspService::new(|client| {
-        handlers::Backend::new(client)
-    });
+    // Create the LSP service
+    let (service, socket) = LspService::new(|client| WindjammerLanguageServer::new(client));
 
+    // Run the server
     Server::new(stdin, stdout, socket).serve(service).await;
-}
 
+    tracing::info!("Windjammer Language Server shutting down");
+}

@@ -1,20 +1,30 @@
 {
   "name": "windjammer",
   "displayName": "Windjammer",
-  "description": "Language support for Windjammer - Go-like syntax that transpiles to Rust",
-  "version": "0.1.0",
-  "publisher": "windjammer-lang",
+  "description": "Language support for Windjammer - 80% of Rust's power with 20% of the complexity",
+  "version": "0.19.0",
+  "publisher": "windjammer",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/jeffreyfriedman/windjammer"
+  },
   "engines": {
     "vscode": "^1.75.0"
   },
   "categories": [
-    "Programming Languages"
+    "Programming Languages",
+    "Linters",
+    "Snippets"
   ],
   "keywords": [
     "windjammer",
     "rust",
-    "go",
-    "systems programming"
+    "systems programming",
+    "ownership",
+    "transpiler"
+  ],
+  "activationEvents": [
+    "onLanguage:windjammer"
   ],
   "main": "./out/extension.js",
   "contributes": {
@@ -23,7 +33,7 @@
         "id": "windjammer",
         "aliases": [
           "Windjammer",
-          "wj"
+          "windjammer"
         ],
         "extensions": [
           ".wj"
@@ -42,16 +52,22 @@
         "path": "./syntaxes/windjammer.tmLanguage.json"
       }
     ],
+    "snippets": [
+      {
+        "language": "windjammer",
+        "path": "./snippets/windjammer.json"
+      }
+    ],
     "configuration": {
       "type": "object",
       "title": "Windjammer",
       "properties": {
-        "windjammer.server.path": {
+        "windjammer.lsp.serverPath": {
           "type": "string",
           "default": "windjammer-lsp",
-          "description": "Path to the Windjammer language server executable"
+          "description": "Path to the Windjammer LSP server binary"
         },
-        "windjammer.trace.server": {
+        "windjammer.lsp.trace.server": {
           "type": "string",
           "enum": [
             "off",
@@ -59,47 +75,34 @@
             "verbose"
           ],
           "default": "off",
-          "description": "Traces the communication between VS Code and the language server"
+          "description": "Traces the communication between VS Code and the Windjammer language server"
         },
         "windjammer.inlayHints.enable": {
           "type": "boolean",
           "default": true,
-          "description": "Enable inlay hints showing inferred types and ownership"
+          "description": "Enable inlay hints for ownership inference (shows inferred &, &mut, owned)"
+        },
+        "windjammer.completion.enable": {
+          "type": "boolean",
+          "default": true,
+          "description": "Enable auto-completion"
         }
       }
-    },
-    "commands": [
-      {
-        "command": "windjammer.restartServer",
-        "title": "Restart Language Server",
-        "category": "Windjammer"
-      },
-      {
-        "command": "windjammer.showGeneratedRust",
-        "title": "Show Generated Rust Code",
-        "category": "Windjammer"
-      }
-    ]
-  },
-  "activationEvents": [
-    "onLanguage:windjammer"
-  ],
-  "dependencies": {
-    "vscode-languageclient": "^9.0.1"
-  },
-  "devDependencies": {
-    "@types/node": "^20.0.0",
-    "@types/vscode": "^1.75.0",
-    "@typescript-eslint/eslint-plugin": "^6.0.0",
-    "@typescript-eslint/parser": "^6.0.0",
-    "eslint": "^8.0.0",
-    "typescript": "^5.0.0"
+    }
   },
   "scripts": {
     "vscode:prepublish": "npm run compile",
     "compile": "tsc -p ./",
     "watch": "tsc -watch -p ./",
-    "lint": "eslint src --ext ts"
+    "package": "vsce package"
+  },
+  "devDependencies": {
+    "@types/node": "^18.x",
+    "@types/vscode": "^1.75.0",
+    "@vscode/vsce": "^2.19.0",
+    "typescript": "^5.0.0"
+  },
+  "dependencies": {
+    "vscode-languageclient": "^8.1.0"
   }
 }
-
