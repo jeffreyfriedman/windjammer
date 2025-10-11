@@ -3,6 +3,7 @@ use tracing_subscriber::{fmt, prelude::*, EnvFilter};
 
 mod analysis;
 mod completion;
+mod debug_adapter;
 mod diagnostics;
 mod hover;
 mod inlay_hints;
