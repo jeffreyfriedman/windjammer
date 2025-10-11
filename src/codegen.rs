@@ -18,6 +18,14 @@ pub struct CodeGenerator {
     inferred_bounds: std::collections::HashMap<String, crate::inference::InferredBounds>,
     needs_trait_imports: std::collections::HashSet<String>, // Tracks which traits need imports
     bound_aliases: std::collections::HashMap<String, Vec<String>>, // bound Name = Trait + Trait
+    // PHASE 2 OPTIMIZATION: Track variables that can avoid cloning
+    clone_optimizations: std::collections::HashSet<String>, // Variables that don't need .clone()
+    // PHASE 3 OPTIMIZATION: Track struct mapping optimizations
+    struct_mapping_hints: std::collections::HashMap<String, crate::analyzer::MappingStrategy>, // Struct name -> strategy
+    // PHASE 4 OPTIMIZATION: Track string operation optimizations
+    string_capacity_hints: std::collections::HashMap<usize, usize>, // Statement idx -> capacity
+    // PHASE 5 OPTIMIZATION: Track assignment operations that can use compound operators
+    assignment_optimizations: std::collections::HashMap<String, crate::analyzer::CompoundOp>, // Variable -> compound op
 }
 
 impl CodeGenerator {
@@ -36,6 +44,10 @@ impl CodeGenerator {
             inferred_bounds: std::collections::HashMap::new(),
             needs_trait_imports: std::collections::HashSet::new(),
             bound_aliases: std::collections::HashMap::new(),
+            clone_optimizations: std::collections::HashSet::new(),
+            struct_mapping_hints: std::collections::HashMap::new(),
+            string_capacity_hints: std::collections::HashMap::new(),
+            assignment_optimizations: std::collections::HashMap::new(),
         }
     }
 
@@ -409,8 +421,10 @@ impl CodeGenerator {
                 output.push_str(&args.join(", "));
                 output.push_str(")]\n");
             }
+            let pub_keyword = if field.is_pub { "pub " } else { "" };
             output.push_str(&format!(
-                "    {}: {},\n",
+                "    {}{}: {},\n",
+                pub_keyword,
                 field.name,
                 self.type_to_rust(&field.field_type)
             ));
@@ -657,12 +671,50 @@ impl CodeGenerator {
         let func = &analyzed.decl;
         let mut output = String::new();
 
+        // PHASE 2 OPTIMIZATION: Load clone optimizations for this function
+        // Variables in this set can safely avoid .clone() calls
+        self.clone_optimizations.clear();
+        for opt in &analyzed.clone_optimizations {
+            self.clone_optimizations.insert(opt.variable.clone());
+        }
+
+        // PHASE 3 OPTIMIZATION: Load struct mapping optimizations
+        // Track which structs can use optimized construction strategies
+        self.struct_mapping_hints.clear();
+        for opt in &analyzed.struct_mapping_optimizations {
+            self.struct_mapping_hints
+                .insert(opt.target_struct.clone(), opt.strategy.clone());
+        }
+
+        // PHASE 4 OPTIMIZATION: Load string operation optimizations
+        // Track capacity hints for string operations
+        self.string_capacity_hints.clear();
+
+        // PHASE 5 OPTIMIZATION: Load assignment operation optimizations
+        // Track which variables can use compound assignment operators
+        self.assignment_optimizations.clear();
+        for opt in &analyzed.assignment_optimizations {
+            self.assignment_optimizations
+                .insert(opt.variable.clone(), opt.operation.clone());
+        }
+        for opt in &analyzed.string_optimizations {
+            if let Some(capacity) = opt.estimated_capacity {
+                self.string_capacity_hints.insert(opt.location, capacity);
+            }
+        }
+
         // Check for @async decorator (special case: it's a keyword, not an attribute)
         let is_async = func.decorators.iter().any(|d| d.name == "async");
 
         // Special case: async main requires #[tokio::main]
         if is_async && func.name == "main" {
             output.push_str("#[tokio::main]\n");
+        }
+
+        // OPTIMIZATION: Add inline hints for hot path functions
+        // This is Phase 1 optimization: Generate Inlinable Code
+        if self.should_inline_function(func, analyzed) {
+            output.push_str("#[inline]\n");
         }
 
         // Generate decorators (map Windjammer decorators to Rust attributes)
@@ -1075,6 +1127,34 @@ impl CodeGenerator {
             }
             Statement::Assignment { target, value } => {
                 let mut output = self.indent();
+
+                // PHASE 5 OPTIMIZATION: Check if this can use a compound operator
+                if let Expression::Identifier(var_name) = target {
+                    if let Expression::Binary { left, right, op } = value {
+                        if let Expression::Identifier(left_var) = &**left {
+                            if left_var == var_name {
+                                // Check if we have this optimization hint
+                                if self.assignment_optimizations.contains_key(var_name) {
+                                    // Generate compound assignment
+                                    output.push_str(&self.generate_expression(target));
+                                    output.push_str(match op {
+                                        crate::parser::BinaryOp::Add => " += ",
+                                        crate::parser::BinaryOp::Sub => " -= ",
+                                        crate::parser::BinaryOp::Mul => " *= ",
+                                        crate::parser::BinaryOp::Div => " /= ",
+                                        _ => " = ",
+                                    });
+                                    output.push_str(&self.generate_expression(right));
+                                    output.push_str(";\n");
+                                    return output;
+                                }
+                            }
+                        }
+                    }
+                }
+                // If no optimization applied, fall through to regular assignment
+
+                // Fall back to regular assignment
                 output.push_str(&self.generate_expression(target));
                 output.push_str(" = ");
                 output.push_str(&self.generate_expression(value));
@@ -1317,6 +1397,17 @@ impl CodeGenerator {
                     _ => ".",                               // Instance method on expressions
                 };
 
+                // PHASE 2 OPTIMIZATION: Eliminate unnecessary .clone() calls
+                // If this is a .clone() on a variable that doesn't need cloning, skip it
+                if method == "clone" && arguments.is_empty() {
+                    if let Expression::Identifier(ref var_name) = **object {
+                        if self.clone_optimizations.contains(var_name) {
+                            // Skip the .clone(), just return the variable (or borrow if needed)
+                            return obj_str;
+                        }
+                    }
+                }
+
                 format!(
                     "{}{}{}{}({})",
                     obj_str,
@@ -1350,12 +1441,29 @@ impl CodeGenerator {
                 format!("{}{}{}", obj_str, separator, field)
             }
             Expression::StructLiteral { name, fields } => {
+                // PHASE 3 OPTIMIZATION: Check if we have optimization hints for this struct
+                let _has_optimization_hint = self.struct_mapping_hints.get(name);
+
+                // Generate field assignments
                 let field_str: Vec<String> = fields
                     .iter()
                     .map(|(field_name, expr)| {
-                        format!("{}: {}", field_name, self.generate_expression(expr))
+                        // For simple direct field access (e.g., source.field -> target.field),
+                        // we can generate cleaner code
+                        let expr_str = self.generate_expression(expr);
+
+                        // Check for field shorthand: if expr is just the field name, use shorthand
+                        if let Expression::Identifier(id) = expr {
+                            if id == field_name {
+                                // Shorthand: User { name } instead of User { name: name }
+                                return field_name.clone();
+                            }
+                        }
+
+                        format!("{}: {}", field_name, expr_str)
                     })
                     .collect();
+
                 format!("{} {{ {} }}", name, field_str.join(", "))
             }
             Expression::TryOp(inner) => {
@@ -1702,6 +1810,84 @@ impl CodeGenerator {
             Type::Tuple(types) => types.iter().all(|t| self.has_default(t)),
             _ => false, // Refs don't have Default, Result/Custom types unknown
         }
+    }
+
+    /// OPTIMIZATION: Determine if a function should be marked #[inline]
+    /// Phase 1: Generate Inlinable Code
+    ///
+    /// Heuristics for inlining:
+    /// 1. Module functions (stdlib wrappers) - always inline for zero-cost abstraction
+    /// 2. Small functions (< 10 statements) - likely to benefit from inlining
+    /// 3. Trivial getters/setters - always inline
+    /// 4. Functions with only one return statement - simple enough to inline
+    /// 5. Don't inline: main(), test functions, async functions, large functions
+    fn should_inline_function(&self, func: &FunctionDecl, _analyzed: &AnalyzedFunction) -> bool {
+        // Never inline main
+        if func.name == "main" {
+            return false;
+        }
+
+        // Never inline test functions
+        if func.decorators.iter().any(|d| d.name == "test") {
+            return false;
+        }
+
+        // Don't inline async functions (they're already state machines)
+        if func.decorators.iter().any(|d| d.name == "async") {
+            return false;
+        }
+
+        // ALWAYS inline module functions (stdlib wrappers)
+        // These are thin wrappers around Rust stdlib and should have zero overhead
+        if self.is_module {
+            return true;
+        }
+
+        // Count statements in function body
+        let statement_count = self.count_statements(&func.body);
+
+        // Inline small functions (< 10 statements)
+        if statement_count < 10 {
+            return true;
+        }
+
+        // Inline trivial single-expression functions
+        if statement_count == 1 {
+            if let Statement::Return(Some(_)) = &func.body[0] {
+                return true;
+            }
+            if let Statement::Expression(_) = &func.body[0] {
+                return true;
+            }
+        }
+
+        // Default: don't inline large functions
+        false
+    }
+
+    /// Count statements in a function body (for inline heuristics)
+    fn count_statements(&self, body: &[Statement]) -> usize {
+        let mut count = 0;
+        for stmt in body {
+            count += match stmt {
+                Statement::Let { .. } => 1,
+                Statement::Const { .. } => 1,
+                Statement::Static { .. } => 1,
+                Statement::Return(_) => 1,
+                Statement::Expression(_) => 1,
+                Statement::If { .. } => 3, // Weighted more heavily
+                Statement::While { .. } => 3,
+                Statement::Loop { .. } => 3,
+                Statement::For { .. } => 3,
+                Statement::Match { .. } => 5, // Match statements are complex
+                Statement::Assignment { .. } => 1,
+                Statement::Go { .. } => 2, // Goroutine spawn
+                Statement::Defer(_) => 1,
+                Statement::Break => 1,
+                Statement::Continue => 1,
+            };
+        }
+        count
     }
 
     // Format type parameters with trait bounds for Rust output

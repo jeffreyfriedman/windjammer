@@ -35,12 +35,13 @@ fn compile_and_check(source: &str, expected_patterns: &[&str]) -> String {
     let output = Command::new("cargo")
         .args([
             "run",
+            "--bin",
+            "wj",
             "--",
             "build",
-            "--path",
-            temp_file.to_str().unwrap(),
             "--output",
             output_dir.to_str().unwrap(),
+            temp_file.to_str().unwrap(),
         ])
         .output()
         .expect("Failed to run compiler");
@@ -101,7 +102,7 @@ fn increment(x: int) {
     x = x + 1
 }
 "#;
-    compile_and_check(source, &["fn increment(x: &mut i64)", "x = x + 1"]);
+    compile_and_check(source, &["fn increment(x: &mut i64)", "x += 1"]); // Phase 5 optimization!
 }
 
 #[test]
@@ -196,7 +197,7 @@ impl Point {
             "impl Point",
             "fn new",
             "fn distance(&self)",
-            "Point { x: x, y: y }", // Shorthand is expanded to full notation
+            "Point { x, y }", // Phase 3: Uses idiomatic Rust struct shorthand
         ],
     );
 }
@@ -303,7 +304,7 @@ fn main() {
 "#;
     compile_and_check(
         source,
-        &["let mut total = 0", "for i in 0..5", "total = total + i"],
+        &["let mut total = 0", "for i in 0..5", "total += i"], // Phase 5 optimization!
     );
 }
 
@@ -316,7 +317,7 @@ fn countdown(n: int) {
     }
 }
 "#;
-    compile_and_check(source, &["while n > 0", "n = n - 1"]);
+    compile_and_check(source, &["while n > 0", "n -= 1"]);
 }
 
 #[test]
@@ -374,7 +375,7 @@ fn test() {
     x = x + 1
 }
 "#;
-    compile_and_check(source, &["let mut x = 0", "x = x + 1"]);
+    compile_and_check(source, &["let mut x = 0", "x += 1"]); // Phase 5 optimization!
 }
 
 #[test]

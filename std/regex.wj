@@ -27,13 +27,13 @@ struct Captures {
 //===============================================
 
 // Compile a regex pattern
-fn compile(pattern: string) -> Result<Regex, Error> {
+fn compile(pattern: string) -> Result<Regex, String> {
     // Wraps: regex::Regex::new(pattern)
     Err("Invalid regex pattern")
 }
 
 // Compile with case-insensitive matching
-fn compile_case_insensitive(pattern: string) -> Result<Regex, Error> {
+fn compile_case_insensitive(pattern: string) -> Result<Regex, String> {
     // Wraps: regex::RegexBuilder::new(pattern).case_insensitive(true).build()
     Err("Invalid regex pattern")
 }
@@ -163,31 +163,31 @@ impl Captures {
 //===============================================
 
 // Quick match check without compiling regex first
-fn is_match(pattern: string, text: string) -> Result<bool, Error> {
+fn is_match(pattern: string, text: string) -> Result<bool, String> {
     // Wraps: regex::Regex::new(pattern)?.is_match(text)
     Err("Invalid regex pattern")
 }
 
 // Quick find without compiling regex first
-fn find(pattern: string, text: string) -> Result<Option<string>, Error> {
+fn find(pattern: string, text: string) -> Result<Option<string>, String> {
     // Wraps: regex::Regex::new(pattern)?.find(text).map(|m| m.as_str())
     Err("Invalid regex pattern")
 }
 
 // Quick replace without compiling regex first
-fn replace(pattern: string, text: string, replacement: string) -> Result<string, Error> {
+fn replace(pattern: string, text: string, replacement: string) -> Result<string, String> {
     // Wraps: regex::Regex::new(pattern)?.replace(text, replacement)
     Err("Invalid regex pattern")
 }
 
 // Quick replace all without compiling regex first
-fn replace_all(pattern: string, text: string, replacement: string) -> Result<string, Error> {
+fn replace_all(pattern: string, text: string, replacement: string) -> Result<string, String> {
     // Wraps: regex::Regex::new(pattern)?.replace_all(text, replacement)
     Err("Invalid regex pattern")
 }
 
 // Quick split without compiling regex first
-fn split(pattern: string, text: string) -> Result<Vec<string>, Error> {
+fn split(pattern: string, text: string) -> Result<Vec<string>, String> {
     // Wraps: regex::Regex::new(pattern)?.split(text).collect()
     Err("Invalid regex pattern")
 }

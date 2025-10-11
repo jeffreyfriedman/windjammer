@@ -8,11 +8,11 @@ use std.json
 
 @derive(Debug, Serialize, Deserialize)
 struct Claims {
-    sub: int,      // user_id
-    username: string,
-    role: string,
-    exp: int,      // expiration timestamp
-    iat: int,      // issued at timestamp
+    pub sub: int,      // user_id
+    pub username: string,
+    pub role: string,
+    pub exp: int,      // expiration timestamp
+    pub iat: int,      // issued at timestamp
 }
 
 pub fn generate_token(user_id: int, username: string, role: string, secret: string) -> Result<string, Error> {
