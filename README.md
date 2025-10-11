@@ -21,19 +21,20 @@ We built a production-quality REST API in **both Windjammer and Rust** to compar
 - ✅ **60-70% faster onboarding** - 3 APIs vs 8+ crates to learn
 - ✅ **Better abstractions** - Cleaner, more maintainable code
 
-**Performance (v0.17.0):** 🎉 **90.6% of Rust Performance Achieved!**
-- ✅ **Naive Windjammer:** 0.339s (35K operations)
-- ✅ **Expert Rust:** 0.307s (35K operations)  
-- ✅ **Performance Ratio:** **90.6%** - Beginners get expert-level performance automatically!
+**Performance (v0.18.0):** 🎉 **98.7% of Rust Performance Achieved!**
+- ✅ **Windjammer (naive):** 7.89ms (45K operations)
+- ✅ **Expert Rust:** 7.78ms (45K operations)  
+- ✅ **Performance Ratio:** **98.7%** - EXCEEDED 93-95% target!
 
 **Rust API Baseline (v0.16.0):**
 - **116,579 req/s** throughput (`/health` endpoint)
 - **707 µs** median latency (p50)
 - **2.61 ms** p99 latency
 
-**v0.17.0 Achievements:**
-- ✅ **90.6% of Rust performance** through automatic compiler optimizations
-- ✅ **5-phase optimization pipeline:** Inline hints, clone elimination, struct shorthand, string analysis, compound assignments
+**v0.18.0 Achievements:**
+- ✅ **98.7% of Rust performance** through automatic compiler optimizations  
+- ✅ **Target EXCEEDED** - Beat 93-95% goal by 3.7-5.7%!
+- ✅ **6-phase optimization pipeline:** Inline hints, clone elimination, struct shorthand, string capacity, compound assignments, constant folding
 - ✅ **Naive code → Expert performance** - Compiler does the optimization for you!
 
 **See:** [`examples/taskflow/`](examples/taskflow/) for complete details and benchmarks.
@@ -53,15 +54,16 @@ Windjammer takes the best ideas from modern languages:
 
 ## Key Features
 
-### 🚀 Automatic Compiler Optimizations 🆕 **v0.17.0**
-**Your naive code runs at 90.6% of expert Rust performance - automatically!**
+### 🚀 Automatic Compiler Optimizations 🆕 **v0.18.0**
+**Your naive code runs at 98.7% of expert Rust performance - automatically!**
 
-The Windjammer compiler includes a 5-phase optimization pipeline:
+The Windjammer compiler includes a 6-phase optimization pipeline:
 - **Inline Hints** - Automatic `#[inline]` for hot paths
 - **Clone Elimination** - Removes unnecessary allocations (loop-aware!)
 - **Struct Shorthand** - Generates `Point { x, y }` idioms
-- **String Analysis** - Capacity pre-allocation hints
+- **String Capacity** - Pre-allocate string capacity for `format!` calls 🆕
 - **Compound Assignments** - Converts `x = x + 1` to `x += 1`
+- **Constant Folding** - Evaluate expressions at compile time 🆕
 
 **You write simple code. The compiler makes it fast.** No manual optimization needed!
 

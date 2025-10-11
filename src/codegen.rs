@@ -11,6 +11,7 @@ pub struct CodeGenerator {
     needs_web_imports: bool,
     needs_js_imports: bool,
     needs_serde_imports: bool, // For JSON support
+    needs_write_import: bool,  // For string capacity optimization (write! macro)
     target: CompilationTarget,
     is_module: bool, // true if generating code for a reusable module (not main file)
     #[allow(dead_code)] // TODO: Use for error mapping Phase 3
@@ -26,6 +27,8 @@ pub struct CodeGenerator {
     string_capacity_hints: std::collections::HashMap<usize, usize>, // Statement idx -> capacity
     // PHASE 5 OPTIMIZATION: Track assignment operations that can use compound operators
     assignment_optimizations: std::collections::HashMap<String, crate::analyzer::CompoundOp>, // Variable -> compound op
+    // Track current statement index for optimization hints
+    current_statement_idx: usize,
 }
 
 impl CodeGenerator {
@@ -38,6 +41,7 @@ impl CodeGenerator {
             needs_web_imports: false,
             needs_js_imports: false,
             needs_serde_imports: false,
+            needs_write_import: false,
             target,
             is_module: false,
             source_map: crate::source_map::SourceMap::new(),
@@ -48,6 +52,7 @@ impl CodeGenerator {
             struct_mapping_hints: std::collections::HashMap::new(),
             string_capacity_hints: std::collections::HashMap::new(),
             assignment_optimizations: std::collections::HashMap::new(),
+            current_statement_idx: 0,
         }
     }
 
@@ -101,6 +106,9 @@ impl CodeGenerator {
         let mut output = String::new();
         let len = stmts.len();
         for (i, stmt) in stmts.iter().enumerate() {
+            // Track current statement index for optimization hints
+            self.current_statement_idx = i;
+
             let is_last = i == len - 1;
             if is_last && matches!(stmt, Statement::Expression(_)) {
                 // Last statement is an expression - generate without semicolon (it's the return value)
@@ -274,6 +282,9 @@ impl CodeGenerator {
         }
         if self.needs_serde_imports {
             implicit_imports.push_str("use serde::{Serialize, Deserialize};\n");
+        }
+        if self.needs_write_import {
+            implicit_imports.push_str("use std::fmt::Write;\n");
         }
 
         // Combine: implicit imports + explicit imports + body
@@ -1226,8 +1237,115 @@ impl CodeGenerator {
         }
     }
 
-    fn generate_expression(&mut self, expr: &Expression) -> String {
+    // PHASE 7: Constant folding - evaluate constant expressions at compile time
+    #[allow(clippy::only_used_in_recursion)]
+    fn try_fold_constant(&self, expr: &Expression) -> Option<Expression> {
         match expr {
+            Expression::Binary { left, op, right } => {
+                // Try to fold both sides first
+                let left_folded = self
+                    .try_fold_constant(left)
+                    .unwrap_or_else(|| (**left).clone());
+                let right_folded = self
+                    .try_fold_constant(right)
+                    .unwrap_or_else(|| (**right).clone());
+
+                // If both sides are literals, try to evaluate
+                if let (Expression::Literal(l), Expression::Literal(r)) =
+                    (&left_folded, &right_folded)
+                {
+                    use BinaryOp::*;
+                    use Literal::*;
+
+                    let result = match (l, op, r) {
+                        // Integer arithmetic
+                        (Int(a), Add, Int(b)) => Some(Literal::Int(a + b)),
+                        (Int(a), Sub, Int(b)) => Some(Literal::Int(a - b)),
+                        (Int(a), Mul, Int(b)) => Some(Literal::Int(a * b)),
+                        (Int(a), Div, Int(b)) if *b != 0 => Some(Literal::Int(a / b)),
+                        (Int(a), Mod, Int(b)) if *b != 0 => Some(Literal::Int(a % b)),
+
+                        // Float arithmetic
+                        (Float(a), Add, Float(b)) => Some(Literal::Float(a + b)),
+                        (Float(a), Sub, Float(b)) => Some(Literal::Float(a - b)),
+                        (Float(a), Mul, Float(b)) => Some(Literal::Float(a * b)),
+                        (Float(a), Div, Float(b)) if *b != 0.0 => Some(Literal::Float(a / b)),
+
+                        // Integer comparisons
+                        (Int(a), Eq, Int(b)) => Some(Literal::Bool(a == b)),
+                        (Int(a), Ne, Int(b)) => Some(Literal::Bool(a != b)),
+                        (Int(a), Lt, Int(b)) => Some(Literal::Bool(a < b)),
+                        (Int(a), Le, Int(b)) => Some(Literal::Bool(a <= b)),
+                        (Int(a), Gt, Int(b)) => Some(Literal::Bool(a > b)),
+                        (Int(a), Ge, Int(b)) => Some(Literal::Bool(a >= b)),
+
+                        // Boolean operations
+                        (Bool(a), And, Bool(b)) => Some(Literal::Bool(*a && *b)),
+                        (Bool(a), Or, Bool(b)) => Some(Literal::Bool(*a || *b)),
+
+                        _ => None,
+                    };
+
+                    return result.map(Expression::Literal);
+                }
+                None
+            }
+            Expression::Unary { op, operand } => {
+                let operand_folded = self
+                    .try_fold_constant(operand)
+                    .unwrap_or_else(|| (**operand).clone());
+
+                if let Expression::Literal(lit) = &operand_folded {
+                    use Literal::*;
+                    use UnaryOp::*;
+
+                    let result = match (op, lit) {
+                        (Neg, Int(n)) => Some(Literal::Int(-n)),
+                        (Neg, Float(f)) => Some(Literal::Float(-f)),
+                        (Not, Bool(b)) => Some(Literal::Bool(!b)),
+                        _ => None,
+                    };
+
+                    return result.map(Expression::Literal);
+                }
+                None
+            }
+            Expression::Ternary {
+                condition,
+                true_expr,
+                false_expr,
+            } => {
+                let cond_folded = self
+                    .try_fold_constant(condition)
+                    .unwrap_or_else(|| (**condition).clone());
+
+                if let Expression::Literal(Literal::Bool(b)) = &cond_folded {
+                    // If condition is constant, return the appropriate branch
+                    if *b {
+                        return self
+                            .try_fold_constant(true_expr)
+                            .or_else(|| Some((**true_expr).clone()));
+                    } else {
+                        return self
+                            .try_fold_constant(false_expr)
+                            .or_else(|| Some((**false_expr).clone()));
+                    }
+                }
+                None
+            }
+            // Already a literal - can't fold further
+            Expression::Literal(_) => None,
+            // Can't fold non-constant expressions
+            _ => None,
+        }
+    }
+
+    fn generate_expression(&mut self, expr: &Expression) -> String {
+        // PHASE 7: Try constant folding first
+        let folded_expr = self.try_fold_constant(expr);
+        let expr_to_generate = folded_expr.as_ref().unwrap_or(expr);
+
+        match expr_to_generate {
             Expression::Literal(lit) => self.generate_literal(lit),
             Expression::Identifier(name) => {
                 // Convert qualified paths: std.fs.read -> std::fs::read
@@ -1515,6 +1633,30 @@ impl CodeGenerator {
                 delimiter,
             } => {
                 use crate::parser::MacroDelimiter;
+
+                // PHASE 4 OPTIMIZATION: Check for format! with capacity hints
+                if name == "format" {
+                    if let Some(&capacity) =
+                        self.string_capacity_hints.get(&self.current_statement_idx)
+                    {
+                        // Clone capacity to avoid borrow issues
+                        let capacity_val = capacity;
+                        // Generate optimized String::with_capacity + write! instead of format!
+                        self.needs_write_import = true;
+                        let arg_strs: Vec<String> =
+                            args.iter().map(|e| self.generate_expression(e)).collect();
+
+                        return format!(
+                            "{{\n{}    let mut __s = String::with_capacity({});\n{}    write!(&mut __s, {}).unwrap();\n{}    __s\n{}}}",
+                            self.indent(),
+                            capacity_val,
+                            self.indent(),
+                            arg_strs.join(", "),
+                            self.indent(),
+                            self.indent()
+                        );
+                    }
+                }
 
                 // Special case: if this is println!/eprintln!/print!/eprint! and first arg is format!, flatten it
                 let should_flatten = (name == "println"
