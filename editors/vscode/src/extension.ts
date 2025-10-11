@@ -1,5 +1,5 @@
 import * as path from 'path';
-import { workspace, ExtensionContext, window, commands } from 'vscode';
+import { workspace, ExtensionContext, window } from 'vscode';
 import {
     LanguageClient,
     LanguageClientOptions,
@@ -10,73 +10,47 @@ import {
 let client: LanguageClient;
 
 export function activate(context: ExtensionContext) {
-    console.log('Windjammer extension is now active');
-
-    // Get the server path from configuration
+    // Get configuration
     const config = workspace.getConfiguration('windjammer');
-    const serverPath = config.get<string>('server.path') || 'windjammer-lsp';
+    const serverPath = config.get<string>('lsp.serverPath', 'windjammer-lsp');
+    const traceLevel = config.get<string>('lsp.trace.server', 'off');
 
     // Server options
     const serverOptions: ServerOptions = {
         command: serverPath,
-        args: [],
-        transport: TransportKind.stdio
+        transport: TransportKind.stdio,
     };
 
     // Client options
     const clientOptions: LanguageClientOptions = {
         documentSelector: [{ scheme: 'file', language: 'windjammer' }],
         synchronize: {
-            fileEvents: workspace.createFileSystemWatcher('**/*.wj')
+            fileEvents: workspace.createFileSystemWatcher('**/.wj')
+        },
+        initializationOptions: {
+            inlayHints: config.get<boolean>('inlayHints.enable', true),
+            completion: config.get<boolean>('completion.enable', true)
         }
     };
 
     // Create the language client
     client = new LanguageClient(
-        'windjammer',
+        'windjammerLanguageServer',
         'Windjammer Language Server',
         serverOptions,
         clientOptions
     );
 
-    // Start the client
-    client.start();
-
-    // Register commands
-    context.subscriptions.push(
-        commands.registerCommand('windjammer.restartServer', async () => {
-            await client.stop();
-            await client.start();
-            window.showInformationMessage('Windjammer Language Server restarted');
-        })
-    );
-
-    context.subscriptions.push(
-        commands.registerCommand('windjammer.showGeneratedRust', async () => {
-            const editor = window.activeTextEditor;
-            if (!editor || editor.document.languageId !== 'windjammer') {
-                window.showErrorMessage('No Windjammer file is currently open');
-                return;
-            }
-
-            // TODO: Implement showing generated Rust code
-            window.showInformationMessage(
-                'Generated Rust code view coming soon!'
-            );
-        })
-    );
-
-    // Status bar item
-    const statusBar = window.createStatusBarItem();
-    statusBar.text = '$(rocket) Windjammer';
-    statusBar.tooltip = 'Windjammer Language Server';
-    statusBar.show();
-    context.subscriptions.push(statusBar);
-
-    // Update status when client is ready
-    client.onReady().then(() => {
-        statusBar.text = '$(check) Windjammer';
-        statusBar.tooltip = 'Windjammer Language Server is running';
+    // Start the client (which will also start the server)
+    client.start().then(() => {
+        window.showInformationMessage('Windjammer LSP activated! 🌊');
+        
+        // Log ownership inference hints
+        console.log('Windjammer: Ownership inference hints enabled');
+        console.log('Windjammer: You will see inferred &, &mut, and owned annotations inline!');
+    }).catch((error) => {
+        window.showErrorMessage(`Failed to start Windjammer LSP: ${error.message}`);
+        console.error('Windjammer LSP error:', error);
     });
 }
 
@@ -86,4 +60,3 @@ export function deactivate(): Thenable<void> | undefined {
     }
     return client.stop();
 }
-
