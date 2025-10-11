@@ -430,9 +430,9 @@ async fn load_config() -> Result<Config, Error> {
 
 ## Why Windjammer?
 
-In the golden age of sail, as steam power began to dominate the seas, shipwrights crafted the windjammer—the pinnacle of sailing ship technology. These magnificent vessels represented centuries of accumulated wisdom, combining elegance, efficiency, and craftsmanship to achieve what seemed impossible: competing with steam in speed and cargo capacity.
+In the golden age of sail, as steam power began to dominate the seas, shipwrights crafted the windjammer, the pinnacle of sailing ship technology. These magnificent vessels represented centuries of accumulated wisdom, combining elegance, efficiency, and craftsmanship to achieve what seemed impossible: competing with steam in speed and cargo capacity.
 
-Windjammers weren't a rejection of progress. They were a celebration of excellence during a time of transition. The builders knew that steam would eventually prevail, yet they pursued perfection anyway—because the craft mattered, because elegance mattered, because the journey of creation itself held value.
+Windjammers weren't a rejection of progress. They were a celebration of excellence during a time of transition. The builders knew that steam would eventually prevail, yet they pursued perfection anyway-—because the craft mattered, because elegance mattered, because the journey of creation itself held value.
 
 Today, as AI-assisted development emerges as a transformative force in software engineering, we find ourselves in a similar moment of transition. We don't know exactly how AI will reshape programming, but we know it will. Some ask: "Why invest in better programming languages when AI might write all our code?"
 
