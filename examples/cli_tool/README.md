@@ -11,7 +11,7 @@ A concurrent file processor built with Windjammer, demonstrating:
 ## Running
 
 ```bash
-windjammer build
+wj build
 cd output
 cargo run -- --help
 ```

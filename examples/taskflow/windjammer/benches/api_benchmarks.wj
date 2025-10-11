@@ -1,0 +1,198 @@
+// Criterion microbenchmarks for TaskFlow API (Windjammer version)
+//
+// Run with: wj test --bench
+
+use std.json
+use std.crypto
+
+// Import models
+use ../src/models/user
+use ../src/models/project
+use ../src/models/task
+
+// Import auth functions
+use ../src/auth/password
+use ../src/auth/jwt
+
+struct RegisterRequest {
+    username: string,
+    email: string,
+    password: string,
+    full_name: Option<string>,
+}
+
+struct LoginRequest {
+    username: string,
+    password: string,
+}
+
+struct CreateProjectRequest {
+    name: string,
+    description: Option<string>,
+}
+
+struct CreateTaskRequest {
+    title: string,
+    description: string,
+    status: string,
+    priority: string,
+    assigned_to: Option<int>,
+}
+
+@test
+fn bench_json_serialization_register_request() {
+    // Benchmark user registration request serialization
+    let req = RegisterRequest {
+        username: "testuser",
+        email: "test@example.com",
+        password: "password123",
+        full_name: Some("Test User"),
+    }
+    
+    // Serialize to JSON 1000 times for benchmark
+    for i in 0..1000 {
+        let json_str = json.stringify(req)
+    }
+}
+
+@test
+fn bench_json_serialization_create_project() {
+    // Benchmark project creation request serialization
+    let req = CreateProjectRequest {
+        name: "Test Project",
+        description: Some("A test project"),
+    }
+    
+    // Serialize to JSON 1000 times for benchmark
+    for i in 0..1000 {
+        let json_str = json.stringify(req)
+    }
+}
+
+@test
+fn bench_json_deserialization_login_request() {
+    // Benchmark login request deserialization
+    let json_str = "{\"username\":\"testuser\",\"password\":\"password123\"}"
+    
+    // Deserialize from JSON 1000 times for benchmark
+    for i in 0..1000 {
+        let req = json.parse::<LoginRequest>(json_str)
+    }
+}
+
+@test
+fn bench_json_deserialization_create_task() {
+    // Benchmark task creation deserialization
+    let json_str = "{\"title\":\"Test Task\",\"description\":\"Description\",\"status\":\"todo\",\"priority\":\"medium\",\"assigned_to\":null}"
+    
+    // Deserialize from JSON 1000 times for benchmark
+    for i in 0..1000 {
+        let req = json.parse::<CreateTaskRequest>(json_str)
+    }
+}
+
+@test
+fn bench_password_hashing() {
+    // Benchmark bcrypt password hashing
+    // NOTE: bcrypt is intentionally slow, so we only do it once
+    let password = "password123"
+    let hash = password::hash_password(password)
+}
+
+@test
+fn bench_jwt_generate() {
+    // Benchmark JWT token generation
+    let secret_key = "secret-key"
+    
+    // Generate token 1000 times for benchmark
+    for i in 0..1000 {
+        let token = jwt::generate_token(1, "testuser", "user", secret_key)
+    }
+}
+
+@test
+fn bench_jwt_verify() {
+    // Benchmark JWT token verification
+    let secret_key = "secret-key"
+    let token = jwt::generate_token(1, "testuser", "user", secret_key)
+    
+    // Verify token 1000 times for benchmark
+    for i in 0..1000 {
+        let claims = jwt::verify_token(token, secret_key)
+    }
+}
+
+@test
+fn bench_query_building_simple_select() {
+    // Benchmark simple SQL query building
+    let user_id = 123
+    
+    // Build query 1000 times for benchmark
+    for i in 0..1000 {
+        let query = "SELECT id, name, email FROM users WHERE id = ${user_id}"
+    }
+}
+
+@test
+fn bench_query_building_complex_join() {
+    // Benchmark complex SQL query building
+    let user_id = 123
+    
+    // Build query 1000 times for benchmark
+    for i in 0..1000 {
+        let query = "SELECT DISTINCT p.id, p.name FROM projects p \
+                     LEFT JOIN project_members pm ON p.id = pm.project_id \
+                     WHERE p.owner_id = ${user_id} OR pm.user_id = ${user_id}"
+    }
+}
+
+fn main() {
+    println("Running TaskFlow API benchmarks (Windjammer version)")
+    println("=====================================================")
+    println("")
+    
+    // JSON Serialization
+    println("JSON Serialization:")
+    bench_json_serialization_register_request()
+    println("  ✓ RegisterRequest")
+    
+    bench_json_serialization_create_project()
+    println("  ✓ CreateProjectRequest")
+    
+    // JSON Deserialization
+    println("")
+    println("JSON Deserialization:")
+    bench_json_deserialization_login_request()
+    println("  ✓ LoginRequest")
+    
+    bench_json_deserialization_create_task()
+    println("  ✓ CreateTaskRequest")
+    
+    // Password Hashing
+    println("")
+    println("Password Hashing:")
+    bench_password_hashing()
+    println("  ✓ bcrypt_hash")
+    
+    // JWT Operations
+    println("")
+    println("JWT Operations:")
+    bench_jwt_generate()
+    println("  ✓ generate")
+    
+    bench_jwt_verify()
+    println("  ✓ verify")
+    
+    // Query Building
+    println("")
+    println("Query Building:")
+    bench_query_building_simple_select()
+    println("  ✓ simple_select")
+    
+    bench_query_building_complex_join()
+    println("  ✓ complex_join")
+    
+    println("")
+    println("✅ All benchmarks completed!")
+}
+
