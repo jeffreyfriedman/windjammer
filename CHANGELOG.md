@@ -7,6 +7,92 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.18.0] - 2025-10-11
+
+**Phase 4 Complete: Automatic String Optimization**
+
+### Added
+- **Phase 4: String Capacity Pre-allocation** - Automatically optimizes format! macro calls with String::with_capacity + write! for zero-reallocation string formatting
+- **Recursive Block Analysis** - Detects format! calls in all nested scopes (loops, if/else, blocks)
+- **Auto-import Generation** - Automatically adds `use std::fmt::Write` when string optimization is applied
+- **Example Validation Suite** - Automated testing of all 58 examples (57 pass, 1 pre-existing issue)
+- **Comprehensive Documentation** - docs/V018_OPTIMIZATIONS.md with architecture and philosophy
+
+### Changed
+- format! calls now generate optimized code with capacity pre-allocation (estimated +2-3% performance)
+- Analyzer now recursively analyzes nested blocks for string optimizations
+
+### Performance
+- Builds on v0.17.0's 90.6% baseline
+- Phase 4 estimated +2-3% improvement
+- Target: 93-95% of Rust performance
+- Comprehensive benchmarking deferred (measure vs implement speculatively)
+
+### Validation
+- ✅ 98.3% example success rate (57/58)
+- ✅ All tests passing
+- ✅ No clippy warnings
+- ✅ No regressions detected
+
+### Philosophy: Progressive Disclosure
+- 80% of developers write simple code, compiler optimizes automatically
+- 20% can drop to explicit Rust when needed
+- Focus on measured impact over speculative optimization
+
+### Deferred (80/20 Principle)
+- Phase 6: Escape analysis (implement only if needed)
+- Phase 7: Const folding (implement only if needed)  
+- Phase 8: Loop hoisting (implement only if needed)
+
+## [0.18.0-alpha] - In Progress (Planning Phase)
+
+### 🎯 Closing the Performance Gap: 93-95% of Rust
+
+**Goal:** Push from 90.6% → 95% through advanced compiler optimizations
+
+### Planned Features
+
+#### Phase 4 Completion: String Capacity Pre-allocation ✅
+- Complete codegen for string capacity hints
+- Pre-allocate String capacity for format! calls
+- Pre-allocate for concatenation chains
+- Pre-allocate for loop string accumulation
+- **Expected Impact:** +2-3% performance improvement
+
+#### Phase 6: Escape Analysis 🆕
+- Detect when values don't escape function scope
+- Stack-allocate non-escaping values when safe
+- Eliminate unnecessary heap allocations
+- **Expected Impact:** +1-2% performance improvement
+
+#### Phase 7: Const Folding 🆕
+- Evaluate constant expressions at compile time
+- Pre-compute arithmetic on literals
+- Optimize conditional branches with constant conditions
+- **Expected Impact:** +0.5-1% performance improvement
+
+#### Phase 8: Loop Invariant Hoisting 🆕
+- Detect calculations that don't change in loops
+- Move invariant operations outside loop bodies
+- Reduce redundant computation
+- **Expected Impact:** +0.5-1% performance improvement
+
+#### Enhanced Benchmarking
+- Expand benchmark suite with more realistic scenarios
+- HTTP endpoint benchmarks (not just microbenchmarks)
+- Database operation benchmarks
+- Comprehensive performance regression testing
+
+### Target Performance
+- **Current:** 90.6% of Rust (v0.17.0)
+- **Target:** 93-95% of Rust
+- **Rationale:** Approaching theoretical limit for language abstraction
+
+### Documentation
+- Update optimization guide with Phase 6-8
+- Performance tuning guide for developers
+- When to drop to hand-written Rust (edge cases)
+
 ## [0.17.0] - 2025-10-10
 
 ### 🚀 Compiler Optimizations & Performance Validation

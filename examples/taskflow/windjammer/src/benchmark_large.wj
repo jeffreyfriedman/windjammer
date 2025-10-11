@@ -33,10 +33,12 @@ fn main() {
     let user_count = benchmark_users()
     let project_count = benchmark_projects()
     let task_count = benchmark_tasks()
+    let string_count = benchmark_string_formatting()
     
     println!("User operations: {}", user_count)
     println!("Project operations: {}", project_count)
     println!("Task operations: {}", task_count)
+    println!("String operations: {}", string_count)
     println!("Benchmark complete!")
 }
 
@@ -110,3 +112,22 @@ fn benchmark_tasks() -> int {
     count
 }
 
+
+// PHASE 4 OPTIMIZATION TEST: String formatting with capacity hints
+fn benchmark_string_formatting() -> int {
+    let mut count = 0
+    
+    // 10,000 format! operations - Phase 4 should optimize with String::with_capacity
+    for i in 0..10000 {
+        let user_msg = format!("User #{}: username={}, email={}", i, "testuser", "test@example.com")
+        let project_msg = format!("Project {}: name={}, owner={}", i, "Project Alpha", i % 1000)
+        let task_msg = format!("Task {}: title={}, status={}, priority={}", i, "Feature", "Active", "High")
+        
+        // Use the strings to prevent dead code elimination
+        if user_msg.len() > 0 && project_msg.len() > 0 && task_msg.len() > 0 {
+            count += 1
+        }
+    }
+    
+    count
+}
