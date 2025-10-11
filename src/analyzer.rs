@@ -14,6 +14,8 @@ pub struct AnalyzedFunction {
     pub string_optimizations: Vec<StringOptimization>,
     // PHASE 5 OPTIMIZATION: Track assignment operations that can use compound operators
     pub assignment_optimizations: Vec<AssignmentOptimization>,
+    // PHASE 6 OPTIMIZATION: Track heavy drops that can be deferred to background thread
+    pub defer_drop_optimizations: Vec<DeferDropOptimization>,
 }
 
 /// PHASE 5: Assignment operation that can be optimized to compound operator
@@ -30,6 +32,39 @@ pub enum CompoundOp {
     SubAssign, // -=
     MulAssign, // *=
     DivAssign, // /=
+}
+
+/// PHASE 6: Defer drop optimization - automatically defer heavy deallocations to background thread
+/// This can make functions return 10,000x faster by dropping large data structures asynchronously.
+/// Reference: https://abrams.cc/rust-dropping-things-in-another-thread
+#[derive(Debug, Clone)]
+pub struct DeferDropOptimization {
+    /// The variable name that should be deferred
+    pub variable: String,
+    /// Estimated size of the type
+    pub estimated_size: EstimatedSize,
+    /// Reason for deferring
+    pub reason: DeferDropReason,
+    /// Location where the defer should happen (usually before return)
+    pub location: usize,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum EstimatedSize {
+    Small,     // < 1KB - not worth deferring
+    Medium,    // 1KB - 100KB - maybe defer
+    Large,     // 100KB - 10MB - definitely defer
+    VeryLarge, // > 10MB - always defer
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum DeferDropReason {
+    /// Function owns large parameter, returns small value
+    LargeOwnedParameter,
+    /// Large local variable goes out of scope
+    LargeLocalVariable,
+    /// Function builds large collection, extracts small value
+    LargeReturnedCollection,
 }
 
 /// Represents a string operation that can be optimized
@@ -223,6 +258,7 @@ impl Analyzer {
 
         // PHASE 5: Detect assignment operations that can use compound operators
         let assignment_optimizations = self.detect_assignment_optimizations(func);
+        let defer_drop_optimizations = self.detect_defer_drop_opportunities(func);
 
         Ok(AnalyzedFunction {
             decl: func.clone(),
@@ -231,6 +267,7 @@ impl Analyzer {
             struct_mapping_optimizations,
             string_optimizations,
             assignment_optimizations,
+            defer_drop_optimizations,
         })
     }
 
@@ -1095,6 +1132,134 @@ impl Analyzer {
                 self.analyze_expression_for_clones(expr, usage);
             }
             _ => {}
+        }
+    }
+    /// PHASE 6: Detect defer drop optimization opportunities
+    /// This detects when a function owns large data structures and returns small values,
+    /// allowing us to defer the drop to a background thread for 10,000x speedup.
+    /// Reference: https://abrams.cc/rust-dropping-things-in-another-thread
+    fn detect_defer_drop_opportunities(&self, func: &FunctionDecl) -> Vec<DeferDropOptimization> {
+        let mut optimizations = Vec::new();
+
+        // Pattern 1: Large owned parameter → small return value
+        for param in &func.parameters {
+            // Check if parameter is owned
+            let ownership = match param.ownership {
+                OwnershipHint::Ref => OwnershipMode::Borrowed,
+                OwnershipHint::Mut => OwnershipMode::MutBorrowed,
+                OwnershipHint::Owned => OwnershipMode::Owned,
+                OwnershipHint::Inferred => {
+                    // Infer ownership if not specified
+                    self.infer_parameter_ownership(&param.name, &func.body, &func.return_type)
+                        .unwrap_or(OwnershipMode::Owned)
+                }
+            };
+
+            if ownership == OwnershipMode::Owned {
+                let param_size = self.estimate_type_size(&param.type_);
+
+                // Only consider large types
+                if matches!(param_size, EstimatedSize::Large | EstimatedSize::VeryLarge) {
+                    // Check if return type is small
+                    if let Some(ref ret_type) = func.return_type {
+                        if self.is_small_type(ret_type) {
+                            // Check if it's safe to defer
+                            if self.is_safe_to_defer(&param.type_) {
+                                optimizations.push(DeferDropOptimization {
+                                    variable: param.name.clone(),
+                                    estimated_size: param_size,
+                                    reason: DeferDropReason::LargeOwnedParameter,
+                                    location: func.body.len().saturating_sub(1),
+                                });
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        // Pattern 2: Large local variable that goes out of scope
+        // TODO: Track local variable lifetimes and sizes
+        // This would require more sophisticated analysis of let statements and their usage
+
+        optimizations
+    }
+
+    /// Estimate the size of a type for defer drop optimization
+    fn estimate_type_size(&self, ty: &Type) -> EstimatedSize {
+        match ty {
+            // Collections are potentially large
+            Type::Custom(name) if name.contains("HashMap") => EstimatedSize::Large,
+            Type::Custom(name) if name.contains("BTreeMap") => EstimatedSize::Large,
+            Type::Custom(name) if name.contains("HashSet") => EstimatedSize::Large,
+            Type::Custom(name) if name.contains("BTreeSet") => EstimatedSize::Large,
+            Type::Parameterized(name, _) if name.contains("HashMap") => EstimatedSize::Large,
+            Type::Parameterized(name, _) if name.contains("BTreeMap") => EstimatedSize::Large,
+            Type::Parameterized(name, _) if name.contains("HashSet") => EstimatedSize::Large,
+            Type::Parameterized(name, _) if name.contains("BTreeSet") => EstimatedSize::Large,
+            Type::Parameterized(name, _) if name.contains("Vec") => EstimatedSize::Medium,
+            Type::Parameterized(name, _) if name.contains("VecDeque") => EstimatedSize::Medium,
+            Type::Vec(_) => EstimatedSize::Medium,
+            Type::String => EstimatedSize::Medium,
+
+            // User-defined structs - conservative estimate (Medium)
+            Type::Custom(_) => EstimatedSize::Medium,
+
+            // Small primitive types
+            Type::Int | Type::Int32 | Type::Uint | Type::Float | Type::Bool => EstimatedSize::Small,
+            Type::Reference(_) => EstimatedSize::Small, // References are just pointers
+            Type::MutableReference(_) => EstimatedSize::Small,
+
+            _ => EstimatedSize::Small,
+        }
+    }
+
+    /// Check if a type is small (return value size check)
+    fn is_small_type(&self, ty: &Type) -> bool {
+        matches!(
+            ty,
+            Type::Int | Type::Int32 | Type::Uint | Type::Float | Type::Bool
+        ) || matches!(ty, Type::Custom(name) if name == "usize" || name == "isize")
+            || matches!(ty, Type::Reference(_) | Type::MutableReference(_))
+    }
+
+    /// Check if it's safe to defer dropping this type
+    /// Must be Send (can move to another thread) and have no important Drop side effects
+    fn is_safe_to_defer(&self, ty: &Type) -> bool {
+        match ty {
+            Type::Custom(name) | Type::Parameterized(name, _) => {
+                // Types with important Drop implementations - DO NOT defer
+                if name.contains("Mutex")
+                    || name.contains("RwLock")
+                    || name.contains("File")
+                    || name.contains("TcpStream")
+                    || name.contains("UdpSocket")
+                    || name.contains("Channel")
+                    || name.contains("Receiver")
+                    || name.contains("Sender")
+                    || name.contains("JoinHandle")
+                {
+                    return false;
+                }
+
+                // Standard collections are safe to defer
+                if name.contains("HashMap")
+                    || name.contains("BTreeMap")
+                    || name.contains("HashSet")
+                    || name.contains("BTreeSet")
+                    || name.contains("Vec")
+                    || name.contains("VecDeque")
+                    || name.contains("String")
+                {
+                    return true;
+                }
+
+                // User-defined types - conservatively assume safe for now
+                // TODO: Add more sophisticated analysis or user annotations
+                true
+            }
+            Type::Vec(_) | Type::String => true, // Built-in collections are safe
+            _ => false, // Primitives and references don't benefit from defer drop
         }
     }
 }
