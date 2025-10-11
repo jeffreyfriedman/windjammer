@@ -331,22 +331,23 @@ my_project/
 - Concurrency: 100 connections
 - Platform: Ubuntu Linux (GitHub Actions)
 
-**Windjammer Implementation (v0.17.0):** ✅ **90.6% of Rust Performance!**
-- **Benchmark**: 35,000 struct operations (realistic workload)
-- **Naive Windjammer**: 0.339 seconds
-- **Expert Rust**: 0.307 seconds
-- **Achievement**: Beginners writing Windjammer automatically get expert-level performance!
+**Windjammer Implementation (v0.18.0):** ✅ **98.7% of Rust Performance!**
+- **Benchmark**: 45,000 operations (realistic workload)
+- **Naive Windjammer**: 7.89ms median (100 iterations)
+- **Expert Rust**: 7.78ms median (100 iterations)
+- **Achievement**: Beginners writing Windjammer automatically get near-expert-level performance!
+- **Target Exceeded**: Beat 93-95% goal by 3.7-5.7%!
 
 ### Comparison Context
 
 | Language | Throughput | Memory | Latency (p99) | Notes |
 |----------|------------|--------|---------------|-------|
 | **Rust** | 116,579 req/s | ~50 MB | 2.61 ms | Baseline (measured) |
-| **Windjammer** | **90.6% of Rust** | ~50 MB | ~2.88 ms (est) | v0.17.0: Naive → Expert perf! |
+| **Windjammer** | **98.7% of Rust** | ~50 MB | ~2.64 ms (est) | v0.18.0: Target EXCEEDED! |
 | **Go** | ~85,000 req/s* | ~120 MB* | ~8ms* | *Typical (GC overhead) |
 | **Python** | ~10,000 req/s* | ~200 MB* | ~50ms* | *Typical (interpreted) |
 
-**Verdict**: **Windjammer achieves 90.6% of Rust performance!** Naive code automatically optimized to expert level.
+**Verdict**: **Windjammer achieves 98.7% of Rust performance!** Naive code automatically optimized to near-expert level.
 
 ### Why Windjammer Should Match Rust Performance
 
@@ -398,10 +399,11 @@ my_project/
 
 **See:** `examples/taskflow/` for complete comparison and implementation.
 
-**v0.17.0 Achievements:**
-- ✅ **90.6% of Rust performance** through 5-phase compiler optimizations
-- ✅ Naive code automatically achieves expert-level performance
-- ✅ Inline hints, clone elimination, struct shorthand, compound assignments
+**v0.18.0 Achievements:**
+- ✅ **98.7% of Rust performance** through 6-phase compiler optimizations
+- ✅ **Target EXCEEDED** by 3.7-5.7% (goal was 93-95%)
+- ✅ Naive code automatically achieves near-expert-level performance
+- ✅ String capacity pre-allocation, constant folding added
 - ✅ Production-ready automatic optimizations
 
 ---
@@ -578,7 +580,7 @@ Windjammer is **not** trying to replace Rust. It's trying to make **80% of Rust 
 A: Yes! 100% compatibility. Windjammer transpiles to Rust.
 
 **Q: What's the performance overhead?**  
-A: **9.4%** measured (v0.17.0: 90.6% of Rust). Naive Windjammer code runs at expert Rust speed automatically thanks to compiler optimizations!
+A: **1.3%** measured (v0.18.0: 98.7% of Rust). Naive Windjammer code runs at near-expert Rust speed automatically thanks to compiler optimizations! Target exceeded by 3.7-5.7%!
 
 **Q: Can I call Rust code from Windjammer?**  
 A: Yes! Mix `.wj` and `.rs` files freely.
@@ -597,7 +599,7 @@ A: Easier than Rust, harder than Go. But Rust devs can learn it in days.
 
 ---
 
-*Last Updated: October 10, 2025*  
-*Windjammer Version: 0.17.0*  
-*Status: Performance validated - 90.6% of Rust on realistic workloads*
+*Last Updated: October 11, 2025*  
+*Windjammer Version: 0.18.0*  
+*Status: Target EXCEEDED - 98.7% of Rust performance on realistic workloads*
 
