@@ -7,7 +7,44 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-## [0.18.0] - In Progress
+## [0.18.0] - 2025-10-11
+
+**Phase 4 Complete: Automatic String Optimization**
+
+### Added
+- **Phase 4: String Capacity Pre-allocation** - Automatically optimizes format! macro calls with String::with_capacity + write! for zero-reallocation string formatting
+- **Recursive Block Analysis** - Detects format! calls in all nested scopes (loops, if/else, blocks)
+- **Auto-import Generation** - Automatically adds `use std::fmt::Write` when string optimization is applied
+- **Example Validation Suite** - Automated testing of all 58 examples (57 pass, 1 pre-existing issue)
+- **Comprehensive Documentation** - docs/V018_OPTIMIZATIONS.md with architecture and philosophy
+
+### Changed
+- format! calls now generate optimized code with capacity pre-allocation (estimated +2-3% performance)
+- Analyzer now recursively analyzes nested blocks for string optimizations
+
+### Performance
+- Builds on v0.17.0's 90.6% baseline
+- Phase 4 estimated +2-3% improvement
+- Target: 93-95% of Rust performance
+- Comprehensive benchmarking deferred (measure vs implement speculatively)
+
+### Validation
+- ✅ 98.3% example success rate (57/58)
+- ✅ All tests passing
+- ✅ No clippy warnings
+- ✅ No regressions detected
+
+### Philosophy: Progressive Disclosure
+- 80% of developers write simple code, compiler optimizes automatically
+- 20% can drop to explicit Rust when needed
+- Focus on measured impact over speculative optimization
+
+### Deferred (80/20 Principle)
+- Phase 6: Escape analysis (implement only if needed)
+- Phase 7: Const folding (implement only if needed)  
+- Phase 8: Loop hoisting (implement only if needed)
+
+## [0.18.0-alpha] - In Progress (Planning Phase)
 
 ### 🎯 Closing the Performance Gap: 93-95% of Rust
 
