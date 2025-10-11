@@ -11,6 +11,7 @@ pub struct CodeGenerator {
     needs_web_imports: bool,
     needs_js_imports: bool,
     needs_serde_imports: bool, // For JSON support
+    needs_write_import: bool,  // For string capacity optimization (write! macro)
     target: CompilationTarget,
     is_module: bool, // true if generating code for a reusable module (not main file)
     #[allow(dead_code)] // TODO: Use for error mapping Phase 3
@@ -26,6 +27,8 @@ pub struct CodeGenerator {
     string_capacity_hints: std::collections::HashMap<usize, usize>, // Statement idx -> capacity
     // PHASE 5 OPTIMIZATION: Track assignment operations that can use compound operators
     assignment_optimizations: std::collections::HashMap<String, crate::analyzer::CompoundOp>, // Variable -> compound op
+    // Track current statement index for optimization hints
+    current_statement_idx: usize,
 }
 
 impl CodeGenerator {
@@ -38,6 +41,7 @@ impl CodeGenerator {
             needs_web_imports: false,
             needs_js_imports: false,
             needs_serde_imports: false,
+            needs_write_import: false,
             target,
             is_module: false,
             source_map: crate::source_map::SourceMap::new(),
@@ -48,6 +52,7 @@ impl CodeGenerator {
             struct_mapping_hints: std::collections::HashMap::new(),
             string_capacity_hints: std::collections::HashMap::new(),
             assignment_optimizations: std::collections::HashMap::new(),
+            current_statement_idx: 0,
         }
     }
 
@@ -101,6 +106,9 @@ impl CodeGenerator {
         let mut output = String::new();
         let len = stmts.len();
         for (i, stmt) in stmts.iter().enumerate() {
+            // Track current statement index for optimization hints
+            self.current_statement_idx = i;
+
             let is_last = i == len - 1;
             if is_last && matches!(stmt, Statement::Expression(_)) {
                 // Last statement is an expression - generate without semicolon (it's the return value)
@@ -274,6 +282,9 @@ impl CodeGenerator {
         }
         if self.needs_serde_imports {
             implicit_imports.push_str("use serde::{Serialize, Deserialize};\n");
+        }
+        if self.needs_write_import {
+            implicit_imports.push_str("use std::fmt::Write;\n");
         }
 
         // Combine: implicit imports + explicit imports + body
@@ -1515,6 +1526,30 @@ impl CodeGenerator {
                 delimiter,
             } => {
                 use crate::parser::MacroDelimiter;
+
+                // PHASE 4 OPTIMIZATION: Check for format! with capacity hints
+                if name == "format" {
+                    if let Some(&capacity) =
+                        self.string_capacity_hints.get(&self.current_statement_idx)
+                    {
+                        // Clone capacity to avoid borrow issues
+                        let capacity_val = capacity;
+                        // Generate optimized String::with_capacity + write! instead of format!
+                        self.needs_write_import = true;
+                        let arg_strs: Vec<String> =
+                            args.iter().map(|e| self.generate_expression(e)).collect();
+
+                        return format!(
+                            "{{\n{}    let mut __s = String::with_capacity({});\n{}    write!(&mut __s, {}).unwrap();\n{}    __s\n{}}}",
+                            self.indent(),
+                            capacity_val,
+                            self.indent(),
+                            arg_strs.join(", "),
+                            self.indent(),
+                            self.indent()
+                        );
+                    }
+                }
 
                 // Special case: if this is println!/eprintln!/print!/eprint! and first arg is format!, flatten it
                 let should_flatten = (name == "println"
