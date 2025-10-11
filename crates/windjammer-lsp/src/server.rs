@@ -1,11 +1,12 @@
 use dashmap::DashMap;
-use std::sync::Arc;
+use std::sync::{Arc, RwLock};
 use tower_lsp::jsonrpc::Result;
 use tower_lsp::lsp_types::*;
 use tower_lsp::{Client, LanguageServer};
 
 use crate::analysis::AnalysisDatabase;
 use crate::diagnostics::DiagnosticsEngine;
+use crate::hover::HoverProvider;
 
 /// The Windjammer Language Server
 ///
@@ -14,6 +15,7 @@ pub struct WindjammerLanguageServer {
     client: Client,
     analysis_db: Arc<AnalysisDatabase>,
     diagnostics: Arc<DiagnosticsEngine>,
+    hover_providers: Arc<RwLock<DashMap<Url, HoverProvider>>>,
     /// Map of file URIs to their content
     documents: DashMap<Url, String>,
 }
@@ -26,6 +28,7 @@ impl WindjammerLanguageServer {
             client: client.clone(),
             analysis_db: Arc::new(AnalysisDatabase::new()),
             diagnostics: Arc::new(DiagnosticsEngine::new(client.clone())),
+            hover_providers: Arc::new(RwLock::new(DashMap::new())),
             documents: DashMap::new(),
         }
     }
@@ -37,6 +40,14 @@ impl WindjammerLanguageServer {
 
             // Analyze the file
             let diagnostics = self.analysis_db.analyze_file(&uri, &content);
+
+            // Update hover provider with parsed program
+            if let Some(program) = self.analysis_db.get_program(&uri) {
+                let mut provider = HoverProvider::new();
+                provider.update_program(program);
+                let providers = self.hover_providers.write().unwrap();
+                providers.insert(uri.clone(), provider);
+            }
 
             // Publish diagnostics to the client
             self.diagnostics.publish(&uri, diagnostics).await;
@@ -217,18 +228,23 @@ impl LanguageServer for WindjammerLanguageServer {
     }
 
     async fn hover(&self, params: HoverParams) -> Result<Option<Hover>> {
-        tracing::debug!(
-            "Hover request: {} at {:?}",
-            params.text_document_position_params.text_document.uri,
-            params.text_document_position_params.position
-        );
+        let uri = params
+            .text_document_position_params
+            .text_document
+            .uri
+            .clone();
+        let position = params.text_document_position_params.position;
 
-        // TODO: Implement hover information
-        // - Show type of symbol
-        // - Show inferred ownership (&, &mut, owned)
-        // - Show documentation
+        tracing::debug!("Hover request: {} at {:?}", uri, position);
 
-        Ok(None)
+        // Get the hover provider for this file
+        let providers = self.hover_providers.read().unwrap();
+        let result = providers
+            .get(&uri)
+            .and_then(|provider| provider.get_hover(position));
+        drop(providers); // Explicitly drop the lock
+
+        Ok(result)
     }
 
     async fn completion(&self, params: CompletionParams) -> Result<Option<CompletionResponse>> {
