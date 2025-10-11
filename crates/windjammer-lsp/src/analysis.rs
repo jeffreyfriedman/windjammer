@@ -50,6 +50,8 @@ impl AnalysisDatabase {
         let mut symbol_table = SymbolTable::new();
         if let Some(ref prog) = program {
             symbol_table.build_from_program(prog, uri);
+            // Build references from source code
+            symbol_table.build_references_from_source(content, uri);
         }
 
         // Cache the results

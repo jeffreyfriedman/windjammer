@@ -362,15 +362,36 @@ impl LanguageServer for WindjammerLanguageServer {
     }
 
     async fn references(&self, params: ReferenceParams) -> Result<Option<Vec<Location>>> {
-        tracing::debug!(
-            "Find references: {} at {:?}",
-            params.text_document_position.text_document.uri,
-            params.text_document_position.position
-        );
+        let uri = params.text_document_position.text_document.uri.clone();
+        let position = params.text_document_position.position;
 
-        // TODO: Implement find references
-        // - Find all usages of a symbol
-        // - Cross-file search
+        tracing::debug!("Find references: {} at {:?}", uri, position);
+
+        // Get the word at the cursor position
+        let symbol_name = self.get_word_at_position(&uri, position);
+
+        if let Some(name) = symbol_name {
+            // Get the symbol table for this file
+            if let Some(symbol_table) = self.analysis_db.get_symbol_table(&uri) {
+                // Find all references to the symbol
+                let refs = symbol_table.find_references(&name);
+
+                if !refs.is_empty() {
+                    let mut locations: Vec<Location> =
+                        refs.iter().map(|r| r.location.clone()).collect();
+
+                    // If include_declaration is true, also include the definition
+                    if params.context.include_declaration {
+                        if let Some(symbol_def) = symbol_table.find_symbol(&name) {
+                            locations.push(symbol_def.location.clone());
+                        }
+                    }
+
+                    tracing::debug!("Found {} references to '{}'", locations.len(), name);
+                    return Ok(Some(locations));
+                }
+            }
+        }
 
         Ok(None)
     }
