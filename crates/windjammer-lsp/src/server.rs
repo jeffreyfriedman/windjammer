@@ -397,16 +397,69 @@ impl LanguageServer for WindjammerLanguageServer {
     }
 
     async fn rename(&self, params: RenameParams) -> Result<Option<WorkspaceEdit>> {
-        tracing::debug!(
-            "Rename: {} at {:?} to {}",
-            params.text_document_position.text_document.uri,
-            params.text_document_position.position,
-            params.new_name
-        );
+        let uri = params.text_document_position.text_document.uri.clone();
+        let position = params.text_document_position.position;
+        let new_name = params.new_name.clone();
 
-        // TODO: Implement rename
-        // - Safe rename across all files
-        // - Update imports and references
+        tracing::debug!("Rename: {} at {:?} to {}", uri, position, new_name);
+
+        // Get the word at the cursor position
+        let symbol_name = self.get_word_at_position(&uri, position);
+
+        if let Some(old_name) = symbol_name {
+            // Get the symbol table for this file
+            if let Some(symbol_table) = self.analysis_db.get_symbol_table(&uri) {
+                // Find all references to the symbol (including definition)
+                let refs = symbol_table.find_references(&old_name);
+
+                if !refs.is_empty() || symbol_table.find_symbol(&old_name).is_some() {
+                    use std::collections::HashMap;
+                    let mut changes: HashMap<Url, Vec<TextEdit>> = HashMap::new();
+
+                    // Create text edits for all references
+                    for reference in refs {
+                        let text_edit = TextEdit {
+                            range: reference.location.range,
+                            new_text: new_name.clone(),
+                        };
+
+                        changes
+                            .entry(reference.location.uri.clone())
+                            .or_insert_with(Vec::new)
+                            .push(text_edit);
+                    }
+
+                    // Also rename the definition
+                    if let Some(symbol_def) = symbol_table.find_symbol(&old_name) {
+                        let text_edit = TextEdit {
+                            range: symbol_def.location.range,
+                            new_text: new_name.clone(),
+                        };
+
+                        changes
+                            .entry(symbol_def.location.uri.clone())
+                            .or_insert_with(Vec::new)
+                            .push(text_edit);
+                    }
+
+                    if !changes.is_empty() {
+                        tracing::debug!(
+                            "Renaming '{}' to '{}' with {} edits across {} files",
+                            old_name,
+                            new_name,
+                            changes.values().map(|v| v.len()).sum::<usize>(),
+                            changes.len()
+                        );
+
+                        return Ok(Some(WorkspaceEdit {
+                            changes: Some(changes),
+                            document_changes: None,
+                            change_annotations: None,
+                        }));
+                    }
+                }
+            }
+        }
 
         Ok(None)
     }
