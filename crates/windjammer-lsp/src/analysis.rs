@@ -1,7 +1,10 @@
 use std::collections::HashMap;
 use std::sync::RwLock;
 use tower_lsp::lsp_types::{Diagnostic, DiagnosticSeverity, Position, Range, Url};
-use windjammer::{lexer::Lexer, parser::Parser};
+use windjammer::{
+    lexer::Lexer,
+    parser::{Parser, Program},
+};
 
 /// Analysis database for incremental compilation
 ///
@@ -17,8 +20,8 @@ pub struct AnalysisDatabase {
 struct FileAnalysis {
     /// Source code
     source: String,
-    /// Parsed AST (placeholder for now)
-    _ast: Option<()>,
+    /// Parsed AST
+    program: Option<Program>,
     /// Analysis diagnostics
     diagnostics: Vec<Diagnostic>,
 }
@@ -34,20 +37,12 @@ impl AnalysisDatabase {
     pub fn analyze_file(&self, uri: &Url, content: &str) -> Vec<Diagnostic> {
         tracing::debug!("Analyzing file: {}", uri);
 
-        // For now, we'll do a simple analysis
-        // TODO: Integrate with the Windjammer compiler
-        //       1. Lex the file
-        //       2. Parse to AST
-        //       3. Run semantic analysis
-        //       4. Run ownership inference
-        //       5. Generate diagnostics
-
-        let diagnostics = self.simple_analysis(content);
+        let (diagnostics, program) = self.simple_analysis(content);
 
         // Cache the results
         let analysis = FileAnalysis {
             source: content.to_string(),
-            _ast: None,
+            program,
             diagnostics: diagnostics.clone(),
         };
 
@@ -57,8 +52,9 @@ impl AnalysisDatabase {
     }
 
     /// Real analysis using the Windjammer compiler
-    fn simple_analysis(&self, content: &str) -> Vec<Diagnostic> {
+    fn simple_analysis(&self, content: &str) -> (Vec<Diagnostic>, Option<Program>) {
         let mut diagnostics = Vec::new();
+        let mut program_result = None;
 
         // Lex the file
         let mut lexer = Lexer::new(content);
@@ -67,13 +63,14 @@ impl AnalysisDatabase {
         // Parse the file
         let mut parser = Parser::new(tokens);
         match parser.parse() {
-            Ok(_program) => {
+            Ok(program) => {
                 // Success! No parsing errors
                 // TODO: Add semantic analysis here
                 // - Type checking
                 // - Ownership inference
                 // - Undefined symbol detection
                 tracing::debug!("File parsed successfully");
+                program_result = Some(program);
             }
             Err(error) => {
                 // Parse error - convert to diagnostic
@@ -104,7 +101,7 @@ impl AnalysisDatabase {
             }
         }
 
-        diagnostics
+        (diagnostics, program_result)
     }
 
     /// Get cached analysis for a file
@@ -114,6 +111,15 @@ impl AnalysisDatabase {
             .unwrap()
             .get(uri)
             .map(|analysis| analysis.diagnostics.clone())
+    }
+
+    /// Get cached program for a file
+    pub fn get_program(&self, uri: &Url) -> Option<Program> {
+        self.cache
+            .read()
+            .unwrap()
+            .get(uri)
+            .and_then(|analysis| analysis.program.clone())
     }
 }
 
