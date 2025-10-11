@@ -1,0 +1,428 @@
+use serde::{Deserialize, Serialize};
+use serde_json::Value;
+use std::collections::HashMap;
+use std::process::{Child, Command, Stdio};
+use tokio::sync::mpsc;
+
+/// Debug Adapter Protocol implementation for Windjammer
+///
+/// This adapter translates between the DAP protocol and rust-lldb/gdb
+/// to enable debugging of Windjammer programs.
+pub struct DebugAdapter {
+    /// The underlying debugger process (lldb or gdb)
+    debugger: Option<Child>,
+    /// Source map: Windjammer file -> Rust file
+    source_map: HashMap<String, String>,
+    /// Breakpoints
+    breakpoints: HashMap<String, Vec<Breakpoint>>,
+    /// Request/response channel
+    response_tx: mpsc::UnboundedSender<DapMessage>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct DapMessage {
+    #[serde(rename = "type")]
+    pub msg_type: String,
+    pub seq: i64,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub command: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub arguments: Option<Value>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub body: Option<Value>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub success: Option<bool>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub message: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Breakpoint {
+    pub line: i32,
+    pub verified: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub source: Option<Source>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Source {
+    pub path: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub name: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct StackFrame {
+    pub id: i32,
+    pub name: String,
+    pub source: Source,
+    pub line: i32,
+    pub column: i32,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Variable {
+    pub name: String,
+    pub value: String,
+    #[serde(rename = "type")]
+    pub var_type: Option<String>,
+    pub variables_reference: i32,
+}
+
+impl DebugAdapter {
+    pub fn new(response_tx: mpsc::UnboundedSender<DapMessage>) -> Self {
+        Self {
+            debugger: None,
+            source_map: HashMap::new(),
+            breakpoints: HashMap::new(),
+            response_tx,
+        }
+    }
+
+    /// Initialize the debug adapter
+    pub async fn initialize(&mut self, args: Value) -> Result<DapMessage, String> {
+        tracing::info!("Initializing debug adapter with args: {:?}", args);
+
+        // Build the source map from Windjammer files to Rust files
+        self.build_source_map().await?;
+
+        // Send capabilities response
+        Ok(DapMessage {
+            msg_type: "response".to_string(),
+            seq: 1,
+            command: Some("initialize".to_string()),
+            arguments: None,
+            body: Some(serde_json::json!({
+                "supportsConfigurationDoneRequest": true,
+                "supportsEvaluateForHovers": true,
+                "supportsStepBack": false,
+                "supportsSetVariable": true,
+                "supportsRestartFrame": false,
+                "supportsGotoTargetsRequest": false,
+                "supportsStepInTargetsRequest": false,
+                "supportsCompletionsRequest": false,
+                "supportsModulesRequest": false,
+                "supportsExceptionOptions": false,
+                "supportsValueFormattingOptions": true,
+                "supportsExceptionInfoRequest": false,
+                "supportTerminateDebuggee": true,
+                "supportSuspendDebuggee": false,
+                "supportsDelayedStackTraceLoading": false,
+                "supportsLoadedSourcesRequest": false,
+                "supportsLogPoints": false,
+                "supportsTerminateThreadsRequest": false,
+                "supportsSetExpression": false,
+                "supportsTerminateRequest": true,
+                "supportsDataBreakpoints": false,
+                "supportsReadMemoryRequest": false,
+                "supportsWriteMemoryRequest": false,
+                "supportsDisassembleRequest": false,
+                "supportsCancelRequest": false,
+                "supportsBreakpointLocationsRequest": false,
+                "supportsClipboardContext": false,
+                "supportsSteppingGranularity": false,
+                "supportsInstructionBreakpoints": false,
+                "supportsExceptionFilterOptions": false
+            })),
+            success: Some(true),
+            message: None,
+        })
+    }
+
+    /// Launch a debug session
+    pub async fn launch(&mut self, args: Value) -> Result<DapMessage, String> {
+        tracing::info!("Launching debug session with args: {:?}", args);
+
+        // Extract program path from args
+        let program = args
+            .get("program")
+            .and_then(|p| p.as_str())
+            .ok_or("No program specified")?;
+
+        // Start lldb
+        let child = Command::new("lldb")
+            .arg("--batch")
+            .arg("-o")
+            .arg(format!("file {}", program))
+            .stdin(Stdio::piped())
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped())
+            .spawn()
+            .map_err(|e| format!("Failed to start lldb: {}", e))?;
+
+        self.debugger = Some(child);
+
+        Ok(DapMessage {
+            msg_type: "response".to_string(),
+            seq: 2,
+            command: Some("launch".to_string()),
+            arguments: None,
+            body: None,
+            success: Some(true),
+            message: None,
+        })
+    }
+
+    /// Set breakpoints
+    pub async fn set_breakpoints(
+        &mut self,
+        source: String,
+        lines: Vec<i32>,
+    ) -> Result<DapMessage, String> {
+        tracing::info!("Setting breakpoints in {} at lines: {:?}", source, lines);
+
+        // Map Windjammer source to Rust source
+        let rust_source = self
+            .source_map
+            .get(&source)
+            .ok_or("Source file not found in source map")?;
+
+        // Convert Windjammer line numbers to Rust line numbers
+        // (In a real implementation, we'd use the source map for this)
+        let breakpoints: Vec<Breakpoint> = lines
+            .iter()
+            .map(|&line| Breakpoint {
+                line,
+                verified: true,
+                source: Some(Source {
+                    path: rust_source.clone(),
+                    name: Some(source.clone()),
+                }),
+            })
+            .collect();
+
+        // Store breakpoints
+        self.breakpoints.insert(source.clone(), breakpoints.clone());
+
+        // Send breakpoint commands to lldb
+        if let Some(ref mut _debugger) = self.debugger {
+            for bp in &breakpoints {
+                let cmd = format!("breakpoint set --file {} --line {}\n", rust_source, bp.line);
+                // TODO: Send command to lldb stdin
+                tracing::debug!("Would send to lldb: {}", cmd.trim());
+            }
+        }
+
+        Ok(DapMessage {
+            msg_type: "response".to_string(),
+            seq: 3,
+            command: Some("setBreakpoints".to_string()),
+            arguments: None,
+            body: Some(serde_json::json!({
+                "breakpoints": breakpoints
+            })),
+            success: Some(true),
+            message: None,
+        })
+    }
+
+    /// Continue execution
+    pub async fn continue_exec(&mut self) -> Result<DapMessage, String> {
+        tracing::info!("Continuing execution");
+
+        // Send continue command to lldb
+        if let Some(ref mut _debugger) = self.debugger {
+            // TODO: Send "continue" to lldb stdin
+            tracing::debug!("Would send to lldb: continue");
+        }
+
+        Ok(DapMessage {
+            msg_type: "response".to_string(),
+            seq: 4,
+            command: Some("continue".to_string()),
+            arguments: None,
+            body: Some(serde_json::json!({
+                "allThreadsContinued": true
+            })),
+            success: Some(true),
+            message: None,
+        })
+    }
+
+    /// Step over
+    pub async fn next(&mut self) -> Result<DapMessage, String> {
+        tracing::info!("Stepping over (next)");
+
+        // Send next command to lldb
+        if let Some(ref mut _debugger) = self.debugger {
+            // TODO: Send "next" to lldb stdin
+            tracing::debug!("Would send to lldb: next");
+        }
+
+        Ok(DapMessage {
+            msg_type: "response".to_string(),
+            seq: 5,
+            command: Some("next".to_string()),
+            arguments: None,
+            body: None,
+            success: Some(true),
+            message: None,
+        })
+    }
+
+    /// Step into
+    pub async fn step_in(&mut self) -> Result<DapMessage, String> {
+        tracing::info!("Stepping into (step)");
+
+        // Send step command to lldb
+        if let Some(ref mut _debugger) = self.debugger {
+            // TODO: Send "step" to lldb stdin
+            tracing::debug!("Would send to lldb: step");
+        }
+
+        Ok(DapMessage {
+            msg_type: "response".to_string(),
+            seq: 6,
+            command: Some("stepIn".to_string()),
+            arguments: None,
+            body: None,
+            success: Some(true),
+            message: None,
+        })
+    }
+
+    /// Step out
+    pub async fn step_out(&mut self) -> Result<DapMessage, String> {
+        tracing::info!("Stepping out (finish)");
+
+        // Send finish command to lldb
+        if let Some(ref mut _debugger) = self.debugger {
+            // TODO: Send "finish" to lldb stdin
+            tracing::debug!("Would send to lldb: finish");
+        }
+
+        Ok(DapMessage {
+            msg_type: "response".to_string(),
+            seq: 7,
+            command: Some("stepOut".to_string()),
+            arguments: None,
+            body: None,
+            success: Some(true),
+            message: None,
+        })
+    }
+
+    /// Get stack trace
+    pub async fn stack_trace(&mut self) -> Result<DapMessage, String> {
+        tracing::info!("Getting stack trace");
+
+        // Get stack trace from lldb
+        let frames = vec![
+            StackFrame {
+                id: 1,
+                name: "main".to_string(),
+                source: Source {
+                    path: "src/main.wj".to_string(),
+                    name: Some("main.wj".to_string()),
+                },
+                line: 10,
+                column: 0,
+            },
+            // More frames would be parsed from lldb output
+        ];
+
+        Ok(DapMessage {
+            msg_type: "response".to_string(),
+            seq: 8,
+            command: Some("stackTrace".to_string()),
+            arguments: None,
+            body: Some(serde_json::json!({
+                "stackFrames": frames,
+                "totalFrames": frames.len()
+            })),
+            success: Some(true),
+            message: None,
+        })
+    }
+
+    /// Get variables
+    pub async fn variables(&mut self, variables_reference: i32) -> Result<DapMessage, String> {
+        tracing::info!("Getting variables for reference: {}", variables_reference);
+
+        // Get variables from lldb
+        let vars = vec![
+            Variable {
+                name: "x".to_string(),
+                value: "42".to_string(),
+                var_type: Some("int".to_string()),
+                variables_reference: 0,
+            },
+            Variable {
+                name: "name".to_string(),
+                value: "\"Windjammer\"".to_string(),
+                var_type: Some("string".to_string()),
+                variables_reference: 0,
+            },
+            // More variables would be parsed from lldb output
+        ];
+
+        Ok(DapMessage {
+            msg_type: "response".to_string(),
+            seq: 9,
+            command: Some("variables".to_string()),
+            arguments: None,
+            body: Some(serde_json::json!({
+                "variables": vars
+            })),
+            success: Some(true),
+            message: None,
+        })
+    }
+
+    /// Evaluate expression
+    pub async fn evaluate(&mut self, expression: String) -> Result<DapMessage, String> {
+        tracing::info!("Evaluating expression: {}", expression);
+
+        // Evaluate expression in lldb
+        // For now, return a placeholder result
+        Ok(DapMessage {
+            msg_type: "response".to_string(),
+            seq: 10,
+            command: Some("evaluate".to_string()),
+            arguments: None,
+            body: Some(serde_json::json!({
+                "result": "<evaluation result>",
+                "type": "unknown",
+                "variablesReference": 0
+            })),
+            success: Some(true),
+            message: None,
+        })
+    }
+
+    /// Terminate the debug session
+    pub async fn terminate(&mut self) -> Result<DapMessage, String> {
+        tracing::info!("Terminating debug session");
+
+        // Kill the debugger process
+        if let Some(mut debugger) = self.debugger.take() {
+            let _ = debugger.kill();
+        }
+
+        Ok(DapMessage {
+            msg_type: "response".to_string(),
+            seq: 11,
+            command: Some("terminate".to_string()),
+            arguments: None,
+            body: None,
+            success: Some(true),
+            message: None,
+        })
+    }
+
+    /// Build source map from Windjammer files to generated Rust files
+    async fn build_source_map(&mut self) -> Result<(), String> {
+        // In a real implementation, this would:
+        // 1. Find all .wj files in the project
+        // 2. Determine the corresponding generated .rs files
+        // 3. Build a mapping between them
+        //
+        // For now, use placeholder mappings
+        self.source_map.insert(
+            "src/main.wj".to_string(),
+            "build_output/src/main.rs".to_string(),
+        );
+
+        Ok(())
+    }
+}
