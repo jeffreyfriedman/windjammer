@@ -61,7 +61,7 @@ brew tap jeffreyfriedman/windjammer
 brew install windjammer
 
 # Verify installation
-windjammer --version
+wj --version
 ```
 
 **Update:**
@@ -95,7 +95,7 @@ sudo mv windjammer /usr/local/bin/
 sudo chmod +x /usr/local/bin/windjammer
 
 # Verify
-windjammer --version
+wj --version
 ```
 
 #### Linux (aarch64 / ARM)
@@ -126,7 +126,7 @@ sudo chmod +x /usr/local/bin/windjammer
 1. Download `windjammer-windows-x86_64.zip` from [Releases](https://github.com/jeffreyfriedman/windjammer/releases)
 2. Extract the ZIP file
 3. Move `windjammer.exe` to a directory in your PATH
-4. Open Command Prompt and verify: `windjammer --version`
+4. Open Command Prompt and verify: `wj --version`
 
 ---
 
@@ -180,8 +180,8 @@ docker run --rm -v $(pwd):/workspace ghcr.io/jeffreyfriedman/windjammer:latest \
 alias windjammer='docker run --rm -v $(pwd):/workspace ghcr.io/jeffreyfriedman/windjammer:latest'
 
 # Usage
-windjammer --help
-windjammer build --path . --output ./build --target wasm
+wj --help
+wj build --path . --output ./build --target wasm
 ```
 
 **Pros:**
@@ -202,7 +202,7 @@ windjammer build --path . --output ./build --target wasm
 sudo snap install windjammer --classic
 
 # Verify
-windjammer --version
+wj --version
 ```
 
 **Update:**
@@ -227,7 +227,7 @@ scoop bucket add windjammer https://github.com/jeffreyfriedman/scoop-windjammer
 scoop install windjammer
 
 # Verify
-windjammer --version
+wj --version
 ```
 
 **Update:**
@@ -255,7 +255,7 @@ sudo apt update
 sudo apt install windjammer
 
 # Verify
-windjammer --version
+wj --version
 ```
 
 **Update:**
@@ -277,14 +277,14 @@ After installation, verify Windjammer is working:
 
 ```bash
 # Check version
-windjammer --version
+wj --version
 
 # View help
-windjammer --help
+wj --help
 
 # Try compiling an example
 echo 'fn main() { println!("Hello, Windjammer!") }' > test.wj
-windjammer build --path . --output ./build --target wasm
+wj build --path . --output ./build --target wasm
 ```
 
 ---
@@ -417,7 +417,7 @@ After installation:
 1. **Read the Guide**: [`docs/GUIDE.md`](GUIDE.md)
 2. **Try Examples**: [`examples/`](../examples/)
 3. **Explore Stdlib**: [`docs/MODULE_SYSTEM.md`](MODULE_SYSTEM.md)
-4. **Build a Project**: Start with `windjammer build --help`
+4. **Build a Project**: Start with `wj build --help`
 
 ---
 

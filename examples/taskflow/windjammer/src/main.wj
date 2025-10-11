@@ -1,12 +1,17 @@
 // TaskFlow API - Windjammer Implementation
-// A production-quality task management REST API
+// Production-ready task management REST API
 
 use std.http
-use std.log
+use std.log  
 use std.env
+use std.db
+use std.json
 
-// Import our modules
+// Import modules
 use ./config
+use ./models.user
+use ./models.project
+use ./models.task
 use ./handlers.health
 use ./handlers.auth
 use ./handlers.users
@@ -16,62 +21,72 @@ use ./handlers.tasks
 @async
 fn main() {
     // Initialize logging
-    log.init_with_level("info")
+    log.init("info")
     log.info("Starting TaskFlow API (Windjammer)")
     
     // Load configuration
-    let config = config.load()
-    log.info_with("Configuration loaded", "port", config.port.to_string())
+    let cfg = config.load()
+    let addr = "${cfg.host}:${cfg.port}"
+    log.info("Configuration loaded, listening on ${addr}")
     
-    // Build router with all endpoints
-    let router = build_router()
+    // Initialize database connection pool
+    let pool = db.connect(cfg.database_url)
     
-    // Start server
-    let addr = format!("{}:{}", config.host, config.port)
-    log.info_with("Server listening", "address", &addr)
+    // Run migrations
+    log.info("Running database migrations...")
+    db.migrate(pool)
     
-    match http.serve(&addr, router).await {
+    // Build and start server
+    log.info("Starting HTTP server...")
+    let server = http.new_server(addr)
+    
+    // Register routes
+    register_routes(server, pool, cfg)
+    
+    // Start serving
+    match http.serve(server) {
         Ok(_) => log.info("Server stopped gracefully"),
         Err(e) => {
-            log.error_with("Server error", "error", &e)
+            log.error("Server error: ${e}")
             std.process.exit(1)
         }
     }
 }
 
-fn build_router() -> Router {
-    Router::new()
-        // Health check
-        .get("/health", health.check)
-        
-        // Auth endpoints
-        .post("/api/v1/auth/register", auth.register)
-        .post("/api/v1/auth/login", auth.login)
-        .post("/api/v1/auth/logout", auth.logout)
-        .get("/api/v1/auth/me", auth.me)
-        
-        // User endpoints
-        .get("/api/v1/users", users.list)
-        .get("/api/v1/users/:id", users.get)
-        .patch("/api/v1/users/:id", users.update)
-        .delete("/api/v1/users/:id", users.delete)
-        
-        // Project endpoints
-        .get("/api/v1/projects", projects.list)
-        .post("/api/v1/projects", projects.create)
-        .get("/api/v1/projects/:id", projects.get)
-        .patch("/api/v1/projects/:id", projects.update)
-        .delete("/api/v1/projects/:id", projects.delete)
-        .post("/api/v1/projects/:id/members", projects.add_member)
-        .delete("/api/v1/projects/:id/members/:user_id", projects.remove_member)
-        
-        // Task endpoints
-        .get("/api/v1/projects/:project_id/tasks", tasks.list_by_project)
-        .post("/api/v1/projects/:project_id/tasks", tasks.create)
-        .get("/api/v1/tasks/:id", tasks.get)
-        .patch("/api/v1/tasks/:id", tasks.update)
-        .delete("/api/v1/tasks/:id", tasks.delete)
-        .post("/api/v1/tasks/:id/assign", tasks.assign)
-        .get("/api/v1/tasks/search", tasks.search)
+fn register_routes(server: Server, pool: DbPool, cfg: Config) {
+    // Health check
+    http.route(server, "GET", "/health", health.check)
+    
+    // Auth endpoints  
+    http.route(server, "POST", "/api/v1/auth/register", auth.register)
+    http.route(server, "POST", "/api/v1/auth/login", auth.login)
+    http.route(server, "POST", "/api/v1/auth/logout", auth.logout)
+    http.route(server, "GET", "/api/v1/auth/me", auth.me)
+    
+    // User endpoints
+    http.route(server, "GET", "/api/v1/users", users.list)
+    http.route(server, "GET", "/api/v1/users/:id", users.get)
+    http.route(server, "PATCH", "/api/v1/users/:id", users.update)
+    http.route(server, "DELETE", "/api/v1/users/:id", users.delete)
+    
+    // Project endpoints
+    http.route(server, "GET", "/api/v1/projects", projects.list)
+    http.route(server, "POST", "/api/v1/projects", projects.create)
+    http.route(server, "GET", "/api/v1/projects/:id", projects.get)
+    http.route(server, "PATCH", "/api/v1/projects/:id", projects.update)
+    http.route(server, "DELETE", "/api/v1/projects/:id", projects.delete)
+    http.route(server, "POST", "/api/v1/projects/:id/members", projects.add_member)
+    http.route(server, "DELETE", "/api/v1/projects/:id/members/:user_id", projects.remove_member)
+    
+    // Task endpoints
+    http.route(server, "GET", "/api/v1/projects/:project_id/tasks", tasks.list_by_project)
+    http.route(server, "POST", "/api/v1/projects/:project_id/tasks", tasks.create)
+    http.route(server, "GET", "/api/v1/tasks/:id", tasks.get)
+    http.route(server, "PATCH", "/api/v1/tasks/:id", tasks.update)
+    http.route(server, "DELETE", "/api/v1/tasks/:id", tasks.delete)
+    http.route(server, "POST", "/api/v1/tasks/:id/assign", tasks.assign)
+    http.route(server, "GET", "/api/v1/tasks/search", tasks.search)
+    
+    log.info("All routes registered successfully")
 }
 

@@ -23,7 +23,7 @@ struct Headers {
 // Simple HTTP Methods
 
 @async
-fn get(url: string) -> Result<Response, Error> {
+fn get(url: string) -> Result<Response, String> {
     // Implementation wraps: reqwest::get(url).await
     Err("HTTP client requires reqwest (auto-added)")
 }
@@ -50,19 +50,19 @@ fn delete(url: string) -> RequestBuilder {
 
 impl Response {
     @async
-    fn text(self) -> Result<string, Error> {
+    fn text(self) -> Result<string, String> {
         // Wraps: response.text().await
         Err("Not yet implemented")
     }
     
     @async
-    fn json<T>(self) -> Result<T, Error> {
+    fn json<T>(self) -> Result<T, String> {
         // Wraps: response.json::<T>().await
         Err("Not yet implemented")
     }
     
     @async
-    fn bytes(self) -> Result<Vec<u8>, Error> {
+    fn bytes(self) -> Result<Vec<u8>, String> {
         // Wraps: response.bytes().await
         Err("Not yet implemented")
     }
@@ -122,7 +122,7 @@ impl RequestBuilder {
     }
     
     @async
-    fn send(self) -> Result<Response, Error> {
+    fn send(self) -> Result<Response, String> {
         // Wraps: builder.send().await
         Err("Not yet implemented")
     }
@@ -200,14 +200,14 @@ struct ServerResponse {
 // Server - Main Entry Point
 
 @async
-fn serve(addr: string, router: Router) -> Result<(), Error> {
+fn serve(addr: string, router: Router) -> Result<(), String> {
     // Implementation wraps: axum::Server::bind(addr).serve(router.into_make_service())
     Err("HTTP server requires axum (auto-added)")
 }
 
 // Simple server with handler function
 @async
-fn serve_fn<F>(addr: string, handler: F) -> Result<(), Error> {
+fn serve_fn<F>(addr: string, handler: F) -> Result<(), String> {
     // Implementation wraps a simple axum router with one handler
     Err("HTTP server requires axum (auto-added)")
 }
@@ -280,13 +280,13 @@ impl Request {
     }
     
     @async
-    fn body_string(self) -> Result<string, Error> {
+    fn body_string(self) -> Result<string, String> {
         // Wraps: String::from_utf8(body.to_bytes())
         Err("Not yet implemented")
     }
     
     @async
-    fn body_json<T>(self) -> Result<T, Error> {
+    fn body_json<T>(self) -> Result<T, String> {
         // Wraps: axum::Json::from_request()
         Err("Not yet implemented")
     }
