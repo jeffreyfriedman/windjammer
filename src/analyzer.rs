@@ -767,22 +767,27 @@ impl Analyzer {
                         });
                     }
                 }
-
-                // Check for concatenation chains (a + b + c)
-                self.detect_concatenation_chain(value, optimizations, idx);
+            }
+            // Recursively analyze nested blocks
+            Statement::If {
+                then_block,
+                else_block,
+                ..
+            } => {
+                for nested_stmt in then_block {
+                    self.analyze_statement_for_string_ops(nested_stmt, optimizations, idx);
+                }
+                if let Some(else_b) = else_block {
+                    for nested_stmt in else_b {
+                        self.analyze_statement_for_string_ops(nested_stmt, optimizations, idx);
+                    }
+                }
             }
             Statement::For { body, .. }
             | Statement::While { body, .. }
             | Statement::Loop { body } => {
-                // Check for string building in loops
-                for s in body {
-                    if self.is_string_accumulation(s) {
-                        optimizations.push(StringOptimization {
-                            optimization_type: StringOptimizationType::LoopAccumulation,
-                            estimated_capacity: Some(256), // Default for loop accumulation
-                            location: idx,
-                        });
-                    }
+                for nested_stmt in body {
+                    self.analyze_statement_for_string_ops(nested_stmt, optimizations, idx);
                 }
             }
             _ => {}
