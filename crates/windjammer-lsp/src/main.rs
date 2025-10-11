@@ -3,6 +3,7 @@ use tracing_subscriber::{fmt, prelude::*, EnvFilter};
 
 mod analysis;
 mod diagnostics;
+mod hover;
 mod server;
 
 use server::WindjammerLanguageServer;
