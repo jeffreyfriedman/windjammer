@@ -75,6 +75,46 @@ impl WindjammerLanguageServer {
             self.diagnostics.publish(&uri, diagnostics).await;
         }
     }
+
+    /// Get the word at a given position in a document
+    /// TODO: Improve this with proper lexical analysis
+    fn get_word_at_position(&self, uri: &Url, position: Position) -> Option<String> {
+        let content = self.documents.get(uri)?;
+        let lines: Vec<&str> = content.value().split('\n').collect();
+
+        if position.line as usize >= lines.len() {
+            return None;
+        }
+
+        let line = lines[position.line as usize];
+        let char_pos = position.character as usize;
+
+        if char_pos >= line.len() {
+            return None;
+        }
+
+        // Find word boundaries
+        let mut start = char_pos;
+        let mut end = char_pos;
+
+        let chars: Vec<char> = line.chars().collect();
+
+        // Find start of word
+        while start > 0 && (chars[start - 1].is_alphanumeric() || chars[start - 1] == '_') {
+            start -= 1;
+        }
+
+        // Find end of word
+        while end < chars.len() && (chars[end].is_alphanumeric() || chars[end] == '_') {
+            end += 1;
+        }
+
+        if start < end {
+            Some(chars[start..end].iter().collect())
+        } else {
+            None
+        }
+    }
 }
 
 #[tower_lsp::async_trait]
@@ -289,15 +329,34 @@ impl LanguageServer for WindjammerLanguageServer {
         &self,
         params: GotoDefinitionParams,
     ) -> Result<Option<GotoDefinitionResponse>> {
-        tracing::debug!(
-            "Go to definition: {} at {:?}",
-            params.text_document_position_params.text_document.uri,
-            params.text_document_position_params.position
-        );
+        let uri = params
+            .text_document_position_params
+            .text_document
+            .uri
+            .clone();
+        let position = params.text_document_position_params.position;
 
-        // TODO: Implement go to definition
-        // - Navigate to function, type, trait definitions
-        // - Navigate to module definitions
+        tracing::debug!("Go to definition: {} at {:?}", uri, position);
+
+        // Get the word at the cursor position
+        let symbol_name = self.get_word_at_position(&uri, position);
+
+        if let Some(name) = symbol_name {
+            // Get the symbol table for this file
+            if let Some(symbol_table) = self.analysis_db.get_symbol_table(&uri) {
+                // Look up the symbol
+                if let Some(symbol_def) = symbol_table.find_symbol(&name) {
+                    tracing::debug!(
+                        "Found definition for '{}' at {:?}",
+                        name,
+                        symbol_def.location
+                    );
+                    return Ok(Some(GotoDefinitionResponse::Scalar(
+                        symbol_def.location.clone(),
+                    )));
+                }
+            }
+        }
 
         Ok(None)
     }
