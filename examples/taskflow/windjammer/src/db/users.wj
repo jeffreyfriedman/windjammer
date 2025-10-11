@@ -128,14 +128,14 @@ pub async fn email_exists(conn: Connection, email: string) -> Result<bool, Error
 // User with password hash (internal use only)
 @derive(Debug)
 struct UserWithPassword {
-    id: int,
-    username: string,
-    email: string,
-    password_hash: string,
-    full_name: Option<string>,
-    role: string,
-    created_at: string,
-    updated_at: string,
+    pub id: int,
+    pub username: string,
+    pub email: string,
+    pub password_hash: string,
+    pub full_name: Option<string>,
+    pub role: string,
+    pub created_at: string,
+    pub updated_at: string,
 }
 
 impl UserWithPassword {
