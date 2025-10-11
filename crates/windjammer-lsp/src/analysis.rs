@@ -2,6 +2,7 @@ use std::collections::HashMap;
 use std::sync::RwLock;
 use tower_lsp::lsp_types::{Diagnostic, DiagnosticSeverity, Position, Range, Url};
 use windjammer::{
+    analyzer::{AnalyzedFunction, Analyzer},
     lexer::Lexer,
     parser::{Parser, Program},
 };
@@ -22,6 +23,8 @@ struct FileAnalysis {
     source: String,
     /// Parsed AST
     program: Option<Program>,
+    /// Analyzed functions with ownership inference
+    analyzed_functions: Vec<AnalyzedFunction>,
     /// Analysis diagnostics
     diagnostics: Vec<Diagnostic>,
 }
@@ -37,12 +40,13 @@ impl AnalysisDatabase {
     pub fn analyze_file(&self, uri: &Url, content: &str) -> Vec<Diagnostic> {
         tracing::debug!("Analyzing file: {}", uri);
 
-        let (diagnostics, program) = self.simple_analysis(content);
+        let (diagnostics, program, analyzed_functions) = self.full_analysis(content);
 
         // Cache the results
         let analysis = FileAnalysis {
             source: content.to_string(),
             program,
+            analyzed_functions,
             diagnostics: diagnostics.clone(),
         };
 
@@ -51,10 +55,14 @@ impl AnalysisDatabase {
         diagnostics
     }
 
-    /// Real analysis using the Windjammer compiler
-    fn simple_analysis(&self, content: &str) -> (Vec<Diagnostic>, Option<Program>) {
+    /// Full analysis: lex, parse, and analyze with ownership inference
+    fn full_analysis(
+        &self,
+        content: &str,
+    ) -> (Vec<Diagnostic>, Option<Program>, Vec<AnalyzedFunction>) {
         let mut diagnostics = Vec::new();
         let mut program_result = None;
+        let mut analyzed_functions = Vec::new();
 
         // Lex the file
         let mut lexer = Lexer::new(content);
@@ -64,12 +72,24 @@ impl AnalysisDatabase {
         let mut parser = Parser::new(tokens);
         match parser.parse() {
             Ok(program) => {
-                // Success! No parsing errors
-                // TODO: Add semantic analysis here
-                // - Type checking
-                // - Ownership inference
-                // - Undefined symbol detection
                 tracing::debug!("File parsed successfully");
+
+                // Run ownership inference analysis
+                let mut analyzer = Analyzer::new();
+                match analyzer.analyze_program(&program) {
+                    Ok((functions, _registry)) => {
+                        tracing::debug!(
+                            "Ownership analysis complete: {} functions",
+                            functions.len()
+                        );
+                        analyzed_functions = functions;
+                    }
+                    Err(error) => {
+                        tracing::warn!("Ownership analysis error: {}", error);
+                        // Don't fail completely, just log the error
+                    }
+                }
+
                 program_result = Some(program);
             }
             Err(error) => {
@@ -101,7 +121,7 @@ impl AnalysisDatabase {
             }
         }
 
-        (diagnostics, program_result)
+        (diagnostics, program_result, analyzed_functions)
     }
 
     /// Get cached analysis for a file
@@ -120,6 +140,16 @@ impl AnalysisDatabase {
             .unwrap()
             .get(uri)
             .and_then(|analysis| analysis.program.clone())
+    }
+
+    /// Get cached analyzed functions for a file
+    pub fn get_analyzed_functions(&self, uri: &Url) -> Vec<AnalyzedFunction> {
+        self.cache
+            .read()
+            .unwrap()
+            .get(uri)
+            .map(|analysis| analysis.analyzed_functions.clone())
+            .unwrap_or_default()
     }
 }
 
