@@ -5,6 +5,7 @@ mod analysis;
 mod completion;
 mod diagnostics;
 mod hover;
+mod inlay_hints;
 mod server;
 
 use server::WindjammerLanguageServer;
