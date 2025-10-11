@@ -1,39 +1,62 @@
 [package]
 name = "windjammer-lsp"
-version = "0.1.0"
-edition = "2021"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+description = "Language Server Protocol implementation for Windjammer"
+license.workspace = true
 
 [[bin]]
 name = "windjammer-lsp"
 path = "src/main.rs"
 
 [dependencies]
-# LSP protocol implementation
+# Windjammer compiler
+windjammer = { path = "../.." }
+
+# LSP
 tower-lsp = "0.20"
+# lsp-types exported from tower-lsp
+tower = "0.4"
 tokio = { version = "1.35", features = ["full"] }
 
-# Incremental compilation framework (same as rust-analyzer)
-salsa = "0.17"
+# Incremental compilation (for future use - starting simple for now)
+# salsa = "0.17.0-pre.2"
+dashmap = "5.5"
 
-# Syntax tree (resilient parsing)
-rowan = "0.15"
-
-# Error handling
-anyhow = "1.0"
-thiserror = "1.0"
-
-# Logging
-tracing = "0.1"
-tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+# File watching
+notify = "6.1"
+notify-debouncer-full = "0.3"
 
 # Serialization
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 
+# Logging
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+
 # Path handling
-dashmap = "5.5"
-lsp-types = "0.95"
+pathdiff = "0.2"
+path-absolutize = "3.1"
 
-# Reference to main windjammer compiler
-windjammer = { path = "../.." }
+# Error handling
+anyhow = "1.0"
+thiserror = "1.0"
 
+# Text manipulation
+ropey = "1.6"  # Efficient rope data structure for text
+text-size = "1.1"
+
+# Async utilities
+futures = "0.3"
+async-trait = "0.1"
+
+# Workspace support
+cargo_metadata = "0.18"
+
+[dev-dependencies]
+# Testing
+assert_cmd = "2.0"
+predicates = "3.0"
+tempfile = "3.8"
