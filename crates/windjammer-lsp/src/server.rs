@@ -5,6 +5,7 @@ use tower_lsp::lsp_types::*;
 use tower_lsp::{Client, LanguageServer};
 
 use crate::analysis::AnalysisDatabase;
+use crate::completion::CompletionProvider;
 use crate::diagnostics::DiagnosticsEngine;
 use crate::hover::HoverProvider;
 
@@ -16,6 +17,7 @@ pub struct WindjammerLanguageServer {
     analysis_db: Arc<AnalysisDatabase>,
     diagnostics: Arc<DiagnosticsEngine>,
     hover_providers: Arc<RwLock<DashMap<Url, HoverProvider>>>,
+    completion_providers: Arc<RwLock<DashMap<Url, CompletionProvider>>>,
     /// Map of file URIs to their content
     documents: DashMap<Url, String>,
 }
@@ -29,6 +31,7 @@ impl WindjammerLanguageServer {
             analysis_db: Arc::new(AnalysisDatabase::new()),
             diagnostics: Arc::new(DiagnosticsEngine::new(client.clone())),
             hover_providers: Arc::new(RwLock::new(DashMap::new())),
+            completion_providers: Arc::new(RwLock::new(DashMap::new())),
             documents: DashMap::new(),
         }
     }
@@ -43,10 +46,16 @@ impl WindjammerLanguageServer {
 
             // Update hover provider with parsed program
             if let Some(program) = self.analysis_db.get_program(&uri) {
-                let mut provider = HoverProvider::new();
-                provider.update_program(program);
-                let providers = self.hover_providers.write().unwrap();
-                providers.insert(uri.clone(), provider);
+                let mut hover_provider = HoverProvider::new();
+                hover_provider.update_program(program.clone());
+                let hover_providers = self.hover_providers.write().unwrap();
+                hover_providers.insert(uri.clone(), hover_provider);
+
+                // Update completion provider with parsed program
+                let mut completion_provider = CompletionProvider::new();
+                completion_provider.update_program(program);
+                let completion_providers = self.completion_providers.write().unwrap();
+                completion_providers.insert(uri.clone(), completion_provider);
             }
 
             // Publish diagnostics to the client
@@ -248,19 +257,19 @@ impl LanguageServer for WindjammerLanguageServer {
     }
 
     async fn completion(&self, params: CompletionParams) -> Result<Option<CompletionResponse>> {
-        tracing::debug!(
-            "Completion request: {} at {:?}",
-            params.text_document_position.text_document.uri,
-            params.text_document_position.position
-        );
+        let uri = params.text_document_position.text_document.uri.clone();
+        let position = params.text_document_position.position;
 
-        // TODO: Implement completion
-        // - Keywords (fn, let, struct, impl, etc.)
-        // - Stdlib modules and functions
-        // - User-defined symbols
-        // - Trait methods
+        tracing::debug!("Completion request: {} at {:?}", uri, position);
 
-        Ok(None)
+        // Get the completion provider for this file
+        let providers = self.completion_providers.read().unwrap();
+        let result = providers
+            .get(&uri)
+            .and_then(|provider| provider.get_completions(position));
+        drop(providers); // Explicitly drop the lock
+
+        Ok(result)
     }
 
     async fn goto_definition(
