@@ -1,0 +1,215 @@
+{
+  "Function": {
+    "prefix": "fn",
+    "body": [
+      "fn ${1:name}(${2:params}) {",
+      "\t$0",
+      "}"
+    ],
+    "description": "Function declaration"
+  },
+  "Function with return type": {
+    "prefix": "fnr",
+    "body": [
+      "fn ${1:name}(${2:params}) -> ${3:type} {",
+      "\t$0",
+      "}"
+    ],
+    "description": "Function with return type"
+  },
+  "Main function": {
+    "prefix": "main",
+    "body": [
+      "fn main() {",
+      "\t$0",
+      "}"
+    ],
+    "description": "Main entry point"
+  },
+  "Struct": {
+    "prefix": "struct",
+    "body": [
+      "struct ${1:Name} {",
+      "\t${2:field}: ${3:Type},$0",
+      "}"
+    ],
+    "description": "Struct definition"
+  },
+  "Enum": {
+    "prefix": "enum",
+    "body": [
+      "enum ${1:Name} {",
+      "\t${2:Variant1},",
+      "\t${3:Variant2},$0",
+      "}"
+    ],
+    "description": "Enum definition"
+  },
+  "Trait": {
+    "prefix": "trait",
+    "body": [
+      "trait ${1:Name} {",
+      "\tfn ${2:method}(&self) -> ${3:Type};$0",
+      "}"
+    ],
+    "description": "Trait definition"
+  },
+  "Impl": {
+    "prefix": "impl",
+    "body": [
+      "impl ${1:Type} {",
+      "\tfn ${2:method}(&self) {",
+      "\t\t$0",
+      "\t}",
+      "}"
+    ],
+    "description": "Implementation block"
+  },
+  "Let binding": {
+    "prefix": "let",
+    "body": "let ${1:name} = ${2:value};$0",
+    "description": "Let binding"
+  },
+  "Mutable let": {
+    "prefix": "letm",
+    "body": "let mut ${1:name} = ${2:value};$0",
+    "description": "Mutable let binding"
+  },
+  "If expression": {
+    "prefix": "if",
+    "body": [
+      "if ${1:condition} {",
+      "\t$0",
+      "}"
+    ],
+    "description": "If expression"
+  },
+  "If-else expression": {
+    "prefix": "ife",
+    "body": [
+      "if ${1:condition} {",
+      "\t${2:true_branch}",
+      "} else {",
+      "\t${3:false_branch}",
+      "}"
+    ],
+    "description": "If-else expression"
+  },
+  "Match expression": {
+    "prefix": "match",
+    "body": [
+      "match ${1:value} {",
+      "\t${2:pattern} => ${3:result},$0",
+      "}"
+    ],
+    "description": "Match expression"
+  },
+  "For loop": {
+    "prefix": "for",
+    "body": [
+      "for ${1:item} in ${2:collection} {",
+      "\t$0",
+      "}"
+    ],
+    "description": "For loop"
+  },
+  "While loop": {
+    "prefix": "while",
+    "body": [
+      "while ${1:condition} {",
+      "\t$0",
+      "}"
+    ],
+    "description": "While loop"
+  },
+  "Loop": {
+    "prefix": "loop",
+    "body": [
+      "loop {",
+      "\t$0",
+      "}"
+    ],
+    "description": "Infinite loop"
+  },
+  "Print": {
+    "prefix": "println",
+    "body": "println!(\"${1:message}\");$0",
+    "description": "Print to stdout with newline"
+  },
+  "Format string": {
+    "prefix": "format",
+    "body": "format!(\"${1:template}\", ${2:args})$0",
+    "description": "Format string"
+  },
+  "Use statement": {
+    "prefix": "use",
+    "body": "use ${1:module};$0",
+    "description": "Import statement"
+  },
+  "Const": {
+    "prefix": "const",
+    "body": "const ${1:NAME}: ${2:Type} = ${3:value};$0",
+    "description": "Constant declaration"
+  },
+  "Static": {
+    "prefix": "static",
+    "body": "static ${1:NAME}: ${2:Type} = ${3:value};$0",
+    "description": "Static variable"
+  },
+  "Test function": {
+    "prefix": "test",
+    "body": [
+      "@test",
+      "fn ${1:test_name}() {",
+      "\t$0",
+      "}"
+    ],
+    "description": "Test function"
+  },
+  "Async function": {
+    "prefix": "async",
+    "body": [
+      "@async",
+      "fn ${1:name}(${2:params}) -> ${3:Type} {",
+      "\t$0",
+      "}"
+    ],
+    "description": "Async function"
+  },
+  "Decorator": {
+    "prefix": "decorator",
+    "body": "@${1:name}($2)$0",
+    "description": "Decorator"
+  },
+  "Derive": {
+    "prefix": "derive",
+    "body": "@derive(${1:Clone}, ${2:Debug})$0",
+    "description": "Derive traits"
+  },
+  "Result match": {
+    "prefix": "resmatch",
+    "body": [
+      "match ${1:result} {",
+      "\tOk(${2:value}) => ${3:success},",
+      "\tErr(${4:error}) => ${5:failure},$0",
+      "}"
+    ],
+    "description": "Match on Result"
+  },
+  "Option match": {
+    "prefix": "optmatch",
+    "body": [
+      "match ${1:option} {",
+      "\tSome(${2:value}) => ${3:success},",
+      "\tNone => ${4:failure},$0",
+      "}"
+    ],
+    "description": "Match on Option"
+  },
+  "Ternary": {
+    "prefix": "ternary",
+    "body": "${1:condition} ? ${2:true_value} : ${3:false_value}$0",
+    "description": "Ternary operator"
+  }
+}
+
