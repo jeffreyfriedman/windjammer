@@ -11,6 +11,9 @@ name = "windjammer-lsp"
 path = "src/main.rs"
 
 [dependencies]
+# Windjammer compiler
+windjammer = { path = "../.." }
+
 # LSP
 tower-lsp = "0.20"
 # lsp-types exported from tower-lsp
