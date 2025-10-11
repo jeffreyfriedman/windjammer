@@ -2,12 +2,8 @@ name: Publish to crates.io
 
 on:
   push:
-    branches:
-      - main
-    paths:
-      - 'Cargo.toml'
-      - 'src/**'
-      - 'std/**'
+    tags:
+      - 'v*.*.*'  # Trigger on version tags (e.g., v0.17.0)
   workflow_dispatch:
 
 jobs:
@@ -21,12 +17,21 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Get current version
+      - name: Get version from tag
         id: get_version
         run: |
-          VERSION=$(grep '^version = ' Cargo.toml | head -1 | sed 's/version = "\(.*\)"/\1/')
+          # Extract version from tag (e.g., v0.17.0 -> 0.17.0)
+          VERSION="${GITHUB_REF#refs/tags/v}"
           echo "version=$VERSION" >> $GITHUB_OUTPUT
-          echo "Current version: $VERSION"
+          echo "Tagged version: $VERSION"
+          
+          # Verify it matches Cargo.toml
+          CARGO_VERSION=$(grep '^version = ' Cargo.toml | head -1 | sed 's/version = "\(.*\)"/\1/')
+          if [ "$VERSION" != "$CARGO_VERSION" ]; then
+            echo "ERROR: Tag version ($VERSION) doesn't match Cargo.toml version ($CARGO_VERSION)"
+            exit 1
+          fi
+          echo "✓ Tag matches Cargo.toml version"
 
       - name: Check if version is published
         id: version_check
@@ -109,27 +114,6 @@ jobs:
         env:
           CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
         run: cargo publish
-
-      - name: Create GitHub Release
-        uses: softprops/action-gh-release@v1
-        with:
-          tag_name: v${{ needs.check-version.outputs.version }}
-          name: Release v${{ needs.check-version.outputs.version }}
-          body: |
-            ## Windjammer v${{ needs.check-version.outputs.version }}
-            
-            Published to crates.io: https://crates.io/crates/windjammer/${{ needs.check-version.outputs.version }}
-            
-            ### Installation
-            ```bash
-            cargo install windjammer
-            ```
-            
-            See [CHANGELOG.md](https://github.com/yourusername/windjammer/blob/main/CHANGELOG.md) for details.
-          draft: false
-          prerelease: false
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Notify success
         if: success()

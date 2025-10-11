@@ -143,6 +143,7 @@ pub struct StructField {
     pub name: String,
     pub field_type: Type,
     pub decorators: Vec<Decorator>,
+    pub is_pub: bool,
 }
 
 #[derive(Debug, Clone)]
@@ -1597,6 +1598,14 @@ impl Parser {
                 field_decorators.push(decorator);
             }
 
+            // Parse pub keyword for fields
+            let is_pub = if self.current_token() == &Token::Pub {
+                self.advance();
+                true
+            } else {
+                false
+            };
+
             let field_name = if let Token::Ident(n) = self.current_token() {
                 let name = n.clone();
                 self.advance();
@@ -1612,6 +1621,7 @@ impl Parser {
                 name: field_name,
                 field_type,
                 decorators: field_decorators,
+                is_pub,
             });
 
             if self.current_token() == &Token::Comma {
