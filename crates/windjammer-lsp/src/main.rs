@@ -2,6 +2,7 @@ use tower_lsp::{LspService, Server};
 use tracing_subscriber::{fmt, prelude::*, EnvFilter};
 
 mod analysis;
+mod completion;
 mod diagnostics;
 mod hover;
 mod server;
