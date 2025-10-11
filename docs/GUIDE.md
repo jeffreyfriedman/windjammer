@@ -1934,6 +1934,178 @@ async fn get_data() -> Json<Data> {
 
 ---
 
+## Developer Experience
+
+Windjammer provides world-class IDE support through its comprehensive Language Server Protocol (LSP) implementation and Debug Adapter Protocol (DAP) integration.
+
+### Language Server (LSP)
+
+The Windjammer LSP (`windjammer-lsp`) provides rich IDE features for all major editors:
+
+**Real-Time Diagnostics:**
+- Instant syntax error detection as you type
+- Semantic analysis (type checking, undefined symbols)
+- Mapped Rust compiler errors (when available)
+- Clear, actionable error messages
+
+**Code Intelligence:**
+- **Auto-Completion**: Context-aware suggestions for:
+  - Keywords (`fn`, `struct`, `match`, etc.)
+  - Standard library modules and functions
+  - User-defined symbols (functions, structs, enums)
+  - Method calls and struct fields
+- **Hover Information**: See function signatures, parameter types, and documentation
+- **Go to Definition** (F12 / Cmd+Click): Jump to any symbol definition
+- **Find References**: See all usages of any symbol across your project
+- **Rename Symbol**: Safe refactoring with project-wide renames
+
+**Windjammer-Unique Features:**
+- **Inlay Hints for Ownership**: See inferred ownership modes inline!
+  ```windjammer
+  fn process(s: string /* & */, mut x: int /* &mut */) {
+      // Hints show the compiler's inference
+  }
+  ```
+- **Code Actions**:
+  - Extract function from selected code
+  - Inline variable at usage sites
+  - Quick fixes for common issues
+
+**Performance:**
+- **Hash-Based Incremental Compilation**: Only re-analyzes files when content changes
+- **Cache Hits**: ~1-5ms response time
+- **Large Files**: Handles 1000+ line files without lag
+- **Scalable**: Works efficiently with 1000+ file projects
+
+**Setup:**
+
+**VSCode:**
+```bash
+# Install the extension
+code --install-extension windjammer-vscode
+
+# Or manually: Copy windjammer-vscode/ to ~/.vscode/extensions/
+```
+
+**Vim/Neovim:**
+```vim
+" Add to your LSP config (with nvim-lspconfig)
+require'lspconfig'.windjammer_lsp.setup{}
+```
+
+**IntelliJ IDEA:**
+```
+Settings → Plugins → Marketplace → Search "LSP4IJ"
+Settings → Languages & Frameworks → Language Server Protocol
+  → Add → windjammer-lsp
+```
+
+### Debugging (DAP)
+
+The Windjammer Debug Adapter provides seamless debugging of `.wj` files through DAP:
+
+**Features:**
+- **Breakpoints**: Set breakpoints in `.wj` source files
+- **Step Through Code**: Step over, step into, step out
+- **Variable Inspection**: View variables, call stack, and scopes
+- **Expression Evaluation**: Evaluate expressions in debug context
+- **Source Mapping**: Automatic translation between Windjammer and generated Rust
+
+**How It Works:**
+1. Windjammer generates Rust with source maps
+2. DAP adapter translates between `.wj` line numbers and `.rs` line numbers
+3. Uses `lldb` (or `gdb`) to debug the underlying Rust binary
+4. Presents everything in terms of your Windjammer source
+
+**Setup:**
+
+**VSCode:**
+```json
+// .vscode/launch.json
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "type": "windjammer",
+      "request": "launch",
+      "name": "Debug Windjammer Program",
+      "program": "${workspaceFolder}/target/debug/my_program"
+    }
+  ]
+}
+```
+
+**Vim/Neovim (with nvim-dap):**
+```lua
+local dap = require('dap')
+dap.adapters.windjammer = {
+  type = 'executable',
+  command = 'windjammer-lsp',  -- Also provides DAP
+  args = {'--debug'}
+}
+dap.configurations.windjammer = {
+  {
+    type = 'windjammer',
+    request = 'launch',
+    name = 'Debug Windjammer Program',
+    program = '${workspaceFolder}/target/debug/my_program',
+  }
+}
+```
+
+**IntelliJ IDEA:**
+```
+Run → Edit Configurations → Add New Configuration → DAP
+  Adapter: windjammer-lsp --debug
+  Program: target/debug/my_program
+```
+
+**Example Debug Session:**
+```windjammer
+// main.wj
+fn factorial(n: int) -> int {
+    if n <= 1 {
+        return 1  // ← Set breakpoint here
+    }
+    n * factorial(n - 1)
+}
+
+fn main() {
+    let result = factorial(5)
+    println!("Result: {}", result)
+}
+```
+
+1. Set breakpoint on `return 1`
+2. Run debugger
+3. Inspect variables: `n = 1`, call stack shows recursion depth
+4. Step out to see return values propagate
+
+**Pro Tips:**
+- Source maps are generated automatically with `--debug` flag
+- Breakpoints work in both `.wj` and generated `.rs` files
+- Use conditional breakpoints: `n == 1` in the breakpoint settings
+- Watch expressions update in real-time during stepping
+
+### Editor Integration Status
+
+| Editor | LSP | Syntax | Debugging | Auto-Format |
+|--------|-----|--------|-----------|-------------|
+| **VSCode** | ✅ Full | ✅ Yes | ✅ Full | ✅ Yes |
+| **Vim/Neovim** | ✅ Full | ✅ Yes | ✅ DAP plugin | ✅ Yes |
+| **IntelliJ IDEA** | ✅ LSP4IJ | ⚠️ Manual | ⚠️ Manual | ✅ Yes |
+| **Emacs** | ⚠️ LSP-mode | ⚠️ Manual | ⚠️ DAP-mode | ✅ Yes |
+| **Sublime Text** | ⚠️ LSP plugin | ⚠️ Manual | ❌ No | ✅ Yes |
+
+✅ = Full support, ⚠️ = Community/manual setup, ❌ = Not yet available
+
+**Contributing Editor Support:**
+- See `crates/windjammer-lsp/README.md` for integration guides
+- Editor plugin source: `editor-plugins/` directory
+- PRs welcome for new editors!
+
+---
+
 ## What's Next?
 
 Now that you've learned the basics, try:
