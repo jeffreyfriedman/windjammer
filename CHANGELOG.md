@@ -9,13 +9,33 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [0.22.0] - In Progress
 
-**Phase 9 Codegen & LSP Completion**
+**Complete All Deferred Features: Phase 9 Codegen + Full LSP**
 
-### Planned
-- 🐄 **Phase 9 Codegen** - Complete Cow<'_, T> code generation
-- 🎨 **LSP Features** - Complete semantic tokens, signature help, symbols
-- 📊 **Benchmarks** - Validate Phase 8 & 9 performance gains
-- 📚 **Documentation** - Update with Phase 8-9 examples
+### Implementing (From v0.21.0 Deferrals)
+
+**Phase 9: Cow Code Generation** 🐄
+- [ ] Function parameter type generation with Cow<'_, T>
+- [ ] Cow::Borrowed and Cow::Owned conversion generation
+- [ ] Return type handling for Cow
+- [ ] Benchmarks validating clone reduction
+
+**LSP: Semantic Tokens** 🎨
+- [ ] AST position tracking infrastructure
+- [ ] SemanticTokenType to u32 index mapping
+- [ ] Delta encoding implementation
+- [ ] Full token collection from AST
+
+**LSP: Additional Features** 🔧
+- [ ] Signature help (parameter hints as you type)
+- [ ] Workspace symbols (project-wide search)
+- [ ] Document symbols (outline view)
+
+**Validation & Documentation** 📊
+- [ ] Phase 8 (SmallVec) performance benchmarks
+- [ ] Phase 9 (Cow) performance benchmarks
+- [ ] Update README with all Phase 7-9 examples
+- [ ] Update COMPARISON.md with optimization advantages
+- [ ] Comprehensive test examples
 
 ## [0.21.0] - 2025-10-12
 
