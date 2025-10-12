@@ -1415,21 +1415,18 @@ impl Analyzer {
         stmt: &Statement,
         optimizations: &mut Vec<SmallVecOptimization>,
     ) {
-        match stmt {
-            Statement::Let { name, value, .. } => {
-                if let Some(size) = self.estimate_vec_literal_size(value) {
-                    if size <= 8 {
-                        // Recommend SmallVec with power-of-2 stack size
-                        let stack_size = size.next_power_of_two().max(4);
-                        optimizations.push(SmallVecOptimization {
-                            variable: name.clone(),
-                            estimated_max_size: size,
-                            stack_size,
-                        });
-                    }
+        if let Statement::Let { name, value, .. } = stmt {
+            if let Some(size) = self.estimate_vec_literal_size(value) {
+                if size <= 8 {
+                    // Recommend SmallVec with power-of-2 stack size
+                    let stack_size = size.next_power_of_two().max(4);
+                    optimizations.push(SmallVecOptimization {
+                        variable: name.clone(),
+                        estimated_max_size: size,
+                        stack_size,
+                    });
                 }
             }
-            _ => {}
         }
     }
 
@@ -1472,7 +1469,7 @@ impl Analyzer {
                     // Try to compute range size
                     let start_val = self.extract_literal_int(start).unwrap_or(0);
                     let end_val = self.extract_literal_int(end)?;
-                    return Some((end_val - start_val) as usize);
+                    return Some((end_val - start_val));
                 }
                 None
             }
