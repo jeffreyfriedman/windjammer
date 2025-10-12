@@ -7,6 +7,46 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.23.0] - In Progress
+
+**Production Hardening & Developer Experience** 🏭🛠️
+
+### Focus Areas
+
+**60% Production Validation**:
+- Build 3 production-grade applications to validate compiler and stdlib
+- Profile and optimize generated code for real-world performance
+- Improve error messages based on actual usage patterns
+- Create comprehensive tutorials and best practices from learnings
+
+**40% Developer Experience**:
+- Enhanced LSP features (code lens, call hierarchy)
+- Better IDE integration and tooling
+- Improved debugging experience
+- Polished VSCode extension
+
+### Goals
+- Validate all 10 optimization phases in production scenarios
+- Uncover and fix edge cases
+- Build confidence for v1.0.0
+- Create showcase projects for adoption
+- Dramatically improve daily development experience
+
+### Added
+- 🚧 Production App 1: Enhanced TaskFlow API (auth, pagination, filtering, rate limiting)
+- 🚧 Production App 2: CLI tool (file search/processing utility)
+- 🚧 Production App 3: WebSocket chat server (rooms, presence)
+- 🚧 LSP: Code lens (inferred types, optimization hints)
+- 🚧 LSP: Call hierarchy (find callers/callees)
+- 🚧 Error message improvements (better source mapping, suggestions)
+- 🚧 Codegen profiling and optimization
+- 🚧 Comprehensive tutorial series
+- 🚧 Best practices guide
+- 🚧 Migration guides (Go → Windjammer, Rust → Windjammer)
+
+### Status
+Work in progress. Target: 6-8 weeks.
+
 ## [0.22.0] - 2025-10-12
 
 **Complete All Deferred Features: Phase 9 Codegen + Full LSP** ✅
