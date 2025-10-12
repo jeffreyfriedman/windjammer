@@ -5,19 +5,21 @@ use std.path
 use std.collections.Vec
 
 use ./config.Config
+use ./gitignore.GitignoreCache
 
 pub fn collect_files(paths: Vec<string>, config: Config) -> Result<Vec<string>, Error> {
     let mut all_files = vec![]
+    let mut gitignore_cache = GitignoreCache::new()
     
     for path in paths {
-        let files = walk_path(path, config.clone())?
+        let files = walk_path(path, config.clone(), &mut gitignore_cache)?
         all_files.extend(files)
     }
     
     Ok(all_files)
 }
 
-fn walk_path(path: string, config: Config) -> Result<Vec<string>, Error> {
+fn walk_path(path: string, config: Config, gitignore_cache: &mut GitignoreCache) -> Result<Vec<string>, Error> {
     let mut files = vec![]
     
     // Check if path exists
@@ -27,7 +29,7 @@ fn walk_path(path: string, config: Config) -> Result<Vec<string>, Error> {
     
     // If it's a file, return it directly
     if fs.is_file(path) {
-        if should_include_file(path.clone(), config) {
+        if should_include_file(path.clone(), config, gitignore_cache) {
             files.push(path)
         }
         return Ok(files)
@@ -35,15 +37,22 @@ fn walk_path(path: string, config: Config) -> Result<Vec<string>, Error> {
     
     // If it's a directory, walk it recursively
     if fs.is_dir(path) {
-        walk_dir(path, config, &mut files)?
+        walk_dir(path, config, &mut files, gitignore_cache)?
     }
     
     Ok(files)
 }
 
-fn walk_dir(dir: string, config: Config, files: &mut Vec<string>) -> Result<(), Error> {
+fn walk_dir(dir: string, config: Config, files: &mut Vec<string>, gitignore_cache: &mut GitignoreCache) -> Result<(), Error> {
     // Read directory entries
-    let entries = fs.read_dir(dir)?
+    let entries = fs.read_dir(dir.clone())?
+    
+    // Load .gitignore rules for this directory if respecting ignore
+    let gitignore_rules = if config.respect_ignore {
+        gitignore_cache.get_rules(dir.clone())
+    } else {
+        None
+    }
     
     for entry in entries {
         let path = entry.path()
@@ -59,17 +68,24 @@ fn walk_dir(dir: string, config: Config, files: &mut Vec<string>) -> Result<(), 
             continue
         }
         
-        // Skip common ignore patterns if respecting .gitignore
-        if config.respect_ignore && is_ignored(file_name) {
+        // Skip common ignore patterns
+        if config.respect_ignore && is_ignored(file_name.clone()) {
             continue
+        }
+        
+        // Check .gitignore rules
+        if config.respect_ignore && gitignore_rules.is_some() {
+            if gitignore_rules.unwrap().is_ignored(path.clone()) {
+                continue
+            }
         }
         
         if entry.is_dir() {
             // Recurse into subdirectory
-            walk_dir(path, config.clone(), files)?
+            walk_dir(path, config.clone(), files, gitignore_cache)?
         } else if entry.is_file() {
             // Add file if it matches criteria
-            if should_include_file(path.clone(), config.clone()) {
+            if should_include_file(path.clone(), config.clone(), gitignore_cache) {
                 files.push(path)
             }
         }
@@ -78,10 +94,19 @@ fn walk_dir(dir: string, config: Config, files: &mut Vec<string>) -> Result<(), 
     Ok(())
 }
 
-fn should_include_file(path: string, config: Config) -> bool {
+fn should_include_file(path: string, config: Config, gitignore_cache: &mut GitignoreCache) -> bool {
     // Check file type filter
     if !config.matches_file_type(path.clone(), config.file_types.clone()) {
         return false
+    }
+    
+    // Check .gitignore for this file if respecting ignore
+    if config.respect_ignore {
+        let dir = path.parent(path.clone()).unwrap_or(".")
+        let gitignore_rules = gitignore_cache.get_rules(dir)
+        if gitignore_rules.is_ignored(path.clone()) {
+            return false
+        }
     }
     
     // Check if binary file (skip binary files)

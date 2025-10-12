@@ -11,6 +11,7 @@ use std.log
 use ./config
 use ./search
 use ./output
+use ./gitignore
 
 @derive(Debug)]
 struct Args {
