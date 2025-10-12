@@ -1,0 +1,24 @@
+// Test Phase 7: Const/Static Optimization
+//
+// static declarations with compile-time values should become const
+
+// Should become `const` (literal value)
+static MAX_SIZE: int = 1024
+
+// Should become `const` (const expression)
+static BUFFER_SIZE: int = MAX_SIZE * 2
+
+// Should become `const` (binary operation on literals)
+static TIMEOUT_MS: int = 30 * 1000
+
+// Should remain `static` (runtime computation would be needed in real case,
+// but for literals it's still const-evaluable)
+static PI_TIMES_TWO: float = 3.14159 * 2.0
+
+fn main() {
+    println("MAX_SIZE = {}", MAX_SIZE)
+    println("BUFFER_SIZE = {}", BUFFER_SIZE)
+    println("TIMEOUT_MS = {}", TIMEOUT_MS)
+    println("PI_TIMES_TWO = {}", PI_TIMES_TWO)
+}
+
