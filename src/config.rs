@@ -312,6 +312,7 @@ serde = { version = "1.0", features = ["derive"] }
             dev_dependencies: HashMap::new(),
             profile: HashMap::new(),
             target: HashMap::new(),
+            compiler: CompilerConfig::default(),
         };
 
         config.add_dependency(

@@ -41,13 +41,19 @@ Implement automatic "defer drop" optimization that makes functions return dramat
 - 📚 **GUIDE.md** - Comprehensive technical details and safety information
 - 📈 **Benchmark Results** - Empirical validation of performance claims
 
-### Planned (Deferred)
-- **Semantic Highlighting** - Context-aware syntax coloring
-- **Signature Help** - Parameter hints as you type function calls
-- **Workspace Symbols** - Search symbols across entire project
-- **Document Symbols** - Outline view for navigation
-- **CLI Configuration** - Optional `--defer-drop` flags for power users
-- **Rust Performance Book Optimizations** - Additional compiler optimizations
+### Infrastructure Added  
+- 🔧 **CLI Configuration** - `--defer-drop` flags and `wj.toml` [compiler] section
+- 🔄 **Self-Update Command** - `wj update` for automatic updates via cargo install
+- 📋 **Optimization Roadmap** - Comprehensive plan for Phases 7-17 optimizations
+- 🏗️ **Phase 7-9 Infrastructure** - Const/Static, SmallVec, and Cow optimization structures
+- ✨ **Semantic Tokens Provider** - Foundation for LSP semantic highlighting
+
+### Deferred to v0.21.0+
+- Full Semantic Highlighting integration
+- Signature Help (parameter hints)
+- Workspace Symbols (project-wide search)
+- Document Symbols (outline view)
+- Phase 7-9 detection algorithms (const static, smallvec, cow)
 
 ## [0.19.0] - 2025-10-11
 
