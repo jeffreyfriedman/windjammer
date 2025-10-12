@@ -250,7 +250,7 @@ This production WebSocket server validates Windjammer's:
 
 ## 🚧 Roadmap
 
-### Phase 1: Core (Week 2) - IN PROGRESS
+### Phase 1: Core (Week 2) - COMPLETE ✅
 - [x] WebSocket server setup
 - [x] Connection handling
 - [x] Room management
@@ -259,11 +259,11 @@ This production WebSocket server validates Windjammer's:
 - [x] Authentication
 - [x] Rate limiting
 - [x] Metrics
+- [x] Message persistence (SQLite)
 
-### Phase 2: Features (Week 2-3)
-- [ ] Message persistence (SQLite/PostgreSQL)
-- [ ] Direct messages
-- [ ] Message history API
+### Phase 2: Features (Week 2-3) - IN PROGRESS
+- [x] Message persistence with search ✅
+- [ ] Direct messages (1-to-1 chat)
 - [ ] Connection recovery
 - [ ] Heartbeat implementation
 
