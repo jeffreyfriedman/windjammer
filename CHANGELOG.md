@@ -7,7 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-## [0.21.0] - In Progress
+## [0.22.0] - In Progress
+
+**Phase 9 Codegen & LSP Completion**
+
+### Planned
+- 🐄 **Phase 9 Codegen** - Complete Cow<'_, T> code generation
+- 🎨 **LSP Features** - Complete semantic tokens, signature help, symbols
+- 📊 **Benchmarks** - Validate Phase 8 & 9 performance gains
+- 📚 **Documentation** - Update with Phase 8-9 examples
+
+## [0.21.0] - 2025-10-12
 
 **Three Major Compiler Optimizations: Phases 7-9 Complete!**
 
