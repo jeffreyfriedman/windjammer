@@ -19,8 +19,7 @@ fn create_large_hashmap() -> HashMap<usize, Vec<usize>> {
 
 // WITHOUT defer drop - normal synchronous drop
 fn hashmap_normal_drop(data: HashMap<usize, Vec<usize>>) -> usize {
-    let len = data.len();
-    len
+    data.len()
     // data is dropped here synchronously - SLOW!
 }
 
@@ -59,8 +58,7 @@ fn create_large_vec() -> Vec<Vec<usize>> {
 }
 
 fn vec_normal_drop(data: Vec<Vec<usize>>) -> usize {
-    let len = data.len();
-    len
+    data.len()
 }
 
 fn vec_defer_drop(data: Vec<Vec<usize>>) -> usize {
@@ -97,8 +95,7 @@ fn create_large_string() -> String {
 }
 
 fn string_normal_drop(data: String) -> usize {
-    let len = data.len();
-    len
+    data.len()
 }
 
 fn string_defer_drop(data: String) -> usize {
@@ -131,6 +128,7 @@ fn bench_string(c: &mut Criterion) {
 // === REALISTIC SCENARIO: API REQUEST/RESPONSE ===
 
 #[derive(Clone)]
+#[allow(dead_code)] // Fields are intentionally unused - realistic data structure for benchmarking
 struct ApiRequest {
     headers: HashMap<String, String>,
     body: Vec<u8>,
