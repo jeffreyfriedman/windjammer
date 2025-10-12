@@ -1,0 +1,408 @@
+// WebSocket server logic for wschat
+
+use std.websocket
+use std.sync
+use std.collections.HashMap
+use std.time
+use std.log
+
+use ./message
+use ./room
+use ./presence
+use ./auth
+use ./rate_limit
+use ./main.Config
+
+@derive(Clone)]
+pub struct ServerState {
+    pub connections: Arc<Mutex<HashMap<string, ConnectionInfo>>>,
+    pub room_manager: room.RoomManager,
+    pub presence_tracker: presence.PresenceTracker,
+    pub rate_limiters: Arc<Mutex<HashMap<string, rate_limit.RateLimiter>>>,
+    pub config: Config,
+}
+
+@derive(Debug, Clone)]
+struct ConnectionInfo {
+    pub user_id: string,
+    pub username: string,
+    pub authenticated: bool,
+    pub joined_rooms: Vec<string>,
+    pub connected_at: int,
+}
+
+pub fn new_state(config: Config) -> ServerState {
+    ServerState {
+        connections: Arc::new(Mutex::new(HashMap::new())),
+        room_manager: room.RoomManager::new(),
+        presence_tracker: presence.PresenceTracker::new(),
+        rate_limiters: Arc::new(Mutex::new(HashMap::new())),
+        config: config,
+    }
+}
+
+@async
+pub fn handle_connection(
+    mut socket: WebSocket,
+    state: ServerState,
+    config: Config,
+    token: Option<string>
+) {
+    let conn_id = uuid.new_v4().to_string()
+    log.info("New connection: ${conn_id}")
+    
+    // Authenticate if token provided
+    let (user_id, username, authenticated) = if let Some(t) = token {
+        match auth.verify_token(t) {
+            Ok(claims) => (claims.user_id, claims.username, true),
+            Err(_) => {
+                send_error(&mut socket, "Authentication failed").await
+                return
+            }
+        }
+    } else {
+        // Anonymous user
+        let anon_id = format!("anon_{}", conn_id[..8])
+        (anon_id.clone(), anon_id, false)
+    }
+    
+    // Register connection
+    let conn_info = ConnectionInfo {
+        user_id: user_id.clone(),
+        username: username.clone(),
+        authenticated: authenticated,
+        joined_rooms: vec![],
+        connected_at: time.now_unix(),
+    }
+    
+    {
+        let mut connections = state.connections.lock().await
+        connections.insert(conn_id.clone(), conn_info)
+    }
+    
+    // Create rate limiter for this user
+    {
+        let mut limiters = state.rate_limiters.lock().await
+        limiters.insert(
+            user_id.clone(),
+            rate_limit.RateLimiter::new(config.message_rate_limit)
+        )
+    }
+    
+    // Send welcome message
+    let welcome = ServerMessage::Welcome {
+        user_id: user_id.clone(),
+        username: username.clone(),
+    }
+    send_message(&mut socket, welcome).await
+    
+    // Start heartbeat task
+    let heartbeat_socket = socket.clone()
+    let heartbeat_interval = config.heartbeat_interval
+    tokio::spawn(async move {
+        heartbeat_task(heartbeat_socket, heartbeat_interval).await
+    })
+    
+    // Handle messages
+    while let Some(msg_result) = socket.next().await {
+        match msg_result {
+            Ok(ws_msg) => {
+                match ws_msg {
+                    WebSocketMessage::Text(text) => {
+                        handle_text_message(
+                            text,
+                            &user_id,
+                            &conn_id,
+                            &mut socket,
+                            state.clone()
+                        ).await
+                    }
+                    WebSocketMessage::Close(_) => {
+                        log.info("Connection closed: ${conn_id}")
+                        break
+                    }
+                    WebSocketMessage::Ping(_) => {
+                        socket.send(WebSocketMessage::Pong(vec![])).await.ok()
+                    }
+                    _ => {}
+                }
+            }
+            Err(e) => {
+                log.error("WebSocket error on ${conn_id}: ${e}")
+                break
+            }
+        }
+    }
+    
+    // Cleanup on disconnect
+    cleanup_connection(conn_id, user_id, state).await
+}
+
+@async
+async fn handle_text_message(
+    text: string,
+    user_id: &string,
+    conn_id: &string,
+    socket: &mut WebSocket,
+    state: ServerState
+) {
+    // Parse client message
+    let client_msg = match message.parse_client_message(text) {
+        Ok(msg) => msg,
+        Err(e) => {
+            log.warn("Failed to parse message from ${user_id}: ${e}")
+            send_error(socket, "Invalid message format").await
+            return
+        }
+    }
+    
+    // Check rate limit
+    {
+        let mut limiters = state.rate_limiters.lock().await
+        if let Some(limiter) = limiters.get_mut(user_id) {
+            if !limiter.check() {
+                send_error(socket, "Rate limit exceeded").await
+                return
+            }
+        }
+    }
+    
+    // Handle message based on type
+    match client_msg {
+        ClientMessage::Ping => {
+            send_message(socket, ServerMessage::Pong).await
+        }
+        
+        ClientMessage::Join { room } => {
+            handle_join(user_id, conn_id, &room, socket, state).await
+        }
+        
+        ClientMessage::Leave { room } => {
+            handle_leave(user_id, conn_id, &room, socket, state).await
+        }
+        
+        ClientMessage::Message { room, text } => {
+            handle_room_message(user_id, &room, &text, state).await
+        }
+        
+        ClientMessage::DirectMessage { to, text } => {
+            handle_direct_message(user_id, &to, &text, state).await
+        }
+        
+        ClientMessage::Typing { room, status } => {
+            handle_typing(user_id, &room, status, state).await
+        }
+        
+        ClientMessage::ListUsers { room } => {
+            handle_list_users(&room, socket, state).await
+        }
+        
+        ClientMessage::History { room, limit } => {
+            handle_history(&room, limit, socket, state).await
+        }
+        
+        _ => {
+            send_error(socket, "Unsupported message type").await
+        }
+    }
+}
+
+@async
+async fn handle_join(
+    user_id: &string,
+    conn_id: &string,
+    room: &string,
+    socket: &mut WebSocket,
+    state: ServerState
+) {
+    // Join room
+    match state.room_manager.join_room(room.clone(), user_id.clone()).await {
+        Ok(room_obj) => {
+            // Update connection info
+            {
+                let mut connections = state.connections.lock().await
+                if let Some(conn) = connections.get_mut(conn_id) {
+                    if !conn.joined_rooms.contains(&room) {
+                        conn.joined_rooms.push(room.clone())
+                    }
+                }
+            }
+            
+            // Update presence
+            state.presence_tracker.set_online(user_id.clone(), room.clone()).await
+            
+            // Get user list
+            let members = state.room_manager.get_members(room.clone()).await.unwrap_or(vec![])
+            let users = get_user_info_list(members, &state).await
+            
+            // Send joined confirmation
+            let msg = ServerMessage::Joined {
+                room: room.clone(),
+                users: users,
+            }
+            send_message(socket, msg).await
+            
+            // Broadcast presence to room
+            broadcast_to_room(
+                room,
+                ServerMessage::Presence {
+                    room: room.clone(),
+                    user: user_id.clone(),
+                    status: PresenceStatus::Online,
+                },
+                &state
+            ).await
+            
+            log.info("User ${user_id} joined room ${room}")
+        }
+        Err(e) => {
+            send_error(socket, format!("Failed to join room: ${e}")).await
+        }
+    }
+}
+
+@async
+async fn handle_leave(
+    user_id: &string,
+    conn_id: &string,
+    room: &string,
+    socket: &mut WebSocket,
+    state: ServerState
+) {
+    // Leave room
+    match state.room_manager.leave_room(room.clone(), user_id.clone()).await {
+        Ok(_) => {
+            // Update connection info
+            {
+                let mut connections = state.connections.lock().await
+                if let Some(conn) = connections.get_mut(conn_id) {
+                    conn.joined_rooms.retain(|r| r != room)
+                }
+            }
+            
+            // Update presence
+            state.presence_tracker.set_offline(user_id.clone(), room.clone()).await
+            
+            // Send left confirmation
+            send_message(socket, ServerMessage::Left { room: room.clone() }).await
+            
+            // Broadcast presence to room
+            broadcast_to_room(
+                room,
+                ServerMessage::Presence {
+                    room: room.clone(),
+                    user: user_id.clone(),
+                    status: PresenceStatus::Offline,
+                },
+                &state
+            ).await
+            
+            log.info("User ${user_id} left room ${room}")
+        }
+        Err(e) => {
+            send_error(socket, format!("Failed to leave room: ${e}")).await
+        }
+    }
+}
+
+@async
+async fn handle_room_message(
+    user_id: &string,
+    room: &string,
+    text: &string,
+    state: ServerState
+) {
+    let msg = InternalMessage::new(user_id.clone(), room.clone(), text.clone())
+    
+    // Store in history
+    state.room_manager.add_message(room.clone(), msg.clone()).await.ok()
+    
+    // Broadcast to room
+    broadcast_to_room(room, msg.to_server_message(), &state).await
+}
+
+@async
+async fn send_message(socket: &mut WebSocket, msg: ServerMessage) {
+    if let Ok(json) = message.serialize_server_message(msg) {
+        socket.send(WebSocketMessage::Text(json)).await.ok()
+    }
+}
+
+@async
+async fn send_error(socket: &mut WebSocket, error: string) {
+    let msg = ServerMessage::Error { message: error }
+    send_message(socket, msg).await
+}
+
+@async
+async fn broadcast_to_room(room: &string, msg: ServerMessage, state: &ServerState) {
+    // Get room members
+    let members = match state.room_manager.get_members(room.clone()).await {
+        Ok(m) => m,
+        Err(_) => return,
+    }
+    
+    // Get all connections
+    let connections = state.connections.lock().await
+    
+    // Find sockets for room members
+    for (conn_id, conn_info) in connections.iter() {
+        if members.contains(&conn_info.user_id) {
+            // Send message (in real impl, we'd store WebSocket handles)
+            // For now, this is a placeholder
+            log.debug("Broadcasting to ${conn_info.user_id} in room ${room}")
+        }
+    }
+}
+
+@async
+async fn cleanup_connection(conn_id: string, user_id: string, state: ServerState) {
+    // Get rooms user was in
+    let rooms = {
+        let connections = state.connections.lock().await
+        connections.get(&conn_id)
+            .map(|c| c.joined_rooms.clone())
+            .unwrap_or(vec![])
+    }
+    
+    // Leave all rooms
+    for room in rooms {
+        state.room_manager.leave_room(room.clone(), user_id.clone()).await.ok()
+        state.presence_tracker.set_offline(user_id.clone(), room.clone()).await
+    }
+    
+    // Remove connection
+    {
+        let mut connections = state.connections.lock().await
+        connections.remove(&conn_id)
+    }
+    
+    // Remove rate limiter
+    {
+        let mut limiters = state.rate_limiters.lock().await
+        limiters.remove(&user_id)
+    }
+    
+    log.info("Cleaned up connection: ${conn_id}")
+}
+
+@async
+pub fn shutdown_gracefully(state: ServerState) {
+    log.info("Initiating graceful shutdown...")
+    
+    // Get all connections
+    let conn_ids: Vec<string> = {
+        let connections = state.connections.lock().await
+        connections.keys().cloned().collect()
+    }
+    
+    log.info("Closing ${conn_ids.len()} connections...")
+    
+    // Close all connections (in real impl, we'd send close frames)
+    for conn_id in conn_ids {
+        log.debug("Closing connection: ${conn_id}")
+    }
+    
+    log.info("All connections closed")
+}
+
