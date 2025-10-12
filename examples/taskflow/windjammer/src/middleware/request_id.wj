@@ -1,0 +1,30 @@
+// Request ID middleware for distributed tracing
+
+use std.http
+use std.crypto
+
+pub fn generate_request_id() -> string {
+    // Generate a unique request ID
+    let random_bytes = crypto.random_bytes(16)
+    let id = crypto.base64_encode(&random_bytes)
+    format!("req_{}", id)
+}
+
+pub fn add_request_id_header(req: Request) -> Request {
+    // Check if request already has an ID (from upstream proxy)
+    let request_id = match http.get_header(req, "X-Request-ID") {
+        Some(id) => id,
+        None => generate_request_id(),
+    }
+    
+    // Add to request context for logging
+    http.set_context(req, "request_id", request_id.clone())
+    
+    // Return request with ID
+    req
+}
+
+pub fn add_request_id_to_response(res: Response, request_id: string) -> Response {
+    http.set_header(res, "X-Request-ID", request_id)
+}
+
