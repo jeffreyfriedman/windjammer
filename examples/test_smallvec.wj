@@ -1,0 +1,35 @@
+// Test Phase 8: SmallVec Optimization
+//
+// Small vectors should use stack allocation via SmallVec
+
+fn test_vec_literals() {
+    // Should use SmallVec[4] - literal with 3 elements
+    let small = vec![1, 2, 3]
+    
+    // Should use SmallVec[8] - literal with 5 elements
+    let medium = vec![1, 2, 3, 4, 5]
+    
+    // Should stay as Vec - too large (> 8 elements)
+    let large = vec![1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
+    
+    println("small: {:?}", small)
+    println("medium: {:?}", medium)
+    println("large: {:?}", large)
+}
+
+fn test_range_collect() {
+    // Should use SmallVec[4] - range of size 3
+    let items = (0..3).collect()
+    
+    // Should use SmallVec[8] - range of size 7
+    let more = (1..8).collect()
+    
+    println("items: {:?}", items)
+    println("more: {:?}", more)
+}
+
+fn main() {
+    test_vec_literals()
+    test_range_collect()
+}
+
