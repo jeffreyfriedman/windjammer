@@ -251,6 +251,9 @@ impl Analyzer {
                     // PHASE 8: Detect SmallVec optimizations
                     analyzed_func.smallvec_optimizations = self.detect_smallvec_opportunities(func);
 
+                    // PHASE 9: Detect Cow optimizations
+                    analyzed_func.cow_optimizations = self.detect_cow_opportunities(func);
+
                     let signature = self.build_signature(&analyzed_func);
                     registry.add_function(func.name.clone(), signature);
                     analyzed.push(analyzed_func);
@@ -267,6 +270,9 @@ impl Analyzer {
                         // PHASE 8: Detect SmallVec optimizations
                         analyzed_func.smallvec_optimizations =
                             self.detect_smallvec_opportunities(func);
+
+                        // PHASE 9: Detect Cow optimizations
+                        analyzed_func.cow_optimizations = self.detect_cow_opportunities(func);
 
                         let signature = self.build_signature(&analyzed_func);
                         registry.add_function(func.name.clone(), signature);
@@ -1430,16 +1436,212 @@ impl Analyzer {
     /// Estimate the size of a Vec literal or similar construction
     fn estimate_vec_literal_size(&self, expr: &Expression) -> Option<usize> {
         match expr {
-            // Direct method calls like Vec::new() or vec![] macro
+            // vec![1, 2, 3] macro invocation
+            Expression::MacroInvocation {
+                name,
+                args,
+                delimiter,
+            } if name == "vec" && *delimiter == MacroDelimiter::Brackets => Some(args.len()),
+
+            // Vec::new() - starts empty
             Expression::MethodCall {
                 method, arguments, ..
-            } if method == "new" && arguments.is_empty() => {
-                Some(0) // Vec::new() starts empty
+            } if method == "new" && arguments.is_empty() => Some(0),
+
+            // Static method Vec::<T>::with_capacity(n) where n is a literal
+            Expression::Call {
+                function,
+                arguments,
+            } => {
+                // Check if it's Vec::with_capacity or similar
+                if let Expression::FieldAccess { object, field } = function.as_ref() {
+                    if field == "with_capacity" {
+                        // Try to extract capacity from first argument
+                        if let Some((_, arg)) = arguments.first() {
+                            return self.extract_literal_int(arg);
+                        }
+                    }
+                }
+                None
             }
-            // Array literals that might become vectors
-            // In Windjammer, vec![1, 2, 3] might parse as a macro or special syntax
-            // For now, we can't easily detect this without better AST support
+
+            // (0..n).collect::<Vec<_>>() patterns
+            Expression::MethodCall { object, method, .. } if method == "collect" => {
+                // Check if object is a Range
+                if let Expression::Range { start, end, .. } = object.as_ref() {
+                    // Try to compute range size
+                    let start_val = self.extract_literal_int(start).unwrap_or(0);
+                    let end_val = self.extract_literal_int(end)?;
+                    return Some((end_val - start_val) as usize);
+                }
+                None
+            }
+
             _ => None,
+        }
+    }
+
+    /// Extract an integer literal value from an expression
+    fn extract_literal_int(&self, expr: &Expression) -> Option<usize> {
+        match expr {
+            Expression::Literal(Literal::Int(n)) if *n >= 0 => Some(*n as usize),
+            _ => None,
+        }
+    }
+
+    /// PHASE 9: Detect Cow (Clone-on-Write) optimization opportunities
+    /// Returns parameters/variables that can use Cow to avoid unnecessary clones
+    fn detect_cow_opportunities(&self, func: &FunctionDecl) -> Vec<CowOptimization> {
+        let mut optimizations = Vec::new();
+
+        // Analyze function parameters that might be conditionally modified
+        for param in &func.parameters {
+            // Check if parameter is String or str (common Cow candidates)
+            let is_string_like = matches!(param.type_, Type::String)
+                || matches!(param.type_, Type::Reference(ref inner) if matches!(**inner, Type::String));
+
+            if !is_string_like {
+                continue;
+            }
+
+            // Analyze if the parameter is conditionally modified
+            if let Some(reason) = self.analyze_conditional_modification(&param.name, &func.body) {
+                optimizations.push(CowOptimization {
+                    variable: param.name.clone(),
+                    reason,
+                });
+            }
+        }
+
+        optimizations
+    }
+
+    /// Analyze if a variable is conditionally modified (some branches modify, others don't)
+    fn analyze_conditional_modification(
+        &self,
+        var_name: &str,
+        body: &[Statement],
+    ) -> Option<CowReason> {
+        let mut has_read_only_path = false;
+        let mut has_modifying_path = false;
+
+        for stmt in body {
+            match stmt {
+                // Check if statements
+                Statement::If {
+                    condition: _,
+                    then_block,
+                    else_block,
+                } => {
+                    // Check if variable is modified in then block
+                    let modified_in_then = self.is_variable_modified(var_name, then_block);
+                    let modified_in_else = else_block
+                        .as_ref()
+                        .map(|block| self.is_variable_modified(var_name, block))
+                        .unwrap_or(false);
+
+                    if modified_in_then && !modified_in_else {
+                        has_read_only_path = true;
+                        has_modifying_path = true;
+                    } else if !modified_in_then && modified_in_else {
+                        has_read_only_path = true;
+                        has_modifying_path = true;
+                    } else if !modified_in_then && !modified_in_else {
+                        has_read_only_path = true;
+                    } else {
+                        has_modifying_path = true;
+                    }
+                }
+
+                // Check match statements
+                Statement::Match { value: _, arms } => {
+                    // For match expressions, check if the variable is referenced in any arm
+                    // Full analysis would require checking if arms modify vs just read
+                    // For now, consider it a potential read-only use
+                    for arm in arms {
+                        if self.expression_references_variable(var_name, &arm.body) {
+                            has_read_only_path = true;
+                        }
+                    }
+                }
+
+                // Check if variable is used in a read-only way
+                Statement::Expression(expr) | Statement::Return(Some(expr)) => {
+                    if self.expression_references_variable(var_name, expr) {
+                        // Simple use - consider it read-only unless it's being modified
+                        has_read_only_path = true;
+                    }
+                }
+
+                _ => {}
+            }
+        }
+
+        // If we have both read-only and modifying paths, Cow is beneficial
+        if has_read_only_path && has_modifying_path {
+            Some(CowReason::ConditionalModification)
+        } else {
+            None
+        }
+    }
+
+    /// Check if a variable is modified in a block of statements
+    fn is_variable_modified(&self, var_name: &str, statements: &[Statement]) -> bool {
+        for stmt in statements {
+            match stmt {
+                // Assignment to the variable
+                Statement::Assignment { target, .. } => {
+                    if let Expression::Identifier(name) = target {
+                        if name == var_name {
+                            return true;
+                        }
+                    }
+                }
+
+                // Method calls that might modify (e.g., push_str, clear)
+                Statement::Expression(Expression::MethodCall { object, method, .. }) => {
+                    if let Expression::Identifier(name) = object.as_ref() {
+                        if name == var_name && self.is_mutating_method(method) {
+                            return true;
+                        }
+                    }
+                }
+
+                _ => {}
+            }
+        }
+        false
+    }
+
+    /// Check if a method mutates the object
+    fn is_mutating_method(&self, method: &str) -> bool {
+        matches!(
+            method,
+            "push" | "push_str" | "clear" | "pop" | "remove" | "insert" | "append"
+        )
+    }
+
+    /// Check if an expression references a variable
+    fn expression_references_variable(&self, var_name: &str, expr: &Expression) -> bool {
+        match expr {
+            Expression::Identifier(name) => name == var_name,
+            Expression::Binary { left, right, .. } => {
+                self.expression_references_variable(var_name, left)
+                    || self.expression_references_variable(var_name, right)
+            }
+            Expression::MethodCall { object, .. } | Expression::FieldAccess { object, .. } => {
+                self.expression_references_variable(var_name, object)
+            }
+            Expression::Call {
+                function,
+                arguments,
+            } => {
+                self.expression_references_variable(var_name, function)
+                    || arguments
+                        .iter()
+                        .any(|(_, arg)| self.expression_references_variable(var_name, arg))
+            }
+            _ => false,
         }
     }
 }
