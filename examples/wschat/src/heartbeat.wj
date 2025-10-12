@@ -1,0 +1,301 @@
+// Connection heartbeat and recovery for wschat
+
+use std.time
+use std.collections.HashMap
+use std.sync.{Arc, RwLock}
+use std.thread
+use std.log
+
+use ./connection.Connection
+
+pub struct HeartbeatManager {
+    // Map of connection_id -> last heartbeat time
+    last_heartbeats: Arc<RwLock<HashMap<string, int>>>,
+    
+    // Heartbeat configuration
+    interval_seconds: int,
+    timeout_seconds: int,
+    
+    // Running state
+    running: Arc<RwLock<bool>>,
+}
+
+impl HeartbeatManager {
+    pub fn new(interval_seconds: int, timeout_seconds: int) -> Self {
+        HeartbeatManager {
+            last_heartbeats: Arc::new(RwLock::new(HashMap::new())),
+            interval_seconds: interval_seconds,
+            timeout_seconds: timeout_seconds,
+            running: Arc::new(RwLock::new(false)),
+        }
+    }
+    
+    pub fn register_connection(self, connection_id: string) {
+        let mut heartbeats = self.last_heartbeats.write()
+        heartbeats.insert(connection_id.clone(), time.now_unix())
+        
+        log.debug("Connection registered for heartbeat", {
+            "connection_id": connection_id,
+        })
+    }
+    
+    pub fn unregister_connection(self, connection_id: string) {
+        let mut heartbeats = self.last_heartbeats.write()
+        heartbeats.remove(&connection_id)
+        
+        log.debug("Connection unregistered from heartbeat", {
+            "connection_id": connection_id,
+        })
+    }
+    
+    pub fn update_heartbeat(self, connection_id: string) {
+        let mut heartbeats = self.last_heartbeats.write()
+        heartbeats.insert(connection_id.clone(), time.now_unix())
+        
+        log.trace("Heartbeat updated", {
+            "connection_id": connection_id,
+        })
+    }
+    
+    pub fn start(self) {
+        let mut running = self.running.write()
+        *running = true
+        drop(running)
+        
+        let heartbeats = self.last_heartbeats.clone()
+        let timeout = self.timeout_seconds
+        let interval = self.interval_seconds
+        let running_flag = self.running.clone()
+        
+        // Spawn background thread to check heartbeats
+        thread.spawn(move || {
+            log.info("Heartbeat monitor started", {
+                "interval_seconds": interval,
+                "timeout_seconds": timeout,
+            })
+            
+            loop {
+                // Check if we should stop
+                let is_running = running_flag.read()
+                if !*is_running {
+                    break
+                }
+                drop(is_running)
+                
+                // Check all connections
+                let now = time.now_unix()
+                let mut timed_out = vec![]
+                
+                {
+                    let hb = heartbeats.read()
+                    for (connection_id, last_heartbeat) in hb.iter() {
+                        let elapsed = now - last_heartbeat
+                        
+                        if elapsed > timeout {
+                            timed_out.push(connection_id.clone())
+                        }
+                    }
+                }
+                
+                // Handle timed out connections
+                if !timed_out.is_empty() {
+                    log.warn("Connections timed out", {
+                        "count": timed_out.len(),
+                        "connection_ids": timed_out.clone(),
+                    })
+                    
+                    // Remove from heartbeat tracking
+                    let mut hb = heartbeats.write()
+                    for connection_id in timed_out {
+                        hb.remove(&connection_id)
+                        // TODO: Trigger connection cleanup
+                    }
+                }
+                
+                // Sleep for interval
+                thread.sleep_seconds(interval)
+            }
+            
+            log.info("Heartbeat monitor stopped")
+        })
+    }
+    
+    pub fn stop(self) {
+        let mut running = self.running.write()
+        *running = false
+        
+        log.info("Heartbeat monitor stopping")
+    }
+    
+    pub fn get_connection_count(self) -> int {
+        let heartbeats = self.last_heartbeats.read()
+        heartbeats.len() as int
+    }
+    
+    pub fn get_connection_status(self, connection_id: string) -> ConnectionStatus {
+        let heartbeats = self.last_heartbeats.read()
+        
+        if let Some(last_heartbeat) = heartbeats.get(&connection_id) {
+            let elapsed = time.now_unix() - last_heartbeat
+            
+            if elapsed > self.timeout_seconds {
+                ConnectionStatus::TimedOut
+            } else if elapsed > (self.timeout_seconds / 2) {
+                ConnectionStatus::Warning
+            } else {
+                ConnectionStatus::Healthy
+            }
+        } else {
+            ConnectionStatus::Unknown
+        }
+    }
+    
+    pub fn get_all_connection_statuses(self) -> Vec<ConnectionHeartbeatInfo> {
+        let heartbeats = self.last_heartbeats.read()
+        let now = time.now_unix()
+        
+        let mut statuses = vec![]
+        
+        for (connection_id, last_heartbeat) in heartbeats.iter() {
+            let elapsed = now - last_heartbeat
+            
+            let status = if elapsed > self.timeout_seconds {
+                ConnectionStatus::TimedOut
+            } else if elapsed > (self.timeout_seconds / 2) {
+                ConnectionStatus::Warning
+            } else {
+                ConnectionStatus::Healthy
+            }
+            
+            statuses.push(ConnectionHeartbeatInfo {
+                connection_id: connection_id.clone(),
+                last_heartbeat: *last_heartbeat,
+                elapsed_seconds: elapsed,
+                status: status,
+            })
+        }
+        
+        statuses
+    }
+}
+
+@derive(Debug, Clone, PartialEq)]
+pub enum ConnectionStatus {
+    Healthy,
+    Warning,
+    TimedOut,
+    Unknown,
+}
+
+@derive(Debug, Clone)]
+pub struct ConnectionHeartbeatInfo {
+    pub connection_id: string,
+    pub last_heartbeat: int,
+    pub elapsed_seconds: int,
+    pub status: ConnectionStatus,
+}
+
+// Connection recovery manager
+pub struct RecoveryManager {
+    // Map of user_id -> (old_connection_id, timestamp)
+    recovery_tokens: Arc<RwLock<HashMap<string, RecoveryToken>>>,
+    
+    // Recovery window (how long a token is valid)
+    recovery_window_seconds: int,
+}
+
+impl RecoveryManager {
+    pub fn new(recovery_window_seconds: int) -> Self {
+        RecoveryManager {
+            recovery_tokens: Arc::new(RwLock::new(HashMap::new())),
+            recovery_window_seconds: recovery_window_seconds,
+        }
+    }
+    
+    pub fn create_recovery_token(
+        self,
+        user_id: string,
+        connection_id: string
+    ) -> string {
+        let token = RecoveryToken {
+            old_connection_id: connection_id.clone(),
+            user_id: user_id.clone(),
+            created_at: time.now_unix(),
+            expires_at: time.now_unix() + self.recovery_window_seconds,
+        }
+        
+        let mut tokens = self.recovery_tokens.write()
+        tokens.insert(user_id.clone(), token.clone())
+        
+        log.info("Recovery token created", {
+            "user_id": user_id,
+            "connection_id": connection_id,
+        })
+        
+        // Return token ID (in production, this would be a secure random token)
+        format!("recovery_{}_{}", user_id, token.created_at)
+    }
+    
+    pub fn validate_recovery_token(
+        self,
+        token_id: string,
+        user_id: string
+    ) -> Result<string, Error> {
+        let tokens = self.recovery_tokens.read()
+        
+        if let Some(token) = tokens.get(&user_id) {
+            let now = time.now_unix()
+            
+            if now > token.expires_at {
+                return Err("Recovery token expired")
+            }
+            
+            if token.user_id != user_id {
+                return Err("Invalid user_id for token")
+            }
+            
+            Ok(token.old_connection_id.clone())
+        } else {
+            Err("Recovery token not found")
+        }
+    }
+    
+    pub fn remove_recovery_token(self, user_id: string) {
+        let mut tokens = self.recovery_tokens.write()
+        tokens.remove(&user_id)
+    }
+    
+    pub fn cleanup_expired_tokens(self) -> int {
+        let mut tokens = self.recovery_tokens.write()
+        let now = time.now_unix()
+        
+        let expired_users: Vec<string> = tokens
+            .iter()
+            .filter(|(_, token)| now > token.expires_at)
+            .map(|(user_id, _)| user_id.clone())
+            .collect()
+        
+        let count = expired_users.len()
+        
+        for user_id in expired_users {
+            tokens.remove(&user_id)
+        }
+        
+        if count > 0 {
+            log.debug("Cleaned up expired recovery tokens", {
+                "count": count,
+            })
+        }
+        
+        count as int
+    }
+}
+
+@derive(Debug, Clone)]
+struct RecoveryToken {
+    old_connection_id: string,
+    user_id: string,
+    created_at: int,
+    expires_at: int,
+}
+
