@@ -1,9 +1,8 @@
 //! Salsa database for incremental computation
 //!
 //! This module provides the core incremental computation infrastructure using Salsa 0.24.
-//! It uses `#[salsa::tracked]` for memoized functions and input structs.
+//! It uses `#[salsa::tracked]` for memoized functions and tracked structs.
 
-use std::sync::Arc;
 use tower_lsp::lsp_types::Url;
 use windjammer::{lexer, parser};
 
@@ -11,22 +10,15 @@ use windjammer::{lexer, parser};
 // Database Definition
 // ============================================================================
 
-/// The main Salsa database that stores all memoized computations
+/// The main Salsa database implementation
 #[salsa::db]
-#[derive(Clone)]
+#[derive(Clone, Default)]
 pub struct WindjammerDatabase {
     storage: salsa::Storage<Self>,
 }
 
+#[salsa::db]
 impl salsa::Database for WindjammerDatabase {}
-
-impl Default for WindjammerDatabase {
-    fn default() -> Self {
-        Self {
-            storage: Default::default(),
-        }
-    }
-}
 
 // ============================================================================
 // Input Structs
@@ -38,8 +30,11 @@ impl Default for WindjammerDatabase {
 /// when changed.
 #[salsa::input]
 pub struct SourceFile {
+    #[returns(ref)]
     pub uri: Url,
-    pub text: Arc<String>,
+
+    #[returns(ref)]
+    pub text: String,
 }
 
 // ============================================================================
@@ -48,19 +43,19 @@ pub struct SourceFile {
 
 /// A parsed program (memoized)
 ///
-/// We wrap the Program in a tracked struct so Salsa can track it.
-/// The actual parser::Program doesn't need to implement PartialEq/Hash.
+/// Now that parser::Program implements Hash/PartialEq/Eq, we can use it
+/// in a tracked struct for better Salsa integration.
 #[salsa::tracked]
-pub struct ParsedProgram {
-    #[return_ref]
-    pub program: Arc<parser::Program>,
+pub struct ParsedProgram<'db> {
+    #[returns(ref)]
+    pub program: parser::Program,
 }
 
 /// Import information for a file
 #[salsa::tracked]
-pub struct ImportInfo {
-    #[return_ref]
-    pub imports: Arc<Vec<Url>>,
+pub struct ImportInfo<'db> {
+    #[returns(ref)]
+    pub imports: Vec<Url>,
 }
 
 // ============================================================================
@@ -71,17 +66,17 @@ pub struct ImportInfo {
 ///
 /// This function is memoized - it only recomputes if the source text changes.
 #[salsa::tracked]
-pub fn parse(db: &dyn salsa::Database, file: SourceFile) -> ParsedProgram {
+pub fn parse<'db>(db: &'db dyn salsa::Database, file: SourceFile) -> ParsedProgram<'db> {
     let uri = file.uri(db);
     let text = file.text(db);
-    
+
     tracing::debug!("Salsa: Parsing {}", uri);
-    
+
     // Lex and parse
-    let mut lexer = lexer::Lexer::new(&text);
+    let mut lexer = lexer::Lexer::new(text);
     let tokens = lexer.tokenize();
     let mut parser = parser::Parser::new(tokens);
-    
+
     let program = match parser.parse() {
         Ok(prog) => prog,
         Err(e) => {
@@ -90,38 +85,38 @@ pub fn parse(db: &dyn salsa::Database, file: SourceFile) -> ParsedProgram {
             parser::Program { items: vec![] }
         }
     };
-    
-    ParsedProgram::new(db, Arc::new(program))
+
+    ParsedProgram::new(db, program)
 }
 
 /// Extract imports from a source file
 ///
 /// Returns URIs of files that this file imports.
 #[salsa::tracked]
-pub fn imports(db: &dyn salsa::Database, file: SourceFile) -> ImportInfo {
+pub fn imports<'db>(db: &'db dyn salsa::Database, file: SourceFile) -> ImportInfo<'db> {
     let parsed = parse(db, file);
     let program = parsed.program(db);
-    
+
     let uri = file.uri(db);
     tracing::debug!("Salsa: Extracting imports from {}", uri);
-    
+
     let mut import_uris = Vec::new();
-    
+
     // Extract imports from the AST
     for item in &program.items {
         if let parser::Item::Use { path, alias: _ } = item {
             // TODO: Resolve import path to URI
             // For now, we'll just log it
             tracing::debug!("Found import: {}", path.join("."));
-            
+
             // In the future, this will resolve to actual URIs:
             // if let Some(resolved_uri) = resolve_import(uri, &path.join(".")) {
             //     import_uris.push(resolved_uri);
             // }
         }
     }
-    
-    ImportInfo::new(db, Arc::new(import_uris))
+
+    ImportInfo::new(db, import_uris)
 }
 
 // ============================================================================
@@ -133,24 +128,24 @@ impl WindjammerDatabase {
     pub fn new() -> Self {
         Self::default()
     }
-    
+
     /// Set the source text for a file
     ///
     /// Returns a SourceFile handle that can be used in queries.
     pub fn set_source_text(&mut self, uri: Url, text: String) -> SourceFile {
-        SourceFile::new(self, uri, Arc::new(text))
+        SourceFile::new(self, uri, text)
     }
-    
+
     /// Get the parsed program for a file
-    pub fn get_program(&self, file: SourceFile) -> Arc<parser::Program> {
+    pub fn get_program(&self, file: SourceFile) -> &parser::Program {
         let parsed = parse(self, file);
-        parsed.program(self).clone()
+        parsed.program(self)
     }
-    
+
     /// Get imports for a file
-    pub fn get_imports(&self, file: SourceFile) -> Arc<Vec<Url>> {
+    pub fn get_imports(&self, file: SourceFile) -> &Vec<Url> {
         let import_info = imports(self, file);
-        import_info.imports(self).clone()
+        import_info.imports(self)
     }
 }
 
@@ -175,17 +170,17 @@ fn resolve_import(base_uri: &Url, import_path: &str) -> Option<Url> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    
+
     #[test]
     fn test_basic_parse() {
         let mut db = WindjammerDatabase::new();
         let uri = Url::parse("file:///test.wj").unwrap();
-        
+
         let file = db.set_source_text(uri, "fn main() {}".to_string());
-        
+
         let program = db.get_program(file);
         assert_eq!(program.items.len(), 1);
-        
+
         // Verify it's a function
         if let parser::Item::Function(func) = &program.items[0] {
             assert_eq!(func.name, "main");
@@ -193,67 +188,62 @@ mod tests {
             panic!("Expected function item");
         }
     }
-    
+
     #[test]
     fn test_incremental_update() {
         let mut db = WindjammerDatabase::new();
         let uri = Url::parse("file:///test.wj").unwrap();
-        
+
         // Initial parse
         let file1 = db.set_source_text(uri.clone(), "fn foo() {}".to_string());
         let program1 = db.get_program(file1);
         assert_eq!(program1.items.len(), 1);
-        
+
         // Update source - creates a new SourceFile input
         let file2 = db.set_source_text(uri, "fn foo() {}\nfn bar() {}".to_string());
         let program2 = db.get_program(file2);
         assert_eq!(program2.items.len(), 2);
     }
-    
+
     #[test]
     fn test_memoization() {
         let mut db = WindjammerDatabase::new();
         let uri = Url::parse("file:///test.wj").unwrap();
-        
+
         let file = db.set_source_text(uri, "fn main() {}".to_string());
-        
+
         // First parse
-        let parsed1 = parse(&db, file);
-        
-        // Second parse (should be memoized - same ParsedProgram)
-        let parsed2 = parse(&db, file);
-        
-        // The ParsedProgram should be the same (Salsa returns same value)
-        // Note: We can't check pointer equality directly, but we can verify
-        // that the program content is the same
-        assert_eq!(parsed1.program(&db).items.len(), parsed2.program(&db).items.len());
+        let program1 = db.get_program(file);
+
+        // Second parse (should be memoized - same pointer)
+        let program2 = db.get_program(file);
+
+        // Should return the same reference (memoized)
+        assert!(std::ptr::eq(program1, program2));
     }
-    
+
     #[test]
     fn test_parse_error_handling() {
         let mut db = WindjammerDatabase::new();
         let uri = Url::parse("file:///test.wj").unwrap();
-        
+
         // Invalid syntax
         let file = db.set_source_text(uri, "fn }}}".to_string());
-        
+
         // Should not panic, should return empty program
         let program = db.get_program(file);
         assert_eq!(program.items.len(), 0);
     }
-    
+
     #[test]
     fn test_extract_imports() {
         let mut db = WindjammerDatabase::new();
         let uri = Url::parse("file:///test.wj").unwrap();
-        
-        let file = db.set_source_text(
-            uri,
-            "use std.fs\nuse std.http\nfn main() {}".to_string(),
-        );
-        
+
+        let file = db.set_source_text(uri, "use std.fs\nuse std.http\nfn main() {}".to_string());
+
         let imports = db.get_imports(file);
-        
+
         // For now, imports are empty until we implement resolution
         // But the function should not crash
         assert_eq!(imports.len(), 0);
