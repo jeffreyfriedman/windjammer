@@ -20,8 +20,8 @@ tower-lsp = "0.20"
 tower = "0.4"
 tokio = { version = "1.35", features = ["full"] }
 
-# Incremental compilation (for future use - starting simple for now)
-# salsa = "0.17.0-pre.2"
+# Incremental computation with Salsa
+salsa = "0.24"
 dashmap = "5.5"
 
 # File watching
