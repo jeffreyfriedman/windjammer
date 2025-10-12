@@ -16,6 +16,12 @@ pub struct AnalyzedFunction {
     pub assignment_optimizations: Vec<AssignmentOptimization>,
     // PHASE 6 OPTIMIZATION: Track heavy drops that can be deferred to background thread
     pub defer_drop_optimizations: Vec<DeferDropOptimization>,
+    // PHASE 7 OPTIMIZATION: Track static values that can be const
+    pub const_static_optimizations: Vec<ConstStaticOptimization>,
+    // PHASE 8 OPTIMIZATION: Track Vec usage that can use SmallVec
+    pub smallvec_optimizations: Vec<SmallVecOptimization>,
+    // PHASE 9 OPTIMIZATION: Track string/data that can use Cow
+    pub cow_optimizations: Vec<CowOptimization>,
 }
 
 /// PHASE 5: Assignment operation that can be optimized to compound operator
@@ -65,6 +71,34 @@ pub enum DeferDropReason {
     LargeLocalVariable,
     /// Function builds large collection, extracts small value
     LargeReturnedCollection,
+}
+
+/// PHASE 7: Const static optimization - convert runtime static to compile-time const
+#[derive(Debug, Clone)]
+pub struct ConstStaticOptimization {
+    pub variable: String,
+    pub can_be_const: bool,
+}
+
+/// PHASE 8: SmallVec optimization - use stack allocation for small vectors
+#[derive(Debug, Clone)]
+pub struct SmallVecOptimization {
+    pub variable: String,
+    pub estimated_max_size: usize, // Maximum size observed
+    pub stack_size: usize,         // Recommended stack size (power of 2)
+}
+
+/// PHASE 9: Cow optimization - use clone-on-write for conditionally modified data
+#[derive(Debug, Clone)]
+pub struct CowOptimization {
+    pub variable: String,
+    pub reason: CowReason,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum CowReason {
+    ConditionalModification, // if/match that may or may not modify
+    ReadHeavy,               // Mostly read, rarely written
 }
 
 /// Represents a string operation that can be optimized
@@ -260,6 +294,11 @@ impl Analyzer {
         let assignment_optimizations = self.detect_assignment_optimizations(func);
         let defer_drop_optimizations = self.detect_defer_drop_opportunities(func);
 
+        // PHASE 7-9: Additional optimizations (future implementation)
+        let const_static_optimizations = Vec::new(); // TODO: Implement detection
+        let smallvec_optimizations = Vec::new(); // TODO: Implement detection
+        let cow_optimizations = Vec::new(); // TODO: Implement detection
+
         Ok(AnalyzedFunction {
             decl: func.clone(),
             inferred_ownership,
@@ -268,6 +307,9 @@ impl Analyzer {
             string_optimizations,
             assignment_optimizations,
             defer_drop_optimizations,
+            const_static_optimizations,
+            smallvec_optimizations,
+            cow_optimizations,
         })
     }
 
