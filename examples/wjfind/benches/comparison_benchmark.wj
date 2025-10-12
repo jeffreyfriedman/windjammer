@@ -1,0 +1,276 @@
+// Benchmark wjfind against ripgrep
+
+use std.process
+use std.time
+use std.fs
+use std.path
+use std.log
+
+@derive(Debug, Clone)]
+struct BenchmarkConfig {
+    test_directory: string,
+    pattern: string,
+    iterations: int,
+}
+
+@derive(Debug)]
+struct BenchmarkResults {
+    tool_name: string,
+    average_time_ms: float,
+    min_time_ms: float,
+    max_time_ms: float,
+    std_dev_ms: float,
+    files_searched: int,
+    matches_found: int,
+}
+
+pub fn run_benchmark(config: BenchmarkConfig) -> Result<(), Error> {
+    log.info("Starting benchmark comparison", {
+        "directory": config.test_directory.clone(),
+        "pattern": config.pattern.clone(),
+        "iterations": config.iterations,
+    })
+    
+    // Run wjfind benchmark
+    let wjfind_results = benchmark_wjfind(config.clone())?
+    
+    // Run ripgrep benchmark (if available)
+    let ripgrep_results = match benchmark_ripgrep(config.clone()) {
+        Ok(results) => Some(results),
+        Err(e) => {
+            log.warn("ripgrep not available", { "error": e.to_string() })
+            None
+        }
+    }
+    
+    // Run grep benchmark (baseline)
+    let grep_results = match benchmark_grep(config.clone()) {
+        Ok(results) => Some(results),
+        Err(e) => {
+            log.warn("grep not available", { "error": e.to_string() })
+            None
+        }
+    }
+    
+    // Print results
+    print_comparison(wjfind_results, ripgrep_results, grep_results)
+    
+    Ok(())
+}
+
+fn benchmark_wjfind(config: BenchmarkConfig) -> Result<BenchmarkResults, Error> {
+    let mut times = vec![]
+    
+    for i in 0..config.iterations {
+        let start = time.now_unix_nano()
+        
+        let output = process.run("wjfind", vec![
+            config.pattern.clone(),
+            config.test_directory.clone(),
+            "--count".to_string(),
+        ])?
+        
+        let elapsed_ms = (time.now_unix_nano() - start) as float / 1_000_000.0
+        times.push(elapsed_ms)
+        
+        if (i + 1) % 10 == 0 {
+            log.debug("wjfind progress", { "iteration": i + 1 })
+        }
+    }
+    
+    Ok(calculate_stats("wjfind", times))
+}
+
+fn benchmark_ripgrep(config: BenchmarkConfig) -> Result<BenchmarkResults, Error> {
+    // Check if ripgrep is available
+    process.run("rg", vec!["--version"])?
+    
+    let mut times = vec![]
+    
+    for i in 0..config.iterations {
+        let start = time.now_unix_nano()
+        
+        let output = process.run("rg", vec![
+            config.pattern.clone(),
+            config.test_directory.clone(),
+            "--count".to_string(),
+        ])?
+        
+        let elapsed_ms = (time.now_unix_nano() - start) as float / 1_000_000.0
+        times.push(elapsed_ms)
+        
+        if (i + 1) % 10 == 0 {
+            log.debug("ripgrep progress", { "iteration": i + 1 })
+        }
+    }
+    
+    Ok(calculate_stats("ripgrep", times))
+}
+
+fn benchmark_grep(config: BenchmarkConfig) -> Result<BenchmarkResults, Error> {
+    let mut times = vec![]
+    
+    for i in 0..config.iterations {
+        let start = time.now_unix_nano()
+        
+        let output = process.run("grep", vec![
+            "-r".to_string(),
+            config.pattern.clone(),
+            config.test_directory.clone(),
+        ])?
+        
+        let elapsed_ms = (time.now_unix_nano() - start) as float / 1_000_000.0
+        times.push(elapsed_ms)
+        
+        if (i + 1) % 10 == 0 {
+            log.debug("grep progress", { "iteration": i + 1 })
+        }
+    }
+    
+    Ok(calculate_stats("grep", times))
+}
+
+fn calculate_stats(tool_name: string, mut times: Vec<float>) -> BenchmarkResults {
+    times.sort_by(|a, b| a.partial_cmp(b).unwrap())
+    
+    let len = times.len() as float
+    let sum: float = times.iter().sum()
+    let average = sum / len
+    
+    let min_time = times[0]
+    let max_time = times[times.len() - 1]
+    
+    // Calculate standard deviation
+    let variance: float = times.iter()
+        .map(|t| (t - average).powi(2))
+        .sum::<float>() / len
+    let std_dev = variance.sqrt()
+    
+    BenchmarkResults {
+        tool_name: tool_name,
+        average_time_ms: average,
+        min_time_ms: min_time,
+        max_time_ms: max_time,
+        std_dev_ms: std_dev,
+        files_searched: 0,  // TODO: Parse from output
+        matches_found: 0,   // TODO: Parse from output
+    }
+}
+
+fn print_comparison(
+    wjfind: BenchmarkResults,
+    ripgrep: Option<BenchmarkResults>,
+    grep: Option<BenchmarkResults>
+) {
+    println!("\n=== Benchmark Results ===\n")
+    
+    println!("Configuration:")
+    println!("  Tool versions:")
+    println!("    wjfind:  0.23.0")
+    if ripgrep.is_some() {
+        println!("    ripgrep: (detected)")
+    }
+    if grep.is_some() {
+        println!("    grep:    (system)")
+    }
+    
+    println!("\n{:<12} {:>12} {:>12} {:>12} {:>12}",
+        "Tool", "Avg (ms)", "Min (ms)", "Max (ms)", "Std Dev")
+    println!("{}", "-".repeat(60))
+    
+    print_result(&wjfind)
+    
+    if let Some(rg) = ripgrep {
+        print_result(&rg)
+        
+        // Calculate comparison
+        let speedup = rg.average_time_ms / wjfind.average_time_ms
+        if speedup > 1.0 {
+            println!("\nwjfind is {:.2}x faster than ripgrep! 🚀", speedup)
+        } else if speedup > 0.9 {
+            println!("\nwjfind is within 10% of ripgrep performance! ✅")
+        } else {
+            println!("\nwjfind is {:.2}x slower than ripgrep", 1.0 / speedup)
+        }
+    }
+    
+    if let Some(g) = grep {
+        print_result(&g)
+        
+        let speedup = g.average_time_ms / wjfind.average_time_ms
+        println!("\nwjfind is {:.2}x faster than grep! ⚡", speedup)
+    }
+    
+    println!("\n=========================\n")
+}
+
+fn print_result(result: &BenchmarkResults) {
+    println!("{:<12} {:>12.2} {:>12.2} {:>12.2} {:>12.2}",
+        result.tool_name,
+        result.average_time_ms,
+        result.min_time_ms,
+        result.max_time_ms,
+        result.std_dev_ms)
+}
+
+// Specific test scenarios
+pub fn run_all_benchmarks() -> Result<(), Error> {
+    println!("Running comprehensive wjfind benchmarks...\n")
+    
+    // Scenario 1: Small directory, simple pattern
+    println!("=== Scenario 1: Small directory (1000 files) ===")
+    run_benchmark(BenchmarkConfig {
+        test_directory: "test_data/small",
+        pattern: "TODO",
+        iterations: 100,
+    })?
+    
+    // Scenario 2: Medium directory, regex pattern
+    println!("\n=== Scenario 2: Medium directory (10000 files) ===")
+    run_benchmark(BenchmarkConfig {
+        test_directory: "test_data/medium",
+        pattern: "fn\\s+\\w+",
+        iterations: 50,
+    })?
+    
+    // Scenario 3: Large directory, rare pattern
+    println!("\n=== Scenario 3: Large directory (50000 files) ===")
+    run_benchmark(BenchmarkConfig {
+        test_directory: "test_data/large",
+        pattern: "FIXME",
+        iterations: 10,
+    })?
+    
+    // Scenario 4: Code-specific (Rust files only)
+    println!("\n=== Scenario 4: Rust files only ===")
+    run_benchmark(BenchmarkConfig {
+        test_directory: "../../src",  // Windjammer source
+        pattern: "impl",
+        iterations: 50,
+    })?
+    
+    Ok(())
+}
+
+fn main() -> Result<(), Error> {
+    log.init("info")
+    
+    let args = std.env.args()
+    
+    if args.len() > 1 && args[1] == "--all" {
+        run_all_benchmarks()?
+    } else {
+        // Single benchmark with custom parameters
+        let directory = if args.len() > 1 { args[1].clone() } else { ".".to_string() }
+        let pattern = if args.len() > 2 { args[2].clone() } else { "TODO".to_string() }
+        
+        run_benchmark(BenchmarkConfig {
+            test_directory: directory,
+            pattern: pattern,
+            iterations: 50,
+        })?
+    }
+    
+    Ok(())
+}
+
