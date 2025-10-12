@@ -3,7 +3,7 @@ use tracing_subscriber::{fmt, prelude::*, EnvFilter};
 
 mod analysis;
 mod completion;
-mod database;
+pub mod database;
 mod debug_adapter;
 mod diagnostics;
 mod hover;
