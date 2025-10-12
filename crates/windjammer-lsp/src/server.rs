@@ -1037,4 +1037,67 @@ impl LanguageServer for WindjammerLanguageServer {
 
         Ok(None)
     }
+
+    async fn symbol(
+        &self,
+        params: WorkspaceSymbolParams,
+    ) -> Result<Option<Vec<SymbolInformation>>> {
+        let query = params.query.to_lowercase();
+        tracing::debug!("Workspace symbol search: '{}'", query);
+
+        let mut all_symbols = Vec::new();
+
+        // Search through all analyzed documents
+        for entry in self.documents.iter() {
+            let uri = entry.key().clone();
+
+            // Get the program for this file
+            let program = match self.analysis_db.get_program(&uri) {
+                Some(prog) => prog,
+                None => continue,
+            };
+
+            // Collect symbols that match the query
+            for item in &program.items {
+                let (name, kind) = match item {
+                    windjammer::parser::Item::Function(func) => (&func.name, SymbolKind::FUNCTION),
+                    windjammer::parser::Item::Struct(s) => (&s.name, SymbolKind::STRUCT),
+                    windjammer::parser::Item::Enum(e) => (&e.name, SymbolKind::ENUM),
+                    windjammer::parser::Item::Trait(t) => (&t.name, SymbolKind::INTERFACE),
+                    windjammer::parser::Item::Static(name, _, _) => (name, SymbolKind::CONSTANT),
+                    windjammer::parser::Item::Const(name, _, _) => (name, SymbolKind::CONSTANT),
+                    _ => continue,
+                };
+
+                // Filter by query (case-insensitive fuzzy match)
+                if query.is_empty() || name.to_lowercase().contains(&query) {
+                    all_symbols.push(SymbolInformation {
+                        name: name.clone(),
+                        kind,
+                        tags: None,
+                        deprecated: None,
+                        location: Location {
+                            uri: uri.clone(),
+                            range: Range {
+                                start: Position {
+                                    line: 0,
+                                    character: 0,
+                                },
+                                end: Position {
+                                    line: 0,
+                                    character: 0,
+                                },
+                            },
+                        },
+                        container_name: None,
+                    });
+                }
+            }
+        }
+
+        // Limit results to avoid overwhelming the client
+        all_symbols.truncate(100);
+
+        Ok(Some(all_symbols))
+    }
 }
