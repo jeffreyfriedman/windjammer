@@ -1,0 +1,137 @@
+// Core search logic for wjfind
+
+use std.fs
+use std.io
+use std.path
+use std.sync
+use std.thread
+use std.collections.Vec
+
+use ./config.Config
+use ./walker
+use ./matcher
+
+@derive(Debug)]
+pub struct SearchResults {
+    pub matches: Vec<Match>,
+    pub files_searched: int,
+    pub total_matches: int,
+}
+
+@derive(Debug, Clone)]
+pub struct Match {
+    pub file: string,
+    pub line_number: int,
+    pub column: int,
+    pub line_text: string,
+    pub match_text: string,
+}
+
+pub fn run(config: Config) -> Result<SearchResults, Error> {
+    // Collect all files to search
+    let files = walker.collect_files(config.paths, config)?
+    
+    // Search files in parallel
+    let matches = search_files_parallel(files, config)?
+    
+    // Apply max count if specified
+    let matches = if let Some(max) = config.max_count {
+        matches.into_iter().take(max).collect()
+    } else {
+        matches
+    }
+    
+    Ok(SearchResults {
+        total_matches: matches.len(),
+        files_searched: files.len(),
+        matches: matches,
+    })
+}
+
+fn search_files_parallel(files: Vec<string>, config: Config) -> Result<Vec<Match>, Error> {
+    let num_threads = config.threads
+    let chunk_size = (files.len() + num_threads - 1) / num_threads
+    
+    // Split files into chunks
+    let mut chunks = vec![]
+    for i in 0..num_threads {
+        let start = i * chunk_size
+        let end = std.cmp.min(start + chunk_size, files.len())
+        if start < files.len() {
+            chunks.push(files[start..end].to_vec())
+        }
+    }
+    
+    // Spawn threads
+    let (tx, rx) = sync.channel()
+    let mut handles = vec![]
+    
+    for chunk in chunks {
+        let tx = tx.clone()
+        let config = config.clone()
+        
+        let handle = thread.spawn(move || {
+            for file in chunk {
+                match search_file(file, config.clone()) {
+                    Ok(matches) => {
+                        for m in matches {
+                            tx.send(m).unwrap()
+                        }
+                    },
+                    Err(_) => {
+                        // Skip files we can't read
+                    }
+                }
+            }
+        })
+        
+        handles.push(handle)
+    }
+    
+    // Drop original sender so receiver knows when all threads are done
+    drop(tx)
+    
+    // Collect results
+    let mut all_matches = vec![]
+    while let Ok(m) = rx.recv() {
+        all_matches.push(m)
+        
+        // Early termination if max count reached
+        if let Some(max) = config.max_count {
+            if all_matches.len() >= max {
+                break
+            }
+        }
+    }
+    
+    // Wait for all threads
+    for handle in handles {
+        handle.join().unwrap()
+    }
+    
+    Ok(all_matches)
+}
+
+fn search_file(path: string, config: Config) -> Result<Vec<Match>, Error> {
+    // Read file contents
+    let contents = fs.read_to_string(path)?
+    
+    // Search line by line
+    let mut matches = vec![]
+    
+    for (line_num, line) in contents.lines().enumerate() {
+        if let Some(m) = matcher.find_match(line, line_num + 1, path.clone(), config.clone()) {
+            matches.push(m)
+            
+            // Early termination if max count reached
+            if let Some(max) = config.max_count {
+                if matches.len() >= max {
+                    break
+                }
+            }
+        }
+    }
+    
+    Ok(matches)
+}
+
