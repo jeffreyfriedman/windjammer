@@ -58,6 +58,33 @@ pub struct ImportInfo<'db> {
     pub imports: Vec<Url>,
 }
 
+/// Symbol information for a file
+#[salsa::tracked]
+pub struct SymbolTable<'db> {
+    #[returns(ref)]
+    pub symbols: Vec<Symbol>,
+}
+
+/// A symbol definition
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct Symbol {
+    pub name: String,
+    pub kind: SymbolKind,
+    pub line: u32,
+    pub character: u32,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum SymbolKind {
+    Function,
+    Struct,
+    Enum,
+    Trait,
+    Impl,
+    Const,
+    Static,
+}
+
 // ============================================================================
 // Tracked Functions (Derived Computations)
 // ============================================================================
@@ -100,7 +127,7 @@ pub fn imports<'db>(db: &'db dyn salsa::Database, file: SourceFile) -> ImportInf
     let uri = file.uri(db);
     tracing::debug!("Salsa: Extracting imports from {}", uri);
 
-    let mut import_uris = Vec::new();
+    let import_uris = Vec::new(); // TODO: Implement import resolution
 
     // Extract imports from the AST
     for item in &program.items {
@@ -117,6 +144,95 @@ pub fn imports<'db>(db: &'db dyn salsa::Database, file: SourceFile) -> ImportInf
     }
 
     ImportInfo::new(db, import_uris)
+}
+
+/// Extract symbols from a source file
+///
+/// Returns all symbol definitions in the file (functions, structs, etc.)
+#[salsa::tracked]
+pub fn extract_symbols<'db>(db: &'db dyn salsa::Database, file: SourceFile) -> SymbolTable<'db> {
+    let parsed = parse(db, file);
+    let program = parsed.program(db);
+
+    let uri = file.uri(db);
+    tracing::debug!("Salsa: Extracting symbols from {}", uri);
+
+    let mut symbols = Vec::new();
+
+    // Extract symbols from top-level items
+    for (idx, item) in program.items.iter().enumerate() {
+        // Use item index as line heuristic (AST doesn't have position info yet)
+        let line = idx as u32;
+
+        match item {
+            parser::Item::Function(func) => {
+                symbols.push(Symbol {
+                    name: func.name.clone(),
+                    kind: SymbolKind::Function,
+                    line,
+                    character: 0,
+                });
+            }
+            parser::Item::Struct(struct_decl) => {
+                symbols.push(Symbol {
+                    name: struct_decl.name.clone(),
+                    kind: SymbolKind::Struct,
+                    line,
+                    character: 0,
+                });
+            }
+            parser::Item::Enum(enum_decl) => {
+                symbols.push(Symbol {
+                    name: enum_decl.name.clone(),
+                    kind: SymbolKind::Enum,
+                    line,
+                    character: 0,
+                });
+            }
+            parser::Item::Trait(trait_decl) => {
+                symbols.push(Symbol {
+                    name: trait_decl.name.clone(),
+                    kind: SymbolKind::Trait,
+                    line,
+                    character: 0,
+                });
+            }
+            parser::Item::Impl(impl_block) => {
+                // Impl blocks don't have a name, use type name
+                let name = if let Some(trait_name) = &impl_block.trait_name {
+                    format!("impl {} for {}", trait_name, impl_block.type_name)
+                } else {
+                    format!("impl {}", impl_block.type_name)
+                };
+                symbols.push(Symbol {
+                    name,
+                    kind: SymbolKind::Impl,
+                    line,
+                    character: 0,
+                });
+            }
+            parser::Item::Const { name, .. } => {
+                symbols.push(Symbol {
+                    name: name.clone(),
+                    kind: SymbolKind::Const,
+                    line,
+                    character: 0,
+                });
+            }
+            parser::Item::Static { name, .. } => {
+                symbols.push(Symbol {
+                    name: name.clone(),
+                    kind: SymbolKind::Static,
+                    line,
+                    character: 0,
+                });
+            }
+            _ => {} // Skip other items (use statements, etc.)
+        }
+    }
+
+    tracing::debug!("Found {} symbols in {}", symbols.len(), uri);
+    SymbolTable::new(db, symbols)
 }
 
 // ============================================================================
@@ -146,6 +262,12 @@ impl WindjammerDatabase {
     pub fn get_imports(&self, file: SourceFile) -> &Vec<Url> {
         let import_info = imports(self, file);
         import_info.imports(self)
+    }
+
+    /// Get symbols for a file
+    pub fn get_symbols(&self, file: SourceFile) -> &Vec<Symbol> {
+        let symbol_table = extract_symbols(self, file);
+        symbol_table.symbols(self)
     }
 }
 
