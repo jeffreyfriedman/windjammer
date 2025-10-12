@@ -114,6 +114,16 @@ fn print_default(results: SearchResults, config: Config) {
 }
 
 fn print_match(m: Match, config: Config) {
+    // Print context before if any
+    if !m.context_before.is_empty() {
+        let start_line = m.line_number - m.context_before.len() as int
+        for (i, context_line) in m.context_before.iter().enumerate() {
+            let line_num = start_line + i as int
+            print_context_line(line_num, context_line.clone(), config.clone())
+        }
+    }
+    
+    // Print the match line
     let line_num_str = if config.line_numbers {
         format!("{}:", m.line_number)
     } else {
@@ -122,9 +132,9 @@ fn print_match(m: Match, config: Config) {
     
     // Highlight the match in the line
     let highlighted_line = if config.use_color {
-        highlight_match(m.line_text, m.match_text, m.column)
+        highlight_match(m.line_text.clone(), m.match_text.clone(), m.column)
     } else {
-        m.line_text
+        m.line_text.clone()
     }
     
     if config.use_color {
@@ -135,6 +145,33 @@ fn print_match(m: Match, config: Config) {
             highlighted_line)
     } else {
         println!("  {}{}", line_num_str, highlighted_line)
+    }
+    
+    // Print context after if any
+    if !m.context_after.is_empty() {
+        let start_line = m.line_number + 1
+        for (i, context_line) in m.context_after.iter().enumerate() {
+            let line_num = start_line + i as int
+            print_context_line(line_num, context_line.clone(), config.clone())
+        }
+    }
+}
+
+fn print_context_line(line_num: int, line: string, config: Config) {
+    let line_num_str = if config.line_numbers {
+        format!("{}-", line_num)  // Use '-' for context lines
+    } else {
+        "".to_string()
+    }
+    
+    if config.use_color {
+        println!("  {}{}{} {}", 
+            COLOR_CYAN,  // Different color for context
+            line_num_str,
+            COLOR_RESET,
+            line)
+    } else {
+        println!("  {}{}", line_num_str, line)
     }
 }
 
