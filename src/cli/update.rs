@@ -93,7 +93,7 @@ pub fn execute(check_only: bool, force: bool) -> Result<()> {
 fn get_latest_release() -> Result<GithubRelease> {
     // Use curl to fetch latest release info
     let output = Command::new("curl")
-        .args(&[
+        .args([
             "-s",
             "-H",
             "Accept: application/vnd.github.v3+json",
@@ -136,7 +136,7 @@ fn install_update() -> Result<()> {
     println!("Running: cargo install {} --force", CRATE_NAME);
 
     let status = Command::new("cargo")
-        .args(&["install", CRATE_NAME, "--force"])
+        .args(["install", CRATE_NAME, "--force"])
         .status()
         .context("Failed to run cargo install. Is cargo in your PATH?")?;
 
