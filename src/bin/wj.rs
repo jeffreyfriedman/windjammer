@@ -50,6 +50,14 @@ enum Commands {
         /// Build in release mode
         #[arg(short, long)]
         release: bool,
+
+        /// Defer drop optimization mode (auto, always, never)
+        #[arg(long, value_name = "MODE", default_value = "auto")]
+        defer_drop: String,
+
+        /// Defer drop threshold in bytes (default: 102400 = 100KB)
+        #[arg(long, value_name = "BYTES")]
+        defer_drop_threshold: Option<usize>,
     },
 
     /// Compile and run a Windjammer file
@@ -61,6 +69,14 @@ enum Commands {
         /// Arguments to pass to the program
         #[arg(trailing_var_arg = true)]
         args: Vec<String>,
+
+        /// Defer drop optimization mode (auto, always, never)
+        #[arg(long, value_name = "MODE", default_value = "auto")]
+        defer_drop: String,
+
+        /// Defer drop threshold in bytes (default: 102400 = 100KB)
+        #[arg(long, value_name = "BYTES")]
+        defer_drop_threshold: Option<usize>,
     },
 
     /// Run tests
