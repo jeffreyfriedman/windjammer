@@ -25,6 +25,8 @@ pub struct Match {
     pub column: int,
     pub line_text: string,
     pub match_text: string,
+    pub context_before: Vec<string>,
+    pub context_after: Vec<string>,
 }
 
 pub fn run(config: Config) -> Result<SearchResults, Error> {
@@ -116,11 +118,19 @@ fn search_file(path: string, config: Config) -> Result<Vec<Match>, Error> {
     // Read file contents
     let contents = fs.read_to_string(path)?
     
+    // Collect all lines for context lookup
+    let all_lines: Vec<string> = contents.lines().map(|s| s.to_string()).collect()
+    
     // Search line by line
     let mut matches = vec![]
     
-    for (line_num, line) in contents.lines().enumerate() {
-        if let Some(m) = matcher.find_match(line, line_num + 1, path.clone(), config.clone()) {
+    for (line_num, line) in all_lines.iter().enumerate() {
+        if let Some(mut m) = matcher.find_match(line.clone(), line_num + 1, path.clone(), config.clone()) {
+            // Add context lines if requested
+            if config.context_before > 0 || config.context_after > 0 {
+                m = add_context(m, &all_lines, config.context_before, config.context_after)
+            }
+            
             matches.push(m)
             
             // Early termination if max count reached
@@ -133,5 +143,37 @@ fn search_file(path: string, config: Config) -> Result<Vec<Match>, Error> {
     }
     
     Ok(matches)
+}
+
+fn add_context(
+    mut match_obj: Match,
+    all_lines: &Vec<string>,
+    lines_before: int,
+    lines_after: int
+) -> Match {
+    let line_idx = (match_obj.line_number - 1) as usize
+    
+    // Collect context before
+    let start_before = if line_idx >= lines_before as usize {
+        line_idx - lines_before as usize
+    } else {
+        0
+    }
+    
+    match_obj.context_before = all_lines[start_before..line_idx]
+        .iter()
+        .map(|s| s.clone())
+        .collect()
+    
+    // Collect context after
+    let start_after = line_idx + 1
+    let end_after = std.cmp.min(start_after + lines_after as usize, all_lines.len())
+    
+    match_obj.context_after = all_lines[start_after..end_after]
+        .iter()
+        .map(|s| s.clone())
+        .collect()
+    
+    match_obj
 }
 
