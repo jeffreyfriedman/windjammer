@@ -13,6 +13,7 @@ pub struct CodeGenerator {
     needs_serde_imports: bool,   // For JSON support
     needs_write_import: bool,    // For string capacity optimization (write! macro)
     needs_smallvec_import: bool, // For Phase 8 SmallVec optimization
+    needs_cow_import: bool,      // For Phase 9 Cow optimization
     target: CompilationTarget,
     is_module: bool, // true if generating code for a reusable module (not main file)
     #[allow(dead_code)] // TODO: Use for error mapping Phase 3
@@ -51,6 +52,7 @@ impl CodeGenerator {
             needs_serde_imports: false,
             needs_write_import: false,
             needs_smallvec_import: false,
+            needs_cow_import: false,
             target,
             is_module: false,
             source_map: crate::source_map::SourceMap::new(),
@@ -305,6 +307,9 @@ impl CodeGenerator {
         }
         if self.needs_smallvec_import {
             implicit_imports.push_str("use smallvec::{SmallVec, smallvec};\n");
+        }
+        if self.needs_cow_import {
+            implicit_imports.push_str("use std::borrow::Cow;\n");
         }
         if self.needs_write_import {
             implicit_imports.push_str("use std::fmt::Write;\n");
@@ -724,6 +729,7 @@ impl CodeGenerator {
         self.cow_optimizations.clear();
         for opt in &analyzed.cow_optimizations {
             self.cow_optimizations.insert(opt.variable.clone());
+            self.needs_cow_import = true; // Mark that we need Cow from std::borrow
         }
 
         // PHASE 3 OPTIMIZATION: Load struct mapping optimizations
@@ -826,6 +832,18 @@ impl CodeGenerator {
             .parameters
             .iter()
             .map(|param| {
+                // PHASE 9 OPTIMIZATION: Check if this parameter should use Cow<'_, T>
+                if self.cow_optimizations.contains(&param.name) {
+                    let base_type = self.type_to_rust(&param.type_);
+                    // For String types, use Cow<'_, str>
+                    let cow_type = if base_type == "String" {
+                        "Cow<'_, str>".to_string()
+                    } else {
+                        format!("Cow<'_, {}>", base_type)
+                    };
+                    return format!("{}: {}", param.name, cow_type);
+                }
+
                 // Handle explicit ownership hints (self, &self, &mut self)
                 let type_str = match &param.ownership {
                     OwnershipHint::Owned => {
