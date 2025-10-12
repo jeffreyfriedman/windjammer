@@ -10,6 +10,7 @@ use crate::diagnostics::DiagnosticsEngine;
 use crate::hover::HoverProvider;
 use crate::inlay_hints::InlayHintsProvider;
 use crate::refactoring::RefactoringProvider;
+use crate::semantic_tokens::SemanticTokensProvider;
 
 /// The Windjammer Language Server
 ///
@@ -22,6 +23,7 @@ pub struct WindjammerLanguageServer {
     completion_providers: Arc<RwLock<DashMap<Url, CompletionProvider>>>,
     inlay_hints_providers: Arc<RwLock<DashMap<Url, InlayHintsProvider>>>,
     refactoring_providers: Arc<RwLock<DashMap<Url, RefactoringProvider>>>,
+    semantic_tokens_providers: Arc<RwLock<DashMap<Url, SemanticTokensProvider>>>,
     /// Map of file URIs to their content
     documents: DashMap<Url, String>,
 }
@@ -38,6 +40,7 @@ impl WindjammerLanguageServer {
             completion_providers: Arc::new(RwLock::new(DashMap::new())),
             inlay_hints_providers: Arc::new(RwLock::new(DashMap::new())),
             refactoring_providers: Arc::new(RwLock::new(DashMap::new())),
+            semantic_tokens_providers: Arc::new(RwLock::new(DashMap::new())),
             documents: DashMap::new(),
         }
     }
@@ -69,6 +72,14 @@ impl WindjammerLanguageServer {
                 refactoring_provider.update_program(program);
                 let refactoring_providers = self.refactoring_providers.write().unwrap();
                 refactoring_providers.insert(uri.clone(), refactoring_provider);
+            }
+
+            // Update semantic tokens provider
+            if let Some(program) = self.analysis_db.get_program(&uri) {
+                let mut semantic_tokens_provider = SemanticTokensProvider::new();
+                semantic_tokens_provider.update_program(program.clone());
+                let semantic_tokens_providers = self.semantic_tokens_providers.write().unwrap();
+                semantic_tokens_providers.insert(uri.clone(), semantic_tokens_provider);
             }
 
             // Update inlay hints provider with ownership analysis
@@ -560,11 +571,22 @@ impl LanguageServer for WindjammerLanguageServer {
         &self,
         params: SemanticTokensParams,
     ) -> Result<Option<SemanticTokensResult>> {
-        tracing::debug!("Semantic tokens: {}", params.text_document.uri);
+        let uri = params.text_document.uri.clone();
+        tracing::debug!("Semantic tokens request: {}", uri);
 
-        // TODO: Implement semantic tokens
-        // - Enhanced syntax highlighting
+        // Get the semantic tokens provider for this file
+        let providers = self.semantic_tokens_providers.read().unwrap();
+        let tokens = providers
+            .get(&uri)
+            .and_then(|provider| provider.get_semantic_tokens());
+        drop(providers); // Explicitly drop the lock
 
-        Ok(None)
+        match tokens {
+            Some(tokens) => Ok(Some(SemanticTokensResult::Tokens(SemanticTokens {
+                result_id: None,
+                data: tokens,
+            }))),
+            None => Ok(None),
+        }
     }
 }
