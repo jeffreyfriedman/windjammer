@@ -5,7 +5,7 @@ members = [
 ]
 
 [workspace.package]
-version = "0.19.0"
+version = "0.20.0"
 edition = "2021"
 authors = ["Jeffrey Friedman <jeffrey@example.com>", "Windjammer Contributors"]
 license = "MIT OR Apache-2.0"
@@ -76,4 +76,12 @@ harness = false
 [[bench]]
 name = "runtime"
 harness = false
+
+[[bench]]
+name = "defer_drop_bench"
+harness = false
+
+[[bin]]
+name = "defer_drop_latency"
+path = "benches/defer_drop_latency.rs"
 

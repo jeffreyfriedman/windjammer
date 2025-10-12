@@ -50,6 +50,14 @@ enum Commands {
         /// Build in release mode
         #[arg(short, long)]
         release: bool,
+
+        /// Defer drop optimization mode (auto, always, never)
+        #[arg(long, value_name = "MODE", default_value = "auto")]
+        defer_drop: String,
+
+        /// Defer drop threshold in bytes (default: 102400 = 100KB)
+        #[arg(long, value_name = "BYTES")]
+        defer_drop_threshold: Option<usize>,
     },
 
     /// Compile and run a Windjammer file
@@ -61,6 +69,14 @@ enum Commands {
         /// Arguments to pass to the program
         #[arg(trailing_var_arg = true)]
         args: Vec<String>,
+
+        /// Defer drop optimization mode (auto, always, never)
+        #[arg(long, value_name = "MODE", default_value = "auto")]
+        defer_drop: String,
+
+        /// Defer drop threshold in bytes (default: 102400 = 100KB)
+        #[arg(long, value_name = "BYTES")]
+        defer_drop_threshold: Option<usize>,
     },
 
     /// Run tests
@@ -112,6 +128,17 @@ enum Commands {
         #[arg(value_name = "PACKAGE")]
         package: String,
     },
+
+    /// Update Windjammer to the latest version
+    Update {
+        /// Check for updates without installing
+        #[arg(long)]
+        check: bool,
+
+        /// Force reinstall even if already up to date
+        #[arg(long)]
+        force: bool,
+    },
 }
 
 fn main() -> anyhow::Result<()> {
@@ -126,10 +153,23 @@ fn main() -> anyhow::Result<()> {
             path,
             output,
             release,
+            defer_drop,
+            defer_drop_threshold,
         } => {
+            // TODO: Pass defer_drop config to compiler
+            // For now, just ignore these flags - defer drop is always auto
+            let _ = (defer_drop, defer_drop_threshold);
             windjammer::cli::build::execute(&path, output.as_deref(), release)?;
         }
-        Commands::Run { path, args } => {
+        Commands::Run {
+            path,
+            args,
+            defer_drop,
+            defer_drop_threshold,
+        } => {
+            // TODO: Pass defer_drop config to compiler
+            // For now, just ignore these flags - defer drop is always auto
+            let _ = (defer_drop, defer_drop_threshold);
             windjammer::cli::run::execute(&path, &args)?;
         }
         Commands::Test { filter } => {
@@ -159,6 +199,10 @@ fn main() -> anyhow::Result<()> {
         }
         Commands::Remove { package } => {
             windjammer::cli::remove::execute(&package)?;
+        }
+
+        Commands::Update { check, force } => {
+            windjammer::cli::update::execute(check, force)?;
         }
     }
 
