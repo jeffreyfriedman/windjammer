@@ -16,18 +16,28 @@
 ### Middleware
 - [x] `middleware/request_id.wj` - Request ID generation and tracing
 - [x] `middleware/logging.wj` - Structured JSON logging
+- [x] `middleware/rate_limit.wj` - Token bucket rate limiting
+
+### Auth
+- [x] `auth/jwt.wj` - Token refresh with grace period
+- [x] `handlers/auth_refresh.wj` - Token refresh endpoint
+
+### Utilities
+- [x] `utils/filtering.wj` - SQL query filtering with validation
+- [x] `utils/sorting.wj` - SQL ORDER BY with field validation
 
 ---
 
 ## 🚧 In Progress
 
 ### Phase 1: Core Enhancements (Week 1)
-- [ ] Token refresh endpoint
+- [x] Token refresh endpoint ✅
+- [x] Filtering and sorting utilities ✅
+- [x] Rate limiting middleware ✅
 - [ ] RBAC implementation in handlers
 - [ ] API key authentication middleware
 - [ ] Pagination implementation in list endpoints
-- [ ] Filtering and sorting utilities
-- [ ] Rate limiting middleware
+- [ ] Update existing handlers with new features
 
 ---
 
@@ -58,8 +68,8 @@
 
 ## 📊 Progress
 
-**Overall**: 5% complete (5/100 tasks)  
-**Phase 1**: 20% complete (5/25 tasks)
+**Overall**: 11% complete (11/100 tasks)  
+**Phase 1**: 44% complete (11/25 tasks)
 
 ---
 
