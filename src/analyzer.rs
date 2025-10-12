@@ -1354,6 +1354,7 @@ impl Analyzer {
     }
 
     /// Check if an expression can be evaluated at compile time (const-evaluable)
+    #[allow(clippy::only_used_in_recursion)]
     fn is_const_evaluable(&self, expr: &Expression) -> bool {
         match expr {
             // Literals are always const
@@ -1469,7 +1470,7 @@ impl Analyzer {
                     // Try to compute range size
                     let start_val = self.extract_literal_int(start).unwrap_or(0);
                     let end_val = self.extract_literal_int(end)?;
-                    return Some((end_val - start_val));
+                    return Some(end_val - start_val);
                 }
                 None
             }
@@ -1587,12 +1588,11 @@ impl Analyzer {
         for stmt in statements {
             match stmt {
                 // Assignment to the variable
-                Statement::Assignment { target, .. } => {
-                    if let Expression::Identifier(name) = target {
-                        if name == var_name {
-                            return true;
-                        }
-                    }
+                Statement::Assignment {
+                    target: Expression::Identifier(name),
+                    ..
+                } if name == var_name => {
+                    return true;
                 }
 
                 // Method calls that might modify (e.g., push_str, clear)
@@ -1619,6 +1619,7 @@ impl Analyzer {
     }
 
     /// Check if an expression references a variable
+    #[allow(clippy::only_used_in_recursion)]
     fn expression_references_variable(&self, var_name: &str, expr: &Expression) -> bool {
         match expr {
             Expression::Identifier(name) => name == var_name,
