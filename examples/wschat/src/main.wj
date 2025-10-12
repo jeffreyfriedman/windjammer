@@ -1,0 +1,164 @@
+// wschat - Production WebSocket Chat Server
+// Built in Windjammer to validate real-time capabilities
+
+use std.http
+use std.websocket
+use std.log
+use std.env
+use std.signal
+use std.sync
+use std.collections.HashMap
+
+use ./server
+use ./metrics
+
+@derive(Debug, Clone)]
+struct Config {
+    host: string,
+    port: int,
+    max_connections: int,
+    message_rate_limit: int,  // messages per second per user
+    heartbeat_interval: int,  // seconds
+    enable_persistence: bool,
+    database_url: Option<string>,
+}
+
+@async
+fn main() {
+    // Initialize logging
+    log.init("info")
+    log.info("Starting wschat v0.1.0 (Production WebSocket Chat Server)")
+    
+    // Load configuration
+    let config = load_config()
+    let addr = "${config.host}:${config.port}"
+    log.info("Configuration loaded, listening on ${addr}")
+    
+    // Initialize server state
+    let state = server.new_state(config.clone())
+    
+    // Start metrics server (separate port)
+    let metrics_addr = "${config.host}:${config.port + 1}"
+    start_metrics_server(metrics_addr, state.clone())
+    
+    // Build HTTP server for WebSocket upgrade
+    let http_server = http.new_server(addr)
+    
+    // WebSocket upgrade endpoint
+    http.route(http_server, "GET", "/ws", move |req| {
+        handle_websocket_upgrade(req, state.clone(), config.clone()).await
+    })
+    
+    // Health check endpoint
+    http.route(http_server, "GET", "/health", |req| {
+        http.json_response(200, json!({"status": "ok"}))
+    })
+    
+    // Setup graceful shutdown
+    let shutdown_signal = setup_shutdown_handler()
+    
+    // Start server
+    log.info("WebSocket server started on ${addr}")
+    log.info("Metrics server started on ${metrics_addr}")
+    log.info("Ready to accept connections (max: ${config.max_connections})")
+    
+    // Run server until shutdown signal
+    tokio::select! {
+        _ = http.serve(http_server) => {
+            log.info("HTTP server stopped")
+        }
+        _ = shutdown_signal => {
+            log.info("Shutdown signal received, closing connections...")
+            server.shutdown_gracefully(state).await
+            log.info("All connections closed, exiting")
+        }
+    }
+}
+
+fn load_config() -> Config {
+    Config {
+        host: env.var("HOST").unwrap_or("0.0.0.0"),
+        port: env.var("PORT").unwrap_or("8080").parse().unwrap_or(8080),
+        max_connections: env.var("MAX_CONNECTIONS")
+            .unwrap_or("10000")
+            .parse()
+            .unwrap_or(10000),
+        message_rate_limit: env.var("RATE_LIMIT")
+            .unwrap_or("10")
+            .parse()
+            .unwrap_or(10),
+        heartbeat_interval: env.var("HEARTBEAT_INTERVAL")
+            .unwrap_or("30")
+            .parse()
+            .unwrap_or(30),
+        enable_persistence: env.var("ENABLE_PERSISTENCE")
+            .unwrap_or("false")
+            .parse()
+            .unwrap_or(false),
+        database_url: env.var("DATABASE_URL").ok(),
+    }
+}
+
+@async
+fn handle_websocket_upgrade(
+    req: Request,
+    state: ServerState,
+    config: Config
+) -> Response {
+    // Check connection limit
+    let current_connections = state.connections.lock().await.len()
+    if current_connections >= config.max_connections {
+        log.warn("Connection limit reached: ${current_connections}/${config.max_connections}")
+        return http.response(503, "Server at capacity")
+    }
+    
+    // Extract optional token from query params
+    let token = http.query_param(req, "token")
+    
+    // Upgrade to WebSocket
+    match websocket.upgrade(req) {
+        Ok((response, socket)) => {
+            // Spawn connection handler
+            tokio::spawn(async move {
+                server.handle_connection(socket, state, config, token).await
+            })
+            
+            response
+        }
+        Err(e) => {
+            log.error("WebSocket upgrade failed: ${e}")
+            http.response(400, "WebSocket upgrade failed")
+        }
+    }
+}
+
+fn start_metrics_server(addr: string, state: ServerState) {
+    tokio::spawn(async move {
+        let server = http.new_server(addr)
+        
+        http.route(server, "GET", "/metrics", move |req| {
+            metrics.prometheus_metrics(state.clone())
+        })
+        
+        http.route(server, "GET", "/metrics/json", move |req| {
+            metrics.json_metrics(state.clone())
+        })
+        
+        http.route(server, "GET", "/health", |req| {
+            http.json_response(200, json!({"status": "ok"}))
+        })
+        
+        match http.serve(server).await {
+            Ok(_) => log.info("Metrics server stopped"),
+            Err(e) => log.error("Metrics server error: ${e}"),
+        }
+    })
+}
+
+fn setup_shutdown_handler() -> impl Future<Output = ()> {
+    async {
+        // Wait for SIGINT or SIGTERM
+        signal.wait_for_shutdown().await
+    }
+}
+
