@@ -77,3 +77,11 @@ harness = false
 name = "runtime"
 harness = false
 
+[[bench]]
+name = "defer_drop_bench"
+harness = false
+
+[[bin]]
+name = "defer_drop_latency"
+path = "benches/defer_drop_latency.rs"
+
