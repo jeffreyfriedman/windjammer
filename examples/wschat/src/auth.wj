@@ -1,0 +1,44 @@
+// Authentication for wschat (JWT token verification)
+
+use std.crypto
+use std.time
+use std.json
+
+@derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Claims {
+    pub user_id: string,
+    pub username: string,
+    pub exp: int,  // expiration timestamp
+}
+
+pub fn verify_token(token: string) -> Result<Claims, Error> {
+    // In production, verify JWT signature properly
+    // For now, simple base64 decode (placeholder)
+    
+    let decoded = crypto.base64_decode(token)?
+    let claims: Claims = json.parse(decoded)?
+    
+    // Check expiration
+    let now = time.now_unix()
+    if claims.exp < now {
+        return Err("Token expired")
+    }
+    
+    Ok(claims)
+}
+
+pub fn generate_token(user_id: string, username: string, expires_in: int) -> Result<string, Error> {
+    let exp = time.now_unix() + expires_in
+    
+    let claims = Claims {
+        user_id: user_id,
+        username: username,
+        exp: exp,
+    }
+    
+    let json_str = json.stringify(claims)?
+    let encoded = crypto.base64_encode(json_str)
+    
+    Ok(encoded)
+}
+
