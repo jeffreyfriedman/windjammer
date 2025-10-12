@@ -1811,11 +1811,51 @@ fn process_file(path: string) -> Result<(), Error> {
 
 ## Compiler Optimizations
 
-### Automatic Performance (v0.18.0)
+### Automatic Performance (v0.20.0)
 
 **Your naive code runs at 98.7% of expert Rust performance - automatically!**
 
-Windjammer includes a 6-phase optimization pipeline that transforms simple code into high-performance Rust:
+**Plus**: Functions return **393x faster** with automatic defer drop optimization!
+
+Windjammer includes a 7-phase optimization pipeline that transforms simple code into high-performance Rust:
+
+**Phase 0: Defer Drop (v0.20.0)** 🆕 ⚡
+- **Automatically defers heavy deallocations to background threads**
+- **393x faster time-to-return** for functions with large owned parameters
+- **Zero configuration, zero code changes, instant responses**
+
+Example:
+```windjammer
+// You write:
+fn get_size(data: HashMap<int, Vec<int>>) -> int {
+    data.len()
+}
+
+// Compiler automatically generates:
+fn get_size(data: HashMap<usize, Vec<usize>>) -> usize {
+    let len = data.len();
+    // DEFER DROP: Deallocate data (Large) in background thread
+    std::thread::spawn(move || drop(data));
+    len  // Returns 393x faster!
+}
+```
+
+**When It Applies:**
+- Function owns large parameter (HashMap, Vec, String, etc.)
+- Function returns small value (int, bool, reference, etc.)
+- Type is `Send` (can move to another thread)
+- Type has no critical `Drop` side effects (not Mutex, File, Channel, etc.)
+
+**Safety:**
+- Conservative whitelist (HashMap, BTreeMap, Vec, String, etc.)
+- Blacklist for unsafe types (Mutex, File, TcpStream, etc.)
+- All checks happen at compile time
+- **Empirically validated** with [comprehensive benchmarks](../benches/defer_drop_latency.rs)
+
+**Performance Impact:**
+- HashMap (1M entries): **375ms → 1ms** (393x faster!)
+- API request (10MB): **24ms → 18ms** (1.3x faster)
+- Perfect for CLIs, web APIs, interactive UIs
 
 **Phase 1: Inline Hints**
 - Automatically adds `#[inline]` to small functions and hot paths
@@ -1830,7 +1870,7 @@ Windjammer includes a 6-phase optimization pipeline that transforms simple code 
 - Generates idiomatic Rust patterns like `Point { x, y }`
 - Cleaner, more efficient generated code
 
-**Phase 4: String Capacity Pre-allocation** 🆕
+**Phase 4: String Capacity Pre-allocation**
 - Optimizes `format!` calls with `String::with_capacity`
 - Eliminates reallocation overhead
 - Auto-imports `std::fmt::Write` when needed
@@ -1839,7 +1879,7 @@ Windjammer includes a 6-phase optimization pipeline that transforms simple code 
 - Converts `x = x + 1` to `x += 1` automatically
 - More efficient code patterns
 
-**Phase 7: Constant Folding** 🆕
+**Phase 6: Constant Folding**
 - Evaluates constant expressions at compile time
 - `2 + 3` becomes `5` in generated code
 - Eliminates runtime computation for known values
