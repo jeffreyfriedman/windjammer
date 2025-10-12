@@ -1,0 +1,287 @@
+// Load testing for wschat - Target: 10k concurrent connections
+
+use std.websocket
+use std.thread
+use std.time
+use std.log
+use std.collections.Vec
+use std.sync.{Arc, Mutex}
+
+@derive(Debug, Clone)]
+struct LoadTestConfig {
+    server_url: string,
+    target_connections: int,
+    ramp_up_seconds: int,
+    test_duration_seconds: int,
+    messages_per_connection: int,
+}
+
+@derive(Debug)]
+struct LoadTestResults {
+    total_connections: int,
+    successful_connections: int,
+    failed_connections: int,
+    total_messages_sent: int,
+    total_messages_received: int,
+    average_latency_ms: float,
+    p50_latency_ms: float,
+    p95_latency_ms: float,
+    p99_latency_ms: float,
+    max_latency_ms: float,
+    errors: Vec<string>,
+}
+
+pub async fn run_load_test(config: LoadTestConfig) -> Result<LoadTestResults, Error> {
+    log.info("Starting load test", {
+        "target_connections": config.target_connections,
+        "server_url": config.server_url,
+    })
+    
+    let results = Arc::new(Mutex::new(LoadTestResults {
+        total_connections: 0,
+        successful_connections: 0,
+        failed_connections: 0,
+        total_messages_sent: 0,
+        total_messages_received: 0,
+        average_latency_ms: 0.0,
+        p50_latency_ms: 0.0,
+        p95_latency_ms: 0.0,
+        p99_latency_ms: 0.0,
+        max_latency_ms: 0.0,
+        errors: vec![],
+    }))
+    
+    let latencies = Arc::new(Mutex::new(Vec::new()))
+    
+    // Calculate ramp-up rate
+    let connections_per_second = config.target_connections / config.ramp_up_seconds
+    let delay_between_connections = 1000 / connections_per_second  // milliseconds
+    
+    log.info("Ramp-up configuration", {
+        "connections_per_second": connections_per_second,
+        "delay_ms": delay_between_connections,
+    })
+    
+    // Spawn connections
+    let mut handles = vec![]
+    
+    for i in 0..config.target_connections {
+        let server_url = config.server_url.clone()
+        let results = results.clone()
+        let latencies = latencies.clone()
+        let messages_to_send = config.messages_per_connection
+        
+        let handle = thread.spawn(move || {
+            // Connect to server
+            let start_connect = time.now_unix_nano()
+            
+            match websocket.connect(server_url) {
+                Ok(mut conn) => {
+                    let connect_time = (time.now_unix_nano() - start_connect) / 1_000_000
+                    
+                    // Update successful connections
+                    {
+                        let mut r = results.lock()
+                        r.successful_connections += 1
+                        r.total_connections += 1
+                    }
+                    
+                    // Send messages and measure latency
+                    for msg_num in 0..messages_to_send {
+                        let start_msg = time.now_unix_nano()
+                        
+                        let message = format!("Test message {} from connection {}", msg_num, i)
+                        
+                        match conn.send_text(message) {
+                            Ok(_) => {
+                                // Wait for response
+                                match conn.receive_with_timeout(5000) {  // 5 second timeout
+                                    Ok(_) => {
+                                        let latency = (time.now_unix_nano() - start_msg) / 1_000_000
+                                        
+                                        latencies.lock().push(latency as float)
+                                        
+                                        let mut r = results.lock()
+                                        r.total_messages_sent += 1
+                                        r.total_messages_received += 1
+                                    },
+                                    Err(e) => {
+                                        let mut r = results.lock()
+                                        r.errors.push(format!("Receive error: {}", e))
+                                    }
+                                }
+                            },
+                            Err(e) => {
+                                let mut r = results.lock()
+                                r.errors.push(format!("Send error: {}", e))
+                            }
+                        }
+                        
+                        // Small delay between messages
+                        thread.sleep_millis(100)
+                    }
+                    
+                    // Keep connection alive for test duration
+                    thread.sleep_seconds(config.test_duration_seconds)
+                    
+                    conn.close()
+                },
+                Err(e) => {
+                    let mut r = results.lock()
+                    r.failed_connections += 1
+                    r.total_connections += 1
+                    r.errors.push(format!("Connection error: {}", e))
+                }
+            }
+        })
+        
+        handles.push(handle)
+        
+        // Ramp-up delay
+        if i < config.target_connections - 1 {
+            thread.sleep_millis(delay_between_connections)
+        }
+        
+        // Progress logging
+        if (i + 1) % 100 == 0 {
+            log.info("Connections established", {
+                "count": i + 1,
+                "target": config.target_connections,
+            })
+        }
+    }
+    
+    log.info("All connections spawned, waiting for completion...")
+    
+    // Wait for all connections
+    for handle in handles {
+        handle.join()
+    }
+    
+    log.info("All connections completed")
+    
+    // Calculate statistics
+    let mut final_results = results.lock().clone()
+    let latency_vec = latencies.lock().clone()
+    
+    if !latency_vec.is_empty() {
+        // Sort latencies for percentile calculation
+        let mut sorted_latencies = latency_vec.clone()
+        sorted_latencies.sort_by(|a, b| a.partial_cmp(b).unwrap())
+        
+        let len = sorted_latencies.len()
+        
+        final_results.average_latency_ms = sorted_latencies.iter().sum::<float>() / len as float
+        final_results.p50_latency_ms = sorted_latencies[len / 2]
+        final_results.p95_latency_ms = sorted_latencies[(len * 95) / 100]
+        final_results.p99_latency_ms = sorted_latencies[(len * 99) / 100]
+        final_results.max_latency_ms = sorted_latencies[len - 1]
+    }
+    
+    Ok(final_results)
+}
+
+pub fn print_results(results: LoadTestResults) {
+    println!("\n=== Load Test Results ===\n")
+    
+    println!("Connections:")
+    println!("  Total:      {}", results.total_connections)
+    println!("  Successful: {}", results.successful_connections)
+    println!("  Failed:     {}", results.failed_connections)
+    println!("  Success %:  {:.2}%", 
+        (results.successful_connections as float / results.total_connections as float) * 100.0)
+    
+    println!("\nMessages:")
+    println!("  Sent:       {}", results.total_messages_sent)
+    println!("  Received:   {}", results.total_messages_received)
+    println!("  Success %:  {:.2}%",
+        (results.total_messages_received as float / results.total_messages_sent as float) * 100.0)
+    
+    println!("\nLatency:")
+    println!("  Average:    {:.2} ms", results.average_latency_ms)
+    println!("  p50:        {:.2} ms", results.p50_latency_ms)
+    println!("  p95:        {:.2} ms", results.p95_latency_ms)
+    println!("  p99:        {:.2} ms", results.p99_latency_ms)
+    println!("  Max:        {:.2} ms", results.max_latency_ms)
+    
+    if !results.errors.is_empty() {
+        println!("\nErrors ({}):", results.errors.len())
+        for (i, error) in results.errors.iter().take(10).enumerate() {
+            println!("  {}: {}", i + 1, error)
+        }
+        if results.errors.len() > 10 {
+            println!("  ... and {} more", results.errors.len() - 10)
+        }
+    }
+    
+    println!("\n=========================\n")
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*
+    
+    #[test]
+    async fn test_100_connections() {
+        let config = LoadTestConfig {
+            server_url: "ws://localhost:8080/ws",
+            target_connections: 100,
+            ramp_up_seconds: 10,
+            test_duration_seconds: 30,
+            messages_per_connection: 10,
+        }
+        
+        let results = run_load_test(config).await.unwrap()
+        
+        assert!(results.successful_connections >= 95)  // At least 95% success
+        assert!(results.p99_latency_ms < 100.0)  // p99 < 100ms
+    }
+    
+    #[test]
+    async fn test_1000_connections() {
+        let config = LoadTestConfig {
+            server_url: "ws://localhost:8080/ws",
+            target_connections: 1000,
+            ramp_up_seconds: 30,
+            test_duration_seconds: 60,
+            messages_per_connection: 5,
+        }
+        
+        let results = run_load_test(config).await.unwrap()
+        
+        assert!(results.successful_connections >= 950)  // At least 95% success
+        assert!(results.p99_latency_ms < 200.0)  // p99 < 200ms
+    }
+}
+
+// CLI entry point
+@async
+fn main() -> Result<(), Error> {
+    log.init("info")
+    
+    // Parse command line arguments
+    let args = std.env.args()
+    
+    let connections = if args.len() > 1 {
+        args[1].parse::<int>().unwrap_or(1000)
+    } else {
+        1000
+    }
+    
+    let config = LoadTestConfig {
+        server_url: "ws://localhost:8080/ws",
+        target_connections: connections,
+        ramp_up_seconds: connections / 100,  // 100 connections per second
+        test_duration_seconds: 60,
+        messages_per_connection: 10,
+    }
+    
+    println!("Running load test with {} connections...", connections)
+    
+    let results = run_load_test(config).await?
+    
+    print_results(results)
+    
+    Ok(())
+}
+
