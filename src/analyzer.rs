@@ -248,6 +248,9 @@ impl Analyzer {
                     analyzed_func.const_static_optimizations =
                         self.detect_const_static_opportunities(&analyzed_func);
 
+                    // PHASE 8: Detect SmallVec optimizations
+                    analyzed_func.smallvec_optimizations = self.detect_smallvec_opportunities(func);
+
                     let signature = self.build_signature(&analyzed_func);
                     registry.add_function(func.name.clone(), signature);
                     analyzed.push(analyzed_func);
@@ -261,17 +264,16 @@ impl Analyzer {
                         analyzed_func.const_static_optimizations =
                             self.detect_const_static_opportunities(&analyzed_func);
 
+                        // PHASE 8: Detect SmallVec optimizations
+                        analyzed_func.smallvec_optimizations =
+                            self.detect_smallvec_opportunities(func);
+
                         let signature = self.build_signature(&analyzed_func);
                         registry.add_function(func.name.clone(), signature);
                         analyzed.push(analyzed_func);
                     }
                 }
-                Item::Static {
-                    name,
-                    mutable,
-                    value,
-                    ..
-                } => {
+                Item::Static { mutable, value, .. } => {
                     // Analyze static declarations for const promotion
                     if !mutable && self.is_const_evaluable(value) {
                         // This static can be promoted to const
@@ -1333,8 +1335,6 @@ impl Analyzer {
         &self,
         func: &AnalyzedFunction,
     ) -> Vec<ConstStaticOptimization> {
-        let mut optimizations = Vec::new();
-
         // For now, we focus on global static analysis (done in analyze_program)
         // Function-level const detection would look for:
         // 1. Local variables initialized with const-evaluable expressions
@@ -1344,7 +1344,7 @@ impl Analyzer {
         // TODO: Implement function-level const detection
         // This requires analyzing the function body's statements and expressions
 
-        optimizations
+        Vec::new()
     }
 
     /// Check if an expression can be evaluated at compile time (const-evaluable)
@@ -1381,6 +1381,65 @@ impl Analyzer {
 
             // Everything else is not const
             _ => false,
+        }
+    }
+
+    /// PHASE 8: Detect SmallVec optimization opportunities
+    /// Returns Vec variables that can use stack allocation via SmallVec
+    fn detect_smallvec_opportunities(&self, func: &FunctionDecl) -> Vec<SmallVecOptimization> {
+        let mut optimizations = Vec::new();
+
+        // TODO: Implement full SmallVec detection
+        // This requires analyzing:
+        // 1. Vec literal sizes: vec![1, 2, 3] → size 3
+        // 2. Loop bounds: (0..n).collect() where n is const → size n
+        // 3. Multiple push() calls → count them
+        // 4. Usage patterns to ensure size stays small
+
+        // For now, detect obvious cases: vec![...] literals with ≤ 8 elements
+        for stmt in &func.body {
+            self.detect_smallvec_in_statement(stmt, &mut optimizations);
+        }
+
+        optimizations
+    }
+
+    fn detect_smallvec_in_statement(
+        &self,
+        stmt: &Statement,
+        optimizations: &mut Vec<SmallVecOptimization>,
+    ) {
+        match stmt {
+            Statement::Let { name, value, .. } => {
+                if let Some(size) = self.estimate_vec_literal_size(value) {
+                    if size <= 8 {
+                        // Recommend SmallVec with power-of-2 stack size
+                        let stack_size = size.next_power_of_two().max(4);
+                        optimizations.push(SmallVecOptimization {
+                            variable: name.clone(),
+                            estimated_max_size: size,
+                            stack_size,
+                        });
+                    }
+                }
+            }
+            _ => {}
+        }
+    }
+
+    /// Estimate the size of a Vec literal or similar construction
+    fn estimate_vec_literal_size(&self, expr: &Expression) -> Option<usize> {
+        match expr {
+            // Direct method calls like Vec::new() or vec![] macro
+            Expression::MethodCall {
+                method, arguments, ..
+            } if method == "new" && arguments.is_empty() => {
+                Some(0) // Vec::new() starts empty
+            }
+            // Array literals that might become vectors
+            // In Windjammer, vec![1, 2, 3] might parse as a macro or special syntax
+            // For now, we can't easily detect this without better AST support
+            _ => None,
         }
     }
 }
