@@ -242,7 +242,12 @@ impl Analyzer {
         for item in &program.items {
             match item {
                 Item::Function(func) => {
-                    let analyzed_func = self.analyze_function(func)?;
+                    let mut analyzed_func = self.analyze_function(func)?;
+
+                    // PHASE 7: Detect const/static optimizations
+                    analyzed_func.const_static_optimizations =
+                        self.detect_const_static_opportunities(&analyzed_func);
+
                     let signature = self.build_signature(&analyzed_func);
                     registry.add_function(func.name.clone(), signature);
                     analyzed.push(analyzed_func);
@@ -250,10 +255,27 @@ impl Analyzer {
                 Item::Impl(impl_block) => {
                     // Analyze methods in impl blocks
                     for func in &impl_block.functions {
-                        let analyzed_func = self.analyze_function(func)?;
+                        let mut analyzed_func = self.analyze_function(func)?;
+
+                        // PHASE 7: Detect const/static optimizations
+                        analyzed_func.const_static_optimizations =
+                            self.detect_const_static_opportunities(&analyzed_func);
+
                         let signature = self.build_signature(&analyzed_func);
                         registry.add_function(func.name.clone(), signature);
                         analyzed.push(analyzed_func);
+                    }
+                }
+                Item::Static {
+                    name,
+                    mutable,
+                    value,
+                    ..
+                } => {
+                    // Analyze static declarations for const promotion
+                    if !mutable && self.is_const_evaluable(value) {
+                        // This static can be promoted to const
+                        // Store in a global optimization list (TODO: add to Program-level analysis)
                     }
                 }
                 _ => {}
@@ -1302,6 +1324,63 @@ impl Analyzer {
             }
             Type::Vec(_) | Type::String => true, // Built-in collections are safe
             _ => false, // Primitives and references don't benefit from defer drop
+        }
+    }
+
+    /// PHASE 7: Detect const/static optimization opportunities
+    /// Returns variables/constants within a function that can be promoted to const
+    fn detect_const_static_opportunities(
+        &self,
+        func: &AnalyzedFunction,
+    ) -> Vec<ConstStaticOptimization> {
+        let mut optimizations = Vec::new();
+
+        // For now, we focus on global static analysis (done in analyze_program)
+        // Function-level const detection would look for:
+        // 1. Local variables initialized with const-evaluable expressions
+        // 2. Static local variables that never change
+        // 3. Repeated literal values that could be extracted to const
+
+        // TODO: Implement function-level const detection
+        // This requires analyzing the function body's statements and expressions
+
+        optimizations
+    }
+
+    /// Check if an expression can be evaluated at compile time (const-evaluable)
+    fn is_const_evaluable(&self, expr: &Expression) -> bool {
+        match expr {
+            // Literals are always const
+            Expression::Literal(_) => true,
+
+            // Binary operations on const values are const
+            Expression::Binary { left, right, .. } => {
+                self.is_const_evaluable(left) && self.is_const_evaluable(right)
+            }
+
+            // Unary operations on const values are const
+            Expression::Unary { operand, .. } => self.is_const_evaluable(operand),
+
+            // Struct literals with const fields might be const (depends on struct)
+            Expression::StructLiteral { fields, .. } => {
+                fields.iter().all(|(_, expr)| self.is_const_evaluable(expr))
+            }
+
+            // References to other const values would be const (requires symbol table)
+            // For now, we're conservative and don't allow this
+            Expression::Identifier(_) => false,
+
+            // Function calls are generally not const (unless const fn, which we don't track yet)
+            Expression::Call { .. } => false,
+
+            // Field access could be const if the base is const, but we're conservative
+            Expression::FieldAccess { .. } => false,
+
+            // Method calls are not const
+            Expression::MethodCall { .. } => false,
+
+            // Everything else is not const
+            _ => false,
         }
     }
 }
