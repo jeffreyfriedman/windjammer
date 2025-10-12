@@ -1,0 +1,196 @@
+// Message persistence for wschat (SQLite)
+
+use std.db
+use std.time
+use std.log
+
+use ./message.InternalMessage
+use ./message.HistoryMessage
+
+pub struct MessageStore {
+    pool: DbPool,
+}
+
+impl MessageStore {
+    pub async fn new(database_url: string) -> Result<Self, Error> {
+        // Connect to database
+        let pool = db.connect(database_url)?
+        
+        // Create messages table if it doesn't exist
+        let create_table = "
+            CREATE TABLE IF NOT EXISTS messages (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                room_id TEXT NOT NULL,
+                user_id TEXT NOT NULL,
+                message_text TEXT NOT NULL,
+                timestamp INTEGER NOT NULL,
+                created_at INTEGER NOT NULL
+            );
+            CREATE INDEX IF NOT EXISTS idx_messages_room_id ON messages(room_id);
+            CREATE INDEX IF NOT EXISTS idx_messages_timestamp ON messages(timestamp);
+        "
+        
+        db.execute(pool, create_table, vec![])?
+        
+        log.info("Message store initialized with SQLite")
+        
+        Ok(MessageStore {
+            pool: pool,
+        })
+    }
+    
+    pub async fn store_message(self, msg: InternalMessage) -> Result<(), Error> {
+        let query = "
+            INSERT INTO messages (room_id, user_id, message_text, timestamp, created_at)
+            VALUES ($1, $2, $3, $4, $5)
+        "
+        
+        let now = time.now_unix()
+        
+        db.execute(
+            self.pool,
+            query,
+            vec![
+                msg.to_room,
+                msg.from_user,
+                msg.text,
+                msg.timestamp.to_string(),
+                now.to_string(),
+            ]
+        )?
+        
+        Ok(())
+    }
+    
+    pub async fn get_history(
+        self,
+        room_id: string,
+        limit: int,
+        before_timestamp: Option<int>
+    ) -> Result<Vec<HistoryMessage>, Error> {
+        let query = if let Some(before) = before_timestamp {
+            format!(
+                "SELECT user_id, message_text, timestamp 
+                 FROM messages 
+                 WHERE room_id = $1 AND timestamp < $2
+                 ORDER BY timestamp DESC 
+                 LIMIT $3"
+            )
+        } else {
+            format!(
+                "SELECT user_id, message_text, timestamp 
+                 FROM messages 
+                 WHERE room_id = $1
+                 ORDER BY timestamp DESC 
+                 LIMIT $2"
+            )
+        }
+        
+        let rows = if let Some(before) = before_timestamp {
+            db.query_all(
+                self.pool,
+                query,
+                vec![room_id, before.to_string(), limit.to_string()]
+            )?
+        } else {
+            db.query_all(
+                self.pool,
+                query,
+                vec![room_id, limit.to_string()]
+            )?
+        }
+        
+        let mut messages = vec![]
+        
+        for row in rows {
+            let msg = HistoryMessage {
+                from: db.get_string(row, "user_id"),
+                text: db.get_string(row, "message_text"),
+                timestamp: db.get_int(row, "timestamp"),
+            }
+            messages.push(msg)
+        }
+        
+        // Reverse to get chronological order
+        messages.reverse()
+        
+        Ok(messages)
+    }
+    
+    pub async fn get_room_message_count(self, room_id: string) -> Result<int, Error> {
+        let query = "SELECT COUNT(*) as count FROM messages WHERE room_id = $1"
+        
+        let row = db.query_one(self.pool, query, vec![room_id])?
+        let count = db.get_int(row, "count")
+        
+        Ok(count)
+    }
+    
+    pub async fn delete_old_messages(self, days: int) -> Result<int, Error> {
+        let cutoff = time.now_unix() - (days * 24 * 60 * 60)
+        
+        let query = "DELETE FROM messages WHERE created_at < $1"
+        
+        let result = db.execute(self.pool, query, vec![cutoff.to_string()])?
+        
+        log.info("Deleted old messages older than ${days} days")
+        
+        Ok(result.rows_affected())
+    }
+    
+    pub async fn get_user_message_count(
+        self,
+        user_id: string,
+        since: int
+    ) -> Result<int, Error> {
+        let query = "
+            SELECT COUNT(*) as count 
+            FROM messages 
+            WHERE user_id = $1 AND timestamp > $2
+        "
+        
+        let row = db.query_one(self.pool, query, vec![user_id, since.to_string()])?
+        let count = db.get_int(row, "count")
+        
+        Ok(count)
+    }
+    
+    pub async fn search_messages(
+        self,
+        room_id: string,
+        search_term: string,
+        limit: int
+    ) -> Result<Vec<HistoryMessage>, Error> {
+        let query = "
+            SELECT user_id, message_text, timestamp 
+            FROM messages 
+            WHERE room_id = $1 AND message_text LIKE $2
+            ORDER BY timestamp DESC 
+            LIMIT $3
+        "
+        
+        let search_pattern = format!("%{}%", search_term)
+        
+        let rows = db.query_all(
+            self.pool,
+            query,
+            vec![room_id, search_pattern, limit.to_string()]
+        )?
+        
+        let mut messages = vec![]
+        
+        for row in rows {
+            let msg = HistoryMessage {
+                from: db.get_string(row, "user_id"),
+                text: db.get_string(row, "message_text"),
+                timestamp: db.get_int(row, "timestamp"),
+            }
+            messages.push(msg)
+        }
+        
+        messages.reverse()
+        
+        Ok(messages)
+    }
+}
+

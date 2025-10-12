@@ -1,0 +1,191 @@
+// Authentication middleware for JWT and API keys
+
+use std.http
+use std.log
+
+use ../auth.jwt
+use ../models.api_key
+use ../models.role
+use ../config
+use ../db
+
+@derive(Debug)]
+pub struct AuthContext {
+    pub user_id: int,
+    pub username: string,
+    pub role: Role,
+    pub auth_method: AuthMethod,
+}
+
+@derive(Debug)]
+pub enum AuthMethod {
+    JWT,
+    ApiKey,
+}
+
+// Authenticate request using JWT token or API key
+pub async fn authenticate(req: Request, cfg: Config, pool: DbPool) -> Result<(Request, AuthContext), AuthError> {
+    // Try JWT authentication first
+    if let Some(auth_header) = http.get_header(req, "Authorization") {
+        if auth_header.starts_with("Bearer ") {
+            let token = auth_header[7..].to_string()
+            return authenticate_jwt(req, token, cfg)
+        }
+    }
+    
+    // Try API key authentication
+    if let Some(api_key) = http.get_header(req, "X-API-Key") {
+        return authenticate_api_key(req, api_key, pool).await
+    }
+    
+    Err(AuthError::MissingCredentials)
+}
+
+// Authenticate using JWT token
+fn authenticate_jwt(req: Request, token: string, cfg: Config) -> Result<(Request, AuthContext), AuthError> {
+    let claims = jwt.verify_token(token, cfg.jwt_secret)
+        .map_err(|_| AuthError::InvalidToken)?
+    
+    let role = Role::from_string(claims.role)
+        .ok_or(AuthError::InvalidRole)?
+    
+    let auth_ctx = AuthContext {
+        user_id: claims.sub,
+        username: claims.username,
+        role: role,
+        auth_method: AuthMethod::JWT,
+    }
+    
+    // Add to request context
+    let mut updated_req = req
+    updated_req = http.set_context(updated_req, "user_id", claims.sub.to_string())
+    updated_req = http.set_context(updated_req, "username", claims.username.clone())
+    updated_req = http.set_context(updated_req, "role", claims.role.clone())
+    
+    Ok((updated_req, auth_ctx))
+}
+
+// Authenticate using API key
+async fn authenticate_api_key(req: Request, key: string, pool: DbPool) -> Result<(Request, AuthContext), AuthError> {
+    // Hash the provided key
+    let key_hash = ApiKey::hash_key(key)
+    
+    // Look up API key in database
+    let query = "SELECT * FROM api_keys WHERE key_hash = $1 AND revoked = false"
+    let row = db.query_one(pool, query, vec![key_hash])
+        .await
+        .map_err(|_| AuthError::InvalidApiKey)?
+    
+    let api_key = ApiKey {
+        id: db.get_int(row, "id"),
+        user_id: db.get_int(row, "user_id"),
+        key_hash: db.get_string(row, "key_hash"),
+        name: db.get_string(row, "name"),
+        last_used_at: db.get_int_opt(row, "last_used_at"),
+        created_at: db.get_int(row, "created_at"),
+        expires_at: db.get_int_opt(row, "expires_at"),
+        revoked: db.get_bool(row, "revoked"),
+    }
+    
+    // Check if key is valid
+    if !api_key.is_valid() {
+        return Err(AuthError::ExpiredApiKey)
+    }
+    
+    // Update last_used_at
+    let now = time.now().timestamp()
+    let update_query = "UPDATE api_keys SET last_used_at = $1 WHERE id = $2"
+    let _ = db.execute(pool, update_query, vec![now, api_key.id]).await
+    
+    // Get user info
+    let user_query = "SELECT username, role FROM users WHERE id = $1"
+    let user_row = db.query_one(pool, user_query, vec![api_key.user_id])
+        .await
+        .map_err(|_| AuthError::UserNotFound)?
+    
+    let username = db.get_string(user_row, "username")
+    let role_str = db.get_string(user_row, "role")
+    let role = Role::from_string(role_str)
+        .ok_or(AuthError::InvalidRole)?
+    
+    let auth_ctx = AuthContext {
+        user_id: api_key.user_id,
+        username: username.clone(),
+        role: role,
+        auth_method: AuthMethod::ApiKey,
+    }
+    
+    // Add to request context
+    let mut updated_req = req
+    updated_req = http.set_context(updated_req, "user_id", api_key.user_id.to_string())
+    updated_req = http.set_context(updated_req, "username", username)
+    updated_req = http.set_context(updated_req, "role", role.to_string())
+    
+    Ok((updated_req, auth_ctx))
+}
+
+// Require specific role
+pub fn require_role(auth_ctx: AuthContext, required_role: Role) -> Result<(), AuthError> {
+    match (auth_ctx.role, required_role) {
+        (Role::Admin, _) => Ok(()),  // Admin can do everything
+        (user_role, req_role) if user_role == req_role => Ok(()),
+        _ => Err(AuthError::InsufficientPermissions),
+    }
+}
+
+// Check if user can perform action
+pub fn can_create_project(auth_ctx: AuthContext) -> bool {
+    auth_ctx.role.can_create_project()
+}
+
+pub fn can_delete_project(auth_ctx: AuthContext) -> bool {
+    auth_ctx.role.can_delete_project()
+}
+
+pub fn can_modify_task(auth_ctx: AuthContext) -> bool {
+    auth_ctx.role.can_modify_task()
+}
+
+@derive(Debug)]
+pub enum AuthError {
+    MissingCredentials,
+    InvalidToken,
+    InvalidApiKey,
+    ExpiredApiKey,
+    InvalidRole,
+    UserNotFound,
+    InsufficientPermissions,
+}
+
+impl AuthError {
+    pub fn to_http_response(self) -> Response {
+        match self {
+            AuthError::MissingCredentials => {
+                http.json_response(401, json!({
+                    "error": "Authentication required"
+                }))
+            },
+            AuthError::InvalidToken | AuthError::InvalidApiKey => {
+                http.json_response(401, json!({
+                    "error": "Invalid credentials"
+                }))
+            },
+            AuthError::ExpiredApiKey => {
+                http.json_response(401, json!({
+                    "error": "API key expired"
+                }))
+            },
+            AuthError::InsufficientPermissions => {
+                http.json_response(403, json!({
+                    "error": "Insufficient permissions"
+                }))
+            },
+            _ => {
+                http.json_response(500, json!({
+                    "error": "Authentication error"
+                }))
+            },
+        }
+    }
+}
+
