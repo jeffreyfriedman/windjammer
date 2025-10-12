@@ -6,6 +6,10 @@ authors.workspace = true
 description = "Language Server Protocol implementation for Windjammer"
 license.workspace = true
 
+[lib]
+name = "windjammer_lsp"
+path = "src/lib.rs"
+
 [[bin]]
 name = "windjammer-lsp"
 path = "src/main.rs"
@@ -20,8 +24,8 @@ tower-lsp = "0.20"
 tower = "0.4"
 tokio = { version = "1.35", features = ["full"] }
 
-# Incremental compilation (for future use - starting simple for now)
-# salsa = "0.17.0-pre.2"
+# Incremental computation with Salsa
+salsa = "0.24"
 dashmap = "5.5"
 
 # File watching
@@ -60,3 +64,10 @@ cargo_metadata = "0.18"
 assert_cmd = "2.0"
 predicates = "3.0"
 tempfile = "3.8"
+
+# Benchmarking
+criterion = { version = "0.5", features = ["html_reports"] }
+
+[[bench]]
+name = "salsa_performance"
+harness = false
