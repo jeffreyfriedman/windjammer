@@ -78,3 +78,32 @@ pub fn extract_user_id_from_token(token: string, secret: string) -> Result<int, 
     Ok(claims.sub)
 }
 
+pub fn refresh_token(old_token: string, secret: string) -> Result<string, Error> {
+    // Verify the old token (even if expired, we allow refresh within grace period)
+    let decoded = crypto.base64_decode(&old_token)?
+    let parts: Vec<string> = decoded.split('.').collect()
+    
+    if parts.len() != 2 {
+        return Err("Invalid token format")
+    }
+    
+    let claims_json = &parts[0]
+    let claims: Claims = json.parse(claims_json.clone())?
+    
+    // Check if token is within refresh grace period (7 days after expiration)
+    let now = time.now().timestamp()
+    let grace_period = 7 * 24 * 60 * 60  // 7 days
+    
+    if claims.exp + grace_period < now {
+        return Err("Token expired beyond grace period")
+    }
+    
+    // Generate new token with same user info
+    generate_token(claims.sub, claims.username, claims.role, secret)
+}
+
+pub fn get_token_expiration(token: string, secret: string) -> Result<int, Error> {
+    let claims = verify_token(token, secret)?
+    Ok(claims.exp)
+}
+
