@@ -1,0 +1,127 @@
+// Directory traversal for wjfind
+
+use std.fs
+use std.path
+use std.collections.Vec
+
+use ./config.Config
+
+pub fn collect_files(paths: Vec<string>, config: Config) -> Result<Vec<string>, Error> {
+    let mut all_files = vec![]
+    
+    for path in paths {
+        let files = walk_path(path, config.clone())?
+        all_files.extend(files)
+    }
+    
+    Ok(all_files)
+}
+
+fn walk_path(path: string, config: Config) -> Result<Vec<string>, Error> {
+    let mut files = vec![]
+    
+    // Check if path exists
+    if !fs.exists(path) {
+        return Err(format!("Path does not exist: {}", path))
+    }
+    
+    // If it's a file, return it directly
+    if fs.is_file(path) {
+        if should_include_file(path.clone(), config) {
+            files.push(path)
+        }
+        return Ok(files)
+    }
+    
+    // If it's a directory, walk it recursively
+    if fs.is_dir(path) {
+        walk_dir(path, config, &mut files)?
+    }
+    
+    Ok(files)
+}
+
+fn walk_dir(dir: string, config: Config, files: &mut Vec<string>) -> Result<(), Error> {
+    // Read directory entries
+    let entries = fs.read_dir(dir)?
+    
+    for entry in entries {
+        let path = entry.path()
+        let file_name = entry.file_name()
+        
+        // Skip hidden files/dirs unless --hidden flag
+        if !config.search_hidden && file_name.starts_with(".") {
+            continue
+        }
+        
+        // Skip if excluded
+        if config.should_exclude(path.clone(), config.exclude_patterns.clone()) {
+            continue
+        }
+        
+        // Skip common ignore patterns if respecting .gitignore
+        if config.respect_ignore && is_ignored(file_name) {
+            continue
+        }
+        
+        if entry.is_dir() {
+            // Recurse into subdirectory
+            walk_dir(path, config.clone(), files)?
+        } else if entry.is_file() {
+            // Add file if it matches criteria
+            if should_include_file(path.clone(), config.clone()) {
+                files.push(path)
+            }
+        }
+    }
+    
+    Ok(())
+}
+
+fn should_include_file(path: string, config: Config) -> bool {
+    // Check file type filter
+    if !config.matches_file_type(path.clone(), config.file_types.clone()) {
+        return false
+    }
+    
+    // Check if binary file (skip binary files)
+    if is_likely_binary(path.clone()) {
+        return false
+    }
+    
+    true
+}
+
+fn is_ignored(name: string) -> bool {
+    // Common directories to ignore
+    let ignored_dirs = vec![
+        "target",
+        "node_modules",
+        ".git",
+        ".svn",
+        ".hg",
+        "dist",
+        "build",
+        "__pycache__",
+        ".cache",
+        ".venv",
+        "venv",
+    ]
+    
+    ignored_dirs.contains(&name)
+}
+
+fn is_likely_binary(path: string) -> bool {
+    // Check by extension
+    let binary_extensions = vec![
+        "exe", "dll", "so", "dylib", "a", "o",
+        "png", "jpg", "jpeg", "gif", "bmp", "ico",
+        "pdf", "zip", "tar", "gz", "bz2", "xz",
+        "mp3", "mp4", "avi", "mov", "mkv",
+        "wasm", "class", "pyc",
+    ]
+    
+    let ext = path.extension(path).unwrap_or("")
+    binary_extensions.contains(&ext)
+}
+
