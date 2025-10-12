@@ -19,6 +19,8 @@ pub struct WjConfig {
     pub profile: HashMap<String, ProfileConfig>,
     #[serde(default)]
     pub target: HashMap<String, TargetConfig>,
+    #[serde(default)]
+    pub compiler: CompilerConfig,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -69,6 +71,35 @@ pub enum OptLevel {
 pub struct TargetConfig {
     pub enabled: Option<bool>,
     // Future: target-specific configuration
+}
+
+/// Compiler optimization configuration
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CompilerConfig {
+    /// Defer drop optimization mode: "auto", "always", "never"
+    #[serde(default = "default_defer_drop_mode")]
+    pub defer_drop: String,
+
+    /// Defer drop threshold in bytes (default: 102400 = 100KB)
+    #[serde(default = "default_defer_drop_threshold")]
+    pub defer_drop_threshold: usize,
+}
+
+fn default_defer_drop_mode() -> String {
+    "auto".to_string()
+}
+
+fn default_defer_drop_threshold() -> usize {
+    102400 // 100KB
+}
+
+impl Default for CompilerConfig {
+    fn default() -> Self {
+        Self {
+            defer_drop: default_defer_drop_mode(),
+            defer_drop_threshold: default_defer_drop_threshold(),
+        }
+    }
 }
 
 impl WjConfig {
@@ -281,6 +312,7 @@ serde = { version = "1.0", features = ["derive"] }
             dev_dependencies: HashMap::new(),
             profile: HashMap::new(),
             target: HashMap::new(),
+            compiler: CompilerConfig::default(),
         };
 
         config.add_dependency(
