@@ -242,7 +242,18 @@ impl Analyzer {
         for item in &program.items {
             match item {
                 Item::Function(func) => {
-                    let analyzed_func = self.analyze_function(func)?;
+                    let mut analyzed_func = self.analyze_function(func)?;
+
+                    // PHASE 7: Detect const/static optimizations
+                    analyzed_func.const_static_optimizations =
+                        self.detect_const_static_opportunities(&analyzed_func);
+
+                    // PHASE 8: Detect SmallVec optimizations
+                    analyzed_func.smallvec_optimizations = self.detect_smallvec_opportunities(func);
+
+                    // PHASE 9: Detect Cow optimizations
+                    analyzed_func.cow_optimizations = self.detect_cow_opportunities(func);
+
                     let signature = self.build_signature(&analyzed_func);
                     registry.add_function(func.name.clone(), signature);
                     analyzed.push(analyzed_func);
@@ -250,10 +261,29 @@ impl Analyzer {
                 Item::Impl(impl_block) => {
                     // Analyze methods in impl blocks
                     for func in &impl_block.functions {
-                        let analyzed_func = self.analyze_function(func)?;
+                        let mut analyzed_func = self.analyze_function(func)?;
+
+                        // PHASE 7: Detect const/static optimizations
+                        analyzed_func.const_static_optimizations =
+                            self.detect_const_static_opportunities(&analyzed_func);
+
+                        // PHASE 8: Detect SmallVec optimizations
+                        analyzed_func.smallvec_optimizations =
+                            self.detect_smallvec_opportunities(func);
+
+                        // PHASE 9: Detect Cow optimizations
+                        analyzed_func.cow_optimizations = self.detect_cow_opportunities(func);
+
                         let signature = self.build_signature(&analyzed_func);
                         registry.add_function(func.name.clone(), signature);
                         analyzed.push(analyzed_func);
+                    }
+                }
+                Item::Static { mutable, value, .. } => {
+                    // Analyze static declarations for const promotion
+                    if !mutable && self.is_const_evaluable(value) {
+                        // This static can be promoted to const
+                        // Store in a global optimization list (TODO: add to Program-level analysis)
                     }
                 }
                 _ => {}
@@ -1302,6 +1332,314 @@ impl Analyzer {
             }
             Type::Vec(_) | Type::String => true, // Built-in collections are safe
             _ => false, // Primitives and references don't benefit from defer drop
+        }
+    }
+
+    /// PHASE 7: Detect const/static optimization opportunities
+    /// Returns variables/constants within a function that can be promoted to const
+    fn detect_const_static_opportunities(
+        &self,
+        _func: &AnalyzedFunction,
+    ) -> Vec<ConstStaticOptimization> {
+        // For now, we focus on global static analysis (done in analyze_program)
+        // Function-level const detection would look for:
+        // 1. Local variables initialized with const-evaluable expressions
+        // 2. Static local variables that never change
+        // 3. Repeated literal values that could be extracted to const
+
+        // TODO: Implement function-level const detection
+        // This requires analyzing the function body's statements and expressions
+
+        Vec::new()
+    }
+
+    /// Check if an expression can be evaluated at compile time (const-evaluable)
+    #[allow(clippy::only_used_in_recursion)]
+    fn is_const_evaluable(&self, expr: &Expression) -> bool {
+        match expr {
+            // Literals are always const
+            Expression::Literal(_) => true,
+
+            // Binary operations on const values are const
+            Expression::Binary { left, right, .. } => {
+                self.is_const_evaluable(left) && self.is_const_evaluable(right)
+            }
+
+            // Unary operations on const values are const
+            Expression::Unary { operand, .. } => self.is_const_evaluable(operand),
+
+            // Struct literals with const fields might be const (depends on struct)
+            Expression::StructLiteral { fields, .. } => {
+                fields.iter().all(|(_, expr)| self.is_const_evaluable(expr))
+            }
+
+            // References to other const values would be const (requires symbol table)
+            // For now, we're conservative and don't allow this
+            Expression::Identifier(_) => false,
+
+            // Function calls are generally not const (unless const fn, which we don't track yet)
+            Expression::Call { .. } => false,
+
+            // Field access could be const if the base is const, but we're conservative
+            Expression::FieldAccess { .. } => false,
+
+            // Method calls are not const
+            Expression::MethodCall { .. } => false,
+
+            // Everything else is not const
+            _ => false,
+        }
+    }
+
+    /// PHASE 8: Detect SmallVec optimization opportunities
+    /// Returns Vec variables that can use stack allocation via SmallVec
+    fn detect_smallvec_opportunities(&self, func: &FunctionDecl) -> Vec<SmallVecOptimization> {
+        let mut optimizations = Vec::new();
+
+        // TODO: Implement full SmallVec detection
+        // This requires analyzing:
+        // 1. Vec literal sizes: vec![1, 2, 3] → size 3
+        // 2. Loop bounds: (0..n).collect() where n is const → size n
+        // 3. Multiple push() calls → count them
+        // 4. Usage patterns to ensure size stays small
+
+        // For now, detect obvious cases: vec![...] literals with ≤ 8 elements
+        for stmt in &func.body {
+            self.detect_smallvec_in_statement(stmt, &mut optimizations);
+        }
+
+        optimizations
+    }
+
+    fn detect_smallvec_in_statement(
+        &self,
+        stmt: &Statement,
+        optimizations: &mut Vec<SmallVecOptimization>,
+    ) {
+        if let Statement::Let { name, value, .. } = stmt {
+            if let Some(size) = self.estimate_vec_literal_size(value) {
+                if size <= 8 {
+                    // Recommend SmallVec with power-of-2 stack size
+                    let stack_size = size.next_power_of_two().max(4);
+                    optimizations.push(SmallVecOptimization {
+                        variable: name.clone(),
+                        estimated_max_size: size,
+                        stack_size,
+                    });
+                }
+            }
+        }
+    }
+
+    /// Estimate the size of a Vec literal or similar construction
+    fn estimate_vec_literal_size(&self, expr: &Expression) -> Option<usize> {
+        match expr {
+            // vec![1, 2, 3] macro invocation
+            Expression::MacroInvocation {
+                name,
+                args,
+                delimiter,
+            } if name == "vec" && *delimiter == MacroDelimiter::Brackets => Some(args.len()),
+
+            // Vec::new() - starts empty
+            Expression::MethodCall {
+                method, arguments, ..
+            } if method == "new" && arguments.is_empty() => Some(0),
+
+            // Static method Vec::<T>::with_capacity(n) where n is a literal
+            Expression::Call {
+                function,
+                arguments,
+            } => {
+                // Check if it's Vec::with_capacity or similar
+                if let Expression::FieldAccess { object: _, field } = function.as_ref() {
+                    if field == "with_capacity" {
+                        // Try to extract capacity from first argument
+                        if let Some((_, arg)) = arguments.first() {
+                            return self.extract_literal_int(arg);
+                        }
+                    }
+                }
+                None
+            }
+
+            // (0..n).collect::<Vec<_>>() patterns
+            Expression::MethodCall { object, method, .. } if method == "collect" => {
+                // Check if object is a Range
+                if let Expression::Range { start, end, .. } = object.as_ref() {
+                    // Try to compute range size
+                    let start_val = self.extract_literal_int(start).unwrap_or(0);
+                    let end_val = self.extract_literal_int(end)?;
+                    return Some(end_val - start_val);
+                }
+                None
+            }
+
+            _ => None,
+        }
+    }
+
+    /// Extract an integer literal value from an expression
+    fn extract_literal_int(&self, expr: &Expression) -> Option<usize> {
+        match expr {
+            Expression::Literal(Literal::Int(n)) if *n >= 0 => Some(*n as usize),
+            _ => None,
+        }
+    }
+
+    /// PHASE 9: Detect Cow (Clone-on-Write) optimization opportunities
+    /// Returns parameters/variables that can use Cow to avoid unnecessary clones
+    fn detect_cow_opportunities(&self, func: &FunctionDecl) -> Vec<CowOptimization> {
+        let mut optimizations = Vec::new();
+
+        // Analyze function parameters that might be conditionally modified
+        for param in &func.parameters {
+            // Check if parameter is String or str (common Cow candidates)
+            let is_string_like = matches!(param.type_, Type::String)
+                || matches!(param.type_, Type::Reference(ref inner) if matches!(**inner, Type::String));
+
+            if !is_string_like {
+                continue;
+            }
+
+            // Analyze if the parameter is conditionally modified
+            if let Some(reason) = self.analyze_conditional_modification(&param.name, &func.body) {
+                optimizations.push(CowOptimization {
+                    variable: param.name.clone(),
+                    reason,
+                });
+            }
+        }
+
+        optimizations
+    }
+
+    /// Analyze if a variable is conditionally modified (some branches modify, others don't)
+    fn analyze_conditional_modification(
+        &self,
+        var_name: &str,
+        body: &[Statement],
+    ) -> Option<CowReason> {
+        let mut has_read_only_path = false;
+        let mut has_modifying_path = false;
+
+        for stmt in body {
+            match stmt {
+                // Check if statements
+                Statement::If {
+                    condition: _,
+                    then_block,
+                    else_block,
+                } => {
+                    // Check if variable is modified in then block
+                    let modified_in_then = self.is_variable_modified(var_name, then_block);
+                    let modified_in_else = else_block
+                        .as_ref()
+                        .map(|block| self.is_variable_modified(var_name, block))
+                        .unwrap_or(false);
+
+                    // XOR: exactly one branch modifies
+                    if modified_in_then != modified_in_else {
+                        has_read_only_path = true;
+                        has_modifying_path = true;
+                    } else if !modified_in_then {
+                        // Neither modifies - read only
+                        has_read_only_path = true;
+                    } else {
+                        // Both modify
+                        has_modifying_path = true;
+                    }
+                }
+
+                // Check match statements
+                Statement::Match { value: _, arms } => {
+                    // For match expressions, check if the variable is referenced in any arm
+                    // Full analysis would require checking if arms modify vs just read
+                    // For now, consider it a potential read-only use
+                    for arm in arms {
+                        if self.expression_references_variable(var_name, &arm.body) {
+                            has_read_only_path = true;
+                        }
+                    }
+                }
+
+                // Check if variable is used in a read-only way
+                Statement::Expression(expr) | Statement::Return(Some(expr)) => {
+                    if self.expression_references_variable(var_name, expr) {
+                        // Simple use - consider it read-only unless it's being modified
+                        has_read_only_path = true;
+                    }
+                }
+
+                _ => {}
+            }
+        }
+
+        // If we have both read-only and modifying paths, Cow is beneficial
+        if has_read_only_path && has_modifying_path {
+            Some(CowReason::ConditionalModification)
+        } else {
+            None
+        }
+    }
+
+    /// Check if a variable is modified in a block of statements
+    fn is_variable_modified(&self, var_name: &str, statements: &[Statement]) -> bool {
+        for stmt in statements {
+            match stmt {
+                // Assignment to the variable
+                Statement::Assignment {
+                    target: Expression::Identifier(name),
+                    ..
+                } if name == var_name => {
+                    return true;
+                }
+
+                // Method calls that might modify (e.g., push_str, clear)
+                Statement::Expression(Expression::MethodCall { object, method, .. }) => {
+                    if let Expression::Identifier(name) = object.as_ref() {
+                        if name == var_name && self.is_mutating_method(method) {
+                            return true;
+                        }
+                    }
+                }
+
+                _ => {}
+            }
+        }
+        false
+    }
+
+    /// Check if a method mutates the object
+    fn is_mutating_method(&self, method: &str) -> bool {
+        matches!(
+            method,
+            "push" | "push_str" | "clear" | "pop" | "remove" | "insert" | "append"
+        )
+    }
+
+    /// Check if an expression references a variable
+    #[allow(clippy::only_used_in_recursion)]
+    fn expression_references_variable(&self, var_name: &str, expr: &Expression) -> bool {
+        match expr {
+            Expression::Identifier(name) => name == var_name,
+            Expression::Binary { left, right, .. } => {
+                self.expression_references_variable(var_name, left)
+                    || self.expression_references_variable(var_name, right)
+            }
+            Expression::MethodCall { object, .. } | Expression::FieldAccess { object, .. } => {
+                self.expression_references_variable(var_name, object)
+            }
+            Expression::Call {
+                function,
+                arguments,
+            } => {
+                self.expression_references_variable(var_name, function)
+                    || arguments
+                        .iter()
+                        .any(|(_, arg)| self.expression_references_variable(var_name, arg))
+            }
+            _ => false,
         }
     }
 }
