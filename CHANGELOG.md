@@ -7,6 +7,32 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.25.0] - 2025-10-12
+
+**Cross-File LSP Features** 🔗🔍
+
+### Summary
+v0.25.0 adds **cross-file analysis** to the LSP server, enabling project-wide features like find-all-references, cross-file goto-definition, and rename-symbol. Built on the Salsa foundation from v0.24.0, these features leverage incremental computation for blazing-fast performance.
+
+### Major Features
+
+#### Cross-File Analysis ✅
+- **Find All References**: Search for symbol usage across entire project
+- **Goto Definition**: Jump to definitions in other files
+- **Rename Symbol**: Refactor symbol names across all files
+- **Import Resolution**: Resolve `use` statements to actual files
+
+#### Salsa Queries 🚀
+- Symbol table extraction (per-file)
+- Import dependency tracking (cross-file)
+- Reference finding (project-wide)
+- Smart cache invalidation
+
+### Coming Soon
+(Work in progress)
+
+---
+
 ## [0.24.0] - 2025-10-12
 
 **Salsa Incremental Computation Integration** 🚀⚡
