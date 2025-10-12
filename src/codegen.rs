@@ -1016,10 +1016,10 @@ impl CodeGenerator {
 
                     // Generate the expression but wrap in smallvec! if it's a vec! macro
                     let expr_str = self.generate_expression(value);
-                    if expr_str.starts_with("vec!") {
+                    if let Some(stripped) = expr_str.strip_prefix("vec!") {
                         // Replace vec! with smallvec!
                         output.push_str("smallvec!");
-                        output.push_str(&expr_str[4..]);
+                        output.push_str(stripped);
                     } else {
                         // For other expressions, try to convert
                         output.push_str(&expr_str);
@@ -2220,6 +2220,7 @@ impl CodeGenerator {
 
     /// PHASE 7: Check if an expression can be evaluated at compile time
     /// If true, we can use `const` instead of `static`
+    #[allow(clippy::only_used_in_recursion)]
     fn is_const_evaluable(&self, expr: &Expression) -> bool {
         match expr {
             // Literals are always const
