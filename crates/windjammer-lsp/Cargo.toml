@@ -6,6 +6,10 @@ authors.workspace = true
 description = "Language Server Protocol implementation for Windjammer"
 license.workspace = true
 
+[lib]
+name = "windjammer_lsp"
+path = "src/lib.rs"
+
 [[bin]]
 name = "windjammer-lsp"
 path = "src/main.rs"
@@ -60,3 +64,10 @@ cargo_metadata = "0.18"
 assert_cmd = "2.0"
 predicates = "3.0"
 tempfile = "3.8"
+
+# Benchmarking
+criterion = { version = "0.5", features = ["html_reports"] }
+
+[[bench]]
+name = "salsa_performance"
+harness = false
