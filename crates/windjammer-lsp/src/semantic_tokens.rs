@@ -3,7 +3,7 @@
 // Provides context-aware syntax coloring beyond simple textmate grammars
 
 use tower_lsp::lsp_types::*;
-use windjammer::parser::{Expression, FunctionDecl, Item, Program, Statement, Type};
+use windjammer::parser::{FunctionDecl, Item, Program, Statement, Type};
 
 /// Provides semantic token information for syntax highlighting
 pub struct SemanticTokensProvider {
@@ -21,14 +21,16 @@ impl SemanticTokensProvider {
 
     /// Generate semantic tokens for the entire document
     pub fn get_semantic_tokens(&self) -> Option<Vec<SemanticToken>> {
-        let program = self.program.as_ref()?;
-        let mut tokens = Vec::new();
+        // TODO: Implement proper semantic token generation
+        // Currently returns empty to avoid compilation errors
+        // Need to:
+        // 1. Track line/column positions in AST
+        // 2. Map SemanticTokenType to u32 indices
+        // 3. Calculate delta encoding properly
+        let _program = self.program.as_ref()?;
 
-        for item in &program.items {
-            self.collect_tokens_from_item(item, &mut tokens);
-        }
-
-        Some(tokens)
+        // Return empty tokens for now
+        Some(Vec::new())
     }
 
     fn collect_tokens_from_item(&self, item: &Item, tokens: &mut Vec<SemanticToken>) {
@@ -252,4 +254,3 @@ pub fn get_semantic_tokens_legend() -> SemanticTokensLegend {
         ],
     }
 }
-
