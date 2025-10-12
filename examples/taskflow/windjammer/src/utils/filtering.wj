@@ -1,0 +1,100 @@
+// Query filtering utilities
+
+use std.time
+
+@derive(Debug, Clone)]
+pub struct FilterParams {
+    pub status: Option<string>,
+    pub priority: Option<string>,
+    pub assigned_to: Option<int>,
+    pub created_by: Option<int>,
+    pub created_after: Option<int>,
+    pub created_before: Option<int>,
+    pub search: Option<string>,
+}
+
+impl FilterParams {
+    pub fn from_query(query: HashMap<string, string>) -> FilterParams {
+        FilterParams {
+            status: query.get("status").cloned(),
+            priority: query.get("priority").cloned(),
+            assigned_to: query.get("assigned_to").and_then(|s| s.parse::<int>().ok()),
+            created_by: query.get("created_by").and_then(|s| s.parse::<int>().ok()),
+            created_after: query.get("created_after").and_then(|s| parse_date(s)),
+            created_before: query.get("created_before").and_then(|s| parse_date(s)),
+            search: query.get("q").cloned(),
+        }
+    }
+    
+    pub fn to_sql_where(self) -> (string, Vec<Value>) {
+        let mut conditions = vec![]
+        let mut params = vec![]
+        let mut param_index = 1
+        
+        if let Some(status) = self.status {
+            conditions.push(format!("status = ${}", param_index))
+            params.push(Value::String(status))
+            param_index += 1
+        }
+        
+        if let Some(priority) = self.priority {
+            conditions.push(format!("priority = ${}", param_index))
+            params.push(Value::String(priority))
+            param_index += 1
+        }
+        
+        if let Some(assigned_to) = self.assigned_to {
+            conditions.push(format!("assigned_to = ${}", param_index))
+            params.push(Value::Int(assigned_to))
+            param_index += 1
+        }
+        
+        if let Some(created_by) = self.created_by {
+            conditions.push(format!("created_by = ${}", param_index))
+            params.push(Value::Int(created_by))
+            param_index += 1
+        }
+        
+        if let Some(created_after) = self.created_after {
+            conditions.push(format!("created_at >= ${}", param_index))
+            params.push(Value::Int(created_after))
+            param_index += 1
+        }
+        
+        if let Some(created_before) = self.created_before {
+            conditions.push(format!("created_at <= ${}", param_index))
+            params.push(Value::Int(created_before))
+            param_index += 1
+        }
+        
+        if let Some(search) = self.search {
+            conditions.push(format!("(title ILIKE ${} OR description ILIKE ${})", param_index, param_index))
+            let search_pattern = format!("%{}%", search)
+            params.push(Value::String(search_pattern))
+            param_index += 1
+        }
+        
+        let where_clause = if conditions.is_empty() {
+            "1=1".to_string()
+        } else {
+            conditions.join(" AND ")
+        }
+        
+        (where_clause, params)
+    }
+}
+
+fn parse_date(date_str: string) -> Option<int> {
+    // Parse ISO 8601 date string to Unix timestamp
+    // Simplified implementation - in production use proper date parsing
+    // Format: YYYY-MM-DD or YYYY-MM-DDTHH:MM:SS
+    time.parse_iso8601(&date_str).ok()
+}
+
+@derive(Debug)]
+pub enum Value {
+    String(string),
+    Int(int),
+    Bool(bool),
+}
+
