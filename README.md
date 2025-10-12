@@ -105,17 +105,64 @@ Perfect for:
 
 ### 🚀 98.7% of Rust Performance
 
-Your naive code automatically achieves near-expert Rust speed thanks to our 7-phase compiler optimization pipeline:
+Your naive code automatically achieves near-expert Rust speed thanks to our 10-phase compiler optimization pipeline:
 
-- **Defer drop** 🆕 - Async deallocation for 393x faster returns
-- **Inline hints** - Automatic `#[inline]` for hot paths
-- **Clone elimination** - Removes unnecessary allocations
-- **String capacity** - Pre-allocates string buffers
-- **Constant folding** - Evaluates expressions at compile time
-- **Compound assignments** - Optimizes `x = x + 1` → `x += 1`
-- **Struct shorthand** - Generates idiomatic patterns
+- **Phase 0: Defer Drop** 🆕 - Async deallocation for 393x faster returns
+- **Phase 1: Inline Hints** - Automatic `#[inline]` for hot paths
+- **Phase 2: Clone Elimination** - Removes unnecessary allocations
+- **Phase 3: Struct Mapping** - Idiomatic patterns for conversions
+- **Phase 4: String Capacity** - Pre-allocates string buffers  
+- **Phase 5: Compound Assignments** - Optimizes `x = x + 1` → `x += 1`
+- **Phase 6: Constant Folding** - Evaluates expressions at compile time
+- **Phase 7: Const/Static** 🆕 - Promotes `static` to `const` when possible
+- **Phase 8: SmallVec** 🆕 - Stack allocates small vectors (< 8 elements)
+- **Phase 9: Cow** 🆕 - Clone-on-write for conditionally modified data
 
-**You write simple code. The compiler makes it 393x faster.**
+**You write simple code. The compiler makes it blazingly fast—automatically.**
+
+#### Phase 7-9: Advanced Optimizations 🆕 **v0.21.0**
+
+**Phase 7: Const/Static Promotion**
+```windjammer
+// You write:
+static MAX_SIZE: int = 1024
+static BUFFER_SIZE: int = MAX_SIZE * 2
+
+// Compiler generates:
+const MAX_SIZE: i32 = 1024;           // Promoted to const!
+const BUFFER_SIZE: i32 = 2048;        // Computed at compile time
+```
+
+**Phase 8: SmallVec (Stack Allocation)**
+```windjammer
+// You write:
+let small = vec![1, 2, 3]  // Small vector (3 elements)
+
+// Compiler generates:
+let small: SmallVec<[i32; 8]> = smallvec![1, 2, 3];  // Stack allocated!
+// No heap allocation, faster access, better cache locality
+```
+
+**Phase 9: Cow (Clone-on-Write)**
+```windjammer
+// You write:
+fn process(text: string, uppercase: bool) -> string {
+    if uppercase {
+        text.to_uppercase()  // Modified
+    } else {
+        text  // Not modified
+    }
+}
+
+// Compiler generates:
+fn process(text: Cow<'_, str>, uppercase: bool) -> Cow<'_, str> {
+    if uppercase {
+        Cow::Owned(text.to_uppercase())  // Clone only when needed
+    } else {
+        text  // Zero-cost borrow!
+    }
+}
+```
 
 ### 🧠 World-Class IDE Support 🆕 **v0.19.0**
 
