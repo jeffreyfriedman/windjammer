@@ -77,7 +77,7 @@ impl WindjammerLanguageServer {
             // Update semantic tokens provider
             if let Some(program) = self.analysis_db.get_program(&uri) {
                 let mut semantic_tokens_provider = SemanticTokensProvider::new();
-                semantic_tokens_provider.update_program(program.clone());
+                semantic_tokens_provider.update_program(program.clone(), content.clone());
                 let semantic_tokens_providers = self.semantic_tokens_providers.write().unwrap();
                 semantic_tokens_providers.insert(uri.clone(), semantic_tokens_provider);
             }
@@ -93,6 +93,50 @@ impl WindjammerLanguageServer {
 
             // Publish diagnostics to the client
             self.diagnostics.publish(&uri, diagnostics).await;
+        }
+    }
+
+    /// Helper to convert Type to string for display
+    fn type_to_string(&self, ty: &windjammer::parser::Type) -> String {
+        use windjammer::parser::Type;
+        match ty {
+            Type::Int => "int".to_string(),
+            Type::Int32 => "i32".to_string(),
+            Type::Uint => "uint".to_string(),
+            Type::Float => "float".to_string(),
+            Type::Bool => "bool".to_string(),
+            Type::String => "string".to_string(),
+            Type::Custom(name) => name.clone(),
+            Type::Generic(name) => name.clone(),
+            Type::Parameterized(base, params) => {
+                let params_str = params
+                    .iter()
+                    .map(|p| self.type_to_string(p))
+                    .collect::<Vec<_>>()
+                    .join(", ");
+                format!("{}<{}>", base, params_str)
+            }
+            Type::Associated(base, assoc) => format!("{}::{}", base, assoc),
+            Type::TraitObject(name) => format!("dyn {}", name),
+            Type::Option(inner) => format!("Option<{}>", self.type_to_string(inner)),
+            Type::Result(ok, err) => {
+                format!(
+                    "Result<{}, {}>",
+                    self.type_to_string(ok),
+                    self.type_to_string(err)
+                )
+            }
+            Type::Vec(inner) => format!("Vec<{}>", self.type_to_string(inner)),
+            Type::Reference(inner) => format!("&{}", self.type_to_string(inner)),
+            Type::MutableReference(inner) => format!("&mut {}", self.type_to_string(inner)),
+            Type::Tuple(types) => {
+                let types_str = types
+                    .iter()
+                    .map(|t| self.type_to_string(t))
+                    .collect::<Vec<_>>()
+                    .join(", ");
+                format!("({})", types_str)
+            }
         }
     }
 
@@ -171,6 +215,13 @@ impl LanguageServer for WindjammerLanguageServer {
                     ..Default::default()
                 }),
 
+                // Signature help (parameter hints)
+                signature_help_provider: Some(SignatureHelpOptions {
+                    trigger_characters: Some(vec!["(".to_string(), ",".to_string()]),
+                    retrigger_characters: None,
+                    work_done_progress_options: WorkDoneProgressOptions::default(),
+                }),
+
                 // Go to definition
                 definition_provider: Some(OneOf::Left(true)),
 
@@ -199,40 +250,7 @@ impl LanguageServer for WindjammerLanguageServer {
                 semantic_tokens_provider: Some(
                     SemanticTokensServerCapabilities::SemanticTokensOptions(
                         SemanticTokensOptions {
-                            legend: SemanticTokensLegend {
-                                token_types: vec![
-                                    SemanticTokenType::NAMESPACE,
-                                    SemanticTokenType::TYPE,
-                                    SemanticTokenType::CLASS,
-                                    SemanticTokenType::ENUM,
-                                    SemanticTokenType::INTERFACE,
-                                    SemanticTokenType::STRUCT,
-                                    SemanticTokenType::TYPE_PARAMETER,
-                                    SemanticTokenType::PARAMETER,
-                                    SemanticTokenType::VARIABLE,
-                                    SemanticTokenType::PROPERTY,
-                                    SemanticTokenType::ENUM_MEMBER,
-                                    SemanticTokenType::FUNCTION,
-                                    SemanticTokenType::METHOD,
-                                    SemanticTokenType::MACRO,
-                                    SemanticTokenType::KEYWORD,
-                                    SemanticTokenType::COMMENT,
-                                    SemanticTokenType::STRING,
-                                    SemanticTokenType::NUMBER,
-                                    SemanticTokenType::OPERATOR,
-                                ],
-                                token_modifiers: vec![
-                                    SemanticTokenModifier::DECLARATION,
-                                    SemanticTokenModifier::DEFINITION,
-                                    SemanticTokenModifier::READONLY,
-                                    SemanticTokenModifier::STATIC,
-                                    SemanticTokenModifier::DEPRECATED,
-                                    SemanticTokenModifier::ABSTRACT,
-                                    SemanticTokenModifier::ASYNC,
-                                    SemanticTokenModifier::MODIFICATION,
-                                    SemanticTokenModifier::DOCUMENTATION,
-                                ],
-                            },
+                            legend: crate::semantic_tokens::get_semantic_token_legend(),
                             range: Some(false),
                             full: Some(SemanticTokensFullOptions::Bool(true)),
                             ..Default::default()
@@ -488,24 +506,339 @@ impl LanguageServer for WindjammerLanguageServer {
         &self,
         params: DocumentSymbolParams,
     ) -> Result<Option<DocumentSymbolResponse>> {
-        tracing::debug!("Document symbol: {}", params.text_document.uri);
+        let uri = params.text_document.uri.clone();
+        tracing::debug!("Document symbol: {}", uri);
 
-        // TODO: Implement document symbols (outline)
-        // - List all functions, structs, enums, etc.
+        // Get the program for this file
+        let program = match self.analysis_db.get_program(&uri) {
+            Some(prog) => prog,
+            None => return Ok(None),
+        };
 
-        Ok(None)
+        let mut symbols = Vec::new();
+
+        // Collect symbols from all items
+        for item in &program.items {
+            match item {
+                windjammer::parser::Item::Function(func) => {
+                    symbols.push(SymbolInformation {
+                        name: func.name.clone(),
+                        kind: SymbolKind::FUNCTION,
+                        tags: None,
+                        deprecated: None,
+                        location: Location {
+                            uri: uri.clone(),
+                            range: Range {
+                                start: Position {
+                                    line: 0,
+                                    character: 0,
+                                },
+                                end: Position {
+                                    line: 0,
+                                    character: 0,
+                                },
+                            },
+                        },
+                        container_name: None,
+                    });
+                }
+                windjammer::parser::Item::Struct(s) => {
+                    symbols.push(SymbolInformation {
+                        name: s.name.clone(),
+                        kind: SymbolKind::STRUCT,
+                        tags: None,
+                        deprecated: None,
+                        location: Location {
+                            uri: uri.clone(),
+                            range: Range {
+                                start: Position {
+                                    line: 0,
+                                    character: 0,
+                                },
+                                end: Position {
+                                    line: 0,
+                                    character: 0,
+                                },
+                            },
+                        },
+                        container_name: None,
+                    });
+
+                    // Add struct fields
+                    for field in &s.fields {
+                        symbols.push(SymbolInformation {
+                            name: field.name.clone(),
+                            kind: SymbolKind::FIELD,
+                            tags: None,
+                            deprecated: None,
+                            location: Location {
+                                uri: uri.clone(),
+                                range: Range {
+                                    start: Position {
+                                        line: 0,
+                                        character: 0,
+                                    },
+                                    end: Position {
+                                        line: 0,
+                                        character: 0,
+                                    },
+                                },
+                            },
+                            container_name: Some(s.name.clone()),
+                        });
+                    }
+                }
+                windjammer::parser::Item::Enum(e) => {
+                    symbols.push(SymbolInformation {
+                        name: e.name.clone(),
+                        kind: SymbolKind::ENUM,
+                        tags: None,
+                        deprecated: None,
+                        location: Location {
+                            uri: uri.clone(),
+                            range: Range {
+                                start: Position {
+                                    line: 0,
+                                    character: 0,
+                                },
+                                end: Position {
+                                    line: 0,
+                                    character: 0,
+                                },
+                            },
+                        },
+                        container_name: None,
+                    });
+
+                    // Add enum variants
+                    for variant in &e.variants {
+                        symbols.push(SymbolInformation {
+                            name: variant.name.clone(),
+                            kind: SymbolKind::ENUM_MEMBER,
+                            tags: None,
+                            deprecated: None,
+                            location: Location {
+                                uri: uri.clone(),
+                                range: Range {
+                                    start: Position {
+                                        line: 0,
+                                        character: 0,
+                                    },
+                                    end: Position {
+                                        line: 0,
+                                        character: 0,
+                                    },
+                                },
+                            },
+                            container_name: Some(e.name.clone()),
+                        });
+                    }
+                }
+                windjammer::parser::Item::Trait(t) => {
+                    symbols.push(SymbolInformation {
+                        name: t.name.clone(),
+                        kind: SymbolKind::INTERFACE,
+                        tags: None,
+                        deprecated: None,
+                        location: Location {
+                            uri: uri.clone(),
+                            range: Range {
+                                start: Position {
+                                    line: 0,
+                                    character: 0,
+                                },
+                                end: Position {
+                                    line: 0,
+                                    character: 0,
+                                },
+                            },
+                        },
+                        container_name: None,
+                    });
+                }
+                windjammer::parser::Item::Impl(impl_block) => {
+                    // Add impl block methods
+                    for method in &impl_block.functions {
+                        symbols.push(SymbolInformation {
+                            name: method.name.clone(),
+                            kind: SymbolKind::METHOD,
+                            tags: None,
+                            deprecated: None,
+                            location: Location {
+                                uri: uri.clone(),
+                                range: Range {
+                                    start: Position {
+                                        line: 0,
+                                        character: 0,
+                                    },
+                                    end: Position {
+                                        line: 0,
+                                        character: 0,
+                                    },
+                                },
+                            },
+                            container_name: Some(impl_block.type_name.clone()),
+                        });
+                    }
+                }
+                windjammer::parser::Item::Static { name, .. } => {
+                    symbols.push(SymbolInformation {
+                        name: name.clone(),
+                        kind: SymbolKind::CONSTANT,
+                        tags: None,
+                        deprecated: None,
+                        location: Location {
+                            uri: uri.clone(),
+                            range: Range {
+                                start: Position {
+                                    line: 0,
+                                    character: 0,
+                                },
+                                end: Position {
+                                    line: 0,
+                                    character: 0,
+                                },
+                            },
+                        },
+                        container_name: None,
+                    });
+                }
+                _ => {}
+            }
+        }
+
+        if symbols.is_empty() {
+            Ok(None)
+        } else {
+            Ok(Some(DocumentSymbolResponse::Flat(symbols)))
+        }
     }
 
     async fn symbol(
         &self,
         params: WorkspaceSymbolParams,
     ) -> Result<Option<Vec<SymbolInformation>>> {
-        tracing::debug!("Workspace symbol: {}", params.query);
+        let query = params.query.to_lowercase();
+        tracing::debug!("Workspace symbol search: {}", query);
 
-        // TODO: Implement workspace symbols (search)
-        // - Search for symbols across entire workspace
+        let mut results = Vec::new();
 
-        Ok(None)
+        // Search across all documents in the workspace
+        for entry in self.documents.iter() {
+            let uri = entry.key().clone();
+
+            // Get the program for this file
+            if let Some(program) = self.analysis_db.get_program(&uri) {
+                // Search through all items
+                for item in &program.items {
+                    match item {
+                        windjammer::parser::Item::Function(func) => {
+                            if func.name.to_lowercase().contains(&query) {
+                                results.push(SymbolInformation {
+                                    name: func.name.clone(),
+                                    kind: SymbolKind::FUNCTION,
+                                    tags: None,
+                                    deprecated: None,
+                                    location: Location {
+                                        uri: uri.clone(),
+                                        range: Range {
+                                            start: Position {
+                                                line: 0,
+                                                character: 0,
+                                            },
+                                            end: Position {
+                                                line: 0,
+                                                character: 0,
+                                            },
+                                        },
+                                    },
+                                    container_name: None,
+                                });
+                            }
+                        }
+                        windjammer::parser::Item::Struct(s) => {
+                            if s.name.to_lowercase().contains(&query) {
+                                results.push(SymbolInformation {
+                                    name: s.name.clone(),
+                                    kind: SymbolKind::STRUCT,
+                                    tags: None,
+                                    deprecated: None,
+                                    location: Location {
+                                        uri: uri.clone(),
+                                        range: Range {
+                                            start: Position {
+                                                line: 0,
+                                                character: 0,
+                                            },
+                                            end: Position {
+                                                line: 0,
+                                                character: 0,
+                                            },
+                                        },
+                                    },
+                                    container_name: None,
+                                });
+                            }
+                        }
+                        windjammer::parser::Item::Enum(e) => {
+                            if e.name.to_lowercase().contains(&query) {
+                                results.push(SymbolInformation {
+                                    name: e.name.clone(),
+                                    kind: SymbolKind::ENUM,
+                                    tags: None,
+                                    deprecated: None,
+                                    location: Location {
+                                        uri: uri.clone(),
+                                        range: Range {
+                                            start: Position {
+                                                line: 0,
+                                                character: 0,
+                                            },
+                                            end: Position {
+                                                line: 0,
+                                                character: 0,
+                                            },
+                                        },
+                                    },
+                                    container_name: None,
+                                });
+                            }
+                        }
+                        windjammer::parser::Item::Trait(t) => {
+                            if t.name.to_lowercase().contains(&query) {
+                                results.push(SymbolInformation {
+                                    name: t.name.clone(),
+                                    kind: SymbolKind::INTERFACE,
+                                    tags: None,
+                                    deprecated: None,
+                                    location: Location {
+                                        uri: uri.clone(),
+                                        range: Range {
+                                            start: Position {
+                                                line: 0,
+                                                character: 0,
+                                            },
+                                            end: Position {
+                                                line: 0,
+                                                character: 0,
+                                            },
+                                        },
+                                    },
+                                    container_name: None,
+                                });
+                            }
+                        }
+                        _ => {}
+                    }
+                }
+            }
+        }
+
+        if results.is_empty() {
+            Ok(None)
+        } else {
+            Ok(Some(results))
+        }
     }
 
     async fn code_action(&self, params: CodeActionParams) -> Result<Option<CodeActionResponse>> {
@@ -588,5 +921,120 @@ impl LanguageServer for WindjammerLanguageServer {
             }))),
             None => Ok(None),
         }
+    }
+
+    async fn signature_help(&self, params: SignatureHelpParams) -> Result<Option<SignatureHelp>> {
+        let uri = params
+            .text_document_position_params
+            .text_document
+            .uri
+            .clone();
+        let position = params.text_document_position_params.position;
+        tracing::debug!("Signature help request: {} at {:?}", uri, position);
+
+        // Get document content
+        let content = match self.documents.get(&uri) {
+            Some(content) => content.clone(),
+            None => return Ok(None),
+        };
+
+        // Get the program for this file
+        let program = match self.analysis_db.get_program(&uri) {
+            Some(prog) => prog,
+            None => return Ok(None),
+        };
+
+        // Find function at cursor position (simplified - look for function name before cursor)
+        let line_start = content
+            .lines()
+            .take(position.line as usize)
+            .map(|l| l.len() + 1)
+            .sum::<usize>();
+        let cursor_offset = line_start + position.character as usize;
+
+        // Look backward for function call pattern
+        let before_cursor = &content[..cursor_offset];
+
+        // Find the last opening parenthesis
+        if let Some(paren_pos) = before_cursor.rfind('(') {
+            // Extract function name before the parenthesis
+            let before_paren = &before_cursor[..paren_pos].trim_end();
+
+            // Simple heuristic: function name is the last word before '('
+            let func_name = before_paren
+                .split(|c: char| !c.is_alphanumeric() && c != '_')
+                .last()
+                .unwrap_or("")
+                .to_string();
+
+            if !func_name.is_empty() {
+                // Find this function in the program
+                for item in &program.items {
+                    if let windjammer::parser::Item::Function(func_decl) = item {
+                        // Get analyzed function for this declaration
+                        let analyzed_funcs = self.analysis_db.get_analyzed_functions(&uri);
+                        let func = analyzed_funcs.iter().find(|f| f.decl.name == func_name);
+
+                        if let Some(func) = func {
+                            // Build signature string
+                            let params_str: Vec<String> = func
+                                .decl
+                                .parameters
+                                .iter()
+                                .map(|p| format!("{}: {}", p.name, self.type_to_string(&p.type_)))
+                                .collect();
+
+                            let return_str = func
+                                .decl
+                                .return_type
+                                .as_ref()
+                                .map(|t| format!(" -> {}", self.type_to_string(t)))
+                                .unwrap_or_default();
+
+                            let signature_label = format!(
+                                "fn {}({}){}",
+                                func_name,
+                                params_str.join(", "),
+                                return_str
+                            );
+
+                            // Calculate active parameter based on comma count
+                            let params_section = &before_cursor[paren_pos + 1..];
+                            let comma_count = params_section.matches(',').count();
+                            let active_param =
+                                comma_count.min(func.decl.parameters.len().saturating_sub(1));
+
+                            // Build parameter information
+                            let parameters: Vec<ParameterInformation> = func
+                                .decl
+                                .parameters
+                                .iter()
+                                .map(|p| ParameterInformation {
+                                    label: ParameterLabel::Simple(format!(
+                                        "{}: {}",
+                                        p.name,
+                                        self.type_to_string(&p.type_)
+                                    )),
+                                    documentation: None,
+                                })
+                                .collect();
+
+                            return Ok(Some(SignatureHelp {
+                                signatures: vec![SignatureInformation {
+                                    label: signature_label,
+                                    documentation: None,
+                                    parameters: Some(parameters),
+                                    active_parameter: Some(active_param as u32),
+                                }],
+                                active_signature: Some(0),
+                                active_parameter: Some(active_param as u32),
+                            }));
+                        }
+                    }
+                }
+            }
+        }
+
+        Ok(None)
     }
 }
