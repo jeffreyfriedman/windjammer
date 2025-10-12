@@ -186,8 +186,16 @@ impl CodeGenerator {
                             self.generate_expression_immut(value)
                         ));
                     } else {
+                        // PHASE 7: Promote static to const if value is compile-time evaluable
+                        let keyword = if self.is_const_evaluable(value) {
+                            "const" // Zero runtime overhead!
+                        } else {
+                            "static"
+                        };
+
                         body.push_str(&format!(
-                            "static {}: {} = {};\n",
+                            "{} {}: {} = {};\n",
+                            keyword,
                             name,
                             self.type_to_rust(type_),
                             self.generate_expression_immut(value)
@@ -2162,5 +2170,30 @@ impl CodeGenerator {
         }
 
         new_body
+    }
+
+    /// PHASE 7: Check if an expression can be evaluated at compile time
+    /// If true, we can use `const` instead of `static`
+    fn is_const_evaluable(&self, expr: &Expression) -> bool {
+        match expr {
+            // Literals are always const
+            Expression::Literal(_) => true,
+
+            // Binary operations on const values are const
+            Expression::Binary { left, right, .. } => {
+                self.is_const_evaluable(left) && self.is_const_evaluable(right)
+            }
+
+            // Unary operations on const values are const
+            Expression::Unary { operand, .. } => self.is_const_evaluable(operand),
+
+            // Struct literals with const fields might be const
+            Expression::StructLiteral { fields, .. } => {
+                fields.iter().all(|(_, expr)| self.is_const_evaluable(expr))
+            }
+
+            // Most other expressions are not const-evaluable
+            _ => false,
+        }
     }
 }
