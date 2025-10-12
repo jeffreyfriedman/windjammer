@@ -1339,7 +1339,7 @@ impl Analyzer {
     /// Returns variables/constants within a function that can be promoted to const
     fn detect_const_static_opportunities(
         &self,
-        func: &AnalyzedFunction,
+        _func: &AnalyzedFunction,
     ) -> Vec<ConstStaticOptimization> {
         // For now, we focus on global static analysis (done in analyze_program)
         // Function-level const detection would look for:
@@ -1452,7 +1452,7 @@ impl Analyzer {
                 arguments,
             } => {
                 // Check if it's Vec::with_capacity or similar
-                if let Expression::FieldAccess { object, field } = function.as_ref() {
+                if let Expression::FieldAccess { object: _, field } = function.as_ref() {
                     if field == "with_capacity" {
                         // Try to extract capacity from first argument
                         if let Some((_, arg)) = arguments.first() {
@@ -1538,15 +1538,15 @@ impl Analyzer {
                         .map(|block| self.is_variable_modified(var_name, block))
                         .unwrap_or(false);
 
-                    if modified_in_then && !modified_in_else {
+                    // XOR: exactly one branch modifies
+                    if modified_in_then != modified_in_else {
                         has_read_only_path = true;
                         has_modifying_path = true;
-                    } else if !modified_in_then && modified_in_else {
-                        has_read_only_path = true;
-                        has_modifying_path = true;
-                    } else if !modified_in_then && !modified_in_else {
+                    } else if !modified_in_then {
+                        // Neither modifies - read only
                         has_read_only_path = true;
                     } else {
+                        // Both modify
                         has_modifying_path = true;
                     }
                 }
