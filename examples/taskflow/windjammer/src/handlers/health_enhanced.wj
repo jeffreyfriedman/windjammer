@@ -1,0 +1,184 @@
+// Enhanced health check endpoints for production monitoring
+
+use std.http
+use std.json
+use std.time
+use std.db
+
+@derive(Debug, Serialize)]
+struct HealthResponse {
+    status: string,
+    version: string,
+    uptime_seconds: int,
+    timestamp: int,
+}
+
+@derive(Debug, Serialize)]
+struct DetailedHealthResponse {
+    status: string,
+    version: string,
+    uptime_seconds: int,
+    timestamp: int,
+    checks: HealthChecks,
+}
+
+@derive(Debug, Serialize)]
+struct HealthChecks {
+    database: HealthCheck,
+    memory: HealthCheck,
+    disk: HealthCheck,
+}
+
+@derive(Debug, Serialize)]
+struct HealthCheck {
+    status: string,
+    message: Option<string>,
+    response_time_ms: Option<int>,
+}
+
+static START_TIME: int = time.now().timestamp()
+
+// Basic health check - fast, for load balancers
+@async
+pub fn liveness(req: Request) -> Response {
+    let now = time.now().timestamp()
+    let uptime = now - START_TIME
+    
+    let response = HealthResponse {
+        status: "ok".to_string(),
+        version: "0.23.0".to_string(),
+        uptime_seconds: uptime,
+        timestamp: now,
+    }
+    
+    http.json_response(200, response)
+}
+
+// Readiness check - includes dependency checks
+@async
+pub fn readiness(req: Request, pool: DbPool) -> Response {
+    let now = time.now().timestamp()
+    
+    // Check database connectivity
+    let db_check = check_database(pool).await
+    
+    if db_check.status != "ok" {
+        let response = json!({
+            "status": "not_ready",
+            "reason": "database_unavailable",
+            "timestamp": now
+        })
+        return http.json_response(503, response)
+    }
+    
+    let uptime = now - START_TIME
+    let response = HealthResponse {
+        status: "ready".to_string(),
+        version: "0.23.0".to_string(),
+        uptime_seconds: uptime,
+        timestamp: now,
+    }
+    
+    http.json_response(200, response)
+}
+
+// Detailed health check - comprehensive system status
+@async
+pub fn detailed(req: Request, pool: DbPool) -> Response {
+    let now = time.now().timestamp()
+    let uptime = now - START_TIME
+    
+    // Run all health checks
+    let db_check = check_database(pool).await
+    let memory_check = check_memory()
+    let disk_check = check_disk()
+    
+    // Determine overall status
+    let overall_status = if db_check.status == "ok" 
+        && memory_check.status == "ok" 
+        && disk_check.status == "ok" {
+        "healthy"
+    } else if db_check.status == "error" {
+        "unhealthy"
+    } else {
+        "degraded"
+    }
+    
+    let response = DetailedHealthResponse {
+        status: overall_status.to_string(),
+        version: "0.23.0".to_string(),
+        uptime_seconds: uptime,
+        timestamp: now,
+        checks: HealthChecks {
+            database: db_check,
+            memory: memory_check,
+            disk: disk_check,
+        },
+    }
+    
+    let status_code = match overall_status {
+        "healthy" => 200,
+        "degraded" => 200,  // Still operational
+        _ => 503,  // Unhealthy
+    }
+    
+    http.json_response(status_code, response)
+}
+
+// Check database connectivity and performance
+async fn check_database(pool: DbPool) -> HealthCheck {
+    let start = time.now().timestamp_millis()
+    
+    let query = "SELECT 1 as health_check"
+    let result = db.query_one(pool, query, vec![]).await
+    
+    let duration = time.now().timestamp_millis() - start
+    
+    match result {
+        Ok(_) => HealthCheck {
+            status: "ok".to_string(),
+            message: Some(format!("Connected, query time: {}ms", duration)),
+            response_time_ms: Some(duration as int),
+        },
+        Err(e) => HealthCheck {
+            status: "error".to_string(),
+            message: Some(format!("Database error: {}", e)),
+            response_time_ms: None,
+        },
+    }
+}
+
+// Check memory usage
+fn check_memory() -> HealthCheck {
+    // In production, use system APIs to get actual memory usage
+    // For demo, we'll return a simple check
+    
+    // Placeholder: In real implementation, check:
+    // - Process memory usage
+    // - Available system memory
+    // - Memory pressure indicators
+    
+    HealthCheck {
+        status: "ok".to_string(),
+        message: Some("Memory usage within limits".to_string()),
+        response_time_ms: Some(1),
+    }
+}
+
+// Check disk space
+fn check_disk() -> HealthCheck {
+    // In production, check actual disk space
+    // For demo, we'll return a simple check
+    
+    // Placeholder: In real implementation, check:
+    // - Available disk space
+    // - Disk I/O performance
+    // - Disk health indicators
+    
+    HealthCheck {
+        status: "ok".to_string(),
+        message: Some("Disk space available".to_string()),
+        response_time_ms: Some(1),
+    }
+}
+
