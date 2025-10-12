@@ -11,3 +11,4 @@ pub mod new;
 pub mod remove;
 pub mod run;
 pub mod test;
+pub mod update;
