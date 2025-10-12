@@ -187,16 +187,17 @@ wjfind "^#\[test\]" -t rust -c
 
 ## 🚀 Roadmap
 
-### Phase 1: Core (Week 1) - 90% COMPLETE
+### Phase 1: Core (Week 1) - COMPLETE ✅
 - [x] CLI argument parsing
 - [x] Basic directory traversal
 - [x] Simple pattern matching
 - [x] Colored output
 - [x] .gitignore support
 - [x] Context lines (-A, -B, -C)
+- [x] Replace mode ✅
 
-### Phase 2: Performance (Week 2)
-- [ ] Parallel file processing
+### Phase 2: Performance (Week 2) - IN PROGRESS
+- [x] Parallel file processing ✅
 - [ ] Memory-mapped I/O for large files
 - [ ] Smart buffering
 - [ ] Benchmark against ripgrep
