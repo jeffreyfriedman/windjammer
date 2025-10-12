@@ -9,15 +9,32 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [0.21.0] - In Progress
 
-**LSP Enhancements & Compiler Optimizations**
+**Compiler Optimizations: Phase 7-9 Infrastructure**
 
 ### Added
-- 🎨 **Semantic Tokens Infrastructure** - Foundation for context-aware syntax highlighting
-- TODO: Complete semantic tokens implementation
-- TODO: Signature help (parameter hints)
-- TODO: Workspace symbols search
-- TODO: Document symbols (outline view)
-- TODO: Phase 7-9 optimizations (const/static, smallvec, cow)
+- ✅ **Phase 7: Const/Static Optimization** - Automatic promotion of static to const
+  - Detection algorithm identifies compile-time evaluable expressions
+  - Code generation uses `const` keyword for zero runtime overhead
+  - Faster startup, smaller binaries, better compiler optimizations
+  - Test: `examples/test_const_static.wj`
+  
+- 🏗️ **Phase 8: SmallVec Infrastructure** - Stack allocation for small vectors
+  - Detection framework for Vec size analysis
+  - Ready for full implementation (literal analysis, loop bounds, usage tracking)
+  
+- 🏗️ **Phase 9: Cow Infrastructure** - Clone-on-write optimization
+  - Structures defined in analyzer
+  - Ready for control flow analysis implementation
+
+- 🎨 **Semantic Tokens Infrastructure** - LSP foundation
+  - Integrated with server pipeline
+  - Ready for full token generation
+
+### Deferred to v0.22.0+
+- Full SmallVec detection (requires sophisticated usage analysis)
+- Full Cow detection (requires control flow analysis)  
+- Complete semantic highlighting (requires AST position tracking)
+- Signature help, workspace symbols, document symbols
 
 ## [0.20.0] - 2025-10-12
 
