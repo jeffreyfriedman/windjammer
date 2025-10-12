@@ -10,8 +10,9 @@ pub struct CodeGenerator {
     needs_wasm_imports: bool,
     needs_web_imports: bool,
     needs_js_imports: bool,
-    needs_serde_imports: bool, // For JSON support
-    needs_write_import: bool,  // For string capacity optimization (write! macro)
+    needs_serde_imports: bool,   // For JSON support
+    needs_write_import: bool,    // For string capacity optimization (write! macro)
+    needs_smallvec_import: bool, // For Phase 8 SmallVec optimization
     target: CompilationTarget,
     is_module: bool, // true if generating code for a reusable module (not main file)
     #[allow(dead_code)] // TODO: Use for error mapping Phase 3
@@ -29,6 +30,11 @@ pub struct CodeGenerator {
     assignment_optimizations: std::collections::HashMap<String, crate::analyzer::CompoundOp>, // Variable -> compound op
     // PHASE 6 OPTIMIZATION: Track defer drop optimizations
     defer_drop_optimizations: Vec<crate::analyzer::DeferDropOptimization>,
+    // PHASE 8 OPTIMIZATION: Track SmallVec optimizations
+    smallvec_optimizations:
+        std::collections::HashMap<String, crate::analyzer::SmallVecOptimization>, // Variable -> SmallVec config
+    // PHASE 9 OPTIMIZATION: Track Cow optimizations
+    cow_optimizations: std::collections::HashSet<String>, // Variables that can use Cow
     // Track current statement index for optimization hints
     current_statement_idx: usize,
 }
@@ -44,6 +50,7 @@ impl CodeGenerator {
             needs_js_imports: false,
             needs_serde_imports: false,
             needs_write_import: false,
+            needs_smallvec_import: false,
             target,
             is_module: false,
             source_map: crate::source_map::SourceMap::new(),
@@ -55,6 +62,8 @@ impl CodeGenerator {
             string_capacity_hints: std::collections::HashMap::new(),
             assignment_optimizations: std::collections::HashMap::new(),
             defer_drop_optimizations: Vec::new(),
+            smallvec_optimizations: std::collections::HashMap::new(),
+            cow_optimizations: std::collections::HashSet::new(),
             current_statement_idx: 0,
         }
     }
@@ -186,8 +195,16 @@ impl CodeGenerator {
                             self.generate_expression_immut(value)
                         ));
                     } else {
+                        // PHASE 7: Promote static to const if value is compile-time evaluable
+                        let keyword = if self.is_const_evaluable(value) {
+                            "const" // Zero runtime overhead!
+                        } else {
+                            "static"
+                        };
+
                         body.push_str(&format!(
-                            "static {}: {} = {};\n",
+                            "{} {}: {} = {};\n",
+                            keyword,
                             name,
                             self.type_to_rust(type_),
                             self.generate_expression_immut(value)
@@ -285,6 +302,9 @@ impl CodeGenerator {
         }
         if self.needs_serde_imports {
             implicit_imports.push_str("use serde::{Serialize, Deserialize};\n");
+        }
+        if self.needs_smallvec_import {
+            implicit_imports.push_str("use smallvec::{SmallVec, smallvec};\n");
         }
         if self.needs_write_import {
             implicit_imports.push_str("use std::fmt::Write;\n");
@@ -692,6 +712,20 @@ impl CodeGenerator {
             self.clone_optimizations.insert(opt.variable.clone());
         }
 
+        // PHASE 8 OPTIMIZATION: Load SmallVec optimizations for this function
+        self.smallvec_optimizations.clear();
+        for opt in &analyzed.smallvec_optimizations {
+            self.smallvec_optimizations
+                .insert(opt.variable.clone(), opt.clone());
+            self.needs_smallvec_import = true; // Mark that we need the smallvec crate
+        }
+
+        // PHASE 9 OPTIMIZATION: Load Cow optimizations for this function
+        self.cow_optimizations.clear();
+        for opt in &analyzed.cow_optimizations {
+            self.cow_optimizations.insert(opt.variable.clone());
+        }
+
         // PHASE 3 OPTIMIZATION: Load struct mapping optimizations
         // Track which structs can use optimized construction strategies
         self.struct_mapping_hints.clear();
@@ -974,13 +1008,33 @@ impl CodeGenerator {
                 }
                 output.push_str(name);
 
-                if let Some(t) = type_ {
+                // PHASE 8: Check if this variable should use SmallVec
+                if let Some(smallvec_opt) = self.smallvec_optimizations.get(name) {
+                    // Use SmallVec with stack allocation
+                    output.push_str(&format!(": SmallVec<[_; {}]>", smallvec_opt.stack_size));
+                    output.push_str(" = ");
+
+                    // Generate the expression but wrap in smallvec! if it's a vec! macro
+                    let expr_str = self.generate_expression(value);
+                    if let Some(stripped) = expr_str.strip_prefix("vec!") {
+                        // Replace vec! with smallvec!
+                        output.push_str("smallvec!");
+                        output.push_str(stripped);
+                    } else {
+                        // For other expressions, try to convert
+                        output.push_str(&expr_str);
+                        output.push_str(".into()"); // Convert Vec to SmallVec
+                    }
+                } else if let Some(t) = type_ {
                     output.push_str(": ");
                     output.push_str(&self.type_to_rust(t));
+                    output.push_str(" = ");
+                    output.push_str(&self.generate_expression(value));
+                } else {
+                    output.push_str(" = ");
+                    output.push_str(&self.generate_expression(value));
                 }
 
-                output.push_str(" = ");
-                output.push_str(&self.generate_expression(value));
                 output.push_str(";\n");
                 output
             }
@@ -2162,5 +2216,31 @@ impl CodeGenerator {
         }
 
         new_body
+    }
+
+    /// PHASE 7: Check if an expression can be evaluated at compile time
+    /// If true, we can use `const` instead of `static`
+    #[allow(clippy::only_used_in_recursion)]
+    fn is_const_evaluable(&self, expr: &Expression) -> bool {
+        match expr {
+            // Literals are always const
+            Expression::Literal(_) => true,
+
+            // Binary operations on const values are const
+            Expression::Binary { left, right, .. } => {
+                self.is_const_evaluable(left) && self.is_const_evaluable(right)
+            }
+
+            // Unary operations on const values are const
+            Expression::Unary { operand, .. } => self.is_const_evaluable(operand),
+
+            // Struct literals with const fields might be const
+            Expression::StructLiteral { fields, .. } => {
+                fields.iter().all(|(_, expr)| self.is_const_evaluable(expr))
+            }
+
+            // Most other expressions are not const-evaluable
+            _ => false,
+        }
     }
 }
