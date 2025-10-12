@@ -8,6 +8,7 @@ mod diagnostics;
 mod hover;
 mod inlay_hints;
 mod refactoring;
+mod semantic_tokens;
 mod server;
 mod symbol_table;
 
