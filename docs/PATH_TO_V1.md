@@ -132,19 +132,74 @@
 
 ---
 
-### 🎉 v1.0.0 - Target (After v0.24.0)
+### 📚 v0.25.0 - Planned (8-10 weeks)
 
-**Theme**: Production-Ready Release
+**Theme**: "The Windjammer Book" - Professional Documentation
+
+**Goal**: Create comprehensive, interactive documentation inspired by [The Rust Book](https://doc.rust-lang.org/book/)
+
+**Content**:
+1. **Getting Started** (Chapters 1-3)
+   - Installation and setup
+   - Hello World and basic concepts
+   - Common programming concepts
+
+2. **Understanding Ownership** (Chapters 4-6)
+   - How Windjammer infers ownership
+   - References and borrowing (automatic)
+   - Understanding the generated code
+
+3. **Core Language Features** (Chapters 7-12)
+   - Structs, enums, and pattern matching
+   - Error handling with Result
+   - Modules and project structure
+   - Collections and iterators
+   - Traits and generics
+   - Testing and documentation
+
+4. **Building Real Applications** (Chapters 13-16)
+   - Web APIs with std.http
+   - CLI tools with std.cli
+   - Database applications
+   - Concurrent programming
+
+5. **Advanced Topics** (Chapters 17-20)
+   - Understanding compiler optimizations
+   - Performance tuning and profiling
+   - Mixing Windjammer and Rust
+   - Unsafe code when needed
+
+6. **Appendices**
+   - Comparison with Rust and Go
+   - Migration guides
+   - Complete stdlib reference
+   - Optimization reference
+
+**Format**:
+- Interactive web version (like rust-book.cs.brown.edu)
+- Quizzes and exercises
+- Runnable code examples
+- Visualizations of ownership inference
+- PDF and ebook versions
+
+**Outcome**: Professional, comprehensive documentation that enables anyone to learn Windjammer
+
+---
+
+### 🎉 v1.0.0 - Target (After 6+ months production use)
+
+**Theme**: Production-Ready Stable Release
 
 **Criteria for v1.0.0**:
 1. ✅ All optimization phases validated in production
-2. ✅ 3+ production applications running flawlessly
-3. ✅ Zero critical bugs
+2. ✅ 3+ production applications running flawlessly for 6+ months
+3. ✅ Zero critical bugs, minimal known issues
 4. ✅ Performance within 5% of hand-written Rust
 5. ✅ World-class developer experience
-6. ✅ Comprehensive documentation
-7. ✅ Proven stability (3+ months in production)
+6. ✅ Comprehensive documentation (The Windjammer Book)
+7. ✅ Proven stability in production environments
 8. ✅ Community feedback incorporated
+9. ✅ Real-world case studies and success stories
 
 **What v1.0.0 Means**:
 - API stability guarantee
@@ -180,14 +235,14 @@
 ## 🚀 Timeline
 
 ```
-Oct 2025        Dec 2025        Feb 2026        Apr 2026
-   |               |               |               |
-v0.22.0 ✅    v0.23.0 🚧      v0.24.0 🔮      v1.0.0 🎉
-   |               |               |               |
-   |-- 6-8 weeks --|-- 6-8 weeks --|-- Validation -|
-   |               |               |               |
- Feature      Production     Advanced         Stable
-Complete      Hardening    Optimizations     Release
+Oct 2025    Dec 2025    Feb 2026    Apr 2026    Jun 2026    Jan 2027
+   |           |           |           |           |           |
+v0.22.0 ✅ v0.23.0 🚧 v0.24.0 🔮 v0.25.0 📚      |      v1.0.0 🎉
+   |           |           |           |           |           |
+   |--6-8w-----|--6-8w-----|--8-10w----|---6+ months prod------|
+   |           |           |           |           |           |
+ Feature   Production  Advanced    "The Book"  Validation  Stable
+Complete   Hardening  Optimizations Documentation & Use   Release
 ```
 
 ---
