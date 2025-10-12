@@ -7,7 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-## [0.20.0] - In Progress
+## [0.21.0] - In Progress
+
+**LSP Enhancements & Compiler Optimizations**
+
+### Added
+- 🎨 **Semantic Tokens Infrastructure** - Foundation for context-aware syntax highlighting
+- TODO: Complete semantic tokens implementation
+- TODO: Signature help (parameter hints)
+- TODO: Workspace symbols search
+- TODO: Document symbols (outline view)
+- TODO: Phase 7-9 optimizations (const/static, smallvec, cow)
+
+## [0.20.0] - 2025-10-12
 
 **Automatic Defer Drop Optimization: 393x Faster Returns!**
 
