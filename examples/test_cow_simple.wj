@@ -1,0 +1,16 @@
+// Test Phase 9: Cow (Clone-on-Write) optimization
+
+fn process_text(text: string, make_uppercase: bool) -> string {
+    if make_uppercase {
+        text
+    } else {
+        text
+    }
+}
+
+fn main() {
+    let result1 = process_text("hello", true)
+    let result2 = process_text("world", false)
+    println!("Result1: ${result1}")
+    println!("Result2: ${result2}")
+}
