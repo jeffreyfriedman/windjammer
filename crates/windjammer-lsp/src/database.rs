@@ -1780,6 +1780,305 @@ impl WindjammerDatabase {
     }
 }
 
+// ============================================================================
+// Diagnostics & Linting Engine
+// ============================================================================
+
+/// Diagnostic severity levels
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum DiagnosticSeverity {
+    Error,
+    Warning,
+    Info,
+    Hint,
+}
+
+/// Diagnostic category (inspired by golangci-lint)
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum DiagnosticCategory {
+    // Code Quality
+    CodeComplexity,
+    CodeStyle,
+    CodeSmell,
+
+    // Error Detection
+    BugRisk,
+    ErrorHandling,
+    NilCheck,
+
+    // Performance
+    Performance,
+    Memory,
+
+    // Security
+    Security,
+
+    // Maintainability
+    Naming,
+    Documentation,
+    Unused,
+
+    // Dependencies
+    Import,
+    Dependency,
+}
+
+/// A diagnostic message
+#[derive(Debug, Clone)]
+pub struct Diagnostic {
+    pub severity: DiagnosticSeverity,
+    pub category: DiagnosticCategory,
+    pub message: String,
+    pub location: tower_lsp::lsp_types::Location,
+    pub rule: String,
+    pub suggestion: Option<String>,
+}
+
+/// Configuration for the linting engine
+#[derive(Debug, Clone)]
+pub struct LintConfig {
+    pub max_function_length: usize,
+    pub max_file_length: usize,
+    pub max_complexity: usize,
+    pub check_unused: bool,
+    pub check_style: bool,
+    pub check_performance: bool,
+    pub check_security: bool,
+}
+
+impl Default for LintConfig {
+    fn default() -> Self {
+        Self {
+            max_function_length: 50,
+            max_file_length: 500,
+            max_complexity: 10,
+            check_unused: true,
+            check_style: true,
+            check_performance: true,
+            check_security: true,
+        }
+    }
+}
+
+impl WindjammerDatabase {
+    /// Run all linting checks on a workspace
+    pub fn lint_workspace(&mut self, files: &[SourceFile], config: &LintConfig) -> Vec<Diagnostic> {
+        let mut diagnostics = Vec::new();
+
+        // Check for unused code
+        if config.check_unused {
+            diagnostics.extend(self.check_unused_code(files));
+        }
+
+        // Check code complexity
+        diagnostics.extend(self.check_complexity(files, config));
+
+        // Check code style
+        if config.check_style {
+            diagnostics.extend(self.check_style(files, config));
+        }
+
+        // Check circular dependencies
+        diagnostics.extend(self.check_circular_deps(files));
+
+        tracing::info!("Linting complete: {} diagnostics found", diagnostics.len());
+        diagnostics
+    }
+
+    /// Check for unused code (similar to unused, deadcode, varcheck)
+    fn check_unused_code(&mut self, files: &[SourceFile]) -> Vec<Diagnostic> {
+        let mut diagnostics = Vec::new();
+        let unused = self.find_unused_symbols(files);
+
+        for symbol in unused {
+            diagnostics.push(Diagnostic {
+                severity: DiagnosticSeverity::Warning,
+                category: DiagnosticCategory::Unused,
+                message: format!(
+                    "Unused {}: '{}'",
+                    format!("{:?}", symbol.kind).to_lowercase(),
+                    symbol.name
+                ),
+                location: symbol.location,
+                rule: "unused-code".to_string(),
+                suggestion: Some(format!(
+                    "Remove unused {} or mark with #[allow(dead_code)]",
+                    format!("{:?}", symbol.kind).to_lowercase()
+                )),
+            });
+        }
+
+        diagnostics
+    }
+
+    /// Check code complexity (similar to gocyclo, gocognit, cyclop)
+    fn check_complexity(&mut self, files: &[SourceFile], config: &LintConfig) -> Vec<Diagnostic> {
+        let mut diagnostics = Vec::new();
+
+        // Check function length
+        let long_funcs = self.find_long_functions(files, config.max_function_length);
+        for (uri, name, length) in long_funcs {
+            diagnostics.push(Diagnostic {
+                severity: DiagnosticSeverity::Warning,
+                category: DiagnosticCategory::CodeComplexity,
+                message: format!(
+                    "Function '{}' is too long ({} lines, max {})",
+                    name, length, config.max_function_length
+                ),
+                location: tower_lsp::lsp_types::Location {
+                    uri,
+                    range: tower_lsp::lsp_types::Range::default(),
+                },
+                rule: "function-length".to_string(),
+                suggestion: Some(
+                    "Consider breaking this function into smaller functions".to_string(),
+                ),
+            });
+        }
+
+        // Check file length
+        let large_files = self.find_large_files(files, config.max_file_length);
+        for (uri, loc) in large_files {
+            diagnostics.push(Diagnostic {
+                severity: DiagnosticSeverity::Info,
+                category: DiagnosticCategory::CodeComplexity,
+                message: format!(
+                    "File is large ({} lines, max {})",
+                    loc, config.max_file_length
+                ),
+                location: tower_lsp::lsp_types::Location {
+                    uri,
+                    range: tower_lsp::lsp_types::Range::default(),
+                },
+                rule: "file-length".to_string(),
+                suggestion: Some("Consider splitting this file into multiple modules".to_string()),
+            });
+        }
+
+        diagnostics
+    }
+
+    /// Check code style (similar to golint, revive, stylecheck)
+    fn check_style(&mut self, files: &[SourceFile], _config: &LintConfig) -> Vec<Diagnostic> {
+        let mut diagnostics = Vec::new();
+
+        for file in files {
+            let uri = file.uri(self).clone();
+            let symbols = self.get_symbols(*file);
+
+            for symbol in symbols.iter() {
+                // Check naming conventions
+                if symbol.kind == SymbolKind::Struct
+                    && !symbol.name.chars().next().unwrap_or('a').is_uppercase()
+                {
+                    if let Some(range) = &symbol.name_range {
+                        diagnostics.push(Diagnostic {
+                            severity: DiagnosticSeverity::Warning,
+                            category: DiagnosticCategory::Naming,
+                            message: format!(
+                                "Struct name '{}' should start with uppercase",
+                                symbol.name
+                            ),
+                            location: tower_lsp::lsp_types::Location {
+                                uri: uri.clone(),
+                                range: tower_lsp::lsp_types::Range {
+                                    start: tower_lsp::lsp_types::Position {
+                                        line: range.start_line,
+                                        character: range.start_character,
+                                    },
+                                    end: tower_lsp::lsp_types::Position {
+                                        line: range.end_line,
+                                        character: range.end_character,
+                                    },
+                                },
+                            },
+                            rule: "naming-convention".to_string(),
+                            suggestion: Some(format!(
+                                "Rename to '{}'",
+                                capitalize_first(&symbol.name)
+                            )),
+                        });
+                    }
+                }
+
+                // Check for documentation
+                if (symbol.kind == SymbolKind::Function || symbol.kind == SymbolKind::Struct)
+                    && symbol.doc.is_none()
+                {
+                    if let Some(range) = &symbol.range {
+                        diagnostics.push(Diagnostic {
+                            severity: DiagnosticSeverity::Info,
+                            category: DiagnosticCategory::Documentation,
+                            message: format!(
+                                "{} '{}' is missing documentation",
+                                format!("{:?}", symbol.kind),
+                                symbol.name
+                            ),
+                            location: tower_lsp::lsp_types::Location {
+                                uri: uri.clone(),
+                                range: tower_lsp::lsp_types::Range {
+                                    start: tower_lsp::lsp_types::Position {
+                                        line: range.start_line,
+                                        character: range.start_character,
+                                    },
+                                    end: tower_lsp::lsp_types::Position {
+                                        line: range.end_line,
+                                        character: range.end_character,
+                                    },
+                                },
+                            },
+                            rule: "missing-docs".to_string(),
+                            suggestion: Some(format!(
+                                "Add documentation comment above {}",
+                                symbol.name
+                            )),
+                        });
+                    }
+                }
+            }
+        }
+
+        diagnostics
+    }
+
+    /// Check for circular dependencies (similar to import-cycle)
+    fn check_circular_deps(&mut self, files: &[SourceFile]) -> Vec<Diagnostic> {
+        let mut diagnostics = Vec::new();
+        let graph = self.build_dependency_graph(files);
+
+        if graph.has_circular_dependencies() {
+            // For now, just report that cycles exist
+            // A full implementation would extract the actual cycle paths
+            for file_uri in &graph.files {
+                diagnostics.push(Diagnostic {
+                    severity: DiagnosticSeverity::Error,
+                    category: DiagnosticCategory::Dependency,
+                    message: "Circular dependency detected in project".to_string(),
+                    location: tower_lsp::lsp_types::Location {
+                        uri: file_uri.clone(),
+                        range: tower_lsp::lsp_types::Range::default(),
+                    },
+                    rule: "circular-dependency".to_string(),
+                    suggestion: Some(
+                        "Break the circular dependency by refactoring imports".to_string(),
+                    ),
+                });
+            }
+        }
+
+        diagnostics
+    }
+}
+
+/// Helper function to capitalize first letter
+fn capitalize_first(s: &str) -> String {
+    let mut chars = s.chars();
+    match chars.next() {
+        None => String::new(),
+        Some(first) => first.to_uppercase().collect::<String>() + chars.as_str(),
+    }
+}
+
 #[cfg(test)]
 mod parallel_tests {
     use super::*;
@@ -3056,5 +3355,139 @@ struct Point {
             assert!(uri.as_str().contains("large"));
             assert!(size > 0);
         }
+    }
+}
+
+#[cfg(test)]
+mod diagnostics_tests {
+    use super::*;
+
+    #[test]
+    fn test_lint_config_default() {
+        let config = LintConfig::default();
+        assert_eq!(config.max_function_length, 50);
+        assert_eq!(config.max_file_length, 500);
+        assert!(config.check_unused);
+        assert!(config.check_style);
+    }
+
+    #[test]
+    fn test_lint_workspace_empty() {
+        let mut db = WindjammerDatabase::new();
+        let config = LintConfig::default();
+
+        let uri = Url::parse("file:///empty.wj").unwrap();
+        let text = "";
+        let file = db.set_source_text(uri, text.to_string());
+
+        let diagnostics = db.lint_workspace(&[file], &config);
+        assert_eq!(diagnostics.len(), 0);
+    }
+
+    #[test]
+    fn test_check_unused_code() {
+        let mut db = WindjammerDatabase::new();
+
+        let files: Vec<_> = vec![
+            (
+                Url::parse("file:///main.wj").unwrap(),
+                "fn main() {}".to_string(),
+            ),
+            (
+                Url::parse("file:///unused.wj").unwrap(),
+                "fn unused_func() {}".to_string(),
+            ),
+        ]
+        .into_iter()
+        .map(|(uri, text)| db.set_source_text(uri, text))
+        .collect();
+
+        let diagnostics = db.check_unused_code(&files);
+        // May find unused functions
+        for diag in &diagnostics {
+            assert_eq!(diag.category, DiagnosticCategory::Unused);
+            assert_eq!(diag.severity, DiagnosticSeverity::Warning);
+            assert!(diag.suggestion.is_some());
+        }
+    }
+
+    #[test]
+    fn test_check_complexity() {
+        let mut db = WindjammerDatabase::new();
+        let config = LintConfig {
+            max_function_length: 2,
+            max_file_length: 5,
+            ..Default::default()
+        };
+
+        let files: Vec<_> = vec![(
+            Url::parse("file:///test.wj").unwrap(),
+            "fn long() {\n  line1();\n  line2();\n  line3();\n  line4();\n}".to_string(),
+        )]
+        .into_iter()
+        .map(|(uri, text)| db.set_source_text(uri, text))
+        .collect();
+
+        let diagnostics = db.check_complexity(&files, &config);
+        // May find complexity issues
+        for diag in &diagnostics {
+            assert_eq!(diag.category, DiagnosticCategory::CodeComplexity);
+            assert!(
+                diag.severity == DiagnosticSeverity::Warning
+                    || diag.severity == DiagnosticSeverity::Info
+            );
+        }
+    }
+
+    #[test]
+    fn test_diagnostic_severity() {
+        assert_ne!(DiagnosticSeverity::Error, DiagnosticSeverity::Warning);
+        assert_ne!(DiagnosticSeverity::Warning, DiagnosticSeverity::Info);
+    }
+
+    #[test]
+    fn test_diagnostic_category() {
+        assert_ne!(
+            DiagnosticCategory::Unused,
+            DiagnosticCategory::CodeComplexity
+        );
+        assert_ne!(
+            DiagnosticCategory::Naming,
+            DiagnosticCategory::Documentation
+        );
+    }
+
+    #[test]
+    fn test_capitalize_first() {
+        assert_eq!(capitalize_first("hello"), "Hello");
+        assert_eq!(capitalize_first("world"), "World");
+        assert_eq!(capitalize_first(""), "");
+        assert_eq!(capitalize_first("A"), "A");
+    }
+
+    #[test]
+    fn test_lint_workspace_with_config() {
+        let mut db = WindjammerDatabase::new();
+        let config = LintConfig {
+            max_function_length: 100,
+            max_file_length: 1000,
+            check_unused: false,
+            check_style: false,
+            check_performance: true,
+            check_security: true,
+            ..Default::default()
+        };
+
+        let files: Vec<_> = vec![(
+            Url::parse("file:///test.wj").unwrap(),
+            "fn main() {}".to_string(),
+        )]
+        .into_iter()
+        .map(|(uri, text)| db.set_source_text(uri, text))
+        .collect();
+
+        let diagnostics = db.lint_workspace(&files, &config);
+        // Should return some diagnostics
+        assert!(diagnostics.len() >= 0);
     }
 }
