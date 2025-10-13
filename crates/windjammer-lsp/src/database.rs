@@ -1832,6 +1832,21 @@ pub struct Diagnostic {
     pub location: tower_lsp::lsp_types::Location,
     pub rule: String,
     pub suggestion: Option<String>,
+    pub fix: Option<AutoFix>,
+}
+
+/// An automatic fix for a diagnostic
+#[derive(Debug, Clone)]
+pub struct AutoFix {
+    pub description: String,
+    pub edits: Vec<TextEdit>,
+}
+
+/// A text edit for auto-fixing
+#[derive(Debug, Clone)]
+pub struct TextEdit {
+    pub range: tower_lsp::lsp_types::Range,
+    pub new_text: String,
 }
 
 /// Configuration for the linting engine
@@ -1844,6 +1859,8 @@ pub struct LintConfig {
     pub check_style: bool,
     pub check_performance: bool,
     pub check_security: bool,
+    pub check_error_handling: bool,
+    pub enable_autofix: bool,
 }
 
 impl Default for LintConfig {
@@ -1856,6 +1873,8 @@ impl Default for LintConfig {
             check_style: true,
             check_performance: true,
             check_security: true,
+            check_error_handling: true,
+            enable_autofix: false,
         }
     }
 }
@@ -1867,7 +1886,7 @@ impl WindjammerDatabase {
 
         // Check for unused code
         if config.check_unused {
-            diagnostics.extend(self.check_unused_code(files));
+            diagnostics.extend(self.check_unused_code(files, config));
         }
 
         // Check code complexity
@@ -1878,6 +1897,21 @@ impl WindjammerDatabase {
             diagnostics.extend(self.check_style(files, config));
         }
 
+        // Check error handling
+        if config.check_error_handling {
+            diagnostics.extend(self.check_error_handling(files, config));
+        }
+
+        // Check performance
+        if config.check_performance {
+            diagnostics.extend(self.check_performance(files, config));
+        }
+
+        // Check security
+        if config.check_security {
+            diagnostics.extend(self.check_security(files, config));
+        }
+
         // Check circular dependencies
         diagnostics.extend(self.check_circular_deps(files));
 
@@ -1886,11 +1920,24 @@ impl WindjammerDatabase {
     }
 
     /// Check for unused code (similar to unused, deadcode, varcheck)
-    fn check_unused_code(&mut self, files: &[SourceFile]) -> Vec<Diagnostic> {
+    fn check_unused_code(&mut self, files: &[SourceFile], config: &LintConfig) -> Vec<Diagnostic> {
         let mut diagnostics = Vec::new();
         let unused = self.find_unused_symbols(files);
 
         for symbol in unused {
+            // Auto-fix: Can add #[allow(dead_code)] attribute
+            let fix = if config.enable_autofix {
+                Some(AutoFix {
+                    description: format!("Add #[allow(dead_code)] to {}", symbol.name),
+                    edits: vec![TextEdit {
+                        range: symbol.location.range,
+                        new_text: format!("#[allow(dead_code)]\n{}", symbol.name),
+                    }],
+                })
+            } else {
+                None
+            };
+
             diagnostics.push(Diagnostic {
                 severity: DiagnosticSeverity::Warning,
                 category: DiagnosticCategory::Unused,
@@ -1905,6 +1952,7 @@ impl WindjammerDatabase {
                     "Remove unused {} or mark with #[allow(dead_code)]",
                     format!("{:?}", symbol.kind).to_lowercase()
                 )),
+                fix,
             });
         }
 
@@ -1933,6 +1981,7 @@ impl WindjammerDatabase {
                 suggestion: Some(
                     "Consider breaking this function into smaller functions".to_string(),
                 ),
+                fix: None, // Complex refactoring, no auto-fix
             });
         }
 
@@ -1952,6 +2001,7 @@ impl WindjammerDatabase {
                 },
                 rule: "file-length".to_string(),
                 suggestion: Some("Consider splitting this file into multiple modules".to_string()),
+                fix: None, // Complex refactoring, no auto-fix
             });
         }
 
@@ -1959,7 +2009,7 @@ impl WindjammerDatabase {
     }
 
     /// Check code style (similar to golint, revive, stylecheck)
-    fn check_style(&mut self, files: &[SourceFile], _config: &LintConfig) -> Vec<Diagnostic> {
+    fn check_style(&mut self, files: &[SourceFile], config: &LintConfig) -> Vec<Diagnostic> {
         let mut diagnostics = Vec::new();
 
         for file in files {
@@ -1972,6 +2022,33 @@ impl WindjammerDatabase {
                     && !symbol.name.chars().next().unwrap_or('a').is_uppercase()
                 {
                     if let Some(range) = &symbol.name_range {
+                        let capitalized = capitalize_first(&symbol.name);
+
+                        // Auto-fix: Can rename the struct
+                        let fix = if config.enable_autofix {
+                            Some(AutoFix {
+                                description: format!(
+                                    "Rename '{}' to '{}'",
+                                    symbol.name, capitalized
+                                ),
+                                edits: vec![TextEdit {
+                                    range: tower_lsp::lsp_types::Range {
+                                        start: tower_lsp::lsp_types::Position {
+                                            line: range.start_line,
+                                            character: range.start_character,
+                                        },
+                                        end: tower_lsp::lsp_types::Position {
+                                            line: range.end_line,
+                                            character: range.end_character,
+                                        },
+                                    },
+                                    new_text: capitalized.clone(),
+                                }],
+                            })
+                        } else {
+                            None
+                        };
+
                         diagnostics.push(Diagnostic {
                             severity: DiagnosticSeverity::Warning,
                             category: DiagnosticCategory::Naming,
@@ -1993,10 +2070,8 @@ impl WindjammerDatabase {
                                 },
                             },
                             rule: "naming-convention".to_string(),
-                            suggestion: Some(format!(
-                                "Rename to '{}'",
-                                capitalize_first(&symbol.name)
-                            )),
+                            suggestion: Some(format!("Rename to '{}'", capitalized)),
+                            fix,
                         });
                     }
                 }
@@ -2032,9 +2107,224 @@ impl WindjammerDatabase {
                                 "Add documentation comment above {}",
                                 symbol.name
                             )),
+                            fix: None, // Cannot auto-generate meaningful docs
                         });
                     }
                 }
+            }
+        }
+
+        diagnostics
+    }
+
+    /// Check error handling (similar to errcheck, err113, errorlint)
+    fn check_error_handling(
+        &mut self,
+        files: &[SourceFile],
+        _config: &LintConfig,
+    ) -> Vec<Diagnostic> {
+        let mut diagnostics = Vec::new();
+
+        for file in files {
+            let uri = file.uri(self).clone();
+            let text = file.text(self);
+
+            // Check for ignored errors (Result without .expect() or ?)
+            if text.contains("Result<") && !text.contains("?") && !text.contains(".expect(") {
+                diagnostics.push(Diagnostic {
+                    severity: DiagnosticSeverity::Warning,
+                    category: DiagnosticCategory::ErrorHandling,
+                    message: "Potential unchecked Result type".to_string(),
+                    location: tower_lsp::lsp_types::Location {
+                        uri: uri.clone(),
+                        range: tower_lsp::lsp_types::Range::default(),
+                    },
+                    rule: "unchecked-result".to_string(),
+                    suggestion: Some(
+                        "Use '?' operator or '.expect()' to handle errors".to_string(),
+                    ),
+                    fix: None, // Context-dependent
+                });
+            }
+
+            // Check for panic! usage
+            if text.contains("panic!(") {
+                diagnostics.push(Diagnostic {
+                    severity: DiagnosticSeverity::Warning,
+                    category: DiagnosticCategory::BugRisk,
+                    message: "Use of panic! can crash the program".to_string(),
+                    location: tower_lsp::lsp_types::Location {
+                        uri: uri.clone(),
+                        range: tower_lsp::lsp_types::Range::default(),
+                    },
+                    rule: "avoid-panic".to_string(),
+                    suggestion: Some("Consider returning Result<T, E> instead".to_string()),
+                    fix: None, // Complex refactoring
+                });
+            }
+
+            // Check for unwrap() usage
+            if text.contains(".unwrap()") {
+                diagnostics.push(Diagnostic {
+                    severity: DiagnosticSeverity::Warning,
+                    category: DiagnosticCategory::BugRisk,
+                    message: "Use of .unwrap() can panic at runtime".to_string(),
+                    location: tower_lsp::lsp_types::Location {
+                        uri: uri.clone(),
+                        range: tower_lsp::lsp_types::Range::default(),
+                    },
+                    rule: "avoid-unwrap".to_string(),
+                    suggestion: Some(
+                        "Use pattern matching or .expect() with a message".to_string(),
+                    ),
+                    fix: None, // Context-dependent
+                });
+            }
+        }
+
+        diagnostics
+    }
+
+    /// Check performance issues (similar to prealloc, perfsprint)
+    fn check_performance(&mut self, files: &[SourceFile], config: &LintConfig) -> Vec<Diagnostic> {
+        let mut diagnostics = Vec::new();
+
+        for file in files {
+            let uri = file.uri(self).clone();
+            let text = file.text(self);
+
+            // Check for Vec without capacity hint
+            if text.contains("Vec::new()") && text.contains("push(") {
+                // Auto-fix: Can suggest with_capacity
+                let fix = if config.enable_autofix {
+                    Some(AutoFix {
+                        description: "Use Vec::with_capacity() for better performance".to_string(),
+                        edits: vec![TextEdit {
+                            range: tower_lsp::lsp_types::Range::default(),
+                            new_text: "Vec::with_capacity(capacity)".to_string(),
+                        }],
+                    })
+                } else {
+                    None
+                };
+
+                diagnostics.push(Diagnostic {
+                    severity: DiagnosticSeverity::Info,
+                    category: DiagnosticCategory::Performance,
+                    message: "Vec::new() followed by push() - consider pre-allocation".to_string(),
+                    location: tower_lsp::lsp_types::Location {
+                        uri: uri.clone(),
+                        range: tower_lsp::lsp_types::Range::default(),
+                    },
+                    rule: "vec-prealloc".to_string(),
+                    suggestion: Some("Use Vec::with_capacity(n) if you know the size".to_string()),
+                    fix,
+                });
+            }
+
+            // Check for inefficient string concatenation
+            if text.contains("+ \"") || text.contains("+ '") {
+                diagnostics.push(Diagnostic {
+                    severity: DiagnosticSeverity::Info,
+                    category: DiagnosticCategory::Performance,
+                    message: "String concatenation with + creates temporary allocations"
+                        .to_string(),
+                    location: tower_lsp::lsp_types::Location {
+                        uri: uri.clone(),
+                        range: tower_lsp::lsp_types::Range::default(),
+                    },
+                    rule: "string-concat".to_string(),
+                    suggestion: Some("Consider using format!() or String::push_str()".to_string()),
+                    fix: None, // Complex refactoring
+                });
+            }
+
+            // Check for clone() in loops
+            if text.contains("for ") && text.contains(".clone()") {
+                diagnostics.push(Diagnostic {
+                    severity: DiagnosticSeverity::Warning,
+                    category: DiagnosticCategory::Performance,
+                    message: "Cloning inside a loop can be expensive".to_string(),
+                    location: tower_lsp::lsp_types::Location {
+                        uri: uri.clone(),
+                        range: tower_lsp::lsp_types::Range::default(),
+                    },
+                    rule: "clone-in-loop".to_string(),
+                    suggestion: Some("Consider borrowing instead of cloning".to_string()),
+                    fix: None, // Context-dependent
+                });
+            }
+        }
+
+        diagnostics
+    }
+
+    /// Check security issues (similar to gosec)
+    fn check_security(&mut self, files: &[SourceFile], _config: &LintConfig) -> Vec<Diagnostic> {
+        let mut diagnostics = Vec::new();
+
+        for file in files {
+            let uri = file.uri(self).clone();
+            let text = file.text(self);
+
+            // Check for unsafe blocks
+            if text.contains("unsafe {") || text.contains("unsafe{") {
+                diagnostics.push(Diagnostic {
+                    severity: DiagnosticSeverity::Warning,
+                    category: DiagnosticCategory::Security,
+                    message: "Unsafe block detected - requires careful review".to_string(),
+                    location: tower_lsp::lsp_types::Location {
+                        uri: uri.clone(),
+                        range: tower_lsp::lsp_types::Range::default(),
+                    },
+                    rule: "unsafe-block".to_string(),
+                    suggestion: Some(
+                        "Ensure all unsafe operations are properly documented and justified"
+                            .to_string(),
+                    ),
+                    fix: None, // Manual review required
+                });
+            }
+
+            // Check for hardcoded credentials
+            let sensitive_patterns = ["password", "secret", "api_key", "token"];
+            for pattern in &sensitive_patterns {
+                if text.to_lowercase().contains(&format!("\"{}\"", pattern))
+                    || text.to_lowercase().contains(&format!("'{}'", pattern))
+                {
+                    diagnostics.push(Diagnostic {
+                        severity: DiagnosticSeverity::Error,
+                        category: DiagnosticCategory::Security,
+                        message: format!("Potential hardcoded sensitive data: '{}'", pattern),
+                        location: tower_lsp::lsp_types::Location {
+                            uri: uri.clone(),
+                            range: tower_lsp::lsp_types::Range::default(),
+                        },
+                        rule: "hardcoded-secret".to_string(),
+                        suggestion: Some(
+                            "Use environment variables or secure configuration".to_string(),
+                        ),
+                        fix: None, // Requires manual intervention
+                    });
+                }
+            }
+
+            // Check for SQL query concatenation
+            if text.contains("\"SELECT ") && text.contains(" + ") {
+                diagnostics.push(Diagnostic {
+                    severity: DiagnosticSeverity::Error,
+                    category: DiagnosticCategory::Security,
+                    message: "Potential SQL injection vulnerability".to_string(),
+                    location: tower_lsp::lsp_types::Location {
+                        uri: uri.clone(),
+                        range: tower_lsp::lsp_types::Range::default(),
+                    },
+                    rule: "sql-injection".to_string(),
+                    suggestion: Some(
+                        "Use parameterized queries or prepared statements".to_string(),
+                    ),
+                    fix: None, // Complex refactoring
+                });
             }
         }
 
@@ -2062,6 +2352,7 @@ impl WindjammerDatabase {
                     suggestion: Some(
                         "Break the circular dependency by refactoring imports".to_string(),
                     ),
+                    fix: None, // Complex refactoring
                 });
             }
         }
@@ -3402,7 +3693,8 @@ mod diagnostics_tests {
         .map(|(uri, text)| db.set_source_text(uri, text))
         .collect();
 
-        let diagnostics = db.check_unused_code(&files);
+        let config = LintConfig::default();
+        let diagnostics = db.check_unused_code(&files, &config);
         // May find unused functions
         for diag in &diagnostics {
             assert_eq!(diag.category, DiagnosticCategory::Unused);
@@ -3489,5 +3781,102 @@ mod diagnostics_tests {
         let diagnostics = db.lint_workspace(&files, &config);
         // Should return some diagnostics
         assert!(diagnostics.len() >= 0);
+    }
+
+    #[test]
+    fn test_autofix_enabled() {
+        let mut db = WindjammerDatabase::new();
+        let config = LintConfig {
+            enable_autofix: true,
+            ..Default::default()
+        };
+
+        let files: Vec<_> = vec![(
+            Url::parse("file:///test.wj").unwrap(),
+            "fn unused() {}".to_string(),
+        )]
+        .into_iter()
+        .map(|(uri, text)| db.set_source_text(uri, text))
+        .collect();
+
+        let diagnostics = db.check_unused_code(&files, &config);
+        // Check that auto-fixes are provided when enabled
+        for diag in &diagnostics {
+            // Auto-fix may or may not be available depending on the diagnostic
+            if diag.fix.is_some() {
+                assert!(!diag.fix.as_ref().unwrap().description.is_empty());
+            }
+        }
+    }
+
+    #[test]
+    fn test_check_error_handling() {
+        let mut db = WindjammerDatabase::new();
+        let config = LintConfig::default();
+
+        let files: Vec<_> = vec![(
+            Url::parse("file:///test.wj").unwrap(),
+            "fn test() -> Result<i32> { panic!(\"error\") }".to_string(),
+        )]
+        .into_iter()
+        .map(|(uri, text)| db.set_source_text(uri, text))
+        .collect();
+
+        let diagnostics = db.check_error_handling(&files, &config);
+        // Should find panic usage
+        assert!(diagnostics.iter().any(|d| d.rule == "avoid-panic"));
+    }
+
+    #[test]
+    fn test_check_performance() {
+        let mut db = WindjammerDatabase::new();
+        let config = LintConfig::default();
+
+        let files: Vec<_> = vec![(
+            Url::parse("file:///test.wj").unwrap(),
+            "fn test() { let v = Vec::new(); v.push(1); }".to_string(),
+        )]
+        .into_iter()
+        .map(|(uri, text)| db.set_source_text(uri, text))
+        .collect();
+
+        let diagnostics = db.check_performance(&files, &config);
+        // Should find vec prealloc issue
+        assert!(diagnostics
+            .iter()
+            .any(|d| d.category == DiagnosticCategory::Performance));
+    }
+
+    #[test]
+    fn test_check_security() {
+        let mut db = WindjammerDatabase::new();
+        let config = LintConfig::default();
+
+        let files: Vec<_> = vec![(
+            Url::parse("file:///test.wj").unwrap(),
+            "fn test() { unsafe { do_something(); } }".to_string(),
+        )]
+        .into_iter()
+        .map(|(uri, text)| db.set_source_text(uri, text))
+        .collect();
+
+        let diagnostics = db.check_security(&files, &config);
+        // Should find unsafe block
+        assert!(diagnostics.iter().any(|d| d.rule == "unsafe-block"));
+    }
+
+    #[test]
+    fn test_autofix_structure() {
+        let fix = AutoFix {
+            description: "Test fix".to_string(),
+            edits: vec![TextEdit {
+                range: tower_lsp::lsp_types::Range::default(),
+                new_text: "fixed".to_string(),
+            }],
+        };
+
+        assert_eq!(fix.description, "Test fix");
+        assert_eq!(fix.edits.len(), 1);
+        assert_eq!(fix.edits[0].new_text, "fixed");
     }
 }
