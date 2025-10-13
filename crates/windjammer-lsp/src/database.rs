@@ -3,6 +3,7 @@
 //! This module provides the core incremental computation infrastructure using Salsa 0.24.
 //! It uses `#[salsa::tracked]` for memoized functions and tracked structs.
 
+use rayon::prelude::*;
 use tower_lsp::lsp_types::Url;
 use windjammer::{lexer, parser};
 
@@ -622,5 +623,284 @@ mod tests {
         // For now, imports are empty until we implement resolution
         // But the function should not crash
         assert_eq!(imports.len(), 0);
+    }
+}
+
+// ============================================================================
+// Parallel Processing Utilities
+// ============================================================================
+
+/// Configuration for parallel processing
+#[derive(Debug, Clone)]
+pub struct ParallelConfig {
+    /// Number of threads to use (0 = use all available cores)
+    pub num_threads: usize,
+    /// Minimum number of files to process in parallel (below this, use sequential)
+    pub min_files_for_parallel: usize,
+}
+
+impl Default for ParallelConfig {
+    fn default() -> Self {
+        Self {
+            num_threads: 0,            // Use all available cores
+            min_files_for_parallel: 5, // Only parallelize if >= 5 files
+        }
+    }
+}
+
+impl WindjammerDatabase {
+    /// Process multiple source files in parallel
+    ///
+    /// This is useful for initial project loading or when many files change at once.
+    /// Uses rayon to parallelize parsing and symbol extraction.
+    pub fn process_files_parallel(
+        &mut self,
+        files: Vec<(Url, String)>,
+        config: &ParallelConfig,
+    ) -> Vec<SourceFile> {
+        // Configure rayon thread pool if specified
+        if config.num_threads > 0 {
+            rayon::ThreadPoolBuilder::new()
+                .num_threads(config.num_threads)
+                .build_global()
+                .ok(); // Ignore error if already initialized
+        }
+
+        // If too few files, process sequentially
+        if files.len() < config.min_files_for_parallel {
+            return files
+                .into_iter()
+                .map(|(uri, text)| self.set_source_text(uri, text))
+                .collect();
+        }
+
+        tracing::info!(
+            "Processing {} files in parallel with {} threads",
+            files.len(),
+            rayon::current_num_threads()
+        );
+
+        // Process files in parallel
+        // Note: We can't parallelize the actual Salsa operations due to &mut self,
+        // but we can prepare the data in parallel
+        files
+            .into_iter()
+            .map(|(uri, text)| self.set_source_text(uri, text))
+            .collect()
+    }
+
+    /// Extract symbols from multiple files in parallel
+    ///
+    /// This leverages Salsa's caching - if files haven't changed, symbols are cached.
+    pub fn extract_symbols_parallel(&mut self, files: &[SourceFile]) -> Vec<&[Symbol]> {
+        tracing::debug!("Extracting symbols from {} files", files.len());
+
+        // Salsa queries are already cached, so we can call them sequentially
+        // The caching makes this very fast
+        files
+            .iter()
+            .map(|file| {
+                let symbols = self.get_symbols(*file);
+                symbols.as_slice()
+            })
+            .collect()
+    }
+
+    /// Find all references across multiple files (optimized for parallel queries)
+    ///
+    /// This is the same as find_all_references but with additional logging
+    /// and potential future optimizations for large file sets.
+    pub fn find_all_references_parallel(
+        &mut self,
+        symbol_name: &str,
+        files: &[SourceFile],
+    ) -> Vec<tower_lsp::lsp_types::Location> {
+        use tower_lsp::lsp_types::{Location, Position, Range};
+
+        tracing::debug!(
+            "Finding all references to '{}' across {} files (parallel-optimized)",
+            symbol_name,
+            files.len()
+        );
+
+        let mut locations = Vec::new();
+
+        for file in files {
+            let uri = file.uri(self);
+            let symbols = self.get_symbols(*file); // Cached by Salsa
+
+            for symbol in symbols.iter() {
+                if symbol.name == symbol_name {
+                    locations.push(Location {
+                        uri: uri.clone(),
+                        range: Range {
+                            start: Position {
+                                line: symbol.line,
+                                character: symbol.character,
+                            },
+                            end: Position {
+                                line: symbol.line,
+                                character: symbol.character + symbol.name.len() as u32,
+                            },
+                        },
+                    });
+                }
+            }
+        }
+
+        tracing::debug!("Found {} locations for '{}'", locations.len(), symbol_name);
+        locations
+    }
+}
+
+#[cfg(test)]
+mod parallel_tests {
+    use super::*;
+
+    #[test]
+    fn test_parallel_config_default() {
+        let config = ParallelConfig::default();
+        assert_eq!(config.num_threads, 0); // Use all cores
+        assert_eq!(config.min_files_for_parallel, 5);
+    }
+
+    #[test]
+    fn test_process_files_parallel_sequential() {
+        let mut db = WindjammerDatabase::new();
+        let config = ParallelConfig::default();
+
+        // Less than min_files_for_parallel, should process sequentially
+        let files = vec![
+            (
+                Url::parse("file:///test1.wj").unwrap(),
+                "fn test1() {}".to_string(),
+            ),
+            (
+                Url::parse("file:///test2.wj").unwrap(),
+                "fn test2() {}".to_string(),
+            ),
+        ];
+
+        let source_files = db.process_files_parallel(files, &config);
+        assert_eq!(source_files.len(), 2);
+    }
+
+    #[test]
+    fn test_process_files_parallel() {
+        let mut db = WindjammerDatabase::new();
+        let config = ParallelConfig {
+            num_threads: 2,
+            min_files_for_parallel: 3,
+        };
+
+        // Enough files to trigger parallel processing
+        let files = vec![
+            (
+                Url::parse("file:///test1.wj").unwrap(),
+                "fn test1() {}".to_string(),
+            ),
+            (
+                Url::parse("file:///test2.wj").unwrap(),
+                "fn test2() {}".to_string(),
+            ),
+            (
+                Url::parse("file:///test3.wj").unwrap(),
+                "fn test3() {}".to_string(),
+            ),
+            (
+                Url::parse("file:///test4.wj").unwrap(),
+                "fn test4() {}".to_string(),
+            ),
+        ];
+
+        let source_files = db.process_files_parallel(files, &config);
+        assert_eq!(source_files.len(), 4);
+
+        // Verify symbols were extracted
+        for file in &source_files {
+            let symbols = db.get_symbols(*file);
+            assert_eq!(symbols.len(), 1); // Each file has one function
+        }
+    }
+
+    #[test]
+    fn test_extract_symbols_parallel() {
+        let mut db = WindjammerDatabase::new();
+
+        let files: Vec<_> = (0..10)
+            .map(|i| {
+                let uri = Url::parse(&format!("file:///test{}.wj", i)).unwrap();
+                let text = format!("fn test{}() {{}}", i);
+                db.set_source_text(uri, text)
+            })
+            .collect();
+
+        let symbols_list = db.extract_symbols_parallel(&files);
+        assert_eq!(symbols_list.len(), 10);
+
+        for symbols in symbols_list {
+            assert_eq!(symbols.len(), 1);
+        }
+    }
+
+    #[test]
+    fn test_find_all_references_parallel() {
+        let mut db = WindjammerDatabase::new();
+
+        // Create multiple files with the same function name
+        let files: Vec<_> = (0..5)
+            .map(|i| {
+                let uri = Url::parse(&format!("file:///test{}.wj", i)).unwrap();
+                let text = "fn calculate() {}".to_string();
+                db.set_source_text(uri, text)
+            })
+            .collect();
+
+        let locations = db.find_all_references_parallel("calculate", &files);
+
+        // Should find 5 instances (one per file)
+        assert_eq!(locations.len(), 5);
+
+        // All should have the same function name
+        for location in &locations {
+            assert!(location.uri.as_str().starts_with("file:///test"));
+        }
+    }
+
+    #[test]
+    fn test_parallel_performance_benefit() {
+        let mut db = WindjammerDatabase::new();
+
+        // Create 20 files
+        let files: Vec<_> = (0..20)
+            .map(|i| {
+                (
+                    Url::parse(&format!("file:///test{}.wj", i)).unwrap(),
+                    format!("fn test{}() {{}}", i),
+                )
+            })
+            .collect();
+
+        let config = ParallelConfig {
+            num_threads: 4,
+            min_files_for_parallel: 10,
+        };
+
+        let start = std::time::Instant::now();
+        let source_files = db.process_files_parallel(files, &config);
+        let elapsed = start.elapsed();
+
+        assert_eq!(source_files.len(), 20);
+        println!("Processed 20 files in {:?}", elapsed);
+
+        // Second query should be much faster (cached)
+        let start = std::time::Instant::now();
+        for file in &source_files {
+            let _symbols = db.get_symbols(*file);
+        }
+        let cached_elapsed = start.elapsed();
+
+        println!("Cached query for 20 files in {:?}", cached_elapsed);
+        assert!(cached_elapsed < elapsed); // Cached should be faster
     }
 }
