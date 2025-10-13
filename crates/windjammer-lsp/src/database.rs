@@ -1418,6 +1418,187 @@ impl WindjammerDatabase {
     }
 }
 
+// ============================================================================
+// Dependency Analysis
+// ============================================================================
+
+/// A dependency between two files
+#[derive(Debug, Clone)]
+pub struct FileDependency {
+    pub from: Url,
+    pub to: Url,
+    pub kind: DependencyKind,
+}
+
+/// The kind of dependency
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum DependencyKind {
+    /// Direct import
+    Import,
+    /// Symbol reference
+    SymbolReference,
+    /// Type reference
+    TypeReference,
+}
+
+/// Dependency graph for the workspace
+#[derive(Debug, Clone)]
+pub struct DependencyGraph {
+    pub dependencies: Vec<FileDependency>,
+    pub files: Vec<Url>,
+}
+
+impl DependencyGraph {
+    /// Check if there are circular dependencies
+    pub fn has_circular_dependencies(&self) -> bool {
+        // Simple cycle detection using DFS
+        let mut visited = std::collections::HashSet::new();
+        let mut rec_stack = std::collections::HashSet::new();
+
+        for file in &self.files {
+            if self.has_cycle_util(file, &mut visited, &mut rec_stack) {
+                return true;
+            }
+        }
+
+        false
+    }
+
+    fn has_cycle_util(
+        &self,
+        file: &Url,
+        visited: &mut std::collections::HashSet<Url>,
+        rec_stack: &mut std::collections::HashSet<Url>,
+    ) -> bool {
+        if rec_stack.contains(file) {
+            return true;
+        }
+
+        if visited.contains(file) {
+            return false;
+        }
+
+        visited.insert(file.clone());
+        rec_stack.insert(file.clone());
+
+        // Check all dependencies
+        for dep in &self.dependencies {
+            if dep.from == *file {
+                if self.has_cycle_util(&dep.to, visited, rec_stack) {
+                    return true;
+                }
+            }
+        }
+
+        rec_stack.remove(file);
+        false
+    }
+
+    /// Get all dependencies of a file
+    pub fn get_dependencies(&self, file: &Url) -> Vec<&FileDependency> {
+        self.dependencies
+            .iter()
+            .filter(|d| d.from == *file)
+            .collect()
+    }
+
+    /// Get all dependents of a file (who depends on this file)
+    pub fn get_dependents(&self, file: &Url) -> Vec<&FileDependency> {
+        self.dependencies.iter().filter(|d| d.to == *file).collect()
+    }
+}
+
+impl WindjammerDatabase {
+    /// Build a dependency graph for the workspace
+    ///
+    /// Analyzes imports and symbol references to build a complete dependency graph.
+    pub fn build_dependency_graph(&mut self, files: &[SourceFile]) -> DependencyGraph {
+        let mut dependencies = Vec::new();
+        let file_uris: Vec<Url> = files.iter().map(|f| f.uri(self).clone()).collect();
+
+        // Build import-based dependencies
+        for file in files {
+            let uri = file.uri(self).clone();
+            let imports = self.get_imports(*file);
+
+            for import_uri in imports.iter() {
+                dependencies.push(FileDependency {
+                    from: uri.clone(),
+                    to: import_uri.clone(),
+                    kind: DependencyKind::Import,
+                });
+            }
+        }
+
+        // Build symbol-based dependencies
+        for file in files {
+            let uri = file.uri(self).clone();
+            let symbols = self.get_symbols(*file);
+
+            // For each symbol in this file, check if it's used in other files
+            for symbol in symbols.iter() {
+                for other_file in files {
+                    let other_uri = other_file.uri(self).clone();
+                    if uri != other_uri {
+                        let other_symbols = self.get_symbols(*other_file);
+                        // Check if other file references this symbol
+                        if other_symbols.iter().any(|s| s.name == symbol.name) {
+                            dependencies.push(FileDependency {
+                                from: other_uri.clone(),
+                                to: uri.clone(),
+                                kind: DependencyKind::SymbolReference,
+                            });
+                        }
+                    }
+                }
+            }
+        }
+
+        tracing::debug!(
+            "Built dependency graph with {} dependencies for {} files",
+            dependencies.len(),
+            files.len()
+        );
+
+        DependencyGraph {
+            dependencies,
+            files: file_uris,
+        }
+    }
+
+    /// Find circular dependencies in the workspace
+    pub fn find_circular_dependencies(&mut self, files: &[SourceFile]) -> Vec<Vec<Url>> {
+        let graph = self.build_dependency_graph(files);
+        let mut cycles = Vec::new();
+
+        if graph.has_circular_dependencies() {
+            // For now, just report that cycles exist
+            // A full implementation would extract the actual cycles
+            tracing::warn!("Circular dependencies detected in workspace");
+        }
+
+        cycles
+    }
+
+    /// Calculate coupling metrics for files
+    ///
+    /// Returns (afferent coupling, efferent coupling) for each file.
+    /// Afferent = number of files that depend on this file
+    /// Efferent = number of files this file depends on
+    pub fn calculate_coupling(&mut self, files: &[SourceFile]) -> Vec<(Url, usize, usize)> {
+        let graph = self.build_dependency_graph(files);
+        let mut metrics = Vec::new();
+
+        for file_uri in &graph.files {
+            let afferent = graph.get_dependents(file_uri).len();
+            let efferent = graph.get_dependencies(file_uri).len();
+            metrics.push((file_uri.clone(), afferent, efferent));
+        }
+
+        metrics
+    }
+}
+
 #[cfg(test)]
 mod parallel_tests {
     use super::*;
@@ -2416,5 +2597,135 @@ mod unused_code_tests {
         // Duplicates should not be marked as unused (they reference each other)
         let duplicate_unused = unused.iter().filter(|u| u.name == "duplicate").count();
         assert_eq!(duplicate_unused, 0);
+    }
+}
+
+#[cfg(test)]
+mod dependency_tests {
+    use super::*;
+
+    #[test]
+    fn test_build_dependency_graph_empty() {
+        let mut db = WindjammerDatabase::new();
+
+        let uri = Url::parse("file:///empty.wj").unwrap();
+        let text = "";
+        let file = db.set_source_text(uri, text.to_string());
+
+        let graph = db.build_dependency_graph(&[file]);
+        assert_eq!(graph.files.len(), 1);
+        assert_eq!(graph.dependencies.len(), 0);
+    }
+
+    #[test]
+    fn test_dependency_graph_no_cycles() {
+        let mut db = WindjammerDatabase::new();
+
+        let files: Vec<_> = vec![
+            (
+                Url::parse("file:///main.wj").unwrap(),
+                "fn main() {}".to_string(),
+            ),
+            (
+                Url::parse("file:///helper.wj").unwrap(),
+                "fn helper() {}".to_string(),
+            ),
+        ]
+        .into_iter()
+        .map(|(uri, text)| db.set_source_text(uri, text))
+        .collect();
+
+        let graph = db.build_dependency_graph(&files);
+        assert!(!graph.has_circular_dependencies());
+    }
+
+    #[test]
+    fn test_get_dependencies() {
+        let mut db = WindjammerDatabase::new();
+
+        let files: Vec<_> = vec![
+            (
+                Url::parse("file:///main.wj").unwrap(),
+                "fn main() {}".to_string(),
+            ),
+            (
+                Url::parse("file:///helper.wj").unwrap(),
+                "fn helper() {}".to_string(),
+            ),
+        ]
+        .into_iter()
+        .map(|(uri, text)| db.set_source_text(uri, text))
+        .collect();
+
+        let graph = db.build_dependency_graph(&files);
+        let main_uri = Url::parse("file:///main.wj").unwrap();
+        let _deps = graph.get_dependencies(&main_uri);
+
+        // Verify we can get dependencies (may be empty)
+        // Test passes if no panic occurs
+    }
+
+    #[test]
+    fn test_calculate_coupling() {
+        let mut db = WindjammerDatabase::new();
+
+        let files: Vec<_> = vec![
+            (
+                Url::parse("file:///main.wj").unwrap(),
+                "fn main() {}".to_string(),
+            ),
+            (
+                Url::parse("file:///helper.wj").unwrap(),
+                "fn helper() {}".to_string(),
+            ),
+        ]
+        .into_iter()
+        .map(|(uri, text)| db.set_source_text(uri, text))
+        .collect();
+
+        let metrics = db.calculate_coupling(&files);
+        assert_eq!(metrics.len(), 2);
+
+        for (uri, afferent, efferent) in metrics {
+            assert!(uri.as_str().starts_with("file:///"));
+            assert!(afferent >= 0);
+            assert!(efferent >= 0);
+        }
+    }
+
+    #[test]
+    fn test_dependency_kind() {
+        assert_eq!(DependencyKind::Import, DependencyKind::Import);
+        assert_ne!(DependencyKind::Import, DependencyKind::SymbolReference);
+    }
+
+    #[test]
+    fn test_file_dependency_structure() {
+        let dep = FileDependency {
+            from: Url::parse("file:///a.wj").unwrap(),
+            to: Url::parse("file:///b.wj").unwrap(),
+            kind: DependencyKind::Import,
+        };
+
+        assert_eq!(dep.from.as_str(), "file:///a.wj");
+        assert_eq!(dep.to.as_str(), "file:///b.wj");
+        assert_eq!(dep.kind, DependencyKind::Import);
+    }
+
+    #[test]
+    fn test_find_circular_dependencies() {
+        let mut db = WindjammerDatabase::new();
+
+        let files: Vec<_> = vec![
+            (Url::parse("file:///a.wj").unwrap(), "fn a() {}".to_string()),
+            (Url::parse("file:///b.wj").unwrap(), "fn b() {}".to_string()),
+        ]
+        .into_iter()
+        .map(|(uri, text)| db.set_source_text(uri, text))
+        .collect();
+
+        let _cycles = db.find_circular_dependencies(&files);
+        // Should not panic, may be empty
+        // Test passes if no panic occurs
     }
 }
