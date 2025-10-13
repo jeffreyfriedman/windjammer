@@ -1,0 +1,99 @@
+# Dependabot configuration for Windjammer
+# Automatically creates PRs to update dependencies
+# https://docs.github.com/code-security/dependabot/dependabot-version-updates/configuration-options-for-the-dependabot.yml-file
+
+version: 2
+updates:
+  # Rust dependencies (Cargo.toml)
+  - package-ecosystem: "cargo"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "09:00"
+      timezone: "America/New_York"
+    open-pull-requests-limit: 10
+    reviewers:
+      - "jeffreyfriedman"
+    labels:
+      - "dependencies"
+      - "rust"
+    commit-message:
+      prefix: "chore(deps)"
+      include: "scope"
+    # Group minor and patch updates together
+    groups:
+      rust-dependencies:
+        patterns:
+          - "*"
+        update-types:
+          - "minor"
+          - "patch"
+    # Ignore alpha/beta/rc versions
+    ignore:
+      - dependency-name: "*"
+        update-types: ["version-update:semver-major"]
+    # Auto-merge patch updates (optional - remove if you prefer manual review)
+    # versioning-strategy: increase
+
+  # LSP crate dependencies
+  - package-ecosystem: "cargo"
+    directory: "/crates/windjammer-lsp"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "09:00"
+      timezone: "America/New_York"
+    open-pull-requests-limit: 5
+    reviewers:
+      - "jeffreyfriedman"
+    labels:
+      - "dependencies"
+      - "lsp"
+      - "rust"
+    commit-message:
+      prefix: "chore(deps/lsp)"
+      include: "scope"
+    groups:
+      lsp-dependencies:
+        patterns:
+          - "*"
+        update-types:
+          - "minor"
+          - "patch"
+
+  # GitHub Actions
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "09:00"
+      timezone: "America/New_York"
+    open-pull-requests-limit: 5
+    reviewers:
+      - "jeffreyfriedman"
+    labels:
+      - "dependencies"
+      - "ci"
+    commit-message:
+      prefix: "chore(ci)"
+      include: "scope"
+
+  # Docker (if you add Docker support later)
+  # - package-ecosystem: "docker"
+  #   directory: "/"
+  #   schedule:
+  #     interval: "weekly"
+  #   labels:
+  #     - "dependencies"
+  #     - "docker"
+
+# Notes:
+# - Weekly updates on Mondays at 9 AM ET
+# - Groups minor/patch updates together to reduce PR noise
+# - Ignores major version updates (breaking changes need manual review)
+# - Separate tracking for main crate and LSP crate
+# - Auto-labels PRs for easy filtering
+# - Assigns PRs to maintainer for review
+
