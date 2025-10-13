@@ -434,29 +434,60 @@ impl LanguageServer for WindjammerLanguageServer {
         let uri = params.text_document_position.text_document.uri.clone();
         let position = params.text_document_position.position;
 
-        tracing::debug!("Find references: {} at {:?}", uri, position);
+        tracing::debug!("Find references (cross-file): {} at {:?}", uri, position);
 
         // Get the word at the cursor position
         let symbol_name = self.get_word_at_position(&uri, position);
 
         if let Some(name) = symbol_name {
-            // Get the symbol table for this file
+            // Use Salsa to find references across all open files
+            let locations = {
+                let mut db = self.salsa_db.lock().unwrap();
+
+                // Collect all open files as SourceFiles
+                let files: Vec<_> = self
+                    .documents
+                    .iter()
+                    .map(|entry| {
+                        let file_uri = entry.key().clone();
+                        let text = entry.value().clone();
+                        db.set_source_text(file_uri, text)
+                    })
+                    .collect();
+
+                // Find all references across all files
+                db.find_all_references(&name, &files)
+            }; // Lock released
+
+            if !locations.is_empty() {
+                tracing::debug!(
+                    "Found {} references to '{}' across {} files",
+                    locations.len(),
+                    name,
+                    self.documents.len()
+                );
+                return Ok(Some(locations));
+            }
+
+            // Fallback to old single-file search if Salsa finds nothing
             if let Some(symbol_table) = self.analysis_db.get_symbol_table(&uri) {
-                // Find all references to the symbol
                 let refs = symbol_table.find_references(&name);
 
                 if !refs.is_empty() {
                     let mut locations: Vec<Location> =
                         refs.iter().map(|r| r.location.clone()).collect();
 
-                    // If include_declaration is true, also include the definition
                     if params.context.include_declaration {
                         if let Some(symbol_def) = symbol_table.find_symbol(&name) {
                             locations.push(symbol_def.location.clone());
                         }
                     }
 
-                    tracing::debug!("Found {} references to '{}'", locations.len(), name);
+                    tracing::debug!(
+                        "Found {} references to '{}' (fallback)",
+                        locations.len(),
+                        name
+                    );
                     return Ok(Some(locations));
                 }
             }
