@@ -74,6 +74,22 @@ pub struct Symbol {
     pub character: u32,
 }
 
+/// A reference to a symbol (usage location)
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct SymbolReference {
+    pub name: String,
+    pub uri: Url,
+    pub line: u32,
+    pub character: u32,
+}
+
+/// References found in a file
+#[salsa::tracked]
+pub struct ReferenceInfo<'db> {
+    #[returns(ref)]
+    pub references: Vec<SymbolReference>,
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum SymbolKind {
     Function,
@@ -238,6 +254,42 @@ pub fn extract_symbols<'db>(db: &'db dyn salsa::Database, file: SourceFile) -> S
     SymbolTable::new(db, symbols)
 }
 
+/// Extract symbol references from a source file
+///
+/// Finds all usages of symbols in expressions, function calls, etc.
+#[salsa::tracked]
+pub fn extract_references<'db>(
+    db: &'db dyn salsa::Database,
+    file: SourceFile,
+) -> ReferenceInfo<'db> {
+    let parsed = parse(db, file);
+    let program = parsed.program(db);
+
+    let uri = file.uri(db).clone();
+    tracing::debug!("Salsa: Extracting references from {}", uri);
+
+    let mut references = Vec::new();
+
+    // Walk the AST to find all identifier references
+    // For now, we'll extract function calls as a starting point
+    for (idx, item) in program.items.iter().enumerate() {
+        let line = idx as u32;
+
+        match item {
+            parser::Item::Function(func) => {
+                // Scan function body for references
+                // TODO: Implement proper AST walking
+                // For now, we'll just note that references exist
+                tracing::debug!("TODO: Scan function '{}' body for references", func.name);
+            }
+            _ => {}
+        }
+    }
+
+    tracing::debug!("Found {} references in {}", references.len(), uri);
+    ReferenceInfo::new(db, references)
+}
+
 // ============================================================================
 // Database API
 // ============================================================================
@@ -271,6 +323,78 @@ impl WindjammerDatabase {
     pub fn get_symbols(&self, file: SourceFile) -> &Vec<Symbol> {
         let symbol_table = extract_symbols(self, file);
         symbol_table.symbols(self)
+    }
+
+    /// Get references for a file
+    pub fn get_references(&self, file: SourceFile) -> &Vec<SymbolReference> {
+        let reference_info = extract_references(self, file);
+        reference_info.references(self)
+    }
+
+    /// Find all references to a symbol across multiple files
+    ///
+    /// This searches through all provided files for references to the given symbol name.
+    pub fn find_all_references(
+        &self,
+        symbol_name: &str,
+        files: &[SourceFile],
+    ) -> Vec<tower_lsp::lsp_types::Location> {
+        let mut locations = Vec::new();
+
+        // Search through all files
+        for &file in files {
+            let uri = file.uri(self).clone();
+
+            // Check if symbol is defined in this file
+            let symbols = self.get_symbols(file);
+            for symbol in symbols {
+                if symbol.name == symbol_name {
+                    // Found definition
+                    locations.push(tower_lsp::lsp_types::Location {
+                        uri: uri.clone(),
+                        range: tower_lsp::lsp_types::Range {
+                            start: tower_lsp::lsp_types::Position {
+                                line: symbol.line,
+                                character: symbol.character,
+                            },
+                            end: tower_lsp::lsp_types::Position {
+                                line: symbol.line,
+                                character: symbol.character + symbol.name.len() as u32,
+                            },
+                        },
+                    });
+                }
+            }
+
+            // Check references in this file (when implemented)
+            let references = self.get_references(file);
+            for reference in references {
+                if reference.name == symbol_name {
+                    locations.push(tower_lsp::lsp_types::Location {
+                        uri: reference.uri.clone(),
+                        range: tower_lsp::lsp_types::Range {
+                            start: tower_lsp::lsp_types::Position {
+                                line: reference.line,
+                                character: reference.character,
+                            },
+                            end: tower_lsp::lsp_types::Position {
+                                line: reference.line,
+                                character: reference.character + reference.name.len() as u32,
+                            },
+                        },
+                    });
+                }
+            }
+        }
+
+        tracing::debug!(
+            "Found {} references to '{}' across {} files",
+            locations.len(),
+            symbol_name,
+            files.len()
+        );
+
+        locations
     }
 }
 
