@@ -127,22 +127,25 @@ pub fn imports<'db>(db: &'db dyn salsa::Database, file: SourceFile) -> ImportInf
     let uri = file.uri(db);
     tracing::debug!("Salsa: Extracting imports from {}", uri);
 
-    let import_uris = Vec::new(); // TODO: Implement import resolution
+    let mut import_uris = Vec::new();
 
-    // Extract imports from the AST
+    // Extract and resolve imports from the AST
     for item in &program.items {
         if let parser::Item::Use { path, alias: _ } = item {
-            // TODO: Resolve import path to URI
-            // For now, we'll just log it
-            tracing::debug!("Found import: {}", path.join("."));
+            let import_path = path.join(".");
+            tracing::debug!("Found import: {}", import_path);
 
-            // In the future, this will resolve to actual URIs:
-            // if let Some(resolved_uri) = resolve_import(uri, &path.join(".")) {
-            //     import_uris.push(resolved_uri);
-            // }
+            // Resolve import path to actual file URI
+            if let Some(resolved_uri) = resolve_import(uri, &import_path) {
+                tracing::debug!("Resolved import '{}' to {}", import_path, resolved_uri);
+                import_uris.push(resolved_uri);
+            } else {
+                tracing::debug!("Could not resolve import: {}", import_path);
+            }
         }
     }
 
+    tracing::debug!("Resolved {} imports from {}", import_uris.len(), uri);
     ImportInfo::new(db, import_uris)
 }
 
@@ -277,15 +280,57 @@ impl WindjammerDatabase {
 
 /// Resolve an import path to a URI
 ///
-/// This will eventually handle relative imports, absolute imports, etc.
-#[allow(dead_code)]
-fn resolve_import(base_uri: &Url, import_path: &str) -> Option<Url> {
-    // TODO: Implement proper import resolution
-    // This would handle:
-    // - std.* imports (from WINDJAMMER_STDLIB)
-    // - Relative imports (./ and ../)
-    // - Absolute imports
-    tracing::debug!("Resolving import '{}' from {}", import_path, base_uri);
+/// Given a source file and an import path like `utils.helpers`, resolves to the actual file URI.
+///
+/// Resolution strategy:
+/// 1. Skip standard library imports (std.*)
+/// 2. Check relative to current file
+/// 3. Check relative to project root (look for Cargo.toml or wj.toml)
+fn resolve_import(source_uri: &Url, import_path: &str) -> Option<Url> {
+    tracing::debug!("Resolving import '{}' from {}", import_path, source_uri);
+
+    // Skip standard library imports for now
+    if import_path.starts_with("std.") {
+        tracing::debug!("Skipping std library import: {}", import_path);
+        return None;
+    }
+
+    // Convert dotted path to file path: utils.helpers -> utils/helpers.wj
+    let file_path = import_path.replace('.', "/") + ".wj";
+
+    // Try to get the directory of the source file
+    let source_path = source_uri.to_file_path().ok()?;
+    let source_dir = source_path.parent()?;
+
+    // Strategy 1: Relative to current file
+    let relative_path = source_dir.join(&file_path);
+    if relative_path.exists() {
+        let resolved_uri = Url::from_file_path(relative_path).ok()?;
+        tracing::debug!("Resolved '{}' to {} (relative)", import_path, resolved_uri);
+        return Some(resolved_uri);
+    }
+
+    // Strategy 2: Relative to project root (find Cargo.toml or wj.toml)
+    let mut current_dir = source_dir;
+    while let Some(parent) = current_dir.parent() {
+        // Check for project root markers
+        if parent.join("Cargo.toml").exists() || parent.join("wj.toml").exists() {
+            let project_path = parent.join(&file_path);
+            if project_path.exists() {
+                let resolved_uri = Url::from_file_path(project_path).ok()?;
+                tracing::debug!(
+                    "Resolved '{}' to {} (project root)",
+                    import_path,
+                    resolved_uri
+                );
+                return Some(resolved_uri);
+            }
+            break;
+        }
+        current_dir = parent;
+    }
+
+    tracing::debug!("Could not resolve import: {}", import_path);
     None
 }
 
