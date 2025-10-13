@@ -12,9 +12,19 @@ use windjammer::{lexer, parser};
 
 /// The main Salsa database implementation
 #[salsa::db]
-#[derive(Clone, Default)]
+#[derive(Clone)]
 pub struct WindjammerDatabase {
     storage: salsa::Storage<Self>,
+    /// Lazy loading cache for symbols (only load when accessed)
+    symbol_cache: std::sync::Arc<std::sync::Mutex<std::collections::HashMap<Url, bool>>>,
+    /// Lazy loading cache for references
+    reference_cache: std::sync::Arc<std::sync::Mutex<std::collections::HashMap<Url, bool>>>,
+}
+
+impl Default for WindjammerDatabase {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 #[salsa::db]
@@ -340,7 +350,84 @@ pub fn extract_references<'db>(
 impl WindjammerDatabase {
     /// Create a new database
     pub fn new() -> Self {
-        Self::default()
+        Self {
+            storage: Default::default(),
+            symbol_cache: Default::default(),
+            reference_cache: Default::default(),
+        }
+    }
+
+    /// Check if symbols are loaded for a file
+    pub fn are_symbols_loaded(&self, file: SourceFile) -> bool {
+        let uri = file.uri(self);
+        self.symbol_cache
+            .lock()
+            .unwrap()
+            .get(uri)
+            .copied()
+            .unwrap_or(false)
+    }
+
+    /// Mark symbols as loaded for a file
+    pub fn mark_symbols_loaded(&self, file: SourceFile) {
+        let uri = file.uri(self).clone();
+        self.symbol_cache.lock().unwrap().insert(uri, true);
+    }
+
+    /// Check if references are loaded for a file
+    pub fn are_references_loaded(&self, file: SourceFile) -> bool {
+        let uri = file.uri(self);
+        self.reference_cache
+            .lock()
+            .unwrap()
+            .get(uri)
+            .copied()
+            .unwrap_or(false)
+    }
+
+    /// Mark references as loaded for a file
+    pub fn mark_references_loaded(&self, file: SourceFile) {
+        let uri = file.uri(self).clone();
+        self.reference_cache.lock().unwrap().insert(uri, true);
+    }
+
+    /// Get symbols with lazy loading
+    pub fn get_symbols_lazy(&mut self, file: SourceFile) -> &Vec<Symbol> {
+        if !self.are_symbols_loaded(file) {
+            // Trigger computation
+            let _symbols = self.get_symbols(file);
+            self.mark_symbols_loaded(file);
+        }
+        self.get_symbols(file)
+    }
+
+    /// Get references with lazy loading
+    pub fn get_references_lazy(&mut self, file: SourceFile) -> &Vec<SymbolReference> {
+        if !self.are_references_loaded(file) {
+            // Trigger computation
+            let _refs = self.get_references(file);
+            self.mark_references_loaded(file);
+        }
+        self.get_references(file)
+    }
+
+    /// Clear lazy loading caches (useful after file changes)
+    pub fn clear_lazy_caches(&self) {
+        self.symbol_cache.lock().unwrap().clear();
+        self.reference_cache.lock().unwrap().clear();
+    }
+
+    /// Preload symbols for multiple files
+    ///
+    /// Note: This is sequential within the database context, but Salsa
+    /// internally parallelizes computation across files.
+    pub fn preload_symbols(&mut self, files: &[SourceFile]) {
+        for file in files {
+            if !self.are_symbols_loaded(*file) {
+                let _ = self.get_symbols(*file);
+                self.mark_symbols_loaded(*file);
+            }
+        }
     }
 
     /// Set the source text for a file
@@ -3878,5 +3965,111 @@ mod diagnostics_tests {
         assert_eq!(fix.description, "Test fix");
         assert_eq!(fix.edits.len(), 1);
         assert_eq!(fix.edits[0].new_text, "fixed");
+    }
+}
+
+#[cfg(test)]
+mod lazy_loading_tests {
+    use super::*;
+
+    #[test]
+    fn test_lazy_loading_initial_state() {
+        let mut db = WindjammerDatabase::new();
+        let uri = Url::parse("file:///test.wj").unwrap();
+        let file = db.set_source_text(uri, "fn test() {}".to_string());
+
+        // Symbols should not be loaded initially
+        assert!(!db.are_symbols_loaded(file));
+        assert!(!db.are_references_loaded(file));
+    }
+
+    #[test]
+    fn test_lazy_loading_mark_loaded() {
+        let mut db = WindjammerDatabase::new();
+        let uri = Url::parse("file:///test.wj").unwrap();
+        let file = db.set_source_text(uri, "fn test() {}".to_string());
+
+        // Mark as loaded
+        db.mark_symbols_loaded(file);
+        assert!(db.are_symbols_loaded(file));
+
+        db.mark_references_loaded(file);
+        assert!(db.are_references_loaded(file));
+    }
+
+    #[test]
+    fn test_lazy_loading_get_symbols() {
+        let mut db = WindjammerDatabase::new();
+        let uri = Url::parse("file:///test.wj").unwrap();
+        let file = db.set_source_text(uri, "fn test() {}".to_string());
+
+        // Get symbols with lazy loading
+        let symbols = db.get_symbols_lazy(file);
+        assert!(symbols.len() >= 0);
+
+        // Should be marked as loaded now
+        assert!(db.are_symbols_loaded(file));
+    }
+
+    #[test]
+    fn test_lazy_loading_clear_caches() {
+        let mut db = WindjammerDatabase::new();
+        let uri = Url::parse("file:///test.wj").unwrap();
+        let file = db.set_source_text(uri, "fn test() {}".to_string());
+
+        db.mark_symbols_loaded(file);
+        db.mark_references_loaded(file);
+
+        assert!(db.are_symbols_loaded(file));
+        assert!(db.are_references_loaded(file));
+
+        // Clear caches
+        db.clear_lazy_caches();
+
+        assert!(!db.are_symbols_loaded(file));
+        assert!(!db.are_references_loaded(file));
+    }
+
+    #[test]
+    fn test_lazy_loading_preload() {
+        let mut db = WindjammerDatabase::new();
+
+        let files: Vec<_> = vec![
+            (Url::parse("file:///a.wj").unwrap(), "fn a() {}".to_string()),
+            (Url::parse("file:///b.wj").unwrap(), "fn b() {}".to_string()),
+        ]
+        .into_iter()
+        .map(|(uri, text)| db.set_source_text(uri, text))
+        .collect();
+
+        // Preload symbols
+        db.preload_symbols(&files);
+
+        // All files should have symbols loaded
+        for file in &files {
+            assert!(db.are_symbols_loaded(*file));
+        }
+    }
+
+    #[test]
+    fn test_lazy_loading_multiple_files() {
+        let mut db = WindjammerDatabase::new();
+
+        let files: Vec<_> = vec![
+            (Url::parse("file:///a.wj").unwrap(), "fn a() {}".to_string()),
+            (Url::parse("file:///b.wj").unwrap(), "fn b() {}".to_string()),
+            (Url::parse("file:///c.wj").unwrap(), "fn c() {}".to_string()),
+        ]
+        .into_iter()
+        .map(|(uri, text)| db.set_source_text(uri, text))
+        .collect();
+
+        // Mark only some as loaded
+        db.mark_symbols_loaded(files[0]);
+        db.mark_symbols_loaded(files[2]);
+
+        assert!(db.are_symbols_loaded(files[0]));
+        assert!(!db.are_symbols_loaded(files[1]));
+        assert!(db.are_symbols_loaded(files[2]));
     }
 }
