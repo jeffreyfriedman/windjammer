@@ -405,18 +405,45 @@ impl LanguageServer for WindjammerLanguageServer {
             .clone();
         let position = params.text_document_position_params.position;
 
-        tracing::debug!("Go to definition: {} at {:?}", uri, position);
+        tracing::debug!("Go to definition (cross-file): {} at {:?}", uri, position);
 
         // Get the word at the cursor position
         let symbol_name = self.get_word_at_position(&uri, position);
 
         if let Some(name) = symbol_name {
-            // Get the symbol table for this file
+            // Use Salsa to find definition across all open files
+            let location = {
+                let mut db = self.salsa_db.lock().unwrap();
+
+                // Collect all open files as SourceFiles
+                let files: Vec<_> = self
+                    .documents
+                    .iter()
+                    .map(|entry| {
+                        let file_uri = entry.key().clone();
+                        let text = entry.value().clone();
+                        db.set_source_text(file_uri, text)
+                    })
+                    .collect();
+
+                // Find definition across all files
+                db.find_definition(&name, &files)
+            }; // Lock released
+
+            if let Some(loc) = location {
+                tracing::debug!(
+                    "Found definition for '{}' in {} (cross-file)",
+                    name,
+                    loc.uri
+                );
+                return Ok(Some(GotoDefinitionResponse::Scalar(loc)));
+            }
+
+            // Fallback to old single-file search
             if let Some(symbol_table) = self.analysis_db.get_symbol_table(&uri) {
-                // Look up the symbol
                 if let Some(symbol_def) = symbol_table.find_symbol(&name) {
                     tracing::debug!(
-                        "Found definition for '{}' at {:?}",
+                        "Found definition for '{}' at {:?} (fallback)",
                         name,
                         symbol_def.location
                     );
