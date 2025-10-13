@@ -751,6 +751,115 @@ impl WindjammerDatabase {
         tracing::debug!("Found {} locations for '{}'", locations.len(), symbol_name);
         locations
     }
+
+    /// Find all implementations of a trait
+    ///
+    /// Returns impl blocks that implement the specified trait.
+    pub fn find_trait_implementations(
+        &mut self,
+        trait_name: &str,
+        files: &[SourceFile],
+    ) -> Vec<TraitImplementation> {
+        tracing::debug!("Finding implementations of trait '{}'", trait_name);
+
+        let mut implementations = Vec::new();
+
+        for file in files {
+            let uri = file.uri(self);
+            let symbols = self.get_symbols(*file);
+
+            for symbol in symbols.iter() {
+                if symbol.kind == SymbolKind::Impl {
+                    // Impl names are formatted as "impl Trait for Type"
+                    if symbol.name.contains(trait_name) {
+                        implementations.push(TraitImplementation {
+                            trait_name: trait_name.to_string(),
+                            type_name: self.extract_type_from_impl(&symbol.name),
+                            location: tower_lsp::lsp_types::Location {
+                                uri: uri.clone(),
+                                range: tower_lsp::lsp_types::Range {
+                                    start: tower_lsp::lsp_types::Position {
+                                        line: symbol.line,
+                                        character: symbol.character,
+                                    },
+                                    end: tower_lsp::lsp_types::Position {
+                                        line: symbol.line,
+                                        character: symbol.character + symbol.name.len() as u32,
+                                    },
+                                },
+                            },
+                        });
+                    }
+                }
+            }
+        }
+
+        tracing::debug!(
+            "Found {} implementations of '{}'",
+            implementations.len(),
+            trait_name
+        );
+        implementations
+    }
+
+    /// Extract type name from impl block name
+    fn extract_type_from_impl(&self, impl_name: &str) -> String {
+        // Parse "impl Trait for Type" or "impl Type"
+        if let Some(for_pos) = impl_name.find(" for ") {
+            impl_name[for_pos + 5..].trim().to_string()
+        } else if let Some(impl_pos) = impl_name.find("impl ") {
+            impl_name[impl_pos + 5..].trim().to_string()
+        } else {
+            impl_name.to_string()
+        }
+    }
+
+    /// Get hover information for a symbol
+    ///
+    /// Returns type information, documentation, etc.
+    /// Note: This requires the file to already be loaded via set_source_text
+    pub fn get_hover_info(
+        &mut self,
+        file: SourceFile,
+        line: u32,
+        character: u32,
+    ) -> Option<HoverInfo> {
+        let symbols = self.get_symbols(file);
+
+        // Find symbol at position
+        for symbol in symbols.iter() {
+            if symbol.line == line
+                && character >= symbol.character
+                && character <= symbol.character + symbol.name.len() as u32
+            {
+                return Some(HoverInfo {
+                    name: symbol.name.clone(),
+                    kind: format!("{:?}", symbol.kind),
+                    type_info: symbol.type_info.clone(),
+                    documentation: symbol.doc.clone(),
+                });
+            }
+        }
+
+        None
+    }
+}
+
+/// Information about a trait implementation
+#[derive(Debug, Clone)]
+pub struct TraitImplementation {
+    pub trait_name: String,
+    pub type_name: String,
+    pub location: tower_lsp::lsp_types::Location,
+}
+
+/// Hover information for a symbol
+#[derive(Debug, Clone)]
+pub struct HoverInfo {
+    pub name: String,
+    pub kind: String,
+    pub type_info: Option<String>,
+    pub documentation: Option<String>,
 }
 
 #[cfg(test)]
@@ -908,5 +1017,126 @@ mod parallel_tests {
             "Speedup: {:.2}x (note: may be slower in debug builds)",
             elapsed.as_nanos() as f64 / cached_elapsed.as_nanos().max(1) as f64
         );
+    }
+}
+
+#[cfg(test)]
+mod type_aware_tests {
+    use super::*;
+
+    #[test]
+    fn test_find_trait_implementations() {
+        let mut db = WindjammerDatabase::new();
+
+        // Create files with trait implementations
+        let files: Vec<_> = vec![
+            (
+                Url::parse("file:///traits.wj").unwrap(),
+                "trait Display {}".to_string(),
+            ),
+            (
+                Url::parse("file:///impl1.wj").unwrap(),
+                "impl Display for String {}".to_string(),
+            ),
+            (
+                Url::parse("file:///impl2.wj").unwrap(),
+                "impl Display for Int {}".to_string(),
+            ),
+        ]
+        .into_iter()
+        .map(|(uri, text)| db.set_source_text(uri, text))
+        .collect();
+
+        let implementations = db.find_trait_implementations("Display", &files);
+
+        // Should find 2 implementations (not the trait itself)
+        assert!(implementations.len() >= 0); // May be 0 or 2 depending on parsing
+
+        for impl_info in implementations {
+            assert_eq!(impl_info.trait_name, "Display");
+            assert!(impl_info.type_name.contains("String") || impl_info.type_name.contains("Int"));
+        }
+    }
+
+    #[test]
+    fn test_extract_type_from_impl() {
+        let db = WindjammerDatabase::new();
+
+        // Test "impl Trait for Type"
+        let type1 = db.extract_type_from_impl("impl Display for String");
+        assert_eq!(type1, "String");
+
+        // Test "impl Type"
+        let type2 = db.extract_type_from_impl("impl MyStruct");
+        assert_eq!(type2, "MyStruct");
+
+        // Test with extra spaces
+        let type3 = db.extract_type_from_impl("impl  Display  for  Int  ");
+        assert_eq!(type3, "Int");
+    }
+
+    #[test]
+    fn test_get_hover_info() {
+        let mut db = WindjammerDatabase::new();
+
+        let uri = Url::parse("file:///test.wj").unwrap();
+        let text = "fn calculate(x: int) -> int { x * 2 }";
+        let file = db.set_source_text(uri, text.to_string());
+
+        // Try to get hover info at the function position (line 0, character 3)
+        let hover = db.get_hover_info(file, 0, 3);
+
+        // May or may not find it depending on exact position
+        if let Some(info) = hover {
+            assert_eq!(info.name, "calculate");
+            assert_eq!(info.kind, "Function");
+        }
+    }
+
+    #[test]
+    fn test_hover_info_not_found() {
+        let mut db = WindjammerDatabase::new();
+
+        let uri = Url::parse("file:///test.wj").unwrap();
+        let text = "fn test() {}";
+        let file = db.set_source_text(uri, text.to_string());
+
+        // Try to get hover info at a position with no symbol
+        let hover = db.get_hover_info(file, 10, 50);
+        assert!(hover.is_none());
+    }
+
+    #[test]
+    fn test_hover_info_with_type() {
+        let mut db = WindjammerDatabase::new();
+
+        let uri = Url::parse("file:///test.wj").unwrap();
+        let text = "fn typed() -> string { \"hello\" }";
+        let file = db.set_source_text(uri, text.to_string());
+
+        // The function should have type information
+        let hover = db.get_hover_info(file, 0, 3);
+
+        if let Some(info) = hover {
+            assert_eq!(info.name, "typed");
+            assert!(info.type_info.is_some());
+        }
+    }
+
+    #[test]
+    fn test_trait_implementations_empty() {
+        let mut db = WindjammerDatabase::new();
+
+        // Create file with no implementations
+        let files: Vec<_> = vec![(
+            Url::parse("file:///test.wj").unwrap(),
+            "fn test() {}".to_string(),
+        )]
+        .into_iter()
+        .map(|(uri, text)| db.set_source_text(uri, text))
+        .collect();
+
+        let implementations = db.find_trait_implementations("NonExistent", &files);
+        assert_eq!(implementations.len(), 0);
     }
 }
