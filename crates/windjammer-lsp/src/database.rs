@@ -396,6 +396,45 @@ impl WindjammerDatabase {
 
         locations
     }
+
+    /// Find the definition of a symbol across multiple files
+    ///
+    /// Searches through all provided files for the definition of the given symbol.
+    /// Returns the first matching definition found.
+    pub fn find_definition(
+        &self,
+        symbol_name: &str,
+        files: &[SourceFile],
+    ) -> Option<tower_lsp::lsp_types::Location> {
+        // Search through all files for the definition
+        for &file in files {
+            let uri = file.uri(self).clone();
+            let symbols = self.get_symbols(file);
+
+            for symbol in symbols {
+                if symbol.name == symbol_name {
+                    // Found definition!
+                    tracing::debug!("Found definition of '{}' in {}", symbol_name, uri);
+                    return Some(tower_lsp::lsp_types::Location {
+                        uri,
+                        range: tower_lsp::lsp_types::Range {
+                            start: tower_lsp::lsp_types::Position {
+                                line: symbol.line,
+                                character: symbol.character,
+                            },
+                            end: tower_lsp::lsp_types::Position {
+                                line: symbol.line,
+                                character: symbol.character + symbol.name.len() as u32,
+                            },
+                        },
+                    });
+                }
+            }
+        }
+
+        tracing::debug!("Definition of '{}' not found", symbol_name);
+        None
+    }
 }
 
 // ============================================================================
