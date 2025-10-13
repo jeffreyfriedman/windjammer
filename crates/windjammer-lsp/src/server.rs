@@ -6,7 +6,7 @@ use tower_lsp::{Client, LanguageServer};
 
 use crate::analysis::AnalysisDatabase;
 use crate::completion::CompletionProvider;
-use crate::database::WindjammerDatabase;
+use crate::database::{ParallelConfig, WindjammerDatabase};
 use crate::diagnostics::DiagnosticsEngine;
 use crate::hover::HoverProvider;
 use crate::inlay_hints::InlayHintsProvider;
@@ -21,6 +21,8 @@ pub struct WindjammerLanguageServer {
     analysis_db: Arc<AnalysisDatabase>,
     /// Salsa incremental computation database (Mutex for Send + Sync)
     salsa_db: Arc<Mutex<WindjammerDatabase>>,
+    /// Parallel processing configuration
+    parallel_config: ParallelConfig,
     diagnostics: Arc<DiagnosticsEngine>,
     hover_providers: Arc<Mutex<DashMap<Url, HoverProvider>>>,
     completion_providers: Arc<Mutex<DashMap<Url, CompletionProvider>>>,
@@ -37,10 +39,24 @@ impl WindjammerLanguageServer {
             "Initializing Windjammer Language Server with Salsa incremental computation"
         );
 
+        // Configure parallel processing
+        // Use default: all cores, parallel for 5+ files
+        let parallel_config = ParallelConfig::default();
+        tracing::info!(
+            "Parallel processing configured: {} threads, min {} files",
+            if parallel_config.num_threads == 0 {
+                "all".to_string()
+            } else {
+                parallel_config.num_threads.to_string()
+            },
+            parallel_config.min_files_for_parallel
+        );
+
         Self {
             client: client.clone(),
             analysis_db: Arc::new(AnalysisDatabase::new()),
             salsa_db: Arc::new(Mutex::new(WindjammerDatabase::new())),
+            parallel_config,
             diagnostics: Arc::new(DiagnosticsEngine::new(client.clone())),
             hover_providers: Arc::new(Mutex::new(DashMap::new())),
             completion_providers: Arc::new(Mutex::new(DashMap::new())),
@@ -120,6 +136,46 @@ impl WindjammerLanguageServer {
             // Publish diagnostics to the client
             self.diagnostics.publish(&uri, diagnostics).await;
         }
+    }
+
+    /// Process multiple files in parallel using the configured parallel processing
+    ///
+    /// This is useful for workspace-wide operations like "find all references"
+    /// or initial workspace indexing.
+    async fn process_files_parallel(&self, uris: Vec<Url>) {
+        if uris.is_empty() {
+            return;
+        }
+
+        let start = std::time::Instant::now();
+        tracing::info!("Processing {} files in parallel", uris.len());
+
+        // Collect all (uri, text) pairs
+        let files: Vec<(Url, String)> = uris
+            .iter()
+            .filter_map(|uri| {
+                self.documents
+                    .get(uri)
+                    .map(|content| (uri.clone(), content.clone()))
+            })
+            .collect();
+
+        if files.is_empty() {
+            tracing::warn!("No documents found to process");
+            return;
+        }
+
+        // Process files in parallel using Salsa database
+        {
+            let mut db = self.salsa_db.lock().unwrap();
+            let _source_files = db.process_files_parallel(files, &self.parallel_config);
+        }
+
+        tracing::info!(
+            "Processed {} files in parallel in {:?}",
+            uris.len(),
+            start.elapsed()
+        );
     }
 
     /// Helper to convert Type to string for display
