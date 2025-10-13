@@ -405,18 +405,45 @@ impl LanguageServer for WindjammerLanguageServer {
             .clone();
         let position = params.text_document_position_params.position;
 
-        tracing::debug!("Go to definition: {} at {:?}", uri, position);
+        tracing::debug!("Go to definition (cross-file): {} at {:?}", uri, position);
 
         // Get the word at the cursor position
         let symbol_name = self.get_word_at_position(&uri, position);
 
         if let Some(name) = symbol_name {
-            // Get the symbol table for this file
+            // Use Salsa to find definition across all open files
+            let location = {
+                let mut db = self.salsa_db.lock().unwrap();
+
+                // Collect all open files as SourceFiles
+                let files: Vec<_> = self
+                    .documents
+                    .iter()
+                    .map(|entry| {
+                        let file_uri = entry.key().clone();
+                        let text = entry.value().clone();
+                        db.set_source_text(file_uri, text)
+                    })
+                    .collect();
+
+                // Find definition across all files
+                db.find_definition(&name, &files)
+            }; // Lock released
+
+            if let Some(loc) = location {
+                tracing::debug!(
+                    "Found definition for '{}' in {} (cross-file)",
+                    name,
+                    loc.uri
+                );
+                return Ok(Some(GotoDefinitionResponse::Scalar(loc)));
+            }
+
+            // Fallback to old single-file search
             if let Some(symbol_table) = self.analysis_db.get_symbol_table(&uri) {
-                // Look up the symbol
                 if let Some(symbol_def) = symbol_table.find_symbol(&name) {
                     tracing::debug!(
-                        "Found definition for '{}' at {:?}",
+                        "Found definition for '{}' at {:?} (fallback)",
                         name,
                         symbol_def.location
                     );
@@ -434,29 +461,60 @@ impl LanguageServer for WindjammerLanguageServer {
         let uri = params.text_document_position.text_document.uri.clone();
         let position = params.text_document_position.position;
 
-        tracing::debug!("Find references: {} at {:?}", uri, position);
+        tracing::debug!("Find references (cross-file): {} at {:?}", uri, position);
 
         // Get the word at the cursor position
         let symbol_name = self.get_word_at_position(&uri, position);
 
         if let Some(name) = symbol_name {
-            // Get the symbol table for this file
+            // Use Salsa to find references across all open files
+            let locations = {
+                let mut db = self.salsa_db.lock().unwrap();
+
+                // Collect all open files as SourceFiles
+                let files: Vec<_> = self
+                    .documents
+                    .iter()
+                    .map(|entry| {
+                        let file_uri = entry.key().clone();
+                        let text = entry.value().clone();
+                        db.set_source_text(file_uri, text)
+                    })
+                    .collect();
+
+                // Find all references across all files
+                db.find_all_references(&name, &files)
+            }; // Lock released
+
+            if !locations.is_empty() {
+                tracing::debug!(
+                    "Found {} references to '{}' across {} files",
+                    locations.len(),
+                    name,
+                    self.documents.len()
+                );
+                return Ok(Some(locations));
+            }
+
+            // Fallback to old single-file search if Salsa finds nothing
             if let Some(symbol_table) = self.analysis_db.get_symbol_table(&uri) {
-                // Find all references to the symbol
                 let refs = symbol_table.find_references(&name);
 
                 if !refs.is_empty() {
                     let mut locations: Vec<Location> =
                         refs.iter().map(|r| r.location.clone()).collect();
 
-                    // If include_declaration is true, also include the definition
                     if params.context.include_declaration {
                         if let Some(symbol_def) = symbol_table.find_symbol(&name) {
                             locations.push(symbol_def.location.clone());
                         }
                     }
 
-                    tracing::debug!("Found {} references to '{}'", locations.len(), name);
+                    tracing::debug!(
+                        "Found {} references to '{}' (fallback)",
+                        locations.len(),
+                        name
+                    );
                     return Ok(Some(locations));
                 }
             }
@@ -470,15 +528,73 @@ impl LanguageServer for WindjammerLanguageServer {
         let position = params.text_document_position.position;
         let new_name = params.new_name.clone();
 
-        tracing::debug!("Rename: {} at {:?} to {}", uri, position, new_name);
+        tracing::debug!(
+            "Rename (cross-file): {} at {:?} to {}",
+            uri,
+            position,
+            new_name
+        );
 
         // Get the word at the cursor position
         let symbol_name = self.get_word_at_position(&uri, position);
 
         if let Some(old_name) = symbol_name {
-            // Get the symbol table for this file
+            // Use Salsa to find all references across all open files
+            let locations = {
+                let mut db = self.salsa_db.lock().unwrap();
+
+                // Collect all open files as SourceFiles
+                let files: Vec<_> = self
+                    .documents
+                    .iter()
+                    .map(|entry| {
+                        let file_uri = entry.key().clone();
+                        let text = entry.value().clone();
+                        db.set_source_text(file_uri, text)
+                    })
+                    .collect();
+
+                // Find all references across all files (includes definitions)
+                db.find_all_references(&old_name, &files)
+            }; // Lock released
+
+            if !locations.is_empty() {
+                use std::collections::HashMap;
+                let mut changes: HashMap<Url, Vec<TextEdit>> = HashMap::new();
+
+                // Create text edits for all locations
+                for location in locations {
+                    let text_edit = TextEdit {
+                        range: location.range,
+                        new_text: new_name.clone(),
+                    };
+
+                    changes
+                        .entry(location.uri)
+                        .or_insert_with(Vec::new)
+                        .push(text_edit);
+                }
+
+                let num_files = changes.len();
+                let num_edits: usize = changes.values().map(|v| v.len()).sum();
+
+                tracing::debug!(
+                    "Renaming '{}' to '{}' with {} edits across {} files (cross-file)",
+                    old_name,
+                    new_name,
+                    num_edits,
+                    num_files
+                );
+
+                return Ok(Some(WorkspaceEdit {
+                    changes: Some(changes),
+                    document_changes: None,
+                    change_annotations: None,
+                }));
+            }
+
+            // Fallback to old single-file rename
             if let Some(symbol_table) = self.analysis_db.get_symbol_table(&uri) {
-                // Find all references to the symbol (including definition)
                 let refs = symbol_table.find_references(&old_name);
 
                 if !refs.is_empty() || symbol_table.find_symbol(&old_name).is_some() {
@@ -513,7 +629,7 @@ impl LanguageServer for WindjammerLanguageServer {
 
                     if !changes.is_empty() {
                         tracing::debug!(
-                            "Renaming '{}' to '{}' with {} edits across {} files",
+                            "Renaming '{}' to '{}' with {} edits across {} files (fallback)",
                             old_name,
                             new_name,
                             changes.values().map(|v| v.len()).sum::<usize>(),
