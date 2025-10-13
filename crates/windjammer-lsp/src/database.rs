@@ -58,6 +58,49 @@ pub struct ImportInfo<'db> {
     pub imports: Vec<Url>,
 }
 
+/// Symbol information for a file
+#[salsa::tracked]
+pub struct SymbolTable<'db> {
+    #[returns(ref)]
+    pub symbols: Vec<Symbol>,
+}
+
+/// A symbol definition
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct Symbol {
+    pub name: String,
+    pub kind: SymbolKind,
+    pub line: u32,
+    pub character: u32,
+}
+
+/// A reference to a symbol (usage location)
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct SymbolReference {
+    pub name: String,
+    pub uri: Url,
+    pub line: u32,
+    pub character: u32,
+}
+
+/// References found in a file
+#[salsa::tracked]
+pub struct ReferenceInfo<'db> {
+    #[returns(ref)]
+    pub references: Vec<SymbolReference>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum SymbolKind {
+    Function,
+    Struct,
+    Enum,
+    Trait,
+    Impl,
+    Const,
+    Static,
+}
+
 // ============================================================================
 // Tracked Functions (Derived Computations)
 // ============================================================================
@@ -102,21 +145,149 @@ pub fn imports<'db>(db: &'db dyn salsa::Database, file: SourceFile) -> ImportInf
 
     let mut import_uris = Vec::new();
 
-    // Extract imports from the AST
+    // Extract and resolve imports from the AST
     for item in &program.items {
         if let parser::Item::Use { path, alias: _ } = item {
-            // TODO: Resolve import path to URI
-            // For now, we'll just log it
-            tracing::debug!("Found import: {}", path.join("."));
+            let import_path = path.join(".");
+            tracing::debug!("Found import: {}", import_path);
 
-            // In the future, this will resolve to actual URIs:
-            // if let Some(resolved_uri) = resolve_import(uri, &path.join(".")) {
-            //     import_uris.push(resolved_uri);
-            // }
+            // Resolve import path to actual file URI
+            if let Some(resolved_uri) = resolve_import(uri, &import_path) {
+                tracing::debug!("Resolved import '{}' to {}", import_path, resolved_uri);
+                import_uris.push(resolved_uri);
+            } else {
+                tracing::debug!("Could not resolve import: {}", import_path);
+            }
         }
     }
 
+    tracing::debug!("Resolved {} imports from {}", import_uris.len(), uri);
     ImportInfo::new(db, import_uris)
+}
+
+/// Extract symbols from a source file
+///
+/// Returns all symbol definitions in the file (functions, structs, etc.)
+#[salsa::tracked]
+pub fn extract_symbols<'db>(db: &'db dyn salsa::Database, file: SourceFile) -> SymbolTable<'db> {
+    let parsed = parse(db, file);
+    let program = parsed.program(db);
+
+    let uri = file.uri(db);
+    tracing::debug!("Salsa: Extracting symbols from {}", uri);
+
+    let mut symbols = Vec::new();
+
+    // Extract symbols from top-level items
+    for (idx, item) in program.items.iter().enumerate() {
+        // Use item index as line heuristic (AST doesn't have position info yet)
+        let line = idx as u32;
+
+        match item {
+            parser::Item::Function(func) => {
+                symbols.push(Symbol {
+                    name: func.name.clone(),
+                    kind: SymbolKind::Function,
+                    line,
+                    character: 0,
+                });
+            }
+            parser::Item::Struct(struct_decl) => {
+                symbols.push(Symbol {
+                    name: struct_decl.name.clone(),
+                    kind: SymbolKind::Struct,
+                    line,
+                    character: 0,
+                });
+            }
+            parser::Item::Enum(enum_decl) => {
+                symbols.push(Symbol {
+                    name: enum_decl.name.clone(),
+                    kind: SymbolKind::Enum,
+                    line,
+                    character: 0,
+                });
+            }
+            parser::Item::Trait(trait_decl) => {
+                symbols.push(Symbol {
+                    name: trait_decl.name.clone(),
+                    kind: SymbolKind::Trait,
+                    line,
+                    character: 0,
+                });
+            }
+            parser::Item::Impl(impl_block) => {
+                // Impl blocks don't have a name, use type name
+                let name = if let Some(trait_name) = &impl_block.trait_name {
+                    format!("impl {} for {}", trait_name, impl_block.type_name)
+                } else {
+                    format!("impl {}", impl_block.type_name)
+                };
+                symbols.push(Symbol {
+                    name,
+                    kind: SymbolKind::Impl,
+                    line,
+                    character: 0,
+                });
+            }
+            parser::Item::Const { name, .. } => {
+                symbols.push(Symbol {
+                    name: name.clone(),
+                    kind: SymbolKind::Const,
+                    line,
+                    character: 0,
+                });
+            }
+            parser::Item::Static { name, .. } => {
+                symbols.push(Symbol {
+                    name: name.clone(),
+                    kind: SymbolKind::Static,
+                    line,
+                    character: 0,
+                });
+            }
+            _ => {} // Skip other items (use statements, etc.)
+        }
+    }
+
+    tracing::debug!("Found {} symbols in {}", symbols.len(), uri);
+    SymbolTable::new(db, symbols)
+}
+
+/// Extract symbol references from a source file
+///
+/// Finds all usages of symbols in expressions, function calls, etc.
+#[salsa::tracked]
+pub fn extract_references<'db>(
+    db: &'db dyn salsa::Database,
+    file: SourceFile,
+) -> ReferenceInfo<'db> {
+    let parsed = parse(db, file);
+    let program = parsed.program(db);
+
+    let uri = file.uri(db).clone();
+    tracing::debug!("Salsa: Extracting references from {}", uri);
+
+    let mut references = Vec::new();
+
+    // Walk the AST to find all identifier references
+    // For now, we'll extract function calls as a starting point
+    for (idx, item) in program.items.iter().enumerate() {
+        let line = idx as u32;
+
+        match item {
+            parser::Item::Function(func) => {
+                // Scan function body for references
+                // TODO: Implement proper AST walking
+                // For now, we'll just note that references exist
+                tracing::debug!("TODO: Scan function '{}' body for references", func.name);
+            }
+            _ => {}
+        }
+    }
+
+    tracing::debug!("Found {} references in {}", references.len(), uri);
+    ReferenceInfo::new(db, references)
 }
 
 // ============================================================================
@@ -147,6 +318,123 @@ impl WindjammerDatabase {
         let import_info = imports(self, file);
         import_info.imports(self)
     }
+
+    /// Get symbols for a file
+    pub fn get_symbols(&self, file: SourceFile) -> &Vec<Symbol> {
+        let symbol_table = extract_symbols(self, file);
+        symbol_table.symbols(self)
+    }
+
+    /// Get references for a file
+    pub fn get_references(&self, file: SourceFile) -> &Vec<SymbolReference> {
+        let reference_info = extract_references(self, file);
+        reference_info.references(self)
+    }
+
+    /// Find all references to a symbol across multiple files
+    ///
+    /// This searches through all provided files for references to the given symbol name.
+    pub fn find_all_references(
+        &self,
+        symbol_name: &str,
+        files: &[SourceFile],
+    ) -> Vec<tower_lsp::lsp_types::Location> {
+        let mut locations = Vec::new();
+
+        // Search through all files
+        for &file in files {
+            let uri = file.uri(self).clone();
+
+            // Check if symbol is defined in this file
+            let symbols = self.get_symbols(file);
+            for symbol in symbols {
+                if symbol.name == symbol_name {
+                    // Found definition
+                    locations.push(tower_lsp::lsp_types::Location {
+                        uri: uri.clone(),
+                        range: tower_lsp::lsp_types::Range {
+                            start: tower_lsp::lsp_types::Position {
+                                line: symbol.line,
+                                character: symbol.character,
+                            },
+                            end: tower_lsp::lsp_types::Position {
+                                line: symbol.line,
+                                character: symbol.character + symbol.name.len() as u32,
+                            },
+                        },
+                    });
+                }
+            }
+
+            // Check references in this file (when implemented)
+            let references = self.get_references(file);
+            for reference in references {
+                if reference.name == symbol_name {
+                    locations.push(tower_lsp::lsp_types::Location {
+                        uri: reference.uri.clone(),
+                        range: tower_lsp::lsp_types::Range {
+                            start: tower_lsp::lsp_types::Position {
+                                line: reference.line,
+                                character: reference.character,
+                            },
+                            end: tower_lsp::lsp_types::Position {
+                                line: reference.line,
+                                character: reference.character + reference.name.len() as u32,
+                            },
+                        },
+                    });
+                }
+            }
+        }
+
+        tracing::debug!(
+            "Found {} references to '{}' across {} files",
+            locations.len(),
+            symbol_name,
+            files.len()
+        );
+
+        locations
+    }
+
+    /// Find the definition of a symbol across multiple files
+    ///
+    /// Searches through all provided files for the definition of the given symbol.
+    /// Returns the first matching definition found.
+    pub fn find_definition(
+        &self,
+        symbol_name: &str,
+        files: &[SourceFile],
+    ) -> Option<tower_lsp::lsp_types::Location> {
+        // Search through all files for the definition
+        for &file in files {
+            let uri = file.uri(self).clone();
+            let symbols = self.get_symbols(file);
+
+            for symbol in symbols {
+                if symbol.name == symbol_name {
+                    // Found definition!
+                    tracing::debug!("Found definition of '{}' in {}", symbol_name, uri);
+                    return Some(tower_lsp::lsp_types::Location {
+                        uri,
+                        range: tower_lsp::lsp_types::Range {
+                            start: tower_lsp::lsp_types::Position {
+                                line: symbol.line,
+                                character: symbol.character,
+                            },
+                            end: tower_lsp::lsp_types::Position {
+                                line: symbol.line,
+                                character: symbol.character + symbol.name.len() as u32,
+                            },
+                        },
+                    });
+                }
+            }
+        }
+
+        tracing::debug!("Definition of '{}' not found", symbol_name);
+        None
+    }
 }
 
 // ============================================================================
@@ -155,15 +443,57 @@ impl WindjammerDatabase {
 
 /// Resolve an import path to a URI
 ///
-/// This will eventually handle relative imports, absolute imports, etc.
-#[allow(dead_code)]
-fn resolve_import(base_uri: &Url, import_path: &str) -> Option<Url> {
-    // TODO: Implement proper import resolution
-    // This would handle:
-    // - std.* imports (from WINDJAMMER_STDLIB)
-    // - Relative imports (./ and ../)
-    // - Absolute imports
-    tracing::debug!("Resolving import '{}' from {}", import_path, base_uri);
+/// Given a source file and an import path like `utils.helpers`, resolves to the actual file URI.
+///
+/// Resolution strategy:
+/// 1. Skip standard library imports (std.*)
+/// 2. Check relative to current file
+/// 3. Check relative to project root (look for Cargo.toml or wj.toml)
+fn resolve_import(source_uri: &Url, import_path: &str) -> Option<Url> {
+    tracing::debug!("Resolving import '{}' from {}", import_path, source_uri);
+
+    // Skip standard library imports for now
+    if import_path.starts_with("std.") {
+        tracing::debug!("Skipping std library import: {}", import_path);
+        return None;
+    }
+
+    // Convert dotted path to file path: utils.helpers -> utils/helpers.wj
+    let file_path = import_path.replace('.', "/") + ".wj";
+
+    // Try to get the directory of the source file
+    let source_path = source_uri.to_file_path().ok()?;
+    let source_dir = source_path.parent()?;
+
+    // Strategy 1: Relative to current file
+    let relative_path = source_dir.join(&file_path);
+    if relative_path.exists() {
+        let resolved_uri = Url::from_file_path(relative_path).ok()?;
+        tracing::debug!("Resolved '{}' to {} (relative)", import_path, resolved_uri);
+        return Some(resolved_uri);
+    }
+
+    // Strategy 2: Relative to project root (find Cargo.toml or wj.toml)
+    let mut current_dir = source_dir;
+    while let Some(parent) = current_dir.parent() {
+        // Check for project root markers
+        if parent.join("Cargo.toml").exists() || parent.join("wj.toml").exists() {
+            let project_path = parent.join(&file_path);
+            if project_path.exists() {
+                let resolved_uri = Url::from_file_path(project_path).ok()?;
+                tracing::debug!(
+                    "Resolved '{}' to {} (project root)",
+                    import_path,
+                    resolved_uri
+                );
+                return Some(resolved_uri);
+            }
+            break;
+        }
+        current_dir = parent;
+    }
+
+    tracing::debug!("Could not resolve import: {}", import_path);
     None
 }
 
