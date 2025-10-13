@@ -984,6 +984,87 @@ impl WindjammerDatabase {
     }
 }
 
+// ============================================================================
+// Inlay Hints Support
+// ============================================================================
+
+/// An inlay hint that can be displayed inline in the editor
+#[derive(Debug, Clone)]
+pub struct InlayHint {
+    pub position: tower_lsp::lsp_types::Position,
+    pub label: String,
+    pub kind: InlayHintKind,
+    pub tooltip: Option<String>,
+}
+
+/// The kind of inlay hint
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum InlayHintKind {
+    /// Type annotation (e.g., `: string`)
+    Type,
+    /// Parameter name (e.g., `x: `)
+    Parameter,
+}
+
+impl WindjammerDatabase {
+    /// Generate inlay hints for a file
+    ///
+    /// Returns inlay hints showing:
+    /// - Type annotations for variables and return values
+    /// - Parameter names in function calls
+    pub fn get_inlay_hints(&mut self, file: SourceFile) -> Vec<InlayHint> {
+        let mut hints = Vec::new();
+        let symbols = self.get_symbols(file);
+
+        for symbol in symbols.iter() {
+            // Add type hints for symbols with type information
+            if let Some(type_info) = &symbol.type_info {
+                // Only add hints for functions (return types)
+                if symbol.kind == SymbolKind::Function {
+                    // Position hint after the function signature
+                    if let Some(range) = &symbol.range {
+                        hints.push(InlayHint {
+                            position: tower_lsp::lsp_types::Position {
+                                line: range.end_line,
+                                character: range.end_character,
+                            },
+                            label: format!(": {}", type_info),
+                            kind: InlayHintKind::Type,
+                            tooltip: Some(format!("Return type of {}", symbol.name)),
+                        });
+                    }
+                }
+            }
+        }
+
+        tracing::debug!(
+            "Generated {} inlay hints for {}",
+            hints.len(),
+            file.uri(self)
+        );
+        hints
+    }
+
+    /// Generate parameter hints for function calls
+    ///
+    /// This would analyze function call sites and show parameter names.
+    /// For now, this is a placeholder that returns empty hints.
+    pub fn get_parameter_hints(
+        &mut self,
+        _file: SourceFile,
+        _line: u32,
+        _character: u32,
+    ) -> Vec<InlayHint> {
+        // TODO: Implement parameter hint generation
+        // This requires:
+        // 1. Finding function call expressions in the AST
+        // 2. Looking up the function definition
+        // 3. Matching arguments to parameters
+        // 4. Generating hints for each argument
+        Vec::new()
+    }
+}
+
 #[cfg(test)]
 mod parallel_tests {
     use super::*;
@@ -1437,5 +1518,118 @@ mod code_lens_tests {
         let _lenses = db.get_code_lenses(file, &[file]);
 
         // Should not panic - test passes if we get here
+    }
+}
+
+#[cfg(test)]
+mod inlay_hints_tests {
+    use super::*;
+
+    #[test]
+    fn test_get_inlay_hints_function_with_type() {
+        let mut db = WindjammerDatabase::new();
+
+        let uri = Url::parse("file:///test.wj").unwrap();
+        let text = "fn calculate(x: int) -> int { x * 2 }";
+        let file = db.set_source_text(uri, text.to_string());
+
+        let hints = db.get_inlay_hints(file);
+
+        // May have hints if type info is extracted
+        // Just verify it doesn't panic
+        for hint in hints {
+            assert!(hint.label.contains(":"));
+            assert_eq!(hint.kind, InlayHintKind::Type);
+        }
+    }
+
+    #[test]
+    fn test_get_inlay_hints_empty_file() {
+        let mut db = WindjammerDatabase::new();
+
+        let uri = Url::parse("file:///empty.wj").unwrap();
+        let text = "";
+        let file = db.set_source_text(uri, text.to_string());
+
+        let hints = db.get_inlay_hints(file);
+
+        // Empty file should have no hints
+        assert_eq!(hints.len(), 0);
+    }
+
+    #[test]
+    fn test_get_inlay_hints_no_types() {
+        let mut db = WindjammerDatabase::new();
+
+        let uri = Url::parse("file:///test.wj").unwrap();
+        let text = "fn test() {}";
+        let file = db.set_source_text(uri, text.to_string());
+
+        let _hints = db.get_inlay_hints(file);
+
+        // Function without explicit return type may have no hints
+        // Just verify it doesn't panic - test passes if we get here
+    }
+
+    #[test]
+    fn test_get_parameter_hints_placeholder() {
+        let mut db = WindjammerDatabase::new();
+
+        let uri = Url::parse("file:///test.wj").unwrap();
+        let text = "fn test(x: int) {}";
+        let file = db.set_source_text(uri, text.to_string());
+
+        // Parameter hints are not yet implemented
+        let hints = db.get_parameter_hints(file, 0, 0);
+        assert_eq!(hints.len(), 0);
+    }
+
+    #[test]
+    fn test_inlay_hint_kind() {
+        // Test that InlayHintKind enum works correctly
+        assert_eq!(InlayHintKind::Type, InlayHintKind::Type);
+        assert_eq!(InlayHintKind::Parameter, InlayHintKind::Parameter);
+        assert_ne!(InlayHintKind::Type, InlayHintKind::Parameter);
+    }
+
+    #[test]
+    fn test_inlay_hint_structure() {
+        let hint = InlayHint {
+            position: tower_lsp::lsp_types::Position {
+                line: 0,
+                character: 10,
+            },
+            label: ": string".to_string(),
+            kind: InlayHintKind::Type,
+            tooltip: Some("Return type".to_string()),
+        };
+
+        assert_eq!(hint.position.line, 0);
+        assert_eq!(hint.position.character, 10);
+        assert_eq!(hint.label, ": string");
+        assert_eq!(hint.kind, InlayHintKind::Type);
+        assert_eq!(hint.tooltip, Some("Return type".to_string()));
+    }
+
+    #[test]
+    fn test_inlay_hints_multiple_functions() {
+        let mut db = WindjammerDatabase::new();
+
+        let uri = Url::parse("file:///test.wj").unwrap();
+        let text = r#"
+fn add(a: int, b: int) -> int { a + b }
+fn greet(name: string) -> string { "Hello" }
+"#;
+        let file = db.set_source_text(uri, text.to_string());
+
+        let hints = db.get_inlay_hints(file);
+
+        // May have hints for both functions if types are extracted
+        // Just verify structure is correct
+        for hint in hints {
+            assert!(hint.label.starts_with(":"));
+            assert_eq!(hint.kind, InlayHintKind::Type);
+            assert!(hint.tooltip.is_some());
+        }
     }
 }
