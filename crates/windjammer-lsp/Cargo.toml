@@ -28,6 +28,9 @@ tokio = { version = "1.35", features = ["full"] }
 salsa = "0.24"
 dashmap = "5.5"
 
+# Parallel processing
+rayon = "1.8"
+
 # File watching
 notify = "6.1"
 notify-debouncer-full = "0.3"
