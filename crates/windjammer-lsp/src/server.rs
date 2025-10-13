@@ -12,6 +12,7 @@ use crate::hover::HoverProvider;
 use crate::inlay_hints::InlayHintsProvider;
 use crate::refactoring::RefactoringProvider;
 use crate::semantic_tokens::SemanticTokensProvider;
+use windjammer_lsp::cache::CacheManager;
 
 /// The Windjammer Language Server
 ///
@@ -23,6 +24,8 @@ pub struct WindjammerLanguageServer {
     salsa_db: Arc<Mutex<WindjammerDatabase>>,
     /// Parallel processing configuration
     parallel_config: ParallelConfig,
+    /// Persistent disk cache for symbols
+    cache_manager: Arc<Mutex<CacheManager>>,
     diagnostics: Arc<DiagnosticsEngine>,
     hover_providers: Arc<Mutex<DashMap<Url, HoverProvider>>>,
     completion_providers: Arc<Mutex<DashMap<Url, CompletionProvider>>>,
@@ -52,11 +55,19 @@ impl WindjammerLanguageServer {
             parallel_config.min_files_for_parallel
         );
 
+        // Initialize cache manager with default path
+        let cache_manager = CacheManager::new(None);
+        tracing::info!(
+            "Cache manager initialized with {} entries",
+            cache_manager.stats().entries
+        );
+
         Self {
             client: client.clone(),
             analysis_db: Arc::new(AnalysisDatabase::new()),
             salsa_db: Arc::new(Mutex::new(WindjammerDatabase::new())),
             parallel_config,
+            cache_manager: Arc::new(Mutex::new(cache_manager)),
             diagnostics: Arc::new(DiagnosticsEngine::new(client.clone())),
             hover_providers: Arc::new(Mutex::new(DashMap::new())),
             completion_providers: Arc::new(Mutex::new(DashMap::new())),
@@ -73,6 +84,17 @@ impl WindjammerLanguageServer {
             let start = std::time::Instant::now();
             tracing::debug!("Analyzing document: {}", uri);
 
+            // Check cache for this file
+            let content_hash = windjammer_lsp::cache::calculate_content_hash(&content);
+            let cache_hit = {
+                let cache = self.cache_manager.lock().unwrap();
+                cache.is_valid(&uri, content_hash)
+            };
+
+            if cache_hit {
+                tracing::debug!("Cache hit for {} in {:?}", uri, start.elapsed());
+            }
+
             // Get parsed program from Salsa (incremental, memoized)
             // We create the SourceFile and query in one shot to avoid lifetime issues
             let program_owned = {
@@ -86,6 +108,36 @@ impl WindjammerLanguageServer {
                 start.elapsed(),
                 start.elapsed().as_micros() < 100 // < 100μs likely means cache hit
             );
+
+            // Extract symbols and update cache
+            {
+                let mut db = self.salsa_db.lock().unwrap();
+                let source_file = db.set_source_text(uri.clone(), content.clone());
+                let symbols = db.get_symbols(source_file);
+
+                // Convert symbols to cached format
+                let cached_symbols: Vec<windjammer_lsp::cache::CachedSymbol> = symbols
+                    .iter()
+                    .map(|s| windjammer_lsp::cache::CachedSymbol {
+                        name: s.name.clone(),
+                        kind: format!("{:?}", s.kind),
+                        line: s.line,
+                        character: s.character,
+                        type_info: s.type_info.clone(),
+                    })
+                    .collect();
+
+                // Update cache with new symbols
+                let mut cache = self.cache_manager.lock().unwrap();
+                let entry = windjammer_lsp::cache::CacheEntry {
+                    uri: uri.to_string(),
+                    content_hash,
+                    modified_time: std::time::SystemTime::now(),
+                    symbols: cached_symbols,
+                    imports: Vec::new(), // TODO: Extract imports
+                };
+                cache.insert(uri.clone(), entry);
+            }
 
             // Analyze the file with the old analysis DB (for now)
             // TODO: Eventually migrate analysis to Salsa queries
@@ -359,6 +411,17 @@ impl LanguageServer for WindjammerLanguageServer {
 
     async fn shutdown(&self) -> Result<()> {
         tracing::info!("Shutdown request received");
+
+        // Save cache to disk before shutting down
+        {
+            let cache = self.cache_manager.lock().unwrap();
+            if let Err(e) = cache.save_to_disk() {
+                tracing::warn!("Failed to save cache on shutdown: {}", e);
+            } else {
+                tracing::info!("Cache saved successfully");
+            }
+        }
+
         Ok(())
     }
 
