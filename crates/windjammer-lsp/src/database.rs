@@ -65,13 +65,30 @@ pub struct SymbolTable<'db> {
     pub symbols: Vec<Symbol>,
 }
 
-/// A symbol definition
+/// A symbol definition with detailed position information
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct Symbol {
     pub name: String,
     pub kind: SymbolKind,
     pub line: u32,
     pub character: u32,
+    /// Full range of the symbol (for precise selection)
+    pub range: Option<SymbolRange>,
+    /// Range of just the symbol name (for rename operations)
+    pub name_range: Option<SymbolRange>,
+    /// Type information (if available)
+    pub type_info: Option<String>,
+    /// Documentation comment
+    pub doc: Option<String>,
+}
+
+/// A range in the source code
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct SymbolRange {
+    pub start_line: u32,
+    pub start_character: u32,
+    pub end_line: u32,
+    pub end_character: u32,
 }
 
 /// A reference to a symbol (usage location)
@@ -190,6 +207,10 @@ pub fn extract_symbols<'db>(db: &'db dyn salsa::Database, file: SourceFile) -> S
                     kind: SymbolKind::Function,
                     line,
                     character: 0,
+                    range: None, // TODO: Extract from AST when available
+                    name_range: None,
+                    type_info: func.return_type.as_ref().map(|t| format!("{:?}", t)),
+                    doc: None, // TODO: Extract doc comments
                 });
             }
             parser::Item::Struct(struct_decl) => {
@@ -198,6 +219,10 @@ pub fn extract_symbols<'db>(db: &'db dyn salsa::Database, file: SourceFile) -> S
                     kind: SymbolKind::Struct,
                     line,
                     character: 0,
+                    range: None,
+                    name_range: None,
+                    type_info: None,
+                    doc: None,
                 });
             }
             parser::Item::Enum(enum_decl) => {
@@ -206,6 +231,10 @@ pub fn extract_symbols<'db>(db: &'db dyn salsa::Database, file: SourceFile) -> S
                     kind: SymbolKind::Enum,
                     line,
                     character: 0,
+                    range: None,
+                    name_range: None,
+                    type_info: None,
+                    doc: None,
                 });
             }
             parser::Item::Trait(trait_decl) => {
@@ -214,6 +243,10 @@ pub fn extract_symbols<'db>(db: &'db dyn salsa::Database, file: SourceFile) -> S
                     kind: SymbolKind::Trait,
                     line,
                     character: 0,
+                    range: None,
+                    name_range: None,
+                    type_info: None,
+                    doc: None,
                 });
             }
             parser::Item::Impl(impl_block) => {
@@ -228,22 +261,34 @@ pub fn extract_symbols<'db>(db: &'db dyn salsa::Database, file: SourceFile) -> S
                     kind: SymbolKind::Impl,
                     line,
                     character: 0,
+                    range: None,
+                    name_range: None,
+                    type_info: Some(impl_block.type_name.clone()),
+                    doc: None,
                 });
             }
-            parser::Item::Const { name, .. } => {
+            parser::Item::Const { name, type_, .. } => {
                 symbols.push(Symbol {
                     name: name.clone(),
                     kind: SymbolKind::Const,
                     line,
                     character: 0,
+                    range: None,
+                    name_range: None,
+                    type_info: Some(format!("{:?}", type_)), // Use Debug for now
+                    doc: None,
                 });
             }
-            parser::Item::Static { name, .. } => {
+            parser::Item::Static { name, type_, .. } => {
                 symbols.push(Symbol {
                     name: name.clone(),
                     kind: SymbolKind::Static,
                     line,
                     character: 0,
+                    range: None,
+                    name_range: None,
+                    type_info: Some(format!("{:?}", type_)), // Use Debug for now
+                    doc: None,
                 });
             }
             _ => {} // Skip other items (use statements, etc.)
