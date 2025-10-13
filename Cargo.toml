@@ -56,7 +56,7 @@ thiserror = "1.0"
 # Code generation
 indoc = "2.0"
 # Pretty printing
-colored = "2.1"
+colored = "3.0"
 # JSON parsing for rustc diagnostics
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
