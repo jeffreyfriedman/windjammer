@@ -344,6 +344,190 @@ pub fn extract_references<'db>(
 }
 
 // ============================================================================
+// Code Actions & Refactorings
+// ============================================================================
+
+/// A code action for refactoring
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct CodeAction {
+    pub title: String,
+    pub kind: CodeActionKind,
+    pub edits: Vec<TextEdit>,
+    pub is_preferred: bool,
+}
+
+/// Types of code actions
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum CodeActionKind {
+    /// Quick fix for a diagnostic
+    QuickFix,
+    /// Refactor: Extract function
+    RefactorExtract,
+    /// Refactor: Inline variable/function
+    RefactorInline,
+    /// Refactor: Rename
+    RefactorRename,
+    /// Refactor: Change signature
+    RefactorChangeSignature,
+    /// Refactor: Move item
+    RefactorMove,
+}
+
+impl WindjammerDatabase {
+    /// Get available code actions for a selection
+    ///
+    /// Returns code actions that can be applied at the given range.
+    pub fn get_code_actions(
+        &mut self,
+        file: SourceFile,
+        range: tower_lsp::lsp_types::Range,
+    ) -> Vec<CodeAction> {
+        let mut actions = Vec::new();
+
+        // Try to extract function
+        if let Some(action) = self.try_extract_function(file, range) {
+            actions.push(action);
+        }
+
+        // Try to inline variable
+        if let Some(action) = self.try_inline_variable(file, range) {
+            actions.push(action);
+        }
+
+        // Try to inline function
+        if let Some(action) = self.try_inline_function(file, range) {
+            actions.push(action);
+        }
+
+        actions
+    }
+
+    /// Try to extract the selected code into a function
+    fn try_extract_function(
+        &mut self,
+        file: SourceFile,
+        range: tower_lsp::lsp_types::Range,
+    ) -> Option<CodeAction> {
+        let text = file.text(self);
+        let lines: Vec<&str> = text.lines().collect();
+
+        // Get selected text
+        let start_line = range.start.line as usize;
+        let end_line = range.end.line as usize;
+
+        if start_line >= lines.len() || end_line >= lines.len() {
+            return None;
+        }
+
+        // Extract the selected code
+        let mut selected_code = String::new();
+        for line_idx in start_line..=end_line {
+            if line_idx == start_line && line_idx == end_line {
+                // Single line selection
+                let line = lines[line_idx];
+                let start_char = range.start.character as usize;
+                let end_char = range.end.character as usize;
+                if start_char < line.len() && end_char <= line.len() {
+                    selected_code.push_str(&line[start_char..end_char]);
+                }
+            } else if line_idx == start_line {
+                // First line of multi-line selection
+                let line = lines[line_idx];
+                let start_char = range.start.character as usize;
+                if start_char < line.len() {
+                    selected_code.push_str(&line[start_char..]);
+                    selected_code.push('\n');
+                }
+            } else if line_idx == end_line {
+                // Last line of multi-line selection
+                let line = lines[line_idx];
+                let end_char = range.end.character as usize;
+                if end_char <= line.len() {
+                    selected_code.push_str(&line[..end_char]);
+                }
+            } else {
+                // Middle lines
+                selected_code.push_str(lines[line_idx]);
+                selected_code.push('\n');
+            }
+        }
+
+        if selected_code.trim().is_empty() {
+            return None;
+        }
+
+        // Generate the extracted function
+        let function_name = "extracted_function";
+        let extracted_function = format!(
+            "fn {}() {{\n    {}\n}}\n\n",
+            function_name,
+            selected_code.trim()
+        );
+
+        // Create edits
+        let mut edits = Vec::new();
+
+        // 1. Replace selection with function call
+        edits.push(TextEdit {
+            range,
+            new_text: format!("{}()", function_name),
+        });
+
+        // 2. Insert function above current function
+        // Find the start of the current function
+        let insert_line = start_line.saturating_sub(1);
+        edits.push(TextEdit {
+            range: tower_lsp::lsp_types::Range {
+                start: tower_lsp::lsp_types::Position {
+                    line: insert_line as u32,
+                    character: 0,
+                },
+                end: tower_lsp::lsp_types::Position {
+                    line: insert_line as u32,
+                    character: 0,
+                },
+            },
+            new_text: extracted_function,
+        });
+
+        Some(CodeAction {
+            title: "Extract function".to_string(),
+            kind: CodeActionKind::RefactorExtract,
+            edits,
+            is_preferred: true,
+        })
+    }
+
+    /// Try to inline a variable at the cursor
+    fn try_inline_variable(
+        &mut self,
+        _file: SourceFile,
+        _range: tower_lsp::lsp_types::Range,
+    ) -> Option<CodeAction> {
+        // TODO: Implement variable inlining
+        // This requires:
+        // 1. Identify the variable at the cursor
+        // 2. Find all uses of the variable
+        // 3. Replace uses with the variable's value
+        None
+    }
+
+    /// Try to inline a function at the cursor
+    fn try_inline_function(
+        &mut self,
+        _file: SourceFile,
+        _range: tower_lsp::lsp_types::Range,
+    ) -> Option<CodeAction> {
+        // TODO: Implement function inlining
+        // This requires:
+        // 1. Identify the function call at the cursor
+        // 2. Get the function body
+        // 3. Replace call with inlined body
+        None
+    }
+}
+
+// ============================================================================
 // Database API
 // ============================================================================
 
@@ -1930,7 +2114,7 @@ pub struct AutoFix {
 }
 
 /// A text edit for auto-fixing
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct TextEdit {
     pub range: tower_lsp::lsp_types::Range,
     pub new_text: String,
@@ -4071,5 +4255,119 @@ mod lazy_loading_tests {
         assert!(db.are_symbols_loaded(files[0]));
         assert!(!db.are_symbols_loaded(files[1]));
         assert!(db.are_symbols_loaded(files[2]));
+    }
+}
+
+#[cfg(test)]
+mod code_actions_tests {
+    use super::*;
+
+    #[test]
+    fn test_extract_function_single_line() {
+        let mut db = WindjammerDatabase::new();
+        let uri = Url::parse("file:///test.wj").unwrap();
+        let code = "fn main() {\n    let x = 1 + 2;\n    println(x);\n}";
+        let file = db.set_source_text(uri, code.to_string());
+
+        // Select "1 + 2"
+        let range = tower_lsp::lsp_types::Range {
+            start: tower_lsp::lsp_types::Position {
+                line: 1,
+                character: 12,
+            },
+            end: tower_lsp::lsp_types::Position {
+                line: 1,
+                character: 17,
+            },
+        };
+
+        let actions = db.get_code_actions(file, range);
+        assert!(!actions.is_empty());
+
+        let extract_action = actions
+            .iter()
+            .find(|a| a.kind == CodeActionKind::RefactorExtract);
+        assert!(extract_action.is_some());
+
+        let action = extract_action.unwrap();
+        assert_eq!(action.title, "Extract function");
+        assert!(action.is_preferred);
+        assert_eq!(action.edits.len(), 2);
+    }
+
+    #[test]
+    fn test_extract_function_multi_line() {
+        let mut db = WindjammerDatabase::new();
+        let uri = Url::parse("file:///test.wj").unwrap();
+        let code = "fn main() {\n    let x = 1;\n    let y = 2;\n    println(x + y);\n}";
+        let file = db.set_source_text(uri, code.to_string());
+
+        // Select lines 2-3
+        let range = tower_lsp::lsp_types::Range {
+            start: tower_lsp::lsp_types::Position {
+                line: 1,
+                character: 4,
+            },
+            end: tower_lsp::lsp_types::Position {
+                line: 2,
+                character: 18,
+            },
+        };
+
+        let actions = db.get_code_actions(file, range);
+        let extract_action = actions
+            .iter()
+            .find(|a| a.kind == CodeActionKind::RefactorExtract);
+        assert!(extract_action.is_some());
+    }
+
+    #[test]
+    fn test_extract_function_empty_selection() {
+        let mut db = WindjammerDatabase::new();
+        let uri = Url::parse("file:///test.wj").unwrap();
+        let code = "fn main() {\n    let x = 1;\n}";
+        let file = db.set_source_text(uri, code.to_string());
+
+        // Empty selection
+        let range = tower_lsp::lsp_types::Range {
+            start: tower_lsp::lsp_types::Position {
+                line: 1,
+                character: 4,
+            },
+            end: tower_lsp::lsp_types::Position {
+                line: 1,
+                character: 4,
+            },
+        };
+
+        let actions = db.get_code_actions(file, range);
+        // Should not offer extract function for empty selection
+        let extract_action = actions
+            .iter()
+            .find(|a| a.kind == CodeActionKind::RefactorExtract);
+        assert!(extract_action.is_none());
+    }
+
+    #[test]
+    fn test_code_action_kind() {
+        assert_ne!(CodeActionKind::QuickFix, CodeActionKind::RefactorExtract);
+        assert_ne!(
+            CodeActionKind::RefactorInline,
+            CodeActionKind::RefactorRename
+        );
+    }
+
+    #[test]
+    fn test_code_action_structure() {
+        let action = CodeAction {
+            title: "Test action".to_string(),
+            kind: CodeActionKind::QuickFix,
+            edits: vec![],
+            is_preferred: false,
+        };
+
+        assert_eq!(action.title, "Test action");
+        assert_eq!(action.kind, CodeActionKind::QuickFix);
+        assert!(!action.is_preferred);
     }
 }
