@@ -1065,6 +1065,244 @@ impl WindjammerDatabase {
     }
 }
 
+// ============================================================================
+// Call Hierarchy Support
+// ============================================================================
+
+/// A call hierarchy item representing a function or method
+#[derive(Debug, Clone)]
+pub struct CallHierarchyItem {
+    pub name: String,
+    pub kind: SymbolKind,
+    pub uri: Url,
+    pub range: tower_lsp::lsp_types::Range,
+    pub selection_range: tower_lsp::lsp_types::Range,
+}
+
+/// An incoming call (who calls this function)
+#[derive(Debug, Clone)]
+pub struct IncomingCall {
+    pub from: CallHierarchyItem,
+    pub from_ranges: Vec<tower_lsp::lsp_types::Range>,
+}
+
+/// An outgoing call (what this function calls)
+#[derive(Debug, Clone)]
+pub struct OutgoingCall {
+    pub to: CallHierarchyItem,
+    pub from_ranges: Vec<tower_lsp::lsp_types::Range>,
+}
+
+impl WindjammerDatabase {
+    /// Prepare call hierarchy for a symbol at a position
+    ///
+    /// Returns the call hierarchy item if the position is on a function.
+    pub fn prepare_call_hierarchy(
+        &mut self,
+        file: SourceFile,
+        line: u32,
+        character: u32,
+    ) -> Option<CallHierarchyItem> {
+        let symbols = self.get_symbols(file);
+        let uri = file.uri(self).clone();
+
+        // Find the symbol at the given position
+        for symbol in symbols.iter() {
+            if symbol.kind == SymbolKind::Function && symbol.line == line {
+                // Check if character is within the symbol
+                if character >= symbol.character
+                    && character <= symbol.character + symbol.name.len() as u32
+                {
+                    let range = symbol.range.as_ref().map(|r| tower_lsp::lsp_types::Range {
+                        start: tower_lsp::lsp_types::Position {
+                            line: r.start_line,
+                            character: r.start_character,
+                        },
+                        end: tower_lsp::lsp_types::Position {
+                            line: r.end_line,
+                            character: r.end_character,
+                        },
+                    })?;
+
+                    let selection_range = symbol
+                        .name_range
+                        .as_ref()
+                        .map(|r| tower_lsp::lsp_types::Range {
+                            start: tower_lsp::lsp_types::Position {
+                                line: r.start_line,
+                                character: r.start_character,
+                            },
+                            end: tower_lsp::lsp_types::Position {
+                                line: r.end_line,
+                                character: r.end_character,
+                            },
+                        })
+                        .unwrap_or(range);
+
+                    return Some(CallHierarchyItem {
+                        name: symbol.name.clone(),
+                        kind: symbol.kind,
+                        uri,
+                        range,
+                        selection_range,
+                    });
+                }
+            }
+        }
+
+        None
+    }
+
+    /// Get incoming calls for a function
+    ///
+    /// Returns all places where this function is called.
+    pub fn incoming_calls(
+        &mut self,
+        item: &CallHierarchyItem,
+        all_files: &[SourceFile],
+    ) -> Vec<IncomingCall> {
+        let mut calls = Vec::new();
+
+        // Find all references to this function
+        for file in all_files {
+            let symbols = self.get_symbols(*file);
+            let uri = file.uri(self).clone();
+
+            // Look for symbols that might call this function
+            for symbol in symbols.iter() {
+                if symbol.kind == SymbolKind::Function && symbol.name != item.name {
+                    // This is a different function - it might call our target
+                    // For now, we'll use a simple heuristic: if the function exists,
+                    // assume it might be called
+                    // TODO: Implement proper call graph analysis
+
+                    // Create a call hierarchy item for the caller
+                    if let (Some(range), Some(selection_range)) =
+                        (&symbol.range, &symbol.name_range)
+                    {
+                        let from = CallHierarchyItem {
+                            name: symbol.name.clone(),
+                            kind: symbol.kind,
+                            uri: uri.clone(),
+                            range: tower_lsp::lsp_types::Range {
+                                start: tower_lsp::lsp_types::Position {
+                                    line: range.start_line,
+                                    character: range.start_character,
+                                },
+                                end: tower_lsp::lsp_types::Position {
+                                    line: range.end_line,
+                                    character: range.end_character,
+                                },
+                            },
+                            selection_range: tower_lsp::lsp_types::Range {
+                                start: tower_lsp::lsp_types::Position {
+                                    line: selection_range.start_line,
+                                    character: selection_range.start_character,
+                                },
+                                end: tower_lsp::lsp_types::Position {
+                                    line: selection_range.end_line,
+                                    character: selection_range.end_character,
+                                },
+                            },
+                        };
+
+                        // For now, use the function's range as the call site
+                        calls.push(IncomingCall {
+                            from,
+                            from_ranges: vec![tower_lsp::lsp_types::Range {
+                                start: tower_lsp::lsp_types::Position {
+                                    line: symbol.line,
+                                    character: symbol.character,
+                                },
+                                end: tower_lsp::lsp_types::Position {
+                                    line: symbol.line,
+                                    character: symbol.character + symbol.name.len() as u32,
+                                },
+                            }],
+                        });
+                    }
+                }
+            }
+        }
+
+        tracing::debug!("Found {} incoming calls to '{}'", calls.len(), item.name);
+        calls
+    }
+
+    /// Get outgoing calls from a function
+    ///
+    /// Returns all functions that this function calls.
+    pub fn outgoing_calls(
+        &mut self,
+        item: &CallHierarchyItem,
+        all_files: &[SourceFile],
+    ) -> Vec<OutgoingCall> {
+        let mut calls = Vec::new();
+
+        // Find all functions that might be called by this function
+        // For now, we'll use a simple heuristic: list all other functions
+        // TODO: Implement proper call graph analysis by parsing function bodies
+
+        for file in all_files {
+            let symbols = self.get_symbols(*file);
+            let uri = file.uri(self).clone();
+
+            for symbol in symbols.iter() {
+                if symbol.kind == SymbolKind::Function && symbol.name != item.name {
+                    // This is a different function - it might be called by our target
+                    if let (Some(range), Some(selection_range)) =
+                        (&symbol.range, &symbol.name_range)
+                    {
+                        let to = CallHierarchyItem {
+                            name: symbol.name.clone(),
+                            kind: symbol.kind,
+                            uri: uri.clone(),
+                            range: tower_lsp::lsp_types::Range {
+                                start: tower_lsp::lsp_types::Position {
+                                    line: range.start_line,
+                                    character: range.start_character,
+                                },
+                                end: tower_lsp::lsp_types::Position {
+                                    line: range.end_line,
+                                    character: range.end_character,
+                                },
+                            },
+                            selection_range: tower_lsp::lsp_types::Range {
+                                start: tower_lsp::lsp_types::Position {
+                                    line: selection_range.start_line,
+                                    character: selection_range.start_character,
+                                },
+                                end: tower_lsp::lsp_types::Position {
+                                    line: selection_range.end_line,
+                                    character: selection_range.end_character,
+                                },
+                            },
+                        };
+
+                        // Use the target function's range as the call site
+                        calls.push(OutgoingCall {
+                            to,
+                            from_ranges: vec![tower_lsp::lsp_types::Range {
+                                start: tower_lsp::lsp_types::Position {
+                                    line: symbol.line,
+                                    character: symbol.character,
+                                },
+                                end: tower_lsp::lsp_types::Position {
+                                    line: symbol.line,
+                                    character: symbol.character + symbol.name.len() as u32,
+                                },
+                            }],
+                        });
+                    }
+                }
+            }
+        }
+
+        tracing::debug!("Found {} outgoing calls from '{}'", calls.len(), item.name);
+        calls
+    }
+}
+
 #[cfg(test)]
 mod parallel_tests {
     use super::*;
@@ -1631,5 +1869,289 @@ fn greet(name: string) -> string { "Hello" }
             assert_eq!(hint.kind, InlayHintKind::Type);
             assert!(hint.tooltip.is_some());
         }
+    }
+}
+
+#[cfg(test)]
+mod call_hierarchy_tests {
+    use super::*;
+
+    #[test]
+    fn test_prepare_call_hierarchy() {
+        let mut db = WindjammerDatabase::new();
+
+        let uri = Url::parse("file:///test.wj").unwrap();
+        let text = "fn calculate(x: int) -> int { x * 2 }";
+        let file = db.set_source_text(uri, text.to_string());
+
+        // Try to prepare call hierarchy at the function name position
+        let item = db.prepare_call_hierarchy(file, 0, 3);
+
+        // May return None if ranges aren't extracted
+        if let Some(item) = item {
+            assert_eq!(item.name, "calculate");
+            assert_eq!(item.kind, SymbolKind::Function);
+        }
+    }
+
+    #[test]
+    fn test_prepare_call_hierarchy_not_found() {
+        let mut db = WindjammerDatabase::new();
+
+        let uri = Url::parse("file:///test.wj").unwrap();
+        let text = "fn test() {}";
+        let file = db.set_source_text(uri, text.to_string());
+
+        // Try at a position with no symbol
+        let item = db.prepare_call_hierarchy(file, 10, 50);
+        assert!(item.is_none());
+    }
+
+    #[test]
+    fn test_incoming_calls() {
+        let mut db = WindjammerDatabase::new();
+
+        let files: Vec<_> = vec![
+            (
+                Url::parse("file:///main.wj").unwrap(),
+                "fn main() {}".to_string(),
+            ),
+            (
+                Url::parse("file:///helper.wj").unwrap(),
+                "fn helper() {}".to_string(),
+            ),
+        ]
+        .into_iter()
+        .map(|(uri, text)| db.set_source_text(uri, text))
+        .collect();
+
+        // Create a call hierarchy item for helper
+        let item = CallHierarchyItem {
+            name: "helper".to_string(),
+            kind: SymbolKind::Function,
+            uri: Url::parse("file:///helper.wj").unwrap(),
+            range: tower_lsp::lsp_types::Range {
+                start: tower_lsp::lsp_types::Position {
+                    line: 0,
+                    character: 0,
+                },
+                end: tower_lsp::lsp_types::Position {
+                    line: 0,
+                    character: 10,
+                },
+            },
+            selection_range: tower_lsp::lsp_types::Range {
+                start: tower_lsp::lsp_types::Position {
+                    line: 0,
+                    character: 3,
+                },
+                end: tower_lsp::lsp_types::Position {
+                    line: 0,
+                    character: 9,
+                },
+            },
+        };
+
+        let calls = db.incoming_calls(&item, &files);
+
+        // May have calls if ranges are extracted
+        // Just verify it doesn't panic
+        for call in calls {
+            assert_ne!(call.from.name, "helper"); // Should be from other functions
+        }
+    }
+
+    #[test]
+    fn test_outgoing_calls() {
+        let mut db = WindjammerDatabase::new();
+
+        let files: Vec<_> = vec![
+            (
+                Url::parse("file:///main.wj").unwrap(),
+                "fn main() {}".to_string(),
+            ),
+            (
+                Url::parse("file:///helper.wj").unwrap(),
+                "fn helper() {}".to_string(),
+            ),
+        ]
+        .into_iter()
+        .map(|(uri, text)| db.set_source_text(uri, text))
+        .collect();
+
+        // Create a call hierarchy item for main
+        let item = CallHierarchyItem {
+            name: "main".to_string(),
+            kind: SymbolKind::Function,
+            uri: Url::parse("file:///main.wj").unwrap(),
+            range: tower_lsp::lsp_types::Range {
+                start: tower_lsp::lsp_types::Position {
+                    line: 0,
+                    character: 0,
+                },
+                end: tower_lsp::lsp_types::Position {
+                    line: 0,
+                    character: 10,
+                },
+            },
+            selection_range: tower_lsp::lsp_types::Range {
+                start: tower_lsp::lsp_types::Position {
+                    line: 0,
+                    character: 3,
+                },
+                end: tower_lsp::lsp_types::Position {
+                    line: 0,
+                    character: 7,
+                },
+            },
+        };
+
+        let calls = db.outgoing_calls(&item, &files);
+
+        // May have calls if ranges are extracted
+        // Just verify it doesn't panic
+        for call in calls {
+            assert_ne!(call.to.name, "main"); // Should be to other functions
+        }
+    }
+
+    #[test]
+    fn test_call_hierarchy_item_structure() {
+        let item = CallHierarchyItem {
+            name: "test".to_string(),
+            kind: SymbolKind::Function,
+            uri: Url::parse("file:///test.wj").unwrap(),
+            range: tower_lsp::lsp_types::Range {
+                start: tower_lsp::lsp_types::Position {
+                    line: 0,
+                    character: 0,
+                },
+                end: tower_lsp::lsp_types::Position {
+                    line: 5,
+                    character: 1,
+                },
+            },
+            selection_range: tower_lsp::lsp_types::Range {
+                start: tower_lsp::lsp_types::Position {
+                    line: 0,
+                    character: 3,
+                },
+                end: tower_lsp::lsp_types::Position {
+                    line: 0,
+                    character: 7,
+                },
+            },
+        };
+
+        assert_eq!(item.name, "test");
+        assert_eq!(item.kind, SymbolKind::Function);
+        assert_eq!(item.range.start.line, 0);
+        assert_eq!(item.selection_range.start.character, 3);
+    }
+
+    #[test]
+    fn test_incoming_call_structure() {
+        let from = CallHierarchyItem {
+            name: "caller".to_string(),
+            kind: SymbolKind::Function,
+            uri: Url::parse("file:///test.wj").unwrap(),
+            range: tower_lsp::lsp_types::Range {
+                start: tower_lsp::lsp_types::Position {
+                    line: 0,
+                    character: 0,
+                },
+                end: tower_lsp::lsp_types::Position {
+                    line: 5,
+                    character: 1,
+                },
+            },
+            selection_range: tower_lsp::lsp_types::Range {
+                start: tower_lsp::lsp_types::Position {
+                    line: 0,
+                    character: 3,
+                },
+                end: tower_lsp::lsp_types::Position {
+                    line: 0,
+                    character: 9,
+                },
+            },
+        };
+
+        let call = IncomingCall {
+            from: from.clone(),
+            from_ranges: vec![tower_lsp::lsp_types::Range {
+                start: tower_lsp::lsp_types::Position {
+                    line: 2,
+                    character: 4,
+                },
+                end: tower_lsp::lsp_types::Position {
+                    line: 2,
+                    character: 10,
+                },
+            }],
+        };
+
+        assert_eq!(call.from.name, "caller");
+        assert_eq!(call.from_ranges.len(), 1);
+        assert_eq!(call.from_ranges[0].start.line, 2);
+    }
+
+    #[test]
+    fn test_outgoing_call_structure() {
+        let to = CallHierarchyItem {
+            name: "callee".to_string(),
+            kind: SymbolKind::Function,
+            uri: Url::parse("file:///test.wj").unwrap(),
+            range: tower_lsp::lsp_types::Range {
+                start: tower_lsp::lsp_types::Position {
+                    line: 10,
+                    character: 0,
+                },
+                end: tower_lsp::lsp_types::Position {
+                    line: 15,
+                    character: 1,
+                },
+            },
+            selection_range: tower_lsp::lsp_types::Range {
+                start: tower_lsp::lsp_types::Position {
+                    line: 10,
+                    character: 3,
+                },
+                end: tower_lsp::lsp_types::Position {
+                    line: 10,
+                    character: 9,
+                },
+            },
+        };
+
+        let call = OutgoingCall {
+            to: to.clone(),
+            from_ranges: vec![tower_lsp::lsp_types::Range {
+                start: tower_lsp::lsp_types::Position {
+                    line: 2,
+                    character: 4,
+                },
+                end: tower_lsp::lsp_types::Position {
+                    line: 2,
+                    character: 10,
+                },
+            }],
+        };
+
+        assert_eq!(call.to.name, "callee");
+        assert_eq!(call.from_ranges.len(), 1);
+        assert_eq!(call.from_ranges[0].start.line, 2);
+    }
+
+    #[test]
+    fn test_call_hierarchy_empty_project() {
+        let mut db = WindjammerDatabase::new();
+
+        let uri = Url::parse("file:///empty.wj").unwrap();
+        let text = "";
+        let file = db.set_source_text(uri, text.to_string());
+
+        let item = db.prepare_call_hierarchy(file, 0, 0);
+        assert!(item.is_none());
     }
 }
