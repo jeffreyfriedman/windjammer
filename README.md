@@ -164,9 +164,9 @@ fn process(text: Cow<'_, str>, uppercase: bool) -> Cow<'_, str> {
 }
 ```
 
-### 🧠 World-Class IDE Support & Linting 🆕 **v0.26.0**
+### 🧠 World-Class IDE Support, Linting & Refactoring 🆕 **v0.27.0**
 
-Complete Language Server Protocol (LSP) implementation with advanced linting:
+Complete Language Server Protocol (LSP) implementation with advanced linting and refactoring:
 
 **✨ Real-time Diagnostics** - Instant feedback as you type  
 **✨ Auto-completion** - Context-aware suggestions for keywords, stdlib, your code  
@@ -175,9 +175,11 @@ Complete Language Server Protocol (LSP) implementation with advanced linting:
 **✨ Rename Symbol** - Safe refactoring across your entire codebase  
 **✨ Hover Information** - Types, signatures, docs  
 **✨ Inlay Hints** (Unique!) - See inferred ownership (`&`, `&mut`, `owned`) inline  
-**✨ Code Actions** - Extract function, inline variable, quick fixes  
-**✨ World-Class Linting** 🆕 - 16 rules across 6 categories (matches golangci-lint!)  
-**✨ Auto-Fix** 🆕 - 3 auto-fixable rules via `wj lint --fix`  
+**✨ Advanced Refactoring** 🆕 - Extract function, inline variable, introduce variable, change signature, move items  
+**✨ Preview Mode** 🆕 - See changes before applying refactorings  
+**✨ Batch Refactorings** 🆕 - Apply multiple refactorings atomically  
+**✨ World-Class Linting** - 16 rules across 6 categories (matches golangci-lint!)  
+**✨ Auto-Fix** - 3 auto-fixable rules via `wj lint --fix`  
 
 **🐛 Full Debugging Support** - Debug Adapter Protocol (DAP):
 
