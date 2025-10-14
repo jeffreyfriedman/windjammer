@@ -77,29 +77,54 @@ impl<'a> MoveItem<'a> {
                 .unwrap_or_else(|| "Cannot move item: unsafe".to_string()));
         }
 
-        // Step 3: Create text edits
+        // Step 3: Check for circular dependencies
+        let target_module = self.extract_module_name(&self.target_uri);
+        if self.would_create_cycle(&analysis, source_content, &target_module) {
+            return Err(format!(
+                "Cannot move {}: would create circular dependency",
+                analysis.item_name
+            ));
+        }
+
+        // Step 4: Create text edits
         let mut changes = std::collections::HashMap::new();
 
-        // Remove from source file
-        let source_edits = vec![TextEdit {
+        // Prepare source file edits
+        let mut source_edits = vec![];
+
+        // Remove item from source file
+        source_edits.push(TextEdit {
             range: analysis.item_range,
             new_text: String::new(), // Delete the item
-        }];
+        });
+
+        // Add import in source file if there are usages
+        let usages = self.find_item_usages(source_content, &analysis.item_name);
+        if !usages.is_empty() {
+            let import_edit =
+                self.create_import_edit(source_content, &analysis.item_name, &target_module);
+            if let Some(edit) = import_edit {
+                source_edits.push(edit);
+            }
+        }
+
+        // Prepare target file edits
+        let mut target_edits = vec![];
 
         // Add to target file (append at end)
         let target_position = self.find_insert_position(target_content);
-        let target_edits = vec![TextEdit {
+        target_edits.push(TextEdit {
             range: Range {
                 start: target_position,
                 end: target_position,
             },
             new_text: format!("\n{}\n", analysis.item_text),
-        }];
+        });
 
         changes.insert(self.source_uri.clone(), source_edits);
         changes.insert(self.target_uri.clone(), target_edits);
 
-        // Step 4: Create workspace edit
+        // Step 5: Create workspace edit
         Ok(WorkspaceEdit {
             changes: Some(changes),
             document_changes: None,
@@ -112,8 +137,8 @@ impl<'a> MoveItem<'a> {
         // Find the item definition at the cursor
         let (item_type, item_name, item_range, item_text) = self.find_item_at_cursor(source)?;
 
-        // Find dependencies (for now, empty - could be expanded)
-        let dependencies = vec![];
+        // Track dependencies
+        let dependencies = self.track_dependencies(source, &item_text);
 
         // Check if it's safe to move
         let (is_safe, unsafe_reason) = self.check_safety(&item_name, &dependencies);
@@ -335,10 +360,185 @@ impl<'a> MoveItem<'a> {
     }
 
     /// Check if it's safe to move the item
-    fn check_safety(&self, _item_name: &str, _dependencies: &[String]) -> (bool, Option<String>) {
-        // For now, allow all moves
-        // TODO: Check for dependencies, circular references, etc.
+    fn check_safety(&self, item_name: &str, dependencies: &[String]) -> (bool, Option<String>) {
+        // Check if item has too many dependencies
+        if dependencies.len() > 10 {
+            return (
+                false,
+                Some(format!(
+                    "{} has {} dependencies - consider refactoring first",
+                    item_name,
+                    dependencies.len()
+                )),
+            );
+        }
+
         (true, None)
+    }
+
+    /// Extract module name from URI
+    fn extract_module_name(&self, uri: &Url) -> String {
+        uri.path()
+            .split('/')
+            .last()
+            .unwrap_or("unknown")
+            .trim_end_matches(".wj")
+            .to_string()
+    }
+
+    /// Find usages of an item in source code
+    fn find_item_usages(&self, source: &str, item_name: &str) -> Vec<Range> {
+        let mut usages = vec![];
+        let pattern = format!(r"\b{}\b", regex::escape(item_name));
+        let re = regex::Regex::new(&pattern).unwrap();
+
+        for (line_num, line) in source.lines().enumerate() {
+            for cap in re.find_iter(line) {
+                let start_pos = Position {
+                    line: line_num as u32,
+                    character: cap.start() as u32,
+                };
+                let end_pos = Position {
+                    line: line_num as u32,
+                    character: cap.end() as u32,
+                };
+                usages.push(Range {
+                    start: start_pos,
+                    end: end_pos,
+                });
+            }
+        }
+
+        usages
+    }
+
+    /// Create an import edit for the moved item
+    fn create_import_edit(
+        &self,
+        source: &str,
+        item_name: &str,
+        target_module: &str,
+    ) -> Option<TextEdit> {
+        // Find if there's already a use statement section
+        let lines: Vec<&str> = source.lines().collect();
+        let mut insert_line = 0;
+
+        // Find the last use statement
+        for (i, line) in lines.iter().enumerate() {
+            if line.trim().starts_with("use ") {
+                insert_line = i + 1;
+            }
+        }
+
+        // If no use statements, insert after any initial comments
+        if insert_line == 0 {
+            for (i, line) in lines.iter().enumerate() {
+                if !line.trim().is_empty() && !line.trim().starts_with("//") {
+                    insert_line = i;
+                    break;
+                }
+            }
+        }
+
+        let import_statement = format!("use {}.{}\n", target_module, item_name);
+
+        Some(TextEdit {
+            range: Range {
+                start: Position {
+                    line: insert_line as u32,
+                    character: 0,
+                },
+                end: Position {
+                    line: insert_line as u32,
+                    character: 0,
+                },
+            },
+            new_text: import_statement,
+        })
+    }
+
+    /// Check if moving would create a circular dependency
+    fn would_create_cycle(
+        &self,
+        analysis: &MoveAnalysis,
+        source_content: &str,
+        target_module: &str,
+    ) -> bool {
+        // Check if target module imports from source module
+        let source_module = self.extract_module_name(&self.source_uri);
+
+        // Look for use statements in target that reference source module
+        let pattern = format!(r"use\s+{}\.(\w+)", regex::escape(&source_module));
+        if let Ok(re) = regex::Regex::new(&pattern) {
+            if re.is_match(source_content) {
+                // Target imports from source, check if moved item is in those imports
+                for cap in re.captures_iter(source_content) {
+                    if let Some(imported_item) = cap.get(1) {
+                        // Check if the moved item depends on this imported item
+                        if analysis
+                            .dependencies
+                            .contains(&imported_item.as_str().to_string())
+                        {
+                            return true;
+                        }
+                    }
+                }
+            }
+        }
+
+        false
+    }
+
+    /// Track dependencies of an item
+    fn track_dependencies(&self, source: &str, item_text: &str) -> Vec<String> {
+        let mut dependencies = vec![];
+
+        // Find all identifiers in the item that might be dependencies
+        // Pattern: word boundaries, excluding keywords
+        let keywords = vec![
+            "fn", "struct", "enum", "let", "mut", "if", "else", "for", "while", "return",
+        ];
+
+        let re = regex::Regex::new(r"\b[a-zA-Z_][a-zA-Z0-9_]*\b").unwrap();
+
+        for cap in re.find_iter(item_text) {
+            let word = cap.as_str();
+
+            // Skip keywords
+            if keywords.contains(&word) {
+                continue;
+            }
+
+            // Check if this identifier is defined elsewhere in source
+            if self.is_external_dependency(source, item_text, word) {
+                if !dependencies.contains(&word.to_string()) {
+                    dependencies.push(word.to_string());
+                }
+            }
+        }
+
+        dependencies
+    }
+
+    /// Check if an identifier is an external dependency
+    fn is_external_dependency(&self, source: &str, item_text: &str, identifier: &str) -> bool {
+        // Check if identifier is defined in source but outside the item
+        let pattern = format!(
+            r"\b(fn|struct|enum|const|static)\s+{}\b",
+            regex::escape(identifier)
+        );
+
+        if let Ok(re) = regex::Regex::new(&pattern) {
+            for cap in re.find_iter(source) {
+                let match_text = cap.as_str();
+                // If found in source but not in item text, it's an external dependency
+                if !item_text.contains(match_text) {
+                    return true;
+                }
+            }
+        }
+
+        false
     }
 }
 
