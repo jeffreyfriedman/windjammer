@@ -685,7 +685,9 @@ One of Windjammer's **strongest advantages** is its world-class IDE support and 
 | **Rename Symbol** | ✅ Yes | ✅ Yes | ✅ Yes |
 | **Real-time Diagnostics** | ✅ Fast | ✅ Fast | ✅ **Lightning-fast** (hash-based caching) |
 | **Inlay Hints** | ✅ Types | ⚠️ Limited | ✅ **Ownership modes!** (unique) |
-| **Code Actions** | ✅ Many | ✅ Some | ✅ Extract function, inline variable |
+| **Refactoring** | ✅ Many | ⚠️ Basic | ✅ **5 systems** (extract, inline, introduce, change sig, move) 🆕 |
+| **Preview Mode** | ⚠️ Limited | ❌ No | ✅ **Full preview** before applying 🆕 |
+| **Code Actions** | ✅ Many | ✅ Some | ✅ Quick fixes + refactorings |
 | **Incremental Compilation** | ✅ Yes | ✅ Yes | ✅ **Hash-based** (1-5ms cache hits) |
 
 **Windjammer's Unique Advantage: Ownership Hints**
@@ -1427,7 +1429,7 @@ A: Easier than Rust, harder than Go. But Rust devs can learn it in days.
 
 ---
 
-*Last Updated: October 13, 2025*  
-*Windjammer Version: 0.26.0*  
-*Status: Production-Ready - 98.7% Rust performance + World-Class LSP & Linting*
+*Last Updated: October 14, 2025*  
+*Windjammer Version: 0.27.0*  
+*Status: Production-Ready - 98.7% Rust performance + World-Class LSP, Linting & Refactoring*
 
