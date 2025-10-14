@@ -702,3 +702,152 @@ fn main() {
     // Should have 4 edits: 1 signature + 3 call sites
     assert_eq!(edits.len(), 4, "Should update all call sites");
 }
+
+// ============================================================================
+// Move Item Tests
+// ============================================================================
+
+#[test]
+fn test_move_function() {
+    let mut db = WindjammerDatabase::new();
+    let engine = RefactoringEngine::new(&db);
+
+    let source_content = r#"fn helper(x: int) -> int {
+    x * 2
+}
+
+fn main() {
+    let result = helper(5)
+}
+"#;
+
+    let target_content = r#"// utilities module
+"#;
+
+    // Position cursor on function name
+    let position = Position {
+        line: 0,
+        character: 3,
+    };
+
+    let source_uri = Url::parse("file:///main.wj").unwrap();
+    let target_uri = Url::parse("file:///utils.wj").unwrap();
+
+    let result = engine.execute_move_item(
+        &source_uri,
+        &target_uri,
+        position,
+        source_content,
+        target_content,
+    );
+
+    assert!(result.is_ok(), "Should successfully move function");
+
+    let workspace_edit = result.unwrap();
+    let changes_map = workspace_edit.changes.as_ref().unwrap();
+
+    // Should have edits for both source and target files
+    assert_eq!(changes_map.len(), 2, "Should edit both files");
+
+    // Check source file - function should be removed
+    let source_edits = &changes_map[&source_uri];
+    assert_eq!(source_edits.len(), 1, "Should have 1 edit in source");
+    assert_eq!(
+        source_edits[0].new_text, "",
+        "Should delete function from source"
+    );
+
+    // Check target file - function should be added
+    let target_edits = &changes_map[&target_uri];
+    assert_eq!(target_edits.len(), 1, "Should have 1 edit in target");
+    assert!(
+        target_edits[0].new_text.contains("fn helper"),
+        "Should add function to target"
+    );
+}
+
+#[test]
+fn test_move_struct() {
+    let mut db = WindjammerDatabase::new();
+    let engine = RefactoringEngine::new(&db);
+
+    let source_content = r#"struct User {
+    name: string,
+    age: int,
+}
+
+fn main() {
+    let user = User { name: "Alice", age: 30 }
+}
+"#;
+
+    let target_content = r#"// models module
+"#;
+
+    // Position cursor on struct name
+    let position = Position {
+        line: 0,
+        character: 7,
+    };
+
+    let source_uri = Url::parse("file:///main.wj").unwrap();
+    let target_uri = Url::parse("file:///models.wj").unwrap();
+
+    let result = engine.execute_move_item(
+        &source_uri,
+        &target_uri,
+        position,
+        source_content,
+        target_content,
+    );
+
+    assert!(result.is_ok(), "Should successfully move struct");
+
+    let workspace_edit = result.unwrap();
+    let changes_map = workspace_edit.changes.as_ref().unwrap();
+
+    // Should edit both files
+    assert_eq!(changes_map.len(), 2, "Should edit both files");
+
+    // Check target file contains struct
+    let target_edits = &changes_map[&target_uri];
+    assert!(
+        target_edits[0].new_text.contains("struct User"),
+        "Should add struct to target"
+    );
+}
+
+#[test]
+fn test_move_no_item_at_cursor() {
+    let mut db = WindjammerDatabase::new();
+    let engine = RefactoringEngine::new(&db);
+
+    let source_content = r#"// Just a comment
+let x = 42
+"#;
+
+    let target_content = r#""#;
+
+    // Position cursor on comment (not a movable item)
+    let position = Position {
+        line: 0,
+        character: 3,
+    };
+
+    let source_uri = Url::parse("file:///main.wj").unwrap();
+    let target_uri = Url::parse("file:///utils.wj").unwrap();
+
+    let result = engine.execute_move_item(
+        &source_uri,
+        &target_uri,
+        position,
+        source_content,
+        target_content,
+    );
+
+    assert!(result.is_err(), "Should fail when no item at cursor");
+    assert!(
+        result.unwrap_err().contains("No movable item"),
+        "Error should mention no item found"
+    );
+}
