@@ -8,11 +8,13 @@
 //! - Undo-able: Via LSP workspace edits
 
 pub mod ast_utils;
+pub mod batch;
 pub mod change_signature;
 pub mod extract_function;
 pub mod inline;
 pub mod introduce_variable;
 pub mod move_item;
+pub mod preview;
 pub mod scope_analyzer;
 
 use crate::database::WindjammerDatabase;
