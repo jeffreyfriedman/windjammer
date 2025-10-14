@@ -121,22 +121,25 @@ impl ScopeAnalyzer {
     /// Analyze a single statement
     fn analyze_statement(&mut self, stmt: &Statement) {
         match stmt {
-            Statement::Let { name, value, .. } => {
+            Statement::Let {
+                name,
+                mutable,
+                value,
+                ..
+            } => {
                 // Record definition
                 self.inner_scope.insert(name.clone());
 
                 // Analyze the value expression
-                if let Some(expr) = value {
-                    self.analyze_expression(expr);
-                }
+                self.analyze_expression(value);
 
                 // Record write
                 self.writes.insert(
                     name.clone(),
                     Variable {
                         name: name.clone(),
-                        type_name: None,   // TODO: Type inference
-                        is_mutable: false, // TODO: Check mutability
+                        type_name: None, // TODO: Type inference
+                        is_mutable: *mutable,
                         defined_at: None,
                     },
                 );
@@ -148,7 +151,7 @@ impl ScopeAnalyzer {
 
             Statement::Assignment { target, value } => {
                 // Record write to target
-                if let Expression::Variable(name) = target {
+                if let Expression::Identifier(name) = target {
                     self.writes.insert(
                         name.clone(),
                         Variable {
@@ -200,7 +203,7 @@ impl ScopeAnalyzer {
     /// Analyze an expression for variable usage
     fn analyze_expression(&mut self, expr: &Expression) {
         match expr {
-            Expression::Variable(name) => {
+            Expression::Identifier(name) => {
                 // Is this a read from outer scope?
                 if !self.inner_scope.contains(name) {
                     self.reads.insert(
@@ -215,12 +218,12 @@ impl ScopeAnalyzer {
                 }
             }
 
-            Expression::BinaryOp { left, right, .. } => {
+            Expression::Binary { left, right, .. } => {
                 self.analyze_expression(left);
                 self.analyze_expression(right);
             }
 
-            Expression::UnaryOp { operand, .. } => {
+            Expression::Unary { operand, .. } => {
                 self.analyze_expression(operand);
             }
 
@@ -229,7 +232,7 @@ impl ScopeAnalyzer {
                 arguments,
             } => {
                 self.analyze_expression(function);
-                for arg in arguments {
+                for (_, arg) in arguments {
                     self.analyze_expression(arg);
                 }
             }
@@ -238,7 +241,7 @@ impl ScopeAnalyzer {
                 object, arguments, ..
             } => {
                 self.analyze_expression(object);
-                for arg in arguments {
+                for (_, arg) in arguments {
                     self.analyze_expression(arg);
                 }
             }
@@ -247,18 +250,14 @@ impl ScopeAnalyzer {
                 self.analyze_expression(object);
             }
 
-            Expression::If {
+            Expression::Ternary {
                 condition,
-                then_expr,
-                else_expr,
+                true_expr,
+                false_expr,
             } => {
                 self.analyze_expression(condition);
-                self.analyze_expression(then_expr);
-                self.analyze_expression(else_expr);
-            }
-
-            Expression::Block(statements) => {
-                self.analyze_statements(statements);
+                self.analyze_expression(true_expr);
+                self.analyze_expression(false_expr);
             }
 
             _ => {
@@ -314,14 +313,14 @@ impl ScopeAnalyzer {
     /// Collect variable usages in an expression
     fn collect_usages_in_expression(expr: &Expression, usages: &mut HashSet<String>) {
         match expr {
-            Expression::Variable(name) => {
+            Expression::Identifier(name) => {
                 usages.insert(name.clone());
             }
-            Expression::BinaryOp { left, right, .. } => {
+            Expression::Binary { left, right, .. } => {
                 Self::collect_usages_in_expression(left, usages);
                 Self::collect_usages_in_expression(right, usages);
             }
-            Expression::UnaryOp { operand, .. } => {
+            Expression::Unary { operand, .. } => {
                 Self::collect_usages_in_expression(operand, usages);
             }
             Expression::Call {
@@ -329,7 +328,7 @@ impl ScopeAnalyzer {
                 arguments,
             } => {
                 Self::collect_usages_in_expression(function, usages);
-                for arg in arguments {
+                for (_, arg) in arguments {
                     Self::collect_usages_in_expression(arg, usages);
                 }
             }
@@ -389,21 +388,21 @@ mod tests {
         // Before: let x = 10;
         let before = vec![Statement::Let {
             name: "x".to_string(),
-            value: Some(Expression::IntLiteral(10)),
-            type_annotation: None,
-            is_mutable: false,
+            mutable: false,
+            type_: None,
+            value: Expression::Literal(windjammer::parser::Literal::Int(10)),
         }];
 
         // Selection: let y = x + 5;
         let selected = vec![Statement::Let {
             name: "y".to_string(),
-            value: Some(Expression::BinaryOp {
-                left: Box::new(Expression::Variable("x".to_string())),
+            mutable: false,
+            type_: None,
+            value: Expression::Binary {
+                left: Box::new(Expression::Identifier("x".to_string())),
                 op: BinaryOp::Add,
-                right: Box::new(Expression::IntLiteral(5)),
-            }),
-            type_annotation: None,
-            is_mutable: false,
+                right: Box::new(Expression::Literal(windjammer::parser::Literal::Int(5))),
+            },
         }];
 
         // After: (empty)
@@ -428,15 +427,15 @@ mod tests {
         // Selection: let result = 42;
         let selected = vec![Statement::Let {
             name: "result".to_string(),
-            value: Some(Expression::IntLiteral(42)),
-            type_annotation: None,
-            is_mutable: false,
+            mutable: false,
+            type_: None,
+            value: Expression::Literal(windjammer::parser::Literal::Int(42)),
         }];
 
         // After: println(result);
         let after = vec![Statement::Expression(Expression::Call {
-            function: Box::new(Expression::Variable("println".to_string())),
-            arguments: vec![Expression::Variable("result".to_string())],
+            function: Box::new(Expression::Identifier("println".to_string())),
+            arguments: vec![(None, Expression::Identifier("result".to_string()))],
         })];
 
         let analysis = analyzer.analyze(&before, &selected, &after);
@@ -453,27 +452,27 @@ mod tests {
         // Before: let x = 10;
         let before = vec![Statement::Let {
             name: "x".to_string(),
-            value: Some(Expression::IntLiteral(10)),
-            type_annotation: None,
-            is_mutable: false,
+            mutable: false,
+            type_: None,
+            value: Expression::Literal(windjammer::parser::Literal::Int(10)),
         }];
 
         // Selection: let y = x * 2;
         let selected = vec![Statement::Let {
             name: "y".to_string(),
-            value: Some(Expression::BinaryOp {
-                left: Box::new(Expression::Variable("x".to_string())),
-                op: BinaryOp::Multiply,
-                right: Box::new(Expression::IntLiteral(2)),
-            }),
-            type_annotation: None,
-            is_mutable: false,
+            mutable: false,
+            type_: None,
+            value: Expression::Binary {
+                left: Box::new(Expression::Identifier("x".to_string())),
+                op: BinaryOp::Mul,
+                right: Box::new(Expression::Literal(windjammer::parser::Literal::Int(2))),
+            },
         }];
 
         // After: use(y);
         let after = vec![Statement::Expression(Expression::Call {
-            function: Box::new(Expression::Variable("use".to_string())),
-            arguments: vec![Expression::Variable("y".to_string())],
+            function: Box::new(Expression::Identifier("use".to_string())),
+            arguments: vec![(None, Expression::Identifier("y".to_string()))],
         })];
 
         let analysis = analyzer.analyze(&before, &selected, &after);

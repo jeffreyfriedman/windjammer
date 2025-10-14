@@ -63,7 +63,7 @@ pub fn generate_function_signature(
         }
         sig.push_str(&param.name);
         sig.push_str(": ");
-        sig.push_str(&format_type(&param.param_type));
+        sig.push_str(&format_type(&param.type_));
     }
     sig.push(')');
 
@@ -79,8 +79,15 @@ pub fn generate_function_signature(
 /// Format a type for code generation
 pub fn format_type(ty: &Type) -> String {
     match ty {
-        Type::Simple(name) => name.clone(),
-        Type::Generic { base, args } => {
+        Type::Int => "int".to_string(),
+        Type::Int32 => "i32".to_string(),
+        Type::Uint => "uint".to_string(),
+        Type::Float => "float".to_string(),
+        Type::Bool => "bool".to_string(),
+        Type::String => "string".to_string(),
+        Type::Custom(name) => name.clone(),
+        Type::Generic(name) => name.clone(),
+        Type::Parameterized(base, args) => {
             let args_str = args
                 .iter()
                 .map(|arg| format_type(arg))
@@ -88,6 +95,13 @@ pub fn format_type(ty: &Type) -> String {
                 .join(", ");
             format!("{}<{}>", base, args_str)
         }
+        Type::Associated(base, assoc) => format!("{}::{}", base, assoc),
+        Type::TraitObject(name) => format!("dyn {}", name),
+        Type::Option(inner) => format!("Option<{}>", format_type(inner)),
+        Type::Result(ok, err) => format!("Result<{}, {}>", format_type(ok), format_type(err)),
+        Type::Vec(inner) => format!("Vec<{}>", format_type(inner)),
+        Type::Reference(inner) => format!("&{}", format_type(inner)),
+        Type::MutableReference(inner) => format!("&mut {}", format_type(inner)),
         Type::Tuple(types) => {
             let types_str = types
                 .iter()
@@ -95,35 +109,6 @@ pub fn format_type(ty: &Type) -> String {
                 .collect::<Vec<_>>()
                 .join(", ");
             format!("({})", types_str)
-        }
-        Type::Array { element_type, size } => {
-            if let Some(size) = size {
-                format!("[{}; {}]", format_type(element_type), size)
-            } else {
-                format!("[{}]", format_type(element_type))
-            }
-        }
-        Type::Reference { inner, is_mutable } => {
-            if *is_mutable {
-                format!("&mut {}", format_type(inner))
-            } else {
-                format!("&{}", format_type(inner))
-            }
-        }
-        Type::Function {
-            params,
-            return_type,
-        } => {
-            let params_str = params
-                .iter()
-                .map(|ty| format_type(ty))
-                .collect::<Vec<_>>()
-                .join(", ");
-            if let Some(ret) = return_type {
-                format!("fn({}) -> {}", params_str, format_type(ret))
-            } else {
-                format!("fn({})", params_str)
-            }
         }
     }
 }
@@ -227,17 +212,18 @@ mod tests {
 
     #[test]
     fn test_format_simple_type() {
-        assert_eq!(format_type(&Type::Simple("int".to_string())), "int");
-        assert_eq!(format_type(&Type::Simple("string".to_string())), "string");
+        assert_eq!(format_type(&Type::Int), "int");
+        assert_eq!(format_type(&Type::String), "string");
+        assert_eq!(format_type(&Type::Custom("MyType".to_string())), "MyType");
     }
 
     #[test]
     fn test_format_generic_type() {
-        let vec_int = Type::Generic {
-            base: "Vec".to_string(),
-            args: vec![Type::Simple("int".to_string())],
-        };
+        let vec_int = Type::Vec(Box::new(Type::Int));
         assert_eq!(format_type(&vec_int), "Vec<int>");
+
+        let option_str = Type::Option(Box::new(Type::String));
+        assert_eq!(format_type(&option_str), "Option<string>");
     }
 
     #[test]
@@ -245,15 +231,19 @@ mod tests {
         let params = vec![
             Parameter {
                 name: "x".to_string(),
-                param_type: Type::Simple("int".to_string()),
+                pattern: None,
+                type_: Type::Custom("int".to_string()),
+                ownership: windjammer::parser::OwnershipHint::Inferred,
             },
             Parameter {
                 name: "y".to_string(),
-                param_type: Type::Simple("int".to_string()),
+                pattern: None,
+                type_: Type::Custom("int".to_string()),
+                ownership: windjammer::parser::OwnershipHint::Inferred,
             },
         ];
 
-        let return_type = Some(Type::Simple("int".to_string()));
+        let return_type = Some(Type::Custom("int".to_string()));
 
         let sig = generate_function_signature("add", &params, &return_type);
         assert_eq!(sig, "fn add(x: int, y: int) -> int");
