@@ -8,6 +8,7 @@
 //! - Undo-able: Via LSP workspace edits
 
 pub mod ast_utils;
+pub mod change_signature;
 pub mod extract_function;
 pub mod inline;
 pub mod introduce_variable;
@@ -134,6 +135,18 @@ impl<'a> RefactoringEngine<'a> {
     ) -> Result<WorkspaceEdit, String> {
         let introducer = introduce_variable::IntroduceVariable::new(self.db, uri.clone(), range);
         introducer.execute(variable_name, source)
+    }
+
+    /// Execute "Change Signature" refactoring
+    pub fn execute_change_signature(
+        &self,
+        uri: &Url,
+        position: Position,
+        changes: &[change_signature::ParameterChange],
+        source: &str,
+    ) -> Result<WorkspaceEdit, String> {
+        let changer = change_signature::ChangeSignature::new(self.db, uri.clone(), position);
+        changer.execute(changes, source)
     }
 }
 
