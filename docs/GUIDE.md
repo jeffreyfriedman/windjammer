@@ -2006,10 +2006,17 @@ The Windjammer LSP (`windjammer-lsp`) provides rich IDE features for all major e
       // Hints show the compiler's inference
   }
   ```
+- **Advanced Refactoring** 🆕 **v0.27.0**:
+  - **Extract Function** - Transform selected code into reusable functions
+  - **Inline Variable** - Replace variables with their values
+  - **Introduce Variable** - Extract expressions into named variables
+  - **Change Signature** - Modify function parameters across all call sites
+  - **Move Item** - Move functions/structs between files with import auto-update
+  - **Preview Mode** - See changes before applying
+  - **Batch Refactorings** - Apply multiple refactorings atomically
 - **Code Actions**:
-  - Extract function from selected code
-  - Inline variable at usage sites
   - Quick fixes for common issues
+  - All refactorings available as code actions
 
 **Performance:**
 - **Hash-Based Incremental Compilation**: Only re-analyzes files when content changes
