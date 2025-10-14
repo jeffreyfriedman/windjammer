@@ -308,3 +308,169 @@ fn test_inline_variable_no_definition() {
         "Should fail when variable has no definition"
     );
 }
+
+// ============================================================================
+// Introduce Variable Tests
+// ============================================================================
+
+#[test]
+fn test_introduce_variable_simple() {
+    let mut db = WindjammerDatabase::new();
+    let engine = RefactoringEngine::new(&db);
+
+    let source = r#"fn main() {
+    let result = x + y * 2
+}
+"#;
+
+    // Select "y * 2"
+    let range = Range {
+        start: Position {
+            line: 1,
+            character: 21,
+        },
+        end: Position {
+            line: 1,
+            character: 26,
+        },
+    };
+
+    let uri = Url::parse("file:///test.wj").unwrap();
+
+    let result = engine.execute_introduce_variable(&uri, range, "factor", source);
+
+    assert!(result.is_ok(), "Should successfully introduce variable");
+
+    let workspace_edit = result.unwrap();
+    let changes = workspace_edit.changes.as_ref().unwrap();
+    let edits = &changes[&uri];
+
+    // Should have 2 edits: insert declaration + replace expression
+    assert_eq!(edits.len(), 2, "Should have 2 edits");
+
+    // One edit should insert the variable declaration
+    let has_declaration = edits.iter().any(|e| e.new_text.contains("let factor"));
+    assert!(has_declaration, "Should insert variable declaration");
+
+    // One edit should replace the expression with the variable name
+    let has_replacement = edits.iter().any(|e| e.new_text == "factor");
+    assert!(
+        has_replacement,
+        "Should replace expression with variable name"
+    );
+}
+
+#[test]
+fn test_introduce_variable_with_duplicates() {
+    let mut db = WindjammerDatabase::new();
+    let engine = RefactoringEngine::new(&db);
+
+    let source = r#"fn calculate() {
+    let a = x + y
+    let b = x + y
+    let c = x + y
+}
+"#;
+
+    // Select first "x + y"
+    let range = Range {
+        start: Position {
+            line: 1,
+            character: 12,
+        },
+        end: Position {
+            line: 1,
+            character: 17,
+        },
+    };
+
+    let uri = Url::parse("file:///test.wj").unwrap();
+
+    let result = engine.execute_introduce_variable(&uri, range, "sum", source);
+
+    assert!(
+        result.is_ok(),
+        "Should introduce variable and replace duplicates"
+    );
+
+    let workspace_edit = result.unwrap();
+    let changes = workspace_edit.changes.as_ref().unwrap();
+    let edits = &changes[&uri];
+
+    // Should have 4 edits: 1 declaration + 3 replacements
+    assert_eq!(edits.len(), 4, "Should have 4 edits");
+}
+
+#[test]
+fn test_introduce_variable_suggested_names() {
+    let mut db = WindjammerDatabase::new();
+    let engine = RefactoringEngine::new(&db);
+
+    let source = r#"fn test() {
+    let result = a + b
+}
+"#;
+
+    // Select "a + b"
+    let range = Range {
+        start: Position {
+            line: 1,
+            character: 17,
+        },
+        end: Position {
+            line: 1,
+            character: 22,
+        },
+    };
+
+    let uri = Url::parse("file:///test.wj").unwrap();
+
+    // Use empty name to get suggested name
+    let result = engine.execute_introduce_variable(&uri, range, "", source);
+
+    assert!(result.is_ok(), "Should suggest variable name");
+
+    let workspace_edit = result.unwrap();
+    let changes = workspace_edit.changes.as_ref().unwrap();
+    let edits = &changes[&uri];
+
+    // Should suggest "sum" for addition
+    let has_sum = edits.iter().any(|e| e.new_text.contains("let sum"));
+    assert!(has_sum, "Should suggest 'sum' for addition");
+}
+
+#[test]
+fn test_introduce_variable_reject_simple_variable() {
+    let mut db = WindjammerDatabase::new();
+    let engine = RefactoringEngine::new(&db);
+
+    let source = r#"fn main() {
+    let result = x
+}
+"#;
+
+    // Select just "x" (already a variable)
+    let range = Range {
+        start: Position {
+            line: 1,
+            character: 17,
+        },
+        end: Position {
+            line: 1,
+            character: 18,
+        },
+    };
+
+    let uri = Url::parse("file:///test.wj").unwrap();
+
+    let result = engine.execute_introduce_variable(&uri, range, "temp", source);
+
+    assert!(
+        result.is_err(),
+        "Should reject introducing variable for simple variable"
+    );
+    assert!(
+        result.unwrap_err().contains("already a variable"),
+        "Error should mention it's already a variable"
+    );
+}
