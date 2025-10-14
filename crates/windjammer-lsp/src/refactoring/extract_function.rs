@@ -24,12 +24,51 @@ impl<'a> ExtractFunction<'a> {
     }
 
     /// Execute the refactoring
-    pub fn execute(&self, function_name: &str) -> Result<WorkspaceEdit, String> {
-        // TODO: Implement the full extraction logic
-        // For now, return a placeholder
+    pub fn execute(&self, function_name: &str, source: &str) -> Result<WorkspaceEdit, String> {
+        // Step 1: Extract the selected text
+        let start_byte = ast_utils::position_to_byte_offset(source, self.range.start);
+        let end_byte = ast_utils::position_to_byte_offset(source, self.range.end);
+        let selected_text = &source[start_byte..end_byte];
 
+        if selected_text.trim().is_empty() {
+            return Err("Selection is empty".to_string());
+        }
+
+        // Step 2: Analyze scope (simplified for now - will integrate with parser later)
+        let analysis = self.analyze_scope()?;
+
+        // Step 3: Generate the new function
+        let new_function = self.generate_function(function_name, &analysis, selected_text);
+
+        // Step 4: Generate the function call
+        let function_call = self.generate_call(function_name, &analysis);
+
+        // Step 5: Create text edits
+        let mut edits = vec![];
+
+        // Edit 1: Replace selection with function call
+        edits.push(TextEdit {
+            range: self.range,
+            new_text: function_call,
+        });
+
+        // Edit 2: Insert function above current location
+        // Find the start of the line to insert before
+        let insert_position = Position {
+            line: self.range.start.line.saturating_sub(2),
+            character: 0,
+        };
+        edits.push(TextEdit {
+            range: Range {
+                start: insert_position,
+                end: insert_position,
+            },
+            new_text: format!("{}\n\n", new_function),
+        });
+
+        // Step 6: Create workspace edit
         let mut changes = std::collections::HashMap::new();
-        changes.insert(self.uri.clone(), vec![]);
+        changes.insert(self.uri.clone(), edits);
 
         Ok(WorkspaceEdit {
             changes: Some(changes),
