@@ -112,6 +112,17 @@ impl<'a> RefactoringEngine<'a> {
         let extractor = extract_function::ExtractFunction::new(self.db, uri.clone(), range);
         extractor.execute(function_name, source)
     }
+
+    /// Execute "Inline Variable" refactoring
+    pub fn execute_inline_variable(
+        &self,
+        uri: &Url,
+        position: Position,
+        source: &str,
+    ) -> Result<WorkspaceEdit, String> {
+        let inliner = inline::InlineRefactoring::new(self.db, uri.clone(), position);
+        inliner.execute(source)
+    }
 }
 
 /// Result of a refactoring operation
