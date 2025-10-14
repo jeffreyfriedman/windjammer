@@ -10,7 +10,7 @@ use crate::database::{ParallelConfig, WindjammerDatabase};
 use crate::diagnostics::DiagnosticsEngine;
 use crate::hover::HoverProvider;
 use crate::inlay_hints::InlayHintsProvider;
-use crate::refactoring::RefactoringProvider;
+use crate::refactoring::RefactoringEngine;
 use crate::semantic_tokens::SemanticTokensProvider;
 use windjammer_lsp::cache::CacheManager;
 
@@ -30,7 +30,7 @@ pub struct WindjammerLanguageServer {
     hover_providers: Arc<Mutex<DashMap<Url, HoverProvider>>>,
     completion_providers: Arc<Mutex<DashMap<Url, CompletionProvider>>>,
     inlay_hints_providers: Arc<Mutex<DashMap<Url, InlayHintsProvider>>>,
-    refactoring_providers: Arc<Mutex<DashMap<Url, RefactoringProvider>>>,
+    // Note: RefactoringEngine is created on-demand, not stored
     semantic_tokens_providers: Arc<Mutex<DashMap<Url, SemanticTokensProvider>>>,
     /// Map of file URIs to their content
     documents: DashMap<Url, String>,
@@ -72,7 +72,6 @@ impl WindjammerLanguageServer {
             hover_providers: Arc::new(Mutex::new(DashMap::new())),
             completion_providers: Arc::new(Mutex::new(DashMap::new())),
             inlay_hints_providers: Arc::new(Mutex::new(DashMap::new())),
-            refactoring_providers: Arc::new(Mutex::new(DashMap::new())),
             semantic_tokens_providers: Arc::new(Mutex::new(DashMap::new())),
             documents: DashMap::new(),
         }
@@ -160,13 +159,7 @@ impl WindjammerLanguageServer {
                 completion_providers.insert(uri.clone(), completion_provider);
             }
 
-            // Update refactoring provider
-            {
-                let mut refactoring_provider = RefactoringProvider::new();
-                refactoring_provider.update_program(program_owned.clone());
-                let refactoring_providers = self.refactoring_providers.lock().unwrap();
-                refactoring_providers.insert(uri.clone(), refactoring_provider);
-            }
+            // Note: RefactoringEngine is created on-demand in code_action handler
 
             // Update semantic tokens provider
             {
@@ -1113,23 +1106,19 @@ impl LanguageServer for WindjammerLanguageServer {
 
         tracing::debug!("Code action request: {} for range {:?}", uri, range);
 
-        // Get the refactoring provider for this file
-        let providers = self.refactoring_providers.lock().unwrap();
-        let result = if let Some(provider) = providers.get(&uri) {
-            if let Some(content) = self.documents.get(&uri) {
-                Some(provider.get_code_actions(&uri, range, &content))
-            } else {
-                None
-            }
-        } else {
-            None
-        };
-        drop(providers); // Explicitly drop the lock
+        // Create refactoring engine on-demand
+        let db_lock = self.salsa_db.lock().unwrap();
+        let engine = RefactoringEngine::new(&db_lock);
 
-        if let Some(actions) = result {
-            if !actions.is_empty() {
-                return Ok(Some(actions));
-            }
+        let context = CodeActionContext {
+            diagnostics: vec![],
+            only: None,
+            trigger_kind: None,
+        };
+        let actions = engine.code_actions(&uri, range, &context);
+
+        if !actions.is_empty() {
+            return Ok(Some(actions));
         }
 
         // TODO: Implement more code actions
