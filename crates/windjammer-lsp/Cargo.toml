@@ -26,7 +26,7 @@ tokio = { version = "1.35", features = ["full"] }
 
 # Incremental computation with Salsa
 salsa = "0.24"
-dashmap = "5.5"
+dashmap = "6.1"
 
 # Parallel processing
 rayon = "1.8"
