@@ -31,6 +31,9 @@ dashmap = "5.5"
 # Parallel processing
 rayon = "1.8"
 
+# Regex for inline refactoring
+regex = "1.10"
+
 # File watching
 notify = "6.1"
 notify-debouncer-full = "0.3"
