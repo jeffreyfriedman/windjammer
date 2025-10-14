@@ -35,7 +35,7 @@ rayon = "1.8"
 regex = "1.10"
 
 # File watching
-notify = "6.1"
+notify = "8.2"
 notify-debouncer-full = "0.3"
 
 # Serialization
