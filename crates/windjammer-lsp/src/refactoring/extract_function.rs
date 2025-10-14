@@ -60,11 +60,13 @@ impl<'a> ExtractFunction<'a> {
             .iter()
             .map(|var| Parameter {
                 name: var.name.clone(),
-                param_type: windjammer::parser::Type::Simple(
+                pattern: None,
+                type_: windjammer::parser::Type::Custom(
                     var.type_name
                         .clone()
                         .unwrap_or_else(|| "unknown".to_string()),
                 ),
+                ownership: windjammer::parser::OwnershipHint::Inferred,
             })
             .collect();
 
@@ -72,7 +74,7 @@ impl<'a> ExtractFunction<'a> {
         let return_type = if analysis.return_values.is_empty() {
             None
         } else if analysis.return_values.len() == 1 {
-            Some(windjammer::parser::Type::Simple(
+            Some(windjammer::parser::Type::Custom(
                 analysis.return_values[0]
                     .type_name
                     .clone()
@@ -84,7 +86,7 @@ impl<'a> ExtractFunction<'a> {
                 .return_values
                 .iter()
                 .map(|var| {
-                    windjammer::parser::Type::Simple(
+                    windjammer::parser::Type::Custom(
                         var.type_name
                             .clone()
                             .unwrap_or_else(|| "unknown".to_string()),
