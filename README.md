@@ -368,6 +368,7 @@ wj --help
 See the `examples/` directory for complete working examples:
 
 **Language Basics:**
+
 1. **[Basic Features](examples/01_basics/)** - Variables, functions, control flow
 2. **[Structs & Methods](examples/02_structs/)** - Data structures and impl blocks
 3. **[Enums & Matching](examples/03_enums/)** - Enumerations and pattern matching
@@ -375,11 +376,13 @@ See the `examples/` directory for complete working examples:
 5. **[Modern Features](examples/05_modern/)** - String interpolation, pipe operator, ternary
 
 **Standard Library:**
+
 6. **[Module System](examples/10_module_test/)** - Module imports and usage
 7. **[File Operations](examples/11_fs_test/)** - Using std.fs for file I/O
 8. **[Core Language](examples/12_simple_test/)** - Basic language test
 
 **Advanced Examples:**
+
 9. **[WASM Hello](examples/wasm_hello/)** - WebAssembly "Hello World"
 10. **[WASM Game](examples/wasm_game/)** - Conway's Game of Life in the browser
 
