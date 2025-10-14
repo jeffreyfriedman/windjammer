@@ -1,5 +1,6 @@
 //! Utilities for AST manipulation and text generation
 
+use tower_lsp::lsp_types::Position;
 use tower_lsp::lsp_types::*;
 use windjammer::parser::{Parameter, Type};
 
@@ -160,6 +161,58 @@ pub fn get_indent_level(line: &str) -> usize {
 /// Get the indentation string for a line
 pub fn get_indentation(line: &str) -> String {
     line.chars().take_while(|c| c.is_whitespace()).collect()
+}
+
+/// Convert LSP Position to byte offset in source text
+pub fn position_to_byte_offset(source: &str, position: Position) -> usize {
+    let mut byte_offset = 0;
+    let mut current_line = 0;
+    let mut current_char = 0;
+
+    for ch in source.chars() {
+        if current_line == position.line as usize && current_char == position.character as usize {
+            return byte_offset;
+        }
+
+        if ch == '\n' {
+            current_line += 1;
+            current_char = 0;
+        } else {
+            current_char += 1;
+        }
+
+        byte_offset += ch.len_utf8();
+    }
+
+    // If we reached the end, return the last position
+    byte_offset
+}
+
+/// Convert byte offset to LSP Position
+pub fn byte_offset_to_position(source: &str, byte_offset: usize) -> Position {
+    let mut line = 0;
+    let mut character = 0;
+    let mut current_offset = 0;
+
+    for ch in source.chars() {
+        if current_offset >= byte_offset {
+            break;
+        }
+
+        if ch == '\n' {
+            line += 1;
+            character = 0;
+        } else {
+            character += 1;
+        }
+
+        current_offset += ch.len_utf8();
+    }
+
+    Position {
+        line: line as u32,
+        character: character as u32,
+    }
 }
 
 /// Apply indentation to a multi-line string
