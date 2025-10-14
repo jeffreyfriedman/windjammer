@@ -123,6 +123,18 @@ impl<'a> RefactoringEngine<'a> {
         let inliner = inline::InlineRefactoring::new(self.db, uri.clone(), position);
         inliner.execute(source)
     }
+
+    /// Execute "Introduce Variable" refactoring
+    pub fn execute_introduce_variable(
+        &self,
+        uri: &Url,
+        range: Range,
+        variable_name: &str,
+        source: &str,
+    ) -> Result<WorkspaceEdit, String> {
+        let introducer = introduce_variable::IntroduceVariable::new(self.db, uri.clone(), range);
+        introducer.execute(variable_name, source)
+    }
 }
 
 /// Result of a refactoring operation
