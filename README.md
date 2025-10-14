@@ -164,9 +164,9 @@ fn process(text: Cow<'_, str>, uppercase: bool) -> Cow<'_, str> {
 }
 ```
 
-### 🧠 World-Class IDE Support 🆕 **v0.19.0**
+### 🧠 World-Class IDE Support & Linting 🆕 **v0.26.0**
 
-Complete Language Server Protocol (LSP) implementation with:
+Complete Language Server Protocol (LSP) implementation with advanced linting:
 
 **✨ Real-time Diagnostics** - Instant feedback as you type  
 **✨ Auto-completion** - Context-aware suggestions for keywords, stdlib, your code  
@@ -176,6 +176,8 @@ Complete Language Server Protocol (LSP) implementation with:
 **✨ Hover Information** - Types, signatures, docs  
 **✨ Inlay Hints** (Unique!) - See inferred ownership (`&`, `&mut`, `owned`) inline  
 **✨ Code Actions** - Extract function, inline variable, quick fixes  
+**✨ World-Class Linting** 🆕 - 16 rules across 6 categories (matches golangci-lint!)  
+**✨ Auto-Fix** 🆕 - 3 auto-fixable rules via `wj lint --fix`  
 
 **🐛 Full Debugging Support** - Debug Adapter Protocol (DAP):
 
@@ -293,13 +295,14 @@ wj new my-app --template web    # Project scaffolding
 wj run main.wj                  # Compile and execute
 wj test                         # Run tests
 wj fmt                          # Format code
-wj lint                         # Lint with clippy
+wj lint                         # World-class linting (16 rules!) 🆕
+wj lint --fix                   # Auto-fix issues 🆕
 wj add serde --features derive  # Manage dependencies
 ```
 
 **Pre-commit Hooks:**
 - Automatic formatting checks
-- Linting with clippy
+- World-class linting (16 rules across 6 categories) 🆕
 - Test execution
 - Version consistency validation
 
