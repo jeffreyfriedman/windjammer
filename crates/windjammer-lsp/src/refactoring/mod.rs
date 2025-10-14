@@ -100,6 +100,18 @@ impl<'a> RefactoringEngine<'a> {
         // For now, return None until implemented
         None
     }
+
+    /// Execute "Extract Function" refactoring
+    pub fn execute_extract_function(
+        &self,
+        uri: &Url,
+        range: Range,
+        function_name: &str,
+        source: &str,
+    ) -> Result<WorkspaceEdit, String> {
+        let extractor = extract_function::ExtractFunction::new(self.db, uri.clone(), range);
+        extractor.execute(function_name, source)
+    }
 }
 
 /// Result of a refactoring operation
