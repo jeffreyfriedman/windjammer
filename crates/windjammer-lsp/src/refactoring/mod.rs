@@ -12,6 +12,7 @@ pub mod change_signature;
 pub mod extract_function;
 pub mod inline;
 pub mod introduce_variable;
+pub mod move_item;
 pub mod scope_analyzer;
 
 use crate::database::WindjammerDatabase;
@@ -147,6 +148,20 @@ impl<'a> RefactoringEngine<'a> {
     ) -> Result<WorkspaceEdit, String> {
         let changer = change_signature::ChangeSignature::new(self.db, uri.clone(), position);
         changer.execute(changes, source)
+    }
+
+    /// Execute "Move Item" refactoring
+    pub fn execute_move_item(
+        &self,
+        source_uri: &Url,
+        target_uri: &Url,
+        position: Position,
+        source_content: &str,
+        target_content: &str,
+    ) -> Result<WorkspaceEdit, String> {
+        let mover =
+            move_item::MoveItem::new(self.db, source_uri.clone(), target_uri.clone(), position);
+        mover.execute(source_content, target_content)
     }
 }
 
