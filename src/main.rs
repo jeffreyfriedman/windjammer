@@ -810,6 +810,7 @@ fn check_with_cargo(output_dir: &Path) -> Result<()> {
 
 /// Lint a Windjammer project using the LSP diagnostics engine
 #[allow(dead_code)]
+#[allow(clippy::too_many_arguments)]
 fn lint_project(
     path: &Path,
     max_function_length: usize,
