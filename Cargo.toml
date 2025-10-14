@@ -5,7 +5,7 @@ members = [
 ]
 
 [workspace.package]
-version = "0.25.0"
+version = "0.26.0"
 edition = "2021"
 authors = ["Jeffrey Friedman <jeffrey@example.com>", "Windjammer Contributors"]
 license = "MIT OR Apache-2.0"
@@ -26,6 +26,8 @@ keywords = ["compiler", "transpiler", "rust", "go", "language"]
 categories = ["development-tools", "compilers"]
 readme = "README.md"
 rust-version.workspace = true
+# Disable automatic binary target from src/main.rs
+autobins = false
 exclude = [
     "test_output_*",
     "examples/*/build_output",
@@ -90,7 +92,8 @@ harness = false
 name = "cow_bench"
 harness = false
 
-[[bin]]
+# Note: defer_drop_latency is a benchmark, not a standalone binary
+[[bench]]
 name = "defer_drop_latency"
-path = "benches/defer_drop_latency.rs"
+harness = false
 

@@ -12,10 +12,9 @@ fn compile_fixture(fixture_name: &str) -> Result<String, String> {
     std::fs::create_dir_all(&output_dir).map_err(|e| e.to_string())?;
 
     // Run the compiler
-    let compiler_output = Command::new(env!("CARGO_BIN_EXE_windjammer"))
+    let compiler_output = Command::new(env!("CARGO_BIN_EXE_wj"))
         .args([
             "build",
-            "--path",
             fixture_path.to_str().unwrap(),
             "--output",
             output_dir.to_str().unwrap(),
