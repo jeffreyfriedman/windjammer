@@ -7,6 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.27.0] - In Progress
+
+**Advanced Refactoring Tools** 🔧
+
+### Summary
+v0.27.0 adds powerful code transformation capabilities to complete the IDE experience. Extract functions, inline variables, change signatures, and more - all with safe, type-aware transformations.
+
+### Features (In Progress)
+- Extract Function with automatic parameter detection
+- Inline Variable/Function with safety checks
+- Introduce Variable from expressions
+- Change Signature (reorder/add/remove parameters)
+- Move Item between files with auto-import updates
+- Full preview and undo support
+
 ## [0.26.0] - 2025-10-13
 
 **World-Class LSP & Linting - Complete Implementation** 🚀⚡🔧📊🎯
