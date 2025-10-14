@@ -171,3 +171,140 @@ fn test_extract_function_preserves_indentation() {
     // The inserted function should be properly formatted
     assert!(insert_edit.new_text.contains("fn inner_calc"));
 }
+
+// ============================================================================
+// Inline Variable Tests
+// ============================================================================
+
+#[test]
+fn test_inline_variable_simple() {
+    let mut db = WindjammerDatabase::new();
+    let engine = RefactoringEngine::new(&db);
+
+    let source = r#"fn main() {
+    let x = 42
+    let y = x + 10
+    println("${y}")
+}
+"#;
+
+    // Position cursor on 'x' in the definition (line 1, column 8)
+    let position = Position {
+        line: 1,
+        character: 8,
+    };
+
+    let uri = Url::parse("file:///test.wj").unwrap();
+
+    let result = engine.execute_inline_variable(&uri, position, source);
+
+    assert!(result.is_ok(), "Should successfully inline variable");
+
+    let workspace_edit = result.unwrap();
+    let changes = workspace_edit.changes.as_ref().unwrap();
+    let edits = &changes[&uri];
+
+    // Should have 2 edits: replace usage + remove definition
+    assert_eq!(edits.len(), 2, "Should have 2 edits");
+
+    // One edit should replace 'x' with '42' in the usage
+    let has_replacement = edits.iter().any(|e| e.new_text.contains("42"));
+    assert!(has_replacement, "Should replace variable with value");
+
+    // One edit should remove the definition
+    let has_deletion = edits.iter().any(|e| e.new_text.is_empty());
+    assert!(has_deletion, "Should delete variable definition");
+}
+
+#[test]
+fn test_inline_variable_multiple_usages() {
+    let mut db = WindjammerDatabase::new();
+    let engine = RefactoringEngine::new(&db);
+
+    let source = r#"fn calculate() {
+    let factor = 2
+    let a = factor * 10
+    let b = factor * 20
+    println("${a}, ${b}")
+}
+"#;
+
+    // Position cursor on 'factor'
+    let position = Position {
+        line: 1,
+        character: 10,
+    };
+
+    let uri = Url::parse("file:///test.wj").unwrap();
+
+    let result = engine.execute_inline_variable(&uri, position, source);
+
+    assert!(
+        result.is_ok(),
+        "Should inline variable with multiple usages"
+    );
+
+    let workspace_edit = result.unwrap();
+    let changes = workspace_edit.changes.as_ref().unwrap();
+    let edits = &changes[&uri];
+
+    // Should have 3 edits: 2 replacements + 1 deletion
+    assert_eq!(edits.len(), 3, "Should have 3 edits");
+}
+
+#[test]
+fn test_inline_variable_unsafe_side_effects() {
+    let mut db = WindjammerDatabase::new();
+    let engine = RefactoringEngine::new(&db);
+
+    let source = r#"fn process() {
+    let result = dangerous_call!()
+    use_result(result)
+}
+"#;
+
+    // Position cursor on 'result'
+    let position = Position {
+        line: 1,
+        character: 10,
+    };
+
+    let uri = Url::parse("file:///test.wj").unwrap();
+
+    let result = engine.execute_inline_variable(&uri, position, source);
+
+    assert!(
+        result.is_err(),
+        "Should reject inlining expressions with side effects"
+    );
+    assert!(
+        result.unwrap_err().contains("side effects"),
+        "Error should mention side effects"
+    );
+}
+
+#[test]
+fn test_inline_variable_no_definition() {
+    let mut db = WindjammerDatabase::new();
+    let engine = RefactoringEngine::new(&db);
+
+    let source = r#"fn main() {
+    println("${x}")
+}
+"#;
+
+    // Position cursor on 'x' which has no definition
+    let position = Position {
+        line: 1,
+        character: 15,
+    };
+
+    let uri = Url::parse("file:///test.wj").unwrap();
+
+    let result = engine.execute_inline_variable(&uri, position, source);
+
+    assert!(
+        result.is_err(),
+        "Should fail when variable has no definition"
+    );
+}
