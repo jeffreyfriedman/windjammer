@@ -43,7 +43,7 @@
 //! - **Single file change:** 5-20x faster (only recompile changed file + dependents)
 //! - **95%+ cache hit rate** on typical development workflow
 
-use crate::{analyzer, inference, lexer, parser};
+use crate::{analyzer, inference, lexer, optimizer, parser};
 use std::path::PathBuf;
 
 // ============================================================================
@@ -180,18 +180,41 @@ pub fn perform_analysis(program: &parser::Program) -> Result<AnalysisResults, St
     })
 }
 
-/// Optimize the typed program (all 15 phases)
+/// Optimize the typed program (all optimization phases)
 ///
 /// **Caching:** Only re-optimize if program changes
+/// 
+/// Runs: Phases 11 (String Interning), 12 (Dead Code Elimination), 13 (Loop Optimization)
+/// Future: Phases 14 (Escape Analysis), 15 (SIMD Vectorization)
 #[salsa::tracked]
 pub fn optimize_program<'db>(
     db: &'db dyn salsa::Database,
     typed: TypedProgram<'db>,
 ) -> OptimizedProgram<'db> {
-    // TODO: Implement optimization phases (v0.28.0)
-    // For now, pass through
-    let program = typed.program(db).clone();
-    OptimizedProgram::new(db, program)
+    use crate::optimizer::Optimizer;
+    
+    let program = typed.program(db);
+    
+    // Create optimizer with all phases enabled
+    let config = crate::optimizer::OptimizerConfig {
+        enable_string_interning: true,
+        enable_dead_code_elimination: true,
+        enable_loop_optimization: true,
+        // Future phases (not yet implemented)
+        enable_escape_analysis: false,
+        enable_simd_vectorization: false,
+    };
+    
+    let optimizer = Optimizer::new(config);
+    let result = optimizer.optimize(program.clone());
+    
+    // Log optimization statistics (can be disabled in release builds)
+    #[cfg(debug_assertions)]
+    {
+        eprintln!("Optimization stats: {:#?}", result.stats);
+    }
+    
+    OptimizedProgram::new(db, result.program)
 }
 
 /// Generate Rust code from optimized program
