@@ -6,6 +6,7 @@ pub mod config;
 pub mod error_mapper;
 pub mod inference;
 pub mod lexer;
+pub mod optimizer;
 pub mod parser;
 pub mod source_map;
 
