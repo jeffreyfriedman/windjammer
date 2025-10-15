@@ -77,7 +77,7 @@ fn process(data: string) {
 // Safe, fast, and you never wrote &!
 ```
 
-### ⚡ 393x Faster Returns - Automatically! 🆕 **v0.20.0**
+### ⚡ 393x Faster Returns - Automatically!
 
 **Windjammer automatically defers heavy deallocations to background threads**, making your functions return **393x faster**:
 
@@ -105,22 +105,25 @@ Perfect for:
 
 ### 🚀 98.7% of Rust Performance
 
-Your naive code automatically achieves near-expert Rust speed thanks to our 10-phase compiler optimization pipeline:
+Your naive code automatically achieves near-expert Rust speed thanks to our 13-phase compiler optimization pipeline:
 
-- **Phase 0: Defer Drop** 🆕 - Async deallocation for 393x faster returns
+- **Phase 0: Defer Drop** - Async deallocation for 393x faster returns
 - **Phase 1: Inline Hints** - Automatic `#[inline]` for hot paths
 - **Phase 2: Clone Elimination** - Removes unnecessary allocations
 - **Phase 3: Struct Mapping** - Idiomatic patterns for conversions
 - **Phase 4: String Capacity** - Pre-allocates string buffers  
 - **Phase 5: Compound Assignments** - Optimizes `x = x + 1` → `x += 1`
 - **Phase 6: Constant Folding** - Evaluates expressions at compile time
-- **Phase 7: Const/Static** 🆕 - Promotes `static` to `const` when possible
-- **Phase 8: SmallVec** 🆕 - Stack allocates small vectors (< 8 elements)
-- **Phase 9: Cow** 🆕 - Clone-on-write for conditionally modified data
+- **Phase 7: Const/Static** - Promotes `static` to `const` when possible
+- **Phase 8: SmallVec** - Stack allocates small vectors (< 8 elements)
+- **Phase 9: Cow** - Clone-on-write for conditionally modified data
+- **Phase 11: String Interning** - Deduplicates string literals at compile time
+- **Phase 12: Dead Code Elimination** - Removes unreachable code and unused functions
+- **Phase 13: Loop Optimization** - Hoists loop invariants, unrolls small loops
 
 **You write simple code. The compiler makes it blazingly fast—automatically.**
 
-#### Phase 7-9: Advanced Optimizations 🆕 **v0.21.0**
+#### Phase 7-9: Advanced Optimizations
 
 **Phase 7: Const/Static Promotion**
 ```windjammer
@@ -164,7 +167,7 @@ fn process(text: Cow<'_, str>, uppercase: bool) -> Cow<'_, str> {
 }
 ```
 
-### 🧠 World-Class IDE Support, Linting & Refactoring 🆕 **v0.27.0**
+### 🧠 World-Class IDE Support, Linting & Refactoring
 
 Complete Language Server Protocol (LSP) implementation with advanced linting and refactoring:
 
@@ -454,7 +457,7 @@ We built a production-quality REST API (TaskFlow) in **both Windjammer and Rust*
 - ✅ **60-70% faster onboarding** - 3 APIs vs 8+ crates to learn
 - ✅ **Better abstractions** - Cleaner, more maintainable code
 
-### Runtime Performance (v0.18.0)
+### Runtime Performance
 
 🎉 **98.7% of Rust Performance Achieved!**
 
@@ -462,15 +465,15 @@ We built a production-quality REST API (TaskFlow) in **both Windjammer and Rust*
 - ✅ **Expert Rust:** 7.78ms median (45K operations)  
 - ✅ **Performance Ratio:** **98.7%** - EXCEEDED 93-95% target!
 
-**Rust API Baseline (v0.16.0):**
+**Rust API Baseline:**
 - **116,579 req/s** throughput (`/health` endpoint)
 - **707 µs** median latency (p50)
 - **2.61 ms** p99 latency
 
-**v0.18.0 Achievements:**
+**Achievements:**
 - ✅ **98.7% of Rust performance** through automatic compiler optimizations  
 - ✅ **Target EXCEEDED** - Beat 93-95% goal by 3.7-5.7%!
-- ✅ **6-phase optimization pipeline** - Your naive code runs at expert speed
+- ✅ **13-phase optimization pipeline** - Your naive code runs at expert speed
 - ✅ **No manual optimization needed** - Compiler does it for you!
 
 **See:** [`examples/taskflow/`](examples/taskflow/) for complete details and benchmarks.

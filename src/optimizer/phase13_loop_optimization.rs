@@ -335,12 +335,12 @@ fn optimize_loops_in_expression(
 
             Expression::Binary {
                 left: Box::new(optimize_loops_in_expression(left, config, stats)),
-                op: op.clone(),
+                op: *op,
                 right: Box::new(optimize_loops_in_expression(right, config, stats)),
             }
         }
         Expression::Unary { op, operand } => Expression::Unary {
-            op: op.clone(),
+            op: *op,
             operand: Box::new(optimize_loops_in_expression(operand, config, stats)),
         },
         Expression::Block(statements) => {
@@ -589,9 +589,9 @@ fn statement_uses_variable(stmt: &Statement, var_name: &str) -> bool {
                 || then_block
                     .iter()
                     .any(|s| statement_uses_variable(s, var_name))
-                || else_block.as_ref().map_or(false, |stmts| {
-                    stmts.iter().any(|s| statement_uses_variable(s, var_name))
-                })
+                || else_block
+                    .as_ref()
+                    .is_some_and(|stmts| stmts.iter().any(|s| statement_uses_variable(s, var_name)))
         }
         Statement::While { condition, body } => {
             expression_uses_variable(condition, var_name)
@@ -614,7 +614,7 @@ fn statement_uses_variable(stmt: &Statement, var_name: &str) -> bool {
                 || arms.iter().any(|arm| {
                     arm.guard
                         .as_ref()
-                        .map_or(false, |g| expression_uses_variable(g, var_name))
+                        .is_some_and(|g| expression_uses_variable(g, var_name))
                         || expression_uses_variable(&arm.body, var_name)
                 })
         }
@@ -666,11 +666,11 @@ fn replace_variable_in_expression(
         Expression::Identifier(name) if name == var_name => replacement.clone(),
         Expression::Binary { left, op, right } => Expression::Binary {
             left: Box::new(replace_variable_in_expression(left, var_name, replacement)),
-            op: op.clone(),
+            op: *op,
             right: Box::new(replace_variable_in_expression(right, var_name, replacement)),
         },
         Expression::Unary { op, operand } => Expression::Unary {
-            op: op.clone(),
+            op: *op,
             operand: Box::new(replace_variable_in_expression(
                 operand,
                 var_name,
