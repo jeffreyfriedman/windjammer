@@ -22,7 +22,7 @@
 
 pub mod phase11_string_interning;
 pub mod phase12_dead_code_elimination;
-// pub mod phase13_loop_optimization;
+pub mod phase13_loop_optimization;
 // pub mod phase14_escape_analysis;
 // pub mod phase15_simd_vectorization;
 
@@ -128,12 +128,14 @@ impl Optimizer {
         }
 
         // Phase 13: Loop Optimization
-        // if self.config.enable_loop_optimization {
-        //     let result = phase13_loop_optimization::optimize_loops(&program);
-        //     program = result.program;
-        //     stats.loops_optimized = result.loops_optimized;
-        //     stats.invariants_hoisted = result.invariants_hoisted;
-        // }
+        if self.config.enable_loop_optimization {
+            let (optimized_program, loop_stats) =
+                phase13_loop_optimization::optimize_loops(&program);
+            program = optimized_program;
+            stats.loops_optimized = loop_stats.loops_optimized;
+            stats.invariants_hoisted = loop_stats.invariants_hoisted;
+            stats.loops_unrolled = loop_stats.loops_unrolled;
+        }
 
         // Phase 14: Escape Analysis
         // if self.config.enable_escape_analysis {
