@@ -5,7 +5,7 @@ members = [
 ]
 
 [workspace.package]
-version = "0.27.0"
+version = "0.28.0"
 edition = "2021"
 authors = ["Jeffrey Friedman <jeffrey@example.com>", "Windjammer Contributors"]
 license = "MIT OR Apache-2.0"
@@ -66,6 +66,8 @@ serde_json = "1.0"
 toml = "0.8"
 # Temporary directories for wj run
 tempfile = "3.8"
+# Incremental compilation with Salsa
+salsa = "0.24"
 
 [dev-dependencies]
 # Benchmarking
