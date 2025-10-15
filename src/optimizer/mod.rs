@@ -24,8 +24,7 @@ pub mod phase11_string_interning;
 pub mod phase12_dead_code_elimination;
 pub mod phase13_loop_optimization;
 pub mod phase14_escape_analysis;
-// pub mod phase14_escape_analysis;
-// pub mod phase15_simd_vectorization;
+pub mod phase15_simd_vectorization;
 
 use crate::parser::Program;
 
@@ -149,11 +148,12 @@ impl Optimizer {
         }
 
         // Phase 15: SIMD Vectorization
-        // if self.config.enable_simd_vectorization {
-        //     let result = phase15_simd_vectorization::vectorize_loops(&program);
-        //     program = result.program;
-        //     stats.loops_vectorized = result.loops_vectorized;
-        // }
+        if self.config.enable_simd_vectorization {
+            let (optimized_program, simd_stats) =
+                phase15_simd_vectorization::optimize_simd_vectorization(&program);
+            program = optimized_program;
+            stats.loops_vectorized += simd_stats.loops_vectorized;
+        }
 
         OptimizationResult { program, stats }
     }
