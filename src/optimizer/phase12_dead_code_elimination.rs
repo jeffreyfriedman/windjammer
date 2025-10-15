@@ -442,10 +442,7 @@ fn eliminate_dead_code_in_statement(stmt: &Statement, stats: &mut DeadCodeStats)
 
             for arm in arms {
                 let new_body = eliminate_dead_code_in_expression(&arm.body);
-                let new_guard = arm
-                    .guard
-                    .as_ref()
-                    .map(|g| eliminate_dead_code_in_expression(g));
+                let new_guard = arm.guard.as_ref().map(eliminate_dead_code_in_expression);
 
                 new_arms.push(MatchArm {
                     pattern: arm.pattern.clone(),
@@ -508,17 +505,17 @@ fn eliminate_dead_code_in_expression(expr: &Expression) -> Expression {
         },
         Expression::Binary { left, op, right } => Expression::Binary {
             left: Box::new(eliminate_dead_code_in_expression(left)),
-            op: op.clone(),
+            op: *op,
             right: Box::new(eliminate_dead_code_in_expression(right)),
         },
         Expression::Unary { op, operand } => Expression::Unary {
-            op: op.clone(),
+            op: *op,
             operand: Box::new(eliminate_dead_code_in_expression(operand)),
         },
         Expression::Tuple(elements) => Expression::Tuple(
             elements
                 .iter()
-                .map(|e| eliminate_dead_code_in_expression(e))
+                .map(eliminate_dead_code_in_expression)
                 .collect(),
         ),
         Expression::Index { object, index } => Expression::Index {
@@ -585,10 +582,7 @@ fn eliminate_dead_code_in_expression(expr: &Expression) -> Expression {
             delimiter,
         } => Expression::MacroInvocation {
             name: name.clone(),
-            args: args
-                .iter()
-                .map(|a| eliminate_dead_code_in_expression(a))
-                .collect(),
+            args: args.iter().map(eliminate_dead_code_in_expression).collect(),
             delimiter: delimiter.clone(),
         },
         _ => expr.clone(),
@@ -610,7 +604,7 @@ fn is_empty_statement(stmt: &Statement) -> bool {
             then_block,
             else_block,
             ..
-        } => then_block.is_empty() && else_block.as_ref().map_or(true, |e| e.is_empty()),
+        } => then_block.is_empty() && else_block.as_ref().is_none_or(|e| e.is_empty()),
         Statement::While { body, .. } | Statement::For { body, .. } => body.is_empty(),
         // Match arms always have a body expression, so they're never considered empty
         _ => false,
