@@ -7,6 +7,31 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.29.0] - 2025-10-15
+
+**Complete Salsa Integration - Incremental Type Checking** 🚀
+
+### Added - Incremental Type Checking & Analysis
+- **Analysis Integration** - Full ownership and trait inference in Salsa pipeline
+  * `perform_analysis()` - Runs ownership inference and trait bound analysis
+  * `AnalysisResults` - Stores analysis metadata outside Salsa tracking
+  * Integrated with code generation for full analysis results
+  * Maintains Salsa caching benefits while avoiding Hash requirements
+  * Tests: All existing tests passing with new analysis integration
+
+### Changed
+- **Code Generation** - Now uses actual analysis results
+  * `generate_rust()` performs full analysis before codegen
+  * Ownership modes and trait bounds properly inferred
+  * Generated Rust code uses inferred information
+
+### Technical Details
+- Redesigned analysis storage to work with Salsa's requirements
+- Separated Salsa-tracked types from complex analysis types
+- Analysis results cached externally for performance
+
+---
+
 ## [0.28.0] - 2025-10-15
 
 **Salsa Integration + Advanced Optimizations (Phases 11-13)** 🚀⚡🎯
