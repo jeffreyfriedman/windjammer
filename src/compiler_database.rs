@@ -200,9 +200,8 @@ pub fn optimize_program<'db>(
         enable_string_interning: true,
         enable_dead_code_elimination: true,
         enable_loop_optimization: true,
-        // Future phases (not yet implemented)
-        enable_escape_analysis: false,
-        enable_simd_vectorization: false,
+        enable_escape_analysis: true,
+        enable_simd_vectorization: true,
     };
 
     let optimizer = Optimizer::new(config);
