@@ -99,3 +99,7 @@ harness = false
 name = "defer_drop_latency"
 harness = false
 
+[[bench]]
+name = "incremental_compilation"
+harness = false
+
