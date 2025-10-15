@@ -1,6 +1,6 @@
 use std::fmt;
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum StringPart {
     Literal(String),
     Expression(String), // The expression text inside ${}
@@ -127,6 +127,26 @@ impl fmt::Display for Token {
             Token::IntLiteral(n) => write!(f, "Int({})", n),
             Token::StringLiteral(s) => write!(f, "String(\"{}\")", s),
             _ => write!(f, "{:?}", self),
+        }
+    }
+}
+
+// Manual Eq implementation to handle f64 (using bit representation)
+impl Eq for Token {}
+
+// Manual Hash implementation to handle f64 (using bit representation)
+impl std::hash::Hash for Token {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        std::mem::discriminant(self).hash(state);
+        match self {
+            Token::IntLiteral(n) => n.hash(state),
+            Token::FloatLiteral(f) => f.to_bits().hash(state), // Hash bits of f64
+            Token::StringLiteral(s) => s.hash(state),
+            Token::InterpolatedString(parts) => parts.hash(state),
+            Token::CharLiteral(c) => c.hash(state),
+            Token::BoolLiteral(b) => b.hash(state),
+            Token::Ident(s) => s.hash(state),
+            _ => {} // Keywords and operators have no data
         }
     }
 }
