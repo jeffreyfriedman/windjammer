@@ -183,7 +183,7 @@ pub fn perform_analysis(program: &parser::Program) -> Result<AnalysisResults, St
 /// Optimize the typed program (all optimization phases)
 ///
 /// **Caching:** Only re-optimize if program changes
-/// 
+///
 /// Runs: Phases 11 (String Interning), 12 (Dead Code Elimination), 13 (Loop Optimization)
 /// Future: Phases 14 (Escape Analysis), 15 (SIMD Vectorization)
 #[salsa::tracked]
@@ -192,9 +192,9 @@ pub fn optimize_program<'db>(
     typed: TypedProgram<'db>,
 ) -> OptimizedProgram<'db> {
     use crate::optimizer::Optimizer;
-    
+
     let program = typed.program(db);
-    
+
     // Create optimizer with all phases enabled
     let config = crate::optimizer::OptimizerConfig {
         enable_string_interning: true,
@@ -204,16 +204,16 @@ pub fn optimize_program<'db>(
         enable_escape_analysis: false,
         enable_simd_vectorization: false,
     };
-    
+
     let optimizer = Optimizer::new(config);
     let result = optimizer.optimize(program.clone());
-    
+
     // Log optimization statistics (can be disabled in release builds)
     #[cfg(debug_assertions)]
     {
         eprintln!("Optimization stats: {:#?}", result.stats);
     }
-    
+
     OptimizedProgram::new(db, result.program)
 }
 
