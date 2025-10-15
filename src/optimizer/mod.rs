@@ -21,7 +21,7 @@
 //! - **Phase 15: SIMD Vectorization (Auto-vectorize numeric code)** 🆕
 
 pub mod phase11_string_interning;
-// pub mod phase12_dead_code_elimination;
+pub mod phase12_dead_code_elimination;
 // pub mod phase13_loop_optimization;
 // pub mod phase14_escape_analysis;
 // pub mod phase15_simd_vectorization;
@@ -118,12 +118,14 @@ impl Optimizer {
         }
 
         // Phase 12: Dead Code Elimination
-        // if self.config.enable_dead_code_elimination {
-        //     let result = phase12_dead_code_elimination::eliminate_dead_code(&program);
-        //     program = result.program;
-        //     stats.dead_functions_removed = result.functions_removed;
-        //     stats.dead_structs_removed = result.structs_removed;
-        // }
+        if self.config.enable_dead_code_elimination {
+            let (optimized_program, dce_stats) =
+                phase12_dead_code_elimination::eliminate_dead_code(&program);
+            program = optimized_program;
+            stats.dead_functions_removed = dce_stats.unused_functions_removed;
+            stats.dead_code_bytes_saved =
+                dce_stats.unreachable_statements_removed + dce_stats.empty_blocks_removed;
+        }
 
         // Phase 13: Loop Optimization
         // if self.config.enable_loop_optimization {
