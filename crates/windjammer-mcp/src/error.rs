@@ -56,6 +56,14 @@ pub enum McpError {
     /// IO error
     #[error("IO error: {message}")]
     IoError { message: String },
+
+    /// Authentication error
+    #[error("Authentication error: {message}")]
+    AuthenticationError { message: String },
+
+    /// Authorization error
+    #[error("Authorization error: {message}")]
+    AuthorizationError { message: String },
 }
 
 /// Source code location
