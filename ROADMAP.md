@@ -6,7 +6,7 @@ This roadmap outlines our vision for making Windjammer the **ultimate systems pr
 
 ---
 
-## ✅ Completed (v0.1.0 - v0.29.0)
+## ✅ Completed (v0.1.0 - v0.31.1)
 
 ### Core Language Features
 - ✅ Complete lexer, parser, and code generator
@@ -36,71 +36,51 @@ This roadmap outlines our vision for making Windjammer the **ultimate systems pr
 - ✅ Parser error recovery
 - ✅ Cross-platform pre-commit hooks
 
----
+### Risk-Free Adoption (v0.30.0)
+- ✅ **"Eject to Rust" Feature** - One-way migration path to pure Rust
+- ✅ `windjammer eject` CLI command
+- ✅ Production-quality Rust code generation
+- ✅ `Cargo.toml` generation with dependencies
+- ✅ Formatted output with `rustfmt`, validated with `clippy`
+- ✅ Zero vendor lock-in
 
-## 🚀 v0.30.0 - "Eject to Rust" (In Progress)
+### Developer Experience & AI Integration (v0.31.0-v0.31.1)
 
-**Theme: Risk-Free Adoption**
+**Language Server Protocol (LSP):**
+- ✅ Real-time type checking and error highlighting
+- ✅ Auto-completion for functions, types, and variables
+- ✅ Go-to-definition and find-references
+- ✅ Hover documentation
+- ✅ Inline code hints
+- ✅ Refactoring support (rename, extract function, inline variable, move item, change signature)
+- ✅ Integration with VS Code, IntelliJ, Neovim, Emacs
+- ✅ Semantic syntax highlighting
 
-### Primary Goal: Remove Adoption Barriers
-
-**"Eject to Rust" Feature** - One-way migration path from Windjammer to pure Rust
-- `windjammer eject` CLI command
-- Convert entire project to production-quality Rust
-- Generate `Cargo.toml` with dependencies
-- Preserve optimizations as explicit code
-- Add helpful comments and documentation
-- Format with `rustfmt`, validate with `clippy`
-- **Marketing**: "Try Windjammer risk-free - eject anytime!"
+**MCP Server (Model Context Protocol):**
+- ✅ AI agent integration for Windjammer development (v0.31.0)
+- ✅ 9 MCP tools: parse, analyze, generate, explain errors, search, get definition
+- ✅ **Advanced refactoring tools**: extract_function, inline_variable, rename_symbol (v0.31.1)
+- ✅ **Streamable HTTP transport** with session management (MCP 2025-06-18 spec) (v0.31.1)
+- ✅ Natural language to Windjammer code translation
+- ✅ Automated refactoring suggestions
+- ✅ Intelligent error diagnosis and fixes
+- ✅ Integration with Claude, ChatGPT, and other AI assistants
+- ✅ Semantic code search and navigation
+- ✅ Performance benchmarks for all MCP tools (v0.31.1)
+- ✅ Shared Salsa database with LSP for consistency
 
 **Why This Matters:**
-- Eliminates vendor lock-in concerns
-- Enables gradual migration strategies
-- Provides learning path: Windjammer → Rust
-- Unique differentiation from other compilers
-- Enterprise-friendly (safety net for adoption)
-
-**Target Date:** November 2025
+- ✅ Modern IDEs are table stakes for professional developers
+- ✅ Instant feedback loop improves productivity 10x
+- ✅ Reduces cognitive load during development
+- ✅ **MCP enables AI-first development workflow**
+- ✅ AI agents can write, understand, and refactor Windjammer code
+- ✅ Lowers barrier to entry for newcomers (AI as pair programmer)
+- ✅ Future-proof for the AI-assisted development era
 
 ---
 
 ## 📅 Future Releases
-
-### v0.31.0 - Language Server Protocol (LSP) & MCP Server 🔧🤖
-
-**Theme: Professional Developer Experience + AI-Powered Development**
-
-**LSP Features:**
-- Real-time type checking and error highlighting
-- Auto-completion for functions, types, and variables
-- Go-to-definition and find-references
-- Hover documentation
-- Inline code hints
-- Refactoring support (rename, extract function)
-- Integration with VS Code, IntelliJ, Neovim, Emacs
-- Semantic syntax highlighting
-
-**MCP Server Features (Model Context Protocol):**
-- AI agent integration for Windjammer development
-- Context-aware code generation and completion
-- Natural language to Windjammer code translation
-- Automated refactoring suggestions
-- Intelligent error diagnosis and fixes
-- Integration with Claude, ChatGPT, and other AI assistants
-- Semantic code search and navigation
-- Documentation generation from code
-
-**Why This Matters:**
-- Modern IDEs are table stakes for professional developers
-- Instant feedback loop improves productivity 10x
-- Reduces cognitive load during development
-- Attracts developers from TypeScript/JavaScript ecosystem
-- **MCP enables AI-first development workflow**
-- AI agents can write, understand, and refactor Windjammer code
-- Lowers barrier to entry for newcomers (AI as pair programmer)
-- Future-proof for the AI-assisted development era
-
-**Target Date:** Q1 2026
 
 ---
 
