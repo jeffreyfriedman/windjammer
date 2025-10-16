@@ -103,3 +103,7 @@ harness = false
 name = "incremental_compilation"
 harness = false
 
+[[bench]]
+name = "regression_benchmarks"
+harness = false
+
