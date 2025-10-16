@@ -10,10 +10,10 @@
 //! these tests focus on verifying that the generated code compiles
 //! with strict safety checks and produces correct behavior.
 
+use windjammer::analyzer::{Analyzer, SignatureRegistry};
+use windjammer::codegen::CodeGenerator;
 use windjammer::lexer::Lexer;
 use windjammer::parser::Parser;
-use windjammer::codegen::CodeGenerator;
-use windjammer::analyzer::{Analyzer, SignatureRegistry};
 use windjammer::CompilationTarget;
 
 /// Test that generated code with ownership transfers compiles safely
@@ -134,13 +134,13 @@ fn main() {
     let mut lexer = Lexer::new(source);
     let tokens = lexer.tokenize();
     let mut parser = Parser::new(tokens);
-    
+
     // Test robustness even if parsing fails
     if let Ok(program) = parser.parse() {
         let signatures = SignatureRegistry::new();
         let mut generator = CodeGenerator::new_for_module(signatures, CompilationTarget::Wasm);
         let _rust_code = generator.generate_program(&program, &[]);
-        
+
         // If we got here without panicking, memory safety is preserved
     }
 }
@@ -160,13 +160,13 @@ fn main() {
     let mut lexer = Lexer::new(source);
     let tokens = lexer.tokenize();
     let mut parser = Parser::new(tokens);
-    
+
     // Test robustness - closures are complex
     if let Ok(program) = parser.parse() {
         let signatures = SignatureRegistry::new();
         let mut generator = CodeGenerator::new_for_module(signatures, CompilationTarget::Wasm);
         let _rust_code = generator.generate_program(&program, &[]);
-        
+
         // If we got here without panicking, closure safety is preserved
     }
 }
@@ -185,7 +185,7 @@ fn with_defer() {
     let mut lexer = Lexer::new(source);
     let tokens = lexer.tokenize();
     let mut parser = Parser::new(tokens);
-    
+
     // Even if parse fails, the test passes - we're checking robustness
     if let Ok(program) = parser.parse() {
         let signatures = SignatureRegistry::new();
@@ -210,12 +210,12 @@ fn stress_test() {
     let mut lexer = Lexer::new(source);
     let tokens = lexer.tokenize();
     let mut parser = Parser::new(tokens);
-    
+
     if let Ok(program) = parser.parse() {
         let signatures = SignatureRegistry::new();
         let mut generator = CodeGenerator::new_for_module(signatures, CompilationTarget::Wasm);
         let _rust_code = generator.generate_program(&program, &[]);
-        
+
         // If we got here without panicking, memory safety is preserved
     }
 }
@@ -236,7 +236,7 @@ fn factorial(n: int) -> int {
     let mut lexer = Lexer::new(source);
     let tokens = lexer.tokenize();
     let mut parser = Parser::new(tokens);
-    
+
     if let Ok(program) = parser.parse() {
         let signatures = SignatureRegistry::new();
         let mut generator = CodeGenerator::new_for_module(signatures, CompilationTarget::Wasm);
@@ -245,4 +245,3 @@ fn factorial(n: int) -> int {
         // If we got here without panicking, recursive function safety is preserved
     }
 }
-
