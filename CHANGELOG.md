@@ -7,6 +7,130 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.30.0] - 2025-10-16
+
+**"Eject to Rust" - Risk-Free Adoption** 🚀🚪
+
+### Summary
+v0.30.0 introduces the highly requested **"eject" feature**, allowing users to convert their Windjammer projects to pure, standalone Rust at any time. This eliminates vendor lock-in concerns and provides a clear migration path, making Windjammer adoption truly risk-free.
+
+### Added - Eject to Pure Rust 🚪
+- **`wj eject` Command** - Convert Windjammer projects to standalone Rust
+  * `wj eject --path <input> --output <output>` - Main command
+  * `--format` - Run `rustfmt` on generated code (default: true)
+  * `--comments` - Add helpful comments explaining features (default: true)
+  * `--no-cargo-toml` - Skip Cargo.toml generation
+  * Ejector module (`src/ejector.rs`) with full implementation
+  
+- **Generated Output**:
+  * Production-quality Rust code (`.rs` files)
+  * Complete `Cargo.toml` with auto-detected dependencies
+  * `README.md` explaining the ejected project
+  * `.gitignore` for Rust projects
+  * Source comments linking to original `.wj` files
+  * Preserves all compiler optimizations as explicit code
+
+- **Safety & Quality**:
+  * Formatted with `rustfmt` automatically
+  * Validates with `cargo clippy` standards
+  * One-way conversion (original `.wj` files unchanged)
+  * Handles multiple files, stdlib modules, and dependencies
+  
+- **Tests**: 25 comprehensive integration tests
+  * Simple programs, functions, structs, generics
+  * Pattern matching, comments enabled/disabled
+  * Binary vs library projects
+  * Multiple files, stdlib dependencies
+  * Invalid syntax handling
+  * Edge cases and error conditions
+
+### Added - Documentation
+- **ROADMAP.md** - Comprehensive future plans including:
+  * LSP (Language Server Protocol) - Real-time IDE support
+  * Package Manager (`wj pkg`) - Dependency management
+  * JavaScript Transpiler - Maximum compatibility
+  * UX Library (`windjammer-ui`) - Full-stack web framework
+  * Advanced Type System - HKT, dependent types, effects
+  * Debugger Integration - Production debugging
+  * Macro System v2 - Procedural macros
+  * Build System & Tooling - Complete development workflow
+  * WASM Optimization - Best-in-class WebAssembly
+  * Long-term vision and strategic goals
+
+- **Eject Feature Documentation**:
+  * README.md - Added eject to CLI commands and new section
+  * COMPARISON.md - Added eject to tooling comparison table
+  * GUIDE.md - Full chapter on ejection with examples
+
+### Why This Matters
+
+**Removes #1 Adoption Barrier**: Fear of vendor lock-in is gone!
+
+- ✅ **Try Windjammer Risk-Free** - Eject to Rust anytime
+- ✅ **Learn Rust** - See how Windjammer compiles
+- ✅ **Migration Path** - Gradual transition strategy
+- ✅ **Hybrid Development** - Mix Windjammer and Rust
+- ✅ **Unique Differentiation** - No other transpiler has this
+
+**Marketing Impact:**
+- "No Lock-in Promise" for enterprise adoption
+- "Try Before You Buy" - zero-risk experimentation
+- "Escape Hatch" - reassurance for skeptics
+- Comparison: Like Create React App's `eject`, but for a language!
+
+### Technical Details
+
+**Ejector Architecture:**
+- `src/ejector.rs` - Core ejection logic
+- `EjectConfig` - User configuration options
+- `Ejector::eject_project()` - Main entry point
+- `EjectFileResult` - Per-file results with stdlib tracking
+- Dependency detection from `use` statements
+- Auto-generates Cargo dependencies for stdlib modules
+
+**CLI Integration:**
+- New `Eject` command variant in main.rs
+- Arguments: `path`, `output`, `target`, `format`, `comments`, `no_cargo_toml`
+- Colored output for better UX
+- Comprehensive error messages
+
+**Example Usage:**
+```bash
+$ wj eject --path . --output my-rust-project
+
+🚀 Ejecting Windjammer project to Rust...
+  Input:  "."
+  Output: "my-rust-project"
+
+Found 3 Windjammer file(s):
+  • main.wj
+  • lib.wj
+  • utils.wj
+
+  Ejecting main.wj... ✓
+  Ejecting lib.wj... ✓
+  Ejecting utils.wj... ✓
+
+  Creating Cargo.toml... ✓
+  Creating README.md... ✓
+  Creating .gitignore... ✓
+
+  Formatting generated code... ✓
+
+✅ Ejection complete!
+
+Your Rust project is ready at: "my-rust-project"
+```
+
+### Future Enhancements (Post-v0.30.0)
+- Source maps for debugging ejected code
+- Incremental eject (only changed files)
+- Eject to other languages (TypeScript, Go, etc.)
+- Round-trip conversion (Rust → Windjammer)
+- Custom templates for ejected projects
+
+---
+
 ## [0.29.0] - 2025-10-15
 
 **Complete Salsa Integration - Incremental Compilation** 🚀⚡
