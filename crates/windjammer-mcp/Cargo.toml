@@ -36,7 +36,7 @@ anyhow = "1.0"
 thiserror = "1.0"
 
 # Validation
-validator = { version = "0.16", features = ["derive"] }
+validator = { version = "0.20", features = ["derive"] }
 
 # Logging
 tracing = "0.1"
@@ -46,14 +46,14 @@ tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 clap = { version = "4.4", features = ["derive"] }
 
 # HTTP transport (optional, for future)
-axum = { version = "0.7", optional = true }
-tower = { version = "0.4", optional = true }
-tower-http = { version = "0.5", features = ["cors", "trace"], optional = true }
+axum = { version = "0.8", optional = true }
+tower = { version = "0.5", optional = true }
+tower-http = { version = "0.6", features = ["cors", "trace"], optional = true }
 
 [dev-dependencies]
 tokio-test = "0.4"
 tempfile = "3.8"
-criterion = { version = "0.5", features = ["html_reports"] }
+criterion = { version = "0.7", features = ["html_reports"] }
 
 [features]
 default = ["stdio"]
