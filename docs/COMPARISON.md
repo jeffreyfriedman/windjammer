@@ -736,12 +736,13 @@ Despite transpiling to Rust, Windjammer provides **first-class debugging** of `.
 | **Project Scaffolding** | `cargo new` | N/A (manual) | `wj new --template web` |
 | **Pre-commit Hooks** | ⚠️ Manual | ⚠️ Manual | ✅ **Built-in** |
 | **Eject to Native** | N/A | N/A | ✅ **`wj eject` (no lock-in!)** 🆕 |
+| **AI Assistant Integration** | ⚠️ Generic tools only | ⚠️ Generic tools only | ✅ **MCP server for Claude/ChatGPT** 🆕🤖 |
 | **Unified CLI** | ✅ `cargo` | ⚠️ Multiple (`go`, `gofmt`, etc.) | ✅ **`wj` (single command)** |
 
 **Verdict:**
 - **Rust**: Excellent tooling (`cargo` is best-in-class)
 - **Go**: Good, but fragmented (`go`, `gofmt`, `golangci-lint`, etc.)
-- **Windjammer**: **Best of both** - Unified CLI + automatic quality checks
+- **Windjammer**: **Best of both** - Unified CLI + automatic quality checks + **AI-powered development** with MCP server
 
 ### Error Messages
 
