@@ -22,6 +22,7 @@ Windjammer is a pragmatic systems programming language that transpiles to Rust, 
 ✅ **Modern syntax** - string interpolation, pipe operator, pattern matching  
 ✅ **100% Rust compatibility** - use any Rust crate  
 ✅ **World-class IDE support** - LSP, debugging, refactoring in VSCode/Vim/IntelliJ  
+✅ **AI-powered development** - MCP server for Claude, ChatGPT code assistance  
 ✅ **Production-ready** - comprehensive testing, fuzzing, security audit (A+ rating)  
 ✅ **No lock-in** - `wj eject` converts your project to pure Rust anytime
 
@@ -348,6 +349,42 @@ wj eject --path . --output my-rust-project
 - **Hybrid Projects** - Start in Windjammer, optimize in Rust
 
 **One-way conversion** - but that's OK! Your original `.wj` files remain unchanged.
+
+---
+
+### 🤖 AI-Powered Development with MCP
+
+**Work faster with AI assistants!** Windjammer includes a Model Context Protocol (MCP) server that enables Claude, ChatGPT, and other AI tools to deeply understand and generate Windjammer code.
+
+```bash
+# Start the MCP server
+windjammer-mcp stdio
+```
+
+**Configure with Claude Desktop** (`~/Library/Application Support/Claude/claude_desktop_config.json`):
+
+```json
+{
+  "mcpServers": {
+    "windjammer": {
+      "command": "/path/to/windjammer-mcp",
+      "args": ["stdio"]
+    }
+  }
+}
+```
+
+**What Claude can do:**
+- ✅ **Parse & Analyze** - Understand your Windjammer code structure
+- ✅ **Generate Code** - Create functions from natural language descriptions
+- ✅ **Explain Errors** - Plain English explanations with fix suggestions
+- ✅ **Refactor** - Extract functions, rename symbols, inline variables
+- ✅ **Search Workspace** - Find code patterns across your project
+- ✅ **Type Analysis** - Show inferred types and ownership modes
+
+**Shared Infrastructure** - The MCP server uses the same Salsa-powered incremental database as the LSP, ensuring consistency and blazing-fast responses.
+
+See [crates/windjammer-mcp/README.md](crates/windjammer-mcp/README.md) for full documentation.
 
 ---
 
