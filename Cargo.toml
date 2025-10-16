@@ -55,7 +55,7 @@ nom = "7.1"
 clap = { version = "4.5", features = ["derive"] }
 # Error handling
 anyhow = "1.0"
-thiserror = "1.0"
+thiserror = "2.0"
 # Code generation
 indoc = "2.0"
 # Pretty printing
