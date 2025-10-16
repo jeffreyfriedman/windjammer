@@ -8,6 +8,7 @@ pub mod inference;
 pub mod lexer;
 pub mod optimizer;
 pub mod parser;
+pub mod parser_recovery;
 pub mod source_map;
 
 use anyhow::Result;
