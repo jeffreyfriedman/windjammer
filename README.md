@@ -22,7 +22,8 @@ Windjammer is a pragmatic systems programming language that transpiles to Rust, 
 ✅ **Modern syntax** - string interpolation, pipe operator, pattern matching  
 ✅ **100% Rust compatibility** - use any Rust crate  
 ✅ **World-class IDE support** - LSP, debugging, refactoring in VSCode/Vim/IntelliJ  
-✅ **Production-ready** - comprehensive testing, fuzzing, security audit (A+ rating)
+✅ **Production-ready** - comprehensive testing, fuzzing, security audit (A+ rating)  
+✅ **No lock-in** - `wj eject` converts your project to pure Rust anytime
 
 **Perfect for:** Web APIs, CLI tools, microservices, data processing, learning systems programming
 
@@ -306,14 +307,15 @@ wj new my-app --template web    # Project scaffolding
 wj run main.wj                  # Compile and execute
 wj test                         # Run tests
 wj fmt                          # Format code
-wj lint                         # World-class linting (16 rules!) 🆕
-wj lint --fix                   # Auto-fix issues 🆕
+wj lint                         # World-class linting (16 rules!)
+wj lint --fix                   # Auto-fix issues
 wj add serde --features derive  # Manage dependencies
+wj eject --output rust-project  # Convert to pure Rust (no lock-in!) 🆕
 ```
 
 **Pre-commit Hooks:**
 - Automatic formatting checks
-- World-class linting (16 rules across 6 categories) 🆕
+- World-class linting (16 rules across 6 categories)
 - Test execution
 - Version consistency validation
 
@@ -322,6 +324,30 @@ wj add serde --features derive  # Manage dependencies
 - Template-based scaffolding (CLI, web, lib, WASM)
 - Dependency management
 - Build automation
+
+### 🚪 No Lock-In: Eject to Pure Rust
+
+**Risk-free adoption!** Convert your Windjammer project to standalone Rust anytime:
+
+```bash
+wj eject --path . --output my-rust-project
+```
+
+**What you get:**
+- ✅ Production-quality Rust code
+- ✅ Preserves all optimizations as explicit code
+- ✅ Complete `Cargo.toml` with dependencies
+- ✅ Formatted with `rustfmt`
+- ✅ Helpful comments explaining Windjammer features
+- ✅ Ready to compile with `cargo build`
+
+**Perfect for:**
+- **Learning Rust** - See how Windjammer compiles to Rust
+- **Migration Path** - Gradual transition from Windjammer to Rust
+- **Safety Net** - Try Windjammer with zero commitment
+- **Hybrid Projects** - Start in Windjammer, optimize in Rust
+
+**One-way conversion** - but that's OK! Your original `.wj` files remain unchanged.
 
 ---
 
