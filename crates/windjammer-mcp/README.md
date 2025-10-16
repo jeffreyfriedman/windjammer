@@ -12,11 +12,13 @@ The Windjammer Model Context Protocol (MCP) server enables AI assistants (Claude
 
 **Key Features**:
 - 🤖 **AI-Native**: Built specifically for AI assistant integration
-- 🎯 **Rich Tools**: Parse, analyze, generate, and refactor Windjammer code
+- 🎯 **Rich Tools**: Parse, analyze, generate, and refactor Windjammer code  
+- 🔧 **Refactoring**: Extract functions, inline variables, rename symbols
 - 🔍 **Deep Understanding**: Leverages same Salsa database as LSP for consistency
 - ⚡ **Fast**: Incremental computation with sub-millisecond cached queries
 - 🛡️ **Secure**: Input validation, sandboxing, and resource limits
-- 📚 **Comprehensive**: 6+ tools covering code understanding, generation, and errors
+- 📚 **Comprehensive**: 9 tools covering code understanding, generation, refactoring, and errors
+- 🌐 **HTTP Transport**: Streamable HTTP support with session management (MCP 2025-06-18)
 
 ---
 
@@ -286,6 +288,97 @@ Search for code patterns across the workspace.
 
 ---
 
+### 7. `extract_function`
+Extract selected code into a new function (refactoring tool).
+
+**Input**:
+```json
+{
+  "code": "fn main() {\n    let x = 1;\n    let y = 2;\n    println!(\"{}\", x + y);\n}",
+  "range": {
+    "start": {"line": 1, "column": 4},
+    "end": {"line": 2, "column": 17}
+  },
+  "function_name": "calculate_sum",
+  "make_public": false
+}
+```
+
+**Output**:
+```json
+{
+  "success": true,
+  "refactored_code": "fn calculate_sum(x: int, y: int) -> int {\n    x + y\n}\n\nfn main() {\n    let result = calculate_sum(1, 2);\n    println!(\"{}\", result);\n}",
+  "function_signature": "fn calculate_sum(x: int, y: int) -> int",
+  "captured_variables": ["x", "y"]
+}
+```
+
+**Use Cases**:
+- Refactor complex functions into smaller, testable units
+- Extract reusable logic
+- Improve code organization
+
+---
+
+### 8. `inline_variable`
+Inline a variable by replacing uses with its value (refactoring tool).
+
+**Input**:
+```json
+{
+  "code": "fn main() {\n    let x = 42;\n    println!(\"{}\", x);\n}",
+  "position": {"line": 1, "column": 8}
+}
+```
+
+**Output**:
+```json
+{
+  "success": true,
+  "refactored_code": "fn main() {\n    println!(\"{}\", 42);\n}",
+  "occurrences_replaced": 1,
+  "variable_name": "x"
+}
+```
+
+**Use Cases**:
+- Simplify code by removing unnecessary variables
+- Reduce indirection
+- Prepare for further refactoring
+
+---
+
+### 9. `rename_symbol`
+Rename a symbol with workspace-wide updates (refactoring tool).
+
+**Input**:
+```json
+{
+  "code": "fn add(a: int, b: int) -> int { a + b }",
+  "position": {"line": 0, "column": 7},
+  "new_name": "sum"
+}
+```
+
+**Output**:
+```json
+{
+  "success": true,
+  "refactored_code": "fn sum(a: int, b: int) -> int { a + b }",
+  "occurrences_renamed": 3,
+  "old_name": "add",
+  "files_affected": ["src/main.wj", "src/lib.wj"]
+}
+```
+
+**Use Cases**:
+- Rename functions, variables, types safely
+- Improve naming consistency
+- Refactor APIs without breaking code
+
+---
+
 ## Architecture
 
 ### Shared Database with LSP
@@ -463,20 +556,21 @@ cargo bench
 
 ## Roadmap
 
-### v0.31.0 (Current)
+### v0.31.1 (Current)
 - [x] Core MCP server with stdio transport
-- [x] Basic tools: parse, analyze, generate, explain, search
+- [x] Tools: parse, analyze, generate, explain, search, get_definition
+- [x] Refactoring tools: extract_function, inline_variable, rename_symbol
+- [x] Streamable HTTP transport ([MCP 2025-06-18 spec](https://modelcontextprotocol.io/specification/2025-06-18/basic/transports))
+- [x] Session management with Mcp-Session-Id header
 - [x] Integration with LSP database
+- [x] Performance benchmarks
 - [x] Unit tests
 
 ### v0.32.0 (Future)
-- [ ] Streamable HTTP transport ([MCP 2025-06-18 spec](https://modelcontextprotocol.io/specification/2025-06-18/basic/transports))
-- [ ] Session management with Mcp-Session-Id header
-- [ ] Resumable streams with Last-Event-ID
 - [ ] OAuth 2.0 authentication
-- [ ] Advanced refactoring tools
-- [ ] Workspace-wide operations
-- [ ] Performance benchmarks
+- [ ] MCP client library for custom AI integrations
+- [ ] Workspace-wide refactoring
+- [ ] Advanced type analysis tools
 
 ### v0.33.0 (Future)
 - [ ] Custom tool plugins
