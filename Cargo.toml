@@ -2,10 +2,11 @@
 members = [
     ".",
     "crates/windjammer-lsp",
+    "crates/windjammer-mcp",
 ]
 
 [workspace.package]
-version = "0.30.0"
+version = "0.31.0"
 edition = "2021"
 authors = ["Jeffrey Friedman <jeffrey@example.com>", "Windjammer Contributors"]
 license = "MIT OR Apache-2.0"
