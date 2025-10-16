@@ -45,15 +45,32 @@ tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 # CLI
 clap = { version = "4.4", features = ["derive"] }
 
-# HTTP transport (optional, for future)
+# HTTP transport and OAuth
 axum = { version = "0.7", optional = true }
 tower = { version = "0.4", optional = true }
 tower-http = { version = "0.5", features = ["cors", "trace"], optional = true }
+uuid = { version = "1.6", features = ["v4", "serde"] }
+
+# OAuth 2.0 authentication
+jsonwebtoken = "9.2"
+base64 = "0.21"
+chrono = { version = "0.4", features = ["serde"] }
+sha2 = "0.10"
+rand = "0.8"
+
+# LSP support
+tower-lsp = "0.20"
+lsp-types = "0.94"
+url = "2.5"
 
 [dev-dependencies]
 tokio-test = "0.4"
 tempfile = "3.8"
-criterion = { version = "0.5", features = ["html_reports"] }
+criterion = { version = "0.5", features = ["html_reports", "async_tokio"] }
+
+[[bench]]
+name = "mcp_tools_benchmarks"
+harness = false
 
 [features]
 default = ["stdio"]
