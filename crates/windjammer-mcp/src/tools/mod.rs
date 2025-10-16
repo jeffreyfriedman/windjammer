@@ -7,6 +7,11 @@ pub mod get_definition;
 pub mod parse_code;
 pub mod search_workspace;
 
+// Refactoring tools
+pub mod refactor_extract_function;
+pub mod refactor_inline_variable;
+pub mod refactor_rename_symbol;
+
 use crate::error::{McpError, McpResult};
 use crate::protocol::{Tool, ToolCallResult, ToolContent};
 use serde_json::Value;
@@ -185,6 +190,112 @@ impl ToolRegistry {
                 "required": ["query"]
             }),
             Box::new(|db, args| Box::pin(search_workspace::handle(db, args))),
+        );
+
+        // Refactoring tools
+        self.register_tool(
+            "extract_function",
+            "Extract selected code into a new function",
+            json!({
+                "type": "object",
+                "properties": {
+                    "code": {
+                        "type": "string",
+                        "description": "Source code to refactor"
+                    },
+                    "range": {
+                        "type": "object",
+                        "properties": {
+                            "start": {
+                                "type": "object",
+                                "properties": {
+                                    "line": {"type": "integer"},
+                                    "column": {"type": "integer"}
+                                }
+                            },
+                            "end": {
+                                "type": "object",
+                                "properties": {
+                                    "line": {"type": "integer"},
+                                    "column": {"type": "integer"}
+                                }
+                            }
+                        },
+                        "description": "Selection range to extract"
+                    },
+                    "function_name": {
+                        "type": "string",
+                        "description": "Name for the new function"
+                    },
+                    "make_public": {
+                        "type": "boolean",
+                        "description": "Make function public",
+                        "default": false
+                    }
+                },
+                "required": ["code", "range", "function_name"]
+            }),
+            Box::new(|db, args| Box::pin(refactor_extract_function::handle(db, args))),
+        );
+
+        self.register_tool(
+            "inline_variable",
+            "Inline a variable by replacing all uses with its value",
+            json!({
+                "type": "object",
+                "properties": {
+                    "code": {
+                        "type": "string",
+                        "description": "Source code to refactor"
+                    },
+                    "position": {
+                        "type": "object",
+                        "properties": {
+                            "line": {"type": "integer"},
+                            "column": {"type": "integer"}
+                        },
+                        "description": "Position of variable to inline"
+                    },
+                    "variable_name": {
+                        "type": "string",
+                        "description": "Optional variable name"
+                    }
+                },
+                "required": ["code", "position"]
+            }),
+            Box::new(|db, args| Box::pin(refactor_inline_variable::handle(db, args))),
+        );
+
+        self.register_tool(
+            "rename_symbol",
+            "Rename a symbol with workspace-wide updates",
+            json!({
+                "type": "object",
+                "properties": {
+                    "code": {
+                        "type": "string",
+                        "description": "Source code to refactor"
+                    },
+                    "position": {
+                        "type": "object",
+                        "properties": {
+                            "line": {"type": "integer"},
+                            "column": {"type": "integer"}
+                        },
+                        "description": "Position of symbol to rename"
+                    },
+                    "new_name": {
+                        "type": "string",
+                        "description": "New name for the symbol"
+                    },
+                    "old_name": {
+                        "type": "string",
+                        "description": "Optional current name"
+                    }
+                },
+                "required": ["code", "position", "new_name"]
+            }),
+            Box::new(|db, args| Box::pin(refactor_rename_symbol::handle(db, args))),
         );
     }
 

@@ -53,19 +53,26 @@ The Windjammer Model Context Protocol (MCP) server enables AI assistants (Claude
 
 ### Transport Layers
 
-1. **stdio** (Primary - v0.31.0)
+1. **stdio** (Primary - v0.31.0) ✅
    - Process-based communication
-   - Used by most AI assistants
+   - Used by most AI assistants (Claude, etc.)
    - Simple, secure, no network exposure
    - Messages delimited by newlines
+   - Full JSON-RPC 2.0 support
 
-2. **Streamable HTTP** (Future - v0.32.0)
-   - Modern replacement for deprecated HTTP+SSE (2024-11-05)
-   - Remote server deployment with single endpoint
-   - POST for client→server, optional GET for server→client
-   - Session management with Mcp-Session-Id header
-   - Resumable streams with Last-Event-ID
-   - OAuth 2.0 authentication
+2. **Streamable HTTP** (v0.31.1) ✅
+   - Modern replacement for deprecated HTTP+SSE
+   - Follows MCP 2025-06-18 specification
+   - Single POST endpoint for all requests
+   - Session management with `Mcp-Session-Id` header
+   - Session TTL and automatic cleanup
+   - Concurrent session support
+   - Secure by default (no network exposure without opt-in)
+   
+3. **OAuth 2.0 Authentication** (Future - v0.32.0)
+   - Enterprise-grade authentication
+   - Token-based access control
+   - Integration with identity providers
 
 ### Message Format
 
@@ -261,8 +268,46 @@ Extract selected code into a new function.
 #### 7. `inline_variable`
 Inline a variable's value at all usage sites.
 
+**Input**:
+```json
+{
+  "code": "fn main() {\n    let x = 42;\n    println!(\"{}\", x);\n}",
+  "position": { "line": 1, "column": 8 }
+}
+```
+
+**Output**:
+```json
+{
+  "success": true,
+  "refactored_code": "fn main() {\n    println!(\"{}\", 42);\n}",
+  "occurrences_replaced": 1,
+  "variable_name": "x"
+}
+```
+
 #### 8. `rename_symbol`
-Rename a symbol across the entire workspace.
+Rename a symbol with workspace-wide updates.
+
+**Input**:
+```json
+{
+  "code": "fn add(a: int, b: int) -> int { a + b }",
+  "position": { "line": 0, "column": 7 },
+  "new_name": "sum"
+}
+```
+
+**Output**:
+```json
+{
+  "success": true,
+  "refactored_code": "fn sum(a: int, b: int) -> int { a + b }",
+  "occurrences_renamed": 3,
+  "old_name": "add",
+  "files_affected": ["src/main.wj", "src/lib.wj"]
+}
+```
 
 ---
 
