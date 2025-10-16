@@ -43,7 +43,7 @@
 //! - **Single file change:** 5-20x faster (only recompile changed file + dependents)
 //! - **95%+ cache hit rate** on typical development workflow
 
-use crate::{analyzer, inference, lexer, optimizer, parser};
+use crate::{analyzer, inference, lexer, parser};
 use std::path::PathBuf;
 
 // ============================================================================
