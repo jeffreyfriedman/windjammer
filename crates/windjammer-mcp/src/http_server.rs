@@ -9,6 +9,7 @@
 //! Reference: https://modelcontextprotocol.io/specification/2025-06-18/basic/transports
 
 use crate::error::{McpError, McpResult};
+use crate::oauth::OAuthManager;
 use crate::protocol::{JsonRpcRequest, JsonRpcResponse};
 use crate::server::McpServer;
 use serde::{Deserialize, Serialize};
@@ -115,8 +116,12 @@ pub struct HttpServerConfig {
     pub port: u16,
     pub session_ttl_seconds: u64,
     pub enable_oauth: bool,
-    pub oauth_client_id: Option<String>,
-    pub oauth_client_secret: Option<String>,
+    /// OAuth JWT secret key (for signing tokens)
+    pub oauth_secret_key: Option<String>,
+    /// OAuth issuer
+    pub oauth_issuer: Option<String>,
+    /// OAuth audience
+    pub oauth_audience: Option<String>,
 }
 
 impl Default for HttpServerConfig {
@@ -126,14 +131,15 @@ impl Default for HttpServerConfig {
             port: 3000,
             session_ttl_seconds: 3600, // 1 hour
             enable_oauth: false,
-            oauth_client_id: None,
-            oauth_client_secret: None,
+            oauth_secret_key: None,
+            oauth_issuer: None,
+            oauth_audience: None,
         }
     }
 }
 
 /// HTTP request body for MCP
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Clone, Deserialize)]
 pub struct McpHttpRequest {
     #[serde(flatten)]
     pub rpc: JsonRpcRequest,
@@ -153,26 +159,104 @@ pub struct McpHttpResponse {
 pub struct McpHttpServer {
     config: HttpServerConfig,
     session_manager: Arc<SessionManager>,
+    oauth_manager: Option<Arc<OAuthManager>>,
     mcp_server: Arc<Mutex<McpServer>>,
 }
 
 impl McpHttpServer {
-    pub fn new(config: HttpServerConfig, mcp_server: Arc<Mutex<McpServer>>) -> Self {
+    pub fn new(config: HttpServerConfig, mcp_server: Arc<Mutex<McpServer>>) -> McpResult<Self> {
         let session_manager = Arc::new(SessionManager::new(config.session_ttl_seconds));
 
-        Self {
+        // Initialize OAuth if enabled
+        let oauth_manager = if config.enable_oauth {
+            let secret =
+                config
+                    .oauth_secret_key
+                    .as_ref()
+                    .ok_or_else(|| McpError::ValidationError {
+                        field: "oauth_secret_key".to_string(),
+                        message: "OAuth secret key is required when OAuth is enabled".to_string(),
+                    })?;
+            let issuer = config
+                .oauth_issuer
+                .as_ref()
+                .ok_or_else(|| McpError::ValidationError {
+                    field: "oauth_issuer".to_string(),
+                    message: "OAuth issuer is required when OAuth is enabled".to_string(),
+                })?;
+            let audience =
+                config
+                    .oauth_audience
+                    .as_ref()
+                    .ok_or_else(|| McpError::ValidationError {
+                        field: "oauth_audience".to_string(),
+                        message: "OAuth audience is required when OAuth is enabled".to_string(),
+                    })?;
+
+            Some(Arc::new(OAuthManager::new(
+                secret,
+                issuer.clone(),
+                audience.clone(),
+            )))
+        } else {
+            None
+        };
+
+        Ok(Self {
             config,
             session_manager,
+            oauth_manager,
             mcp_server,
+        })
+    }
+
+    /// Verify OAuth token from Authorization header
+    fn verify_oauth_token(&self, auth_header: Option<&str>) -> McpResult<()> {
+        if !self.config.enable_oauth {
+            return Ok(()); // OAuth not enabled, skip verification
         }
+
+        let oauth = self
+            .oauth_manager
+            .as_ref()
+            .ok_or_else(|| McpError::InternalError {
+                message: "OAuth manager not initialized".to_string(),
+            })?;
+
+        let auth_header = auth_header.ok_or_else(|| McpError::AuthenticationError {
+            message: "Missing Authorization header".to_string(),
+        })?;
+
+        // Parse "Bearer <token>"
+        let token =
+            auth_header
+                .strip_prefix("Bearer ")
+                .ok_or_else(|| McpError::AuthenticationError {
+                    message: "Invalid Authorization header format (expected 'Bearer <token>')"
+                        .to_string(),
+                })?;
+
+        // Validate token
+        oauth.validate_token(token)?;
+
+        Ok(())
+    }
+
+    /// Get OAuth manager (for token generation)
+    pub fn oauth_manager(&self) -> Option<Arc<OAuthManager>> {
+        self.oauth_manager.clone()
     }
 
     /// Handle an incoming HTTP request
     pub async fn handle_request(
         &self,
         session_id: Option<String>,
+        auth_header: Option<&str>,
         request: McpHttpRequest,
     ) -> McpResult<McpHttpResponse> {
+        // Verify OAuth token if OAuth is enabled
+        self.verify_oauth_token(auth_header)?;
+
         // Get or create session
         let session = self.session_manager.get_or_create(session_id).await;
         let session_id = {
@@ -259,5 +343,89 @@ mod tests {
         // Trigger cleanup
         manager.cleanup_expired().await;
         assert_eq!(manager.count().await, 0);
+    }
+
+    #[tokio::test]
+    async fn test_oauth_integration() {
+        use crate::oauth::ClientCredentials;
+        use std::sync::Arc;
+        use tokio::sync::Mutex;
+
+        let mut config = HttpServerConfig::default();
+        config.enable_oauth = true;
+        config.oauth_secret_key = Some("test-secret-key".to_string());
+        config.oauth_issuer = Some("test-issuer".to_string());
+        config.oauth_audience = Some("test-audience".to_string());
+
+        let mcp_server = Arc::new(Mutex::new(crate::server::McpServer::new().await.unwrap()));
+        let http_server = McpHttpServer::new(config, mcp_server).unwrap();
+
+        // Get OAuth manager and register a client
+        let oauth = http_server.oauth_manager().unwrap();
+        let credentials = ClientCredentials::new(
+            "test-client".to_string(),
+            "test-secret",
+            "Test Client".to_string(),
+            vec!["read".to_string(), "write".to_string()],
+        );
+        oauth.register_client(credentials).await.unwrap();
+
+        // Get access token
+        let token_response = oauth
+            .client_credentials_grant("test-client", "test-secret", vec!["read".to_string()])
+            .await
+            .unwrap();
+
+        // Prepare request
+        let request = McpHttpRequest {
+            rpc: crate::protocol::JsonRpcRequest {
+                jsonrpc: "2.0".to_string(),
+                id: serde_json::json!(1),
+                method: "test".to_string(),
+                params: serde_json::json!({}),
+            },
+        };
+
+        // Request with valid token should succeed
+        let auth_header = format!("Bearer {}", token_response.access_token);
+        let result = http_server
+            .handle_request(None, Some(&auth_header), request.clone())
+            .await;
+        assert!(result.is_ok());
+
+        // Request without token should fail
+        let result = http_server
+            .handle_request(None, None, request.clone())
+            .await;
+        assert!(result.is_err());
+
+        // Request with invalid token should fail
+        let result = http_server
+            .handle_request(None, Some("Bearer invalid-token"), request)
+            .await;
+        assert!(result.is_err());
+    }
+
+    #[tokio::test]
+    async fn test_oauth_disabled() {
+        use std::sync::Arc;
+        use tokio::sync::Mutex;
+
+        let config = HttpServerConfig::default(); // OAuth disabled by default
+        let mcp_server = Arc::new(Mutex::new(crate::server::McpServer::new().await.unwrap()));
+        let http_server = McpHttpServer::new(config, mcp_server).unwrap();
+
+        let request = McpHttpRequest {
+            rpc: crate::protocol::JsonRpcRequest {
+                jsonrpc: "2.0".to_string(),
+                id: serde_json::json!(1),
+                method: "test".to_string(),
+                params: serde_json::json!({}),
+            },
+        };
+
+        // Request without token should succeed when OAuth is disabled
+        let result = http_server.handle_request(None, None, request).await;
+        assert!(result.is_ok());
     }
 }
