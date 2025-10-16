@@ -409,7 +409,203 @@ fn fibonacci(n: int) -> int {
 
 ---
 
-### v0.40.0+ - Future Possibilities 🔭
+### v0.40.0 - Security-by-Design Compiler Analysis 🔒
+
+**Theme: Zero-Trust Security Model**
+
+**Inspired by:** [Deno's permission system](https://docs.deno.com/runtime/fundamentals/security/), capability-based security, principle of least privilege
+
+**Compiler-Enforced Permissions:**
+- **Network Access Control** - Track and restrict network calls at compile time
+  - `@permission(network: "api.example.com")` - Explicit allowlist
+  - Detect unauthorized network access attempts
+  - Prevent DNS rebinding attacks
+  - Warn about connecting to localhost from web contexts
+  
+- **File System Sandboxing** - Fine-grained file access tracking
+  - `@permission(fs_read: ["./data", "./config"])` - Explicit read paths
+  - `@permission(fs_write: ["./output"])` - Explicit write paths
+  - Detect path traversal vulnerabilities
+  - Prevent reading sensitive files (`.env`, private keys, etc.)
+  
+- **Environment Variable Safety** - Control env var access
+  - `@permission(env: ["DATABASE_URL", "API_KEY"])` - Explicit allowlist
+  - Detect hardcoded secrets vs env vars
+  - Warn about reading sensitive env vars in untrusted contexts
+  
+- **Subprocess Execution** - Restrict command execution
+  - `@permission(run: ["git", "npm"])` - Explicit command allowlist
+  - Detect shell injection vulnerabilities
+  - Prevent privilege escalation attempts
+  - Track subprocess spawning for audit
+
+**Advanced Static Analysis:**
+- **Taint Analysis** - Track data flow from untrusted sources
+  - User input → database query (SQL injection detection)
+  - User input → shell command (command injection detection)
+  - User input → eval/reflection (code injection detection)
+  - Network data → file system (path traversal detection)
+  
+- **Information Flow Control** - Prevent data leaks
+  - Detect sensitive data flowing to network
+  - Track personally identifiable information (PII)
+  - Prevent secrets leaking to logs
+  - Ensure encryption for sensitive data transmission
+  
+- **Capability Analysis** - Least privilege enforcement
+  - Detect over-privileged code (asking for more than needed)
+  - Suggest minimum permission sets
+  - Flag unused permissions
+  - Recommend permission reduction
+
+**Security Linting Rules (Beyond gosec):**
+- `untrusted-input` - Track all user input without validation
+- `sql-injection` - Enhanced with taint analysis
+- `command-injection` - Shell command construction analysis
+- `path-traversal` - File path validation
+- `xxe-vulnerability` - XML external entity detection
+- `deserialization-of-untrusted-data` - Unsafe deserialization
+- `timing-attack` - Constant-time comparison enforcement
+- `cryptographic-weakness` - Weak cipher/hash detection
+- `insecure-randomness` - Non-cryptographic RNG for security
+- `unvalidated-redirect` - Open redirect vulnerabilities
+- `cors-misconfiguration` - Permissive CORS policies
+- `jwt-security` - JWT best practices enforcement
+
+**Permission Manifest (`wj.toml`):**
+```toml
+[permissions]
+# Network access
+network = ["api.example.com", "db.example.com"]
+network_deny = ["0.0.0.0", "127.0.0.1"]  # Prevent localhost access
+
+# File system access
+fs_read = ["./data", "./config"]
+fs_write = ["./output", "./logs"]
+fs_deny = [".env", "*.key", "*.pem"]  # Never access secrets
+
+# Environment variables
+env = ["DATABASE_URL", "API_KEY"]
+env_deny = ["AWS_SECRET_KEY"]  # Never read cloud credentials
+
+# Subprocess execution
+run = ["git", "npm", "cargo"]
+run_deny = ["curl", "wget"]  # Prevent arbitrary downloads
+
+[security]
+# Require all network calls to use TLS
+require_tls = true
+
+# Enforce input validation
+require_validation = true
+
+# Enable taint analysis
+taint_tracking = true
+
+# Require capability annotations
+require_permissions = true
+```
+
+**Runtime Integration:**
+```windjammer
+// Compile-time permission checking
+@permission(network: "api.github.com")
+@permission(env: "GITHUB_TOKEN")
+async fn fetch_repo(owner: string, repo: string) -> Result<Repo, Error> {
+    // Compiler verifies:
+    // 1. Network access to api.github.com is declared
+    // 2. GITHUB_TOKEN env var access is declared
+    // 3. No other permissions are used
+    
+    let token = env::var("GITHUB_TOKEN")?;  // ✅ Allowed
+    let url = format!("https://api.github.com/repos/{}/{}", owner, repo);
+    
+    http::get(&url)  // ✅ Allowed (api.github.com in permission)
+        .header("Authorization", format!("token {}", token))
+        .send()
+        .await
+}
+
+// ❌ Compile error: Network access to 'evil.com' not in permission list
+async fn bad_function() {
+    http::get("https://evil.com").await  // ERROR: Unauthorized network access
+}
+```
+
+**Audit Mode:**
+```bash
+# Generate security audit report
+wj audit --path src
+
+# Output:
+Security Audit Report
+=====================
+
+Network Access:
+  ✓ api.github.com (declared, used in fetch_repo)
+  ✓ db.example.com (declared, used in database::connect)
+  ⚠ api.twitter.com (used but not declared in wj.toml)
+
+File System:
+  ✓ ./data (read, declared)
+  ✗ ./.env (attempted read - BLOCKED)
+  
+Environment Variables:
+  ✓ GITHUB_TOKEN (declared, used)
+  ⚠ AWS_SECRET_KEY (attempted access - BLOCKED by deny list)
+
+Vulnerabilities:
+  ⚠ SQL injection risk in user_query.rs:45 (taint analysis)
+  ⚠ Hardcoded secret in config.rs:12 (pattern match)
+  ✗ Command injection in deploy.rs:89 (user input → subprocess)
+  
+Recommendations:
+  1. Add @permission(network: "api.twitter.com") or remove usage
+  2. Use parameterized queries in user_query.rs:45
+  3. Move hardcoded secret to environment variable
+  4. Sanitize user input before subprocess execution
+```
+
+**Comparison with Other Languages:**
+
+| Feature | Node.js | Deno | Rust | Go | **Windjammer v0.40.0** |
+|---------|---------|------|------|----|-----------------------|
+| **Permission System** | ❌ None | ✅ Runtime | ❌ None | ❌ None | ✅ **Compile-time** |
+| **Network Sandboxing** | ❌ No | ✅ `--allow-net` | ❌ No | ❌ No | ✅ **Fine-grained** |
+| **File System Sandboxing** | ❌ No | ✅ `--allow-read/write` | ❌ No | ❌ No | ✅ **Path-specific** |
+| **Taint Analysis** | ⚠️ Limited | ❌ No | ⚠️ External tools | ❌ No | ✅ **Built-in** |
+| **SQL Injection Detection** | ⚠️ Linters | ❌ No | ⚠️ clippy (basic) | ⚠️ gosec | ✅ **Advanced** |
+| **Audit Trail** | ❌ No | ⚠️ Runtime logs | ❌ No | ❌ No | ✅ **Compile-time report** |
+
+**Why This Matters:**
+
+1. **Security by Default** - Programs start with zero permissions, must explicitly request access
+2. **Supply Chain Protection** - Dependencies can't access resources without declaration
+3. **Audit Trail** - Complete compile-time visibility into all security-relevant operations
+4. **Zero Runtime Overhead** - All checks happen at compile time
+5. **Developer Education** - Forces thinking about security implications upfront
+
+**Competitive Advantages:**
+
+- ✅ **Only language with compile-time permission system** (Deno is runtime)
+- ✅ **Zero runtime overhead** (compile-time analysis)
+- ✅ **Better than Deno** - Catches issues at compile time, not runtime
+- ✅ **Better than Rust** - Built-in, not external tools
+- ✅ **Better than Go** - No gosec needed, it's built-in and smarter
+- ✅ **Better than Node** - Actually has security controls
+
+**Target Date:** Q2 2028
+
+**References:**
+- [Deno Security Model](https://docs.deno.com/runtime/fundamentals/security/)
+- [Node's Security Problem](https://deno.com/learn/nodes-security-problem)
+- [Capability-Based Security](https://en.wikipedia.org/wiki/Capability-based_security)
+- [OWASP Top 10](https://owasp.org/www-project-top-ten/)
+- [CWE Top 25](https://cwe.mitre.org/top25/)
+
+---
+
+### v0.41.0+ - Future Possibilities 🔭
 
 **Long-Term Vision:**
 
