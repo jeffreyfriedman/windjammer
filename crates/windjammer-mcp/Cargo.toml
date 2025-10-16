@@ -1,0 +1,62 @@
+[package]
+name = "windjammer-mcp"
+version = "0.31.0"
+edition = "2021"
+authors = ["Jeffrey Friedman <jeff@example.com>"]
+description = "Model Context Protocol (MCP) server for Windjammer - AI-powered development"
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/jeffreyfriedman/windjammer"
+keywords = ["mcp", "ai", "language-server", "code-generation", "anthropic"]
+categories = ["development-tools", "parser-implementations"]
+
+[lib]
+name = "windjammer_mcp"
+path = "src/lib.rs"
+
+[[bin]]
+name = "windjammer-mcp"
+path = "src/main.rs"
+
+[dependencies]
+# Core Windjammer dependencies
+windjammer = { path = "../..", version = "0.31.0" }
+windjammer-lsp = { path = "../windjammer-lsp", version = "0.31.0" }
+
+# JSON-RPC and MCP protocol
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+jsonrpc-core = "18.0"
+
+# Async runtime
+tokio = { version = "1.35", features = ["full"] }
+async-trait = "0.1"
+
+# Error handling
+anyhow = "1.0"
+thiserror = "1.0"
+
+# Validation
+validator = { version = "0.16", features = ["derive"] }
+
+# Logging
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+
+# CLI
+clap = { version = "4.4", features = ["derive"] }
+
+# HTTP transport (optional, for future)
+axum = { version = "0.7", optional = true }
+tower = { version = "0.4", optional = true }
+tower-http = { version = "0.5", features = ["cors", "trace"], optional = true }
+
+[dev-dependencies]
+tokio-test = "0.4"
+tempfile = "3.8"
+criterion = { version = "0.5", features = ["html_reports"] }
+
+[features]
+default = ["stdio"]
+stdio = []
+http = ["axum", "tower", "tower-http"]
+

@@ -1,6 +1,6 @@
 # Windjammer LSP Server
 
-**Version**: 0.24.0  
+**Version**: 0.31.0  
 **Status**: Production Ready  
 **Performance**: ~1000x speedup with Salsa incremental computation
 
@@ -8,7 +8,7 @@
 
 ## Overview
 
-The Windjammer Language Server Protocol (LSP) implementation provides intelligent code editing features for the Windjammer programming language.
+The Windjammer Language Server Protocol (LSP) implementation provides intelligent code editing features for the Windjammer programming language. The same Salsa-powered database is shared with the [MCP server](../windjammer-mcp/README.md) for AI-assisted development.
 
 **Key Features**:
 - 🚀 **Incremental Computation**: Salsa-powered caching (~1000x speedup)
@@ -17,6 +17,7 @@ The Windjammer Language Server Protocol (LSP) implementation provides intelligen
 - 🔍 **Symbol Navigation**: Find references, workspace symbols
 - ⚡ **Fast**: Sub-microsecond cached queries
 - 🔧 **Refactoring**: Rename, extract function (coming soon)
+- 🤖 **MCP Integration**: Shared database with AI assistant tools (see [windjammer-mcp](../windjammer-mcp))
 
 ---
 
