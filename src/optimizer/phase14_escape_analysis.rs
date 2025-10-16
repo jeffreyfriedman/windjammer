@@ -51,7 +51,7 @@
 //! - **Reduced GC pressure** (in Rust, reduced allocator overhead)
 
 use crate::parser::*;
-use std::collections::{HashMap, HashSet};
+use std::collections::HashSet;
 
 #[cfg(test)]
 use crate::parser::{Literal, MacroDelimiter};
@@ -263,6 +263,7 @@ fn collect_variables_in_expression(expr: &Expression, vars: &mut HashSet<String>
 }
 
 /// Optimize statements with escape analysis
+#[allow(clippy::only_used_in_recursion)]
 fn optimize_statements_escape_analysis(
     stmts: &[Statement],
     escape_info: &EscapeInfo,
@@ -337,6 +338,7 @@ fn optimize_statement_escape_analysis(
 }
 
 /// Optimize an expression with escape analysis
+#[allow(clippy::only_used_in_recursion)]
 fn optimize_expression_escape_analysis(
     expr: &Expression,
     escape_info: &EscapeInfo,
@@ -373,7 +375,7 @@ fn try_optimize_vec_to_smallvec(expr: &Expression) -> Option<Expression> {
     match expr {
         Expression::MacroInvocation { name, args, .. } if name == "vec" => {
             // Only optimize if the vec has a small number of elements (< 8)
-            if args.len() < 8 && args.len() > 0 {
+            if args.len() < 8 && !args.is_empty() {
                 // Transform vec![...] to smallvec![...]
                 // This is a marker that codegen will handle
                 return Some(Expression::MacroInvocation {
@@ -427,10 +429,12 @@ mod tests {
 
         // Verify the optimization was applied
         if let Item::Function(func) = &optimized.items[0] {
-            if let Statement::Let { value, .. } = &func.body[0] {
-                if let Expression::MacroInvocation { name, .. } = value {
-                    assert_eq!(name, "smallvec");
-                }
+            if let Statement::Let {
+                value: Expression::MacroInvocation { name, .. },
+                ..
+            } = &func.body[0]
+            {
+                assert_eq!(name, "smallvec");
             }
         }
     }
