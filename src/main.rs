@@ -3,6 +3,7 @@ pub mod cli;
 pub mod codegen;
 pub mod compiler_database;
 pub mod config;
+pub mod ejector;
 pub mod error_mapper;
 pub mod inference;
 pub mod lexer;
@@ -108,6 +109,32 @@ enum Commands {
         #[arg(long)]
         fix: bool,
     },
+    /// Eject to pure Rust - convert your Windjammer project to a standalone Rust project
+    Eject {
+        /// Input directory or file
+        #[arg(short, long, value_name = "PATH")]
+        path: PathBuf,
+
+        /// Output directory for ejected Rust project
+        #[arg(short, long, value_name = "OUTPUT")]
+        output: PathBuf,
+
+        /// Compilation target
+        #[arg(short, long, value_enum, default_value = "wasm")]
+        target: CompilationTarget,
+
+        /// Run rustfmt on generated code
+        #[arg(long, default_value = "true")]
+        format: bool,
+
+        /// Add helpful comments explaining Windjammer features
+        #[arg(long, default_value = "true")]
+        comments: bool,
+
+        /// Skip Cargo.toml generation (use existing)
+        #[arg(long)]
+        no_cargo_toml: bool,
+    },
 }
 
 #[allow(dead_code)]
@@ -156,6 +183,16 @@ fn main() -> Result<()> {
                 json,
                 fix,
             )?;
+        }
+        Commands::Eject {
+            path,
+            output,
+            target,
+            format,
+            comments,
+            no_cargo_toml,
+        } => {
+            eject_project(&path, &output, target, format, comments, !no_cargo_toml)?;
         }
     }
 
@@ -1056,4 +1093,27 @@ fn extract_between<'a>(text: &'a str, start: &str, end: &str) -> Option<&'a str>
     let remaining = &text[start_pos..];
     let end_pos = remaining.find(end)?;
     Some(&remaining[..end_pos])
+}
+
+/// Eject a Windjammer project to pure Rust
+#[allow(dead_code)]
+fn eject_project(
+    path: &Path,
+    output: &Path,
+    target: CompilationTarget,
+    format: bool,
+    comments: bool,
+    generate_cargo_toml: bool,
+) -> Result<()> {
+    let config = ejector::EjectConfig {
+        format,
+        comments,
+        generate_cargo_toml,
+        target,
+    };
+
+    let mut ejector = ejector::Ejector::new(config);
+    ejector.eject_project(path, output)?;
+
+    Ok(())
 }

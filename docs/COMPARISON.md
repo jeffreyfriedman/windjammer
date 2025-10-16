@@ -732,9 +732,10 @@ Despite transpiling to Rust, Windjammer provides **first-class debugging** of `.
 | **Package Manager** | `cargo` | `go get` | `wj add` |
 | **Testing** | `cargo test` | `go test` | `wj test` |
 | **Formatting** | `cargo fmt` | `go fmt` | `wj fmt` |
-| **Linting** | `cargo clippy` | `go vet` / `golangci-lint` | `wj lint` ✅ **16 rules + auto-fix!** 🆕 |
+| **Linting** | `cargo clippy` | `go vet` / `golangci-lint` | `wj lint` ✅ **16 rules + auto-fix!** |
 | **Project Scaffolding** | `cargo new` | N/A (manual) | `wj new --template web` |
 | **Pre-commit Hooks** | ⚠️ Manual | ⚠️ Manual | ✅ **Built-in** |
+| **Eject to Native** | N/A | N/A | ✅ **`wj eject` (no lock-in!)** 🆕 |
 | **Unified CLI** | ✅ `cargo` | ⚠️ Multiple (`go`, `gofmt`, etc.) | ✅ **`wj` (single command)** |
 
 **Verdict:**
@@ -1347,6 +1348,12 @@ let results = thread.parallel_chunks(large_dataset, 1000, |chunk| {
 - Team learning systems programming
 - Need 80% of Rust's power
 - Want to leverage Rust ecosystem
+
+**Risk-Free with Eject:**
+- Run `wj eject` anytime to convert to pure Rust
+- No lock-in - try Windjammer with zero commitment
+- Perfect safety net for cautious adopters
+- Original `.wj` files remain unchanged
 
 ---
 
