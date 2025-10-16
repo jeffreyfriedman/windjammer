@@ -53,7 +53,7 @@ path-absolutize = "3.1"
 
 # Error handling
 anyhow = "1.0"
-thiserror = "1.0"
+thiserror = "2.0"
 
 # Text manipulation
 ropey = "1.6"  # Efficient rope data structure for text
