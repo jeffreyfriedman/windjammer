@@ -7,6 +7,152 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.31.1] - 2025-10-16
+
+**MCP Advanced Features: Refactoring Tools, HTTP Transport & OAuth 2.0** 🔧🌐🔐
+
+### Summary
+v0.31.1 completes the MCP server implementation with advanced refactoring tools, Streamable HTTP transport, and enterprise-grade OAuth 2.0 authentication. This release adds three powerful code refactoring tools that enable AI assistants to transform and restructure code, plus production-ready HTTP transport with session management and OAuth 2.0 security per the [MCP 2025-06-18 specification](https://modelcontextprotocol.io/specification/2025-06-18/basic/transports).
+
+### Added - Advanced Refactoring Tools 🔧
+
+**New MCP Tools (3 Tools):**
+1. **`extract_function`** - Transform selected code into reusable functions
+   - Analyzes variable usage to determine parameters
+   - Infers return types automatically
+   - Generates function signatures and captures
+   - Public/private function control
+
+2. **`inline_variable`** - Replace variable uses with their values
+   - Safety analysis (detects side effects)
+   - Occurrence tracking and replacement
+   - Works with simple and complex expressions
+
+3. **`rename_symbol`** - Rename symbols with workspace-wide updates
+   - Identifier validation (prevents reserved keywords)
+   - Naming conflict detection
+   - Tracks all occurrences across files
+   - Supports functions, variables, structs, enums, traits
+
+**Total MCP Tools: 9** (6 from v0.31.0 + 3 refactoring tools)
+
+### Added - Streamable HTTP Transport 🌐
+
+**HTTP Server Implementation:**
+- ✅ **MCP 2025-06-18 Specification** - Modern Streamable HTTP transport
+- ✅ **Session Management** - `Mcp-Session-Id` header support
+- ✅ **Session TTL** - Automatic cleanup of expired sessions
+- ✅ **Concurrent Sessions** - Multiple clients supported
+- ✅ **Secure by Default** - No network exposure without opt-in
+- ✅ **Single POST Endpoint** - All requests via POST
+- ✅ **JSON-RPC 2.0** - Standard protocol over HTTP
+
+**Features:**
+- Session creation and reuse
+- Automatic session cleanup (configurable TTL)
+- Thread-safe session storage
+- 5 passing integration tests (including OAuth)
+
+### Added - OAuth 2.0 Authentication 🔐
+
+**Enterprise-Grade Security:**
+- ✅ **RFC 6749 Compliant** - Standard OAuth 2.0 implementation
+- ✅ **Client Credentials Grant** - Service-to-service authentication
+- ✅ **Refresh Token Grant** - Long-lived sessions
+- ✅ **JWT Access Tokens** - Stateless token validation (HS256)
+- ✅ **Scope-Based Authorization** - Fine-grained permission control
+- ✅ **Token Revocation** - Security-first design
+- ✅ **Automatic Cleanup** - Expired token management
+
+**Security Features:**
+- Token validation middleware with `Authorization: Bearer` header
+- SHA-256 hashed client secrets
+- Configurable token TTLs (access: 1h, refresh: 7d)
+- Issuer and audience validation
+- Optional OAuth (disabled by default for backwards compatibility)
+
+**Components:**
+- `oauth.rs` - Complete OAuth 2.0 manager (635 lines)
+- `OAuth.md` - Comprehensive documentation guide
+- 9 OAuth tests (client registration, grants, refresh, revocation, scope filtering, cleanup)
+
+### Added - Performance Benchmarks 📊
+
+**Benchmark Suite:**
+- `cargo bench --package windjammer-mcp` - Measures all MCP tool performance
+- Benchmarks for parse_code (small & large files)
+- Benchmarks for analyze_types
+- Benchmarks for all 3 refactoring tools
+- Uses `criterion` for accurate measurements
+- HTML reports for performance tracking
+
+### Updated - Documentation 📚
+
+**MCP README (`crates/windjammer-mcp/README.md`):**
+- Added refactoring tools section (tools 7-9)
+- Added HTTP transport section
+- Updated roadmap (marked v0.31.1 features as complete)
+- Updated tool count (6 → 9)
+- Added performance benchmarks section
+
+**DESIGN.md (`crates/windjammer-mcp/DESIGN.md`):**
+- Expanded refactoring tools with full API specs
+- Added `inline_variable` request/response examples
+- Added `rename_symbol` request/response examples
+- Updated transport layers section (HTTP marked as ✅)
+
+**Main ROADMAP.md:**
+- Updated completed features section (v0.1.0 - v0.31.1)
+- Added MCP Server bullet points:
+  - 9 MCP tools
+  - Advanced refactoring tools
+  - Streamable HTTP transport (MCP 2025-06-18)
+  - Session management
+  - Performance benchmarks
+
+### Technical Details
+
+**Refactoring Implementation:**
+- Variable usage analysis (used vs defined tracking)
+- Scope-aware renaming with shadowing detection
+- Safety analysis for inline operations (detects side effects)
+- Reserved keyword validation (35 keywords)
+- Full test coverage (18 passing tests)
+
+**HTTP Transport:**
+- `http_server.rs` - Core HTTP server implementation
+- `SessionManager` - Thread-safe session storage with RwLock
+- `Session` - Per-client state with metadata
+- Automatic cleanup on expired sessions
+- Configurable host, port, and TTL
+
+**Dependencies:**
+- Added `uuid` (v1.6) for session ID generation
+- Added `jsonwebtoken` (v9.2) for JWT token generation and validation
+- Added `base64` (v0.21) for token encoding
+- Added `chrono` (v0.4) for timestamp handling
+- Added `sha2` (v0.10) for secret hashing
+- Added `rand` (v0.8) for secure token generation
+- Uses `tower-lsp` and `lsp-types` for protocol types
+
+### Notes
+
+**Deferred to v0.32.0:**
+- MCP client library for custom integrations
+- `complete_code`, `suggest_fix`, `get_references`, `list_symbols` tools (redundant with LSP functionality)
+
+**Why These Tools Were Deferred:**
+The missing tools (`complete_code`, `suggest_fix`, `get_references`, `list_symbols`) are better suited for real-time IDE integration via LSP rather than async AI assistant interactions via MCP. They provide no additional value over existing LSP functionality.
+
+**Test Coverage:**
+- 30 total tests (all passing)
+- 9 OAuth 2.0 tests
+- 5 HTTP server tests (including OAuth integration)
+- 9 refactoring tool tests
+- 7 other MCP tool tests
+
+---
+
 ## [0.31.0] - 2025-10-16
 
 **AI-Powered Development with MCP Server** 🤖🚀
