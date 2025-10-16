@@ -2517,6 +2517,194 @@ Now that you've learned the basics, try:
 5. **Read the examples** - Learn from working code
 6. **Experiment!** - The best way to learn
 
+---
+
+## AI-Powered Development with MCP
+
+Windjammer includes a **Model Context Protocol (MCP) server** that enables AI assistants like Claude and ChatGPT to deeply understand, analyze, and generate Windjammer code.
+
+### What is MCP?
+
+The [Model Context Protocol](https://modelcontextprotocol.io) is a standard way for AI tools to interact with code bases. It's like an API for AI assistants to understand your code.
+
+### Quick Setup with Claude Desktop
+
+1. **Install the MCP server** (comes with Windjammer):
+   ```bash
+   # MCP server is installed automatically with Windjammer
+   which windjammer-mcp  # Verify it's in your PATH
+   ```
+
+2. **Configure Claude Desktop**:
+   
+   Edit `~/Library/Application Support/Claude/claude_desktop_config.json` (macOS):
+   
+   ```json
+   {
+     "mcpServers": {
+       "windjammer": {
+         "command": "/usr/local/bin/windjammer-mcp",
+         "args": ["stdio"]
+       }
+     }
+   }
+   ```
+
+3. **Restart Claude Desktop**
+
+4. **Test it!** Ask Claude:
+   > "Parse this Windjammer code: `fn add(a: int, b: int) -> int { a + b }`"
+
+### What Can AI Assistants Do?
+
+Once connected, Claude (or other MCP-enabled AI tools) can:
+
+**1. Parse and Analyze Code:**
+```
+You: "What does this Windjammer code do?"
+
+fn process(items: Vec<string>) -> int {
+    items.iter().filter(|s| s.len() > 3).count()
+}
+
+Claude: This function takes a vector of strings, filters items with more than 3 characters, and returns the count. The compiler will infer that `items` should be `&[String]` and the return type is `usize` (which maps to `int` in Windjammer).
+```
+
+**2. Generate Code from Descriptions:**
+```
+You: "Create a function that filters even numbers from a vector"
+
+Claude: Here's idiomatic Windjammer code:
+
+fn filter_evens(numbers: Vec<int>) -> Vec<int> {
+    numbers.iter().filter(|&n| n % 2 == 0).collect()
+}
+```
+
+**3. Explain Compiler Errors:**
+```
+You: "What does this error mean?"
+error: mismatched types
+  expected `i64`, found `&str`
+
+Claude: You're trying to use a string where a number is expected. The compiler requires types to match exactly. For example, if you declared a variable as `let x: int = "hello"`, you need to either change the type to `string` or change the value to a number like `42`.
+```
+
+**4. Refactor Code:**
+```
+You: "Extract the filtering logic into a separate function"
+
+Claude: Here's the refactored code:
+
+fn is_even(n: int) -> bool {
+    n % 2 == 0
+}
+
+fn filter_evens(numbers: Vec<int>) -> Vec<int> {
+    numbers.iter().filter(|&n| is_even(n)).collect()
+}
+```
+
+**5. Search Your Codebase:**
+```
+You: "Find all functions that return Result<T, Error>"
+
+Claude: [Searches your workspace and shows relevant matches]
+```
+
+**6. Type Inference Insights:**
+```
+You: "What type will the compiler infer for `x`?"
+
+let data = vec![1, 2, 3]
+let x = data.iter().map(|n| n * 2).collect()
+
+Claude: The compiler will infer `x: Vec<i64>` because:
+- `data` is `Vec<i64>` (Windjammer's `int` maps to `i64`)
+- `.iter()` produces `Iterator<Item = &i64>`
+- `.map(|n| n * 2)` produces `Iterator<Item = i64>`
+- `.collect()` gathers into `Vec<i64>`
+```
+
+### Available Tools
+
+The MCP server provides these tools to AI assistants:
+
+| Tool | Description |
+|------|-------------|
+| `parse_code` | Parse Windjammer code and return AST structure |
+| `analyze_types` | Perform type inference and show inferred types |
+| `generate_code` | Generate Windjammer code from natural language |
+| `explain_error` | Explain compiler errors in plain English |
+| `get_definition` | Find where a symbol is defined |
+| `search_workspace` | Search for code patterns across files |
+
+### Advanced: Using with Other AI Tools
+
+The MCP server works with any AI assistant that supports MCP:
+
+**ChatGPT (via API):**
+```python
+import subprocess
+import json
+
+# Start MCP server
+server = subprocess.Popen(
+    ["windjammer-mcp", "stdio"],
+    stdin=subprocess.PIPE,
+    stdout=subprocess.PIPE,
+    text=True
+)
+
+# Send parse request
+request = {
+    "jsonrpc": "2.0",
+    "id": 1,
+    "method": "tools/call",
+    "params": {
+        "name": "parse_code",
+        "arguments": {"code": "fn main() { println!(\"Hi\") }"}
+    }
+}
+
+server.stdin.write(json.dumps(request) + "\n")
+server.stdin.flush()
+
+# Read response
+response = json.loads(server.stdout.readline())
+print(response)
+```
+
+**Custom Integration:**
+See [crates/windjammer-mcp/README.md](../crates/windjammer-mcp/README.md) for full API documentation.
+
+### Benefits of AI-Assisted Development
+
+- ✅ **Learn Faster** - AI explains Windjammer concepts instantly
+- ✅ **Code Faster** - Generate boilerplate from descriptions  
+- ✅ **Debug Faster** - Plain English error explanations
+- ✅ **Refactor Safely** - AI suggests improvements using your codebase
+- ✅ **Consistency** - MCP uses same Salsa database as LSP for accuracy
+
+### Troubleshooting
+
+**"Claude doesn't show MCP tools"**
+- Restart Claude Desktop after config changes
+- Check that `windjammer-mcp` is in your PATH
+- Verify the config file path is correct
+
+**"MCP server crashes"**
+- Check logs in Claude Desktop (Help → View Logs)
+- Try running manually: `windjammer-mcp stdio`
+- File an issue on GitHub with logs
+
+**"AI gives incorrect information"**
+- The AI generates responses; MCP provides the data
+- Always verify generated code
+- Report issues to improve the tools
+
+---
+
 ## Getting Help
 
 - Read the [README.md](README.md) for language features
