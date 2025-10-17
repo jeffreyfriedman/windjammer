@@ -67,9 +67,12 @@ The framework architecture is complete with 91 passing tests. **Parser integrati
 - **Parser support for braced imports (`use module.{A, B, C}`)**
 - **External crate imports (`use windjammer_ui.prelude.*`)**
 - **`.wj` → Rust transpilation with auto-generated Cargo.toml**
+- **`wj build` command (generates Rust + Cargo.toml with deps)**
+- **`wj run` command (transpiles, builds, and runs - partial)**
 
 ### 🚧 What's Being Built (Next)
-- `wj run` command for executing .wj files
+- **Runtime implementation** (print, string interpolation, component macros)
+- `#[component]` macro implementation (generate constructors, render methods)
 - Web runtime (browser DOM integration via WASM)
 - Desktop runtime (Tauri integration)
 - Game runtime (rendering backends: Canvas/WebGL)
