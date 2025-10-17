@@ -6,23 +6,94 @@ use anyhow::Result;
 use colored::*;
 use std::path::Path;
 
-pub fn execute(path: &Path, output: Option<&Path>, _release: bool) -> Result<()> {
+pub fn execute(path: &Path, output: Option<&Path>, _release: bool, target_str: &str) -> Result<()> {
     let output_dir = output.unwrap_or_else(|| Path::new("./build"));
 
     println!(
-        "{} Windjammer project from {:?}",
+        "{} Windjammer project from {:?} (target: {})",
         "Building".green().bold(),
-        path
+        path,
+        target_str
     );
     println!("Output: {:?}", output_dir);
 
-    // Use the existing build logic from main.rs
-    let target = crate::CompilationTarget::Wasm;
+    // Parse target string
+    let target = match target_str.to_lowercase().as_str() {
+        "rust" => crate::CompilationTarget::Wasm, // Use Wasm target for now (generates Rust)
+        "javascript" | "js" => {
+            // Use new JavaScript backend
+            use crate::codegen::backend::{CodegenConfig, Target};
+            let config = CodegenConfig {
+                target: Target::JavaScript,
+                output_dir: output_dir.to_path_buf(),
+                ..Default::default()
+            };
+            return build_javascript(path, &config);
+        }
+        "wasm" | "webassembly" => crate::CompilationTarget::Wasm,
+        _ => {
+            anyhow::bail!(
+                "Unknown target: {}. Use 'rust', 'javascript', or 'wasm'",
+                target_str
+            );
+        }
+    };
+
     crate::build_project(path, output_dir, target)?;
 
     println!("\n{} Build complete!", "Success!".green().bold());
-    println!("Run your project with:");
-    println!("  cd {:?} && cargo run", output_dir);
+    if target_str == "javascript" || target_str == "js" {
+        println!("Run your JavaScript project with:");
+        println!("  node {:?}/output.js", output_dir);
+    } else {
+        println!("Run your project with:");
+        println!("  cd {:?} && cargo run", output_dir);
+    }
+
+    Ok(())
+}
+
+fn build_javascript(path: &Path, config: &crate::codegen::backend::CodegenConfig) -> Result<()> {
+    use crate::codegen;
+    use crate::lexer::Lexer;
+    use crate::parser::Parser;
+    use std::fs;
+
+    // Read source file
+    let source = fs::read_to_string(path)?;
+
+    // Lex and parse
+    let mut lexer = Lexer::new(&source);
+    let tokens = lexer.tokenize();
+    let mut parser = Parser::new(tokens);
+    let program = parser
+        .parse()
+        .map_err(|e| anyhow::anyhow!("Parse error: {}", e))?;
+
+    // Generate JavaScript
+    let output = codegen::generate(&program, config.target, Some(config.clone()))?;
+
+    // Create output directory
+    fs::create_dir_all(&config.output_dir)?;
+
+    // Write main output
+    let output_path = config.output_dir.join("output.js");
+    fs::write(&output_path, &output.source)?;
+    println!("  {} {:?}", "Generated".green(), output_path);
+
+    // Write TypeScript definitions if available
+    if let Some(ref type_defs) = output.type_definitions {
+        let types_path = config.output_dir.join("output.d.ts");
+        fs::write(&types_path, type_defs)?;
+        println!("  {} {:?}", "Generated".green(), types_path);
+    }
+
+    // Write additional files (package.json, etc.)
+    for (filename, content) in &output.additional_files {
+        let file_path = config.output_dir.join(filename);
+        fs::write(&file_path, content)?;
+        println!("  {} {:?}", "Generated".green(), file_path);
+    }
 
     Ok(())
 }

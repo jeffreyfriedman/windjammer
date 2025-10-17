@@ -7,6 +7,69 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.32.0] - 2025-10-17
+
+**Multi-Target Compilation: JavaScript Transpiler** 🌐
+
+### Summary
+v0.32.0 introduces multi-target compilation, allowing Windjammer code to be compiled to Rust, JavaScript (ES2020+), and WebAssembly from a single codebase. Write once, run everywhere!
+
+### Added - Multi-Target Compilation System 🌐
+
+**Core Features:**
+- `CodegenBackend` trait for extensible target support
+- JavaScript backend with complete ES2020+ generation
+- TypeScript `.d.ts` definition generation
+- Rust backend (wrapper for existing codegen)
+- WebAssembly backend
+- Shared optimization pipeline (all 15 phases)
+
+**JavaScript Transpiler (744 lines):**
+- Complete expression generation (all 20+ types)
+- Complete statement generation (all 12 types)
+- Async/await detection and handling
+- Template literals for string interpolation
+- ES6 classes for structs
+- Frozen objects with Symbols for enums
+- JSDoc comments for all functions
+- package.json and .gitignore generation
+
+**CLI Integration:**
+- `--target` flag for `wj build` (rust/javascript/wasm)
+- `--target` flag for `wj run`
+- JavaScript execution via Node.js
+- Clean error handling and validation
+
+### Testing & Quality 🧪
+- **174 tests passing** (+17 new tests)
+- 12 new multi-target integration tests
+- 5 new end-to-end tests
+- String interpolation tests
+- TypeScript definition quality tests
+- Complex program tests
+- **Zero regressions**
+
+### CI/CD 🚀
+- New `multi-target-tests` job in GitHub Actions
+- Node.js setup for JavaScript execution
+- Tests all three targets
+- Validates generated files
+- Executes JavaScript output
+
+### Documentation 📚
+- Updated README.md with multi-target section
+- Updated COMPARISON.md with target comparison
+- Updated GUIDE.md with multi-target chapter
+- Updated ROADMAP.md (v0.32.0 marked complete)
+- Added design doc for multi-target codegen
+
+### Impact
+- Write once, compile to Rust, JavaScript, or WASM
+- npm ecosystem access
+- Full-stack development with single language
+- Browser deployment without compromising quality
+- Positions Windjammer as truly multi-platform
+
 ## [0.31.1] - 2025-10-16
 
 **MCP Advanced Features: Refactoring Tools, HTTP Transport & OAuth 2.0** 🔧🌐🔐

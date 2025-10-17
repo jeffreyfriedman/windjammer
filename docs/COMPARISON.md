@@ -207,11 +207,69 @@ fn complex<T, U>(x: T, y: U) -> Iterator<String>
 
 ---
 
+## Multi-Target Compilation (v0.32.0) 🆕
+
+**Write once, compile to Rust, JavaScript, or WebAssembly!**
+
+Windjammer now supports multiple compilation targets:
+
+```bash
+wj build --target=rust        # Native performance
+wj build --target=javascript  # Node.js/Browser
+wj build --target=wasm        # WebAssembly
+```
+
+### Why Multi-Target Matters
+
+| Scenario | Solution |
+|----------|----------|
+| Need a CLI tool | Compile to Rust for native performance |
+| Building a web app | Compile to JavaScript for Node.js/Browser |
+| Browser plugin | Compile to WebAssembly for sandboxed execution |
+| Full-stack app | Compile backend to Rust, frontend to JavaScript |
+| npm package | Share logic across Rust and JavaScript ecosystems |
+
+### Target Comparison
+
+| Feature | Rust Target | JavaScript Target | WASM Target |
+|---------|-------------|-------------------|-------------|
+| **Performance** | Native speed | V8/Node.js (fast) | Near-native |
+| **Size** | Small binary | Small .js file | Compact .wasm |
+| **Startup** | Instant | Instant | Instant |
+| **Ecosystem** | crates.io | npm | Browser APIs |
+| **Memory** | Manual (safe) | GC | Linear memory |
+| **Best For** | Servers, CLIs | Full-stack, npm | Browser, edge |
+
+### JavaScript Output Quality
+
+**Clean, Idiomatic ES2020+:**
+```javascript
+export function fibonacci(n) {
+    if (n <= 1) {
+        return n;
+    }
+    return (fibonacci((n - 1)) + fibonacci((n - 2)));
+}
+```
+
+**Includes:**
+- ✅ TypeScript `.d.ts` definitions
+- ✅ `package.json` for npm
+- ✅ JSDoc comments
+- ✅ Async/await detection
+- ✅ Source maps (coming soon)
+
+**Advantages Over Other Multi-Target Languages:**
+- **Go → WASM**: Works, but no JavaScript target, limited browser APIs
+- **Rust → WASM**: Excellent, but verbose for JavaScript use cases
+- **Kotlin Multiplatform**: JVM-centric, JavaScript support improving
+- **Windjammer**: **Purpose-built for Rust+JavaScript+WASM** with clean output
+
 ## Rust Interoperability
 
 ### ✅ YES: Full Rust Crate Compatibility!
 
-**Windjammer transpiles to Rust**, so you get:
+**Windjammer compiles to Rust** (among other targets), so you get:
 - ✅ **ALL Rust crates** work out of the box
 - ✅ Tokio, Serde, Actix, Reqwest, etc.
 - ✅ No FFI or bindings needed
