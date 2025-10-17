@@ -1,7 +1,7 @@
 // Simple counter example using windjammer-ui
 
-import windjammer_ui::prelude::*
-import windjammer_ui::vdom::{VElement, VNode, VText}
+use windjammer_ui.prelude.*
+use windjammer_ui.vdom.{VElement, VNode, VText}
 
 @component
 struct Counter {

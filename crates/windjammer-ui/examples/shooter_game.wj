@@ -1,6 +1,6 @@
 // Space Shooter Game Example
 
-import windjammer_ui::game::*
+use windjammer_ui.game.*
 
 @derive(Debug, Clone)
 struct Player {

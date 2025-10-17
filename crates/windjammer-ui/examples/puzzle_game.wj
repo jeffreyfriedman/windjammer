@@ -1,6 +1,6 @@
 // 2048-style Puzzle Game Example
 
-import windjammer_ui::game::*
+use windjammer_ui.game.*
 
 @derive(Debug, Clone, Copy, PartialEq, Eq)
 enum Direction {
