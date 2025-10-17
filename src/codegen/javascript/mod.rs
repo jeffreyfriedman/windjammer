@@ -6,8 +6,11 @@
 //! - TypeScript definitions (.d.ts)
 //! - npm package.json
 
+pub mod code_splitter;
+pub mod differential_loading;
 mod generator;
 pub mod minifier;
+pub mod module_federation;
 pub mod polyfills;
 pub mod source_maps;
 pub mod tree_shaker;
