@@ -6,5 +6,9 @@ edition = "2021"
 [dependencies]
 windjammer-ui = { path = "../../crates/windjammer-ui" }
 
+[[bin]]
+name = "counter"
+path = "counter.rs"
+
 [profile.release]
 opt-level = 3

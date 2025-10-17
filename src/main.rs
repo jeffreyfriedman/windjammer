@@ -708,6 +708,7 @@ fn create_cargo_toml_with_deps(
     imported_modules: &HashSet<String>,
     external_crates: &[String],
 ) -> Result<()> {
+    use std::env;
     use std::fs;
 
     // Map imported stdlib modules to their Cargo dependencies
@@ -766,9 +767,20 @@ fn create_cargo_toml_with_deps(
     for crate_name in external_crates {
         match crate_name.as_str() {
             "windjammer_ui" => {
-                // Use path dependency to the workspace crate
-                external_deps
-                    .push("windjammer-ui = { path = \"../../crates/windjammer-ui\" }".to_string());
+                // Use absolute path to the workspace crate
+                // Try to find it relative to current directory or use CARGO_MANIFEST_DIR
+                let windjammer_ui_path = if let Ok(manifest_dir) = env::var("CARGO_MANIFEST_DIR") {
+                    PathBuf::from(manifest_dir).join("crates/windjammer-ui")
+                } else {
+                    env::current_dir()
+                        .unwrap_or_else(|_| PathBuf::from("."))
+                        .join("crates/windjammer-ui")
+                };
+
+                external_deps.push(format!(
+                    "windjammer-ui = {{ path = \"{}\" }}",
+                    windjammer_ui_path.display()
+                ));
             }
             _ => {
                 // Default: assume it's a crates.io dependency
@@ -788,12 +800,26 @@ fn create_cargo_toml_with_deps(
         format!("[dependencies]\n{}\n\n", deps.join("\n"))
     };
 
-    // Check if main.rs exists to determine if we need a [[bin]] section
-    let main_rs = output_dir.join("main.rs");
-    let bin_section = if main_rs.exists() {
-        "[[bin]]\nname = \"app\"\npath = \"main.rs\"\n\n"
+    // Find all .rs files to create [[bin]] sections
+    let mut bin_sections = Vec::new();
+    if let Ok(entries) = fs::read_dir(output_dir) {
+        for entry in entries.flatten() {
+            if let Some(filename) = entry.file_name().to_str() {
+                if filename.ends_with(".rs") && filename != "lib.rs" {
+                    let bin_name = filename.strip_suffix(".rs").unwrap_or(filename);
+                    bin_sections.push(format!(
+                        "[[bin]]\nname = \"{}\"\npath = \"{}\"\n",
+                        bin_name, filename
+                    ));
+                }
+            }
+        }
+    }
+
+    let bin_section = if !bin_sections.is_empty() {
+        format!("{}\n", bin_sections.join("\n"))
     } else {
-        ""
+        String::new()
     };
 
     let cargo_toml = format!(
