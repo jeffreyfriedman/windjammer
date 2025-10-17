@@ -51,6 +51,10 @@ enum Commands {
         #[arg(short, long)]
         release: bool,
 
+        /// Target platform (rust, javascript, wasm)
+        #[arg(short, long, value_name = "TARGET", default_value = "rust")]
+        target: String,
+
         /// Defer drop optimization mode (auto, always, never)
         #[arg(long, value_name = "MODE", default_value = "auto")]
         defer_drop: String,
@@ -69,6 +73,10 @@ enum Commands {
         /// Arguments to pass to the program
         #[arg(trailing_var_arg = true)]
         args: Vec<String>,
+
+        /// Target platform (rust, javascript, wasm)
+        #[arg(short, long, value_name = "TARGET", default_value = "rust")]
+        target: String,
 
         /// Defer drop optimization mode (auto, always, never)
         #[arg(long, value_name = "MODE", default_value = "auto")]
@@ -153,24 +161,26 @@ fn main() -> anyhow::Result<()> {
             path,
             output,
             release,
+            target,
             defer_drop,
             defer_drop_threshold,
         } => {
             // TODO: Pass defer_drop config to compiler
             // For now, just ignore these flags - defer drop is always auto
             let _ = (defer_drop, defer_drop_threshold);
-            windjammer::cli::build::execute(&path, output.as_deref(), release)?;
+            windjammer::cli::build::execute(&path, output.as_deref(), release, &target)?;
         }
         Commands::Run {
             path,
             args,
+            target,
             defer_drop,
             defer_drop_threshold,
         } => {
             // TODO: Pass defer_drop config to compiler
             // For now, just ignore these flags - defer drop is always auto
             let _ = (defer_drop, defer_drop_threshold);
-            windjammer::cli::run::execute(&path, &args)?;
+            windjammer::cli::run::execute(&path, &args, &target)?;
         }
         Commands::Test { filter } => {
             windjammer::cli::test::execute(filter.as_deref())?;
