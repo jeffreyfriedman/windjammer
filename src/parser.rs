@@ -1108,6 +1108,13 @@ impl Parser {
                 if self.current_token() == &Token::Dot {
                     path_str.push('.');
                     self.advance();
+
+                    // Check if next token is * (glob import)
+                    if self.current_token() == &Token::Star {
+                        path_str.push('*');
+                        self.advance();
+                        break;
+                    }
                 } else if self.current_token() == &Token::Slash {
                     path_str.push('/');
                     self.advance();
@@ -1119,6 +1126,41 @@ impl Parser {
             } else {
                 break;
             }
+        }
+
+        // Check for braced imports: use module.{A, B, C}
+        if self.current_token() == &Token::LBrace {
+            // Remove trailing dot if present (already added by previous iteration)
+            if path_str.ends_with('.') {
+                path_str.pop();
+            }
+
+            self.advance(); // consume {
+            path_str.push_str(".{");
+
+            loop {
+                if let Token::Ident(name) = self.current_token() {
+                    path_str.push_str(name);
+                    self.advance();
+
+                    // Check for comma (more items) or closing brace
+                    if self.current_token() == &Token::Comma {
+                        path_str.push_str(", ");
+                        self.advance();
+                    } else if self.current_token() == &Token::RBrace {
+                        break;
+                    } else {
+                        return Err("Expected ',' or '}' in braced import".to_string());
+                    }
+                } else if self.current_token() == &Token::RBrace {
+                    break;
+                } else {
+                    return Err("Expected identifier in braced import".to_string());
+                }
+            }
+
+            self.expect(Token::RBrace)?;
+            path_str.push('}');
         }
 
         // For now, return the path as a single-element vector

@@ -341,6 +341,27 @@ impl CodeGenerator {
 
         let full_path = path.join(".");
 
+        // Handle glob imports: module.submodule.* -> use module::submodule::*;
+        if full_path.ends_with(".*") {
+            let path_without_glob = full_path.strip_suffix(".*").unwrap();
+            // Replace dots with :: but remove any trailing ::
+            let rust_path = path_without_glob
+                .replace('.', "::")
+                .trim_end_matches("::")
+                .to_string();
+            return format!("use {}::*;\n", rust_path);
+        }
+
+        // Handle braced imports: module.{A, B, C} -> use module::{A, B, C};
+        if full_path.contains(".{") && full_path.contains('}') {
+            // Split into base path and braced items
+            if let Some((base, items)) = full_path.split_once(".{") {
+                let rust_base = base.replace('.', "::");
+                // items already has the closing brace
+                return format!("use {}::{{{};\n", rust_base, items);
+            }
+        }
+
         // Handle stdlib imports: std.math -> use math::*; or std.math as m -> use math as m;
         if full_path.starts_with("std.") {
             let module_name = full_path.strip_prefix("std.").unwrap();
@@ -374,7 +395,12 @@ impl CodeGenerator {
         // Convert Windjammer's Go-style imports to Rust's glob imports
         // e.g., "use wasm_bindgen.prelude" -> "use wasm_bindgen::prelude::*;"
         // or "use wasm_bindgen.prelude as wb" -> "use wasm_bindgen::prelude as wb;"
-        format!("use {}::*;\n", path.join("::"))
+        let rust_path = full_path.replace('.', "::");
+        if let Some(alias_name) = alias {
+            format!("use {} as {};\n", rust_path, alias_name)
+        } else {
+            format!("use {}::*;\n", rust_path)
+        }
     }
 
     fn generate_struct(&mut self, s: &StructDecl) -> String {
