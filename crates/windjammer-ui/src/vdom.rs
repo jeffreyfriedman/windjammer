@@ -67,6 +67,30 @@ impl VText {
     }
 }
 
+impl From<VElement> for VNode {
+    fn from(element: VElement) -> Self {
+        VNode::Element(element)
+    }
+}
+
+impl From<VText> for VNode {
+    fn from(text: VText) -> Self {
+        VNode::Text(text)
+    }
+}
+
+impl From<String> for VNode {
+    fn from(s: String) -> Self {
+        VNode::Text(VText::new(s))
+    }
+}
+
+impl From<&str> for VNode {
+    fn from(s: &str) -> Self {
+        VNode::Text(VText::new(s))
+    }
+}
+
 /// A virtual component node
 #[derive(Debug, Clone, PartialEq)]
 pub struct VComponent {
