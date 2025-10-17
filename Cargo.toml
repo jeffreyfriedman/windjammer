@@ -3,6 +3,7 @@ members = [
     ".",
     "crates/windjammer-lsp",
     "crates/windjammer-mcp",
+    "crates/windjammer-ui",
 ]
 
 [workspace.package]
