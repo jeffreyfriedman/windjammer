@@ -6,6 +6,7 @@
 //! - Mobile (iOS, Android)
 
 pub mod capabilities;
+pub mod capability_impl;
 pub mod desktop;
 pub mod mobile;
 pub mod web;
