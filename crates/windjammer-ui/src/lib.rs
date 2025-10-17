@@ -40,6 +40,7 @@ pub use windjammer_ui_macro::Props;
 
 pub mod component;
 pub mod events;
+pub mod game;
 pub mod platform;
 pub mod reactivity;
 pub mod renderer;
