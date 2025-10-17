@@ -2,21 +2,38 @@
 
 **Version:** 0.34.0  
 **Status:** In Development  
-**Philosophy:** Svelte-inspired simplicity, multi-target support (JavaScript + WASM)
+**Philosophy:** Svelte-inspired simplicity, true cross-platform (Web + Desktop + Mobile)  
+**Inspiration:** Svelte + Dioxus + Tauri + Flutter
 
 ---
 
 ## Overview
 
-Windjammer UI is a **complete, full-stack UI framework** that compiles to both JavaScript and WebAssembly. It combines the simplicity of Svelte with the performance of Rust, providing a unified solution for web development.
+Windjammer UI is a **complete, cross-platform UI framework** that compiles to Web (JavaScript/WASM), Desktop (native), and Mobile (iOS/Android). Write once, run everywhere—with the simplicity of Svelte, the cross-platform power of Dioxus, and the native integration of Tauri.
 
 ### Key Principles
 
 1. **Simplicity First** - Closer to Svelte than React
 2. **Compiler-Driven** - No runtime overhead where possible
-3. **Multi-Target** - Same code runs as JavaScript or WASM
-4. **Type-Safe** - Full type checking at compile time
-5. **Zero-Config** - Sensible defaults, easy overrides
+3. **True Cross-Platform** - Web, Desktop, Mobile from same code
+4. **Native Performance** - Use platform's native UI when available
+5. **Type-Safe** - Full type checking at compile time
+6. **Zero-Config** - Sensible defaults, easy overrides
+
+### Target Platforms
+
+| Platform | Rendering | Package Format | Native APIs |
+|----------|-----------|---------------|-------------|
+| **Web** | Virtual DOM or WASM+web-sys | JavaScript bundle | Web APIs |
+| **Desktop** | Native (Tauri + webview or native widgets) | .app, .exe, .deb | Filesystem, system tray, etc |
+| **Mobile** | Native (iOS UIKit / Android Views) | .ipa, .apk | Camera, GPS, contacts, etc |
+
+### Architecture Inspiration
+
+- **Svelte**: Simplicity, compile-time reactivity, minimal runtime
+- **Dioxus**: Cross-platform component model, RSX syntax, renderer abstraction
+- **Tauri**: Native desktop integration, small bundles, Rust backend
+- **Flutter**: Widget composition, platform channels, hot reload
 
 ---
 
@@ -490,57 +507,233 @@ struct Chat {
 
 ## Compilation Strategy
 
-### JavaScript Target
+### Web Target (JavaScript)
 
 1. **Parse** Windjammer component
 2. **Generate** Virtual DOM code
 3. **Optimize** with minification, tree shaking
 4. **Output** ES2020+ JavaScript
 
-### WASM Target
+### Web Target (WASM)
 
 1. **Parse** Windjammer component
 2. **Generate** Rust code with web-sys bindings
 3. **Compile** to WebAssembly with wasm-bindgen
 4. **Output** .wasm + minimal JS glue
 
-### Comparison
+### Desktop Target (Tauri-style)
 
-| Feature | JavaScript | WASM |
-|---------|-----------|------|
-| **Size** | Smaller for simple apps | Smaller for complex apps |
-| **Performance** | Good | Excellent |
-| **Startup** | Fast | Slower (WASM load) |
-| **Best For** | Content sites, forms | Games, data viz, heavy computation |
+1. **Parse** Windjammer component
+2. **Generate** Rust code with native UI bindings
+3. **Compile** Rust backend + webview frontend
+4. **Package** as .app/.exe/.deb with Tauri
+5. **Output** Native app (2-10MB, tiny compared to Electron!)
+
+### Mobile Target (iOS/Android)
+
+1. **Parse** Windjammer component
+2. **Generate** platform-specific code:
+   - iOS: Swift/UIKit or Rust with objc bindings
+   - Android: Kotlin/Views or Rust with JNI bindings
+3. **Compile** to native binary
+4. **Package** as .ipa or .apk
+5. **Output** Native mobile app
+
+### Platform Comparison
+
+| Feature | Web (JS) | Web (WASM) | Desktop | Mobile |
+|---------|----------|------------|---------|--------|
+| **Size** | Small | Medium | 2-10MB | 5-15MB |
+| **Performance** | Good | Excellent | Excellent | Native |
+| **Startup** | Instant | Fast | Fast | Instant |
+| **Native APIs** | Web only | Web only | Full OS | Full device |
+| **Distribution** | URL | URL | App stores | App stores |
+| **Best For** | Websites | Heavy compute | Productivity | Apps on-the-go |
 
 ---
 
 ## Implementation Plan
 
-### Phase 1: Core (v0.34.0)
-- [x] Design document
+### Phase 1: Core & Web (v0.34.0)
+- [x] Cross-platform design document
 - [ ] Component model & @component macro
-- [ ] Reactive state system
+- [ ] Reactive state system (fine-grained)
 - [ ] Virtual DOM (JavaScript target)
-- [ ] Basic rendering
+- [ ] WASM rendering (web-sys target)
+- [ ] Basic event system
+- [ ] Platform abstraction layer (foundation)
 
-### Phase 2: Multi-Target (v0.34.1)
-- [ ] WASM target support
-- [ ] web-sys integration
-- [ ] Unified API for both targets
+### Phase 2: Desktop (v0.34.1)
+- [ ] Tauri integration
+- [ ] Native webview rendering
+- [ ] Desktop-specific APIs (file dialogs, system tray, notifications)
+- [ ] Platform detection (#[platform(desktop)])
+- [ ] Desktop packaging (.app, .exe, .deb)
 
-### Phase 3: Full-Stack (v0.34.2)
-- [ ] Server-side rendering
+### Phase 3: Mobile (v0.34.2)
+- [ ] iOS rendering (UIKit bindings)
+- [ ] Android rendering (Views/JNI bindings)
+- [ ] Mobile-specific APIs (camera, GPS, contacts, permissions)
+- [ ] Platform detection (#[platform(mobile)])
+- [ ] Mobile packaging (.ipa, .apk)
+
+### Phase 4: Full-Stack Features (v0.34.3)
+- [ ] Server-side rendering (web only)
 - [ ] Client-side hydration
-- [ ] File-based routing
+- [ ] File-based routing (all platforms)
 - [ ] HTTP server integration
+- [ ] WebSocket support (all platforms)
 
-### Phase 4: Polish (v0.34.3)
+### Phase 5: Polish & Production (v0.34.4)
 - [ ] Component-scoped styling
-- [ ] Form handling
-- [ ] WebSocket support
-- [ ] Global state management
+- [ ] Form handling and validation
+- [ ] Global state management (@store)
+- [ ] Hot reload (development)
+- [ ] Performance optimizations
 - [ ] Comprehensive docs & examples
+- [ ] Sample apps (TodoMVC, chat, desktop editor, mobile app)
+
+---
+
+## Cross-Platform Native APIs
+
+### Platform Abstraction Layer
+
+```windjammer
+// Write once, works everywhere
+@component
+struct PhotoPicker {
+    state photo: Option<Image> = None
+    
+    async fn pick_photo() {
+        // Compiler generates platform-specific code:
+        // - Web: <input type="file" accept="image/*">
+        // - Desktop: native file picker dialog
+        // - Mobile: camera roll / camera
+        photo = native::pick_image().await
+    }
+    
+    fn render() -> Html {
+        <div>
+            <button onclick={pick_photo}>"Pick Photo"</button>
+            {photo.map(|img| <img src={img.url} />)}
+        </div>
+    }
+}
+```
+
+### Native Capabilities
+
+```windjammer
+use windjammer::native::*
+
+@component
+struct NativeFeatures {
+    state location: Option<Location> = None
+    state contacts: Vec<Contact> = vec![]
+    
+    // Platform detection (compile-time)
+    #[platform(desktop)]
+    fn show_system_notification() {
+        notification::show("Hello from Windjammer!")
+    }
+    
+    #[platform(mobile)]
+    async fn get_location() {
+        location = gps::get_current_location().await
+    }
+    
+    #[platform(web)]
+    fn use_web_api() {
+        console::log("Running in browser")
+    }
+    
+    fn render() -> Html {
+        <div>
+            <button onclick={get_location}>"Get Location"</button>
+            {location.map(|loc| <p>"Lat: {loc.lat}, Lng: {loc.lng}"</p>)}
+        </div>
+    }
+}
+```
+
+### Desktop-Specific (Tauri Integration)
+
+```windjammer
+@component
+@platform(desktop)
+struct DesktopApp {
+    state files: Vec<PathBuf> = vec![]
+    
+    async fn open_file_dialog() {
+        files = desktop::file_dialog()
+            .set_title("Open Files")
+            .pick_multiple()
+            .await
+    }
+    
+    fn create_system_tray() {
+        desktop::system_tray()
+            .with_icon("icon.png")
+            .with_menu(vec![
+                MenuItem::new("Show", show_window),
+                MenuItem::new("Quit", quit_app),
+            ])
+            .build()
+    }
+    
+    fn render() -> Html {
+        <div>
+            <button onclick={open_file_dialog}>"Open Files"</button>
+            <ul>
+                {files.iter().map(|path| <li>{path.display()}</li>)}
+            </ul>
+        </div>
+    }
+}
+```
+
+### Mobile-Specific
+
+```windjammer
+@component
+@platform(mobile)
+struct MobileApp {
+    state contacts: Vec<Contact> = vec![]
+    state photo: Option<Image> = None
+    
+    async fn request_permissions() {
+        mobile::permissions()
+            .request_camera()
+            .request_contacts()
+            .await
+    }
+    
+    async fn take_photo() {
+        photo = mobile::camera::capture().await
+    }
+    
+    async fn load_contacts() {
+        contacts = mobile::contacts::fetch_all().await
+    }
+    
+    fn render() -> Html {
+        <ScrollView>
+            <Button onclick={take_photo}>"Take Photo"</Button>
+            <Button onclick={load_contacts}>"Load Contacts"</Button>
+            
+            {photo.map(|img| <Image source={img} />)}
+            
+            <List data={contacts}>
+                {|contact| <ListItem>
+                    <Text>{contact.name}</Text>
+                    <Text>{contact.phone}</Text>
+                </ListItem>}
+            </List>
+        </ScrollView>
+    }
+}
+```
 
 ---
 
@@ -573,26 +766,52 @@ fn main() {
 }
 ```
 
-**Compile to JavaScript:**
+**Compile to Web (JavaScript):**
 ```bash
 wj build --target=javascript --ui --minify --ssr main.wj
 ```
 
-**Compile to WASM:**
+**Compile to Web (WASM):**
 ```bash
 wj build --target=wasm --ui main.wj
+```
+
+**Compile to Desktop:**
+```bash
+wj build --target=desktop --ui main.wj
+# Outputs: myapp.app (macOS), myapp.exe (Windows), myapp.deb (Linux)
+```
+
+**Compile to Mobile:**
+```bash
+wj build --target=ios --ui main.wj        # → myapp.ipa
+wj build --target=android --ui main.wj    # → myapp.apk
 ```
 
 ---
 
 ## Competitive Advantages
 
-1. **Multi-Target** - JavaScript OR WASM from same code
+1. **True Cross-Platform** - Web, Desktop, Mobile from same code
 2. **Simple** - Svelte-like API, easy to learn
 3. **Type-Safe** - Full Rust type checking
-4. **Fast** - Compiler optimizations, fine-grained reactivity
-5. **Complete** - SSR, routing, forms, WebSockets built-in
-6. **No Runtime** - Most reactivity compiled away
+4. **Native Performance** - Real native apps (not Electron!)
+5. **Small Bundles** - 2-10MB desktop apps (vs 100MB+ Electron)
+6. **Fast** - Compiler optimizations, fine-grained reactivity
+7. **Complete** - SSR, routing, forms, WebSockets, native APIs built-in
+8. **No Runtime** - Most reactivity compiled away
 
-**Windjammer UI = Svelte's simplicity + Rust's safety + Multi-target flexibility**
+### vs Competition
+
+| Framework | Web | Desktop | Mobile | Bundle Size | Language |
+|-----------|-----|---------|--------|-------------|----------|
+| **Windjammer** | ✅ | ✅ | ✅ | 2-10MB | Windjammer |
+| React Native | ✅ | ❌ | ✅ | Large | JavaScript |
+| Flutter | ✅ | ✅ | ✅ | 15-30MB | Dart |
+| Electron | ❌ | ✅ | ❌ | 100MB+ | JavaScript |
+| Tauri | ✅ | ✅ | ❌ | 2-10MB | Rust+JS |
+| Dioxus | ✅ | ✅ | ✅ | Medium | Rust |
+| Svelte | ✅ | ❌ | ❌ | Small | JavaScript |
+
+**Windjammer UI = Svelte's simplicity + Dioxus's cross-platform + Tauri's native integration + Rust's safety**
 
