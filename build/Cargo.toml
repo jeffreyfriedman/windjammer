@@ -3,9 +3,8 @@ name = "windjammer-app"
 version = "0.1.0"
 edition = "2021"
 
-[[bin]]
-name = "app"
-path = "main.rs"
+[dependencies]
+windjammer-ui = { path = "../../crates/windjammer-ui" }
 
 [profile.release]
 opt-level = 3

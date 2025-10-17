@@ -226,15 +226,17 @@ fn build_project(path: &Path, output: &Path, target: CompilationTarget) -> Resul
 
     let mut has_errors = false;
     let mut all_stdlib_modules = HashSet::new();
+    let mut all_external_crates = Vec::new();
 
     for file in &wj_files {
         let file_name = file.file_name().unwrap().to_str().unwrap();
         print!("  Compiling {:?}... ", file_name);
 
         match compile_file(file, output, target) {
-            Ok(stdlib_modules) => {
+            Ok((stdlib_modules, external_crates)) => {
                 println!("{}", "✓".green());
                 all_stdlib_modules.extend(stdlib_modules);
+                all_external_crates.extend(external_crates);
             }
             Err(e) => {
                 println!("{}", "✗".red());
@@ -245,8 +247,8 @@ fn build_project(path: &Path, output: &Path, target: CompilationTarget) -> Resul
     }
 
     if !has_errors {
-        // Create Cargo.toml with stdlib dependencies
-        create_cargo_toml_with_deps(output, &all_stdlib_modules)?;
+        // Create Cargo.toml with stdlib and external dependencies
+        create_cargo_toml_with_deps(output, &all_stdlib_modules, &all_external_crates)?;
 
         println!("\n{} Transpilation complete!", "Success!".green().bold());
         println!("Output directory: {:?}", output);
@@ -344,6 +346,7 @@ struct ModuleCompiler {
     target: CompilationTarget,
     stdlib_path: PathBuf,
     imported_stdlib_modules: HashSet<String>, // Track which stdlib modules are used
+    external_crates: Vec<String>,             // Track external crates (e.g., windjammer_ui)
 }
 
 #[allow(dead_code)]
@@ -359,6 +362,7 @@ impl ModuleCompiler {
             target,
             stdlib_path,
             imported_stdlib_modules: HashSet::new(),
+            external_crates: Vec::new(),
         }
     }
 
@@ -370,6 +374,38 @@ impl ModuleCompiler {
 
         // Resolve module path to file path
         let file_path = self.resolve_module_path(module_path, source_file)?;
+
+        // Check if this is an external crate (marked by __external__ prefix)
+        if file_path
+            .to_str()
+            .is_some_and(|s| s.starts_with("__external__::"))
+        {
+            // External crate - extract crate name and mark as external dependency
+            let crate_name = file_path
+                .to_str()
+                .unwrap()
+                .strip_prefix("__external__::")
+                .unwrap()
+                .replace(".*", "") // Remove glob imports
+                .replace(".{", "") // Remove braced imports
+                .split('}')
+                .next()
+                .unwrap()
+                .split('.')
+                .next()
+                .unwrap()
+                .to_string();
+
+            // Add to external crates if not already present
+            if !self.external_crates.contains(&crate_name) {
+                self.external_crates.push(crate_name.clone());
+            }
+
+            // Mark as compiled (external, no code generated)
+            self.compiled_modules
+                .insert(module_path.to_string(), String::new());
+            return Ok(());
+        }
 
         // Read and parse module
         let source = std::fs::read_to_string(&file_path)
@@ -491,11 +527,11 @@ impl ModuleCompiler {
                 source_dir.join(rel_path).join("mod.wj")
             ))
         } else {
-            // Absolute imports not yet supported
-            Err(anyhow::anyhow!(
-                "Absolute imports not yet supported: {}",
-                module_path
-            ))
+            // External crate imports (e.g., windjammer_ui, external_crate)
+            // These are treated as Rust crate dependencies and passed through to generated code
+            // Mark as external by returning a special "external" path
+            // We'll handle this specially in the compilation phase
+            Ok(PathBuf::from(format!("__external__::{}", module_path)))
         }
     }
 
@@ -576,7 +612,7 @@ fn compile_file(
     input_path: &Path,
     output_dir: &Path,
     target: CompilationTarget,
-) -> Result<HashSet<String>> {
+) -> Result<(HashSet<String>, Vec<String>)> {
     let mut module_compiler = ModuleCompiler::new(target);
 
     // Read source file
@@ -596,7 +632,7 @@ fn compile_file(
     for item in &program.items {
         if let parser::Item::Use { path, alias: _ } = item {
             let module_path = path.join(".");
-            // Compile both std.* and relative imports (./ or ../)
+            // Compile both std.* and relative imports (./ or ../) and external crates
             module_compiler.compile_module(&module_path, Some(input_path))?;
         }
     }
@@ -644,8 +680,11 @@ fn compile_file(
 
     std::fs::write(output_file, combined_code)?;
 
-    // Return the set of imported stdlib modules for Cargo.toml generation
-    Ok(module_compiler.imported_stdlib_modules)
+    // Return the set of imported stdlib modules and external crates for Cargo.toml generation
+    Ok((
+        module_compiler.imported_stdlib_modules,
+        module_compiler.external_crates,
+    ))
 }
 
 #[allow(dead_code)]
@@ -667,6 +706,7 @@ fn check_file(file_path: &Path) -> Result<()> {
 fn create_cargo_toml_with_deps(
     output_dir: &Path,
     imported_modules: &HashSet<String>,
+    external_crates: &[String],
 ) -> Result<()> {
     use std::fs;
 
@@ -720,6 +760,24 @@ fn create_cargo_toml_with_deps(
             _ => {}
         }
     }
+
+    // Add external crates (from workspace or crates.io)
+    let mut external_deps = Vec::new();
+    for crate_name in external_crates {
+        match crate_name.as_str() {
+            "windjammer_ui" => {
+                // Use path dependency to the workspace crate
+                external_deps
+                    .push("windjammer-ui = { path = \"../../crates/windjammer-ui\" }".to_string());
+            }
+            _ => {
+                // Default: assume it's a crates.io dependency
+                external_deps.push(format!("{} = \"*\"", crate_name));
+            }
+        }
+    }
+
+    deps.extend(external_deps.iter().map(|s| s.as_str()));
 
     deps.sort();
     deps.dedup();
