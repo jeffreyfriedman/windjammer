@@ -7,6 +7,31 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.34.0] - In Progress
+
+**Windjammer UI Framework: Full-Stack Web Development** 🎨
+
+### Summary
+v0.34.0 introduces a complete, full-stack UI framework inspired by Svelte. Build reactive web applications with the simplicity of Svelte and the safety of Rust, compiling to both JavaScript and WebAssembly from the same codebase.
+
+### Status
+- 🚧 In Development
+- Design document complete
+- Component model implementation in progress
+
+### Planned Features
+- Component model with `@component` macro
+- Fine-grained reactivity system (Svelte-style)
+- Virtual DOM for JavaScript target
+- Direct DOM manipulation for WASM target
+- Server-side rendering (SSR)
+- Client-side hydration
+- File-based routing
+- Component-scoped styling
+- Form handling and validation
+- WebSocket support
+- Global state management
+
 ## [0.33.0] - 2025-10-17
 
 **Enhanced JavaScript Support: Production-Grade Tooling** 🚀
