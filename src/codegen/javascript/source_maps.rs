@@ -6,6 +6,18 @@
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
+/// Source map output mode
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum SourceMapMode {
+    /// Generate external .map file
+    #[default]
+    External,
+    /// Inline source map as base64 data URL
+    Inline,
+    /// Both external and inline
+    Both,
+}
+
 /// Source map format (v3)
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SourceMap {
@@ -242,6 +254,83 @@ pub fn generate_source_map(
     }
 
     builder.build()
+}
+
+/// Convert source map to inline base64 data URL
+pub fn source_map_to_inline(source_map: &SourceMap) -> String {
+    let json = serde_json::to_string(source_map).unwrap_or_default();
+    let base64 = base64_encode(json.as_bytes());
+    format!(
+        "//# sourceMappingURL=data:application/json;charset=utf-8;base64,{}",
+        base64
+    )
+}
+
+/// Generate external source map reference comment
+pub fn source_map_external_reference(map_filename: &str) -> String {
+    format!("//# sourceMappingURL={}", map_filename)
+}
+
+/// Apply source map to JavaScript code based on mode
+pub fn apply_source_map(
+    code: &str,
+    source_map: &SourceMap,
+    mode: SourceMapMode,
+    map_filename: &str,
+) -> String {
+    let mut result = code.to_string();
+
+    match mode {
+        SourceMapMode::External => {
+            result.push('\n');
+            result.push_str(&source_map_external_reference(map_filename));
+            result.push('\n');
+        }
+        SourceMapMode::Inline => {
+            result.push('\n');
+            result.push_str(&source_map_to_inline(source_map));
+            result.push('\n');
+        }
+        SourceMapMode::Both => {
+            result.push('\n');
+            result.push_str(&source_map_external_reference(map_filename));
+            result.push('\n');
+            result.push_str(&source_map_to_inline(source_map));
+            result.push('\n');
+        }
+    }
+
+    result
+}
+
+/// Simple base64 encoding (sufficient for source maps)
+fn base64_encode(data: &[u8]) -> String {
+    const BASE64_CHARS: &[u8] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+    let mut result = String::new();
+
+    for chunk in data.chunks(3) {
+        let mut buf = [0u8; 3];
+        for (i, &byte) in chunk.iter().enumerate() {
+            buf[i] = byte;
+        }
+
+        result.push(BASE64_CHARS[(buf[0] >> 2) as usize] as char);
+        result.push(BASE64_CHARS[(((buf[0] & 0x03) << 4) | (buf[1] >> 4)) as usize] as char);
+
+        if chunk.len() > 1 {
+            result.push(BASE64_CHARS[(((buf[1] & 0x0f) << 2) | (buf[2] >> 6)) as usize] as char);
+        } else {
+            result.push('=');
+        }
+
+        if chunk.len() > 2 {
+            result.push(BASE64_CHARS[(buf[2] & 0x3f) as usize] as char);
+        } else {
+            result.push('=');
+        }
+    }
+
+    result
 }
 
 #[cfg(test)]
