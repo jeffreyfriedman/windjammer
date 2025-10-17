@@ -17,6 +17,9 @@ path = "src/lib.rs"
 # Core Windjammer dependency
 windjammer = { path = "../..", version = "0.34.0" }
 
+# Proc macro for #[component]
+windjammer-ui-macro = { path = "../windjammer-ui-macro", version = "0.34.0" }
+
 # Core dependencies
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"

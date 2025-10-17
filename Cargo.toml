@@ -4,6 +4,7 @@ members = [
     "crates/windjammer-lsp",
     "crates/windjammer-mcp",
     "crates/windjammer-ui",
+    "crates/windjammer-ui-macro",
 ]
 
 [workspace.package]
