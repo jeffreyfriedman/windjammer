@@ -32,8 +32,23 @@ Windjammer UI is a **complete, cross-platform UI framework** that compiles to We
 
 - **Svelte**: Simplicity, compile-time reactivity, minimal runtime
 - **Dioxus**: Cross-platform component model, RSX syntax, renderer abstraction
-- **Tauri**: Native desktop integration, small bundles, Rust backend
+- **Tauri**: Native desktop integration, small bundles, Rust backend (we USE Tauri, not replace it)
 - **Flutter**: Widget composition, platform channels, hot reload
+- **Bevy**: ECS architecture for game development
+- **Unity/Godot**: Component-based game engines
+
+### Relationship with Tauri
+
+**We integrate WITH Tauri, not compete:**
+- Desktop apps use Tauri as the runtime
+- Tauri provides the webview, native APIs, and packaging
+- Windjammer UI provides the reactive component model
+- Think: "Tauri + React" → "Tauri + Windjammer UI"
+
+**Advantages:**
+- Leverage Tauri's mature desktop integration
+- Focus on the UI/component model
+- Get all Tauri benefits (small bundles, security, native APIs)
 
 ---
 
@@ -814,4 +829,213 @@ wj build --target=android --ui main.wj    # → myapp.apk
 | Svelte | ✅ | ❌ | ❌ | Small | JavaScript |
 
 **Windjammer UI = Svelte's simplicity + Dioxus's cross-platform + Tauri's native integration + Rust's safety**
+
+---
+
+## Game Framework Extension
+
+### Why Games?
+
+The same cross-platform architecture that powers UI apps is PERFECT for games:
+- **Component model** → Game entities
+- **Reactivity** → Game state management
+- **Cross-platform** → Web, Desktop, Mobile games
+- **Native performance** → 60+ FPS on all platforms
+
+### Game-Specific Features
+
+```windjammer
+use windjammer_ui::game::*;
+
+#[game_entity]
+struct Player {
+    position: Vec2,
+    velocity: Vec2,
+    health: i32,
+    sprite: Sprite,
+}
+
+impl Player {
+    fn update(&mut self, delta: f32) {
+        self.position += self.velocity * delta;
+    }
+    
+    fn render(&self, ctx: &RenderContext) {
+        ctx.draw_sprite(&self.sprite, self.position);
+    }
+}
+
+#[game]
+struct MyGame {
+    player: Player,
+    enemies: Vec<Enemy>,
+    score: i32,
+}
+
+impl GameLoop for MyGame {
+    fn update(&mut self, delta: f32) {
+        self.player.update(delta);
+        
+        for enemy in &mut self.enemies {
+            enemy.update(delta);
+        }
+        
+        self.check_collisions();
+    }
+    
+    fn render(&self, ctx: &RenderContext) {
+        ctx.clear(Color::BLACK);
+        
+        self.player.render(ctx);
+        
+        for enemy in &self.enemies {
+            enemy.render(ctx);
+        }
+        
+        ctx.draw_text(&format!("Score: {}", self.score), Vec2::new(10, 10));
+    }
+}
+
+fn main() {
+    windjammer_ui::game::run(MyGame::new());
+}
+```
+
+### Game Module Features
+
+1. **Entity-Component System (ECS)**
+   - `#[game_entity]` macro
+   - Efficient entity management
+   - Component-based architecture
+
+2. **Rendering**
+   - 2D sprites, tilemaps, particles
+   - 3D models (optional)
+   - WebGL (web), Metal (iOS), Vulkan (Android), DirectX (Windows)
+
+3. **Input Handling**
+   - Keyboard, mouse, touch
+   - Gamepad support (all platforms)
+   - Unified input API
+
+4. **Physics**
+   - 2D physics (built-in)
+   - 3D physics (optional, via Rapier)
+   - Collision detection
+
+5. **Audio**
+   - Sound effects, music
+   - 3D spatial audio
+   - Cross-platform audio API
+
+6. **Networking**
+   - Multiplayer support
+   - WebSocket-based (web)
+   - UDP/TCP (native)
+   - Rollback netcode
+
+### Cross-Platform Game Compilation
+
+```bash
+# Compile to Web (WebGL)
+wj build --target=web --game mygame.wj
+
+# Compile to Desktop (Vulkan/Metal/DirectX)
+wj build --target=desktop --game mygame.wj
+
+# Compile to Mobile (Metal/Vulkan)
+wj build --target=ios --game mygame.wj
+wj build --target=android --game mygame.wj
+```
+
+### Game Examples
+
+**Platformer:**
+```windjammer
+#[game_entity]
+struct Player {
+    position: Vec2,
+    velocity: Vec2,
+    on_ground: bool,
+}
+
+impl Player {
+    fn jump(&mut self) {
+        if self.on_ground {
+            self.velocity.y = -500.0;
+        }
+    }
+    
+    fn update(&mut self, delta: f32, input: &Input) {
+        if input.key_pressed(Key::Space) {
+            self.jump();
+        }
+        
+        self.velocity.y += 980.0 * delta; // Gravity
+        self.position += self.velocity * delta;
+    }
+}
+```
+
+**Multiplayer Game:**
+```windjammer
+#[game]
+struct MultiplayerGame {
+    local_player: Player,
+    remote_players: HashMap<PlayerId, Player>,
+    network: NetworkManager,
+}
+
+impl GameLoop for MultiplayerGame {
+    fn update(&mut self, delta: f32) {
+        // Send local player state
+        self.network.send(PlayerUpdate {
+            position: self.local_player.position,
+            velocity: self.local_player.velocity,
+        });
+        
+        // Receive remote player updates
+        for update in self.network.receive() {
+            if let Some(player) = self.remote_players.get_mut(&update.id) {
+                player.position = update.position;
+                player.velocity = update.velocity;
+            }
+        }
+    }
+}
+```
+
+### Game Framework vs UI Apps
+
+| Feature | UI Apps | Games |
+|---------|---------|-------|
+| **Update Loop** | Event-driven | Fixed timestep (60 FPS) |
+| **Rendering** | DOM/Native widgets | Canvas/WebGL/Metal/Vulkan |
+| **State** | Reactive (fine-grained) | Entity-Component System |
+| **Input** | Events (click, type) | Continuous (held keys) |
+| **Performance** | Good enough | 60+ FPS required |
+
+### Use Cases
+
+1. **Web Games** - Browser-based games (no installation)
+2. **Desktop Games** - Indie games, Steam distribution
+3. **Mobile Games** - iOS App Store, Google Play
+4. **Educational Games** - Interactive learning
+5. **Simulations** - Physics simulations, visualizations
+6. **Game Jams** - Rapid prototyping
+
+### Competitive Position
+
+| Framework | Web | Desktop | Mobile | 2D | 3D | Language |
+|-----------|-----|---------|--------|----|----|----------|
+| **Windjammer Game** | ✅ | ✅ | ✅ | ✅ | ✅ | Windjammer |
+| Bevy | ❌ | ✅ | ⚠️ | ✅ | ✅ | Rust |
+| Unity | ✅ | ✅ | ✅ | ✅ | ✅ | C# |
+| Godot | ✅ | ✅ | ✅ | ✅ | ✅ | GDScript |
+| Phaser | ✅ | ❌ | ⚠️ | ✅ | ❌ | JavaScript |
+| LibGDX | ❌ | ✅ | ✅ | ✅ | ✅ | Java |
+
+**Unique advantage:** Same language (Windjammer) for UI apps AND games!
+
+---
 
