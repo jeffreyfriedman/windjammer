@@ -6,7 +6,7 @@ This roadmap outlines our vision for making Windjammer the **ultimate systems pr
 
 ---
 
-## ✅ Completed (v0.1.0 - v0.31.1)
+## ✅ Completed (v0.1.0 - v0.32.0)
 
 ### Core Language Features
 - ✅ Complete lexer, parser, and code generator
@@ -78,24 +78,43 @@ This roadmap outlines our vision for making Windjammer the **ultimate systems pr
 - ✅ Lowers barrier to entry for newcomers (AI as pair programmer)
 - ✅ Future-proof for the AI-assisted development era
 
+### Multi-Target Compilation (v0.32.0) 🌐
+
+**JavaScript Transpiler:**
+- ✅ `wj build --target=javascript` command
+- ✅ Transpile Windjammer → JavaScript (ES2020+)
+- ✅ TypeScript definitions (`.d.ts` files)
+- ✅ JSDoc comments for IDE support
+- ✅ Node.js and Browser compatibility
+- ✅ NPM package generation (`package.json`)
+- ✅ Async/await detection and handling
+- ✅ Clean, idiomatic ES2020+ output
+- ✅ Integrated with unified CLI (`wj run --target=js`)
+
+**Multi-Target Architecture:**
+- ✅ `CodegenBackend` trait for extensibility
+- ✅ Rust backend (native binaries)
+- ✅ JavaScript backend (npm packages)
+- ✅ WebAssembly backend (browser apps)
+- ✅ Shared optimization pipeline (all 15 phases)
+- ✅ Target-specific idiomatic code generation
+
+**Why This Matters:**
+- ✅ Write once, target Rust, JavaScript, or WASM
+- ✅ Shared business logic across full-stack apps
+- ✅ npm ecosystem access without abandoning Rust safety
+- ✅ Browser deployment without compromising on language quality
+- ✅ Positions Windjammer as truly **multi-platform**
+
 ---
 
 ## 📅 Future Releases
 
 ---
 
-### v0.32.0 - JavaScript Transpiler 🌐
+### v0.33.0 - Enhanced JavaScript Support
 
-**Theme: Maximum Compatibility**
-
-**Core Features:**
-- `windjammer build --target=js` command
-- Transpile Windjammer → JavaScript (ES2020+)
-- Source maps for debugging
-- TypeScript definitions (`.d.ts`)
-- Node.js and Browser compatibility
-- NPM package generation
-- Tree-shaking friendly output
+**Theme: Production-Grade JavaScript Output**
 
 **Advanced Features:**
 - Async/await translation for concurrent code

@@ -108,3 +108,89 @@ jobs:
         with:
           files: ./cobertura.xml
           fail_ci_if_error: false
+
+  multi-target-tests:
+    name: Multi-Target Compilation Tests
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+      
+      - name: Install Node.js (for JavaScript target testing)
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      
+      - name: Cache cargo registry
+        uses: actions/cache@v3
+        with:
+          path: ~/.cargo/registry
+          key: ${{ runner.os }}-cargo-registry-${{ hashFiles('**/Cargo.lock') }}
+      
+      - name: Cache cargo build
+        uses: actions/cache@v3
+        with:
+          path: target
+          key: ${{ runner.os }}-cargo-build-target-${{ hashFiles('**/Cargo.lock') }}
+      
+      - name: Build windjammer
+        run: cargo build --release
+      
+      - name: Test Rust target compilation
+        run: |
+          echo "fn main() { println!(\"Hello, Rust!\") }" > test.wj
+          ./target/release/wj build --target=rust test.wj --output /tmp/test_rust
+          test -f /tmp/test_rust/Cargo.toml || exit 1
+          echo "✅ Rust target works"
+      
+      - name: Test JavaScript target compilation
+        run: |
+          echo "fn main() { println!(\"Hello, JavaScript!\") }" > test.wj
+          ./target/release/wj build --target=javascript test.wj --output /tmp/test_js
+          test -f /tmp/test_js/output.js || exit 1
+          test -f /tmp/test_js/output.d.ts || exit 1
+          test -f /tmp/test_js/package.json || exit 1
+          echo "✅ JavaScript target works"
+      
+      - name: Test JavaScript output execution
+        run: |
+          node /tmp/test_js/output.js
+          echo "✅ JavaScript output executes correctly"
+      
+      - name: Test WebAssembly target compilation
+        run: |
+          echo "fn main() { println!(\"Hello, WASM!\") }" > test.wj
+          ./target/release/wj build --target=wasm test.wj --output /tmp/test_wasm
+          test -f /tmp/test_wasm/Cargo.toml || exit 1
+          echo "✅ WASM target works"
+      
+      - name: Run multi-target integration tests
+        run: cargo test --test multi_target_tests --verbose
+      
+      - name: Test all targets with complex code
+        run: |
+          cat > complex.wj << 'EOF'
+          struct Point {
+              x: int,
+              y: int,
+          }
+          
+          fn add(a: int, b: int) -> int {
+              a + b
+          }
+          
+          fn main() {
+              let p = Point { x: 10, y: 20 }
+              let sum = add(p.x, p.y)
+              println!("Sum: {}", sum)
+          }
+          EOF
+          
+          ./target/release/wj build --target=rust complex.wj --output /tmp/complex_rust
+          ./target/release/wj build --target=javascript complex.wj --output /tmp/complex_js
+          ./target/release/wj build --target=wasm complex.wj --output /tmp/complex_wasm
+          
+          echo "✅ All targets compile complex code successfully"
