@@ -842,7 +842,7 @@ The same cross-platform architecture that powers UI apps is PERFECT for games:
 - **Cross-platform** → Web, Desktop, Mobile games
 - **Native performance** → 60+ FPS on all platforms
 
-### Game-Specific Features
+### Game-Specific Features (Idiomatic Windjammer)
 
 ```windjammer
 use windjammer_ui::game::*;
@@ -856,12 +856,14 @@ struct Player {
 }
 
 impl Player {
-    fn update(&mut self, delta: f32) {
-        self.position += self.velocity * delta;
+    fn update(delta: f32) {
+        // Windjammer auto-detects position needs mutable access
+        position += velocity * delta;
     }
     
-    fn render(&self, ctx: &RenderContext) {
-        ctx.draw_sprite(&self.sprite, self.position);
+    fn render(ctx: RenderContext) {
+        // No & needed - Windjammer infers borrows
+        ctx.draw_sprite(sprite, position);
     }
 }
 
@@ -873,26 +875,29 @@ struct MyGame {
 }
 
 impl GameLoop for MyGame {
-    fn update(&mut self, delta: f32) {
-        self.player.update(delta);
+    fn update(delta: f32) {
+        // Clean method calls - no self needed
+        player.update(delta);
         
-        for enemy in &mut self.enemies {
+        // Simple iteration - Windjammer knows this is mutable
+        for enemy in enemies {
             enemy.update(delta);
         }
         
-        self.check_collisions();
+        check_collisions();
     }
     
-    fn render(&self, ctx: &RenderContext) {
+    fn render(ctx: RenderContext) {
         ctx.clear(Color::BLACK);
         
-        self.player.render(ctx);
+        player.render(ctx);
         
-        for enemy in &self.enemies {
+        // Clean read-only iteration
+        for enemy in enemies {
             enemy.render(ctx);
         }
         
-        ctx.draw_text(&format!("Score: {}", self.score), Vec2::new(10, 10));
+        ctx.draw_text(format!("Score: {score}"), Vec2::new(10, 10));
     }
 }
 
@@ -900,6 +905,39 @@ fn main() {
     windjammer_ui::game::run(MyGame::new());
 }
 ```
+
+**Windjammer Magic (How it Works):**
+
+1. **Implicit `self`** - Compiler inserts `self.` automatically
+   ```windjammer
+   position += velocity  // Becomes: self.position += self.velocity
+   ```
+
+2. **Automatic Borrow Inference** - Analyzes usage to determine `&` vs `&mut`
+   ```windjammer
+   fn update(delta: f32) { ... }  // Compiler determines: &mut self
+   fn render(ctx: RenderContext) { ... }  // Compiler determines: &self
+   ```
+
+3. **Smart Loop Iteration** - Knows when to borrow vs consume
+   ```windjammer
+   for enemy in enemies { enemy.update() }  // Becomes: &mut enemies
+   for enemy in enemies { enemy.render() }  // Becomes: &enemies
+   ```
+
+4. **Format String Auto-Borrow** - Variables in `{}` auto-borrowed
+   ```windjammer
+   format!("Score: {score}")  // Becomes: format!("Score: {}", &score)
+   ```
+
+5. **Parameter Borrow Inference** - Function calls auto-add `&` where needed
+   ```windjammer
+   ctx.draw_sprite(sprite, position)  // Becomes: ctx.draw_sprite(&sprite, position)
+   ```
+
+✅ **All Rust safety guarantees preserved!**  
+✅ **Zero runtime overhead - pure compile-time sugar!**  
+✅ **Compiles to idiomatic, safe Rust code!**
 
 ### Game Module Features
 
@@ -950,7 +988,7 @@ wj build --target=android --game mygame.wj
 
 ### Game Examples
 
-**Platformer:**
+**Platformer (Idiomatic Windjammer):**
 ```windjammer
 #[game_entity]
 struct Player {
@@ -960,24 +998,24 @@ struct Player {
 }
 
 impl Player {
-    fn jump(&mut self) {
-        if self.on_ground {
-            self.velocity.y = -500.0;
+    fn jump() {
+        if on_ground {
+            velocity.y = -500.0;
         }
     }
     
-    fn update(&mut self, delta: f32, input: &Input) {
+    fn update(delta: f32, input: Input) {
         if input.key_pressed(Key::Space) {
-            self.jump();
+            jump();
         }
         
-        self.velocity.y += 980.0 * delta; // Gravity
-        self.position += self.velocity * delta;
+        velocity.y += 980.0 * delta; // Gravity
+        position += velocity * delta;
     }
 }
 ```
 
-**Multiplayer Game:**
+**Multiplayer Game (Idiomatic Windjammer):**
 ```windjammer
 #[game]
 struct MultiplayerGame {
@@ -987,16 +1025,16 @@ struct MultiplayerGame {
 }
 
 impl GameLoop for MultiplayerGame {
-    fn update(&mut self, delta: f32) {
-        // Send local player state
-        self.network.send(PlayerUpdate {
-            position: self.local_player.position,
-            velocity: self.local_player.velocity,
+    fn update(delta: f32) {
+        // Send local player state (auto-borrow inference)
+        network.send(PlayerUpdate {
+            position: local_player.position,
+            velocity: local_player.velocity,
         });
         
-        // Receive remote player updates
-        for update in self.network.receive() {
-            if let Some(player) = self.remote_players.get_mut(&update.id) {
+        // Receive remote player updates (clean iteration)
+        for update in network.receive() {
+            if let Some(player) = remote_players.get_mut(update.id) {
                 player.position = update.position;
                 player.velocity = update.velocity;
             }
@@ -1198,7 +1236,7 @@ Our current architecture is **3D-ready** without being overengineered:
    - Same syntax, same tools
    - No context switching
 
-### 3D Game Example (Future)
+### 3D Game Example (Future - Idiomatic Windjammer)
 
 ```windjammer
 use windjammer_ui::game3d::*;
@@ -1220,30 +1258,38 @@ struct FPSGame {
 }
 
 impl GameLoop3D for FPSGame {
-    fn update(&mut self, delta: f32, input: &Input) {
-        // Camera look with mouse
-        self.camera.rotate(input.mouse_delta());
+    fn update(delta: f32, input: Input) {
+        // Camera look with mouse (Windjammer auto-detects mutable access)
+        camera.rotate(input.mouse_delta());
         
-        // WASD movement
-        let forward = self.camera.forward();
+        // WASD movement (clean, no explicit borrows)
+        let forward = camera.forward();
         if input.key_pressed(Key::W) {
-            self.player.rigidbody.apply_force(forward * 1000.0);
+            player.rigidbody.apply_force(forward * 1000.0);
         }
         
-        // Update physics
-        self.player.update(delta);
+        // Update physics (Windjammer infers ownership)
+        player.update(delta);
     }
     
-    fn render(&self, ctx: &RenderContext3D) {
-        ctx.set_camera(&self.camera);
-        ctx.draw_mesh(&self.player.mesh, self.player.position, self.player.rotation);
+    fn render(ctx: RenderContext3D) {
+        ctx.set_camera(camera);
+        ctx.draw_mesh(player.mesh, player.position, player.rotation);
         
-        for enemy in &self.enemies {
-            ctx.draw_mesh(&enemy.mesh, enemy.position, enemy.rotation);
+        // Clean iteration - no & needed, Windjammer auto-detects
+        for enemy in enemies {
+            ctx.draw_mesh(enemy.mesh, enemy.position, enemy.rotation);
         }
     }
 }
 ```
+
+**Key Differences from Rust:**
+- ❌ No `&self`, `&mut self` - Windjammer infers
+- ❌ No `&enemy` in loops - auto-detected
+- ❌ No `&enemy.mesh` - borrow inference
+- ✅ Clean, readable code like JavaScript/Python
+- ✅ Compile-time safety (Windjammer → Rust → binary)
 
 ### Implementation Phases (Post-v0.34.0)
 
