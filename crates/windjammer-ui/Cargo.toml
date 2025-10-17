@@ -1,0 +1,67 @@
+[package]
+name = "windjammer-ui"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+rust-version.workspace = true
+description = "Cross-platform UI framework for Windjammer (Web, Desktop, Mobile)"
+keywords = ["ui", "framework", "cross-platform", "wasm", "tauri"]
+categories = ["gui", "web-programming", "wasm"]
+
+[lib]
+name = "windjammer_ui"
+path = "src/lib.rs"
+
+[dependencies]
+# Core Windjammer dependency
+windjammer = { path = "../..", version = "0.34.0" }
+
+# Core dependencies
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+
+# Async runtime
+tokio = { version = "1.35", features = ["full"], optional = true }
+
+# Web platform (WASM)
+wasm-bindgen = { version = "0.2", optional = true }
+web-sys = { version = "0.3", features = [
+    "Document",
+    "Element",
+    "HtmlElement",
+    "Node",
+    "Window",
+    "EventTarget",
+    "Event",
+    "MouseEvent",
+    "KeyboardEvent",
+    "console",
+], optional = true }
+js-sys = { version = "0.3", optional = true }
+
+# Desktop platform (Tauri)
+tauri = { version = "2.0", features = ["protocol-asset"], optional = true }
+
+# Mobile platform (iOS)
+objc = { version = "0.2", optional = true }
+cocoa = { version = "0.25", optional = true }
+
+# Mobile platform (Android)
+jni = { version = "0.21", optional = true }
+
+[dev-dependencies]
+tokio-test = "0.4"
+
+[features]
+default = ["web"]
+
+# Platform features
+web = ["wasm-bindgen", "web-sys", "js-sys"]
+desktop = ["tauri", "tokio"]
+mobile-ios = ["objc", "cocoa"]
+mobile-android = ["jni"]
+
+# All platforms (for testing)
+all-platforms = ["web", "desktop", "mobile-ios", "mobile-android"]
+
