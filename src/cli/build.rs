@@ -6,7 +6,22 @@ use anyhow::Result;
 use colored::*;
 use std::path::Path;
 
-pub fn execute(path: &Path, output: Option<&Path>, _release: bool, target_str: &str) -> Result<()> {
+/// Build options for JavaScript target
+pub struct BuildOptions {
+    pub minify: bool,
+    pub tree_shake: bool,
+    pub source_maps: bool,
+    pub polyfills: bool,
+    pub v8_optimize: bool,
+}
+
+pub fn execute(
+    path: &Path,
+    output: Option<&Path>,
+    _release: bool,
+    target_str: &str,
+    options: BuildOptions,
+) -> Result<()> {
     let output_dir = output.unwrap_or_else(|| Path::new("./build"));
 
     println!(
@@ -26,6 +41,11 @@ pub fn execute(path: &Path, output: Option<&Path>, _release: bool, target_str: &
             let config = CodegenConfig {
                 target: Target::JavaScript,
                 output_dir: output_dir.to_path_buf(),
+                minify: options.minify,
+                tree_shake: options.tree_shake,
+                source_maps: options.source_maps,
+                polyfills: options.polyfills,
+                v8_optimize: options.v8_optimize,
                 ..Default::default()
             };
             return build_javascript(path, &config);

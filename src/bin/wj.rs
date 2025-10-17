@@ -62,6 +62,26 @@ enum Commands {
         /// Defer drop threshold in bytes (default: 102400 = 100KB)
         #[arg(long, value_name = "BYTES")]
         defer_drop_threshold: Option<usize>,
+
+        /// Minify JavaScript output (JS target only)
+        #[arg(long)]
+        minify: bool,
+
+        /// Enable tree shaking (dead code elimination)
+        #[arg(long)]
+        tree_shake: bool,
+
+        /// Generate source maps
+        #[arg(long)]
+        source_maps: bool,
+
+        /// Include polyfills for older browsers (JS target only)
+        #[arg(long)]
+        polyfills: bool,
+
+        /// Apply V8 optimizations (JS target only)
+        #[arg(long)]
+        v8_optimize: bool,
     },
 
     /// Compile and run a Windjammer file
@@ -164,11 +184,28 @@ fn main() -> anyhow::Result<()> {
             target,
             defer_drop,
             defer_drop_threshold,
+            minify,
+            tree_shake,
+            source_maps,
+            polyfills,
+            v8_optimize,
         } => {
             // TODO: Pass defer_drop config to compiler
             // For now, just ignore these flags - defer drop is always auto
             let _ = (defer_drop, defer_drop_threshold);
-            windjammer::cli::build::execute(&path, output.as_deref(), release, &target)?;
+            windjammer::cli::build::execute(
+                &path,
+                output.as_deref(),
+                release,
+                &target,
+                windjammer::cli::build::BuildOptions {
+                    minify,
+                    tree_shake,
+                    source_maps,
+                    polyfills,
+                    v8_optimize,
+                },
+            )?;
         }
         Commands::Run {
             path,
