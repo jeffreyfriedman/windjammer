@@ -1039,3 +1039,261 @@ impl GameLoop for MultiplayerGame {
 
 ---
 
+## 3D Game Support (Future)
+
+### Architecture Designed for 3D
+
+Our current architecture is **3D-ready** without being overengineered:
+
+**Already 3D-compatible:**
+- ✅ `Vec3` math type (implemented)
+- ✅ `draw_mesh()` in RenderContext (stubbed)
+- ✅ Platform abstraction (WebGL/Metal/Vulkan/DirectX)
+- ✅ ECS architecture (scales to 3D)
+- ✅ Component-based design (3D entities work same way)
+
+**What we need to add later:**
+- 🔜 3D camera system
+- 🔜 Mesh loading (GLTF, FBX)
+- 🔜 Material system
+- 🔜 Lighting (directional, point, spot)
+- 🔜 3D physics (via Rapier)
+- 🔜 Skeletal animation
+- 🔜 Scene graph
+
+### Competitive Analysis: Learning from the Best
+
+#### Unity (C#) - The Standard
+
+**Strengths:**
+- ✅ Mature ecosystem (15+ years)
+- ✅ Asset Store (millions of assets)
+- ✅ Visual editor (scene, inspector, profiler)
+- ✅ Multi-platform (20+ platforms)
+- ✅ Huge community, tutorials
+
+**Weaknesses:**
+- ❌ C# performance overhead
+- ❌ Proprietary (licensing costs for revenue > $100k)
+- ❌ Heavy runtime (100MB+ builds)
+- ❌ Editor-centric (hard to version control scenes)
+- ❌ Compilation slow
+
+**What we'll do better:**
+- Smaller binaries (Rust efficiency)
+- Text-based scenes (Git-friendly)
+- Faster compilation
+- Open-source, no licensing
+
+#### Unreal Engine (C++) - The Powerhouse
+
+**Strengths:**
+- ✅ AAA-quality graphics (nanite, lumen)
+- ✅ Blueprint visual scripting
+- ✅ Industry standard for 3D
+- ✅ Free for < $1M revenue
+- ✅ Amazing rendering
+
+**Weaknesses:**
+- ❌ Massive size (40GB+ install)
+- ❌ Complex C++ API
+- ❌ Slow iteration (long compile times)
+- ❌ Overkill for indies/small games
+- ❌ Steep learning curve
+
+**What we'll do better:**
+- Simpler API (Svelte-like simplicity)
+- Fast iteration (Rust compile times)
+- Lightweight (no 40GB install)
+- Same code for 2D and 3D
+
+#### Bevy (Rust) - The Modern Contender
+
+**Strengths:**
+- ✅ Pure Rust (no C++ interop)
+- ✅ ECS architecture (performant)
+- ✅ Data-oriented design
+- ✅ Open-source (MIT/Apache)
+- ✅ Growing ecosystem
+
+**Weaknesses:**
+- ❌ No web support (WASM experimental)
+- ❌ No mobile support (iOS/Android hard)
+- ❌ Young (immature tooling)
+- ❌ No visual editor
+- ❌ Steep learning curve (ECS)
+
+**What we'll do better:**
+- Full web support (first-class)
+- Mobile support (iOS + Android)
+- Simpler API (component model)
+- Cross-platform from day 1
+- Same language for UI + games
+
+#### Godot (GDScript) - The Open-Source Hero
+
+**Strengths:**
+- ✅ Fully open-source (MIT)
+- ✅ Great visual editor
+- ✅ Node-based scene system
+- ✅ Lightweight (40MB download)
+- ✅ Easy to learn
+
+**Weaknesses:**
+- ❌ GDScript is slow (Python-like)
+- ❌ No web support (4.x experimental)
+- ❌ Smaller community than Unity
+- ❌ C# support is second-class
+- ❌ Not as polished as Unity/Unreal
+
+**What we'll do better:**
+- Native performance (Rust)
+- First-class web support
+- Type safety (compile-time)
+- Same language for everything
+- More polished API
+
+### Our Superior Design: Synthesis of Best Ideas
+
+| Feature | Unity | Unreal | Bevy | Godot | **Windjammer** |
+|---------|-------|--------|------|-------|----------------|
+| **Language** | C# | C++ | Rust | GDScript | **Windjammer (Rust-based)** |
+| **Performance** | Good | Excellent | Excellent | OK | **Excellent** |
+| **Compile Time** | Slow | Very Slow | Fast | Instant | **Fast** |
+| **Web Support** | OK | No | No | Experimental | **First-class** |
+| **Mobile** | Yes | Yes | No | Yes | **Yes** |
+| **Editor** | Yes | Yes | No | Yes | **Text-first (Git-friendly)** |
+| **ECS** | Bolt-on | No | Core | No | **Core (optional)** |
+| **Visual Scripting** | Bolt-on | Blueprint | No | Visual Script | **Future (macros)** |
+| **Learning Curve** | Medium | Steep | Steep | Easy | **Easy (Svelte-like)** |
+| **Binary Size** | Large | Huge | Medium | Small | **Small** |
+| **Licensing** | Tiered | Royalty | Free | Free | **Free (MIT)** |
+
+### Our Architectural Advantages
+
+1. **Text-Based Scenes** (like Bevy, not Unity/Unreal)
+   - Git-friendly
+   - Easy to review PRs
+   - No binary merge conflicts
+   - Simple to edit
+
+2. **Component Model** (like our UI framework)
+   - Simpler than ECS for beginners
+   - Can opt-in to ECS for performance
+   - Same patterns as UI code
+
+3. **Cross-Platform First** (like Godot, better than Bevy)
+   - Web, Desktop, Mobile from day 1
+   - No "experimental" platforms
+   - Same codebase everywhere
+
+4. **Rust Performance** (like Bevy, better than Unity/Godot)
+   - No GC pauses
+   - Memory safety
+   - Fearless concurrency
+
+5. **Unified Language** (unique to us!)
+   - UI apps use Windjammer
+   - Games use Windjammer
+   - Same syntax, same tools
+   - No context switching
+
+### 3D Game Example (Future)
+
+```windjammer
+use windjammer_ui::game3d::*;
+
+#[game_entity]
+struct Player {
+    position: Vec3,
+    rotation: Vec3,
+    mesh: Mesh,
+    rigidbody: Rigidbody3D,
+}
+
+#[game]
+struct FPSGame {
+    player: Player,
+    enemies: Vec<Enemy>,
+    camera: Camera3D,
+    level: Scene,
+}
+
+impl GameLoop3D for FPSGame {
+    fn update(&mut self, delta: f32, input: &Input) {
+        // Camera look with mouse
+        self.camera.rotate(input.mouse_delta());
+        
+        // WASD movement
+        let forward = self.camera.forward();
+        if input.key_pressed(Key::W) {
+            self.player.rigidbody.apply_force(forward * 1000.0);
+        }
+        
+        // Update physics
+        self.player.update(delta);
+    }
+    
+    fn render(&self, ctx: &RenderContext3D) {
+        ctx.set_camera(&self.camera);
+        ctx.draw_mesh(&self.player.mesh, self.player.position, self.player.rotation);
+        
+        for enemy in &self.enemies {
+            ctx.draw_mesh(&enemy.mesh, enemy.position, enemy.rotation);
+        }
+    }
+}
+```
+
+### Implementation Phases (Post-v0.34.0)
+
+**v0.35.0 - 3D Foundation:**
+- Camera system (perspective, orthographic)
+- 3D transformations (position, rotation, scale)
+- Basic mesh rendering
+- 3D physics (Rapier integration)
+
+**v0.36.0 - 3D Assets:**
+- Mesh loading (GLTF)
+- Texture system
+- Material system (PBR)
+- Shader support
+
+**v0.37.0 - 3D Advanced:**
+- Skeletal animation
+- Particle systems
+- Lighting (directional, point, spot, ambient)
+- Shadow mapping
+
+**v0.38.0 - 3D Polish:**
+- Scene graph
+- LOD (Level of Detail)
+- Culling (frustum, occlusion)
+- Post-processing effects
+
+### Key Architectural Decisions (Made Now)
+
+✅ **ECS as Foundation** - Scales to 3D  
+✅ **Vec3 Already Exists** - Ready for 3D math  
+✅ **Platform Abstraction** - Supports 3D APIs  
+✅ **Component-Based** - Works for 2D and 3D  
+✅ **Renderer Trait** - Can swap 2D/3D renderers  
+✅ **Text-Based** - Scenes are code, not binary  
+
+### Research Summary
+
+**We're taking:**
+- Unity's ease of use
+- Unreal's rendering quality (eventually)
+- Bevy's Rust performance + ECS
+- Godot's lightweight nature + open-source
+- Our own: Unified language, web-first, cross-platform simplicity
+
+**We're avoiding:**
+- Unity's proprietary licensing
+- Unreal's complexity + size
+- Bevy's web/mobile gaps
+- Godot's performance issues
+
+---
+
