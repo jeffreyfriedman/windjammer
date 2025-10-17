@@ -4,7 +4,7 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-windjammer-ui = { path = "../../crates/windjammer-ui" }
+windjammer-ui = { path = "/Users/jeffreyfriedman/src/windjammer/crates/windjammer-ui" }
 
 [[bin]]
 name = "counter"
