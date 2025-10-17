@@ -337,6 +337,9 @@ wj eject --output rust-project  # Convert to pure Rust (no lock-in!)
 # Compile to JavaScript (Node.js or Browser)
 wj build --target=javascript main.wj
 
+# Production-ready JavaScript with all optimizations
+wj build --target=javascript --minify --tree-shake --polyfills --v8-optimize main.wj
+
 # Compile to WebAssembly
 wj build --target=wasm main.wj
 
@@ -359,6 +362,14 @@ wj build --target=rust main.wj
 - ✅ JSDoc comments for IDE support
 - ✅ Async/await support automatically detected
 - ✅ Auto-run `main()` when executed directly
+
+**Enhanced JavaScript Features (v0.33.0):** 🆕
+- ✅ **Minification** - Compress output for production (`--minify`)
+- ✅ **Tree Shaking** - Remove unused code (`--tree-shake`)
+- ✅ **Source Maps** - Debug original Windjammer code (`--source-maps`)
+- ✅ **Polyfills** - Support older browsers (`--polyfills`)
+- ✅ **V8 Optimizations** - Target-specific performance (`--v8-optimize`)
+- ✅ **Web Workers** - Browser parallelism for `spawn` statements
 
 **Example JavaScript Output:**
 ```javascript

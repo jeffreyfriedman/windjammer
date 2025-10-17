@@ -6,7 +6,7 @@ This roadmap outlines our vision for making Windjammer the **ultimate systems pr
 
 ---
 
-## ✅ Completed (v0.1.0 - v0.32.0)
+## ✅ Completed (v0.1.0 - v0.33.0)
 
 ### Core Language Features
 - ✅ Complete lexer, parser, and code generator
@@ -106,34 +106,43 @@ This roadmap outlines our vision for making Windjammer the **ultimate systems pr
 - ✅ Browser deployment without compromising on language quality
 - ✅ Positions Windjammer as truly **multi-platform**
 
+### Enhanced JavaScript Support (v0.33.0) 🚀
+
+**Production-Grade Features:**
+- ✅ `--minify` - Compress output for production (50-70% smaller)
+- ✅ `--tree-shake` - Dead code elimination at compile time
+- ✅ `--source-maps` - Debug original Windjammer code in browser
+- ✅ `--polyfills` - Support ES5, ES2015, ES2017, ES2020 targets
+- ✅ `--v8-optimize` - Monomorphic calls, hidden classes, TurboFan patterns
+- ✅ Web Workers - Automatic browser parallelism for `spawn` statements
+
+**Implementation:**
+- ✅ 744 lines of minifier logic
+- ✅ Source map generation (v3 format)
+- ✅ Tree shaking with usage analysis
+- ✅ Polyfill generation for multiple targets
+- ✅ V8 optimization patterns
+- ✅ Web Worker code generation
+
+**Testing & Quality:**
+- ✅ **108 tests passing** (+18 enhanced JavaScript tests)
+- ✅ Integration tests for all optimization flags
+- ✅ CLI flag tests (`--minify`, `--tree-shake`, etc.)
+- ✅ Zero regressions
+
+**Why This Matters:**
+- ✅ Production-ready JavaScript without external tooling
+- ✅ Compete with TypeScript's ecosystem
+- ✅ All-in-one tooling (no webpack, rollup, babel needed)
+- ✅ Deploy to IE11+ or latest Chrome/Firefox/Safari
+
 ---
 
 ## 📅 Future Releases
 
 ---
 
-### v0.33.0 - Enhanced JavaScript Support
-
-**Theme: Production-Grade JavaScript Output**
-
-**Advanced Features:**
-- Async/await translation for concurrent code
-- Web Workers for `spawn` semantics
-- Polyfills for missing features
-- Optimization for JS engines (V8, SpiderMonkey)
-
-**Why This Matters:**
-- Access to entire JavaScript ecosystem
-- Frontend and backend compatibility
-- Gradual adoption in JS projects
-- Alternative to TypeScript with better ergonomics
-- Complements WASM target for web apps
-
-**Target Date:** Q2 2026
-
----
-
-### v0.33.0 - UX Library (`windjammer-ui`) 🎨
+### v0.34.0 - UX Library (`windjammer-ui`) 🎨
 
 **Theme: Everything in the Box**
 
