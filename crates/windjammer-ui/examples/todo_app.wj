@@ -1,7 +1,7 @@
 // Todo App Example - Demonstrates state management and events
 
-import windjammer_ui::prelude::*
-import windjammer_ui::vdom::{VElement, VNode, VText}
+use windjammer_ui.prelude.*
+use windjammer_ui.vdom.{VElement, VNode, VText}
 
 @derive(Debug, Clone)
 struct TodoItem {
@@ -164,8 +164,8 @@ fn main() {
     print("Completed: {completed}/{app.todos.len()}")
 
     // Demonstrate SSR
-    import windjammer_ui::ssr::SSRRenderer
-    let mut renderer = SSRRenderer::new()
+    use windjammer_ui.ssr.SSRRenderer
+    let mut renderer = SSRRenderer.new()
     let html = renderer.render_to_string(app)
     print("\n📄 Server-Side Rendered HTML:")
     print(html)
