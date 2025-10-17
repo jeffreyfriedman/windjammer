@@ -19,18 +19,24 @@
 //!
 //! #[component]
 //! struct Counter {
-//!     state count: i32 = 0,
-//!     
-//!     fn render() -> Html {
-//!         html! {
-//!             <div>
-//!                 <h1>"Count: {count}"</h1>
-//!                 <button onclick={|| count += 1}>"Increment"</button>
-//!             </div>
-//!         }
+//!     count: i32,
+//! }
+//!
+//! impl Counter {
+//!     fn render(&self) -> VNode {
+//!         VElement::new("div")
+//!             .child(VNode::Element(VElement::new("h1")
+//!                 .child(VNode::Text(VText::new(format!("Count: {}", self.count))))))
+//!             .child(VNode::Element(VElement::new("button")
+//!                 .child(VNode::Text(VText::new("Increment")))))
+//!             .into()
 //!     }
 //! }
 //! ```
+
+// Re-export the proc macro
+pub use windjammer_ui_macro::component;
+pub use windjammer_ui_macro::Props;
 
 pub mod component;
 pub mod events;
