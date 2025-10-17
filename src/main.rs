@@ -1,6 +1,7 @@
 pub mod analyzer;
 pub mod cli;
 pub mod codegen;
+pub mod codegen_legacy;
 pub mod compiler_database;
 pub mod config;
 pub mod ejector;
