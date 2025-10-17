@@ -1519,6 +1519,16 @@ impl CodeGenerator {
             } => {
                 // Extract function name for signature lookup
                 let func_name = self.extract_function_name(function);
+
+                // Special case: convert print() to println!()
+                if func_name == "print" {
+                    let args: Vec<String> = arguments
+                        .iter()
+                        .map(|(_label, arg)| self.generate_expression(arg))
+                        .collect();
+                    return format!("println!({})", args.join(", "));
+                }
+
                 let func_str = self.generate_expression(function);
 
                 // Look up signature and clone it to avoid borrow conflicts
@@ -1872,7 +1882,64 @@ impl CodeGenerator {
                     s
                 }
             }
-            Literal::String(s) => format!("\"{}\"", s),
+            Literal::String(s) => {
+                // Check for string interpolation: {variable}
+                if s.contains('{') && s.contains('}') {
+                    // Convert to format! macro
+                    // "Count: {count}" -> format!("Count: {}", count)
+                    let mut format_str = String::new();
+                    let mut args = Vec::new();
+                    let mut chars = s.chars().peekable();
+
+                    while let Some(ch) = chars.next() {
+                        if ch == '{' {
+                            // Check if it's {variable} pattern
+                            let mut var_name = String::new();
+                            let mut is_variable = true;
+
+                            while let Some(&next_ch) = chars.peek() {
+                                if next_ch == '}' {
+                                    chars.next(); // consume }
+                                    break;
+                                } else if next_ch.is_alphanumeric() || next_ch == '_' {
+                                    var_name.push(next_ch);
+                                    chars.next();
+                                } else {
+                                    // Not a simple variable pattern
+                                    is_variable = false;
+                                    break;
+                                }
+                            }
+
+                            if is_variable && !var_name.is_empty() {
+                                // It's a variable interpolation
+                                format_str.push_str("{}");
+                                args.push(var_name);
+                            } else {
+                                // Not a variable, keep the braces
+                                format_str.push('{');
+                                format_str.push_str(&var_name);
+                            }
+                        } else {
+                            format_str.push(ch);
+                        }
+                    }
+
+                    if args.is_empty() {
+                        // No interpolation found, just a regular string
+                        format!("\"{}\"", s)
+                    } else {
+                        // Generate format! call
+                        format!(
+                            "format!(\"{}\"{})",
+                            format_str,
+                            args.iter().map(|a| format!(", {}", a)).collect::<String>()
+                        )
+                    }
+                } else {
+                    format!("\"{}\"", s)
+                }
+            }
             Literal::Char(c) => {
                 // Escape special characters
                 match c {
