@@ -45,6 +45,7 @@ pub mod platform;
 pub mod reactivity;
 pub mod renderer;
 pub mod routing;
+pub mod ssr;
 pub mod vdom;
 
 /// Prelude module with commonly used types and traits
