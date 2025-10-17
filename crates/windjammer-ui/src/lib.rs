@@ -44,6 +44,7 @@ pub mod game;
 pub mod platform;
 pub mod reactivity;
 pub mod renderer;
+pub mod routing;
 pub mod vdom;
 
 /// Prelude module with commonly used types and traits
