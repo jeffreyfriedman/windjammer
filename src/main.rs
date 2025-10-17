@@ -781,6 +781,21 @@ fn create_cargo_toml_with_deps(
                     "windjammer-ui = {{ path = \"{}\" }}",
                     windjammer_ui_path.display()
                 ));
+
+                // Also add the macro crate (needed for #[component], #[derive(Props)])
+                let windjammer_ui_macro_path =
+                    if let Ok(manifest_dir) = env::var("CARGO_MANIFEST_DIR") {
+                        PathBuf::from(manifest_dir).join("crates/windjammer-ui-macro")
+                    } else {
+                        env::current_dir()
+                            .unwrap_or_else(|_| PathBuf::from("."))
+                            .join("crates/windjammer-ui-macro")
+                    };
+
+                external_deps.push(format!(
+                    "windjammer-ui-macro = {{ path = \"{}\" }}",
+                    windjammer_ui_macro_path.display()
+                ));
             }
             _ => {
                 // Default: assume it's a crates.io dependency
