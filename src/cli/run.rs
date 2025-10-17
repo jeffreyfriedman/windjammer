@@ -23,7 +23,19 @@ pub fn execute(path: &Path, args: &[String], target_str: &str) -> Result<()> {
     // Check if target is JavaScript
     if target_str == "javascript" || target_str == "js" {
         // Build JavaScript to temp directory
-        crate::cli::build::execute(path, Some(output_dir), false, target_str)?;
+        crate::cli::build::execute(
+            path,
+            Some(output_dir),
+            false,
+            target_str,
+            crate::cli::build::BuildOptions {
+                minify: false,
+                tree_shake: false,
+                source_maps: false,
+                polyfills: false,
+                v8_optimize: false,
+            },
+        )?;
 
         // Run with Node.js
         let output_file = output_dir.join("output.js");
