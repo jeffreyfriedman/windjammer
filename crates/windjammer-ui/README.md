@@ -56,20 +56,24 @@ All examples are in **idiomatic Windjammer** (`.wj` files):
 
 **v0.34.0 - IN DEVELOPMENT**
 
-The framework architecture is complete with 91 passing tests, but **runtime integration is in progress**. 
+The framework architecture is complete with 91 passing tests. **Parser integration complete!** 🎉
 
 ### ✅ What Works
-- Complete Rust library implementation
+- Complete Rust library implementation (91 tests passing)
 - All core APIs designed and tested
-- Comprehensive example code (shows intended usage)
+- Comprehensive example code (8 examples in idiomatic Windjammer)
 - Cross-platform architecture ready
+- **Parser support for glob imports (`use module.*`)**
+- **Parser support for braced imports (`use module.{A, B, C}`)**
+- **External crate imports (`use windjammer_ui.prelude.*`)**
+- **`.wj` → Rust transpilation with auto-generated Cargo.toml**
 
-### 🚧 What's Being Built
-- `.wj` file transpilation to Rust
-- Web runtime (browser DOM integration)
+### 🚧 What's Being Built (Next)
+- `wj run` command for executing .wj files
+- Web runtime (browser DOM integration via WASM)
 - Desktop runtime (Tauri integration)
-- Game runtime (rendering backends)
-- `wj run` CLI command
+- Game runtime (rendering backends: Canvas/WebGL)
+- WASM packaging with wasm-pack
 
 ## 📖 Usage Example
 
