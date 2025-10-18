@@ -1,7 +1,9 @@
+// Note: This is a conceptual example showing Windjammer UI syntax
+// In a real application, types would be imported from windjammer_ui
+
 // Platform Capabilities Example
 // Demonstrates filesystem, GPS, camera, clipboard, and notifications
 
-use windjammer_ui.platform.capability_impl.{
     Filesystem, GPS, Camera, Clipboard, Notifications,
     Location, Notification, CameraImage
 }

@@ -1,3 +1,5 @@
+//! Debug Adapter Protocol support (planned feature for v0.35.0)
+#![allow(dead_code)]
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::collections::HashMap;
@@ -8,6 +10,7 @@ use tokio::sync::mpsc;
 ///
 /// This adapter translates between the DAP protocol and rust-lldb/gdb
 /// to enable debugging of Windjammer programs.
+#[cfg_attr(test, allow(dead_code))]
 pub struct DebugAdapter {
     /// The underlying debugger process (lldb or gdb)
     debugger: Option<Child>,
@@ -20,6 +23,7 @@ pub struct DebugAdapter {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(test, allow(dead_code))]
 pub struct DapMessage {
     #[serde(rename = "type")]
     pub msg_type: String,
@@ -37,6 +41,7 @@ pub struct DapMessage {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(test, allow(dead_code))]
 pub struct Breakpoint {
     pub line: i32,
     pub verified: bool,
@@ -45,6 +50,7 @@ pub struct Breakpoint {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(test, allow(dead_code))]
 pub struct Source {
     pub path: String,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -52,6 +58,7 @@ pub struct Source {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(test, allow(dead_code))]
 pub struct StackFrame {
     pub id: i32,
     pub name: String,
@@ -61,6 +68,7 @@ pub struct StackFrame {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(test, allow(dead_code))]
 pub struct Variable {
     pub name: String,
     pub value: String,

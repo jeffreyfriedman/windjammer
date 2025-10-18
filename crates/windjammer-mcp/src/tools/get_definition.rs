@@ -11,8 +11,10 @@ use windjammer_lsp::database::WindjammerDatabase;
 
 #[derive(Debug, Deserialize)]
 struct GetDefinitionRequest {
+    #[allow(dead_code)]
     file: Option<String>,
     symbol: String,
+    #[allow(dead_code)]
     position: Option<Position>,
 }
 

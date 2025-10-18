@@ -11,6 +11,22 @@ windjammer-ui = { path = "/Users/jeffreyfriedman/src/windjammer/crates/windjamme
 windjammer-ui-macro = { path = "/Users/jeffreyfriedman/src/windjammer/crates/windjammer-ui-macro" }
 
 [[bin]]
+name = "test_component"
+path = "test_component.rs"
+
+[[bin]]
+name = "shooter_game"
+path = "shooter_game.rs"
+
+[[bin]]
+name = "test_block"
+path = "test_block.rs"
+
+[[bin]]
+name = "test_todo_140"
+path = "test_todo_140.rs"
+
+[[bin]]
 name = "test_array_of_structs"
 path = "test_array_of_structs.rs"
 
@@ -19,20 +35,60 @@ name = "test_todo_simple"
 path = "test_todo_simple.rs"
 
 [[bin]]
+name = "todo_app"
+path = "todo_app.rs"
+
+[[bin]]
+name = "test_todo_42"
+path = "test_todo_42.rs"
+
+[[bin]]
+name = "test_field_assign"
+path = "test_field_assign.rs"
+
+[[bin]]
 name = "counter"
 path = "counter.rs"
+
+[[bin]]
+name = "test_array_struct"
+path = "test_array_struct.rs"
+
+[[bin]]
+name = "test_todo_55"
+path = "test_todo_55.rs"
 
 [[bin]]
 name = "test_todo_component"
 path = "test_todo_component.rs"
 
 [[bin]]
+name = "test_todo_71"
+path = "test_todo_71.rs"
+
+[[bin]]
+name = "test_nested_struct_array"
+path = "test_nested_struct_array.rs"
+
+[[bin]]
 name = "test_struct_with_array"
 path = "test_struct_with_array.rs"
 
 [[bin]]
+name = "test_for_field_assign"
+path = "test_for_field_assign.rs"
+
+[[bin]]
 name = "test_multiline_array"
 path = "test_multiline_array.rs"
+
+[[bin]]
+name = "platform_capabilities"
+path = "platform_capabilities.rs"
+
+[[bin]]
+name = "test_todo_88"
+path = "test_todo_88.rs"
 
 [profile.release]
 opt-level = 3

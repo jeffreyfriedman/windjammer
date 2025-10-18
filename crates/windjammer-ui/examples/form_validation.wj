@@ -1,10 +1,9 @@
 // Form Validation Example
 // Demonstrates form handling, validation, and error display
+// Note: This is a conceptual example showing the Windjammer UI API
+// In a real application, these types would be imported from windjammer_ui
 
-use windjammer_ui.prelude.*
-use windjammer_ui.vdom.{VElement, VNode, VText}
-
-@derive(Debug, Clone)]
+@derive(Debug, Clone)
 struct ValidationError {
     field: string
     message: string

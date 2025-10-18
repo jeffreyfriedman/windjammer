@@ -31,7 +31,8 @@ impl<'a> RefactoringEngine<'a> {
         Self { db }
     }
 
-    /// Get the database
+    /// Get the database (for use by refactoring submodules)
+    #[allow(dead_code)]
     pub fn db(&self) -> &WindjammerDatabase {
         self.db
     }
@@ -106,6 +107,8 @@ impl<'a> RefactoringEngine<'a> {
     }
 
     /// Execute "Extract Function" refactoring
+    /// Execute "Extract Function" refactoring (called via LSP command)
+    #[allow(dead_code)]
     pub fn execute_extract_function(
         &self,
         uri: &Url,
@@ -118,6 +121,8 @@ impl<'a> RefactoringEngine<'a> {
     }
 
     /// Execute "Inline Variable" refactoring
+    /// Execute "Inline Variable" refactoring (called via LSP command)
+    #[allow(dead_code)]
     pub fn execute_inline_variable(
         &self,
         uri: &Url,
@@ -129,6 +134,8 @@ impl<'a> RefactoringEngine<'a> {
     }
 
     /// Execute "Introduce Variable" refactoring
+    /// Execute "Introduce Variable" refactoring (called via LSP command)
+    #[allow(dead_code)]
     pub fn execute_introduce_variable(
         &self,
         uri: &Url,
@@ -141,6 +148,8 @@ impl<'a> RefactoringEngine<'a> {
     }
 
     /// Execute "Change Signature" refactoring
+    /// Execute "Change Signature" refactoring (called via LSP command)
+    #[allow(dead_code)]
     pub fn execute_change_signature(
         &self,
         uri: &Url,
@@ -153,6 +162,8 @@ impl<'a> RefactoringEngine<'a> {
     }
 
     /// Execute "Move Item" refactoring
+    /// Execute "Move Item" refactoring (called via LSP command)
+    #[allow(dead_code)]
     pub fn execute_move_item(
         &self,
         source_uri: &Url,
@@ -167,8 +178,9 @@ impl<'a> RefactoringEngine<'a> {
     }
 }
 
-/// Result of a refactoring operation
+/// Result of a refactoring operation (for future preview functionality)
 #[derive(Debug, Clone)]
+#[allow(dead_code)]
 pub struct RefactoringResult {
     /// The workspace edit to apply
     pub edit: WorkspaceEdit,

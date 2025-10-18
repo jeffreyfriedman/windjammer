@@ -9,7 +9,6 @@ struct TodoApp {
 }
 
 fn main() {
-    let app = TodoApp { todos: vec![TodoItem { id: 1, text: "Learn Windjammer", completed: false }, TodoItem { id: 2, text: "Build awesome apps", completed: false }] };
-    println!("Done")
+    let app = TodoApp { todos: vec![TodoItem { id: 1, text: "Learn", completed: false }, TodoItem { id: 2, text: "Build", completed: false }] };
 }
 
