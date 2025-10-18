@@ -7,12 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-## [0.34.0] - 2025-10-17
+## [0.34.0] - 2025-10-18
 
 **Windjammer UI Framework + Game Engine: Cross-Platform Everything** 🎨🎮
 
 ### Summary
-v0.34.0 introduces TWO major frameworks: a Svelte-inspired UI framework for building apps, and a complete 2D game engine (with 3D-ready architecture). Write once, deploy to Web, Desktop, and Mobile - for both UI apps AND games. Same language, idiomatic Windjammer syntax, Rust performance.
+v0.34.0 introduces TWO major frameworks: a Svelte-inspired UI framework for building apps, and a complete 2D/3D game engine. Write once, deploy to Web, Desktop, and Mobile - for both UI apps AND games. Same language, idiomatic Windjammer syntax, Rust performance.
+
+**Major Achievement**: Separated game engine into dedicated `windjammer-game` crate with full ECS, physics, and wgpu rendering backend.
 
 ### New Crates
 
@@ -31,14 +33,18 @@ v0.34.0 introduces TWO major frameworks: a Svelte-inspired UI framework for buil
 - `new()` and `with_state()` constructors
 - `#[derive(Props)]` for component props
 
-**windjammer-ui/game (Game Framework):**
-- Entity-Component System (ECS)
-- 2D math (Vec2, Vec3) with full operations
-- 2D physics (AABB collision, Rigidbody)
-- Input handling (keyboard, mouse, gamepad ready)
-- Rendering context (2D sprites, shapes, text)
+**windjammer-game (Dedicated Game Engine):**
+- Entity-Component System (ECS) with World, Entity, Component
+- 2D/3D math (Vec2, Vec3, Mat4) with SIMD (glam)
+- 2D/3D physics (Rapier2D/3D integration)
+- wgpu rendering backend (Metal, Vulkan, DX12, WebGPU)
+- Sprite rendering with batching (Sprite, SpriteBatch)
+- Game loop with fixed timestep (60 UPS)
+- Input handling (keyboard, mouse, touch)
 - Time management (delta, FPS tracking)
-- 21 game-specific tests
+- Window management (winit integration)
+- Audio support (rodio integration)
+- 23 passing tests
 
 ### Platform Abstraction
 

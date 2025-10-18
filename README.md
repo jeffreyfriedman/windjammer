@@ -469,6 +469,65 @@ See [`crates/windjammer-ui/README.md`](crates/windjammer-ui/README.md) for full 
 
 ---
 
+### 🎮 Game Engine (`windjammer-game`) 🆕
+
+**Build high-performance 2D and 3D games!** Windjammer includes a complete game engine with ECS architecture, physics, and modern graphics.
+
+```windjammer
+use windjammer_game.prelude.*
+
+struct MyGame {
+    player_pos: Vec2
+    enemies: Vec<Entity>
+}
+
+impl GameLoop for MyGame {
+    fn update(delta: f32) {
+        // Fixed timestep game logic (60 UPS)
+        player_pos.x += 100.0 * delta
+    }
+    
+    fn render(ctx: RenderContext) {
+        ctx.clear(Color.BLACK)
+        ctx.draw_rect(player_pos.x, player_pos.y, 32.0, 32.0, Color.BLUE)
+    }
+}
+
+fn main() {
+    let game = MyGame { player_pos: Vec2.ZERO, enemies: Vec.new() }
+    windjammer_game.run(game)
+}
+```
+
+**What You Get:**
+- ✅ **ECS Architecture** - Efficient Entity-Component-System
+- ✅ **Fixed Timestep Loop** - Consistent physics (60 UPS)
+- ✅ **wgpu Graphics** - Metal, Vulkan, DirectX 12, WebGPU support
+- ✅ **2D & 3D** - Sprite batching, 3D transforms, camera system
+- ✅ **Physics** - Rapier2D/3D for collision detection and rigid bodies
+- ✅ **Cross-Platform** - Web (WASM), Desktop, Mobile (planned)
+
+**Features:**
+- Sprite rendering with batching
+- Game loop with fixed timestep
+- Input handling (keyboard, mouse, touch)
+- Time management (delta time, FPS)
+- Physics simulation (2D/3D)
+- Math library (Vec2, Vec3, Mat4 with SIMD)
+
+**Getting Started:**
+```bash
+# Run a game example
+wj run crates/windjammer-game/examples/shooter_2d.wj
+
+# Build for WASM
+wj build crates/windjammer-game/examples/shooter_2d.wj --target wasm
+```
+
+See [`crates/windjammer-game/README.md`](crates/windjammer-game/README.md) for full documentation and examples.
+
+---
+
 ### 🚪 No Lock-In: Eject to Pure Rust
 
 **Risk-free adoption!** Convert your Windjammer project to standalone Rust anytime:
