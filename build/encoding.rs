@@ -25,6 +25,8 @@ fn url_encode(data: &str) -> String {
 
 #[inline]
 fn url_decode(data: &str) -> Result<String, std::str::Utf8Error> {
-    urlencoding::decode(data).map(|s| s.into_owned())
+    urlencoding::decode(data).map(|s| {
+        s.into_owned();
+    })
 }
 

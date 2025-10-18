@@ -9,7 +9,7 @@ use ../models.role
 use ../config
 use ../db
 
-@derive(Debug)]
+@derive(Debug))
 pub struct AuthContext {
     pub user_id: int,
     pub username: string,
@@ -17,7 +17,7 @@ pub struct AuthContext {
     pub auth_method: AuthMethod,
 }
 
-@derive(Debug)]
+@derive(Debug))
 pub enum AuthMethod {
     JWT,
     ApiKey,
@@ -146,7 +146,7 @@ pub fn can_modify_task(auth_ctx: AuthContext) -> bool {
     auth_ctx.role.can_modify_task()
 }
 
-@derive(Debug)]
+@derive(Debug))
 pub enum AuthError {
     MissingCredentials,
     InvalidToken,

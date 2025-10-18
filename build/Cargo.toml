@@ -131,6 +131,10 @@ name = "benchmark_large"
 path = "benchmark_large.rs"
 
 [[bin]]
+name = "stateful_counter"
+path = "stateful_counter.rs"
+
+[[bin]]
 name = "async"
 path = "async.rs"
 
@@ -169,6 +173,10 @@ path = "fs.rs"
 [[bin]]
 name = "test_method_chain"
 path = "test_method_chain.rs"
+
+[[bin]]
+name = "cube_3d"
+path = "cube_3d.rs"
 
 [[bin]]
 name = "counter_web"

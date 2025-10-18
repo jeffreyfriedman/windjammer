@@ -12,7 +12,7 @@ use std::collections.HashMap
 use ./server
 use ./metrics
 
-@derive(Debug, Clone)]
+@derive(Debug, Clone))
 struct Config {
     host: string,
     port: int,

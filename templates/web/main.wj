@@ -6,13 +6,13 @@ use std::json
 struct User {
     id: int,
     name: string,
-    email: string
+    email: string,
 }
 
 @derive(Serialize, Deserialize)
 struct ApiResponse {
     message: string,
-    status: string
+    status: string,
 }
 
 @async

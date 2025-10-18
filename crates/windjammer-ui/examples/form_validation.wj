@@ -5,20 +5,20 @@
 
 @derive(Debug, Clone)
 struct ValidationError {
-    field: string
-    message: string
+    field: string,
+    message: string,
 }
 
 @derive(Debug, Clone)
 struct UserForm {
-    username: string
-    email: string
-    password: string
-    confirm_password: string
-    age: string
-    agree_terms: bool
-    errors: [ValidationError]
-    submitted: bool
+    username: string,
+    email: string,
+    password: string,
+    confirm_password: string,
+    age: string,
+    agree_terms: bool,
+    errors: [ValidationError],
+    submitted: bool,
 }
 
 impl UserForm {
@@ -31,7 +31,7 @@ impl UserForm {
             age: "",
             agree_terms: false,
             errors: [],
-            submitted: false
+            submitted: false,
         }
     }
 
@@ -42,12 +42,12 @@ impl UserForm {
         if username.is_empty() {
             errors.push(ValidationError {
                 field: "username",
-                message: "Username is required"
+                message: "Username is required",
             })
         } else if username.len() < 3 {
             errors.push(ValidationError {
                 field: "username",
-                message: "Username must be at least 3 characters"
+                message: "Username must be at least 3 characters",
             })
         } else if !username.chars().all(|c| c.is_alphanumeric() || c == '_') {
             errors.push(ValidationError {
@@ -60,7 +60,7 @@ impl UserForm {
         if email.is_empty() {
             errors.push(ValidationError {
                 field: "email",
-                message: "Email is required"
+                message: "Email is required",
             })
         } else if !email.contains("@") || !email.contains(".") {
             errors.push(ValidationError {
@@ -73,22 +73,22 @@ impl UserForm {
         if password.is_empty() {
             errors.push(ValidationError {
                 field: "password",
-                message: "Password is required"
+                message: "Password is required",
             })
         } else if password.len() < 8 {
             errors.push(ValidationError {
                 field: "password",
-                message: "Password must be at least 8 characters"
+                message: "Password must be at least 8 characters",
             })
         } else if !password.chars().any(|c| c.is_numeric()) {
             errors.push(ValidationError {
                 field: "password",
-                message: "Password must contain at least one number"
+                message: "Password must contain at least one number",
             })
         } else if !password.chars().any(|c| c.is_uppercase()) {
             errors.push(ValidationError {
                 field: "password",
-                message: "Password must contain at least one uppercase letter"
+                message: "Password must contain at least one uppercase letter",
             })
         }
 
@@ -96,7 +96,7 @@ impl UserForm {
         if confirm_password != password {
             errors.push(ValidationError {
                 field: "confirm_password",
-                message: "Passwords do not match"
+                message: "Passwords do not match",
             })
         }
 
@@ -104,24 +104,24 @@ impl UserForm {
         if age.is_empty() {
             errors.push(ValidationError {
                 field: "age",
-                message: "Age is required"
+                message: "Age is required",
             })
         } else if let Some(age_num) = age.parse::<int>() {
             if age_num < 13 {
                 errors.push(ValidationError {
                     field: "age",
-                    message: "You must be at least 13 years old"
+                    message: "You must be at least 13 years old",
                 })
             } else if age_num > 120 {
                 errors.push(ValidationError {
                     field: "age",
-                    message: "Please enter a valid age"
+                    message: "Please enter a valid age",
                 })
             }
         } else {
             errors.push(ValidationError {
                 field: "age",
-                message: "Age must be a number"
+                message: "Age must be a number",
             })
         }
 
@@ -129,7 +129,7 @@ impl UserForm {
         if !agree_terms {
             errors.push(ValidationError {
                 field: "terms",
-                message: "You must agree to the terms and conditions"
+                message: "You must agree to the terms and conditions",
             })
         }
 

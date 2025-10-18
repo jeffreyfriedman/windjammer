@@ -1,11 +1,11 @@
 // Query sorting utilities
 
-@derive(Debug, Clone)]
+@derive(Debug, Clone))
 pub struct SortParams {
     pub fields: Vec<SortField>,
 }
 
-@derive(Debug, Clone)]
+@derive(Debug, Clone))
 pub struct SortField {
     pub name: string,
     pub descending: bool,

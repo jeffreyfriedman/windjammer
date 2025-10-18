@@ -6,17 +6,17 @@ use windjammer_ui.vdom.{VElement, VNode, VText}
 use windjammer_ui.reactivity.Signal
 
 struct Todo {
-    id: int
-    text: String
-    completed: bool
+    id: int,
+    text: String,
+    completed: bool,
 }
 
 @component
 struct TodoApp {
-    todos: Signal<Vec<Todo>>
-    input: Signal<String>
+    todos: Signal<Vec<Todo>>,
+    input: Signal<String>,
     filter: Signal<String> // "all", "active", "completed"
-    next_id: Signal<int>
+    next_id: Signal<int>,
 }
 
 impl Component for TodoApp {

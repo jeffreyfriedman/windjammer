@@ -227,3 +227,9 @@ fn render_counter(counter: &Rc<RefCell<Counter>>, target: &web_sys::Element) {
         .append_child(&dom_node)
         .expect("failed to append child");
 }
+
+#[cfg(not(target_arch = "wasm32"))]
+fn main() {
+    eprintln!("This example is WASM-only. Build with:");
+    eprintln!("  wasm-pack build --target web --example interactive_counter");
+}
