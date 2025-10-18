@@ -4,14 +4,14 @@
 use windjammer_game.prelude.*
 
 struct CubeGame {
-    rotation: f32
-    camera: Camera
+    rotation: f32,
+    camera: Camera,
 }
 
 impl CubeGame {
     fn new() -> Self {
         Self {
-            rotation: 0.0
+            rotation: 0.0,
             camera: Camera.new()
         }
     }

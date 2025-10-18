@@ -7,10 +7,10 @@
 
 @component
 struct BlogPost {
-    title: string
-    content: string
-    author: string
-    views: int
+    title: string,
+    content: string,
+    author: string,
+    views: int,
 }
 
 impl BlogPost {
@@ -51,7 +51,7 @@ fn render_server_side() -> string {
         title: "Building with Windjammer UI",
         content: "Windjammer UI makes it easy to build cross-platform apps with SSR and hydration. The same component code runs on server and client!",
         author: "Alice",
-        views: 1337
+        views: 1337,
     }
     
     let mut renderer = SSRRenderer.new()

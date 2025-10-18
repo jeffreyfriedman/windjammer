@@ -21,7 +21,7 @@ trait Converter<Input, Output> {
 
 // A simple converter struct
 struct IntToString {
-    prefix: string
+    prefix: string,
 }
 
 // Implement Converter<int, string> for IntToString
@@ -38,7 +38,7 @@ trait Into<T> {
 
 // Wrapper type for demonstrating Into
 struct MyNumber {
-    value: int
+    value: int,
 }
 
 // Implement Into<string> for MyNumber

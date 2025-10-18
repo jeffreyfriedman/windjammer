@@ -7,7 +7,7 @@ use windjammer_ui.reactivity.Signal
 
 @component
 struct Counter {
-    count: Signal<int>
+    count: Signal<int>,
 }
 
 impl Component for Counter {

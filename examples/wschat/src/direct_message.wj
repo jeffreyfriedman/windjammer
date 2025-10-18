@@ -231,7 +231,7 @@ impl DirectMessageManager {
     }
 }
 
-@derive(Debug, Clone, Serialize, Deserialize)]
+@derive(Debug, Clone, Serialize, Deserialize))
 pub struct ConversationInfo {
     pub other_user: string,
     pub last_message_time: int,
@@ -239,13 +239,13 @@ pub struct ConversationInfo {
     pub unread_count: int,
 }
 
-@derive(Debug, Clone, Serialize, Deserialize)]
+@derive(Debug, Clone, Serialize, Deserialize))
 pub struct DirectMessageRequest {
     pub to_user: string,
     pub text: string,
 }
 
-@derive(Debug, Clone, Serialize, Deserialize)]
+@derive(Debug, Clone, Serialize, Deserialize))
 pub struct DirectMessageResponse {
     pub success: bool,
     pub message_id: Option<int>,

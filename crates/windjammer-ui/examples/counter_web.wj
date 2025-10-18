@@ -4,7 +4,7 @@ use windjammer_ui.vdom.{VElement, VNode, VText}
 
 @component
 struct Counter {
-    count: int
+    count: int,
 }
 
 impl Component for Counter {

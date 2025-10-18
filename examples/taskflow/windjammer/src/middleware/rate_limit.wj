@@ -54,7 +54,7 @@ impl RateLimiter {
     }
 }
 
-@derive(Debug)]
+@derive(Debug))
 pub struct RateLimitError {
     pub retry_after: int,
     pub limit: int,

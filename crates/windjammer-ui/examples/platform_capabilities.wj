@@ -54,7 +54,7 @@ fn demo_gps() {
         longitude: -122.4194,
         altitude: Some(10.0),
         accuracy: 5.0,
-        timestamp: 1234567890
+        timestamp: 1234567890,
     }
     gps.set_location(location)
     print("✅ Location set (simulated)")
@@ -135,7 +135,7 @@ fn demo_notifications() {
     notifications.send(Notification {
         title: "New Message".to_string(),
         body: "You have 3 unread messages".to_string(),
-        icon: None
+        icon: None,
     }).unwrap()
     print("✅ Notification sent: New Message")
     

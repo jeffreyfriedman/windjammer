@@ -2880,7 +2880,44 @@ impl Parser {
                 }
 
                 self.expect(Token::Pipe)?;
-                let body = Box::new(self.parse_expression()?);
+
+                // Parse closure body - can be either an expression or a block
+                let body = if self.current_token() == &Token::LBrace {
+                    // Block closure: |x| { statements }
+                    self.advance();
+                    let statements = self.parse_block_statements()?;
+                    self.expect(Token::RBrace)?;
+                    Box::new(Expression::Block(statements))
+                } else {
+                    // Expression closure: |x| expr
+                    // Check if this looks like a compound assignment (e.g., *c += 1)
+                    // by peeking ahead for compound assignment operators
+                    let checkpoint = self.position;
+
+                    // Try to parse the left side
+                    let _left_expr = self.parse_primary_expression()?;
+
+                    // Check if followed by a compound assignment operator
+                    let is_compound_assign = matches!(
+                        self.current_token(),
+                        Token::PlusAssign
+                            | Token::MinusAssign
+                            | Token::StarAssign
+                            | Token::SlashAssign
+                            | Token::PercentAssign
+                    );
+
+                    if is_compound_assign {
+                        // Reset and parse as a statement
+                        self.position = checkpoint;
+                        let stmt = self.parse_statement()?;
+                        Box::new(Expression::Block(vec![stmt]))
+                    } else {
+                        // Reset and parse as a normal expression
+                        self.position = checkpoint;
+                        Box::new(self.parse_expression()?)
+                    }
+                };
 
                 Expression::Closure { parameters, body }
             }
