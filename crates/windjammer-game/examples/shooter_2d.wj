@@ -1,0 +1,159 @@
+// 2D Space Shooter Game Example
+// Demonstrates: ECS, physics, input, sprite rendering
+
+use windjammer_game.prelude.*
+
+// Player component
+struct Player {
+    speed: f32
+}
+
+// Enemy component
+struct Enemy {
+    speed: f32
+    health: int
+}
+
+// Bullet component
+struct Bullet {
+    velocity: Vec2
+    damage: int
+}
+
+// Main game struct
+struct ShooterGame {
+    world: World
+    player_entity: Entity
+    spawn_timer: f32
+    score: int
+}
+
+impl ShooterGame {
+    fn new() -> Self {
+        let mut world = World.new()
+        
+        // Spawn player
+        let player_entity = world.spawn_entity()
+        world.add_component(player_entity, Player { speed: 200.0 })
+        world.add_component(player_entity, Vec2.new(400.0, 500.0)) // Position
+        
+        Self {
+            world
+            player_entity
+            spawn_timer: 0.0
+            score: 0
+        }
+    }
+    
+    fn spawn_enemy(world: World) {
+        let enemy = world.spawn_entity()
+        let x = (rand() * 800.0) // Random x position
+        world.add_component(enemy, Enemy { speed: 100.0, health: 3 })
+        world.add_component(enemy, Vec2.new(x, 0.0))
+    }
+    
+    fn spawn_bullet(world: World, position: Vec2) {
+        let bullet = world.spawn_entity()
+        world.add_component(bullet, Bullet { velocity: Vec2.new(0.0, -500.0), damage: 1 })
+        world.add_component(bullet, position)
+    }
+}
+
+impl GameLoop for ShooterGame {
+    fn init() {
+        print("Space Shooter - Use arrow keys to move, space to shoot!")
+    }
+    
+    fn update(delta: f32) {
+        // Spawn enemies periodically
+        spawn_timer += delta
+        if spawn_timer > 2.0 {
+            ShooterGame.spawn_enemy(world)
+            spawn_timer = 0.0
+        }
+        
+        // Update player position (simplified input)
+        if let Some(player_pos) = world.get_component_mut::<Vec2>(player_entity) {
+            // Move player (in real game, would use Input system)
+            player_pos.x += 100.0 * delta
+        }
+        
+        // Update enemies
+        let mut enemies_to_remove = Vec.new()
+        for (entity, enemy_pos) in world.query::<Vec2>() {
+            if world.get_component::<Enemy>(entity).is_some() {
+                enemy_pos.y += 100.0 * delta
+                
+                // Remove if off screen
+                if enemy_pos.y > 600.0 {
+                    enemies_to_remove.push(entity)
+                }
+            }
+        }
+        
+        for entity in enemies_to_remove {
+            world.despawn(entity)
+        }
+        
+        // Update bullets
+        let mut bullets_to_remove = Vec.new()
+        for (entity, bullet_pos) in world.query::<Vec2>() {
+            if let Some(bullet) = world.get_component::<Bullet>(entity) {
+                bullet_pos.y += bullet.velocity.y * delta
+                
+                // Remove if off screen
+                if bullet_pos.y < 0.0 {
+                    bullets_to_remove.push(entity)
+                }
+            }
+        }
+        
+        for entity in bullets_to_remove {
+            world.despawn(entity)
+        }
+        
+        // Check collisions (simplified)
+        // In real game, would use physics system
+    }
+    
+    fn render(ctx: RenderContext) {
+        ctx.clear(Color.BLACK)
+        
+        // Render player
+        if let Some(pos) = world.get_component::<Vec2>(player_entity) {
+            ctx.draw_rect(pos.x, pos.y, 32.0, 32.0, Color.BLUE)
+        }
+        
+        // Render enemies
+        for (entity, pos) in world.query::<Vec2>() {
+            if world.get_component::<Enemy>(entity).is_some() {
+                ctx.draw_rect(pos.x, pos.y, 32.0, 32.0, Color.RED)
+            }
+        }
+        
+        // Render bullets
+        for (entity, pos) in world.query::<Vec2>() {
+            if world.get_component::<Bullet>(entity).is_some() {
+                ctx.draw_rect(pos.x, pos.y, 4.0, 12.0, Color.YELLOW)
+            }
+        }
+        
+        // Render score
+        ctx.draw_text("Score: {score}", 10.0, 10.0, Color.WHITE)
+    }
+    
+    fn handle_input(input: Input) {
+        // Handle shooting
+        if input.is_key_pressed(KeyCode.Space) {
+            if let Some(pos) = world.get_component::<Vec2>(player_entity) {
+                ShooterGame.spawn_bullet(world, Vec2.new(pos.x + 14.0, pos.y))
+            }
+        }
+    }
+}
+
+fn main() {
+    let game = ShooterGame.new()
+    windjammer_game.run(game)
+}
+

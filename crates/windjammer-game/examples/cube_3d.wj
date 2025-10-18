@@ -1,0 +1,61 @@
+// 3D Rotating Cube Example
+// Demonstrates: 3D rendering, camera, transforms
+
+use windjammer_game.prelude.*
+
+struct CubeGame {
+    rotation: f32
+    camera: Camera
+}
+
+impl CubeGame {
+    fn new() -> Self {
+        Self {
+            rotation: 0.0
+            camera: Camera.new()
+        }
+    }
+}
+
+impl GameLoop for CubeGame {
+    fn init() {
+        print("3D Cube Demo - Rotating cube with perspective camera")
+    }
+    
+    fn update(delta: f32) {
+        // Rotate cube
+        rotation += delta * 45.0 // 45 degrees per second
+        
+        // Orbit camera
+        let angle = rotation * 0.5
+        camera.position = Vec3.new(
+            angle.cos() * 5.0,
+            3.0,
+            angle.sin() * 5.0
+        )
+        camera.target = Vec3.ZERO
+    }
+    
+    fn render(ctx: RenderContext) {
+        ctx.clear(Color.new(0.1, 0.1, 0.15, 1.0))
+        
+        // Set camera
+        ctx.set_camera(camera)
+        
+        // Draw cube (simplified - in real game would use meshes)
+        let transform = Mat4.from_rotation_y(rotation.to_radians())
+        ctx.draw_cube(Vec3.ZERO, Vec3.ONE, Color.new(0.3, 0.6, 0.9, 1.0), transform)
+        
+        // Draw grid
+        ctx.draw_grid(10, 1.0, Color.new(0.3, 0.3, 0.3, 0.5))
+        
+        // Draw text overlay
+        ctx.draw_text("Rotation: {rotation:.1}°", 10.0, 10.0, Color.WHITE)
+    }
+}
+
+fn main() {
+    let game = CubeGame.new()
+    windjammer_game.run(game)
+}
+
