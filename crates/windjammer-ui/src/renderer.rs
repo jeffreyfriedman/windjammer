@@ -1,9 +1,58 @@
 //! Cross-platform renderer
 
 use crate::component::Component;
+
+#[cfg(not(feature = "web"))]
 use crate::platform::create_platform;
 
-/// Mount a component to the target
+/// Mount a component to the target selector
+#[cfg(feature = "web")]
+pub fn mount<C: Component>(selector: &str, component: C) -> Result<(), String> {
+    #[cfg(target_arch = "wasm32")]
+    {
+        use wasm_bindgen::JsCast;
+
+        // Get the window and document
+        let window = web_sys::window().ok_or("No window found")?;
+        let document = window.document().ok_or("No document found")?;
+
+        // Find the target element
+        let target = document
+            .query_selector(selector)
+            .map_err(|_| format!("Invalid selector: {}", selector))?
+            .ok_or(format!("Element not found: {}", selector))?;
+
+        // Render the component to a VNode
+        let vnode = component.render();
+
+        // Create a WebRenderer
+        let mut renderer = WebRenderer::new();
+
+        // Create the DOM element from VNode
+        let dom_node = renderer.create_element(&vnode)?;
+
+        // Clear the target and append the rendered content
+        while let Some(child) = target.first_child() {
+            target
+                .remove_child(&child)
+                .map_err(|_| "Failed to clear target")?;
+        }
+
+        target
+            .append_child(&dom_node)
+            .map_err(|_| "Failed to mount component")?;
+
+        Ok(())
+    }
+    #[cfg(not(target_arch = "wasm32"))]
+    {
+        let _ = (selector, component);
+        Err("mount() is only available on WASM target".to_string())
+    }
+}
+
+/// Mount a component to the target selector (non-web platforms)
+#[cfg(not(feature = "web"))]
 pub fn mount<C: Component>(_selector: &str, _component: C) -> Result<(), String> {
     let mut platform = create_platform();
     platform.init()?;
@@ -64,8 +113,10 @@ impl WebRenderer {
     }
 
     #[cfg(target_arch = "wasm32")]
-    fn create_element(&self, vnode: &crate::vdom::VNode) -> Result<web_sys::Node, String> {
+    pub fn create_element(&self, vnode: &crate::vdom::VNode) -> Result<web_sys::Node, String> {
         use crate::vdom::VNode;
+        use wasm_bindgen::closure::Closure;
+        use wasm_bindgen::JsCast;
 
         match vnode {
             VNode::Element(element) => {
@@ -74,11 +125,41 @@ impl WebRenderer {
                     .create_element(&element.tag)
                     .map_err(|_| format!("Failed to create element: {}", element.tag))?;
 
-                // Set attributes
+                // Set attributes and event handlers
                 for (key, value) in &element.attrs {
-                    dom_element
-                        .set_attribute(key, value)
-                        .map_err(|_| format!("Failed to set attribute: {}", key))?;
+                    // Check if this is an event handler (starts with "on")
+                    if key.starts_with("on") {
+                        let event_type = key.strip_prefix("on").unwrap_or(key);
+
+                        // For now, we'll just log events
+                        // In a full implementation, this would dispatch to component methods
+                        let callback = Closure::wrap(Box::new(move |event: web_sys::Event| {
+                            web_sys::console::log_1(
+                                &format!("Event triggered: {}", event_type).into(),
+                            );
+                            // Prevent default behavior for some events
+                            if event_type == "submit" {
+                                event.prevent_default();
+                            }
+                        })
+                            as Box<dyn FnMut(_)>);
+
+                        dom_element
+                            .add_event_listener_with_callback(
+                                event_type,
+                                callback.as_ref().unchecked_ref(),
+                            )
+                            .map_err(|_| format!("Failed to add event listener: {}", key))?;
+
+                        // Leak the closure to keep it alive
+                        // In production, we'd store these and clean them up properly
+                        callback.forget();
+                    } else {
+                        // Regular attribute
+                        dom_element
+                            .set_attribute(key, value)
+                            .map_err(|_| format!("Failed to set attribute: {}", key))?;
+                    }
                 }
 
                 // Append children
@@ -92,7 +173,7 @@ impl WebRenderer {
                 Ok(dom_element.into())
             }
             VNode::Text(text) => {
-                let text_node = self.document.create_text_node(&text.text);
+                let text_node = self.document.create_text_node(&text.content);
                 Ok(text_node.into())
             }
             VNode::Component(_) => {

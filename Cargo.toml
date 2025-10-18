@@ -1,6 +1,6 @@
 [workspace]
 members = [
-    ".",
+    ".", "crates/game-host",
     "crates/windjammer-lsp",
     "crates/windjammer-mcp",
     "crates/windjammer-ui",

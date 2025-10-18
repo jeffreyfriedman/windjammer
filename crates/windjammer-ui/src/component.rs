@@ -3,10 +3,11 @@
 use crate::vdom::VNode;
 
 /// Trait for components
+///
+/// Note: The `render()` method should be implemented as a regular method,
+/// not as part of this trait. The `#[component]` macro will ensure the
+/// struct implements this trait.
 pub trait Component: Send + Sync {
-    /// Render the component to a virtual DOM node
-    fn render(&self) -> VNode;
-
     /// Initialize the component
     fn init(&mut self) {}
 
@@ -15,6 +16,10 @@ pub trait Component: Send + Sync {
 
     /// Cleanup when component is unmounted
     fn cleanup(&mut self) {}
+
+    /// Render the component to a virtual DOM node
+    /// This is provided as a trait method for type safety
+    fn render(&self) -> VNode;
 }
 
 /// Props trait for component properties
