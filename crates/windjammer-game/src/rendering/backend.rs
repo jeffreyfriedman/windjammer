@@ -44,12 +44,16 @@ impl GraphicsBackend {
 
 /// Vertex for 2D rendering
 #[repr(C)]
-#[derive(Copy, Clone, Debug, bytemuck::Pod, bytemuck::Zeroable)]
+#[derive(Copy, Clone, Debug)]
 pub struct Vertex2D {
     pub position: [f32; 2],
     pub tex_coords: [f32; 2],
     pub color: [f32; 4],
 }
+
+// Safety: Vertex2D is repr(C) with only f32 fields
+unsafe impl bytemuck::Pod for Vertex2D {}
+unsafe impl bytemuck::Zeroable for Vertex2D {}
 
 impl Vertex2D {
     pub fn desc() -> wgpu::VertexBufferLayout<'static> {
