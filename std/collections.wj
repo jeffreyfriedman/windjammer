@@ -1,11 +1,11 @@
 // std/collections - Collection types (HashMap, HashSet, etc.)
 // Wraps Rust's std::collections with Windjammer-friendly APIs
 
-use std.collections.HashMap as RustHashMap
-use std.collections.HashSet as RustHashSet
-use std.collections.BTreeMap as RustBTreeMap
-use std.collections.BTreeSet as RustBTreeSet
-use std.collections.VecDeque as RustVecDeque
+use std::collections.HashMap as RustHashMap
+use std::collections.HashSet as RustHashSet
+use std::collections.BTreeMap as RustBTreeMap
+use std::collections.BTreeSet as RustBTreeSet
+use std::collections.VecDeque as RustVecDeque
 
 // HashMap - Hash table implementation
 pub struct HashMap<K, V> {

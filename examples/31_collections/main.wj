@@ -1,7 +1,7 @@
 // Example 31: Collections Module
 // Demonstrates HashMap, HashSet, and other collection types
 
-use std.collections
+use std::collections
 
 fn demonstrate_hashmap() {
     println!("=== HashMap ===")

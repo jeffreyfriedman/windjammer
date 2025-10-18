@@ -8,7 +8,7 @@
 //   use std::collections::BTreeMap;
 //
 // Windjammer's cleaner syntax:
-//   use std.collections as col
+//   use std::collections as col
 //
 // ✅ Use . instead of ::
 // ✅ One import for the whole module
@@ -16,14 +16,14 @@
 
 // For this example, we'll use direct imports (no alias)
 // to keep it simple while the :: expression parser is being added
-use std.math
-use std.strings
+use std::math
+use std::strings
 
 fn main() {
     println!("===== Module Aliases Demo =====")
     println!("")
     println!("Module aliases make imports cleaner:")
-    println!("  Windjammer: use std.math as m")
+    println!("  Windjammer: use std::math as m")
     println!("  Rust:       use std::math as m")
     println!("")
     

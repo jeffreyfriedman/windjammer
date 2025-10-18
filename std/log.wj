@@ -123,7 +123,7 @@ fn error_enabled() -> bool {
 
 // USAGE EXAMPLES:
 //
-// use std.log
+// use std::log
 //
 // fn main() {
 //     // Initialize logger (reads RUST_LOG env var)

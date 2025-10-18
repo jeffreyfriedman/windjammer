@@ -1,9 +1,9 @@
 // Example 39: Stdlib Modules
 // Demonstrates new stdlib modules: env, process, random
 
-use std.env
-use std.process  
-use std.random
+use std::env
+use std::process  
+use std::random
 
 fn main() {
     println!("=== Stdlib Modules Demo ===")

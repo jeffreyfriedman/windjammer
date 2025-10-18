@@ -1,9 +1,9 @@
 // User management handlers
 
-use std.http
-use std.json
-use std.db
-use std.log
+use std::http
+use std::json
+use std::db
+use std::log
 
 use ../models.user
 

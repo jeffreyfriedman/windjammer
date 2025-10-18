@@ -248,7 +248,7 @@ fn is_relative(path: string) -> bool {
 
 // USAGE EXAMPLES:
 //
-// use std.fs
+// use std::fs
 //
 // fn main() {
 //     // Read file

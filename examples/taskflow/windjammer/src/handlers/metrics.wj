@@ -1,7 +1,7 @@
 // Prometheus metrics endpoint
 
-use std.http
-use std.time
+use std::http
+use std::time
 
 // Global metrics storage (in production, use a proper metrics library)
 static mut REQUEST_COUNT: HashMap<string, int> = HashMap::new()

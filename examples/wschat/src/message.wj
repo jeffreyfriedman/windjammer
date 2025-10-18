@@ -1,6 +1,6 @@
 // Message types for wschat
 
-use std.time
+use std::time
 
 // Client → Server messages
 @derive(Debug, Serialize, Deserialize)]

@@ -1,10 +1,10 @@
 // Project management handlers
 
-use std.http
-use std.json
-use std.db
-use std.log
-use std.time
+use std::http
+use std::json
+use std::db
+use std::log
+use std::time
 
 use ../models.project
 

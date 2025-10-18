@@ -1,6 +1,6 @@
 // Configuration for wjfind search
 
-use std.regex
+use std::regex
 use ./main.Args
 
 @derive(Debug, Clone)]
