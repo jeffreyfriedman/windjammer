@@ -1022,77 +1022,9 @@ impl CodeGenerator {
         output
     }
 
-    #[allow(clippy::only_used_in_recursion)]
     fn type_to_rust(&self, type_: &Type) -> String {
-        match type_ {
-            Type::Int => "i64".to_string(),
-            Type::Int32 => "i32".to_string(),
-            Type::Uint => "u64".to_string(),
-            Type::Float => "f64".to_string(),
-            Type::Bool => "bool".to_string(),
-            Type::String => "String".to_string(),
-            Type::Custom(name) => {
-                // Convert Windjammer module.Type syntax to Rust module::Type
-                name.replace('.', "::")
-            }
-            Type::Generic(name) => name.clone(), // Type parameter: T -> T
-            Type::Associated(base, assoc_name) => {
-                // Associated type: Self::Item -> Self::Item, T::Output -> T::Output
-                format!("{}::{}", base, assoc_name)
-            }
-            Type::TraitObject(trait_name) => {
-                // Trait object: dyn Trait -> Box<dyn Trait>
-                // Note: Windjammer automatically boxes trait objects for convenience
-                format!("Box<dyn {}>", trait_name)
-            }
-            Type::Parameterized(base, args) => {
-                // Generic type: Vec<T> -> Vec<T>, HashMap<K, V> -> HashMap<K, V>
-                format!(
-                    "{}<{}>",
-                    base,
-                    args.iter()
-                        .map(|t| self.type_to_rust(t))
-                        .collect::<Vec<_>>()
-                        .join(", ")
-                )
-            }
-            Type::Option(inner) => format!("Option<{}>", self.type_to_rust(inner)),
-            Type::Result(ok, err) => format!(
-                "Result<{}, {}>",
-                self.type_to_rust(ok),
-                self.type_to_rust(err)
-            ),
-            Type::Vec(inner) => format!("Vec<{}>", self.type_to_rust(inner)),
-            Type::Reference(inner) => {
-                // Special case: &[T] (slice) vs &Vec<T>
-                if let Type::Vec(elem) = &**inner {
-                    format!("&[{}]", self.type_to_rust(elem))
-                // Special case: &str instead of &String (more idiomatic Rust)
-                } else if matches!(**inner, Type::String) {
-                    "&str".to_string()
-                // Special case: &dyn Trait (don't box when already a reference)
-                } else if let Type::TraitObject(trait_name) = &**inner {
-                    format!("&dyn {}", trait_name)
-                } else {
-                    format!("&{}", self.type_to_rust(inner))
-                }
-            }
-            Type::MutableReference(inner) => {
-                // Special case: &mut [T] (mutable slice) vs &mut Vec<T>
-                if let Type::Vec(elem) = &**inner {
-                    format!("&mut [{}]", self.type_to_rust(elem))
-                // Special case: &mut dyn Trait (don't box when already a reference)
-                } else if let Type::TraitObject(trait_name) = &**inner {
-                    format!("&mut dyn {}", trait_name)
-                } else {
-                    format!("&mut {}", self.type_to_rust(inner))
-                }
-            }
-            Type::Tuple(types) => {
-                let rust_types: Vec<String> = types.iter().map(|t| self.type_to_rust(t)).collect();
-                format!("({})", rust_types.join(", "))
-            }
-        }
+        // Delegate to the refactored types module
+        crate::codegen::rust::type_to_rust(type_)
     }
 
     fn pattern_to_rust(&self, pattern: &Pattern) -> String {

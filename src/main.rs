@@ -1,7 +1,7 @@
 pub mod analyzer;
 pub mod cli;
 pub mod codegen;
-pub mod codegen_legacy;
+// Removed: codegen_legacy is now codegen::rust::generator
 pub mod compiler_database;
 pub mod config;
 pub mod ejector;
