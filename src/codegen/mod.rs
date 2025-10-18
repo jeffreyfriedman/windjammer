@@ -23,8 +23,8 @@ pub mod javascript;
 pub mod rust;
 pub mod wasm;
 
-// Re-export the existing CodeGenerator for backward compatibility
-pub use crate::codegen_legacy::CodeGenerator;
+// Re-export the CodeGenerator from the rust module
+pub use rust::CodeGenerator;
 
 use crate::parser::Program;
 use anyhow::Result;

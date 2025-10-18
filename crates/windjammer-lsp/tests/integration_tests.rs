@@ -1,3 +1,9 @@
+#![allow(
+    unused_variables,
+    unused_imports,
+    dead_code,
+    clippy::assertions_on_constants
+)]
 /// Comprehensive Integration Tests for Windjammer LSP
 ///
 /// These tests validate end-to-end functionality of the Language Server
@@ -49,6 +55,7 @@ fn main() {
 }
 
 mod hover_tests {
+    #[allow(unused_imports)]
     use super::*;
 
     #[test]
@@ -75,6 +82,7 @@ mod hover_tests {
 }
 
 mod completion_tests {
+    #[allow(unused_imports)]
     use super::*;
 
     #[test]
@@ -105,6 +113,7 @@ mod completion_tests {
 }
 
 mod goto_definition_tests {
+    #[allow(unused_imports)]
     use super::*;
 
     #[test]
@@ -127,6 +136,7 @@ mod goto_definition_tests {
 }
 
 mod references_tests {
+    #[allow(unused_imports)]
     use super::*;
 
     #[test]
@@ -149,6 +159,7 @@ mod references_tests {
 }
 
 mod rename_tests {
+    #[allow(unused_imports)]
     use super::*;
 
     #[test]
@@ -174,6 +185,7 @@ mod rename_tests {
 }
 
 mod diagnostics_tests {
+    #[allow(unused_imports)]
     use super::*;
 
     #[test]
@@ -214,6 +226,7 @@ fn main() {
 }
 
 mod inlay_hints_tests {
+    #[allow(unused_imports)]
     use super::*;
 
     #[test]
@@ -254,6 +267,7 @@ fn main() {
 }
 
 mod code_action_tests {
+    #[allow(unused_imports)]
     use super::*;
 
     #[test]
@@ -286,6 +300,7 @@ fn main() {
 }
 
 mod symbol_table_tests {
+    #[allow(unused_imports)]
     use super::*;
 
     #[test]
@@ -309,6 +324,7 @@ mod symbol_table_tests {
 }
 
 mod performance_tests {
+    #[allow(unused_imports)]
     use super::*;
 
     #[test]
@@ -334,6 +350,7 @@ mod performance_tests {
 }
 
 mod edge_case_tests {
+    #[allow(unused_imports)]
     use super::*;
 
     #[test]

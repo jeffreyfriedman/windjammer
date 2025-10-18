@@ -1,7 +1,7 @@
 pub mod analyzer;
 pub mod cli;
 pub mod codegen;
-pub mod codegen_legacy;
+// Removed: codegen_legacy is now codegen::rust::generator
 pub mod compiler_database;
 pub mod config;
 pub mod ejector;
@@ -136,6 +136,20 @@ enum Commands {
         #[arg(long)]
         no_cargo_toml: bool,
     },
+    /// Run a Windjammer file (build + cargo run)
+    Run {
+        /// Input file to run
+        #[arg(value_name = "FILE")]
+        file: PathBuf,
+
+        /// Compilation target
+        #[arg(short, long, value_enum, default_value = "rust")]
+        target: CompilationTarget,
+
+        /// Arguments to pass to the program
+        #[arg(last = true)]
+        args: Vec<String>,
+    },
 }
 
 #[allow(dead_code)]
@@ -195,6 +209,9 @@ fn main() -> Result<()> {
         } => {
             eject_project(&path, &output, target, format, comments, !no_cargo_toml)?;
         }
+        Commands::Run { file, target, args } => {
+            run_file(&file, target, &args)?;
+        }
     }
 
     Ok(())
@@ -226,15 +243,17 @@ fn build_project(path: &Path, output: &Path, target: CompilationTarget) -> Resul
 
     let mut has_errors = false;
     let mut all_stdlib_modules = HashSet::new();
+    let mut all_external_crates = Vec::new();
 
     for file in &wj_files {
         let file_name = file.file_name().unwrap().to_str().unwrap();
         print!("  Compiling {:?}... ", file_name);
 
         match compile_file(file, output, target) {
-            Ok(stdlib_modules) => {
+            Ok((stdlib_modules, external_crates)) => {
                 println!("{}", "✓".green());
                 all_stdlib_modules.extend(stdlib_modules);
+                all_external_crates.extend(external_crates);
             }
             Err(e) => {
                 println!("{}", "✗".red());
@@ -245,8 +264,8 @@ fn build_project(path: &Path, output: &Path, target: CompilationTarget) -> Resul
     }
 
     if !has_errors {
-        // Create Cargo.toml with stdlib dependencies
-        create_cargo_toml_with_deps(output, &all_stdlib_modules)?;
+        // Create Cargo.toml with stdlib and external dependencies
+        create_cargo_toml_with_deps(output, &all_stdlib_modules, &all_external_crates)?;
 
         println!("\n{} Transpilation complete!", "Success!".green().bold());
         println!("Output directory: {:?}", output);
@@ -254,11 +273,11 @@ fn build_project(path: &Path, output: &Path, target: CompilationTarget) -> Resul
         println!("  cd {:?}", output);
         println!("  cargo run");
         println!("\nOr use 'windjammer check' to see any Rust compilation errors");
+        Ok(())
     } else {
         println!("\n{} Compilation failed with errors", "Error:".red().bold());
+        anyhow::bail!("Compilation failed")
     }
-
-    Ok(())
 }
 
 #[allow(dead_code)]
@@ -344,6 +363,7 @@ struct ModuleCompiler {
     target: CompilationTarget,
     stdlib_path: PathBuf,
     imported_stdlib_modules: HashSet<String>, // Track which stdlib modules are used
+    external_crates: Vec<String>,             // Track external crates (e.g., windjammer_ui)
 }
 
 #[allow(dead_code)]
@@ -359,6 +379,7 @@ impl ModuleCompiler {
             target,
             stdlib_path,
             imported_stdlib_modules: HashSet::new(),
+            external_crates: Vec::new(),
         }
     }
 
@@ -370,6 +391,38 @@ impl ModuleCompiler {
 
         // Resolve module path to file path
         let file_path = self.resolve_module_path(module_path, source_file)?;
+
+        // Check if this is an external crate (marked by __external__ prefix)
+        if file_path
+            .to_str()
+            .is_some_and(|s| s.starts_with("__external__::"))
+        {
+            // External crate - extract crate name and mark as external dependency
+            let crate_name = file_path
+                .to_str()
+                .unwrap()
+                .strip_prefix("__external__::")
+                .unwrap()
+                .replace(".*", "") // Remove glob imports
+                .replace(".{", "") // Remove braced imports
+                .split('}')
+                .next()
+                .unwrap()
+                .split('.')
+                .next()
+                .unwrap()
+                .to_string();
+
+            // Add to external crates if not already present
+            if !self.external_crates.contains(&crate_name) {
+                self.external_crates.push(crate_name.clone());
+            }
+
+            // Mark as compiled (external, no code generated)
+            self.compiled_modules
+                .insert(module_path.to_string(), String::new());
+            return Ok(());
+        }
 
         // Read and parse module
         let source = std::fs::read_to_string(&file_path)
@@ -491,11 +544,11 @@ impl ModuleCompiler {
                 source_dir.join(rel_path).join("mod.wj")
             ))
         } else {
-            // Absolute imports not yet supported
-            Err(anyhow::anyhow!(
-                "Absolute imports not yet supported: {}",
-                module_path
-            ))
+            // External crate imports (e.g., windjammer_ui, external_crate)
+            // These are treated as Rust crate dependencies and passed through to generated code
+            // Mark as external by returning a special "external" path
+            // We'll handle this specially in the compilation phase
+            Ok(PathBuf::from(format!("__external__::{}", module_path)))
         }
     }
 
@@ -576,7 +629,7 @@ fn compile_file(
     input_path: &Path,
     output_dir: &Path,
     target: CompilationTarget,
-) -> Result<HashSet<String>> {
+) -> Result<(HashSet<String>, Vec<String>)> {
     let mut module_compiler = ModuleCompiler::new(target);
 
     // Read source file
@@ -596,7 +649,7 @@ fn compile_file(
     for item in &program.items {
         if let parser::Item::Use { path, alias: _ } = item {
             let module_path = path.join(".");
-            // Compile both std.* and relative imports (./ or ../)
+            // Compile both std.* and relative imports (./ or ../) and external crates
             module_compiler.compile_module(&module_path, Some(input_path))?;
         }
     }
@@ -644,8 +697,11 @@ fn compile_file(
 
     std::fs::write(output_file, combined_code)?;
 
-    // Return the set of imported stdlib modules for Cargo.toml generation
-    Ok(module_compiler.imported_stdlib_modules)
+    // Return the set of imported stdlib modules and external crates for Cargo.toml generation
+    Ok((
+        module_compiler.imported_stdlib_modules,
+        module_compiler.external_crates,
+    ))
 }
 
 #[allow(dead_code)]
@@ -667,7 +723,9 @@ fn check_file(file_path: &Path) -> Result<()> {
 fn create_cargo_toml_with_deps(
     output_dir: &Path,
     imported_modules: &HashSet<String>,
+    external_crates: &[String],
 ) -> Result<()> {
+    use std::env;
     use std::fs;
 
     // Map imported stdlib modules to their Cargo dependencies
@@ -721,6 +779,50 @@ fn create_cargo_toml_with_deps(
         }
     }
 
+    // Add external crates (from workspace or crates.io)
+    let mut external_deps = Vec::new();
+    for crate_name in external_crates {
+        match crate_name.as_str() {
+            "windjammer_ui" => {
+                // Use absolute path to the workspace crate
+                // Try to find it relative to current directory or use CARGO_MANIFEST_DIR
+                let windjammer_ui_path = if let Ok(manifest_dir) = env::var("CARGO_MANIFEST_DIR") {
+                    PathBuf::from(manifest_dir).join("crates/windjammer-ui")
+                } else {
+                    env::current_dir()
+                        .unwrap_or_else(|_| PathBuf::from("."))
+                        .join("crates/windjammer-ui")
+                };
+
+                external_deps.push(format!(
+                    "windjammer-ui = {{ path = \"{}\" }}",
+                    windjammer_ui_path.display()
+                ));
+
+                // Also add the macro crate (needed for #[component], #[derive(Props)])
+                let windjammer_ui_macro_path =
+                    if let Ok(manifest_dir) = env::var("CARGO_MANIFEST_DIR") {
+                        PathBuf::from(manifest_dir).join("crates/windjammer-ui-macro")
+                    } else {
+                        env::current_dir()
+                            .unwrap_or_else(|_| PathBuf::from("."))
+                            .join("crates/windjammer-ui-macro")
+                    };
+
+                external_deps.push(format!(
+                    "windjammer-ui-macro = {{ path = \"{}\" }}",
+                    windjammer_ui_macro_path.display()
+                ));
+            }
+            _ => {
+                // Default: assume it's a crates.io dependency
+                external_deps.push(format!("{} = \"*\"", crate_name));
+            }
+        }
+    }
+
+    deps.extend(external_deps.iter().map(|s| s.as_str()));
+
     deps.sort();
     deps.dedup();
 
@@ -730,12 +832,26 @@ fn create_cargo_toml_with_deps(
         format!("[dependencies]\n{}\n\n", deps.join("\n"))
     };
 
-    // Check if main.rs exists to determine if we need a [[bin]] section
-    let main_rs = output_dir.join("main.rs");
-    let bin_section = if main_rs.exists() {
-        "[[bin]]\nname = \"app\"\npath = \"main.rs\"\n\n"
+    // Find all .rs files to create [[bin]] sections
+    let mut bin_sections = Vec::new();
+    if let Ok(entries) = fs::read_dir(output_dir) {
+        for entry in entries.flatten() {
+            if let Some(filename) = entry.file_name().to_str() {
+                if filename.ends_with(".rs") && filename != "lib.rs" {
+                    let bin_name = filename.strip_suffix(".rs").unwrap_or(filename);
+                    bin_sections.push(format!(
+                        "[[bin]]\nname = \"{}\"\npath = \"{}\"\n",
+                        bin_name, filename
+                    ));
+                }
+            }
+        }
+    }
+
+    let bin_section = if !bin_sections.is_empty() {
+        format!("{}\n", bin_sections.join("\n"))
     } else {
-        ""
+        String::new()
     };
 
     let cargo_toml = format!(
@@ -743,6 +859,9 @@ fn create_cargo_toml_with_deps(
 name = "windjammer-app"
 version = "0.1.0"
 edition = "2021"
+
+# Prevent this from being treated as part of parent workspace
+[workspace]
 
 {}{}[profile.release]
 opt-level = 3
@@ -1115,6 +1234,62 @@ fn eject_project(
 
     let mut ejector = ejector::Ejector::new(config);
     ejector.eject_project(path, output)?;
+
+    Ok(())
+}
+
+/// Run a Windjammer file (build + cargo run)
+fn run_file(file: &Path, target: CompilationTarget, args: &[String]) -> Result<()> {
+    use colored::*;
+    use std::fs;
+    use std::process::Command;
+
+    // Validate that the file exists and is a .wj file
+    if !file.exists() {
+        anyhow::bail!("File not found: {:?}", file);
+    }
+    if file.extension().is_none_or(|ext| ext != "wj") {
+        anyhow::bail!("File must have .wj extension: {:?}", file);
+    }
+
+    println!("{} {:?}", "Running".green().bold(), file);
+
+    // Create a temporary build directory
+    let temp_dir = std::env::temp_dir().join(format!(
+        "windjammer-run-{}",
+        file.file_stem().and_then(|s| s.to_str()).unwrap_or("app")
+    ));
+
+    // Clean up any previous build
+    if temp_dir.exists() {
+        fs::remove_dir_all(&temp_dir)?;
+    }
+    fs::create_dir_all(&temp_dir)?;
+
+    // Build the project
+    build_project(file, &temp_dir, target)?;
+
+    // Run cargo run with any additional arguments
+    println!("\n{} the program...", "Executing".cyan().bold());
+    let mut cmd = Command::new("cargo");
+    cmd.arg("run").current_dir(&temp_dir);
+
+    // Pass through any additional arguments
+    if !args.is_empty() {
+        cmd.arg("--");
+        cmd.args(args);
+    }
+
+    let status = cmd.status()?;
+
+    if !status.success() {
+        anyhow::bail!("Program execution failed");
+    }
+
+    // Clean up temp directory
+    if temp_dir.exists() {
+        fs::remove_dir_all(&temp_dir)?;
+    }
 
     Ok(())
 }

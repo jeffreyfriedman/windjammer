@@ -1,0 +1,75 @@
+// Windjammer HTTP Server for UI Demo
+// Serves the interactive counter demo using Windjammer's stdlib
+
+use std::http
+use std::fs
+use std::mime
+
+fn handle_request(req: Request) -> ServerResponse {
+    let path = req.path()
+    
+    // Log the request
+    print("[REQUEST] {} {}", req.method(), path)
+
+    // Determine file path - default to counter demo
+    let file_path = if path == "/" {
+        "examples/counter_demo.html"
+    } else {
+        // Remove leading slash
+        path.trim_start_matches("/")
+    }
+
+    // Try to read the file
+    match fs::read_to_string(file_path) {
+        Ok(content) => {
+            // Get MIME type from file path
+            let mime_type = mime::from_path(file_path)
+            print("  ✅ Serving: {} ({})", file_path, mime_type)
+            
+            ServerResponse::ok(content)
+                .with_header("Content-Type", mime_type)
+                .with_header("Access-Control-Allow-Origin", "*")
+                .with_header("Cache-Control", "no-cache")
+        }
+        Err(_e) => {
+            print("  ❌ File not found: {}", file_path)
+            
+            let error_html = format!("<html><body><h1>404 Not Found</h1><p>{}</p></body></html>", file_path)
+            
+            ServerResponse::with_status(404, error_html)
+                .with_header("Content-Type", mime::TEXT_HTML)
+        }
+    }
+}
+
+@async
+fn main() {
+    print("")
+    print("🎨 Windjammer UI Demo Server")
+    print("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
+    print("")
+    print("📂 Serving from: crates/windjammer-ui/")
+    print("🌐 Open in browser:")
+    print("")
+    print("   http://localhost:8000/examples/counter_demo.html")
+    print("")
+    print("✨ Features:")
+    print("   • Interactive counter with reactive state")
+    print("   • WASM-powered UI framework")
+    print("   • Proper MIME types via std::mime")
+    print("   • Served by Windjammer HTTP server!")
+    print("")
+    print("Press Ctrl+C to stop")
+    print("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
+    print("")
+    
+    // Create router for static file serving
+    let router = Router::new()
+        .any("/*", handle_request)
+    
+    // Start server
+    match http::serve("0.0.0.0:8000", router).await {
+        Ok(x) => print("Server stopped"),
+        Err(e) => print("Server error: {}", e)
+    }
+}

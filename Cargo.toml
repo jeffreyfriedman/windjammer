@@ -1,12 +1,14 @@
 [workspace]
 members = [
-    ".",
+    ".", "crates/windjammer-game",
     "crates/windjammer-lsp",
     "crates/windjammer-mcp",
+    "crates/windjammer-ui",
+    "crates/windjammer-ui-macro",
 ]
 
 [workspace.package]
-version = "0.33.0"
+version = "0.34.0"
 edition = "2021"
 authors = ["Jeffrey Friedman <jeffrey@example.com>", "Windjammer Contributors"]
 license = "MIT OR Apache-2.0"
