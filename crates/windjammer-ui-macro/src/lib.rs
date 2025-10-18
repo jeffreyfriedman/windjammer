@@ -83,6 +83,9 @@ pub fn component(_attr: TokenStream, item: TokenStream) -> TokenStream {
             }
         }
 
+        // Note: Component trait implementation must be done manually by the user
+        // with the render() method in the impl Component for #name block
+
         // Implement Send + Sync for cross-platform use
         unsafe impl #impl_generics Send for #name #ty_generics #where_clause {}
         unsafe impl #impl_generics Sync for #name #ty_generics #where_clause {}

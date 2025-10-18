@@ -54,6 +54,7 @@ pub mod prelude {
     pub use crate::events::{Event, EventHandler};
     pub use crate::platform::{Platform, PlatformType};
     pub use crate::reactivity::{Computed, Effect, Signal};
+    pub use crate::renderer::mount;
     pub use crate::vdom::{VElement, VNode, VText};
     // Re-export macros
     pub use windjammer_ui_macro::{component, Props};
