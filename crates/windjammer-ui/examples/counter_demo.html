@@ -1,0 +1,163 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Windjammer UI - Interactive Counter Demo</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+        }
+        
+        #app {
+            min-width: 400px;
+            max-width: 600px;
+        }
+        
+        .counter-button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 20px rgba(0,0,0,0.3);
+        }
+        
+        .counter-button:active {
+            transform: translateY(0);
+        }
+        
+        @keyframes fadeIn {
+            from {
+                opacity: 0;
+                transform: translateY(20px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+        
+        #app {
+            animation: fadeIn 0.5s ease-out;
+        }
+        
+        #loading {
+            color: white;
+            text-align: center;
+            font-size: 24px;
+            padding: 40px;
+            background: rgba(255,255,255,0.1);
+            border-radius: 15px;
+            backdrop-filter: blur(10px);
+        }
+        
+        .spinner {
+            border: 4px solid rgba(255,255,255,0.3);
+            border-top: 4px solid white;
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            animation: spin 1s linear infinite;
+            margin: 20px auto;
+        }
+        
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        
+        .build-instructions {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            background: rgba(0,0,0,0.8);
+            color: white;
+            padding: 15px;
+            border-radius: 8px;
+            font-size: 12px;
+            max-width: 300px;
+            font-family: 'Courier New', monospace;
+        }
+        
+        .build-instructions h3 {
+            margin-bottom: 10px;
+            color: #4CAF50;
+        }
+        
+        .build-instructions code {
+            display: block;
+            background: rgba(255,255,255,0.1);
+            padding: 5px;
+            border-radius: 3px;
+            margin: 5px 0;
+        }
+    </style>
+</head>
+<body>
+    <div class="build-instructions">
+        <h3>📦 Build Instructions</h3>
+        <code>cd crates/windjammer-ui</code>
+        <code>wasm-pack build --target web --dev</code>
+        <code>python3 -m http.server 8000</code>
+        <p style="margin-top: 10px; font-size: 11px; opacity: 0.7;">
+            Then open:<br>
+            localhost:8000/examples/counter_demo.html
+        </p>
+    </div>
+    
+    <div id="app">
+        <div id="loading">
+            <div class="spinner"></div>
+            <p>Loading Windjammer UI...</p>
+            <p style="font-size: 14px; margin-top: 10px; opacity: 0.7;">
+                Initializing WASM module
+            </p>
+        </div>
+    </div>
+    
+    <script type="module">
+        import init, { run_interactive_counter } from '../pkg/windjammer_ui.js';
+        
+        async function run() {
+            try {
+                console.log('🚀 Initializing WASM module...');
+                await init();
+                console.log('✅ WASM module loaded successfully!');
+                
+                // Run the counter example
+                run_interactive_counter();
+                
+            } catch (error) {
+                console.error('❌ Failed to initialize:', error);
+                document.getElementById('app').innerHTML = `
+                    <div style="padding: 40px; text-align: center; color: white; background: rgba(244, 67, 54, 0.9); border-radius: 15px;">
+                        <h2 style="margin-bottom: 20px;">⚠️ Failed to Load</h2>
+                        <p style="margin-bottom: 10px;">${error.message}</p>
+                        <p style="font-size: 14px; opacity: 0.8; margin-top: 20px;">
+                            Make sure you've built the WASM module:
+                        </p>
+                        <code style="display: block; background: rgba(0,0,0,0.2); padding: 15px; border-radius: 5px; margin-top: 10px; font-family: 'Courier New', monospace;">
+                            cd crates/windjammer-ui<br>
+                            wasm-pack build --target web --dev
+                        </code>
+                        <p style="font-size: 12px; margin-top: 15px; opacity: 0.6;">
+                            Error details: ${error.stack || 'No stack trace'}
+                        </p>
+                    </div>
+                `;
+            }
+        }
+        
+        run();
+    </script>
+</body>
+</html>
+
