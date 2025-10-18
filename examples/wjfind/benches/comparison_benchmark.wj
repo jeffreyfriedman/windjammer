@@ -152,8 +152,8 @@ fn calculate_stats(tool_name: string, mut times: Vec<float>) -> BenchmarkResults
         min_time_ms: min_time,
         max_time_ms: max_time,
         std_dev_ms: std_dev,
-        files_searched: 0,  // TODO: Parse from output
-        matches_found: 0,   // TODO: Parse from output
+        files_searched: 0,  // TODO: Parse from output,
+        matches_found: 0,   // TODO: Parse from output,
     }
 }
 
@@ -244,7 +244,7 @@ pub fn run_all_benchmarks() -> Result<(), Error> {
     // Scenario 4: Code-specific (Rust files only)
     println!("\n=== Scenario 4: Rust files only ===")
     run_benchmark(BenchmarkConfig {
-        test_directory: "../../src",  // Windjammer source
+        test_directory: "../../src",  // Windjammer source,
         pattern: "impl",
         iterations: 50,
     })?

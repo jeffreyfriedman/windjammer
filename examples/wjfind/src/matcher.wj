@@ -20,8 +20,8 @@ pub fn find_match(line: string, line_num: int, file: string, config: Config) -> 
         column: column,
         line_text: line.to_string(),
         match_text: match_text.to_string(),
-        context_before: vec![],  // Will be filled by search module
-        context_after: vec![],   // Will be filled by search module
+        context_before: vec![],  // Will be filled by search module,
+        context_after: vec![],   // Will be filled by search module,
     })
 }
 
@@ -39,8 +39,8 @@ pub fn find_all_matches(line: string, line_num: int, file: string, config: Confi
                 column: column,
                 line_text: line.to_string(),
                 match_text: match_text.to_string(),
-                context_before: vec![],  // Will be filled by search module
-                context_after: vec![],   // Will be filled by search module
+                context_before: vec![],  // Will be filled by search module,
+                context_after: vec![],   // Will be filled by search module,
             })
         }
     }

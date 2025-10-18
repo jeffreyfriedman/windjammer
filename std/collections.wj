@@ -9,7 +9,7 @@ use std::collections.VecDeque as RustVecDeque
 
 // HashMap - Hash table implementation
 pub struct HashMap<K, V> {
-    inner: RustHashMap<K, V>
+    inner: RustHashMap<K, V>,
 }
 
 impl<K, V> HashMap<K, V> {
@@ -95,7 +95,7 @@ impl<T> HashSet<T> {
 
 // BTreeMap - Sorted map implementation
 pub struct BTreeMap<K, V> {
-    inner: RustBTreeMap<K, V>
+    inner: RustBTreeMap<K, V>,
 }
 
 impl<K, V> BTreeMap<K, V> {

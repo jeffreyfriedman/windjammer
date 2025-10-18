@@ -19,7 +19,7 @@ fn main() {
     let user = User {
         id: 1,
         name: "Alice".to_string(),
-        email: "alice@example.com".to_string()
+        email: "alice@example.com".to_string(),
     }
     
     // Use Windjammer's json abstraction - no direct serde_json access!
