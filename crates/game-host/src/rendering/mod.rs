@@ -7,6 +7,9 @@
 //! - WebGPU (web)
 
 pub mod backend;
+pub mod sprite;
+
+pub use sprite::{Sprite, SpriteBatch};
 
 use crate::math::{Mat4, Vec2, Vec3, Vec4};
 
@@ -40,20 +43,14 @@ impl Default for RenderContext {
     }
 }
 
-/// Sprite for 2D rendering
-pub struct Sprite {
-    pub texture: Handle<Texture>,
-    pub size: Vec2,
-}
-
 /// 3D Mesh
 pub struct Mesh {
-    pub vertices: Vec<Vertex>,
+    pub vertices: Vec<Vertex3D>,
     pub indices: Vec<u32>,
 }
 
-/// Vertex data
-pub struct Vertex {
+/// Vertex data for 3D rendering
+pub struct Vertex3D {
     pub position: Vec3,
     pub normal: Vec3,
     pub uv: Vec2,

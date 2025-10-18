@@ -31,6 +31,16 @@ impl<T: Clone> Signal<T> {
         self.notify(&new_value);
     }
 
+    /// Update the value with a function and notify subscribers
+    pub fn update<F>(&self, f: F)
+    where
+        F: FnOnce(&mut T),
+    {
+        f(&mut self.value.borrow_mut());
+        let value = self.value.borrow().clone();
+        self.notify(&value);
+    }
+
     /// Subscribe to changes
     pub fn subscribe<F>(&self, callback: F)
     where

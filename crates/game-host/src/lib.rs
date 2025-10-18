@@ -37,6 +37,7 @@
 pub mod assets; // Asset loading and management
 pub mod audio; // Audio playback
 pub mod ecs; // Entity-Component-System
+pub mod game_loop; // Game loop with fixed timestep
 pub mod input; // Input handling
 pub mod math; // Math types (Vec2, Vec3, Mat4, etc.)
 pub mod physics; // Physics integration
@@ -80,13 +81,17 @@ pub trait GameLoop {
     fn cleanup(&mut self) {}
 }
 
-/// Run a game
-pub fn run<G: GameLoop + 'static>(mut game: G) -> Result<(), String> {
-    // This will be implemented with the actual game loop
-    game.init();
+/// Run a game with default configuration
+pub fn run<G: GameLoop + 'static>(game: G) -> Result<(), String> {
+    game_loop::run_game_loop(game, game_loop::GameLoopConfig::default())
+}
 
-    // For now, just a placeholder
-    Ok(())
+/// Run a game with custom configuration
+pub fn run_with_config<G: GameLoop + 'static>(
+    game: G,
+    config: game_loop::GameLoopConfig,
+) -> Result<(), String> {
+    game_loop::run_game_loop(game, config)
 }
 
 #[cfg(test)]
