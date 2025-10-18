@@ -18,7 +18,9 @@ use std::rc::Rc;
 
 /// Component runtime manages the lifecycle of a mounted component
 pub struct ComponentRuntime<C: Component> {
+    #[allow(dead_code)]
     component: Rc<RefCell<C>>,
+    #[allow(dead_code)]
     current_vnode: Rc<RefCell<Option<VNode>>>,
     event_dispatcher: Rc<RefCell<ComponentEventDispatcher>>,
     #[cfg(target_arch = "wasm32")]
