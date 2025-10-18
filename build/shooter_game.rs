@@ -92,18 +92,12 @@ fn update(&self, delta: f32) {
         for idx in bullets_to_remove.reversed() {
             self.bullets.remove(idx);
         }
-        self.bullets = self.bullets.filter(|b| {
-            b.position::y > -50.0 && b.position::y < 650.0;
-        });
-        let enemies_at_bottom = self.enemies.filter(|e| {
-            e.position::y > 560.0;
-        }).len();
+        self.bullets = self.bullets.filter(|b| b.position::y > -50.0 && b.position::y < 650.0);
+        let enemies_at_bottom = self.enemies.filter(|e| e.position::y > 560.0).len();
         if enemies_at_bottom > 0 {
             self.player.health = self.player.health - enemies_at_bottom * 10;
         }
-        self.enemies = self.enemies.filter(|e| {
-            e.position::y <= 560.0;
-        });
+        self.enemies = self.enemies.filter(|e| e.position::y <= 560.0);
         if self.player.health <= 0 {
             self.game_over = true;
         }

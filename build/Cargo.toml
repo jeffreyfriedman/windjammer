@@ -51,6 +51,10 @@ name = "test_const_static"
 path = "test_const_static.rs"
 
 [[bin]]
+name = "todo_reactive"
+path = "todo_reactive.rs"
+
+[[bin]]
 name = "encoding"
 path = "encoding.rs"
 

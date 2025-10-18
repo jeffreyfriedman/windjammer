@@ -36,9 +36,7 @@ fn toggle_todo(&self, id: i64) {
 }
 #[inline]
 fn delete_todo(&self, id: i64) {
-        self.todos = self.todos.filter(|t| {
-            t.id != id;
-        });
+        self.todos = self.todos.filter(|t| t.id != id);
 }
 #[inline]
 fn render(&self) -> VNode {
@@ -80,9 +78,7 @@ fn render_todo_item(&self, todo: &TodoItem) -> VNode {
 #[inline]
 fn render_stats(&self) -> VNode {
         let total = self.todos.len();
-        let completed = self.todos.filter(|t| {
-            t.completed;
-        }).len();
+        let completed = self.todos.filter(|t| t.completed).len();
         let remaining = total - completed;
         VElement::new("div").attr("class", "stats").child(VNode::Text(VText::new(format!("Total: {} | Completed: {} | Remaining: {}", total, completed, remaining)))).into()
 }
@@ -103,9 +99,7 @@ fn main() {
 ");
     println!("Completing todo #1");
     app.toggle_todo(1);
-    let completed = app.todos::filter(|t| {
-        t.completed;
-    }).len();
+    let completed = app.todos::filter(|t| t.completed).len();
     println!(format!("Completed: {}/{app.todos.len()}", completed));
     use windjammer_ui.ssr.SSRRenderer;
     let mut renderer = SSRRenderer::new();
