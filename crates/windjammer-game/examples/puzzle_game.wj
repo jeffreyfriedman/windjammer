@@ -12,10 +12,10 @@ enum Direction {
 
 @game
 struct PuzzleGame {
-    grid: [[int; 4]; 4]
-    score: int
-    moves: int
-    game_over: bool
+    grid: [[int; 4]; 4],
+    score: int,
+    moves: int,
+    game_over: bool,
 }
 
 impl PuzzleGame {
@@ -32,7 +32,7 @@ impl PuzzleGame {
             grid,
             score: 0,
             moves: 0,
-            game_over: false
+            game_over: false,
         }
         game.spawn_tile()
         game.spawn_tile()

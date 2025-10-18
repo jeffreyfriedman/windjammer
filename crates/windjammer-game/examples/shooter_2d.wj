@@ -5,27 +5,27 @@ use windjammer_game.prelude.*
 
 // Player component
 struct Player {
-    speed: f32
+    speed: f32,
 }
 
 // Enemy component
 struct Enemy {
-    speed: f32
-    health: int
+    speed: f32,
+    health: int,
 }
 
 // Bullet component
 struct Bullet {
-    velocity: Vec2
-    damage: int
+    velocity: Vec2,
+    damage: int,
 }
 
 // Main game struct
 struct ShooterGame {
-    world: World
-    player_entity: Entity
-    spawn_timer: f32
-    score: int
+    world: World,
+    player_entity: Entity,
+    spawn_timer: f32,
+    score: int,
 }
 
 impl ShooterGame {
@@ -40,8 +40,8 @@ impl ShooterGame {
         Self {
             world
             player_entity
-            spawn_timer: 0.0
-            score: 0
+            spawn_timer: 0.0,
+            score: 0,
         }
     }
     

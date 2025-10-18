@@ -9,7 +9,7 @@ use ./message
 
 const MAX_HISTORY_SIZE: int = 100
 
-@derive(Debug, Clone)]
+@derive(Debug, Clone))
 pub struct Room {
     pub id: string,
     pub name: string,

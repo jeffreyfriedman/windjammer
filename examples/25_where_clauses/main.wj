@@ -33,7 +33,7 @@ where
     U: Clone
 {
     first: T,
-    second: U
+    second: U,
 }
 
 impl<T, U> Pair<T, U>

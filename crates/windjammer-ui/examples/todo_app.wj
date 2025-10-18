@@ -6,16 +6,16 @@
 
 @derive(Debug, Clone)
 struct TodoItem {
-    id: int
-    text: string
-    completed: bool
+    id: int,
+    text: string,
+    completed: bool,
 }
 
 @component
 struct TodoApp {
-    todos: [TodoItem]
-    next_id: int
-    input_value: string
+    todos: [TodoItem],
+    next_id: int,
+    input_value: string,
 }
 
 impl TodoApp {
@@ -26,7 +26,7 @@ impl TodoApp {
                 TodoItem { id: 2, text: "Build awesome apps", completed: false }
             ],
             next_id: 3,
-            input_value: ""
+            input_value: "",
         }
     }
 
@@ -35,7 +35,7 @@ impl TodoApp {
             todos.push(TodoItem {
                 id: next_id,
                 text: text,
-                completed: false
+                completed: false,
             })
             next_id += 1
             input_value = ""

@@ -6,7 +6,7 @@
 
 @component
 struct Counter {
-    count: int
+    count: int,
 }
 
 impl Counter {

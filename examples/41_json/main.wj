@@ -7,7 +7,7 @@ use std::json
 struct User {
     id: int,
     name: string,
-    email: string
+    email: string,
 }
 
 fn main() {

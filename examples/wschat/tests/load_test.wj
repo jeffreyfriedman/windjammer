@@ -7,7 +7,7 @@ use std::log
 use std::collections.Vec
 use std::sync.{Arc, Mutex}
 
-@derive(Debug, Clone)]
+@derive(Debug, Clone))
 struct LoadTestConfig {
     server_url: string,
     target_connections: int,
@@ -16,7 +16,7 @@ struct LoadTestConfig {
     messages_per_connection: int,
 }
 
-@derive(Debug)]
+@derive(Debug))
 struct LoadTestResults {
     total_connections: int,
     successful_connections: int,

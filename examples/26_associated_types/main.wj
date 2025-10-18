@@ -5,7 +5,7 @@ trait Container {
 }
 
 struct Box<T> {
-    value: T
+    value: T,
 }
 
 impl<T> Container for Box<T> {
@@ -17,7 +17,7 @@ impl<T> Container for Box<T> {
 }
 
 struct IntBox {
-    number: int
+    number: int,
 }
 
 impl Container for IntBox {
