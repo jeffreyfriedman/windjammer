@@ -67,7 +67,21 @@ pub fn mount<C: Component>(_selector: &str, _component: C) -> Result<(), String>
 }
 
 /// Renderer trait for different platforms
+#[cfg(not(target_arch = "wasm32"))]
 pub trait Renderer: Send + Sync {
+    /// Initialize the renderer
+    fn init(&mut self) -> Result<(), String>;
+
+    /// Render a virtual DOM tree
+    fn render(&mut self, vnode: &crate::vdom::VNode) -> Result<(), String>;
+
+    /// Apply patches to the rendered tree
+    fn patch(&mut self, patches: &[crate::vdom::Patch]) -> Result<(), String>;
+}
+
+/// Renderer trait for WASM (no Send + Sync required)
+#[cfg(target_arch = "wasm32")]
+pub trait Renderer {
     /// Initialize the renderer
     fn init(&mut self) -> Result<(), String>;
 
