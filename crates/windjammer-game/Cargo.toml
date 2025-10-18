@@ -23,10 +23,13 @@ winit = "0.29"  # Window management and input
 
 # Math library
 glam = "0.25"  # Fast math for games (SIMD-optimized)
+bytemuck = { version = "1.14", features = ["derive"] }  # For wgpu vertex data
 
-# Physics engine
+# Physics engines
 rapier2d = { version = "0.18", features = ["serde-serialize"] }
 rapier3d = { version = "0.18", features = ["serde-serialize"], optional = true }
+# Note: Jolt physics (jolt-physics-rs) is still experimental in Rust
+# For now, we'll use Rapier for both 2D and 3D, with Jolt as a future option
 
 # Audio
 rodio = { version = "0.17", optional = true }
