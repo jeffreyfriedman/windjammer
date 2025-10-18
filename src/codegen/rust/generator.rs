@@ -1189,7 +1189,25 @@ impl CodeGenerator {
             Statement::Match { value, arms } => {
                 let mut output = self.indent();
                 output.push_str("match ");
-                output.push_str(&self.generate_expression(value));
+
+                // Check if any arm has a string literal pattern
+                // If so, add .as_str() to the match value for String types
+                let has_string_literal = arms
+                    .iter()
+                    .any(|arm| self.pattern_has_string_literal(&arm.pattern));
+
+                let value_str = self.generate_expression(value);
+                if has_string_literal {
+                    // Add .as_str() if the value doesn't already end with it
+                    if !value_str.ends_with(".as_str()") {
+                        output.push_str(&format!("{}.as_str()", value_str));
+                    } else {
+                        output.push_str(&value_str);
+                    }
+                } else {
+                    output.push_str(&value_str);
+                }
+
                 output.push_str(" {\n");
 
                 self.indent_level += 1;
@@ -1370,6 +1388,17 @@ impl CodeGenerator {
                     patterns.iter().map(|p| self.generate_pattern(p)).collect();
                 pattern_strs.join(" | ")
             }
+        }
+    }
+
+    /// Check if a pattern contains a string literal
+    /// This is used to determine if we need to add .as_str() to match expressions
+    fn pattern_has_string_literal(&self, pattern: &Pattern) -> bool {
+        match pattern {
+            Pattern::Literal(Literal::String(_)) => true,
+            Pattern::Tuple(patterns) => patterns.iter().any(|p| self.pattern_has_string_literal(p)),
+            Pattern::Or(patterns) => patterns.iter().any(|p| self.pattern_has_string_literal(p)),
+            _ => false,
         }
     }
 
@@ -1886,7 +1915,24 @@ impl CodeGenerator {
                 if stmts.len() == 1 {
                     if let Statement::Match { value, arms } = &stmts[0] {
                         let mut output = String::from("match ");
-                        output.push_str(&self.generate_expression(value));
+
+                        // Check if any arm has a string literal pattern
+                        let has_string_literal = arms
+                            .iter()
+                            .any(|arm| self.pattern_has_string_literal(&arm.pattern));
+
+                        let value_str = self.generate_expression(value);
+                        if has_string_literal {
+                            // Add .as_str() if the value doesn't already end with it
+                            if !value_str.ends_with(".as_str()") {
+                                output.push_str(&format!("{}.as_str()", value_str));
+                            } else {
+                                output.push_str(&value_str);
+                            }
+                        } else {
+                            output.push_str(&value_str);
+                        }
+
                         output.push_str(" {\n");
 
                         self.indent_level += 1;

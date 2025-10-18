@@ -1,0 +1,19 @@
+[package]
+name = "windjammer-app"
+version = "0.1.0"
+edition = "2021"
+
+# Prevent this from being treated as part of parent workspace
+[workspace]
+
+[dependencies]
+std::fs = "*"
+std::http = "*"
+std::mime = "*"
+
+[[bin]]
+name = "serve_demo"
+path = "serve_demo.rs"
+
+[profile.release]
+opt-level = 3

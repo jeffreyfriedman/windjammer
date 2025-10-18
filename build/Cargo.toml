@@ -7,12 +7,39 @@ edition = "2021"
 [workspace]
 
 [dependencies]
-windjammer-ui = { path = "/Users/jeffreyfriedman/src/windjammer/crates/windjammer-ui" }
-windjammer-ui-macro = { path = "/Users/jeffreyfriedman/src/windjammer/crates/windjammer-ui-macro" }
+std::http = "*"
+
+[[bin]]
+name = "test_module_path"
+path = "test_module_path.rs"
+
+[[bin]]
+name = "test_match_chain"
+path = "test_match_chain.rs"
+
+[[bin]]
+name = "test_async_match"
+path = "test_async_match.rs"
+
+[[bin]]
+name = "test_serve_minimal"
+path = "test_serve_minimal.rs"
+
+[[bin]]
+name = "test_method_chain"
+path = "test_method_chain.rs"
 
 [[bin]]
 name = "counter_web"
 path = "counter_web.rs"
+
+[[bin]]
+name = "test_use_syntax"
+path = "test_use_syntax.rs"
+
+[[bin]]
+name = "test_match_module"
+path = "test_match_module.rs"
 
 [profile.release]
 opt-level = 3
