@@ -1103,15 +1103,25 @@ impl Parser {
             }
         }
 
-        // Parse the rest of the path (identifiers separated by . or /)
+        // Parse the rest of the path (identifiers separated by . or :: or /)
         loop {
             if let Token::Ident(name) = self.current_token() {
                 path_str.push_str(name);
                 self.advance();
 
-                // Check for . or / as separator
+                // Check for . or :: or / as separator
                 if self.current_token() == &Token::Dot {
                     path_str.push('.');
+                    self.advance();
+
+                    // Check if next token is * (glob import)
+                    if self.current_token() == &Token::Star {
+                        path_str.push('*');
+                        self.advance();
+                        break;
+                    }
+                } else if self.current_token() == &Token::ColonColon {
+                    path_str.push_str("::");
                     self.advance();
 
                     // Check if next token is * (glob import)
@@ -1133,15 +1143,18 @@ impl Parser {
             }
         }
 
-        // Check for braced imports: use module.{A, B, C}
+        // Check for braced imports: use module.{A, B, C} or use module::{A, B, C}
         if self.current_token() == &Token::LBrace {
-            // Remove trailing dot if present (already added by previous iteration)
+            // Remove trailing dot or :: if present (already added by previous iteration)
             if path_str.ends_with('.') {
+                path_str.pop();
+            } else if path_str.ends_with("::") {
+                path_str.pop();
                 path_str.pop();
             }
 
             self.advance(); // consume {
-            path_str.push_str(".{");
+            path_str.push_str("::{");
 
             loop {
                 if let Token::Ident(name) = self.current_token() {
@@ -2336,11 +2349,35 @@ impl Parser {
                 }
             }
             Token::Ident(name) => {
-                let name = name.clone();
+                let mut qualified_name = name.clone();
                 self.advance();
+
+                // Handle qualified paths with :: (e.g., std::fs::read)
+                while self.current_token() == &Token::ColonColon {
+                    // Look ahead to see if there's an identifier after ::
+                    if self.position + 1 < self.tokens.len() {
+                        if let Token::Ident(next_name) = &self.tokens[self.position + 1] {
+                            // This is a qualified path segment
+                            qualified_name.push_str("::");
+                            qualified_name.push_str(next_name);
+                            self.advance(); // consume ::
+                            self.advance(); // consume identifier
+                        } else if let Token::Lt = &self.tokens[self.position + 1] {
+                            // This is turbofish (e.g., Type::<T>), stop here
+                            break;
+                        } else {
+                            // Unknown token after ::, stop here
+                            break;
+                        }
+                    } else {
+                        // No more tokens, stop
+                        break;
+                    }
+                }
+
                 // Don't check for { here - just create the identifier
                 // and continue to postfix operators
-                Expression::Identifier(name)
+                Expression::Identifier(qualified_name)
             }
             _ => return self.parse_primary_expression(),
         };
@@ -2349,18 +2386,25 @@ impl Parser {
         loop {
             match self.current_token() {
                 Token::Dot => {
-                    self.advance();
-                    let field = if let Token::Ident(name) = self.current_token() {
-                        let name = name.clone();
-                        self.advance();
-                        name
+                    // Check for .await
+                    if self.peek(1) == Some(&Token::Await) {
+                        self.advance(); // consume '.'
+                        self.advance(); // consume 'await'
+                        left = Expression::Await(Box::new(left));
                     } else {
-                        return Err("Expected field name after .".to_string());
-                    };
-                    left = Expression::FieldAccess {
-                        object: Box::new(left),
-                        field,
-                    };
+                        self.advance();
+                        let field = if let Token::Ident(name) = self.current_token() {
+                            let name = name.clone();
+                            self.advance();
+                            name
+                        } else {
+                            return Err("Expected field name after .".to_string());
+                        };
+                        left = Expression::FieldAccess {
+                            object: Box::new(left),
+                            field,
+                        };
+                    }
                 }
                 Token::LBracket => {
                     self.advance();
