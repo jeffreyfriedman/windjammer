@@ -43,7 +43,9 @@ pub mod math; // Math types (Vec2, Vec3, Mat4, etc.)
 pub mod physics; // Physics integration
 pub mod rendering; // Graphics rendering
 pub mod time; // Time and delta time management
-pub mod window; // Window creation and management
+
+#[cfg(not(target_arch = "wasm32"))]
+pub mod window; // Window creation and management (native only)
 
 /// Prelude module with commonly used types and traits
 pub mod prelude {
@@ -55,7 +57,9 @@ pub mod prelude {
     pub use crate::physics::{Collider, PhysicsWorld, RigidBody};
     pub use crate::rendering::{Camera, Material, Mesh, RenderContext, Sprite};
     pub use crate::time::Time;
-    pub use crate::window::{Window, WindowConfig};
+
+    #[cfg(not(target_arch = "wasm32"))]
+    pub use crate::window::{Window, WindowConfig, WindowRunner};
 
     // Re-export the game loop trait
     pub use crate::GameLoop;
