@@ -1,10 +1,17 @@
 //! Physics simulation using Rapier
+//!
+//! Supports both 2D and 3D physics:
+//! - 2D: rapier2d (default)
+//! - 3D: rapier3d (optional feature)
+//!
+//! Future: Jolt physics integration for high-performance 3D physics
 
 use crate::math::Vec2;
 
 #[cfg(feature = "3d")]
 use crate::math::Vec3;
 
+// Re-export Rapier types based on enabled features
 #[cfg(feature = "2d")]
 pub use rapier2d::prelude::*;
 
@@ -71,7 +78,57 @@ impl PhysicsWorld {
 #[cfg(feature = "3d")]
 pub struct PhysicsWorld {
     pub gravity: Vec3,
-    // 3D physics implementation
+    pub integration_parameters: IntegrationParameters,
+    pub physics_pipeline: PhysicsPipeline,
+    pub island_manager: IslandManager,
+    pub broad_phase: BroadPhase,
+    pub narrow_phase: NarrowPhase,
+    pub rigid_body_set: RigidBodySet,
+    pub collider_set: ColliderSet,
+    pub impulse_joint_set: ImpulseJointSet,
+    pub multibody_joint_set: MultibodyJointSet,
+    pub ccd_solver: CCDSolver,
+    pub query_pipeline: QueryPipeline,
+}
+
+#[cfg(feature = "3d")]
+impl PhysicsWorld {
+    pub fn new(gravity: Vec3) -> Self {
+        Self {
+            gravity,
+            integration_parameters: IntegrationParameters::default(),
+            physics_pipeline: PhysicsPipeline::new(),
+            island_manager: IslandManager::new(),
+            broad_phase: BroadPhase::new(),
+            narrow_phase: NarrowPhase::new(),
+            rigid_body_set: RigidBodySet::new(),
+            collider_set: ColliderSet::new(),
+            impulse_joint_set: ImpulseJointSet::new(),
+            multibody_joint_set: MultibodyJointSet::new(),
+            ccd_solver: CCDSolver::new(),
+            query_pipeline: QueryPipeline::new(),
+        }
+    }
+
+    pub fn step(&mut self) {
+        let gravity = rapier3d::math::Vector::new(self.gravity.x, self.gravity.y, self.gravity.z);
+
+        self.physics_pipeline.step(
+            &gravity,
+            &self.integration_parameters,
+            &mut self.island_manager,
+            &mut self.broad_phase,
+            &mut self.narrow_phase,
+            &mut self.rigid_body_set,
+            &mut self.collider_set,
+            &mut self.impulse_joint_set,
+            &mut self.multibody_joint_set,
+            &mut self.ccd_solver,
+            Some(&mut self.query_pipeline),
+            &(),
+            &(),
+        );
+    }
 }
 
 #[cfg(test)]

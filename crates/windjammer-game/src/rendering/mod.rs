@@ -1,4 +1,12 @@
 //! Graphics rendering using wgpu
+//!
+//! Supports both 2D and 3D rendering with multiple graphics APIs:
+//! - Metal (macOS, iOS)
+//! - Vulkan (cross-platform)
+//! - DirectX 12 (Windows)
+//! - WebGPU (web)
+
+pub mod backend;
 
 use crate::math::{Mat4, Vec2, Vec3, Vec4};
 
