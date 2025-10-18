@@ -243,6 +243,58 @@ cargo fmt -p windjammer-ui
   - 5 event propagation tests
   - 3 platform tests
 
+## 📦 Building for Web (WASM)
+
+### Prerequisites
+
+```bash
+cargo install wasm-pack
+```
+
+### Build for Web
+
+```bash
+cd crates/windjammer-ui
+./build-wasm.sh
+```
+
+This creates three build variants:
+- `pkg/web/` - For vanilla HTML/JS (use with `<script type="module">`)
+- `pkg/bundler/` - For webpack/rollup/vite
+- `pkg/nodejs/` - For Node.js applications
+
+### Using in HTML
+
+```html
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Windjammer UI App</title>
+</head>
+<body>
+    <div id="app"></div>
+    
+    <script type="module">
+        import init from './pkg/web/windjammer_ui.js';
+        await init();
+    </script>
+</body>
+</html>
+```
+
+### Using with Vite/Webpack
+
+```javascript
+import init from 'windjammer-ui';
+
+async function main() {
+    await init();
+    // Your app code here
+}
+
+main();
+```
+
 ## 🌟 Inspiration
 
 - **Svelte**: Simplicity and reactivity model
@@ -269,5 +321,6 @@ See main Windjammer CONTRIBUTING.md
 ---
 
 **Status**: Active development for v0.34.0  
-**Next**: Runtime integration to make examples actually runnable
+**Completed**: Parser integration, implicit self, array types, `wj run`, web runtime, WASM packaging  
+**In Progress**: LSP/MCP updates, game runtime, desktop integration
 

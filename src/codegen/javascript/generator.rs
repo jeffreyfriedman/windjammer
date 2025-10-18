@@ -600,6 +600,14 @@ if (import.meta.url === `file://${process.argv[1]}`) {
                 format!("[{}]", elems.join(", "))
             }
 
+            Expression::Array(elements) => {
+                let elems: Vec<String> = elements
+                    .iter()
+                    .map(|e| self.generate_expression(e))
+                    .collect();
+                format!("[{}]", elems.join(", "))
+            }
+
             Expression::MacroInvocation { name, args, .. } => {
                 // Handle common macros
                 match name.as_str() {
