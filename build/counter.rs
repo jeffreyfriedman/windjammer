@@ -13,8 +13,8 @@ struct Counter {
 
 impl Counter {
 #[inline]
-fn render() -> VNode {
-        VElement::new("div").attr("class", "counter").child(VNode::Element(VElement::new("h1").child(VNode::Text(VText::new(format!("Count: {}", count)))))).child(VNode::Element(VElement::new("button").attr("onclick", "increment").child(VNode::Text(VText::new("Increment"))))).into()
+fn render(&self) -> VNode {
+        VElement::new("div").attr("class", "counter").child(VNode::Element(VElement::new("h1").child(VNode::Text(VText::new(format!("Count: {}", self.count)))))).child(VNode::Element(VElement::new("button").attr("onclick", "increment").child(VNode::Text(VText::new("Increment"))))).into()
 }
 }
 

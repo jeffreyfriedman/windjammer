@@ -24,10 +24,11 @@ Windjammer is a pragmatic systems programming language that compiles to **Rust, 
 ✅ **100% Rust compatibility** - use any Rust crate  
 ✅ **World-class IDE support** - LSP, debugging, refactoring in VSCode/Vim/IntelliJ  
 ✅ **AI-powered development** - MCP server for Claude, ChatGPT code assistance  
+✅ **UI Framework** - Build web, desktop, and mobile apps with `windjammer-ui` 🆕  
 ✅ **Production-ready** - comprehensive testing, fuzzing, security audit (A+ rating)  
 ✅ **No lock-in** - `wj eject` converts your project to pure Rust anytime
 
-**Perfect for:** Web APIs, CLI tools, microservices, data processing, learning systems programming
+**Perfect for:** Web APIs, CLI tools, microservices, data processing, UI apps, game development, learning systems programming
 
 **Philosophy:** Provide 80% of developers with 80% of Rust's power while eliminating 80% of its complexity.
 
@@ -406,6 +407,68 @@ All targets benefit from the same 15-phase optimization pipeline:
 - ✅ **Idiomatic Output** - Each target uses language conventions
 - ✅ **Extensible** - Easy to add new targets (Python, C, LLVM IR)
 
+### 🎨 UI Framework (`windjammer-ui`) 🆕
+
+**Build beautiful, cross-platform applications!** Windjammer includes a complete UI framework inspired by Svelte, Dioxus, and Flutter for web, desktop, and mobile development.
+
+```windjammer
+use windjammer_ui.prelude.*
+use windjammer_ui.vdom.{VElement, VNode, VText}
+
+@component
+struct Counter {
+    count: int
+}
+
+impl Counter {
+    fn render() -> VNode {
+        VElement::new("div")
+            .attr("class", "counter")
+            .child(VNode::Element(
+                VElement::new("h1")
+                    .child(VNode::Text(VText::new("Count: {count}")))
+            ))
+            .child(VNode::Element(
+                VElement::new("button")
+                    .attr("onclick", "increment")
+                    .child(VNode::Text(VText::new("Increment")))
+            ))
+            .into()
+    }
+}
+```
+
+**What You Get:**
+- ✅ **Svelte-inspired** - Simple, easy-to-reason-about component model
+- ✅ **Cross-platform** - Web (WASM), Desktop (Tauri), Mobile
+- ✅ **Reactive** - `Signal<T>`, `Computed`, `Effect` for state management
+- ✅ **Virtual DOM** - Efficient reconciliation and patching
+- ✅ **Game Development** - ECS architecture, 2D/3D rendering support
+- ✅ **Idiomatic Windjammer** - Implicit `self`, automatic borrows, clean syntax
+- ✅ **LSP/MCP Integration** - Completions, hover docs, code generation tools
+
+**Features:**
+- Server-side rendering (SSR) with hydration
+- Client-side routing
+- Platform-specific capabilities (Camera, GPS, Filesystem)
+- Form validation and state management
+- Game loop with input handling and rendering
+- Full IDE support with completions and refactoring
+
+**Getting Started:**
+```bash
+# Run a UI example
+wj run crates/windjammer-ui/examples/counter.wj
+
+# Build for web (WASM)
+cd crates/windjammer-ui
+./build-wasm.sh
+```
+
+See [`crates/windjammer-ui/README.md`](crates/windjammer-ui/README.md) for full documentation and examples.
+
+---
+
 ### 🚪 No Lock-In: Eject to Pure Rust
 
 **Risk-free adoption!** Convert your Windjammer project to standalone Rust anytime:
@@ -457,6 +520,9 @@ windjammer-mcp stdio
 **What Claude can do:**
 - ✅ **Parse & Analyze** - Understand your Windjammer code structure
 - ✅ **Generate Code** - Create functions from natural language descriptions
+- ✅ **Generate UI Components** - Create `@component` decorated UI components 🆕
+- ✅ **Generate Game Entities** - Scaffold ECS game entities with physics 🆕
+- ✅ **Analyze SSR/Routing** - Check server-side rendering and routing configs 🆕
 - ✅ **Explain Errors** - Plain English explanations with fix suggestions
 - ✅ **Refactor** - Extract functions, rename symbols, inline variables
 - ✅ **Search Workspace** - Find code patterns across your project

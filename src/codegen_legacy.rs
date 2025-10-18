@@ -38,6 +38,9 @@ pub struct CodeGenerator {
     cow_optimizations: std::collections::HashSet<String>, // Variables that can use Cow
     // Track current statement index for optimization hints
     current_statement_idx: usize,
+    // IMPLICIT SELF SUPPORT: Track struct fields for implicit self references
+    current_struct_fields: std::collections::HashSet<String>, // Field names in current impl block
+    in_impl_block: bool, // true if currently generating code for an impl block
 }
 
 impl CodeGenerator {
@@ -67,6 +70,8 @@ impl CodeGenerator {
             smallvec_optimizations: std::collections::HashMap::new(),
             cow_optimizations: std::collections::HashSet::new(),
             current_statement_idx: 0,
+            current_struct_fields: std::collections::HashSet::new(),
+            in_impl_block: false,
         }
     }
 
@@ -146,6 +151,16 @@ impl CodeGenerator {
         for item in &program.items {
             if let Item::BoundAlias { name, traits } = item {
                 self.bound_aliases.insert(name.clone(), traits.clone());
+            }
+        }
+
+        // Collect struct definitions for implicit self support
+        let mut struct_fields: std::collections::HashMap<String, Vec<String>> =
+            std::collections::HashMap::new();
+        for item in &program.items {
+            if let Item::Struct(s) = item {
+                let field_names: Vec<String> = s.fields.iter().map(|f| f.name.clone()).collect();
+                struct_fields.insert(s.name.clone(), field_names);
             }
         }
 
@@ -247,8 +262,19 @@ impl CodeGenerator {
                     body.push_str("\n\n");
                 }
                 Item::Impl(impl_block) => {
+                    // Set the struct fields for implicit self support
+                    if let Some(fields) = struct_fields.get(&impl_block.type_name) {
+                        self.current_struct_fields = fields.iter().cloned().collect();
+                    } else {
+                        self.current_struct_fields.clear();
+                    }
+                    self.in_impl_block = true;
+
                     body.push_str(&self.generate_impl(impl_block, analyzed));
                     body.push_str("\n\n");
+
+                    self.in_impl_block = false;
+                    self.current_struct_fields.clear();
                 }
                 _ => {}
             }
@@ -732,6 +758,15 @@ impl CodeGenerator {
         }
     }
 
+    // Check if a function accesses any struct fields
+    // For now, we use a simple heuristic: if we're in an impl block and the function
+    // has a non-empty body, assume it might need &self
+    fn function_accesses_fields(&self, _func: &FunctionDecl) -> bool {
+        // Simple heuristic: methods in impl blocks typically need &self
+        // The identifier generation will add self. prefix where needed
+        true
+    }
+
     fn generate_function(&mut self, analyzed: &AnalyzedFunction) -> String {
         let func = &analyzed.decl;
         let mut output = String::new();
@@ -854,7 +889,18 @@ impl CodeGenerator {
 
         output.push('(');
 
-        let params: Vec<String> = func
+        // Add implicit &self for impl block methods that access fields
+        let mut params: Vec<String> = Vec::new();
+        let has_explicit_self = func.parameters.iter().any(|p| p.name == "self");
+
+        if self.in_impl_block && !has_explicit_self && !self.current_struct_fields.is_empty() {
+            // Check if function body accesses any struct fields
+            if self.function_accesses_fields(func) {
+                params.push("&self".to_string());
+            }
+        }
+
+        let additional_params: Vec<String> = func
             .parameters
             .iter()
             .map(|param| {
@@ -932,6 +978,8 @@ impl CodeGenerator {
                 }
             })
             .collect();
+
+        params.extend(additional_params);
 
         output.push_str(&params.join(", "));
         output.push(')');
@@ -1467,7 +1515,12 @@ impl CodeGenerator {
                 if name.contains('.') {
                     name.replace('.', "::")
                 } else {
-                    name.clone()
+                    // Check if this is a struct field and we're in an impl block
+                    if self.in_impl_block && self.current_struct_fields.contains(name) {
+                        format!("self.{}", name)
+                    } else {
+                        name.clone()
+                    }
                 }
             }
             Expression::Binary { left, op, right } => {
@@ -1751,6 +1804,11 @@ impl CodeGenerator {
                     exprs.iter().map(|e| self.generate_expression(e)).collect();
                 format!("({})", expr_strs.join(", "))
             }
+            Expression::Array(exprs) => {
+                let expr_strs: Vec<String> =
+                    exprs.iter().map(|e| self.generate_expression(e)).collect();
+                format!("vec![{}]", expr_strs.join(", "))
+            }
             Expression::MacroInvocation {
                 name,
                 args,
@@ -1929,12 +1987,20 @@ impl CodeGenerator {
                         // No interpolation found, just a regular string
                         format!("\"{}\"", s)
                     } else {
-                        // Generate format! call
-                        format!(
-                            "format!(\"{}\"{})",
-                            format_str,
-                            args.iter().map(|a| format!(", {}", a)).collect::<String>()
-                        )
+                        // Generate format! call with implicit self for struct fields
+                        let formatted_args = args
+                            .iter()
+                            .map(|a| {
+                                // Check if this is a struct field and add self. prefix
+                                if self.in_impl_block && self.current_struct_fields.contains(a) {
+                                    format!(", self.{}", a)
+                                } else {
+                                    format!(", {}", a)
+                                }
+                            })
+                            .collect::<String>();
+
+                        format!("format!(\"{}\"{})", format_str, formatted_args)
                     }
                 } else {
                     format!("\"{}\"", s)

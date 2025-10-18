@@ -3,12 +3,36 @@ name = "windjammer-app"
 version = "0.1.0"
 edition = "2021"
 
+# Prevent this from being treated as part of parent workspace
+[workspace]
+
 [dependencies]
 windjammer-ui = { path = "/Users/jeffreyfriedman/src/windjammer/crates/windjammer-ui" }
+windjammer-ui-macro = { path = "/Users/jeffreyfriedman/src/windjammer/crates/windjammer-ui-macro" }
+
+[[bin]]
+name = "test_array_of_structs"
+path = "test_array_of_structs.rs"
+
+[[bin]]
+name = "test_todo_simple"
+path = "test_todo_simple.rs"
 
 [[bin]]
 name = "counter"
 path = "counter.rs"
+
+[[bin]]
+name = "test_todo_component"
+path = "test_todo_component.rs"
+
+[[bin]]
+name = "test_struct_with_array"
+path = "test_struct_with_array.rs"
+
+[[bin]]
+name = "test_multiline_array"
+path = "test_multiline_array.rs"
 
 [profile.release]
 opt-level = 3

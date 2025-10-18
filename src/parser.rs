@@ -293,6 +293,7 @@ pub enum Expression {
         index: Box<Expression>,
     },
     Tuple(Vec<Expression>), // Tuple expression: (a, b, c)
+    Array(Vec<Expression>), // Array expression: [a, b, c]
     MacroInvocation {
         name: String,
         args: Vec<Expression>,
@@ -1486,6 +1487,14 @@ impl Parser {
                 self.advance();
                 Type::String
             }
+            Token::LBracket => {
+                // Array/Slice type: [T]
+                self.advance();
+                let inner = Box::new(self.parse_type()?);
+                self.expect(Token::RBracket)?;
+                // In Windjammer, [T] translates to Vec<T> in Rust
+                Type::Vec(inner)
+            }
             Token::LParen => {
                 // Tuple type: (T1, T2, T3)
                 self.advance();
@@ -1629,14 +1638,6 @@ impl Parser {
                 } else {
                     Type::Custom(type_name)
                 }
-            }
-            Token::LBracket => {
-                // Slice type: [T] or array [T; N]
-                self.advance();
-                let inner = Box::new(self.parse_type()?);
-                // For now, treat all as Vec
-                self.expect(Token::RBracket)?;
-                Type::Vec(inner)
             }
             _ => return Err(format!("Expected type, got {:?}", self.current_token())),
         };
@@ -2234,6 +2235,33 @@ impl Parser {
                     first_expr
                 }
             }
+            Token::LBracket => {
+                // Array literal: [a, b, c]
+                self.advance();
+
+                // Check for empty array []
+                if self.current_token() == &Token::RBracket {
+                    self.advance();
+                    return Ok(Expression::Array(vec![]));
+                }
+
+                let mut elements = vec![];
+                elements.push(self.parse_expression()?);
+
+                while self.current_token() == &Token::Comma {
+                    self.advance(); // consume comma
+
+                    // Allow trailing comma
+                    if self.current_token() == &Token::RBracket {
+                        break;
+                    }
+
+                    elements.push(self.parse_expression()?);
+                }
+
+                self.expect(Token::RBracket)?;
+                Expression::Array(elements)
+            }
             Token::Ampersand => {
                 // Handle & and &mut unary operators
                 self.advance();
@@ -2642,6 +2670,33 @@ impl Parser {
                         self.expect(Token::RParen)?;
                         first_expr
                     }
+                }
+            }
+            Token::LBracket => {
+                // Array literal: [a, b, c]
+                self.advance();
+
+                // Check for empty array []
+                if self.current_token() == &Token::RBracket {
+                    self.advance();
+                    Expression::Array(vec![])
+                } else {
+                    let mut elements = vec![];
+                    elements.push(self.parse_expression()?);
+
+                    while self.current_token() == &Token::Comma {
+                        self.advance(); // consume comma
+
+                        // Allow trailing comma
+                        if self.current_token() == &Token::RBracket {
+                            break;
+                        }
+
+                        elements.push(self.parse_expression()?);
+                    }
+
+                    self.expect(Token::RBracket)?;
+                    Expression::Array(elements)
                 }
             }
             Token::Match => {
