@@ -6,34 +6,34 @@
 
 @derive(Debug, Clone)
 struct Player {
-    position: Vec2
-    velocity: Vec2
-    health: int
-    score: int
+    position: Vec2,
+    velocity: Vec2,
+    health: int,
+    score: int,
 }
 
 @derive(Debug, Clone)
 struct Enemy {
-    position: Vec2
-    velocity: Vec2
-    health: int
+    position: Vec2,
+    velocity: Vec2,
+    health: int,
 }
 
 @derive(Debug, Clone)
 struct Bullet {
-    position: Vec2
-    velocity: Vec2
-    from_player: bool
+    position: Vec2,
+    velocity: Vec2,
+    from_player: bool,
 }
 
 @game
 struct ShooterGame {
-    player: Player
-    enemies: [Enemy]
-    bullets: [Bullet]
-    game_time: f32
-    spawn_timer: f32
-    game_over: bool
+    player: Player,
+    enemies: [Enemy],
+    bullets: [Bullet],
+    game_time: f32,
+    spawn_timer: f32,
+    game_over: bool,
 }
 
 impl ShooterGame {
@@ -43,13 +43,13 @@ impl ShooterGame {
                 position: Vec2::new(400.0, 550.0),
                 velocity: Vec2::ZERO,
                 health: 100,
-                score: 0
+                score: 0,
             },
             enemies: [],
             bullets: [],
             game_time: 0.0,
             spawn_timer: 0.0,
-            game_over: false
+            game_over: false,
         }
     }
 
@@ -57,7 +57,7 @@ impl ShooterGame {
         bullets.push(Bullet {
             position: Vec2::new(player.position.x, player.position.y - 20.0),
             velocity: Vec2::new(0.0, -500.0),  // Upward
-            from_player: true
+            from_player: true,
         })
     }
 
@@ -66,7 +66,7 @@ impl ShooterGame {
         enemies.push(Enemy {
             position: Vec2::new(x, 50.0),
             velocity: Vec2::new(0.0, 100.0),  // Downward
-            health: 50
+            health: 50,
         })
     }
 }

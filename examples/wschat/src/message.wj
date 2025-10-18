@@ -3,7 +3,7 @@
 use std::time
 
 // Client → Server messages
-@derive(Debug, Serialize, Deserialize)]
+@derive(Debug, Serialize, Deserialize))
 pub enum ClientMessage {
     Auth { token: string },
     Join { room: string },
@@ -17,7 +17,7 @@ pub enum ClientMessage {
 }
 
 // Server → Client messages
-@derive(Debug, Serialize, Deserialize)]
+@derive(Debug, Serialize, Deserialize))
 pub enum ServerMessage {
     Welcome { user_id: string, username: string },
     Joined { room: string, users: Vec<UserInfo> },
@@ -26,57 +26,57 @@ pub enum ServerMessage {
         room: string, 
         from: string, 
         text: string, 
-        timestamp: int 
+        timestamp: int,
     },
     DirectMessage { 
         from: string, 
         text: string, 
-        timestamp: int 
+        timestamp: int,
     },
     Presence { 
         room: string, 
         user: string, 
-        status: PresenceStatus 
+        status: PresenceStatus,
     },
     Typing { 
         room: string, 
         user: string, 
-        status: bool 
+        status: bool,
     },
     UserList { 
         room: string, 
-        users: Vec<UserInfo> 
+        users: Vec<UserInfo>,
     },
     History { 
         room: string, 
-        messages: Vec<HistoryMessage> 
+        messages: Vec<HistoryMessage>,
     },
     Error { message: string },
     Pong,
 }
 
-@derive(Debug, Clone, Serialize, Deserialize)]
+@derive(Debug, Clone, Serialize, Deserialize))
 pub struct UserInfo {
     pub user_id: string,
     pub username: string,
     pub status: PresenceStatus,
 }
 
-@derive(Debug, Clone, Serialize, Deserialize)]
+@derive(Debug, Clone, Serialize, Deserialize))
 pub enum PresenceStatus {
     Online,
     Away,
     Offline,
 }
 
-@derive(Debug, Clone, Serialize, Deserialize)]
+@derive(Debug, Clone, Serialize, Deserialize))
 pub struct HistoryMessage {
     pub from: string,
     pub text: string,
     pub timestamp: int,
 }
 
-@derive(Debug, Clone)]
+@derive(Debug, Clone))
 pub struct InternalMessage {
     pub from_user: string,
     pub to_room: string,

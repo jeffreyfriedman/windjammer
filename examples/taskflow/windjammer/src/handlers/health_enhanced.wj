@@ -5,7 +5,7 @@ use std::json
 use std::time
 use std::db
 
-@derive(Debug, Serialize)]
+@derive(Debug, Serialize))
 struct HealthResponse {
     status: string,
     version: string,
@@ -13,7 +13,7 @@ struct HealthResponse {
     timestamp: int,
 }
 
-@derive(Debug, Serialize)]
+@derive(Debug, Serialize))
 struct DetailedHealthResponse {
     status: string,
     version: string,
@@ -22,14 +22,14 @@ struct DetailedHealthResponse {
     checks: HealthChecks,
 }
 
-@derive(Debug, Serialize)]
+@derive(Debug, Serialize))
 struct HealthChecks {
     database: HealthCheck,
     memory: HealthCheck,
     disk: HealthCheck,
 }
 
-@derive(Debug, Serialize)]
+@derive(Debug, Serialize))
 struct HealthCheck {
     status: string,
     message: Option<string>,

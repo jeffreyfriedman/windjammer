@@ -19,7 +19,7 @@ trait Pet: Animal {
 
 // Struct implementing multiple traits
 struct Dog {
-    dog_name: string
+    dog_name: string,
 }
 
 impl Animal for Dog {

@@ -11,14 +11,14 @@ use ./config.Config
 use ./walker
 use ./matcher
 
-@derive(Debug)]
+@derive(Debug))
 pub struct SearchResults {
     pub matches: Vec<Match>,
     pub files_searched: int,
     pub total_matches: int,
 }
 
-@derive(Debug, Clone)]
+@derive(Debug, Clone))
 pub struct Match {
     pub file: string,
     pub line_number: int,

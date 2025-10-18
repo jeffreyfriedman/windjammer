@@ -9,7 +9,7 @@ trait Drawable {
 
 // Implement for Circle
 struct Circle {
-    radius: int
+    radius: int,
 }
 
 impl Drawable for Circle {
@@ -24,7 +24,7 @@ impl Drawable for Circle {
 
 // Implement for Square
 struct Square {
-    size: int
+    size: int,
 }
 
 impl Drawable for Square {

@@ -3,7 +3,7 @@
 use std::regex
 use ./main.Args
 
-@derive(Debug, Clone)]
+@derive(Debug, Clone))
 pub struct Config {
     pub pattern: Regex,
     pub paths: Vec<string>,
