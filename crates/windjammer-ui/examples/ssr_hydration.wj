@@ -1,9 +1,9 @@
+// Note: This is a conceptual example showing Windjammer UI syntax
+// In a real application, types would be imported from windjammer_ui
+
 // SSR with Client-Side Hydration Example
 // Demonstrates server-side rendering and rehydrating on the client
 
-use windjammer_ui.prelude.*
-use windjammer_ui.vdom.{VElement, VNode, VText}
-use windjammer_ui.ssr.{SSRRenderer, Hydration}
 
 @component
 struct BlogPost {

@@ -1,4 +1,3 @@
-#![allow(dead_code)] // Refactoring implementation - some parts planned for future versions
 //! Introduce Variable refactoring
 //!
 //! Extracts an expression into a new variable with automatic naming.

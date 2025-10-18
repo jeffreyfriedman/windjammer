@@ -1,5 +1,5 @@
-//! Debug Adapter Protocol support (planned feature for v0.35.0)
-#![allow(dead_code)]
+//! Debug Adapter Protocol support (future feature)
+#![cfg_attr(test, allow(dead_code))]
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::collections::HashMap;
@@ -23,8 +23,7 @@ pub struct DebugAdapter {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-#[cfg_attr(test, allow(dead_code))]
-pub struct DapMessage {
+#[cfg_attr(test, allow(dead_code))]pub struct DapMessage {
     #[serde(rename = "type")]
     pub msg_type: String,
     pub seq: i64,
@@ -41,8 +40,7 @@ pub struct DapMessage {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-#[cfg_attr(test, allow(dead_code))]
-pub struct Breakpoint {
+#[cfg_attr(test, allow(dead_code))]pub struct Breakpoint {
     pub line: i32,
     pub verified: bool,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -50,16 +48,14 @@ pub struct Breakpoint {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-#[cfg_attr(test, allow(dead_code))]
-pub struct Source {
+#[cfg_attr(test, allow(dead_code))]pub struct Source {
     pub path: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub name: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-#[cfg_attr(test, allow(dead_code))]
-pub struct StackFrame {
+#[cfg_attr(test, allow(dead_code))]pub struct StackFrame {
     pub id: i32,
     pub name: String,
     pub source: Source,
@@ -68,7 +64,6 @@ pub struct StackFrame {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-#[cfg_attr(test, allow(dead_code))]
 pub struct Variable {
     pub name: String,
     pub value: String,

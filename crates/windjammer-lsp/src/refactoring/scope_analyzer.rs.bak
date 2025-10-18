@@ -1,4 +1,3 @@
-#![allow(dead_code)] // Refactoring implementation - some parts planned for future versions
 //! Scope analysis for refactoring operations
 //!
 //! This module analyzes variable scopes to determine:
@@ -168,10 +167,11 @@ impl ScopeAnalyzer {
                 self.analyze_expression(value);
             }
 
-            Statement::Return(Some(expr)) => {
-                self.analyze_expression(expr);
+            Statement::Return(expr) => {
+                if let Some(expr) = expr {
+                    self.analyze_expression(expr);
+                }
             }
-            Statement::Return(None) => {}
 
             Statement::If {
                 condition,
@@ -272,14 +272,11 @@ impl ScopeAnalyzer {
             Statement::Let { name, .. } => {
                 scope.insert(name.clone());
             }
-            Statement::For {
-                pattern: windjammer::parser::Pattern::Identifier(var),
-                ..
-            } => {
+            Statement::For { pattern, .. } => {
                 // For simple identifier patterns, add to scope
-                scope.insert(var.clone());
-            }
-            Statement::For { .. } => {
+                if let windjammer::parser::Pattern::Identifier(var) = pattern {
+                    scope.insert(var.clone());
+                }
                 // For tuple patterns, we'd need to extract all identifiers
                 // For now, skip complex patterns
             }

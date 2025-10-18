@@ -39,7 +39,6 @@ fn stress_rapid_edits() {
 /// Test very large file (10,000 lines)
 #[test]
 #[ignore] // Timing-sensitive, may vary by machine
-#[ignore] // Timing-sensitive, may vary by machine
 fn stress_large_file() {
     let mut db = WindjammerDatabase::new();
     let uri = Url::parse("file:///large.wj").unwrap();
@@ -403,7 +402,7 @@ fn stress_error_recovery() {
     let mut db = WindjammerDatabase::new();
     let uri = Url::parse("file:///test.wj").unwrap();
 
-    let invalid_sources = vec![
+    let invalid_sources = [
         "fn }}}",
         "struct {{{",
         "impl }}",

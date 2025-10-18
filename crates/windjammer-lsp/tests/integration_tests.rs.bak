@@ -1,12 +1,8 @@
-#![allow(
-    unused_variables,
-    unused_imports,
-    dead_code,
-    clippy::assertions_on_constants
-)]
 /// Comprehensive Integration Tests for Windjammer LSP
 ///
 /// These tests validate end-to-end functionality of the Language Server
+#![allow(unused_variables, unused_imports)]
+
 use tower_lsp::lsp_types::*;
 
 /// Test helper to create a simple Windjammer program
@@ -55,6 +51,7 @@ fn main() {
 }
 
 mod hover_tests {
+    #[allow(unused_variables)]
     #[allow(unused_imports)]
     use super::*;
 
@@ -82,6 +79,7 @@ mod hover_tests {
 }
 
 mod completion_tests {
+    #[allow(unused_variables)]
     #[allow(unused_imports)]
     use super::*;
 
@@ -113,6 +111,7 @@ mod completion_tests {
 }
 
 mod goto_definition_tests {
+    #[allow(unused_variables)]
     #[allow(unused_imports)]
     use super::*;
 
@@ -136,6 +135,7 @@ mod goto_definition_tests {
 }
 
 mod references_tests {
+    #[allow(unused_variables)]
     #[allow(unused_imports)]
     use super::*;
 
@@ -159,6 +159,7 @@ mod references_tests {
 }
 
 mod rename_tests {
+    #[allow(unused_variables)]
     #[allow(unused_imports)]
     use super::*;
 
@@ -185,6 +186,7 @@ mod rename_tests {
 }
 
 mod diagnostics_tests {
+    #[allow(unused_variables)]
     #[allow(unused_imports)]
     use super::*;
 
@@ -226,6 +228,7 @@ fn main() {
 }
 
 mod inlay_hints_tests {
+    #[allow(unused_variables)]
     #[allow(unused_imports)]
     use super::*;
 
@@ -267,6 +270,7 @@ fn main() {
 }
 
 mod code_action_tests {
+    #[allow(unused_variables)]
     #[allow(unused_imports)]
     use super::*;
 
@@ -300,6 +304,7 @@ fn main() {
 }
 
 mod symbol_table_tests {
+    #[allow(unused_variables)]
     #[allow(unused_imports)]
     use super::*;
 
@@ -324,6 +329,7 @@ mod symbol_table_tests {
 }
 
 mod performance_tests {
+    #[allow(unused_variables)]
     #[allow(unused_imports)]
     use super::*;
 
@@ -350,6 +356,7 @@ mod performance_tests {
 }
 
 mod edge_case_tests {
+    #[allow(unused_variables)]
     #[allow(unused_imports)]
     use super::*;
 

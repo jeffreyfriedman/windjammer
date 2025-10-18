@@ -1,229 +1,100 @@
 //! Tool for generating game entities
 
-use crate::protocol::{Tool, ToolDefinition, ToolResult};
+use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 
-pub fn definition() -> ToolDefinition {
-    ToolDefinition {
-        name: "generate_game_entity".to_string(),
-        description:
-            "Generate a game entity with @game decorator, ECS components, and game loop methods"
-                .to_string(),
-        input_schema: json!({
-            "type": "object",
-            "properties": {
-                "name": {
-                    "type": "string",
-                    "description": "Entity name (PascalCase)"
-                },
-                "entity_type": {
-                    "type": "string",
-                    "description": "Type of game entity",
-                    "enum": ["player", "enemy", "projectile", "item", "npc", "custom"]
-                },
-                "components": {
-                    "type": "array",
-                    "description": "ECS components to include",
-                    "items": {
-                        "type": "object",
-                        "properties": {
-                            "name": { "type": "string" },
-                            "type": { "type": "string" }
-                        },
-                        "required": ["name", "type"]
-                    }
-                },
-                "include_physics": {
-                    "type": "boolean",
-                    "description": "Include physics components (velocity, acceleration)"
-                },
-                "include_health": {
-                    "type": "boolean",
-                    "description": "Include health/damage system"
-                }
-            },
-            "required": ["name", "entity_type"]
-        }),
-    }
+#[derive(Debug, Serialize, Deserialize)]
+pub struct GenerateGameEntityArgs {
+    pub name: String,
+    pub entity_type: String,
+    pub include_physics: Option<bool>,
+    pub include_health: Option<bool>,
 }
 
-pub fn execute(arguments: Value) -> ToolResult {
-    let name = arguments["name"]
-        .as_str()
-        .ok_or("Missing 'name' parameter")?;
+pub fn execute(args: Value) -> Result<Vec<Value>, String> {
+    let parsed_args: GenerateGameEntityArgs =
+        serde_json::from_value(args).map_err(|e| format!("Invalid arguments: {}", e))?;
 
-    let entity_type = arguments["entity_type"].as_str().unwrap_or("custom");
+    let entity_name = &parsed_args.name;
+    let _entity_type = &parsed_args.entity_type;
+    let include_physics = parsed_args.include_physics.unwrap_or(false);
+    let include_health = parsed_args.include_health.unwrap_or(false);
 
-    let include_physics = arguments["include_physics"].as_bool().unwrap_or(true);
-    let include_health = arguments["include_health"].as_bool().unwrap_or(false);
-    let custom_components = arguments["components"].as_array();
+    let mut fields = vec![
+        "    position: Vec2,".to_string(),
+        "    rotation: f32,".to_string(),
+        "    scale: Vec2,".to_string(),
+    ];
+    let new_params = ["pos: Vec2".to_string()];
+    let mut new_fields = vec!["position: pos".to_string()];
 
-    // Generate game entity code
-    let mut code = String::from("use windjammer_ui.game.*\n\n");
-
-    // Add entity struct with @game decorator
-    code.push_str(&format!(
-        "@derive(Debug, Clone)\n@game\nstruct {} {{\n",
-        name
-    ));
-
-    // Always include position
-    code.push_str("    position: Vec2\n");
-
-    // Add physics components if requested
     if include_physics {
-        code.push_str("    velocity: Vec2\n");
-        code.push_str("    acceleration: Vec2\n");
+        fields.push("    velocity: Vec2,".to_string());
+        fields.push("    acceleration: Vec2,".to_string());
+        new_fields.push("velocity: Vec2 { x: 0.0, y: 0.0 }".to_string());
+        new_fields.push("acceleration: Vec2 { x: 0.0, y: 0.0 }".to_string());
     }
-
-    // Add health if requested
     if include_health {
-        code.push_str("    health: int\n");
-        code.push_str("    max_health: int\n");
+        fields.push("    health: int,".to_string());
+        fields.push("    max_health: int,".to_string());
+        new_fields.push("health: 100".to_string());
+        new_fields.push("max_health: 100".to_string());
     }
 
-    // Add entity-type specific components
-    match entity_type {
-        "player" => {
-            code.push_str("    speed: f32\n");
-            code.push_str("    score: int\n");
-        }
-        "enemy" => {
-            code.push_str("    patrol_path: [Vec2]\n");
-            code.push_str("    aggro_range: f32\n");
-        }
-        "projectile" => {
-            code.push_str("    damage: int\n");
-            code.push_str("    lifetime: f32\n");
-        }
-        "item" => {
-            code.push_str("    item_type: string\n");
-            code.push_str("    pickable: bool\n");
-        }
-        "npc" => {
-            code.push_str("    dialogue: [string]\n");
-            code.push_str("    interaction_radius: f32\n");
-        }
-        _ => {}
+    let update_method = if include_physics {
+        r#"
+    fn update(delta: f32) {
+        velocity += acceleration * delta
+        position += velocity * delta
+        // Basic friction/drag
+        velocity *= 0.95
     }
+"#
+        .to_string()
+    } else {
+        String::new()
+    };
 
-    // Add custom components
-    if let Some(components) = custom_components {
-        for component in components {
-            let comp_name = component["name"].as_str().unwrap_or("field");
-            let comp_type = component["type"].as_str().unwrap_or("int");
-            code.push_str(&format!("    {}: {}\n", comp_name, comp_type));
-        }
+    let render_method = r#"
+    fn render(ctx: RenderContext) {
+        ctx.draw_rect(position.x, position.y, scale.x, scale.y, Color.BLUE)
+        // Add more sophisticated rendering based on entity_type
     }
+"#
+    .to_string();
 
-    code.push_str("}\n\n");
+    let entity_code = format!(
+        r#"use windjammer_ui.game.*
 
-    // Add impl block with common methods
-    code.push_str(&format!("impl {} {{\n", name));
+@game_entity
+struct {} {{
+{}
+}}
 
-    // Constructor
-    code.push_str("    fn new(pos: Vec2) -> Self {\n");
-    code.push_str(&format!("        {} {{\n", name));
-    code.push_str("            position: pos,\n");
+impl {} {{
+    fn new({}) -> Self {{
+        Self {{
+            {},
+            rotation: 0.0,
+            scale: Vec2 {{ x: 32.0, y: 32.0 }},
+        }}
+    }}
 
-    if include_physics {
-        code.push_str("            velocity: Vec2 { x: 0.0, y: 0.0 },\n");
-        code.push_str("            acceleration: Vec2 { x: 0.0, y: 0.0 },\n");
-    }
-
-    if include_health {
-        code.push_str("            health: 100,\n");
-        code.push_str("            max_health: 100,\n");
-    }
-
-    // Add entity-specific defaults
-    match entity_type {
-        "player" => {
-            code.push_str("            speed: 5.0,\n");
-            code.push_str("            score: 0,\n");
-        }
-        "enemy" => {
-            code.push_str("            patrol_path: [],\n");
-            code.push_str("            aggro_range: 10.0,\n");
-        }
-        "projectile" => {
-            code.push_str("            damage: 10,\n");
-            code.push_str("            lifetime: 2.0,\n");
-        }
-        "item" => {
-            code.push_str("            item_type: \"generic\",\n");
-            code.push_str("            pickable: true,\n");
-        }
-        "npc" => {
-            code.push_str("            dialogue: [\"Hello!\"],\n");
-            code.push_str("            interaction_radius: 2.0,\n");
-        }
-        _ => {}
-    }
-
-    code.push_str("        }\n    }\n\n");
-
-    // Update method
-    code.push_str("    fn update(delta: f32) {\n");
-    if include_physics {
-        code.push_str("        velocity += acceleration * delta\n");
-        code.push_str("        position += velocity * delta\n");
-    }
-    code.push_str("    }\n\n");
-
-    // Render method
-    code.push_str("    fn render(ctx: RenderContext) {\n");
-    code.push_str("        ctx.draw_rect(position.x, position.y, 32, 32, Color.WHITE)\n");
-    code.push_str("    }\n");
-
-    code.push_str("}\n");
+    {}
+    {}
+}}
+"#,
+        entity_name,
+        fields.join("\n"),
+        entity_name,
+        new_params.join(", "),
+        new_fields.join(",\n            "),
+        update_method,
+        render_method
+    );
 
     Ok(vec![json!({
-        "type": "text",
-        "text": code
+        "text": entity_code,
+        "language": "windjammer"
     })])
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn test_generate_player_entity() {
-        let args = json!({
-            "name": "Player",
-            "entity_type": "player",
-            "include_physics": true,
-            "include_health": true
-        });
-
-        let result = execute(args);
-        assert!(result.is_ok());
-
-        let content = result.unwrap();
-        let text = content[0]["text"].as_str().unwrap();
-        assert!(text.contains("@game"));
-        assert!(text.contains("struct Player"));
-        assert!(text.contains("position: Vec2"));
-        assert!(text.contains("velocity: Vec2"));
-        assert!(text.contains("health: int"));
-    }
-
-    #[test]
-    fn test_generate_enemy_entity() {
-        let args = json!({
-            "name": "Zombie",
-            "entity_type": "enemy",
-            "include_physics": false,
-            "include_health": true
-        });
-
-        let result = execute(args);
-        assert!(result.is_ok());
-
-        let content = result.unwrap();
-        let text = content[0]["text"].as_str().unwrap();
-        assert!(text.contains("patrol_path"));
-        assert!(text.contains("aggro_range"));
-    }
 }

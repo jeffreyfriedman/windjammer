@@ -6,8 +6,6 @@
 //! # Then serve the generated files and open in a browser
 //! ```
 
-use windjammer_ui::prelude::*;
-use windjammer_ui::renderer::{Renderer, WebRenderer};
 use windjammer_ui::vdom::{VElement, VNode, VText};
 
 fn main() {
@@ -41,6 +39,7 @@ fn main() {
     }
 }
 
+#[allow(dead_code)]
 fn create_counter_ui(count: i64) -> VNode {
     VElement::new("div")
         .attr("class", "counter")
