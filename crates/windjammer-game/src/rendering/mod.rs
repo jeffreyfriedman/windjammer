@@ -7,8 +7,10 @@
 //! - WebGPU (web)
 
 pub mod backend;
+pub mod pipeline_2d;
 pub mod sprite;
 
+pub use pipeline_2d::Pipeline2D;
 pub use sprite::{Sprite, SpriteBatch};
 
 use crate::math::{Mat4, Vec2, Vec3, Vec4};
