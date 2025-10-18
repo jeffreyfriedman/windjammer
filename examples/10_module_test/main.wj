@@ -1,6 +1,6 @@
 // Test simple module import
 
-use std.test_simple
+use std::test_simple
 
 fn main() {
     println!("Testing module system...")

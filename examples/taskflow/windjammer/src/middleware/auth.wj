@@ -1,7 +1,7 @@
 // Authentication middleware for JWT and API keys
 
-use std.http
-use std.log
+use std::http
+use std::log
 
 use ../auth.jwt
 use ../models.api_key

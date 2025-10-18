@@ -1,6 +1,6 @@
 // Pagination models for cursor-based pagination
 
-use std.crypto
+use std::crypto
 
 @derive(Debug, Serialize, Deserialize)]
 pub struct PaginationParams {

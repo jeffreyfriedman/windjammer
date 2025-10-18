@@ -1,9 +1,9 @@
 // File replacement functionality for wjfind
 
-use std.fs
-use std.io
-use std.path
-use std.log
+use std::fs
+use std::io
+use std::path
+use std::log
 
 use ./config.Config
 use ./search.Match

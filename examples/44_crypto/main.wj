@@ -1,7 +1,7 @@
 // Example 44: Cryptography
 // Demonstrates cryptographic operations with Windjammer's std.crypto abstraction
 
-use std.crypto
+use std::crypto
 
 fn main() {
     println!("=== Cryptography Demo ===")

@@ -1,7 +1,7 @@
 // Example 48: File System Operations
 // Demonstrates Windjammer's std.fs module
 
-use std.fs
+use std::fs
 
 fn main() {
     println!("=== File System Demo ===")

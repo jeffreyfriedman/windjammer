@@ -1,13 +1,13 @@
 // wschat - Production WebSocket Chat Server
 // Built in Windjammer to validate real-time capabilities
 
-use std.http
-use std.websocket
-use std.log
-use std.env
-use std.signal
-use std.sync
-use std.collections.HashMap
+use std::http
+use std::websocket
+use std::log
+use std::env
+use std::signal
+use std::sync
+use std::collections.HashMap
 
 use ./server
 use ./metrics

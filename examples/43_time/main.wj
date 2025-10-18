@@ -1,7 +1,7 @@
 // Example 43: Time and Date  
 // Demonstrates time/date handling with Windjammer's std.time abstraction
 
-use std.time
+use std::time
 
 fn main() {
     println!("=== Time and Date Demo ===")

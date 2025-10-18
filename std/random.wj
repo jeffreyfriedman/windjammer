@@ -114,7 +114,7 @@ impl Rng {
 
 // USAGE EXAMPLES (what users should write):
 //
-// use std.random
+// use std::random
 //
 // fn main() {
 //     // Basic random - Windjammer API! ✅

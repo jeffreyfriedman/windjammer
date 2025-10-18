@@ -1,6 +1,6 @@
 // Pattern matching for wjfind
 
-use std.regex
+use std::regex
 
 use ./config.Config
 use ./search.Match

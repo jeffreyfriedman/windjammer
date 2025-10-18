@@ -1,8 +1,8 @@
 // Token refresh endpoint
 
-use std.http
-use std.json
-use std.log
+use std::http
+use std::json
+use std::log
 
 use ../auth.jwt
 use ../config

@@ -1,7 +1,7 @@
 // Example 49: Logging
 // Demonstrates Windjammer's std.log module
 
-use std.log
+use std::log
 
 fn process_request(user_id: int, action: string) {
     log.info_with("Processing request", "user_id", user_id.to_string())

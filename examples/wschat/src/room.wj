@@ -1,9 +1,9 @@
 // Room management for wschat
 
-use std.sync
-use std.collections.HashMap
-use std.collections.HashSet
-use std.time
+use std::sync
+use std::collections.HashMap
+use std::collections.HashSet
+use std::time
 
 use ./message
 
