@@ -1,6 +1,6 @@
 // 2048-style Puzzle Game Example
-
-use windjammer_ui.game.*
+// Note: This is a conceptual example showing the Windjammer game API
+// In a real application, game types would be imported from windjammer_ui
 
 @derive(Debug, Clone, Copy, PartialEq, Eq)
 enum Direction {
@@ -20,8 +20,16 @@ struct PuzzleGame {
 
 impl PuzzleGame {
     fn new() -> PuzzleGame {
+        // Initialize empty 4x4 grid
+        let grid = [
+            [0, 0, 0, 0],
+            [0, 0, 0, 0],
+            [0, 0, 0, 0],
+            [0, 0, 0, 0]
+        ]
+        
         let mut game = PuzzleGame {
-            grid: [[0; 4]; 4],
+            grid,
             score: 0,
             moves: 0,
             game_over: false

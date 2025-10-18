@@ -1,6 +1,7 @@
 //! Batch refactorings
 //!
 //! Apply multiple refactorings at once with conflict resolution.
+#![allow(dead_code)] // Planned feature for batch refactoring operations
 
 use super::RefactoringEngine;
 use tower_lsp::lsp_types::*;
@@ -229,7 +230,7 @@ impl<'a> BatchRefactoring<'a> {
                     if Self::ranges_overlap(&ranges[i], &ranges[j]) {
                         return Some(format!(
                             "Overlapping operations in {}",
-                            uri.split('/').last().unwrap_or("unknown")
+                            uri.split('/').next_back().unwrap_or("unknown")
                         ));
                     }
                 }

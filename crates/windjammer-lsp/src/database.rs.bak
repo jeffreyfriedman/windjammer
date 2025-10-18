@@ -328,11 +328,14 @@ pub fn extract_references<'db>(
     // Walk the AST to find all identifier references
     // For now, we'll extract function calls as a starting point
     for item in program.items.iter() {
-        if let parser::Item::Function(func) = item {
-            // Scan function body for references
-            // TODO: Implement proper AST walking
-            // For now, we'll just note that references exist
-            tracing::debug!("TODO: Scan function '{}' body for references", func.name);
+        match item {
+            parser::Item::Function(func) => {
+                // Scan function body for references
+                // TODO: Implement proper AST walking
+                // For now, we'll just note that references exist
+                tracing::debug!("TODO: Scan function '{}' body for references", func.name);
+            }
+            _ => {}
         }
     }
 
@@ -418,15 +421,10 @@ impl WindjammerDatabase {
 
         // Extract the selected code
         let mut selected_code = String::new();
-        for (idx, line) in lines
-            .iter()
-            .enumerate()
-            .skip(start_line)
-            .take(end_line - start_line + 1)
-        {
-            let line_idx = idx;
+        for line_idx in start_line..=end_line {
             if line_idx == start_line && line_idx == end_line {
                 // Single line selection
+                let line = lines[line_idx];
                 let start_char = range.start.character as usize;
                 let end_char = range.end.character as usize;
                 if start_char < line.len() && end_char <= line.len() {
@@ -1756,8 +1754,10 @@ impl DependencyGraph {
 
         // Check all dependencies
         for dep in &self.dependencies {
-            if dep.from == *file && self.has_cycle_util(&dep.to, visited, rec_stack) {
-                return true;
+            if dep.from == *file {
+                if self.has_cycle_util(&dep.to, visited, rec_stack) {
+                    return true;
+                }
             }
         }
 
@@ -2356,8 +2356,9 @@ impl WindjammerDatabase {
                             severity: DiagnosticSeverity::Info,
                             category: DiagnosticCategory::Documentation,
                             message: format!(
-                                "{:?} '{}' is missing documentation",
-                                symbol.kind, symbol.name
+                                "{} '{}' is missing documentation",
+                                format!("{:?}", symbol.kind),
+                                symbol.name
                             ),
                             location: tower_lsp::lsp_types::Location {
                                 uri: uri.clone(),
@@ -3856,7 +3857,7 @@ struct Point {
         .collect();
 
         let large = db.find_large_files(&files, 2);
-        assert!(!large.is_empty());
+        assert!(large.len() > 0);
         assert!(large.iter().any(|(uri, _)| uri.as_str().contains("large")));
     }
 
@@ -4187,7 +4188,7 @@ mod lazy_loading_tests {
         let file = db.set_source_text(uri, "fn test() {}".to_string());
 
         // Get symbols with lazy loading
-        let _symbols = db.get_symbols_lazy(file);
+        let symbols = db.get_symbols_lazy(file);
         // assert!(symbols.len() >= 0); // Always true for Vec
 
         // Should be marked as loaded now

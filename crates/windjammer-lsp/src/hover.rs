@@ -139,6 +139,7 @@ impl HoverProvider {
         sig
     }
 
+    #[allow(clippy::only_used_in_recursion)]
     fn format_type(&self, ty: &Type) -> String {
         match ty {
             Type::Int => "int".to_string(),

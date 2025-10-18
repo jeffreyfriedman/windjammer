@@ -75,7 +75,7 @@ impl WebRenderer {
                     .map_err(|_| format!("Failed to create element: {}", element.tag))?;
 
                 // Set attributes
-                for (key, value) in &element.attributes {
+                for (key, value) in &element.attrs {
                     dom_element
                         .set_attribute(key, value)
                         .map_err(|_| format!("Failed to set attribute: {}", key))?;
@@ -187,10 +187,7 @@ impl Renderer for WebRenderer {
                         // Update text node content
                     }
                     Patch::SetAttribute { .. } => {
-                        // Set attribute on element
-                    }
-                    Patch::RemoveAttribute { .. } => {
-                        // Remove attribute from element
+                        // Set attribute on element (or remove if value is empty)
                     }
                     Patch::Append { .. } => {
                         // Append child node
@@ -247,6 +244,7 @@ impl DesktopRenderer {
         }
     }
 
+    #[allow(clippy::only_used_in_recursion)]
     fn vnode_to_html(&self, vnode: &crate::vdom::VNode) -> String {
         use crate::vdom::VNode;
 
@@ -255,7 +253,7 @@ impl DesktopRenderer {
                 let mut html = format!("<{}", element.tag);
 
                 // Add attributes
-                for (key, value) in &element.attributes {
+                for (key, value) in &element.attrs {
                     html.push_str(&format!(" {}=\"{}\"", key, value));
                 }
 
@@ -269,7 +267,7 @@ impl DesktopRenderer {
                 html.push_str(&format!("</{}>", element.tag));
                 html
             }
-            VNode::Text(text) => text.text.clone(),
+            VNode::Text(text) => text.content.clone(),
             VNode::Component(_) => String::new(),
             VNode::Empty => String::new(),
         }
@@ -337,7 +335,7 @@ impl Renderer for DesktopRenderer {
                 Patch::Replace { .. } => "document.getElementById('app').innerHTML = ...;",
                 Patch::UpdateText { .. } => "element.textContent = ...;",
                 Patch::SetAttribute { .. } => "element.setAttribute(...);",
-                Patch::RemoveAttribute { .. } => "element.removeAttribute(...);",
+                // RemoveAttribute is not a separate variant, it's handled by SetAttribute with empty value
                 Patch::Append { .. } => "element.appendChild(...);",
                 Patch::Remove { .. } => "element.removeChild(...);",
             };
@@ -378,6 +376,7 @@ pub struct MobileRenderer {
 
 #[cfg(any(feature = "mobile-ios", feature = "mobile-android"))]
 #[derive(Debug, Clone)]
+#[allow(dead_code)]
 struct NativeView {
     id: usize,
     view_type: String,
@@ -403,7 +402,7 @@ impl MobileRenderer {
                 let id = self.view_hierarchy.len();
 
                 let mut properties = std::collections::HashMap::new();
-                for (key, value) in &element.attributes {
+                for (key, value) in &element.attrs {
                     properties.insert(key.clone(), value.clone());
                 }
 
@@ -427,7 +426,7 @@ impl MobileRenderer {
             VNode::Text(text) => {
                 let id = self.view_hierarchy.len();
                 let mut properties = std::collections::HashMap::new();
-                properties.insert("text".to_string(), text.text.clone());
+                properties.insert("text".to_string(), text.content.clone());
 
                 let view = NativeView {
                     id,
@@ -529,10 +528,7 @@ impl Renderer for MobileRenderer {
                     // Update native text view
                 }
                 Patch::SetAttribute { .. } => {
-                    // Update view property
-                }
-                Patch::RemoveAttribute { .. } => {
-                    // Remove view property
+                    // Update view property (or remove if value is empty)
                 }
                 Patch::Append { .. } => {
                     // Add subview

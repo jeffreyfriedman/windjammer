@@ -12,6 +12,7 @@ use windjammer_lsp::database::WindjammerDatabase;
 #[derive(Debug, Deserialize)]
 struct GenerateCodeRequest {
     description: String,
+    #[allow(dead_code)]
     context: Option<Value>,
 }
 

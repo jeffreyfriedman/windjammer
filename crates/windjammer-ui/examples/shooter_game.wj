@@ -1,6 +1,8 @@
+// Note: This is a conceptual example showing Windjammer UI syntax
+// In a real application, types would be imported from windjammer_ui
+
 // Space Shooter Game Example
 
-use windjammer_ui.game.*
 
 @derive(Debug, Clone)
 struct Player {

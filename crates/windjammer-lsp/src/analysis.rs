@@ -23,10 +23,11 @@ pub struct AnalysisDatabase {
 
 /// Analysis results for a single file
 #[derive(Clone)]
+#[allow(dead_code)] // Some fields reserved for future incremental parsing features
 struct FileAnalysis {
     /// Hash of source code for change detection
     source_hash: u64,
-    /// Source code
+    /// Source code (kept for future use in incremental parsing)
     source: String,
     /// Parsed AST
     program: Option<Program>,
@@ -36,7 +37,7 @@ struct FileAnalysis {
     symbol_table: SymbolTable,
     /// Analysis diagnostics
     diagnostics: Vec<Diagnostic>,
-    /// Timestamp of last analysis
+    /// Timestamp of last analysis (for cache invalidation)
     timestamp: SystemTime,
 }
 
@@ -169,7 +170,8 @@ impl AnalysisDatabase {
         (diagnostics, program_result, analyzed_functions)
     }
 
-    /// Get cached analysis for a file
+    /// Get cached analysis for a file (planned for hover improvements)
+    #[allow(dead_code)]
     pub fn get_analysis(&self, uri: &Url) -> Option<Vec<Diagnostic>> {
         self.cache
             .read()

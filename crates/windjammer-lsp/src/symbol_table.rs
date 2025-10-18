@@ -1,3 +1,4 @@
+#![allow(dead_code)] // Symbol table infrastructure for future features
 use std::collections::HashMap;
 use tower_lsp::lsp_types::{Location, Position, Range, Url};
 use windjammer::parser::{Item, Program};
@@ -269,8 +270,7 @@ impl SymbolTable {
 
         // Search for each symbol in the source code
         for symbol_name in &symbol_names {
-            let mut line_num = 0;
-            for line in source.lines() {
+            for (line_num, line) in source.lines().enumerate() {
                 // Find all occurrences of the symbol name in this line
                 let mut start = 0;
                 while let Some(pos) = line[start..].find(symbol_name.as_str()) {
@@ -297,11 +297,11 @@ impl SymbolTable {
                                 uri: uri.clone(),
                                 range: Range {
                                     start: Position {
-                                        line: line_num,
+                                        line: line_num as u32,
                                         character: actual_pos as u32,
                                     },
                                     end: Position {
-                                        line: line_num,
+                                        line: line_num as u32,
                                         character: (actual_pos + symbol_name.len()) as u32,
                                     },
                                 },
@@ -310,14 +310,12 @@ impl SymbolTable {
 
                         self.references
                             .entry(symbol_name.clone())
-                            .or_insert_with(Vec::new)
+                            .or_default()
                             .push(reference);
                     }
 
                     start = actual_pos + 1;
                 }
-
-                line_num += 1;
             }
         }
     }

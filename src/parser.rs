@@ -203,7 +203,7 @@ pub enum Statement {
         arms: Vec<MatchArm>,
     },
     For {
-        variable: String,
+        pattern: Pattern,
         iterable: Expression,
         body: Vec<Statement>,
     },
@@ -220,6 +220,10 @@ pub enum Statement {
     Defer(Box<Statement>),
     Break,
     Continue,
+    Use {
+        path: Vec<String>,
+        alias: Option<String>,
+    },
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
@@ -1804,6 +1808,11 @@ impl Parser {
                 self.advance();
                 Ok(Statement::Continue)
             }
+            Token::Use => {
+                self.advance(); // consume 'use'
+                let (path, alias) = self.parse_use()?;
+                Ok(Statement::Use { path, alias })
+            }
             _ => {
                 // Try to parse as expression first
                 let expr = self.parse_expression()?;
@@ -1881,12 +1890,33 @@ impl Parser {
     fn parse_for(&mut self) -> Result<Statement, String> {
         self.expect(Token::For)?;
 
-        let variable = if let Token::Ident(name) = self.current_token() {
+        // Parse pattern: either a simple identifier or a tuple pattern like (idx, item)
+        let pattern = if self.current_token() == &Token::LParen {
+            // Tuple pattern
+            self.advance(); // consume (
+            let mut patterns = Vec::new();
+
+            while self.current_token() != &Token::RParen {
+                if let Token::Ident(name) = self.current_token() {
+                    patterns.push(Pattern::Identifier(name.clone()));
+                    self.advance();
+
+                    if self.current_token() == &Token::Comma {
+                        self.advance();
+                    }
+                } else {
+                    return Err("Expected identifier in tuple pattern".to_string());
+                }
+            }
+
+            self.expect(Token::RParen)?;
+            Pattern::Tuple(patterns)
+        } else if let Token::Ident(name) = self.current_token() {
             let name = name.clone();
             self.advance();
-            name
+            Pattern::Identifier(name)
         } else {
-            return Err("Expected variable name in for loop".to_string());
+            return Err("Expected variable name or tuple pattern in for loop".to_string());
         };
 
         self.expect(Token::In)?;
@@ -1897,7 +1927,7 @@ impl Parser {
         self.expect(Token::RBrace)?;
 
         Ok(Statement::For {
-            variable,
+            pattern,
             iterable,
             body,
         })
@@ -2602,7 +2632,14 @@ impl Parser {
                 }
 
                 // Check for struct literal
-                if self.current_token() == &Token::LBrace {
+                // Only parse as struct literal if the name looks like a type (starts with uppercase)
+                // This avoids ambiguity in contexts like "for item in items { ... }"
+                let looks_like_type = qualified_name
+                    .chars()
+                    .next()
+                    .is_some_and(|c| c.is_uppercase());
+
+                if looks_like_type && self.current_token() == &Token::LBrace {
                     self.advance();
                     let mut fields = Vec::new();
 
@@ -2624,6 +2661,14 @@ impl Parser {
 
                             if self.current_token() == &Token::Comma {
                                 self.advance();
+                                // Allow trailing comma
+                                if self.current_token() == &Token::RBrace {
+                                    break;
+                                }
+                            } else if self.current_token() != &Token::RBrace {
+                                return Err(
+                                    "Expected comma or closing brace in struct literal".to_string()
+                                );
                             }
                         } else {
                             return Err("Expected field name in struct literal".to_string());

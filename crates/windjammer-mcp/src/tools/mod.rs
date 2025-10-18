@@ -327,11 +327,8 @@ impl ToolRegistry {
             }),
             Box::new(|_db, args| {
                 Box::pin(async move {
-                    let result = generate_component::execute(args).map_err(|e: &str| {
-                        McpError::InternalError {
-                            message: e.to_string(),
-                        }
-                    })?;
+                    let result = generate_component::execute(args)
+                        .map_err(|e: String| McpError::InternalError { message: e })?;
                     Ok(ToolCallResult {
                         content: result
                             .into_iter()
@@ -370,11 +367,8 @@ impl ToolRegistry {
             }),
             Box::new(|_db, args| {
                 Box::pin(async move {
-                    let result = generate_game_entity::execute(args).map_err(|e: &str| {
-                        McpError::InternalError {
-                            message: e.to_string(),
-                        }
-                    })?;
+                    let result = generate_game_entity::execute(args)
+                        .map_err(|e: String| McpError::InternalError { message: e })?;
                     Ok(ToolCallResult {
                         content: result
                             .into_iter()
@@ -413,11 +407,8 @@ impl ToolRegistry {
             }),
             Box::new(|_db, args| {
                 Box::pin(async move {
-                    let result = analyze_ssr_routing::execute(args).map_err(|e: &str| {
-                        McpError::InternalError {
-                            message: e.to_string(),
-                        }
-                    })?;
+                    let result = analyze_ssr_routing::execute(args)
+                        .map_err(|e: String| McpError::InternalError { message: e })?;
                     Ok(ToolCallResult {
                         content: result
                             .into_iter()

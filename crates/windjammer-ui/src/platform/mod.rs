@@ -58,17 +58,18 @@ pub fn detect_platform() -> PlatformType {
         not(feature = "mobile-android")
     ))]
     {
-        PlatformType::Web
+        return PlatformType::Web;
     }
 
     #[cfg(all(feature = "desktop", not(target_family = "wasm")))]
     {
-        PlatformType::Desktop
+        return PlatformType::Desktop;
     }
 
     #[cfg(any(feature = "mobile-ios", feature = "mobile-android"))]
+    #[allow(unreachable_code)]
     {
-        PlatformType::Mobile
+        return PlatformType::Mobile;
     }
 
     #[cfg(not(any(
@@ -79,8 +80,11 @@ pub fn detect_platform() -> PlatformType {
     )))]
     {
         // Default to web for unknown platforms
-        PlatformType::Web
+        return PlatformType::Web;
     }
+
+    #[allow(unreachable_code)]
+    PlatformType::Web
 }
 
 /// Create a platform instance for the current platform

@@ -574,9 +574,9 @@ impl CompletionProvider {
                         label: func.name.clone(),
                         kind: Some(CompletionItemKind::FUNCTION),
                         detail: Some(format!("fn {}", func.name)),
-                        documentation: Some(Documentation::String(
-                            "Function defined in this file".to_string(),
-                        )),
+                        documentation: Some(Documentation::String(format!(
+                            "Function defined in this file"
+                        ))),
                         ..Default::default()
                     });
                 }
@@ -585,9 +585,9 @@ impl CompletionProvider {
                         label: struct_decl.name.clone(),
                         kind: Some(CompletionItemKind::STRUCT),
                         detail: Some(format!("struct {}", struct_decl.name)),
-                        documentation: Some(Documentation::String(
-                            "Struct defined in this file".to_string(),
-                        )),
+                        documentation: Some(Documentation::String(format!(
+                            "Struct defined in this file"
+                        ))),
                         ..Default::default()
                     });
                 }
@@ -596,9 +596,9 @@ impl CompletionProvider {
                         label: enum_decl.name.clone(),
                         kind: Some(CompletionItemKind::ENUM),
                         detail: Some(format!("enum {}", enum_decl.name)),
-                        documentation: Some(Documentation::String(
-                            "Enum defined in this file".to_string(),
-                        )),
+                        documentation: Some(Documentation::String(format!(
+                            "Enum defined in this file"
+                        ))),
                         ..Default::default()
                     });
 
@@ -621,9 +621,9 @@ impl CompletionProvider {
                         label: trait_decl.name.clone(),
                         kind: Some(CompletionItemKind::INTERFACE),
                         detail: Some(format!("trait {}", trait_decl.name)),
-                        documentation: Some(Documentation::String(
-                            "Trait defined in this file".to_string(),
-                        )),
+                        documentation: Some(Documentation::String(format!(
+                            "Trait defined in this file"
+                        ))),
                         ..Default::default()
                     });
                 }

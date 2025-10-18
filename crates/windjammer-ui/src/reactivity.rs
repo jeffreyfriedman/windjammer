@@ -7,6 +7,7 @@ use std::rc::Rc;
 #[derive(Clone)]
 pub struct Signal<T: Clone> {
     value: Rc<RefCell<T>>,
+    #[allow(clippy::type_complexity)]
     subscribers: Rc<RefCell<Vec<Box<dyn Fn(&T)>>>>,
 }
 

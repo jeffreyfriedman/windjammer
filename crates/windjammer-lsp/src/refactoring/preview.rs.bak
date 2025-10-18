@@ -1,4 +1,3 @@
-#![allow(dead_code)] // Refactoring implementation - some parts planned for future versions
 //! Preview mode for refactorings
 //!
 //! Show diffs and changes before applying refactorings.

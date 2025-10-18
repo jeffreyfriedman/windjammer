@@ -744,7 +744,7 @@ mod tests {
                 parameters: vec![],
                 return_type: None,
                 body: vec![Statement::For {
-                    pattern: Pattern::Identifier("i".to_string()),
+                    variable: "i".to_string(),
                     iterable: Expression::Range {
                         start: Box::new(Expression::Literal(Literal::Int(0))),
                         end: Box::new(Expression::Literal(Literal::Int(3))),
@@ -782,7 +782,7 @@ mod tests {
                 parameters: vec![],
                 return_type: None,
                 body: vec![Statement::For {
-                    pattern: Pattern::Identifier("i".to_string()),
+                    variable: "i".to_string(),
                     iterable: Expression::Range {
                         start: Box::new(Expression::Literal(Literal::Int(0))),
                         end: Box::new(Expression::Literal(Literal::Int(100))),
@@ -857,7 +857,7 @@ mod tests {
                 parameters: vec![],
                 return_type: None,
                 body: vec![Statement::For {
-                    pattern: Pattern::Identifier("i".to_string()),
+                    variable: "i".to_string(),
                     iterable: Expression::Range {
                         start: Box::new(Expression::Literal(Literal::Int(0))),
                         end: Box::new(Expression::Literal(Literal::Int(1000))), // Too large
@@ -894,7 +894,7 @@ mod tests {
                 parameters: vec![],
                 return_type: None,
                 body: vec![Statement::For {
-                    pattern: Pattern::Identifier("i".to_string()),
+                    variable: "i".to_string(),
                     iterable: Expression::Range {
                         start: Box::new(Expression::Literal(Literal::Int(0))),
                         end: Box::new(Expression::Literal(Literal::Int(10))),

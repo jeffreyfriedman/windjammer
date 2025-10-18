@@ -1,4 +1,3 @@
-#![allow(dead_code)] // Refactoring implementation - some parts planned for future versions
 //! Move Item refactoring
 //!
 //! Move functions, structs, and other items between files while
@@ -511,10 +510,10 @@ impl<'a> MoveItem<'a> {
             }
 
             // Check if this identifier is defined elsewhere in source
-            if self.is_external_dependency(source, item_text, word)
-                && !dependencies.contains(&word.to_string())
-            {
-                dependencies.push(word.to_string());
+            if self.is_external_dependency(source, item_text, word) {
+                if !dependencies.contains(&word.to_string()) {
+                    dependencies.push(word.to_string());
+                }
             }
         }
 

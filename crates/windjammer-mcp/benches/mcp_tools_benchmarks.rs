@@ -7,7 +7,7 @@ use std::sync::Arc;
 use tokio::sync::Mutex;
 use windjammer_lsp::database::WindjammerDatabase;
 use windjammer_mcp::tools::{
-    analyze_types, generate_code, parse_code, refactor_extract_function, refactor_inline_variable,
+    analyze_types, parse_code, refactor_extract_function, refactor_inline_variable,
     refactor_rename_symbol,
 };
 
