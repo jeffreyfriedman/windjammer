@@ -6,14 +6,14 @@ use std::sync
 pub struct RateLimiter {
     capacity: int,
     tokens: Arc<Mutex<int>>,
-    refill_rate: int,  // tokens per second
-    last_refill: Arc<Mutex<int>>,  // timestamp
+    refill_rate: int,  // tokens per second,
+    last_refill: Arc<Mutex<int>>,  // timestamp,
 }
 
 impl RateLimiter {
     pub fn new(messages_per_second: int) -> Self {
         RateLimiter {
-            capacity: messages_per_second * 10,  // Allow bursts
+            capacity: messages_per_second * 10,  // Allow bursts,
             tokens: Arc::new(Mutex::new(messages_per_second * 10)),
             refill_rate: messages_per_second,
             last_refill: Arc::new(Mutex::new(time.now_unix())),

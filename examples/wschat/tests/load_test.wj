@@ -271,7 +271,7 @@ fn main() -> Result<(), Error> {
     let config = LoadTestConfig {
         server_url: "ws://localhost:8080/ws",
         target_connections: connections,
-        ramp_up_seconds: connections / 100,  // 100 connections per second
+        ramp_up_seconds: connections / 100,  // 100 connections per second,
         test_duration_seconds: 60,
         messages_per_connection: 10,
     }

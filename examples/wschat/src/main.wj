@@ -17,8 +17,8 @@ struct Config {
     host: string,
     port: int,
     max_connections: int,
-    message_rate_limit: int,  // messages per second per user
-    heartbeat_interval: int,  // seconds
+    message_rate_limit: int,  // messages per second per user,
+    heartbeat_interval: int,  // seconds,
     enable_persistence: bool,
     database_url: Option<string>,
 }

@@ -52,7 +52,7 @@ impl UserForm {
         } else if !username.chars().all(|c| c.is_alphanumeric() || c == '_') {
             errors.push(ValidationError {
                 field: "username",
-                message: "Username can only contain letters, numbers, and underscores"
+                message: "Username can only contain letters, numbers, and underscores",
             })
         }
 
@@ -65,7 +65,7 @@ impl UserForm {
         } else if !email.contains("@") || !email.contains(".") {
             errors.push(ValidationError {
                 field: "email",
-                message: "Email must be valid (e.g., user@example.com)"
+                message: "Email must be valid (e.g., user@example.com)",
             })
         }
 

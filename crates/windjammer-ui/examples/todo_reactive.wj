@@ -15,7 +15,7 @@ struct Todo {
 struct TodoApp {
     todos: Signal<Vec<Todo>>,
     input: Signal<String>,
-    filter: Signal<String> // "all", "active", "completed"
+    filter: Signal<String> // "all", "active", "completed",
     next_id: Signal<int>,
 }
 
@@ -47,10 +47,10 @@ impl Component for TodoApp {
 impl TodoApp {
     fn new() -> Self {
         Self {
-            todos: Signal.new(Vec.new())
-            input: Signal.new(String.new())
-            filter: Signal.new("all".to_string())
-            next_id: Signal.new(0)
+            todos: Signal.new(Vec.new()),
+            input: Signal.new(String.new()),
+            filter: Signal.new("all".to_string()),
+            next_id: Signal.new(0),
         }
     }
     

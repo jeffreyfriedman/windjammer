@@ -113,7 +113,7 @@ impl DirectMessageManager {
                 other_user: db.get_string(row, "other_user"),
                 last_message_time: db.get_int(row, "last_message_time"),
                 message_count: db.get_int(row, "message_count"),
-                unread_count: 0,  // TODO: Track unread messages
+                unread_count: 0,  // TODO: Track unread messages,
             }
             conversations.push(info)
         }
