@@ -12,6 +12,11 @@ pub mod refactor_extract_function;
 pub mod refactor_inline_variable;
 pub mod refactor_rename_symbol;
 
+// UI Framework tools
+pub mod analyze_ssr_routing;
+pub mod generate_component;
+pub mod generate_game_entity;
+
 use crate::error::{McpError, McpResult};
 use crate::protocol::{Tool, ToolCallResult, ToolContent};
 use serde_json::Value;
@@ -296,6 +301,134 @@ impl ToolRegistry {
                 "required": ["code", "position", "new_name"]
             }),
             Box::new(|db, args| Box::pin(refactor_rename_symbol::handle(db, args))),
+        );
+
+        // UI Framework tools
+        self.register_tool(
+            "generate_component",
+            "Generate a Windjammer UI component with @component decorator",
+            json!({
+                "type": "object",
+                "properties": {
+                    "name": {
+                        "type": "string",
+                        "description": "Component name (PascalCase)"
+                    },
+                    "props": {
+                        "type": "array",
+                        "description": "Component properties"
+                    },
+                    "render_template": {
+                        "type": "string",
+                        "enum": ["div", "button", "form", "list", "card", "custom"]
+                    }
+                },
+                "required": ["name"]
+            }),
+            Box::new(|_db, args| {
+                Box::pin(async move {
+                    let result = generate_component::execute(args).map_err(|e: &str| {
+                        McpError::InternalError {
+                            message: e.to_string(),
+                        }
+                    })?;
+                    Ok(ToolCallResult {
+                        content: result
+                            .into_iter()
+                            .map(|v| ToolContent::Text {
+                                text: v["text"].as_str().unwrap_or("").to_string(),
+                            })
+                            .collect(),
+                        is_error: false,
+                    })
+                })
+            }),
+        );
+
+        self.register_tool(
+            "generate_game_entity",
+            "Generate a game entity with @game decorator and ECS components",
+            json!({
+                "type": "object",
+                "properties": {
+                    "name": {
+                        "type": "string",
+                        "description": "Entity name"
+                    },
+                    "entity_type": {
+                        "type": "string",
+                        "enum": ["player", "enemy", "projectile", "item", "npc", "custom"]
+                    },
+                    "include_physics": {
+                        "type": "boolean"
+                    },
+                    "include_health": {
+                        "type": "boolean"
+                    }
+                },
+                "required": ["name", "entity_type"]
+            }),
+            Box::new(|_db, args| {
+                Box::pin(async move {
+                    let result = generate_game_entity::execute(args).map_err(|e: &str| {
+                        McpError::InternalError {
+                            message: e.to_string(),
+                        }
+                    })?;
+                    Ok(ToolCallResult {
+                        content: result
+                            .into_iter()
+                            .map(|v| ToolContent::Text {
+                                text: v["text"].as_str().unwrap_or("").to_string(),
+                            })
+                            .collect(),
+                        is_error: false,
+                    })
+                })
+            }),
+        );
+
+        self.register_tool(
+            "analyze_ssr_routing",
+            "Analyze SSR and routing configurations",
+            json!({
+                "type": "object",
+                "properties": {
+                    "code": {
+                        "type": "string",
+                        "description": "Code to analyze"
+                    },
+                    "analysis_type": {
+                        "type": "string",
+                        "enum": ["ssr", "routing", "both"]
+                    },
+                    "check_hydration": {
+                        "type": "boolean"
+                    },
+                    "check_seo": {
+                        "type": "boolean"
+                    }
+                },
+                "required": ["code"]
+            }),
+            Box::new(|_db, args| {
+                Box::pin(async move {
+                    let result = analyze_ssr_routing::execute(args).map_err(|e: &str| {
+                        McpError::InternalError {
+                            message: e.to_string(),
+                        }
+                    })?;
+                    Ok(ToolCallResult {
+                        content: result
+                            .into_iter()
+                            .map(|v| ToolContent::Text {
+                                text: v["text"].as_str().unwrap_or("").to_string(),
+                            })
+                            .collect(),
+                        is_error: false,
+                    })
+                })
+            }),
         );
     }
 

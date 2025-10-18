@@ -136,6 +136,20 @@ enum Commands {
         #[arg(long)]
         no_cargo_toml: bool,
     },
+    /// Run a Windjammer file (build + cargo run)
+    Run {
+        /// Input file to run
+        #[arg(value_name = "FILE")]
+        file: PathBuf,
+
+        /// Compilation target
+        #[arg(short, long, value_enum, default_value = "rust")]
+        target: CompilationTarget,
+
+        /// Arguments to pass to the program
+        #[arg(last = true)]
+        args: Vec<String>,
+    },
 }
 
 #[allow(dead_code)]
@@ -194,6 +208,9 @@ fn main() -> Result<()> {
             no_cargo_toml,
         } => {
             eject_project(&path, &output, target, format, comments, !no_cargo_toml)?;
+        }
+        Commands::Run { file, target, args } => {
+            run_file(&file, target, &args)?;
         }
     }
 
@@ -843,6 +860,9 @@ name = "windjammer-app"
 version = "0.1.0"
 edition = "2021"
 
+# Prevent this from being treated as part of parent workspace
+[workspace]
+
 {}{}[profile.release]
 opt-level = 3
 "#,
@@ -1214,6 +1234,62 @@ fn eject_project(
 
     let mut ejector = ejector::Ejector::new(config);
     ejector.eject_project(path, output)?;
+
+    Ok(())
+}
+
+/// Run a Windjammer file (build + cargo run)
+fn run_file(file: &Path, target: CompilationTarget, args: &[String]) -> Result<()> {
+    use colored::*;
+    use std::fs;
+    use std::process::Command;
+
+    // Validate that the file exists and is a .wj file
+    if !file.exists() {
+        anyhow::bail!("File not found: {:?}", file);
+    }
+    if file.extension().is_none_or(|ext| ext != "wj") {
+        anyhow::bail!("File must have .wj extension: {:?}", file);
+    }
+
+    println!("{} {:?}", "Running".green().bold(), file);
+
+    // Create a temporary build directory
+    let temp_dir = std::env::temp_dir().join(format!(
+        "windjammer-run-{}",
+        file.file_stem().and_then(|s| s.to_str()).unwrap_or("app")
+    ));
+
+    // Clean up any previous build
+    if temp_dir.exists() {
+        fs::remove_dir_all(&temp_dir)?;
+    }
+    fs::create_dir_all(&temp_dir)?;
+
+    // Build the project
+    build_project(file, &temp_dir, target)?;
+
+    // Run cargo run with any additional arguments
+    println!("\n{} the program...", "Executing".cyan().bold());
+    let mut cmd = Command::new("cargo");
+    cmd.arg("run").current_dir(&temp_dir);
+
+    // Pass through any additional arguments
+    if !args.is_empty() {
+        cmd.arg("--");
+        cmd.args(args);
+    }
+
+    let status = cmd.status()?;
+
+    if !status.success() {
+        anyhow::bail!("Program execution failed");
+    }
+
+    // Clean up temp directory
+    if temp_dir.exists() {
+        fs::remove_dir_all(&temp_dir)?;
+    }
 
     Ok(())
 }

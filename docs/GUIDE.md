@@ -2111,6 +2111,204 @@ connect_database(
 
 ---
 
+## UI Framework (`windjammer-ui`) 🆕
+
+**Version**: v0.34.0+
+
+Windjammer includes a complete UI framework for building cross-platform applications (web, desktop, mobile) with a Svelte-inspired component model.
+
+### Quick Start
+
+```windjammer
+use windjammer_ui.prelude.*
+use windjammer_ui.vdom.{VElement, VNode, VText}
+
+@component
+struct Counter {
+    count: int
+}
+
+impl Counter {
+    fn render() -> VNode {
+        VElement::new("div")
+            .attr("class", "counter")
+            .child(VNode::Element(
+                VElement::new("h1")
+                    .child(VNode::Text(VText::new("Count: {count}")))
+            ))
+            .child(VNode::Element(
+                VElement::new("button")
+                    .attr("onclick", "increment")
+                    .child(VNode::Text(VText::new("Increment")))
+            ))
+            .into()
+    }
+}
+
+fn main() {
+    let counter = Counter::new()
+    println!("Rendered: {:?}", counter.render())
+}
+```
+
+### Running UI Examples
+
+```bash
+# Run counter example
+wj run crates/windjammer-ui/examples/counter.wj
+
+# Run todo app example
+wj run crates/windjammer-ui/examples/todo_app.wj
+
+# Build for web (WASM)
+cd crates/windjammer-ui
+./build-wasm.sh
+```
+
+### Component Model
+
+**Key Features:**
+- `@component` decorator for UI components
+- Implicit `self` - no need for `&self` in render methods
+- Automatic borrow inference
+- String interpolation in templates
+- Virtual DOM with efficient reconciliation
+
+**Example with Props:**
+
+```windjammer
+use windjammer_ui.prelude.*
+
+@component
+struct Button {
+    label: string,
+    disabled: bool,
+    onClick: fn()
+}
+
+impl Button {
+    fn render() -> VNode {
+        VElement::new("button")
+            .attr("disabled", if disabled { "true" } else { "" })
+            .attr("onclick", "onClick")
+            .child(VNode::Text(VText::new(label)))
+            .into()
+    }
+}
+```
+
+### Game Development
+
+Windjammer UI includes ECS (Entity-Component-System) architecture for game development:
+
+```windjammer
+use windjammer_ui.game.*
+
+@game
+struct Player {
+    position: Vec2,
+    velocity: Vec2,
+    health: int,
+    speed: f32
+}
+
+impl Player {
+    fn new(pos: Vec2) -> Self {
+        Player {
+            position: pos,
+            velocity: Vec2 { x: 0.0, y: 0.0 },
+            health: 100,
+            speed: 5.0
+        }
+    }
+    
+    fn update(delta: f32) {
+        position += velocity * delta
+    }
+    
+    fn render(ctx: RenderContext) {
+        ctx.draw_rect(position.x, position.y, 32, 32, Color.BLUE)
+    }
+}
+```
+
+### Server-Side Rendering (SSR)
+
+```windjammer
+use windjammer_ui.ssr.SSRRenderer
+
+fn main() {
+    let renderer = SSRRenderer::new()
+    let html = renderer.render_to_document(
+        "My App",
+        my_component
+    )
+    println!("{}", html)
+}
+```
+
+### Routing
+
+```windjammer
+use windjammer_ui.routing.{Router, Route}
+
+fn setup_router() {
+    let router = Router::new()
+    router.add_route("/", home_page)
+    router.add_route("/about", about_page)
+    router.add_route("/user/:id", user_page)
+    router.set_not_found(not_found_page)
+}
+```
+
+### Platform Capabilities
+
+Access platform-specific features:
+
+```windjammer
+use windjammer_ui.platform.{Platform, Capability}
+
+fn request_camera() {
+    if Platform::has_capability(Capability::Camera) {
+        let stream = Platform::request_camera()?
+        // Use camera stream
+    }
+}
+```
+
+### AI-Powered Component Generation
+
+The MCP server can generate components for you:
+
+```bash
+# Ask Claude:
+"Generate a todo list component with add, delete, and complete functionality"
+
+# Claude uses the MCP tool to generate:
+@component
+struct TodoList {
+    items: Vec<TodoItem>,
+    input_value: string
+}
+
+impl TodoList {
+    fn render() -> VNode {
+        // ... complete component code
+    }
+}
+```
+
+### Documentation
+
+See [`crates/windjammer-ui/README.md`](../crates/windjammer-ui/README.md) for:
+- Complete API documentation
+- All examples with source code
+- WASM build instructions
+- Desktop/mobile setup guides
+- Best practices and patterns
+
+---
+
 ## Advanced Topics
 
 ### Closures
