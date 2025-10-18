@@ -190,11 +190,21 @@ impl CodeGenerator {
             match item {
                 Item::Const { name, type_, value } => {
                     let pub_prefix = if self.is_module { "pub " } else { "" };
+
+                    // Special case: string constants should use &'static str, not String
+                    let rust_type = if matches!(type_, Type::String)
+                        && matches!(value, Expression::Literal(Literal::String(_)))
+                    {
+                        "&'static str".to_string()
+                    } else {
+                        self.type_to_rust(type_)
+                    };
+
                     body.push_str(&format!(
                         "{}const {}: {} = {};\n",
                         pub_prefix,
                         name,
-                        self.type_to_rust(type_),
+                        rust_type,
                         self.generate_expression_immut(value)
                     ));
                 }
@@ -1157,10 +1167,20 @@ impl CodeGenerator {
             }
             Statement::Const { name, type_, value } => {
                 let mut output = self.indent();
+
+                // Special case: string constants should use &'static str, not String
+                let rust_type = if matches!(type_, Type::String)
+                    && matches!(value, Expression::Literal(Literal::String(_)))
+                {
+                    "&'static str".to_string()
+                } else {
+                    self.type_to_rust(type_)
+                };
+
                 output.push_str(&format!(
                     "const {}: {} = {};\n",
                     name,
-                    self.type_to_rust(type_),
+                    rust_type,
                     self.generate_expression(value)
                 ));
                 output
@@ -1712,6 +1732,16 @@ impl CodeGenerator {
                             "Utc",
                             "Local",
                             "DEFAULT_COST",
+                            // Stdlib modules
+                            "mime",
+                            "http",
+                            "fs",
+                            "strings",
+                            "json",
+                            "regex",
+                            "cli",
+                            "log",
+                            "crypto",
                         ];
 
                         // Type or module (uppercase) vs variable (lowercase)
