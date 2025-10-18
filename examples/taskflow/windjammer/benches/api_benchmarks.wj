@@ -2,8 +2,8 @@
 //
 // Run with: wj test --bench
 
-use std.json
-use std.crypto
+use std::json
+use std::crypto
 
 // Import models
 use ../src/models/user

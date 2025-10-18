@@ -1,7 +1,7 @@
 // Rate limiting for wschat (token bucket algorithm)
 
-use std.time
-use std.sync
+use std::time
+use std::sync
 
 pub struct RateLimiter {
     capacity: int,

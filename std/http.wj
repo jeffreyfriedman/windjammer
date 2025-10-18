@@ -144,7 +144,7 @@ impl Headers {
 
 // USAGE EXAMPLES (what users should write):
 //
-// use std.http
+// use std::http
 //
 // @async
 // fn main() {
@@ -382,7 +382,7 @@ impl ServerResponse {
 //
 // SERVER EXAMPLE:
 //
-// use std.http
+// use std::http
 //
 // fn handle_index(req: Request) -> ServerResponse {
 //     ServerResponse::ok("Hello, World!")
@@ -413,7 +413,7 @@ impl ServerResponse {
 // }
 //
 // CLIENT EXAMPLE:
-// use std.http
+// use std::http
 //
 // @async
 // fn main() {

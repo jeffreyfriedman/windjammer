@@ -1,11 +1,11 @@
 // Load testing for wschat - Target: 10k concurrent connections
 
-use std.websocket
-use std.thread
-use std.time
-use std.log
-use std.collections.Vec
-use std.sync.{Arc, Mutex}
+use std::websocket
+use std::thread
+use std::time
+use std::log
+use std::collections.Vec
+use std::sync.{Arc, Mutex}
 
 @derive(Debug, Clone)]
 struct LoadTestConfig {

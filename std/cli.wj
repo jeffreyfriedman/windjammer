@@ -68,7 +68,7 @@ fn arg(index: int) -> Option<string> {
 
 // USAGE EXAMPLES:
 //
-// use std.cli
+// use std::cli
 //
 // // Example 1: Simple struct with @derive(Cli)
 // @derive(Cli, Debug)

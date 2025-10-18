@@ -1,7 +1,7 @@
 // Example 51: CLI Argument Parsing
 // Demonstrates Windjammer's std.cli module
 
-use std.cli
+use std::cli
 
 // Define command-line arguments with @derive(Cli)
 @derive(Cli, Debug)

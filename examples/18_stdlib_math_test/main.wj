@@ -1,5 +1,5 @@
 // Test std/math module
-use std.math
+use std::math
 
 fn main() {
     println!("Testing std/math module...")

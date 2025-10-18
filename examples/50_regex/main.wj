@@ -1,7 +1,7 @@
 // Example 50: Regular Expressions
 // Demonstrates Windjammer's std.regex module
 
-use std.regex
+use std::regex
 
 fn main() {
     println!("=== Regular Expressions Demo ===")

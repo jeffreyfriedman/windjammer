@@ -3,7 +3,7 @@
 
 use windjammer_ui::prelude::*;
 
-use windjammer_ui::vdom::{VElement, VNode, VText};
+use windjammer_ui::vdom::{VElement, VNode, VText}::*;
 
 
 #[component]
