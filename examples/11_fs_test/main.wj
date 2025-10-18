@@ -1,6 +1,6 @@
 // Test std/fs module - file system operations
 
-use std.fs
+use std::fs
 
 fn main() {
     println!("=== File System Module Test ===\n")

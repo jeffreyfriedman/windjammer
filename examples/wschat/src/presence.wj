@@ -1,8 +1,8 @@
 // User presence tracking for wschat
 
-use std.sync
-use std.collections.HashMap
-use std.time
+use std::sync
+use std::collections.HashMap
+use std::time
 
 use ./message.PresenceStatus
 

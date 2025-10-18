@@ -1394,12 +1394,7 @@ impl CodeGenerator {
     /// Check if a pattern contains a string literal
     /// This is used to determine if we need to add .as_str() to match expressions
     fn pattern_has_string_literal(&self, pattern: &Pattern) -> bool {
-        match pattern {
-            Pattern::Literal(Literal::String(_)) => true,
-            Pattern::Tuple(patterns) => patterns.iter().any(|p| self.pattern_has_string_literal(p)),
-            Pattern::Or(patterns) => patterns.iter().any(|p| self.pattern_has_string_literal(p)),
-            _ => false,
-        }
+        pattern_has_string_literal_impl(pattern)
     }
 
     fn generate_expression_with_precedence(&mut self, expr: &Expression) -> String {
@@ -2464,5 +2459,16 @@ impl CodeGenerator {
             // Most other expressions are not const-evaluable
             _ => false,
         }
+    }
+}
+
+/// Helper function to check if a pattern contains a string literal
+/// Extracted to avoid clippy::only_used_in_recursion warning
+fn pattern_has_string_literal_impl(pattern: &Pattern) -> bool {
+    match pattern {
+        Pattern::Literal(Literal::String(_)) => true,
+        Pattern::Tuple(patterns) => patterns.iter().any(pattern_has_string_literal_impl),
+        Pattern::Or(patterns) => patterns.iter().any(pattern_has_string_literal_impl),
+        _ => false,
     }
 }

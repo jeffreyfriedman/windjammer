@@ -1,10 +1,10 @@
 // Connection heartbeat and recovery for wschat
 
-use std.time
-use std.collections.HashMap
-use std.sync.{Arc, RwLock}
-use std.thread
-use std.log
+use std::time
+use std::collections.HashMap
+use std::sync.{Arc, RwLock}
+use std::thread
+use std::log
 
 use ./connection.Connection
 

@@ -1,6 +1,6 @@
 // Query filtering utilities
 
-use std.time
+use std::time
 
 @derive(Debug, Clone)]
 pub struct FilterParams {

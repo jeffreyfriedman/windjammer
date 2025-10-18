@@ -1,10 +1,10 @@
 // Benchmark wjfind against ripgrep
 
-use std.process
-use std.time
-use std.fs
-use std.path
-use std.log
+use std::process
+use std::time
+use std::fs
+use std::path
+use std::log
 
 @derive(Debug, Clone)]
 struct BenchmarkConfig {

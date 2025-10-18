@@ -1,9 +1,9 @@
 // Optimization Validation Benchmark
 // Tests all 4 optimization phases with realistic patterns
 
-use std.json
-use std.crypto
-use std.time
+use std::json
+use std::crypto
+use std::time
 
 // Phase 3: Struct mapping optimization test
 struct User {

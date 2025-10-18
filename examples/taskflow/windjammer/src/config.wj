@@ -1,6 +1,6 @@
 // Configuration management
 
-use std.env
+use std::env
 
 @derive(Debug, Clone)
 pub struct Config {

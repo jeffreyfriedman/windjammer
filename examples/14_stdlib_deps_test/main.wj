@@ -1,6 +1,6 @@
 // Test that Cargo.toml is generated with correct dependencies
-use std.json
-use std.math
+use std::json
+use std::math
 
 fn main() {
     println!("Testing Cargo.toml dependency generation!")

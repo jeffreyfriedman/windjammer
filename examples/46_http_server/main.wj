@@ -1,7 +1,7 @@
 // Example 46: HTTP Server
 // Demonstrates Windjammer's std.http server abstraction
 
-use std.http
+use std::http
 
 // Handler functions
 fn handle_index(req: Request) -> ServerResponse {

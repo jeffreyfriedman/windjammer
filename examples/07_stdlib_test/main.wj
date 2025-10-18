@@ -1,9 +1,9 @@
 // Simple test of stdlib modules
 // Tests: time, strings, math
 
-use std.time
-use std.strings  
-use std.math
+use std::time
+use std::strings  
+use std::math
 
 fn test_time() {
     // Get current time

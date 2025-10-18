@@ -1,6 +1,6 @@
 // Web application template
-use std.http
-use std.json
+use std::http
+use std::json
 
 @derive(Serialize, Deserialize)
 struct User {

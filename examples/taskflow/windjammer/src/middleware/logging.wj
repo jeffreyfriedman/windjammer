@@ -1,9 +1,9 @@
 // Structured logging middleware
 
-use std.http
-use std.log
-use std.time
-use std.json
+use std::http
+use std::log
+use std::time
+use std::json
 
 @derive(Debug, Serialize)]
 struct RequestLog {

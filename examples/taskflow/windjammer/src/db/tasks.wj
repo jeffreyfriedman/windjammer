@@ -1,7 +1,7 @@
 // Database operations for tasks
 
-use std.db
-use std.log
+use std::db
+use std::log
 use ../models.task.{Task, CreateTaskRequest, TaskSearchQuery}
 
 // Create a new task

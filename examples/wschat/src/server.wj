@@ -1,10 +1,10 @@
 // WebSocket server logic for wschat
 
-use std.websocket
-use std.sync
-use std.collections.HashMap
-use std.time
-use std.log
+use std::websocket
+use std::sync
+use std::collections.HashMap
+use std::time
+use std::log
 
 use ./message
 use ./room

@@ -1,7 +1,7 @@
 // Example 45: Database with SQLite
 // Demonstrates Windjammer's std.db abstraction
 
-use std.db
+use std::db
 
 fn main() {
     println!("=== Database Demo (SQLite) ===")

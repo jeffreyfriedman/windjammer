@@ -1,8 +1,8 @@
 // Authentication for wschat (JWT token verification)
 
-use std.crypto
-use std.time
-use std.json
+use std::crypto
+use std::time
+use std::json
 
 @derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Claims {

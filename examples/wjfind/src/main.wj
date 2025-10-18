@@ -1,12 +1,12 @@
 // wjfind - Fast file search utility built in Windjammer
 // A production CLI tool to validate Windjammer's capabilities
 
-use std.cli
-use std.fs
-use std.io
-use std.env
-use std.time
-use std.log
+use std::cli
+use std::fs
+use std::io
+use std::env
+use std::time
+use std::log
 
 use ./config
 use ./search

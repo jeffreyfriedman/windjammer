@@ -1,11 +1,11 @@
 // Core search logic for wjfind
 
-use std.fs
-use std.io
-use std.path
-use std.sync
-use std.thread
-use std.collections.Vec
+use std::fs
+use std::io
+use std::path
+use std::sync
+use std::thread
+use std::collections.Vec
 
 use ./config.Config
 use ./walker

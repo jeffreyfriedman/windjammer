@@ -1,7 +1,7 @@
 // Example demonstrating Windjammer Standard Library usage
 
 // === JSON Example ===
-use std.json
+use std::json
 
 fn json_example() {
     // Parse JSON
@@ -21,7 +21,7 @@ fn json_example() {
 }
 
 // === File System Example ===
-use std.fs
+use std::fs
 
 fn fs_example() {
     // Write a file
@@ -49,7 +49,7 @@ fn fs_example() {
 }
 
 // === HTTP Example (commented out until reqwest is added to dependencies) ===
-// use std.http
+// use std::http
 
 // fn http_example() {
 //     // Simple GET request
