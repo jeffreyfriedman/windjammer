@@ -3,8 +3,8 @@
 //! This module wraps the existing `CodeGenerator` to provide a clean backend interface
 //! while maintaining 100% backward compatibility.
 
-use crate::codegen::backend::{CodegenBackend, CodegenConfig, CodegenOutput, Target};
 use crate::analyzer::SignatureRegistry;
+use crate::codegen::backend::{CodegenBackend, CodegenConfig, CodegenOutput, Target};
 use crate::parser::Program;
 use crate::CompilationTarget;
 use anyhow::Result;

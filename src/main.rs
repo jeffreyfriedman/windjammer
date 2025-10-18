@@ -273,11 +273,11 @@ fn build_project(path: &Path, output: &Path, target: CompilationTarget) -> Resul
         println!("  cd {:?}", output);
         println!("  cargo run");
         println!("\nOr use 'windjammer check' to see any Rust compilation errors");
+        Ok(())
     } else {
         println!("\n{} Compilation failed with errors", "Error:".red().bold());
+        anyhow::bail!("Compilation failed")
     }
-
-    Ok(())
 }
 
 #[allow(dead_code)]

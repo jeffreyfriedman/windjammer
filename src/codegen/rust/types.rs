@@ -30,18 +30,11 @@ pub fn type_to_rust(type_: &Type) -> String {
             format!(
                 "{}<{}>",
                 base,
-                args.iter()
-                    .map(type_to_rust)
-                    .collect::<Vec<_>>()
-                    .join(", ")
+                args.iter().map(type_to_rust).collect::<Vec<_>>().join(", ")
             )
         }
         Type::Option(inner) => format!("Option<{}>", type_to_rust(inner)),
-        Type::Result(ok, err) => format!(
-            "Result<{}, {}>",
-            type_to_rust(ok),
-            type_to_rust(err)
-        ),
+        Type::Result(ok, err) => format!("Result<{}, {}>", type_to_rust(ok), type_to_rust(err)),
         Type::Vec(inner) => format!("Vec<{}>", type_to_rust(inner)),
         Type::Reference(inner) => {
             // Special case: &[T] (slice) vs &Vec<T>
@@ -92,22 +85,15 @@ mod tests {
             type_to_rust(&Type::Reference(Box::new(Type::String))),
             "&str"
         );
-        assert_eq!(
-            type_to_rust(&Type::Reference(Box::new(Type::Int))),
-            "&i64"
-        );
+        assert_eq!(type_to_rust(&Type::Reference(Box::new(Type::Int))), "&i64");
     }
 
     #[test]
     fn test_generic_types() {
-        assert_eq!(
-            type_to_rust(&Type::Vec(Box::new(Type::Int))),
-            "Vec<i64>"
-        );
+        assert_eq!(type_to_rust(&Type::Vec(Box::new(Type::Int))), "Vec<i64>");
         assert_eq!(
             type_to_rust(&Type::Option(Box::new(Type::String))),
             "Option<String>"
         );
     }
 }
-
