@@ -158,7 +158,7 @@ fn main() {
     print("   Route param 'id': {}", router.param("id").unwrap())
     let user = UserPage {
         user_id: router.param("id").unwrap(),
-        username: "Alice".to_string()
+        username: "Alice".to_string(),
     }
     print("   Rendered: {user.render():?}\n")
     

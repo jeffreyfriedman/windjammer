@@ -51,7 +51,7 @@ impl Component for Counter {
 impl Counter {
     fn new() -> Self {
         Self {
-            count: Signal.new(0)
+            count: Signal.new(0),
         }
     }
     

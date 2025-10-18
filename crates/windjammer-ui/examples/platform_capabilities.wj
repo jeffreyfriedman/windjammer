@@ -128,7 +128,7 @@ fn demo_notifications() {
     notifications.send(Notification {
         title: "Welcome!".to_string(),
         body: "Windjammer UI is running".to_string(),
-        icon: Some("icon.png".to_string())
+        icon: Some("icon.png".to_string()),
     }).unwrap()
     print("✅ Notification sent: Welcome")
     

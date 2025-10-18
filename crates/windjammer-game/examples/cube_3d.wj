@@ -12,7 +12,7 @@ impl CubeGame {
     fn new() -> Self {
         Self {
             rotation: 0.0,
-            camera: Camera.new()
+            camera: Camera.new(),
         }
     }
 }
