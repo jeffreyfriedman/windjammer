@@ -49,13 +49,11 @@ impl Route {
         let mut params = HashMap::new();
 
         for (route_part, path_part) in route_parts.iter().zip(path_parts.iter()) {
-            if route_part.starts_with(':') {
+            if let Some(param_name) = route_part.strip_prefix(':') {
                 // Dynamic parameter
-                let param_name = &route_part[1..];
                 params.insert(param_name.to_string(), path_part.to_string());
-            } else if route_part.starts_with('*') {
+            } else if let Some(param_name) = route_part.strip_prefix('*') {
                 // Wildcard - matches everything
-                let param_name = &route_part[1..];
                 params.insert(param_name.to_string(), path_part.to_string());
             } else if route_part != path_part {
                 // Static part doesn't match
@@ -76,6 +74,7 @@ pub struct Router {
     /// Navigation history
     history: Arc<Mutex<Vec<String>>>,
     /// Navigation listeners
+    #[allow(clippy::type_complexity)]
     listeners: Arc<Mutex<Vec<Arc<dyn Fn(&Route) + Send + Sync>>>>,
 }
 
@@ -299,9 +298,9 @@ impl FileBasedRouter {
         } else if name.starts_with('[') && name.ends_with(']') {
             // Dynamic route: [id].wj -> /:id
             let param = &name[1..name.len() - 1];
-            if param.starts_with("...") {
+            if let Some(stripped) = param.strip_prefix("...") {
                 // Catch-all: [...slug].wj -> /*slug
-                route = format!("{}/*{}", route, &param[3..]);
+                route = format!("{}/*{}", route, stripped);
             } else {
                 // Regular param: [id].wj -> /:id
                 route = format!("{}/:{}", route, param);

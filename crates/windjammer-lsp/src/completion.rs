@@ -284,14 +284,14 @@ impl CompletionProvider {
             },
             CompletionItem {
                 label: "@derive".to_string(),
-                kind: Some(CompletionItemKind::KEYWORD),
+            kind: Some(CompletionItemKind::KEYWORD),
                 detail: Some("Derive trait implementations".to_string()),
                 documentation: Some(Documentation::MarkupContent(MarkupContent {
                     kind: MarkupKind::Markdown,
                     value: "Automatically implement common traits.\n\n```windjammer\n@derive(Debug, Clone, PartialEq)\nstruct Point { x: int, y: int }\n```".to_string(),
                 })),
                 insert_text: Some("@derive($0)".to_string()),
-                ..Default::default()
+            ..Default::default()
             },
         ]
     }
@@ -574,9 +574,9 @@ impl CompletionProvider {
                         label: func.name.clone(),
                         kind: Some(CompletionItemKind::FUNCTION),
                         detail: Some(format!("fn {}", func.name)),
-                        documentation: Some(Documentation::String(format!(
-                            "Function defined in this file"
-                        ))),
+                        documentation: Some(Documentation::String(
+                            "Function defined in this file".to_string(),
+                        )),
                         ..Default::default()
                     });
                 }
@@ -585,9 +585,9 @@ impl CompletionProvider {
                         label: struct_decl.name.clone(),
                         kind: Some(CompletionItemKind::STRUCT),
                         detail: Some(format!("struct {}", struct_decl.name)),
-                        documentation: Some(Documentation::String(format!(
-                            "Struct defined in this file"
-                        ))),
+                        documentation: Some(Documentation::String(
+                            "Struct defined in this file".to_string(),
+                        )),
                         ..Default::default()
                     });
                 }
@@ -596,9 +596,9 @@ impl CompletionProvider {
                         label: enum_decl.name.clone(),
                         kind: Some(CompletionItemKind::ENUM),
                         detail: Some(format!("enum {}", enum_decl.name)),
-                        documentation: Some(Documentation::String(format!(
-                            "Enum defined in this file"
-                        ))),
+                        documentation: Some(Documentation::String(
+                            "Enum defined in this file".to_string(),
+                        )),
                         ..Default::default()
                     });
 
@@ -607,7 +607,7 @@ impl CompletionProvider {
                         items.push(CompletionItem {
                             label: format!("{}::{}", enum_decl.name, variant.name),
                             kind: Some(CompletionItemKind::ENUM_MEMBER),
-                            detail: Some(format!("enum variant")),
+                            detail: Some("enum variant".to_string()),
                             documentation: Some(Documentation::String(format!(
                                 "Variant of enum {}",
                                 enum_decl.name
@@ -621,9 +621,9 @@ impl CompletionProvider {
                         label: trait_decl.name.clone(),
                         kind: Some(CompletionItemKind::INTERFACE),
                         detail: Some(format!("trait {}", trait_decl.name)),
-                        documentation: Some(Documentation::String(format!(
-                            "Trait defined in this file"
-                        ))),
+                        documentation: Some(Documentation::String(
+                            "Trait defined in this file".to_string(),
+                        )),
                         ..Default::default()
                     });
                 }

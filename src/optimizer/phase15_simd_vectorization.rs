@@ -193,33 +193,36 @@ fn optimize_statements_simd(stmts: &[Statement], stats: &mut SimdStats) -> Vec<S
 fn optimize_statement_simd(stmt: &Statement, stats: &mut SimdStats) -> Statement {
     match stmt {
         Statement::For {
-            variable,
+            pattern,
             iterable,
             body,
         } => {
-            // Check if this loop is vectorizable
-            if let Some(vectorizable) = analyze_loop_vectorizability(variable, iterable, body) {
-                if vectorizable.is_safe && is_numeric_operation(&vectorizable.operation_type) {
-                    // Mark for vectorization (codegen will handle actual SIMD generation)
-                    stats.loops_vectorized += 1;
-                    stats.total_optimizations += 1;
+            // Only vectorize simple loops with identifier patterns
+            if let Pattern::Identifier(variable) = pattern {
+                // Check if this loop is vectorizable
+                if let Some(vectorizable) = analyze_loop_vectorizability(variable, iterable, body) {
+                    if vectorizable.is_safe && is_numeric_operation(&vectorizable.operation_type) {
+                        // Mark for vectorization (codegen will handle actual SIMD generation)
+                        stats.loops_vectorized += 1;
+                        stats.total_optimizations += 1;
 
-                    match vectorizable.operation_type {
-                        VectorOperation::Reduction => stats.reductions_vectorized += 1,
-                        VectorOperation::Map => stats.maps_vectorized += 1,
-                        VectorOperation::ElementWise => stats.maps_vectorized += 1,
-                        _ => {}
+                        match vectorizable.operation_type {
+                            VectorOperation::Reduction => stats.reductions_vectorized += 1,
+                            VectorOperation::Map => stats.maps_vectorized += 1,
+                            VectorOperation::ElementWise => stats.maps_vectorized += 1,
+                            _ => {}
+                        }
+
+                        // Add a decorator to mark this loop as vectorizable
+                        // The codegen phase will see this and generate SIMD code
+                        return create_vectorized_loop(variable, iterable, body, &vectorizable);
                     }
-
-                    // Add a decorator to mark this loop as vectorizable
-                    // The codegen phase will see this and generate SIMD code
-                    return create_vectorized_loop(variable, iterable, body, &vectorizable);
                 }
             }
 
             // Not vectorizable, recurse into body
             Statement::For {
-                variable: variable.clone(),
+                pattern: pattern.clone(),
                 iterable: iterable.clone(),
                 body: optimize_statements_simd(body, stats),
             }
@@ -357,7 +360,7 @@ fn create_vectorized_loop(
     // and generate SIMD code. For now, we just preserve the loop structure
     // and track it in stats.
     Statement::For {
-        variable: variable.to_string(),
+        pattern: Pattern::Identifier(variable.to_string()),
         iterable: iterable.clone(),
         body: body.to_vec(),
     }
@@ -387,7 +390,7 @@ mod tests {
                         value: Expression::Literal(Literal::Float(0.0)),
                     },
                     Statement::For {
-                        variable: "i".to_string(),
+                        pattern: Pattern::Identifier("i".to_string()),
                         iterable: Expression::Range {
                             start: Box::new(Expression::Literal(Literal::Int(0))),
                             end: Box::new(Expression::Identifier("n".to_string())),
@@ -431,7 +434,7 @@ mod tests {
                 parameters: vec![],
                 return_type: None,
                 body: vec![Statement::For {
-                    variable: "i".to_string(),
+                    pattern: Pattern::Identifier("i".to_string()),
                     iterable: Expression::Range {
                         start: Box::new(Expression::Literal(Literal::Int(0))),
                         end: Box::new(Expression::Literal(Literal::Int(10))),

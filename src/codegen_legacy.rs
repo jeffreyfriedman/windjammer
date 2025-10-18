@@ -1085,6 +1085,31 @@ impl CodeGenerator {
         }
     }
 
+    fn pattern_to_rust(&self, pattern: &Pattern) -> String {
+        match pattern {
+            Pattern::Wildcard => "_".to_string(),
+            Pattern::Identifier(name) => name.clone(),
+            Pattern::Tuple(patterns) => {
+                let rust_patterns: Vec<String> =
+                    patterns.iter().map(|p| self.pattern_to_rust(p)).collect();
+                format!("({})", rust_patterns.join(", "))
+            }
+            Pattern::EnumVariant(variant, binding) => {
+                if let Some(bind) = binding {
+                    format!("{}({})", variant, bind)
+                } else {
+                    variant.clone()
+                }
+            }
+            Pattern::Literal(lit) => self.generate_literal(lit),
+            Pattern::Or(patterns) => {
+                let rust_patterns: Vec<String> =
+                    patterns.iter().map(|p| self.pattern_to_rust(p)).collect();
+                rust_patterns.join(" | ")
+            }
+        }
+    }
+
     fn generate_statement(&mut self, stmt: &Statement) -> String {
         match stmt {
             Statement::Let {
@@ -1267,13 +1292,13 @@ impl CodeGenerator {
                 output
             }
             Statement::For {
-                variable,
+                pattern,
                 iterable,
                 body,
             } => {
                 let mut output = self.indent();
                 output.push_str("for ");
-                output.push_str(variable);
+                output.push_str(&self.pattern_to_rust(pattern));
                 output.push_str(" in ");
                 output.push_str(&self.generate_expression(iterable));
                 output.push_str(" {\n");
@@ -1296,6 +1321,17 @@ impl CodeGenerator {
             Statement::Continue => {
                 let mut output = self.indent();
                 output.push_str("continue;\n");
+                output
+            }
+            Statement::Use { path, alias } => {
+                let mut output = self.indent();
+                output.push_str("use ");
+                output.push_str(&path.join("::"));
+                if let Some(alias_name) = alias {
+                    output.push_str(" as ");
+                    output.push_str(alias_name);
+                }
+                output.push_str(";\n");
                 output
             }
             Statement::Assignment { target, value } => {
@@ -2274,6 +2310,7 @@ impl CodeGenerator {
                 Statement::Defer(_) => 1,
                 Statement::Break => 1,
                 Statement::Continue => 1,
+                Statement::Use { .. } => 0, // Use statements don't affect complexity
             };
         }
         count

@@ -1,7 +1,8 @@
+// Note: This is a conceptual example showing Windjammer UI syntax
+// In a real application, types would be imported from windjammer_ui
+
 // Todo App Example - Demonstrates state management and events
 
-use windjammer_ui.prelude.*
-use windjammer_ui.vdom.{VElement, VNode, VText}
 
 @derive(Debug, Clone)
 struct TodoItem {

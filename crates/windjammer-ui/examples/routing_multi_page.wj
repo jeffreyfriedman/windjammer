@@ -1,8 +1,7 @@
 // Multi-Page Routing Example
 // Demonstrates file-based routing and navigation
-
-use windjammer_ui.routing.{Router, Route, FileBasedRouter}
-use windjammer_ui.vdom.{VElement, VNode, VText}
+// Note: This is a conceptual example showing the Windjammer routing API
+// In a real application, routing types would be imported from windjammer_ui
 
 @component
 struct HomePage {

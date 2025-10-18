@@ -208,6 +208,7 @@ pub struct EventListener {
     /// Event type (e.g., "click", "keydown")
     pub event_type: String,
     /// Handler function
+    #[allow(clippy::type_complexity)]
     pub handler: Arc<dyn Fn(&Event, &EventContext) + Send + Sync>,
     /// Whether to capture
     pub capture: bool,

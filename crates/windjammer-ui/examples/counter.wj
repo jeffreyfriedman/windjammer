@@ -1,7 +1,8 @@
+// Note: This is a conceptual example showing Windjammer UI syntax
+// In a real application, types would be imported from windjammer_ui
+
 // Simple counter example using windjammer-ui
 
-use windjammer_ui.prelude.*
-use windjammer_ui.vdom.{VElement, VNode, VText}
 
 @component
 struct Counter {

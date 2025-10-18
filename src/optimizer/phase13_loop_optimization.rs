@@ -26,7 +26,9 @@
 //! array[0] = 0; array[1] = 1; array[2] = 2; array[3] = 3;
 //! ```
 
-use crate::parser::{BinaryOp, Expression, FunctionDecl, ImplBlock, Item, Program, Statement};
+use crate::parser::{
+    BinaryOp, Expression, FunctionDecl, ImplBlock, Item, Pattern, Program, Statement,
+};
 // No additional imports needed for Phase 13
 
 /// Statistics about loop optimizations
@@ -161,42 +163,55 @@ fn optimize_loops_in_statements(
     for stmt in statements {
         match stmt {
             Statement::For {
-                variable,
+                pattern,
                 iterable,
                 body,
             } => {
-                // Try to unroll the loop if it's a small constant range
-                if config.enable_unrolling {
-                    if let Some(unrolled) = try_unroll_loop(variable, iterable, body, config, stats)
-                    {
-                        result.extend(unrolled);
-                        stats.loops_unrolled += 1;
-                        stats.loops_optimized += 1;
-                        continue;
+                // Extract simple identifier from pattern for optimization
+                // Only optimize simple loops with a single identifier pattern
+                if let Pattern::Identifier(variable) = pattern {
+                    // Try to unroll the loop if it's a small constant range
+                    if config.enable_unrolling {
+                        if let Some(unrolled) =
+                            try_unroll_loop(variable, iterable, body, config, stats)
+                        {
+                            result.extend(unrolled);
+                            stats.loops_unrolled += 1;
+                            stats.loops_optimized += 1;
+                            continue;
+                        }
                     }
-                }
 
-                // Apply LICM if enabled
-                let optimized_body = if config.enable_licm {
-                    let (hoisted, new_body) = hoist_loop_invariants(body, variable, stats);
-                    let has_hoisted = !hoisted.is_empty();
-                    result.extend(hoisted);
-                    if has_hoisted {
-                        stats.loops_optimized += 1;
-                    }
-                    new_body
+                    // Apply LICM if enabled
+                    let optimized_body = if config.enable_licm {
+                        let (hoisted, new_body) = hoist_loop_invariants(body, variable, stats);
+                        let has_hoisted = !hoisted.is_empty();
+                        result.extend(hoisted);
+                        if has_hoisted {
+                            stats.loops_optimized += 1;
+                        }
+                        new_body
+                    } else {
+                        body.clone()
+                    };
+
+                    // Recursively optimize the loop body
+                    let final_body = optimize_loops_in_statements(&optimized_body, config, stats);
+
+                    result.push(Statement::For {
+                        pattern: pattern.clone(),
+                        iterable: optimize_loops_in_expression(iterable, config, stats),
+                        body: final_body,
+                    });
                 } else {
-                    body.clone()
-                };
-
-                // Recursively optimize the loop body
-                let final_body = optimize_loops_in_statements(&optimized_body, config, stats);
-
-                result.push(Statement::For {
-                    variable: variable.clone(),
-                    iterable: optimize_loops_in_expression(iterable, config, stats),
-                    body: final_body,
-                });
+                    // For complex patterns (tuples, etc.), just recursively optimize the body
+                    let final_body = optimize_loops_in_statements(body, config, stats);
+                    result.push(Statement::For {
+                        pattern: pattern.clone(),
+                        iterable: optimize_loops_in_expression(iterable, config, stats),
+                        body: final_body,
+                    });
+                }
             }
             Statement::While { condition, body } => {
                 // Apply LICM if enabled
@@ -598,12 +613,18 @@ fn statement_uses_variable(stmt: &Statement, var_name: &str) -> bool {
                 || body.iter().any(|s| statement_uses_variable(s, var_name))
         }
         Statement::For {
-            variable,
+            pattern,
             iterable,
             body,
         } => {
             // If this is a nested loop with the same variable, it shadows the outer one
-            if variable == var_name {
+            // For tuple patterns, we're conservative and assume it might shadow
+            let shadows = match pattern {
+                Pattern::Identifier(var) => var == var_name,
+                Pattern::Tuple(_) => true, // Conservative: assume tuple might contain the variable
+                _ => false,
+            };
+            if shadows {
                 return false;
             }
             expression_uses_variable(iterable, var_name)
@@ -723,7 +744,7 @@ mod tests {
                 parameters: vec![],
                 return_type: None,
                 body: vec![Statement::For {
-                    variable: "i".to_string(),
+                    pattern: Pattern::Identifier("i".to_string()),
                     iterable: Expression::Range {
                         start: Box::new(Expression::Literal(Literal::Int(0))),
                         end: Box::new(Expression::Literal(Literal::Int(3))),
@@ -761,7 +782,7 @@ mod tests {
                 parameters: vec![],
                 return_type: None,
                 body: vec![Statement::For {
-                    variable: "i".to_string(),
+                    pattern: Pattern::Identifier("i".to_string()),
                     iterable: Expression::Range {
                         start: Box::new(Expression::Literal(Literal::Int(0))),
                         end: Box::new(Expression::Literal(Literal::Int(100))),
@@ -836,7 +857,7 @@ mod tests {
                 parameters: vec![],
                 return_type: None,
                 body: vec![Statement::For {
-                    variable: "i".to_string(),
+                    pattern: Pattern::Identifier("i".to_string()),
                     iterable: Expression::Range {
                         start: Box::new(Expression::Literal(Literal::Int(0))),
                         end: Box::new(Expression::Literal(Literal::Int(1000))), // Too large
@@ -873,7 +894,7 @@ mod tests {
                 parameters: vec![],
                 return_type: None,
                 body: vec![Statement::For {
-                    variable: "i".to_string(),
+                    pattern: Pattern::Identifier("i".to_string()),
                     iterable: Expression::Range {
                         start: Box::new(Expression::Literal(Literal::Int(0))),
                         end: Box::new(Expression::Literal(Literal::Int(10))),

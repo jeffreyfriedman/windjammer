@@ -421,7 +421,7 @@ fn eliminate_dead_code_in_statement(stmt: &Statement, stats: &mut DeadCodeStats)
             }
         }
         Statement::For {
-            variable,
+            pattern,
             iterable,
             body,
         } => {
@@ -431,7 +431,7 @@ fn eliminate_dead_code_in_statement(stmt: &Statement, stats: &mut DeadCodeStats)
             stats.empty_blocks_removed += body_stats.empty_blocks_removed;
 
             Statement::For {
-                variable: variable.clone(),
+                pattern: pattern.clone(),
                 iterable: new_iterable,
                 body: new_body,
             }
