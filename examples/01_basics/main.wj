@@ -1,8 +1,8 @@
 // Example 1: Basics - Functions, variables, control flow
 
-// Simple function with automatic ownership inference
+// Simple function
 fn greet(name: string) -> string {
-    "Hello, ${name}!"
+    "Hello, " + name + "!"
 }
 
 // Function with multiple parameters
@@ -10,9 +10,9 @@ fn add(x: int, y: int) -> int {
     x + y
 }
 
-// Mutable parameter (inferred from assignment)
-fn increment(counter: int) {
-    counter = counter + 1
+// Function that returns incremented value
+fn increment(counter: int) -> int {
+    counter + 1
 }
 
 // Using the ternary operator
@@ -41,30 +41,30 @@ fn abs(x: int) -> int {
 }
 
 fn main() {
-    // String interpolation
+    // Simple function call
     let name = "World"
-    println!("${greet(name)}")
+    print(greet(name))
     
-    // Automatic reference insertion
+    // Multiple parameters
     let x = 5
     let y = 10
-    println!("${x} + ${y} = ${add(x, y)}")
+    let sum = add(x, y)
+    print(sum)
     
-    // Mutable borrowing
-    let mut count = 0
-    increment(count)
-    println!("Counter: ${count}")
+    // Function call with return value
+    let count = 0
+    let new_count = increment(count)
+    print(new_count)
     
     // Ternary operator
-    println!("5 is ${sign(5)}")
-    println!("-3 is ${sign(-3)}")
+    print(sign(5))
+    print(sign(-3))
     
-    // Pattern matching
+    // Pattern matching in loop
     for i in 0..5 {
-        println!("${i} is ${describe_number(i)}")
+        print(describe_number(i))
     }
     
     // If-else
-    println!("abs(-42) = ${abs(-42)}")
+    print(abs(-42))
 }
-

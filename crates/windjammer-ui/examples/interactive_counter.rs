@@ -10,20 +10,26 @@
 //! # Open http://localhost:8000/examples/interactive_counter.html
 //! ```
 
-#![cfg(target_arch = "wasm32")]
-
+#[cfg(target_arch = "wasm32")]
 use std::cell::RefCell;
+#[cfg(target_arch = "wasm32")]
 use std::rc::Rc;
+#[cfg(target_arch = "wasm32")]
 use wasm_bindgen::prelude::*;
+#[cfg(target_arch = "wasm32")]
 use wasm_bindgen::JsCast;
+#[cfg(target_arch = "wasm32")]
 use windjammer_ui::reactivity::Signal;
+#[cfg(target_arch = "wasm32")]
 use windjammer_ui::vdom::{VElement, VNode, VText};
 
 /// Counter component with reactive state
+#[cfg(target_arch = "wasm32")]
 struct Counter {
     count: Signal<i32>,
 }
 
+#[cfg(target_arch = "wasm32")]
 impl Counter {
     fn new() -> Self {
         Self {
@@ -226,10 +232,4 @@ fn render_counter(counter: &Rc<RefCell<Counter>>, target: &web_sys::Element) {
     target
         .append_child(&dom_node)
         .expect("failed to append child");
-}
-
-#[cfg(not(target_arch = "wasm32"))]
-fn main() {
-    eprintln!("This example is WASM-only. Build with:");
-    eprintln!("  wasm-pack build --target web --example interactive_counter");
 }

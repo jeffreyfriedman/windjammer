@@ -102,7 +102,8 @@ fn increment(x: int) {
     x = x + 1
 }
 "#;
-    compile_and_check(source, &["fn increment(x: &mut i64)", "x += 1"]); // Phase 5 optimization!
+    // Phase 5 optimization with proper deref for mutable reference parameters
+    compile_and_check(source, &["fn increment(x: &mut i64)", "*x += 1"]);
 }
 
 #[test]
@@ -302,9 +303,10 @@ fn main() {
     total
 }
 "#;
+    // Phase 5 optimization works for local variables
     compile_and_check(
         source,
-        &["let mut total = 0", "for i in 0..5", "total += i"], // Phase 5 optimization!
+        &["let mut total = 0", "for i in 0..5", "total += i"],
     );
 }
 
@@ -317,7 +319,8 @@ fn countdown(n: int) {
     }
 }
 "#;
-    compile_and_check(source, &["while n > 0", "n -= 1"]);
+    // Phase 5 optimization with proper deref for mutable reference parameters
+    compile_and_check(source, &["while n > 0", "*n -= 1"]);
 }
 
 #[test]
@@ -375,7 +378,8 @@ fn test() {
     x = x + 1
 }
 "#;
-    compile_and_check(source, &["let mut x = 0", "x += 1"]); // Phase 5 optimization!
+    // Phase 5 optimization works for local variables
+    compile_and_check(source, &["let mut x = 0", "x += 1"]);
 }
 
 #[test]

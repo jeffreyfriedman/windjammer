@@ -318,7 +318,74 @@ fn close(f: File) // Consumes File, must be called
 
 ---
 
-### v0.36.0 - Macro System v2 (Procedural Macros) 🪄
+### v0.36.0 - Race Detector & Concurrency Analysis 🔍
+
+**Theme: Go-Style Race Detection for Rust Performance**
+
+**Features:**
+- **Compile-time race detection** - Static analysis of concurrent code
+- **Runtime race detector** - Instrumented builds (like Go's `-race` flag)
+- **`wj test --race`** - Automatic race detection in tests
+- **`wj run --race`** - Debug builds with race checking
+- **Data race visualization** - Show conflicting accesses
+- **Happens-before analysis** - Track synchronization primitives
+- **Lock order analysis** - Detect potential deadlocks
+- **Channel race detection** - Find send/receive races
+- **Atomic operation tracking** - Verify memory ordering
+- **Performance overhead tracking** - Show slowdown from instrumentation
+
+**CLI Commands:**
+```bash
+# Run with race detection (2-10x slowdown)
+wj run --race main.wj
+
+# Test with race detection
+wj test --race
+
+# Build with race instrumentation
+wj build --race --target debug
+
+# Analyze race reports
+wj race analyze race_report.json
+```
+
+**Example Output:**
+```
+==================
+WARNING: DATA RACE
+Write at 0x7f8a1c000010 by goroutine 7:
+  main.wj:45 counter += 1
+  
+Previous read at 0x7f8a1c000010 by goroutine 6:
+  main.wj:42 print(counter)
+
+Goroutine 7 (running) created at:
+  main.wj:40 spawn { increment() }
+  
+Goroutine 6 (running) created at:
+  main.wj:39 spawn { read_counter() }
+==================
+```
+
+**Why This Matters:**
+- **Competitive advantage over Rust** - Easier to find concurrency bugs
+- **Go-level DX** - Simple race detection like `go test -race`
+- **Catches bugs Rust's type system misses** - Runtime races in `unsafe` code
+- **Better than ThreadSanitizer** - Windjammer-aware, better error messages
+- **Production debugging** - Optional runtime checks in staging
+
+**Implementation Strategy:**
+- **Static analysis** - Use dataflow analysis on Windjammer AST
+- **Instrumentation** - Insert race detection code in codegen
+- **Runtime library** - Lightweight race detector (inspired by Go's race detector)
+- **Integration** - Works with LSP (show races in editor)
+- **WASM support** - Detect races in browser workers
+
+**Target Date:** Q2 2027
+
+---
+
+### v0.37.0 - Macro System v2 (Procedural Macros) 🪄
 
 **Theme: Powerful Metaprogramming**
 

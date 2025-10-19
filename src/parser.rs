@@ -235,10 +235,17 @@ pub struct MatchArm {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub enum EnumPatternBinding {
+    None,          // No parentheses: None, Empty
+    Wildcard,      // Parentheses with wildcard: Some(_)
+    Named(String), // Parentheses with binding: Some(x)
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum Pattern {
     Wildcard,
     Identifier(String),
-    EnumVariant(String, Option<String>), // Enum name, optional binding
+    EnumVariant(String, EnumPatternBinding), // Enum name, binding type
     Literal(Literal),
     Tuple(Vec<Pattern>), // Tuple pattern: (a, b, c)
     Or(Vec<Pattern>),    // Or pattern: pattern1 | pattern2 | pattern3
@@ -2223,19 +2230,25 @@ impl Parser {
                         let variant = variant.clone();
                         self.advance();
 
-                        // Check for binding
+                        // Check for binding: Result.Ok(x) or Result.Ok(_)
                         let binding = if self.current_token() == &Token::LParen {
                             self.advance();
-                            if let Token::Ident(b) = self.current_token() {
-                                let b = b.clone();
-                                self.advance();
-                                self.expect(Token::RParen)?;
-                                Some(b)
-                            } else {
-                                None
-                            }
+                            let b = match self.current_token() {
+                                Token::Underscore => {
+                                    self.advance();
+                                    EnumPatternBinding::Wildcard
+                                }
+                                Token::Ident(name) => {
+                                    let name = name.clone();
+                                    self.advance();
+                                    EnumPatternBinding::Named(name)
+                                }
+                                _ => EnumPatternBinding::None,
+                            };
+                            self.expect(Token::RParen)?;
+                            b
                         } else {
-                            None
+                            EnumPatternBinding::None
                         };
 
                         Ok(Pattern::EnumVariant(
@@ -2246,16 +2259,27 @@ impl Parser {
                         Err("Expected variant name".to_string())
                     }
                 } else if self.current_token() == &Token::LParen {
-                    // Unqualified enum variant with parameter: Some(x), Ok(value), Err(e)
+                    // Unqualified enum variant with parameter: Some(x), Ok(value), Err(e), Some(_)
                     self.advance();
-                    if let Token::Ident(b) = self.current_token() {
-                        let b = b.clone();
-                        self.advance();
-                        self.expect(Token::RParen)?;
-                        Ok(Pattern::EnumVariant(name, Some(b)))
-                    } else {
-                        Err("Expected binding name in enum pattern".to_string())
-                    }
+                    
+                    // Handle underscore (Some(_)) or identifier (Some(x))
+                    let binding = match self.current_token() {
+                        Token::Underscore => {
+                            self.advance();
+                            EnumPatternBinding::Wildcard
+                        }
+                        Token::Ident(b) => {
+                            let b = b.clone();
+                            self.advance();
+                            EnumPatternBinding::Named(b)
+                        }
+                        _ => {
+                            return Err("Expected binding name or _ in enum pattern".to_string());
+                        }
+                    };
+                    
+                    self.expect(Token::RParen)?;
+                    Ok(Pattern::EnumVariant(name, binding))
                 } else {
                     // Check if this could be an enum variant without parameters (None, Empty, etc.)
                     // For now, treat as identifier - the analyzer will determine if it's an enum variant
