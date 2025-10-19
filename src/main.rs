@@ -389,6 +389,18 @@ impl ModuleCompiler {
             return Ok(());
         }
 
+        // Skip stdlib modules - they're implemented in windjammer-runtime
+        if module_path.starts_with("std::") {
+            // Track that we used this stdlib module
+            let module_name = module_path.strip_prefix("std::").unwrap().to_string();
+            self.imported_stdlib_modules.insert(module_name);
+
+            // Mark as compiled (no code generated, handled by runtime)
+            self.compiled_modules
+                .insert(module_path.to_string(), String::new());
+            return Ok(());
+        }
+
         // Resolve module path to file path
         let file_path = self.resolve_module_path(module_path, source_file)?;
 
@@ -731,50 +743,62 @@ fn create_cargo_toml_with_deps(
     // Map imported stdlib modules to their Cargo dependencies
     let mut deps = Vec::new();
 
+    // If ANY stdlib module is used, add windjammer-runtime
+    if !imported_modules.is_empty() {
+        // Add windjammer-runtime dependency (path-based for now)
+        let windjammer_runtime_path = if let Ok(manifest_dir) = env::var("CARGO_MANIFEST_DIR") {
+            PathBuf::from(manifest_dir).join("crates/windjammer-runtime")
+        } else {
+            env::current_dir()
+                .unwrap_or_else(|_| PathBuf::from("."))
+                .join("crates/windjammer-runtime")
+        };
+
+        deps.push(format!(
+            "windjammer-runtime = {{ path = \"{}\" }}",
+            windjammer_runtime_path.display()
+        ));
+    }
+
+    // Legacy: Keep old dependencies for modules not yet in runtime
     for module in imported_modules {
         match module.as_str() {
-            "json" => {
-                deps.push("serde = { version = \"1.0\", features = [\"derive\"] }");
-                deps.push("serde_json = \"1.0\"");
-            }
+            // These are now in windjammer-runtime, no extra deps needed
+            "fs" | "http" | "mime" | "json" => {}
+
+            // Legacy modules that still need direct dependencies
             "csv" => {
-                deps.push("csv = \"1.3\"");
-            }
-            "http" => {
-                // HTTP client (reqwest) + HTTP server (axum)
-                deps.push("reqwest = { version = \"0.11\", features = [\"json\"] }");
-                deps.push("axum = \"0.7\"");
-                deps.push("tokio = { version = \"1\", features = [\"full\"] }");
+                deps.push("csv = \"1.3\"".to_string());
             }
             "time" => {
-                deps.push("chrono = \"0.4\"");
+                deps.push("chrono = \"0.4\"".to_string());
             }
             "log" => {
-                deps.push("log = \"0.4\"");
-                deps.push("env_logger = \"0.11\"");
+                deps.push("log = \"0.4\"".to_string());
+                deps.push("env_logger = \"0.11\"".to_string());
             }
             "regex" => {
-                deps.push("regex = \"1.10\"");
+                deps.push("regex = \"1.10\"".to_string());
             }
             "cli" => {
-                deps.push("clap = { version = \"4.5\", features = [\"derive\"] }");
+                deps.push("clap = { version = \"4.5\", features = [\"derive\"] }".to_string());
             }
             "crypto" => {
-                deps.push("sha2 = \"0.10\"");
-                deps.push("bcrypt = \"0.15\"");
-                deps.push("base64 = \"0.21\"");
+                deps.push("sha2 = \"0.10\"".to_string());
+                deps.push("bcrypt = \"0.15\"".to_string());
+                deps.push("base64 = \"0.21\"".to_string());
             }
             "random" => {
-                deps.push("rand = \"0.8\"");
+                deps.push("rand = \"0.8\"".to_string());
             }
             "async" => {
-                deps.push("tokio = { version = \"1\", features = [\"full\"] }");
+                deps.push("tokio = { version = \"1\", features = [\"full\"] }".to_string());
             }
             "db" => {
-                deps.push("sqlx = { version = \"0.7\", features = [\"runtime-tokio-native-tls\", \"sqlite\"] }");
-                deps.push("tokio = { version = \"1\", features = [\"full\"] }");
+                deps.push("sqlx = { version = \"0.7\", features = [\"runtime-tokio-native-tls\", \"sqlite\"] }".to_string());
+                deps.push("tokio = { version = \"1\", features = [\"full\"] }".to_string());
             }
-            // fs, strings, math, env, process use std library (no extra deps needed)
+            // fs, strings, math, env, process use std library or windjammer-runtime
             _ => {}
         }
     }
@@ -821,7 +845,7 @@ fn create_cargo_toml_with_deps(
         }
     }
 
-    deps.extend(external_deps.iter().map(|s| s.as_str()));
+    deps.extend(external_deps);
 
     deps.sort();
     deps.dedup();
