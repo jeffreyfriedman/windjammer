@@ -2261,7 +2261,7 @@ impl Parser {
                 } else if self.current_token() == &Token::LParen {
                     // Unqualified enum variant with parameter: Some(x), Ok(value), Err(e), Some(_)
                     self.advance();
-                    
+
                     // Handle underscore (Some(_)) or identifier (Some(x))
                     let binding = match self.current_token() {
                         Token::Underscore => {
@@ -2277,7 +2277,7 @@ impl Parser {
                             return Err("Expected binding name or _ in enum pattern".to_string());
                         }
                     };
-                    
+
                     self.expect(Token::RParen)?;
                     Ok(Pattern::EnumVariant(name, binding))
                 } else {
