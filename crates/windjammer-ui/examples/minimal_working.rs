@@ -19,7 +19,7 @@ fn main() {
 
 #[cfg(target_arch = "wasm32")]
 fn run_wasm() {
-    use wasm_bindgen::prelude::*;
+    use windjammer_ui::vdom::{VElement, VNode, VText};
     // Set panic hook for better error messages
     #[cfg(feature = "console_error_panic_hook")]
     console_error_panic_hook::set_once();
