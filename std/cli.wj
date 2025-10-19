@@ -1,190 +1,35 @@
-// std/cli - Command-line argument parsing with proper abstraction
-// Implementation: clap crate (wrapped for clean API)
+// std/cli - Command-line argument parsing
+// This file is for API documentation only.
+// Actual implementation is in windjammer-runtime/src/cli.rs
 
-// PUBLIC API - Users interact with these types only
+// CLI application builder
+pub struct CliApp {}
 
-//===============================================
-// CLI PARSING
-//===============================================
+// Parsed command-line matches
+pub struct CliMatches {}
 
-// Parse arguments from a struct with @derive(Cli)
-fn parse<T>() -> T {
-    // Wraps: T::parse()
-    // Requires T to have #[derive(Parser)] from clap
-    // In Windjammer, use @derive(Cli) on the struct
-}
+// Create a new CLI application
+pub fn app(name: string, version: string, about: string) -> CliApp
 
-// Parse arguments from command line args
-fn parse_from<T>(args: Vec<string>) -> T {
-    // Wraps: T::parse_from(args)
-}
-
-// Try to parse, return Result instead of exiting on error
-fn try_parse<T>() -> Result<T, String> {
-    // Wraps: T::try_parse()
-    Err("Parse error")
-}
-
-//===============================================
-// ARG DECORATOR (for struct fields)
-//===============================================
-
-// Use @arg(...) decorator on struct fields to configure arguments
-// 
-// Examples:
-// @arg(help: "Description of argument")
-// @arg(short: 'v', long: "verbose")
-// @arg(default_value: "default")
-// @arg(required: true)
-//
-// Full decorator syntax in examples below
-
-//===============================================
-// SIMPLE USAGE WITHOUT DECORATORS
-//===============================================
-
-struct SimpleArgs {
-    // Positional argument
-    input: string,
+impl CliApp {
+    // Add an argument
+    pub fn arg(self, name: string, short: Option<char>, long: Option<string>, help: string, required: bool) -> CliApp
     
-    // Optional argument
-    output: Option<string>,
+    // Add a flag (boolean)
+    pub fn flag(self, name: string, short: Option<char>, long: Option<string>, help: string) -> CliApp
     
-    // Flag (boolean)
-    verbose: bool,
+    // Parse command-line arguments
+    pub fn parse(self) -> CliMatches
 }
 
-// Get command-line arguments as vector
-fn args() -> Vec<string> {
-    // Wraps: std::env::args().collect()
-    vec![]
+impl CliMatches {
+    // Get argument value as string
+    pub fn get(self, name: string) -> Option<string>
+    
+    // Check if flag is present
+    pub fn is_present(self, name: string) -> bool
+    
+    // Get multiple values
+    pub fn get_many(self, name: string) -> Vec<string>
 }
 
-// Get specific argument by index
-fn arg(index: int) -> Option<string> {
-    // Wraps: std::env::args().nth(index)
-    None
-}
-
-// USAGE EXAMPLES:
-//
-// use std::cli
-//
-// // Example 1: Simple struct with @derive(Cli)
-// @derive(Cli, Debug)
-// struct Args {
-//     // Positional argument (required)
-//     @arg(help: "Input file to process")
-//     input: string,
-//     
-//     // Optional argument with short and long form
-//     @arg(short: 'o', long: "output", help: "Output file")
-//     output: Option<string>,
-//     
-//     // Flag (boolean option)
-//     @arg(short: 'v', long: "verbose", help: "Verbose output")
-//     verbose: bool,
-//     
-//     // Integer with default value
-//     @arg(short: 'n', long: "count", default_value: "10", help: "Number of items")
-//     count: int,
-// }
-//
-// fn main() {
-//     let args = cli.parse::<Args>()
-//     
-//     println!("Input: {}", args.input)
-//     
-//     match args.output {
-//         Some(output) => println!("Output: {}", output),
-//         None => println!("No output file specified")
-//     }
-//     
-//     if args.verbose {
-//         println!("Verbose mode enabled")
-//     }
-//     
-//     println!("Count: {}", args.count)
-// }
-//
-// // Example 2: Subcommands
-// @derive(Cli)
-// struct Cli {
-//     #[command(subcommand)]
-//     command: Commands
-// }
-//
-// @derive(Subcommand)
-// enum Commands {
-//     Add {
-//         @arg(help: "Item to add")
-//         item: string
-//     },
-//     Remove {
-//         @arg(help: "Item to remove")
-//         item: string
-//     },
-//     List
-// }
-//
-// fn main() {
-//     let cli = cli.parse::<Cli>()
-//     
-//     match cli.command {
-//         Commands::Add { item } => println!("Adding: {}", item),
-//         Commands::Remove { item } => println!("Removing: {}", item),
-//         Commands::List => println!("Listing items")
-//     }
-// }
-//
-// // Example 3: Multiple values
-// @derive(Cli)
-// struct Args {
-//     @arg(help: "Files to process")
-//     files: Vec<string>,
-//     
-//     @arg(short: 't', long: "tag", help: "Tags (can be specified multiple times)")
-//     tags: Vec<string>,
-// }
-//
-// // Usage: myapp file1.txt file2.txt -t tag1 -t tag2
-//
-// // Example 4: Manual argument parsing (simple cases)
-// fn main() {
-//     let args = cli.args()
-//     
-//     if args.len() < 2 {
-//         println!("Usage: {} <input>", args[0])
-//         return
-//     }
-//     
-//     let input = args[1]
-//     println!("Processing: {}", input)
-// }
-//
-// COMMAND-LINE PATTERNS:
-//
-// Flags:
-//   -v, --verbose        Boolean flag
-//   -h, --help          Help message (auto-generated)
-//   --version           Version (auto-generated if specified)
-//
-// Options with values:
-//   -o output.txt       Short form
-//   --output output.txt Long form
-//   --count=10          With equals sign
-//
-// Positional arguments:
-//   myapp input.txt     Required positional
-//   myapp file1 file2   Multiple positional
-//
-// Subcommands:
-//   myapp add item      Subcommand with args
-//   myapp list          Subcommand without args
-//
-// NOT THIS (clap exposed): ❌
-// use clap::Parser
-// #[derive(Parser)]
-// let args = Args::parse()
-//
-// NOTE: clap crate is auto-added as dependency
