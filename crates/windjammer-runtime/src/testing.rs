@@ -78,4 +78,3 @@ mod tests {
         assert!(!no_panic);
     }
 }
-
