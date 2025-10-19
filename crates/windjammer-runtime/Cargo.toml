@@ -1,0 +1,29 @@
+[package]
+name = "windjammer-runtime"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+description = "Runtime library implementing Windjammer's standard library"
+
+[dependencies]
+# HTTP client/server
+reqwest = { version = "0.11", features = ["json", "blocking"] }
+axum = { version = "0.7", features = ["http2"] }
+tokio = { version = "1.35", features = ["full"] }
+tower = "0.4"
+tower-http = { version = "0.5", features = ["fs", "trace"] }
+
+# File system
+walkdir = "2.4"
+
+# Serialization
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+
+# Time
+chrono = "0.4"
+
+# Error handling
+anyhow = "1.0"
+thiserror = "1.0"
