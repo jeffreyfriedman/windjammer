@@ -4,10 +4,26 @@
 //! When you write `use std::http` in Windjammer, the compiler generates code that calls
 //! functions from this crate.
 
+// Core modules (fully implemented)
 pub mod fs;
 pub mod http;
 pub mod json;
 pub mod mime;
+
+// Additional stdlib modules
+pub mod async_runtime;
+pub mod collections;
+pub mod crypto;
+pub mod csv_mod;
+pub mod encoding;
+pub mod env;
+pub mod log_mod;
+pub mod math;
+pub mod process;
+pub mod random;
+pub mod regex_mod;
+pub mod strings;
+pub mod time;
 
 // Re-export commonly used types
 pub use http::{Request, Response, Router, ServerResponse};
