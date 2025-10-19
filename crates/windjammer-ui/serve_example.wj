@@ -1,0 +1,22 @@
+use std.http
+use std.fs
+
+fn main() {
+    let server = http.Server.new("127.0.0.1:8080")
+    
+    print("🚀 Windjammer UI Dev Server")
+    print("📁 Serving from: crates/windjammer-ui")
+    print("�� Open: http://127.0.0.1:8080/examples/interactive_counter.html")
+    print("")
+    
+    server.handle("/", |req, res| {
+        res.send_file("examples/interactive_counter.html")
+    })
+    
+    server.handle("/pkg/*", |req, res| {
+        let path = req.path.replace("/pkg/", "pkg/")
+        res.send_file(path)
+    })
+    
+    server.listen()
+}
