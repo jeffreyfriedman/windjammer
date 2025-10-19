@@ -155,30 +155,24 @@ impl Pipeline2D {
         // For now, we create the encoder structure
         let _ = (encoder, color);
     }
-    
+
     /// Draw the current buffers
     pub fn draw(&self, encoder: &mut wgpu::CommandEncoder) -> Result<(), String> {
         let render_pipeline = self
             .render_pipeline
             .as_ref()
             .ok_or("Render pipeline not initialized")?;
-        let vertex_buffer = self
-            .vertex_buffer
-            .as_ref()
-            .ok_or("No vertex buffer")?;
-        let index_buffer = self
-            .index_buffer
-            .as_ref()
-            .ok_or("No index buffer")?;
+        let vertex_buffer = self.vertex_buffer.as_ref().ok_or("No vertex buffer")?;
+        let index_buffer = self.index_buffer.as_ref().ok_or("No index buffer")?;
 
         // Note: In a full implementation with a surface:
         // let output = surface.get_current_texture()?;
         // let view = output.texture.create_view(&Default::default());
-        
+
         // For now, create a minimal render pass structure
         // This demonstrates the API even without a live surface
         let _ = (encoder, render_pipeline, vertex_buffer, index_buffer);
-        
+
         // In production:
         // let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
         //     label: Some("Sprite Render Pass"),
@@ -199,7 +193,7 @@ impl Pipeline2D {
         // render_pass.set_vertex_buffer(0, vertex_buffer.slice(..));
         // render_pass.set_index_buffer(index_buffer.slice(..), wgpu::IndexFormat::Uint32);
         // render_pass.draw_indexed(0..index_count, 0, 0..1);
-        
+
         Ok(())
     }
 

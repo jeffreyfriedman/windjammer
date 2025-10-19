@@ -54,34 +54,36 @@ All examples are in **idiomatic Windjammer** (`.wj` files):
 
 ## 💻 Current Status
 
-**v0.34.0 - FUNCTIONAL! 🎉**
+**v0.34.0 - Foundation Complete ✅**
 
-The framework is now **production-ready** with 236+ passing tests across all crates!
+The framework has **solid foundations** with 95+ passing tests and complete Virtual DOM implementation.
 
-### ✅ What Works
-- ✅ Complete Rust library implementation (91 tests in windjammer-ui)
-- ✅ All core APIs designed and tested
-- ✅ Comprehensive example code (9 examples in idiomatic Windjammer)
-- ✅ Cross-platform architecture ready
-- ✅ Parser support for glob imports (`use module.*`)
-- ✅ Parser support for braced imports (`use module.{A, B, C}`)
-- ✅ External crate imports (`use windjammer_ui.prelude.*`)
-- ✅ `.wj` → Rust transpilation with auto-generated Cargo.toml
-- ✅ `wj build` command (generates Rust + Cargo.toml with deps)
-- ✅ `wj run` command (transpiles, builds, and runs)
-- ✅ **`#[component]` macro** (generates constructors, trait impls)
-- ✅ **Web runtime** (browser DOM integration via web-sys)
-- ✅ **`mount()` function** (mount components to DOM)
-- ✅ **Event handling** (onclick, etc. wired to browser events)
-- ✅ **Working counter_web.wj example** (compiles and runs!)
+### ✅ What's Complete
+- ✅ **Virtual DOM**: Complete diff/patch algorithm with all 5 operations
+- ✅ **Component Model**: Component trait and macro infrastructure
+- ✅ **Reactive State**: Signal-based reactivity with subscribers
+- ✅ **VNode Types**: VElement, VText, VComponent with builders
+- ✅ **WebRenderer**: Creates DOM elements from VNodes
+- ✅ **Efficient Updates**: Surgical DOM patches instead of full re-renders
+- ✅ **20 Integration Tests**: VDOM, diffing, components, reactivity, performance
+- ✅ **Examples Compile**: counter, todo, form examples transpile successfully
+- ✅ **Platform Abstraction**: Types defined for Web/Desktop/Mobile
 
-### 🚧 What's Next (v0.35.0+)
-- WASM packaging with wasm-pack (for browser deployment)
-- Game runtime (Canvas/WebGL rendering backends)
-- Desktop runtime (Tauri integration)
-- Stateful components with reactivity
-- Hot reload for development
-- More complete examples (todo app, games, etc.)
+### ⚠️ Alpha Status (Use with Caution)
+- **WASM Packaging**: wasm-pack integration not complete
+- **Event Handlers**: Events detected but callbacks not fully wired
+- **Desktop Runtime**: Tauri integration stubbed
+- **Mobile Runtime**: iOS/Android platform code stubbed
+- **SSR/Routing**: Planned for v0.35.0+
+
+### 🚧 Next Steps (v0.35.0)
+- Complete WASM packaging for browser deployment
+- Wire event handlers to component state
+- Desktop runtime (winit + wgpu)
+- Working browser demos
+- More comprehensive examples
+
+**Recommendation:** Use for experimentation and learning. Not yet recommended for production applications.
 
 ## 📖 Usage Example
 
