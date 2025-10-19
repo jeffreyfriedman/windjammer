@@ -1115,7 +1115,8 @@ impl Parser {
         // Parse the rest of the path (identifiers separated by . or :: or /)
         loop {
             if let Token::Ident(name) = self.current_token() {
-                path_str.push_str(name);
+                let name = name.clone();
+                path_str.push_str(&name);
                 self.advance();
 
                 // Check for . or :: or / as separator

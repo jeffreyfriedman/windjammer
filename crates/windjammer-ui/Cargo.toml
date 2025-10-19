@@ -14,6 +14,10 @@ name = "windjammer_ui"
 path = "src/lib.rs"
 crate-type = ["cdylib", "rlib"]
 
+[[bin]]
+name = "serve_wasm"
+path = "src/bin/serve_wasm.rs"
+
 [dependencies]
 # Core Windjammer dependency
 windjammer = { path = "../..", version = "0.34.0" }
