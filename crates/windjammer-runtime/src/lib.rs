@@ -1,15 +1,13 @@
 //! Windjammer Runtime Library
 //!
 //! This crate provides the actual Rust implementations for Windjammer's standard library.
-//! When users write `use std.http` in Windjammer, the compiler transpiles this to
-//! `use windjammer_runtime::http::*`, making these implementations available.
+//! When you write `use std::http` in Windjammer, the compiler generates code that calls
+//! functions from this crate.
 
 pub mod fs;
 pub mod http;
+pub mod json;
 pub mod mime;
 
 // Re-export commonly used types
-pub use fs::*;
-pub use http::*;
-pub use mime::*;
-
+pub use http::{Request, Response, Router, ServerResponse};
