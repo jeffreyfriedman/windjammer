@@ -84,7 +84,8 @@ pub enum Type {
     TraitObject(String),              // Trait object: dyn Trait
     Option(Box<Type>),
     Result(Box<Type>, Box<Type>),
-    Vec(Box<Type>),
+    Vec(Box<Type>),          // Dynamic array: Vec<T>
+    Array(Box<Type>, usize), // Fixed-size array: [T; N]
     Reference(Box<Type>),
     MutableReference(Box<Type>),
     Tuple(Vec<Type>), // Tuple type: (T1, T2, T3)
@@ -497,6 +498,7 @@ impl Parser {
                 self.type_to_string(err)
             ),
             Type::Vec(inner) => format!("Vec<{}>", self.type_to_string(inner)),
+            Type::Array(inner, size) => format!("[{}; {}]", self.type_to_string(inner), size),
             Type::Tuple(types) => {
                 let type_strs: Vec<String> = types.iter().map(|t| self.type_to_string(t)).collect();
                 format!("({})", type_strs.join(", "))
@@ -1512,16 +1514,29 @@ impl Parser {
                 // Check for fixed-size array syntax: [T; N]
                 if self.current_token() == &Token::Semicolon {
                     self.advance();
-                    // Skip the size expression - we'll just treat it as Vec<T>
-                    // TODO: Properly support fixed-size arrays
-                    while self.current_token() != &Token::RBracket {
-                        self.advance();
-                    }
-                }
 
-                self.expect(Token::RBracket)?;
-                // In Windjammer, [T] and [T; N] both translate to Vec<T> in Rust
-                Type::Vec(inner)
+                    // Parse the size - must be a literal integer
+                    let size = match self.current_token() {
+                        Token::IntLiteral(n) => {
+                            let size = *n as usize;
+                            self.advance();
+                            size
+                        }
+                        _ => {
+                            return Err(format!(
+                                "Expected integer literal for array size, got {:?}",
+                                self.current_token()
+                            ));
+                        }
+                    };
+
+                    self.expect(Token::RBracket)?;
+                    Type::Array(inner, size)
+                } else {
+                    self.expect(Token::RBracket)?;
+                    // [T] without size is a dynamic array (Vec)
+                    Type::Vec(inner)
+                }
             }
             Token::LParen => {
                 // Tuple type: (T1, T2, T3)

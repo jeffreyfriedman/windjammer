@@ -181,6 +181,9 @@ impl HoverProvider {
             Type::Vec(inner) => {
                 format!("Vec<{}>", self.format_type(inner))
             }
+            Type::Array(inner, size) => {
+                format!("[{}; {}]", self.format_type(inner), size)
+            }
             Type::Reference(inner) => {
                 format!("&{}", self.format_type(inner))
             }
