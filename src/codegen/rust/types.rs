@@ -36,10 +36,14 @@ pub fn type_to_rust(type_: &Type) -> String {
         Type::Option(inner) => format!("Option<{}>", type_to_rust(inner)),
         Type::Result(ok, err) => format!("Result<{}, {}>", type_to_rust(ok), type_to_rust(err)),
         Type::Vec(inner) => format!("Vec<{}>", type_to_rust(inner)),
+        Type::Array(inner, size) => format!("[{}; {}]", type_to_rust(inner), size),
         Type::Reference(inner) => {
             // Special case: &[T] (slice) vs &Vec<T>
             if let Type::Vec(elem) = &**inner {
                 format!("&[{}]", type_to_rust(elem))
+            // Special case: &[T; N] stays as &[T; N]
+            } else if let Type::Array(elem, size) = &**inner {
+                format!("&[{}; {}]", type_to_rust(elem), size)
             // Special case: &str instead of &String (more idiomatic Rust)
             } else if matches!(**inner, Type::String) {
                 "&str".to_string()
