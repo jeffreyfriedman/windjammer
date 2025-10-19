@@ -401,35 +401,31 @@ impl CodeGenerator {
             }
         }
 
-        // Handle stdlib imports: std::fs -> use std::fs (Rust stdlib)
-        // Map Windjammer stdlib modules to Rust equivalents
+        // Handle stdlib imports: std::fs -> windjammer_runtime::fs
+        // Map Windjammer stdlib modules to runtime implementations
         if full_path.starts_with("std::") {
             let module_name = full_path.strip_prefix("std::").unwrap();
 
-            // Map to Rust standard library or common crates
+            // Map to windjammer_runtime or Rust stdlib
             let rust_import = match module_name {
-                "fs" => "std::fs",
-                "http" => {
-                    "// HTTP functionality requires external dependencies (implement manually)"
-                }
-                "mime" => "// MIME type detection (implement manually)",
-                "json" => "serde_json",
+                // Implemented in windjammer_runtime
+                "fs" => "windjammer_runtime::fs",
+                "http" => "windjammer_runtime::http",
+                "mime" => "windjammer_runtime::mime",
+                "json" => "windjammer_runtime::json",
+
+                // Direct Rust stdlib mappings
                 "time" => "std::time",
                 "env" => "std::env",
                 "process" => "std::process",
                 "collections" => "std::collections",
-                "math" => "// Math functions use std library primitives",
+                "math" => "std", // Math functions use std library primitives
+
                 _ => {
-                    // For unknown stdlib modules, use the module name as-is
-                    // This allows the inlined module code to work
-                    module_name
+                    // Unknown module - try windjammer_runtime first
+                    return format!("use windjammer_runtime::{};\n", module_name);
                 }
             };
-
-            // Skip comment-only imports
-            if rust_import.starts_with("//") {
-                return format!("{}\n", rust_import);
-            }
 
             if let Some(alias_name) = alias {
                 return format!("use {} as {};\n", rust_import, alias_name);

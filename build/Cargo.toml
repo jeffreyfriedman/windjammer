@@ -6,9 +6,16 @@ edition = "2021"
 # Prevent this from being treated as part of parent workspace
 [workspace]
 
+[dependencies]
+windjammer-runtime = { path = "/Users/jeffreyfriedman/src/windjammer/crates/windjammer-runtime" }
+
 [[bin]]
 name = "test_stdlib_check"
 path = "test_stdlib_check.rs"
+
+[[bin]]
+name = "http_server_test"
+path = "http_server_test.rs"
 
 [[bin]]
 name = "main"
