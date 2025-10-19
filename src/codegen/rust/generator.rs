@@ -416,9 +416,11 @@ impl CodeGenerator {
 
                 // Additional modules
                 "async" => "windjammer_runtime::async_runtime",
+                "cli" => "windjammer_runtime::cli",
                 "collections" => "windjammer_runtime::collections",
                 "crypto" => "windjammer_runtime::crypto",
                 "csv" => "windjammer_runtime::csv_mod",
+                "db" => "windjammer_runtime::db",
                 "encoding" => "windjammer_runtime::encoding",
                 "env" => "windjammer_runtime::env",
                 "log" => "windjammer_runtime::log_mod",
@@ -427,12 +429,8 @@ impl CodeGenerator {
                 "random" => "windjammer_runtime::random",
                 "regex" => "windjammer_runtime::regex_mod",
                 "strings" => "windjammer_runtime::strings",
+                "testing" => "windjammer_runtime::testing",
                 "time" => "windjammer_runtime::time",
-
-                // Not yet implemented - will add later
-                "cli" | "db" | "testing" => {
-                    return format!("// TODO: Implement windjammer_runtime::{}\n", module_name);
-                }
 
                 _ => {
                     // Unknown module - try windjammer_runtime

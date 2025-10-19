@@ -12,9 +12,11 @@ pub mod mime;
 
 // Additional stdlib modules
 pub mod async_runtime;
+pub mod cli;
 pub mod collections;
 pub mod crypto;
 pub mod csv_mod;
+pub mod db;
 pub mod encoding;
 pub mod env;
 pub mod log_mod;
@@ -23,6 +25,7 @@ pub mod process;
 pub mod random;
 pub mod regex_mod;
 pub mod strings;
+pub mod testing;
 pub mod time;
 
 // Re-export commonly used types

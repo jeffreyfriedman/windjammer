@@ -2,7 +2,7 @@
 //!
 //! Windjammer's `std::csv` module maps to these functions.
 
-use csv::{Reader, Writer};
+use csv::Writer;
 use std::io::Cursor;
 
 /// Parse CSV string into rows
