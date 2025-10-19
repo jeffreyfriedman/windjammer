@@ -178,34 +178,3 @@ mod tests {
         assert!(!input.is_key_pressed(KeyCode::Space));
     }
 }
-
-    // Special keys
-    Space,
-    Enter,
-    Escape,
-    Tab,
-    Backspace,
-    Delete,
-    Shift,
-    Control,
-    Alt,
-}
-
-/// Mouse buttons
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub enum MouseButton {
-    Left,
-    Right,
-    Middle,
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn test_input_creation() {
-        let input = Input::new();
-        assert!(!input.is_key_pressed(KeyCode::Space));
-    }
-}
