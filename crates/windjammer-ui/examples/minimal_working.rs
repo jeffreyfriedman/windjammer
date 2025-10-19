@@ -9,7 +9,6 @@
 //! # Open http://localhost:8000/examples/minimal_working.html
 //! ```
 
-
 fn main() {
     #[cfg(target_arch = "wasm32")]
     run_wasm();
