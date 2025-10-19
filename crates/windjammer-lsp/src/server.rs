@@ -258,6 +258,7 @@ impl WindjammerLanguageServer {
                 )
             }
             Type::Vec(inner) => format!("Vec<{}>", self.type_to_string(inner)),
+            Type::Array(inner, size) => format!("[{}; {}]", self.type_to_string(inner), size),
             Type::Reference(inner) => format!("&{}", self.type_to_string(inner)),
             Type::MutableReference(inner) => format!("&mut {}", self.type_to_string(inner)),
             Type::Tuple(types) => {
