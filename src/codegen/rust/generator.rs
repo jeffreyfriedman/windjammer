@@ -1567,18 +1567,13 @@ impl CodeGenerator {
         match expr_to_generate {
             Expression::Literal(lit) => self.generate_literal(lit),
             Expression::Identifier(name) => {
-                // Qualified paths already use :: from parser
+                // Qualified paths use :: from parser (e.g., std::fs::read)
                 // Simple identifiers: variable_name -> variable_name
-                if name.contains('.') {
-                    // Legacy support: convert . to :: if found
-                    name.replace('.', "::")
+                // Check if this is a struct field and we're in an impl block
+                if self.in_impl_block && self.current_struct_fields.contains(name) {
+                    format!("self.{}", name)
                 } else {
-                    // Check if this is a struct field and we're in an impl block
-                    if self.in_impl_block && self.current_struct_fields.contains(name) {
-                        format!("self.{}", name)
-                    } else {
-                        name.clone()
-                    }
+                    name.clone()
                 }
             }
             Expression::Binary { left, op, right } => {
