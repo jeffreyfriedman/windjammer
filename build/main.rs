@@ -1,39 +1,57 @@
-
-
-
-use std::http::*;
-
-use std::json::*;
-
-
-#[derive(Serialize, Deserialize)]
-struct User {
-    id: i64,
-    name: String,
-    email: String,
+#[inline]
+fn greet(name: &String) -> String {
+    format!("Hello, {}!", name)
 }
 
-#[derive(Serialize, Deserialize)]
-struct ApiResponse {
-    message: String,
-    status: String,
+#[inline]
+fn add(x: i64, y: i64) -> i64 {
+    x + y
 }
 
-#[tokio::main]
-async fn main() {
-    println!("Starting web application...");
-    println!("This is a template for building web services with Windjammer");
-    println!("");
-    println!("Example: Making an HTTP request");
-    match http.get("https://jsonplaceholder.typicode.com/users/1").await {
-        Ok(response) => {
-            println!("Status: {}", response.status_code());
-            match response.text().await {
-                Ok(body) => println!("Response: {}", body),
-                Err(e) => println!("Error reading response: {:?}", e),
-            }
-        },
-        Err(e) => println!("Error making request: {:?}", e),
+#[inline]
+fn increment(counter: &mut i64) {
+    counter = counter + 1;
+}
+
+#[inline]
+fn sign(x: i64) -> String {
+    if x >= 0 { "positive" } else { "negative" }
+}
+
+#[inline]
+fn describe_number(x: i64) -> String {
+    match x {
+        0 => "zero",
+        1 => "one",
+        n if n < 0 => "negative",
+        n if n > 100 => "large",
+        _ => "other",
     }
+}
+
+#[inline]
+fn abs(x: i64) -> i64 {
+    if x < 0 {
+        -x
+    } else {
+        x
+    }
+}
+
+fn main() {
+    let name = "World";
+    println!("{}", greet(&name));
+    let x = 5;
+    let y = 10;
+    println!("{} + {} = {}", x, y, add(x, y));
+    let mut count = 0;
+    increment(&mut count);
+    println!("Counter: {}", count);
+    println!("5 is {}", sign(5));
+    println!("-3 is {}", sign(-3));
+    for i in 0..5 {
+        println!("{} is {}", i, describe_number(i));
+    }
+    println!("abs(-42) = {}", abs(-42))
 }
 

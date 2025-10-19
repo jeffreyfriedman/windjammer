@@ -7,8 +7,8 @@
 //! - Integrates with wgpu for rendering
 
 use winit::{
-    event::{Event, WindowEvent},
-    event_loop::{ControlFlow, EventLoop},
+    event::Event,
+    event_loop::EventLoop,
     window::{Window as WinitWindow, WindowBuilder},
 };
 

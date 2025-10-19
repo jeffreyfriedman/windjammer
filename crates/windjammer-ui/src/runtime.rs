@@ -6,7 +6,7 @@
 //! - Runtime handles all the complexity
 //!
 //! Architecture:
-//! ```
+//! ```text
 //! Component State → Signal<T> → Update → Notify Runtime → Re-render → Patch DOM
 //! ```
 

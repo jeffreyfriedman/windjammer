@@ -155,6 +155,10 @@ name = "ternary_operator"
 path = "ternary_operator.rs"
 
 [[bin]]
+name = "test_compound"
+path = "test_compound.rs"
+
+[[bin]]
 name = "temp_mut"
 path = "temp_mut.rs"
 
@@ -193,6 +197,10 @@ path = "counter_web.rs"
 [[bin]]
 name = "test_use_syntax"
 path = "test_use_syntax.rs"
+
+[[bin]]
+name = "test_underscore"
+path = "test_underscore.rs"
 
 [[bin]]
 name = "request_id"
