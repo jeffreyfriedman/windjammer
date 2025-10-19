@@ -1112,25 +1112,15 @@ impl Parser {
             }
         }
 
-        // Parse the rest of the path (identifiers separated by . or :: or /)
+        // Parse the rest of the path (identifiers separated by :: or /)
         loop {
             if let Token::Ident(name) = self.current_token() {
                 let name = name.clone();
                 path_str.push_str(&name);
                 self.advance();
 
-                // Check for . or :: or / as separator
-                if self.current_token() == &Token::Dot {
-                    path_str.push('.');
-                    self.advance();
-
-                    // Check if next token is * (glob import)
-                    if self.current_token() == &Token::Star {
-                        path_str.push('*');
-                        self.advance();
-                        break;
-                    }
-                } else if self.current_token() == &Token::ColonColon {
+                // Check for :: or / as separator (. is NOT supported - use :: for modules)
+                if self.current_token() == &Token::ColonColon {
                     path_str.push_str("::");
                     self.advance();
 
@@ -1143,6 +1133,9 @@ impl Parser {
                 } else if self.current_token() == &Token::Slash {
                     path_str.push('/');
                     self.advance();
+                } else if self.current_token() == &Token::Dot {
+                    // ERROR: . is not allowed for module paths, use :: instead
+                    return Err("Use '::' for module paths, not '.'. Example: 'use std::fs' not 'use std.fs'".to_string());
                 } else {
                     break;
                 }
@@ -1153,12 +1146,10 @@ impl Parser {
             }
         }
 
-        // Check for braced imports: use module.{A, B, C} or use module::{A, B, C}
+        // Check for braced imports: use module::{A, B, C}
         if self.current_token() == &Token::LBrace {
-            // Remove trailing dot or :: if present (already added by previous iteration)
-            if path_str.ends_with('.') {
-                path_str.pop();
-            } else if path_str.ends_with("::") {
+            // Remove trailing :: if present (already added by previous iteration)
+            if path_str.ends_with("::") {
                 path_str.pop();
                 path_str.pop();
             }
