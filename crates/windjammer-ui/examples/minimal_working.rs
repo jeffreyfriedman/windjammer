@@ -9,7 +9,6 @@
 //! # Open http://localhost:8000/examples/minimal_working.html
 //! ```
 
-use windjammer_ui::vdom::VNode;
 
 fn main() {
     #[cfg(target_arch = "wasm32")]

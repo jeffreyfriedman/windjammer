@@ -275,11 +275,11 @@ if (import.meta.url === `file://${process.argv[1]}`) {
                 format!("[{}]", js_patterns.join(", "))
             }
             crate::parser::Pattern::EnumVariant(variant, binding) => {
+                use crate::parser::EnumPatternBinding;
                 // JavaScript doesn't have pattern matching like Rust, simplify
-                if let Some(bind) = binding {
-                    bind.clone()
-                } else {
-                    variant.clone()
+                match binding {
+                    EnumPatternBinding::Named(bind) => bind.clone(),
+                    EnumPatternBinding::Wildcard | EnumPatternBinding::None => variant.clone(),
                 }
             }
             crate::parser::Pattern::Literal(lit) => {
@@ -774,10 +774,14 @@ if (import.meta.url === `file://${process.argv[1]}`) {
             Pattern::Identifier(id) => format!("(({} = {}) || true)", id, match_value),
             Pattern::Literal(lit) => format!("{} === {}", match_value, self.generate_literal(lit)),
             Pattern::EnumVariant(name, binding) => {
-                if let Some(var) = binding {
-                    format!("{} === {}.{}", match_value, name, var)
-                } else {
-                    format!("{} === {}", match_value, name)
+                use crate::parser::EnumPatternBinding;
+                match binding {
+                    EnumPatternBinding::Named(var) => {
+                        format!("{} === {}.{}", match_value, name, var)
+                    }
+                    EnumPatternBinding::Wildcard | EnumPatternBinding::None => {
+                        format!("{} === {}", match_value, name)
+                    }
                 }
             }
             Pattern::Or(patterns) => {

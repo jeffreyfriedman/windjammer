@@ -41,6 +41,8 @@ pub struct CodeGenerator {
     // IMPLICIT SELF SUPPORT: Track struct fields for implicit self references
     current_struct_fields: std::collections::HashSet<String>, // Field names in current impl block
     in_impl_block: bool, // true if currently generating code for an impl block
+    // FUNCTION CONTEXT: Track current function parameters for compound assignment optimization
+    current_function_params: Vec<crate::parser::Parameter>, // Parameters of the current function
 }
 
 impl CodeGenerator {
@@ -72,6 +74,7 @@ impl CodeGenerator {
             current_statement_idx: 0,
             current_struct_fields: std::collections::HashSet::new(),
             in_impl_block: false,
+            current_function_params: Vec::new(),
         }
     }
 
@@ -788,6 +791,9 @@ impl CodeGenerator {
             self.clone_optimizations.insert(opt.variable.clone());
         }
 
+        // Track function parameters for compound assignment optimization
+        self.current_function_params = func.parameters.clone();
+
         // PHASE 8 OPTIMIZATION: Load SmallVec optimizations for this function
         self.smallvec_optimizations.clear();
         for opt in &analyzed.smallvec_optimizations {
@@ -1037,10 +1043,11 @@ impl CodeGenerator {
                 format!("({})", rust_patterns.join(", "))
             }
             Pattern::EnumVariant(variant, binding) => {
-                if let Some(bind) = binding {
-                    format!("{}({})", variant, bind)
-                } else {
-                    variant.clone()
+                use crate::parser::EnumPatternBinding;
+                match binding {
+                    EnumPatternBinding::Named(name) => format!("{}({})", variant, name),
+                    EnumPatternBinding::Wildcard => format!("{}(_)", variant),
+                    EnumPatternBinding::None => variant.clone(),
                 }
             }
             Pattern::Literal(lit) => self.generate_literal(lit),
@@ -1314,7 +1321,16 @@ impl CodeGenerator {
                             if left_var == var_name {
                                 // Check if we have this optimization hint
                                 if self.assignment_optimizations.contains_key(var_name) {
-                                    // Generate compound assignment
+                                    // Check if target is a mutable reference parameter (needs deref)
+                                    // Parameters with assignments inferred to need &mut need deref
+                                    let is_mut_param = self.current_function_params
+                                        .iter()
+                                        .any(|p| p.name == *var_name);
+                                    
+                                    // Generate compound assignment with deref if needed
+                                    if is_mut_param {
+                                        output.push('*');
+                                    }
                                     output.push_str(&self.generate_expression(target));
                                     output.push_str(match op {
                                         crate::parser::BinaryOp::Add => " += ",
@@ -1371,10 +1387,11 @@ impl CodeGenerator {
             Pattern::Wildcard => "_".to_string(),
             Pattern::Identifier(name) => name.clone(),
             Pattern::EnumVariant(name, binding) => {
-                if let Some(b) = binding {
-                    format!("{}({})", name, b)
-                } else {
-                    name.clone()
+                use crate::parser::EnumPatternBinding;
+                match binding {
+                    EnumPatternBinding::Named(b) => format!("{}({})", name, b),
+                    EnumPatternBinding::Wildcard => format!("{}(_)", name),
+                    EnumPatternBinding::None => name.clone(),
                 }
             }
             Pattern::Literal(lit) => self.generate_literal(lit),
