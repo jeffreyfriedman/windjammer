@@ -406,23 +406,36 @@ impl CodeGenerator {
         if full_path.starts_with("std::") {
             let module_name = full_path.strip_prefix("std::").unwrap();
 
-            // Map to windjammer_runtime or Rust stdlib
+            // Map to windjammer_runtime (all stdlib modules are now implemented!)
             let rust_import = match module_name {
-                // Implemented in windjammer_runtime
+                // Core modules
                 "fs" => "windjammer_runtime::fs",
                 "http" => "windjammer_runtime::http",
                 "mime" => "windjammer_runtime::mime",
                 "json" => "windjammer_runtime::json",
 
-                // Direct Rust stdlib mappings
-                "time" => "std::time",
-                "env" => "std::env",
-                "process" => "std::process",
-                "collections" => "std::collections",
-                "math" => "std", // Math functions use std library primitives
+                // Additional modules
+                "async" => "windjammer_runtime::async_runtime",
+                "collections" => "windjammer_runtime::collections",
+                "crypto" => "windjammer_runtime::crypto",
+                "csv" => "windjammer_runtime::csv_mod",
+                "encoding" => "windjammer_runtime::encoding",
+                "env" => "windjammer_runtime::env",
+                "log" => "windjammer_runtime::log_mod",
+                "math" => "windjammer_runtime::math",
+                "process" => "windjammer_runtime::process",
+                "random" => "windjammer_runtime::random",
+                "regex" => "windjammer_runtime::regex_mod",
+                "strings" => "windjammer_runtime::strings",
+                "time" => "windjammer_runtime::time",
+
+                // Not yet implemented - will add later
+                "cli" | "db" | "testing" => {
+                    return format!("// TODO: Implement windjammer_runtime::{}\n", module_name);
+                }
 
                 _ => {
-                    // Unknown module - try windjammer_runtime first
+                    // Unknown module - try windjammer_runtime
                     return format!("use windjammer_runtime::{};\n", module_name);
                 }
             };
