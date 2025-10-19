@@ -58,10 +58,14 @@ pub fn open_sqlite(path: &str) -> Result<Connection, String> {
 /// Open a PostgreSQL database connection
 /// Format: "postgres://user:password@host:port/database"
 pub fn open_postgres(connection_string: &str) -> Result<Connection, String> {
-    if !connection_string.starts_with("postgres://") && !connection_string.starts_with("postgresql://") {
-        return Err("PostgreSQL connection string must start with postgres:// or postgresql://".to_string());
+    if !connection_string.starts_with("postgres://")
+        && !connection_string.starts_with("postgresql://")
+    {
+        return Err(
+            "PostgreSQL connection string must start with postgres:// or postgresql://".to_string(),
+        );
     }
-    
+
     Ok(Connection {
         connection_string: connection_string.to_string(),
         db_type: DatabaseType::Postgres,
@@ -70,7 +74,9 @@ pub fn open_postgres(connection_string: &str) -> Result<Connection, String> {
 
 /// Open a database connection (auto-detect type)
 pub fn open(connection_string: &str) -> Result<Connection, String> {
-    if connection_string.starts_with("postgres://") || connection_string.starts_with("postgresql://") {
+    if connection_string.starts_with("postgres://")
+        || connection_string.starts_with("postgresql://")
+    {
         open_postgres(connection_string)
     } else {
         open_sqlite(connection_string)
@@ -177,7 +183,7 @@ mod tests {
         columns.insert("age".to_string(), "30".to_string());
         columns.insert("active".to_string(), "true".to_string());
         columns.insert("score".to_string(), "95.5".to_string());
-        
+
         let row = Row { columns };
         assert_eq!(row.get("name"), Some("Alice".to_string()));
         assert_eq!(row.get_int("age"), Some(30));
@@ -201,4 +207,3 @@ mod tests {
         assert!(result.is_err());
     }
 }
-

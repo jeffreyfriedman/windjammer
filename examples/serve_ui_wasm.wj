@@ -1,0 +1,49 @@
+// Serve Windjammer UI WASM examples using std::http
+use std::http
+use std::fs
+use std::mime
+
+fn serve_file(req: http::Request) -> http::ServerResponse {
+    let path = req.path()
+    
+    // Map root to index.html
+    let file_path = if path == "/" {
+        "crates/windjammer-ui/examples/interactive_counter.html"
+    } else {
+        // Remove leading slash and serve from examples directory
+        let clean_path = path.trim_start_matches("/")
+        format!("crates/windjammer-ui/examples/{}", clean_path)
+    }
+    
+    // Read file
+    let content_result = fs::read_bytes(file_path)
+    if content_result.is_err() {
+        return http::ServerResponse::not_found(format!("File not found: {}", file_path))
+    }
+    
+    let content = content_result.unwrap()
+    
+    // Determine MIME type
+    let mime_type = mime::from_filename(file_path)
+    
+    // Return response with correct content type
+    return http::ServerResponse::ok(content).with_header("Content-Type", mime_type)
+}
+
+@async
+fn main() {
+    println!("Starting Windjammer UI WASM server on http://127.0.0.1:8080")
+    println!("Serving from: crates/windjammer-ui/examples/")
+    println!("Open http://127.0.0.1:8080 in your browser")
+    
+    let router = http::Router::new()
+        .get("/*", serve_file)
+    
+    let result = http::serve("127.0.0.1:8080", router).await
+    if result.is_ok() {
+        println!("Server stopped")
+    } else {
+        println!("Server error: {}", result.unwrap_err())
+    }
+}
+
