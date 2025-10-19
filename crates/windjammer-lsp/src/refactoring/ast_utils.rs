@@ -98,6 +98,7 @@ pub fn format_type(ty: &Type) -> String {
         Type::Option(inner) => format!("Option<{}>", format_type(inner)),
         Type::Result(ok, err) => format!("Result<{}, {}>", format_type(ok), format_type(err)),
         Type::Vec(inner) => format!("Vec<{}>", format_type(inner)),
+        Type::Array(inner, size) => format!("[{}; {}]", format_type(inner), size),
         Type::Reference(inner) => format!("&{}", format_type(inner)),
         Type::MutableReference(inner) => format!("&mut {}", format_type(inner)),
         Type::Tuple(types) => {
