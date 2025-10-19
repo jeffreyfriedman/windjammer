@@ -72,26 +72,35 @@ impl<C: Component + 'static> ComponentRuntime<C> {
     /// Re-render the component (called when state changes)
     #[cfg(target_arch = "wasm32")]
     pub fn re_render(&self) -> Result<(), String> {
-        use crate::renderer::WebRenderer;
+        use crate::renderer::{Renderer, WebRenderer};
+        use crate::vdom::diff;
 
         let new_vnode = self.component.borrow().render();
 
-        // For now, do a full re-render (optimized diffing/patching coming later)
-        if let Some(root) = &self.root_element {
-            // Clear existing content
-            while let Some(child) = root.first_child() {
-                root.remove_child(&child)
-                    .map_err(|_| "Failed to remove child")?;
+        // Get the old VNode
+        let old_vnode = self.current_vnode.borrow();
+        
+        if let Some(old) = old_vnode.as_ref() {
+            // Compute diff patches
+            let patches = diff(old, &new_vnode);
+            
+            // Apply patches efficiently instead of full re-render
+            if !patches.is_empty() {
+                let mut renderer = WebRenderer::new();
+                renderer.patch(&patches)?;
             }
-
-            // Render new content
-            let renderer = WebRenderer::new();
-            let dom_node = renderer.create_element(&new_vnode)?;
-            root.append_child(&dom_node)
-                .map_err(|_| "Failed to append new content")?;
+        } else {
+            // First render - do full render
+            if let Some(root) = &self.root_element {
+                let renderer = WebRenderer::new();
+                let dom_node = renderer.create_element(&new_vnode)?;
+                root.append_child(&dom_node)
+                    .map_err(|_| "Failed to append new content")?;
+            }
         }
 
         // Update stored VNode
+        drop(old_vnode);  // Release borrow before mut borrow
         *self.current_vnode.borrow_mut() = Some(new_vnode);
 
         Ok(())

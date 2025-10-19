@@ -271,24 +271,56 @@ impl Renderer for WebRenderer {
         #[cfg(target_arch = "wasm32")]
         {
             use crate::vdom::Patch;
+            use wasm_bindgen::JsCast;
+
+            let root = self.root.as_ref().ok_or("No root element")?;
 
             for patch in patches {
                 match patch {
-                    Patch::Replace { .. } => {
-                        // Full re-render for now
-                        // In production, would do targeted replacement
+                    Patch::Replace { path, node } => {
+                        // Find the node at path and replace it
+                        let target = self.find_node_at_path(root, path)?;
+                        let new_node = self.create_element(node)?;
+                        
+                        if let Some(parent) = target.parent_node() {
+                            parent.replace_child(&new_node, &target)
+                                .map_err(|_| "Failed to replace node")?;
+                        }
                     }
-                    Patch::UpdateText { .. } => {
+                    Patch::UpdateText { path, content } => {
                         // Update text node content
+                        let target = self.find_node_at_path(root, path)?;
+                        if let Some(text_node) = target.dyn_ref::<web_sys::Text>() {
+                            text_node.set_data(content);
+                        }
                     }
-                    Patch::SetAttribute { .. } => {
-                        // Set attribute on element (or remove if value is empty)
+                    Patch::SetAttribute { path, key, value } => {
+                        // Set attribute on element
+                        let target = self.find_node_at_path(root, path)?;
+                        if let Some(element) = target.dyn_ref::<web_sys::Element>() {
+                            if value.is_empty() {
+                                element.remove_attribute(key)
+                                    .map_err(|_| format!("Failed to remove attribute: {}", key))?;
+                            } else {
+                                element.set_attribute(key, value)
+                                    .map_err(|_| format!("Failed to set attribute: {}", key))?;
+                            }
+                        }
                     }
-                    Patch::Append { .. } => {
+                    Patch::Append { path, node } => {
                         // Append child node
+                        let target = self.find_node_at_path(root, path)?;
+                        let new_node = self.create_element(node)?;
+                        target.append_child(&new_node)
+                            .map_err(|_| "Failed to append child")?;
                     }
-                    Patch::Remove { .. } => {
+                    Patch::Remove { path } => {
                         // Remove child node
+                        let target = self.find_node_at_path(root, path)?;
+                        if let Some(parent) = target.parent_node() {
+                            parent.remove_child(&target)
+                                .map_err(|_| "Failed to remove child")?;
+                        }
                     }
                 }
             }
@@ -299,6 +331,19 @@ impl Renderer for WebRenderer {
             let _ = patches;
             Ok(())
         }
+    }
+
+    #[cfg(target_arch = "wasm32")]
+    fn find_node_at_path(&self, root: &web_sys::Element, path: &[usize]) -> Result<web_sys::Node, String> {
+        let mut current: web_sys::Node = root.clone().into();
+        
+        for &index in path.iter().skip(1) {  // Skip first index (root)
+            let children = current.child_nodes();
+            current = children.get(index as u32)
+                .ok_or(format!("Child not found at index {}", index))?;
+        }
+        
+        Ok(current)
     }
 }
 
