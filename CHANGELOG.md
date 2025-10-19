@@ -14,7 +14,34 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Summary
 v0.34.0 introduces TWO major frameworks: a Svelte-inspired UI framework for building apps, and a complete 2D/3D game engine. Write once, deploy to Web, Desktop, and Mobile - for both UI apps AND games. Same language, idiomatic Windjammer syntax, Rust performance.
 
-**Major Achievement**: Separated game engine into dedicated `windjammer-game` crate with full ECS, physics, and wgpu rendering backend.
+**Major Achievements**: 
+- Separated game engine into dedicated `windjammer-game` crate with full ECS, physics, and wgpu rendering backend
+- Implemented key language features: `if let` patterns, fixed-size arrays `[T; N]`, closure compound assignments
+- 97/164 examples passing (59%), comprehensive test coverage
+
+### Language Improvements
+
+**Pattern Matching:**
+- `if let` patterns for ergonomic Option/Result handling
+- Desugars to match statements internally
+- Supports all pattern types (Some(x), Ok(v), enum variants)
+- Optional else blocks
+
+**Array Support:**
+- Fixed-size arrays: `[T; N]` type syntax
+- Array initialization: `[value; count]` expression syntax
+- Preserves fixed-size semantics (no unsafe Vec conversion)
+- Proper codegen to Rust's `[T; N]`
+
+**Closure Improvements:**
+- Compound assignments in closures: `|c| *c += 1`
+- Smart parsing: statements when needed, expressions otherwise
+- Maintains backward compatibility
+
+**Module System:**
+- Internal `::` syntax for Rust codegen
+- Public `.` syntax for Windjammer code
+- Consistent across all 170+ examples
 
 ### New Crates
 
