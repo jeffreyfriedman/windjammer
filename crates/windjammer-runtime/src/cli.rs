@@ -36,7 +36,14 @@ pub struct CliArg {
 
 impl CliApp {
     /// Add an argument
-    pub fn arg(mut self, name: &str, short: Option<char>, long: Option<String>, help: &str, required: bool) -> Self {
+    pub fn arg(
+        mut self,
+        name: &str,
+        short: Option<char>,
+        long: Option<String>,
+        help: &str,
+        required: bool,
+    ) -> Self {
         self.args.push(CliArg {
             name: name.to_string(),
             short,
@@ -49,7 +56,13 @@ impl CliApp {
     }
 
     /// Add a flag (no value)
-    pub fn flag(mut self, name: &str, short: Option<char>, long: Option<String>, help: &str) -> Self {
+    pub fn flag(
+        mut self,
+        name: &str,
+        short: Option<char>,
+        long: Option<String>,
+        help: &str,
+    ) -> Self {
         self.args.push(CliArg {
             name: name.to_string(),
             short,
@@ -67,18 +80,14 @@ impl CliApp {
         let name: &'static str = Box::leak(self.name.into_boxed_str());
         let version: &'static str = Box::leak(self.version.into_boxed_str());
         let about: &'static str = Box::leak(self.about.into_boxed_str());
-        
-        let mut cmd = Command::new(name)
-            .version(version)
-            .about(about);
+
+        let mut cmd = Command::new(name).version(version).about(about);
 
         for arg_def in self.args {
             let arg_name: &'static str = Box::leak(arg_def.name.into_boxed_str());
             let arg_help: &'static str = Box::leak(arg_def.help.into_boxed_str());
-            
-            let mut arg = Arg::new(arg_name)
-                .help(arg_help)
-                .required(arg_def.required);
+
+            let mut arg = Arg::new(arg_name).help(arg_help).required(arg_def.required);
 
             if let Some(short) = arg_def.short {
                 arg = arg.short(short);
@@ -140,18 +149,26 @@ mod tests {
 
     #[test]
     fn test_add_arg() {
-        let app = app("test", "1.0", "Test app")
-            .arg("input", Some('i'), Some("input".to_string()), "Input file", true);
+        let app = app("test", "1.0", "Test app").arg(
+            "input",
+            Some('i'),
+            Some("input".to_string()),
+            "Input file",
+            true,
+        );
         assert_eq!(app.args.len(), 1);
         assert_eq!(app.args[0].name, "input");
     }
 
     #[test]
     fn test_add_flag() {
-        let app = app("test", "1.0", "Test app")
-            .flag("verbose", Some('v'), Some("verbose".to_string()), "Verbose output");
+        let app = app("test", "1.0", "Test app").flag(
+            "verbose",
+            Some('v'),
+            Some("verbose".to_string()),
+            "Verbose output",
+        );
         assert_eq!(app.args.len(), 1);
         assert!(!app.args[0].takes_value);
     }
 }
-

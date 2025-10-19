@@ -12,19 +12,19 @@ use windjammer_runtime::*;
 #[test]
 fn test_fs_write_read() {
     use std::fs as std_fs;
-    
+
     let test_file = "/tmp/windjammer_test_fs.txt";
     let content = "Hello, Windjammer!";
-    
+
     // Write
     let write_result = fs::write_string(test_file, content);
     assert!(write_result.is_ok(), "Failed to write: {:?}", write_result);
-    
+
     // Read
     let read_result = fs::read_to_string(test_file);
     assert!(read_result.is_ok(), "Failed to read: {:?}", read_result);
     assert_eq!(read_result.unwrap(), content);
-    
+
     // Cleanup
     let _ = std_fs::remove_file(test_file);
 }
@@ -34,7 +34,7 @@ fn test_fs_exists() {
     let result = fs::exists("/tmp");
     assert!(result.is_ok());
     assert!(result.unwrap());
-    
+
     let result = fs::exists("/nonexistent_path_12345");
     assert!(result.is_ok());
     assert!(!result.unwrap());
@@ -57,7 +57,7 @@ async fn test_http_client_get() {
     // Test against a reliable public API
     let result = http::get("https://httpbin.org/get").await;
     assert!(result.is_ok(), "HTTP GET failed: {:?}", result);
-    
+
     let response = result.unwrap();
     assert!(response.is_success());
     assert_eq!(response.status_code(), 200);
@@ -67,11 +67,11 @@ async fn test_http_client_get() {
 async fn test_http_response_text() {
     let result = http::get("https://httpbin.org/get").await;
     assert!(result.is_ok());
-    
+
     let response = result.unwrap();
     let text_result = response.text().await;
     assert!(text_result.is_ok(), "Failed to get text: {:?}", text_result);
-    
+
     let text = text_result.unwrap();
     assert!(text.contains("httpbin"));
 }
@@ -82,7 +82,7 @@ async fn test_http_post_json() {
         .json(r#"{"test": "data"}"#)
         .send()
         .await;
-    
+
     assert!(result.is_ok(), "HTTP POST failed: {:?}", result);
     let response = result.unwrap();
     assert!(response.is_success());
@@ -95,10 +95,10 @@ async fn test_http_post_json() {
 #[test]
 fn test_json_parse_stringify() {
     let json_str = r#"{"name": "Alice", "age": 30}"#;
-    
+
     let parse_result = json::parse(json_str);
     assert!(parse_result.is_ok(), "Failed to parse: {:?}", parse_result);
-    
+
     let value = parse_result.unwrap();
     let stringify_result = json::stringify(&value);
     assert!(stringify_result.is_ok());
@@ -108,11 +108,11 @@ fn test_json_parse_stringify() {
 fn test_json_get_set() {
     let json_str = r#"{"name": "Alice", "age": 30}"#;
     let mut value = json::parse(json_str).unwrap();
-    
+
     // Get
     let name = json::get(&value, "name");
     assert!(name.is_some());
-    
+
     // Set
     let new_value = json::parse(r#""Bob""#).unwrap();
     let set_result = json::set(&mut value, "name", new_value);
@@ -123,10 +123,10 @@ fn test_json_get_set() {
 fn test_json_array_operations() {
     let json_str = r#"[1, 2, 3, 4, 5]"#;
     let value = json::parse(json_str).unwrap();
-    
+
     let len = json::len(&value);
     assert_eq!(len, 5);
-    
+
     assert!(!json::is_empty(&value));
 }
 
@@ -138,10 +138,10 @@ fn test_json_array_operations() {
 fn test_mime_from_filename() {
     let mime = mime::from_filename("test.html");
     assert_eq!(mime, "text/html");
-    
+
     let mime = mime::from_filename("image.png");
     assert_eq!(mime, "image/png");
-    
+
     let mime = mime::from_filename("data.json");
     assert_eq!(mime, "application/json");
 }
@@ -150,7 +150,7 @@ fn test_mime_from_filename() {
 fn test_mime_from_extension() {
     let mime = mime::from_extension("js");
     assert_eq!(mime, "application/javascript");
-    
+
     let mime = mime::from_extension("css");
     assert_eq!(mime, "text/css");
 }
@@ -169,10 +169,8 @@ fn test_mime_type_checks() {
 
 #[tokio::test]
 async fn test_async_spawn() {
-    let handle = async_runtime::spawn(async {
-        42
-    });
-    
+    let handle = async_runtime::spawn(async { 42 });
+
     let result = handle.await;
     assert!(result.is_ok());
     assert_eq!(result.unwrap(), 42);
@@ -181,12 +179,16 @@ async fn test_async_spawn() {
 #[tokio::test]
 async fn test_async_sleep() {
     use std::time::Instant;
-    
+
     let start = Instant::now();
     async_runtime::sleep(100).await;
     let elapsed = start.elapsed().as_millis();
-    
-    assert!(elapsed >= 100, "Sleep didn't wait long enough: {}ms", elapsed);
+
+    assert!(
+        elapsed >= 100,
+        "Sleep didn't wait long enough: {}ms",
+        elapsed
+    );
 }
 
 // ============================================================================
@@ -196,9 +198,20 @@ async fn test_async_sleep() {
 #[test]
 fn test_cli_app_creation() {
     let app = cli::app("test", "1.0.0", "Test application");
-    let app = app.arg("input", Some('i'), Some("input".to_string()), "Input file", false);
-    let app = app.flag("verbose", Some('v'), Some("verbose".to_string()), "Verbose output");
-    
+    let app = app.arg(
+        "input",
+        Some('i'),
+        Some("input".to_string()),
+        "Input file",
+        false,
+    );
+    let app = app.flag(
+        "verbose",
+        Some('v'),
+        Some("verbose".to_string()),
+        "Verbose output",
+    );
+
     // Can't easily test parse() without mocking args, but we can verify structure
     assert!(true); // App builds successfully
 }
@@ -210,13 +223,13 @@ fn test_cli_app_creation() {
 #[test]
 fn test_collections_hashmap() {
     let mut map = collections::HashMap::new();
-    
+
     collections::HashMap::insert(&mut map, "key1".to_string(), "value1".to_string());
     assert_eq!(collections::HashMap::len(&map), 1);
-    
+
     let value = collections::HashMap::get(&map, "key1");
     assert_eq!(value, Some("value1".to_string()));
-    
+
     assert!(collections::HashMap::contains_key(&map, "key1"));
     assert!(!collections::HashMap::contains_key(&map, "key2"));
 }
@@ -224,11 +237,11 @@ fn test_collections_hashmap() {
 #[test]
 fn test_collections_hashset() {
     let mut set = collections::HashSet::new();
-    
+
     collections::HashSet::insert(&mut set, "item1".to_string());
     collections::HashSet::insert(&mut set, "item2".to_string());
     assert_eq!(collections::HashSet::len(&set), 2);
-    
+
     assert!(collections::HashSet::contains(&set, "item1"));
     assert!(!collections::HashSet::contains(&set, "item3"));
 }
@@ -236,13 +249,19 @@ fn test_collections_hashset() {
 #[test]
 fn test_collections_vecdeque() {
     let mut deque = collections::VecDeque::new();
-    
+
     collections::VecDeque::push_back(&mut deque, "back".to_string());
     collections::VecDeque::push_front(&mut deque, "front".to_string());
-    
+
     assert_eq!(collections::VecDeque::len(&deque), 2);
-    assert_eq!(collections::VecDeque::front(&deque), Some("front".to_string()));
-    assert_eq!(collections::VecDeque::back(&deque), Some("back".to_string()));
+    assert_eq!(
+        collections::VecDeque::front(&deque),
+        Some("front".to_string())
+    );
+    assert_eq!(
+        collections::VecDeque::back(&deque),
+        Some("back".to_string())
+    );
 }
 
 // ============================================================================
@@ -260,13 +279,17 @@ fn test_crypto_sha256() {
 fn test_crypto_password_hashing() {
     let password = "my_secure_password";
     let hash_result = crypto::hash_password(password);
-    assert!(hash_result.is_ok(), "Failed to hash password: {:?}", hash_result);
-    
+    assert!(
+        hash_result.is_ok(),
+        "Failed to hash password: {:?}",
+        hash_result
+    );
+
     let hash = hash_result.unwrap();
     let verify_result = crypto::verify_password(password, &hash);
     assert!(verify_result.is_ok());
     assert!(verify_result.unwrap(), "Password verification failed");
-    
+
     let wrong_verify = crypto::verify_password("wrong_password", &hash);
     assert!(wrong_verify.is_ok());
     assert!(!wrong_verify.unwrap(), "Wrong password should not verify");
@@ -277,7 +300,7 @@ fn test_crypto_base64() {
     let data = "Hello, World!";
     let encoded = crypto::base64_encode(data);
     assert!(!encoded.is_empty());
-    
+
     let decoded_result = crypto::base64_decode(&encoded);
     assert!(decoded_result.is_ok());
     assert_eq!(decoded_result.unwrap(), data);
@@ -292,7 +315,7 @@ fn test_csv_parse() {
     let csv_data = "name,age,city\nAlice,30,NYC\nBob,25,LA";
     let result = csv_mod::parse(csv_data);
     assert!(result.is_ok(), "Failed to parse CSV: {:?}", result);
-    
+
     let rows = result.unwrap();
     assert_eq!(rows.len(), 3); // header + 2 data rows
 }
@@ -303,7 +326,7 @@ fn test_csv_write() {
         vec!["name".to_string(), "age".to_string()],
         vec!["Alice".to_string(), "30".to_string()],
     ];
-    
+
     let result = csv_mod::write(&rows);
     assert!(result.is_ok());
     let csv = result.unwrap();
@@ -319,7 +342,7 @@ fn test_csv_write() {
 fn test_db_open_sqlite() {
     let result = db::open_sqlite(":memory:");
     assert!(result.is_ok(), "Failed to open SQLite: {:?}", result);
-    
+
     let conn = result.unwrap();
     assert_eq!(conn.db_type(), &db::DatabaseType::SQLite);
 }
@@ -327,8 +350,12 @@ fn test_db_open_sqlite() {
 #[test]
 fn test_db_open_postgres() {
     let result = db::open_postgres("postgres://localhost/test");
-    assert!(result.is_ok(), "Failed to create Postgres connection: {:?}", result);
-    
+    assert!(
+        result.is_ok(),
+        "Failed to create Postgres connection: {:?}",
+        result
+    );
+
     let conn = result.unwrap();
     assert_eq!(conn.db_type(), &db::DatabaseType::Postgres);
 }
@@ -337,7 +364,7 @@ fn test_db_open_postgres() {
 fn test_db_auto_detect() {
     let sqlite = db::open(":memory:").unwrap();
     assert_eq!(sqlite.db_type(), &db::DatabaseType::SQLite);
-    
+
     let postgres = db::open("postgres://localhost/test").unwrap();
     assert_eq!(postgres.db_type(), &db::DatabaseType::Postgres);
 }
@@ -351,7 +378,7 @@ fn test_encoding_base64() {
     let data = "Hello, World!";
     let encoded = encoding::base64_encode(data);
     assert!(!encoded.is_empty());
-    
+
     let decoded = encoding::base64_decode(&encoded);
     assert!(decoded.is_ok());
     assert_eq!(decoded.unwrap(), data);
@@ -362,7 +389,7 @@ fn test_encoding_hex() {
     let data = "test";
     let encoded = encoding::hex_encode(data);
     assert_eq!(encoded, "74657374");
-    
+
     let decoded = encoding::hex_decode(&encoded);
     assert!(decoded.is_ok());
     assert_eq!(decoded.unwrap(), data);
@@ -375,11 +402,11 @@ fn test_encoding_hex() {
 #[test]
 fn test_env_set_get() {
     env::set_var("WINDJAMMER_TEST_VAR", "test_value");
-    
+
     let result = env::get_var("WINDJAMMER_TEST_VAR");
     assert!(result.is_ok());
     assert_eq!(result.unwrap(), "test_value");
-    
+
     env::remove_var("WINDJAMMER_TEST_VAR");
     let result = env::get_var("WINDJAMMER_TEST_VAR");
     assert!(result.is_err());
@@ -437,7 +464,7 @@ fn test_math_basic_ops() {
 #[test]
 fn test_math_trig() {
     use std::f64::consts::PI;
-    
+
     assert!((math::sin(0.0) - 0.0).abs() < 0.0001);
     assert!((math::cos(0.0) - 1.0).abs() < 0.0001);
     assert!((math::sin(PI / 2.0) - 1.0).abs() < 0.0001);
@@ -458,7 +485,7 @@ fn test_math_rounding() {
 fn test_process_run() {
     let result = process::run("echo", &["hello"]);
     assert!(result.is_ok(), "Failed to run process: {:?}", result);
-    
+
     let output = result.unwrap();
     assert!(output.success);
     assert!(output.stdout.contains("hello"));
@@ -558,7 +585,7 @@ fn test_strings_split_join() {
     let parts = strings::split(s, ",");
     assert_eq!(parts.len(), 3);
     assert_eq!(parts[0], "a");
-    
+
     let joined = strings::join(&parts, "-");
     assert_eq!(joined, "a-b-c");
 }
@@ -595,7 +622,7 @@ fn test_testing_should_panic() {
         panic!("test");
     });
     assert!(panics);
-    
+
     let no_panic = testing::should_panic(|| {
         // do nothing
     });
@@ -624,7 +651,7 @@ fn test_time_parse_format() {
     let s = "2024-01-15T10:30:00Z";
     let result = time::parse(s, "%Y-%m-%dT%H:%M:%SZ");
     assert!(result.is_ok(), "Failed to parse time: {:?}", result);
-    
+
     let timestamp = result.unwrap();
     let formatted = time::format(timestamp, "%Y-%m-%d");
     assert!(formatted.starts_with("2024-01-15"));
@@ -634,8 +661,7 @@ fn test_time_parse_format() {
 fn test_time_duration() {
     let secs = time::duration_secs(2, 5);
     assert_eq!(secs, 3);
-    
+
     let millis = time::duration_millis(1000, 2000);
     assert_eq!(millis, 1000);
 }
-
