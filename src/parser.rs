@@ -2037,27 +2037,75 @@ impl Parser {
     fn parse_if(&mut self) -> Result<Statement, String> {
         self.expect(Token::If)?;
 
-        let condition = self.parse_expression()?;
+        // Check for `if let` pattern matching
+        if self.current_token() == &Token::Let {
+            self.advance(); // consume 'let'
 
-        self.expect(Token::LBrace)?;
-        let then_block = self.parse_block_statements()?;
-        self.expect(Token::RBrace)?;
+            // Parse pattern
+            let pattern = self.parse_pattern()?;
 
-        let else_block = if self.current_token() == &Token::Else {
-            self.advance();
+            self.expect(Token::Assign)?;
+
+            // Parse value to match against
+            let value = self.parse_expression()?;
+
             self.expect(Token::LBrace)?;
-            let block = self.parse_block_statements()?;
+            let then_block = self.parse_block_statements()?;
             self.expect(Token::RBrace)?;
-            Some(block)
-        } else {
-            None
-        };
 
-        Ok(Statement::If {
-            condition,
-            then_block,
-            else_block,
-        })
+            let else_block = if self.current_token() == &Token::Else {
+                self.advance();
+                self.expect(Token::LBrace)?;
+                let block = self.parse_block_statements()?;
+                self.expect(Token::RBrace)?;
+                Some(block)
+            } else {
+                None
+            };
+
+            // Convert `if let` to a match statement internally
+            // if let Pattern = expr { then } else { else_block }
+            // becomes: match expr { Pattern => { then }, _ => { else_block } }
+            let mut arms = vec![MatchArm {
+                pattern,
+                guard: None,
+                body: Expression::Block(then_block),
+            }];
+
+            // Add wildcard arm for else block
+            if let Some(else_stmts) = else_block {
+                arms.push(MatchArm {
+                    pattern: Pattern::Wildcard,
+                    guard: None,
+                    body: Expression::Block(else_stmts),
+                });
+            }
+
+            Ok(Statement::Match { value, arms })
+        } else {
+            // Regular if statement
+            let condition = self.parse_expression()?;
+
+            self.expect(Token::LBrace)?;
+            let then_block = self.parse_block_statements()?;
+            self.expect(Token::RBrace)?;
+
+            let else_block = if self.current_token() == &Token::Else {
+                self.advance();
+                self.expect(Token::LBrace)?;
+                let block = self.parse_block_statements()?;
+                self.expect(Token::RBrace)?;
+                Some(block)
+            } else {
+                None
+            };
+
+            Ok(Statement::If {
+                condition,
+                then_block,
+                else_block,
+            })
+        }
     }
 
     fn parse_match(&mut self) -> Result<Statement, String> {

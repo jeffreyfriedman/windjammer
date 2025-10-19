@@ -147,6 +147,10 @@ name = "math"
 path = "math.rs"
 
 [[bin]]
+name = "routing_multi_page"
+path = "routing_multi_page.rs"
+
+[[bin]]
 name = "ternary_operator"
 path = "ternary_operator.rs"
 
