@@ -337,17 +337,23 @@ impl Renderer for WebRenderer {
             Ok(())
         }
     }
+}
 
-    #[cfg(target_arch = "wasm32")]
+// Helper methods for WebRenderer
+#[cfg(target_arch = "wasm32")]
+impl WebRenderer {
     fn find_node_at_path(
         &self,
         root: &web_sys::Element,
         path: &[usize],
     ) -> Result<web_sys::Node, String> {
+        use wasm_bindgen::JsCast;
+
         let mut current: web_sys::Node = root.clone().into();
 
         for &index in path.iter().skip(1) {
             // Skip first index (root)
+            // Node has child_nodes() method, but we need to access it correctly
             let children = current.child_nodes();
             current = children
                 .get(index as u32)
