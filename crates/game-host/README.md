@@ -4,44 +4,107 @@ A high-performance, cross-platform 2D/3D game engine for Windjammer.
 
 ## ✨ Features
 
-### Core
-- **ECS Architecture** - Efficient Entity-Component-System
-- **Fixed Timestep Loop** - Consistent physics and game logic (60 UPS)
-- **Cross-Platform** - Web (WASM), Desktop (Windows/macOS/Linux), Mobile (iOS/Android planned)
+### ✅ Implemented (v0.34.0)
 
-### Graphics
-- **wgpu Backend** - Modern graphics API supporting:
-  - Metal (macOS, iOS)
-  - Vulkan (Linux, Android, Windows)
-  - DirectX 12 (Windows)
-  - WebGPU (Web)
-- **2D Sprite Rendering** - Efficient sprite batching
-- **3D Support** - Foundation for 3D games (mesh rendering planned)
+**Math & Transform:**
+- ✅ Vec2/Vec3 with full vector operations (glam-based)
+- ✅ Transform type (position, rotation, scale)
+- ✅ Math utilities (lerp, clamp, deg/rad conversion)
 
-### Physics
-- **2D Physics** - Rapier2D for collision detection and rigid body dynamics
-- **3D Physics** - Rapier3D (optional feature)
+**Input System:**
+- ✅ Input struct with key/mouse state tracking
+- ✅ press_key() / release_key() methods
+- ✅ Support for keyboard and mouse buttons
+- ✅ Frame-based state management
 
-### Input & Time
-- **Input Handling** - Keyboard, mouse, touch support
-- **Time Management** - Delta time, frame counting, FPS tracking
+**Rendering Foundation:**
+- ✅ wgpu backend integration
+- ✅ Vertex2D and sprite types
+- ✅ SpriteBatch for efficient rendering
+- ✅ 2D pipeline API (begin_frame, draw, end_frame)
 
-## 🚀 Quick Start
+**Testing:**
+- ✅ 51 tests covering math, transform, input, rendering
+- ✅ Window configuration types
+
+### ⚠️ In Progress (Alpha)
+
+**Graphics:**
+- ⚠️ 2D sprite rendering (API complete, needs surface integration)
+- ⚠️ Texture loading (not yet implemented)
+- ⚠️ 3D rendering (foundation only)
+
+**Physics:**
+- ⚠️ Rapier2D/3D integration (types defined, not wired up)
+
+**Game Loop:**
+- ⚠️ ECS architecture (types defined, system execution stubbed)
+- ⚠️ Fixed timestep loop (not yet implemented)
+
+**Cross-Platform:**
+- ⚠️ Desktop (needs winit window integration)
+- ⚠️ Web/WASM (needs Canvas/WebGL bindings)
+- ⚠️ Mobile (planned for future)
+
+## 🚀 Quick Start (Alpha)
+
+**Note:** The game engine is in alpha. The examples below show the intended API, but full game loop integration is planned for v0.35.0.
 
 ### Installation
 
-Add to your `Cargo.toml`:
+```bash
+# Clone the repository
+git clone https://github.com/jeffreyfriedman/windjammer
+cd windjammer
 
-```toml
-[dependencies]
-game-host = "0.34.0"
+# The game engine is part of the workspace
+cargo build --package game-host
 ```
 
-### Your First Game
+### Current Capabilities
 
-Create `my_game.wj`:
+You can currently:
+- ✅ Use math types (Vec2, Vec3, Transform)
+- ✅ Create sprites and batches
+- ✅ Handle keyboard/mouse input
+- ✅ Initialize wgpu rendering backend
+
+Example of what works today:
+
+```rust
+use game_host::math::{Vec2, Transform};
+use game_host::input::{Input, KeyCode};
+use game_host::rendering::sprite::{Sprite, SpriteBatch};
+
+fn main() {
+    // Math works
+    let mut transform = Transform::new();
+    transform.translate(Vec2::new(10.0, 20.0));
+    
+    // Input works
+    let mut input = Input::new();
+    input.press_key(KeyCode::Space);
+    
+    // Sprite batching works
+    let mut batch = SpriteBatch::new();
+    let sprite = Sprite {
+        position: Vec2::new(100.0, 100.0),
+        size: Vec2::new(32.0, 32.0),
+        texture_id: Some(0),
+        color: [1.0, 1.0, 1.0, 1.0],
+    };
+    batch.add(sprite);
+    
+    println!("Sprite batch has {} vertices", batch.vertices().len());
+}
+```
+
+### Coming in v0.35.0
+
+Full game loop with window integration:
 
 ```windjammer
+// This API is planned but not yet functional
 use game_host.prelude.*
 
 struct MyGame {
@@ -49,38 +112,14 @@ struct MyGame {
 }
 
 impl GameLoop for MyGame {
-    fn init() {
-        print("Game started!")
-    }
-    
     fn update(delta: f32) {
-        // Update game logic
-        player_pos.x += 100.0 * delta
+        // Game logic
     }
     
     fn render(ctx: RenderContext) {
-        ctx.clear(Color.BLACK)
-        ctx.draw_rect(player_pos.x, player_pos.y, 32.0, 32.0, Color.BLUE)
+        // Drawing
     }
 }
-
-fn main() {
-    let game = MyGame { player_pos: Vec2.ZERO }
-    game_host.run(game)
-}
-```
-
-### Build & Run
-
-```bash
-# Build for native
-windjammer build my_game.wj
-
-# Run
-windjammer run my_game.wj
-
-# Build for WASM
-windjammer build my_game.wj --target wasm
 ```
 
 ## 📚 Examples

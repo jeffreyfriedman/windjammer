@@ -79,11 +79,11 @@ impl<C: Component + 'static> ComponentRuntime<C> {
 
         // Get the old VNode
         let old_vnode = self.current_vnode.borrow();
-        
+
         if let Some(old) = old_vnode.as_ref() {
             // Compute diff patches
             let patches = diff(old, &new_vnode);
-            
+
             // Apply patches efficiently instead of full re-render
             if !patches.is_empty() {
                 let mut renderer = WebRenderer::new();
@@ -100,7 +100,7 @@ impl<C: Component + 'static> ComponentRuntime<C> {
         }
 
         // Update stored VNode
-        drop(old_vnode);  // Release borrow before mut borrow
+        drop(old_vnode); // Release borrow before mut borrow
         *self.current_vnode.borrow_mut() = Some(new_vnode);
 
         Ok(())
