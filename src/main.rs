@@ -439,6 +439,8 @@ impl ModuleCompiler {
         for item in &program.items {
             if let parser::Item::Use { path, alias: _ } = item {
                 let dep_path = path.join(".");
+                // Normalize :: to . for module resolution (both syntaxes are supported)
+                let dep_path = dep_path.replace("::", ".");
                 // Pass the current file's path for resolving relative imports
                 self.compile_module(&dep_path, Some(&file_path))?;
             }
@@ -649,6 +651,8 @@ fn compile_file(
     for item in &program.items {
         if let parser::Item::Use { path, alias: _ } = item {
             let module_path = path.join(".");
+            // Normalize :: to . for module resolution (both syntaxes are supported)
+            let module_path = module_path.replace("::", ".");
             // Compile both std.* and relative imports (./ or ../) and external crates
             module_compiler.compile_module(&module_path, Some(input_path))?;
         }
