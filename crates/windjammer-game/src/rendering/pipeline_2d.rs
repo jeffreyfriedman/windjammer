@@ -7,8 +7,7 @@
 //! - Easy to understand and extend
 
 use super::backend::{GraphicsBackend, Vertex2D};
-use super::sprite::{Sprite, SpriteBatch};
-use crate::math::Vec2;
+use super::sprite::SpriteBatch;
 
 /// 2D rendering pipeline for sprites
 pub struct Pipeline2D {
@@ -16,7 +15,8 @@ pub struct Pipeline2D {
     render_pipeline: Option<wgpu::RenderPipeline>,
     vertex_buffer: Option<wgpu::Buffer>,
     index_buffer: Option<wgpu::Buffer>,
-    bind_group: Option<wgpu::BindGroup>,
+    #[allow(dead_code)]
+    bind_group: Option<wgpu::BindGroup>, // Will be used for textures
 }
 
 impl Pipeline2D {
@@ -34,7 +34,7 @@ impl Pipeline2D {
     }
 
     /// Initialize the rendering pipeline with shaders
-    pub fn init(&mut self, width: u32, height: u32) -> Result<(), String> {
+    pub fn init(&mut self, _width: u32, _height: u32) -> Result<(), String> {
         // Create shader module
         let shader = self
             .backend
