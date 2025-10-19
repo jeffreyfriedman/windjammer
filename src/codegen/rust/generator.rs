@@ -1323,10 +1323,11 @@ impl CodeGenerator {
                                 if self.assignment_optimizations.contains_key(var_name) {
                                     // Check if target is a mutable reference parameter (needs deref)
                                     // Parameters with assignments inferred to need &mut need deref
-                                    let is_mut_param = self.current_function_params
+                                    let is_mut_param = self
+                                        .current_function_params
                                         .iter()
                                         .any(|p| p.name == *var_name);
-                                    
+
                                     // Generate compound assignment with deref if needed
                                     if is_mut_param {
                                         output.push('*');

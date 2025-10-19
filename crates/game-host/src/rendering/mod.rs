@@ -103,6 +103,7 @@ pub struct Texture {
 
 /// Generic handle for assets
 pub struct Handle<T> {
+    #[allow(dead_code)] // Used internally for resource tracking
     id: u64,
     _phantom: std::marker::PhantomData<T>,
 }
@@ -118,10 +119,7 @@ impl<T> Handle<T> {
 
 impl<T> Clone for Handle<T> {
     fn clone(&self) -> Self {
-        Self {
-            id: self.id,
-            _phantom: std::marker::PhantomData,
-        }
+        *self
     }
 }
 
