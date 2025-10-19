@@ -438,9 +438,7 @@ impl ModuleCompiler {
         // Recursively compile dependencies
         for item in &program.items {
             if let parser::Item::Use { path, alias: _ } = item {
-                let dep_path = path.join(".");
-                // Normalize :: to . for module resolution (both syntaxes are supported)
-                let dep_path = dep_path.replace("::", ".");
+                let dep_path = path.join("::");
                 // Pass the current file's path for resolving relative imports
                 self.compile_module(&dep_path, Some(&file_path))?;
             }
@@ -457,10 +455,10 @@ impl ModuleCompiler {
         let rust_code = generator.generate_program(&program, &analyzed);
 
         // Extract module name from path
-        // For "std.json" -> "json"
+        // For "std::json" -> "json"
         // For "./utils" -> "utils"
-        let module_name = if module_path.starts_with("std.") {
-            module_path.strip_prefix("std.").unwrap().to_string()
+        let module_name = if module_path.starts_with("std::") {
+            module_path.strip_prefix("std::").unwrap().to_string()
         } else {
             // For relative paths, use the last component
             module_path
@@ -473,7 +471,7 @@ impl ModuleCompiler {
         };
 
         // Track stdlib imports for Cargo.toml generation
-        if module_path.starts_with("std.") {
+        if module_path.starts_with("std::") {
             self.imported_stdlib_modules.insert(module_name.clone());
         }
 
@@ -490,9 +488,9 @@ impl ModuleCompiler {
         module_path: &str,
         source_file: Option<&Path>,
     ) -> Result<PathBuf> {
-        if module_path.starts_with("std.") {
-            // Stdlib module: std.json -> ./std/json.wj
-            let module_name = module_path.strip_prefix("std.").unwrap();
+        if module_path.starts_with("std::") {
+            // Stdlib module: std::json -> ./std/json.wj
+            let module_name = module_path.strip_prefix("std::").unwrap();
             let mut path = self.stdlib_path.clone();
             path.push(format!("{}.wj", module_name));
 
@@ -650,10 +648,8 @@ fn compile_file(
     // Compile dependencies first
     for item in &program.items {
         if let parser::Item::Use { path, alias: _ } = item {
-            let module_path = path.join(".");
-            // Normalize :: to . for module resolution (both syntaxes are supported)
-            let module_path = module_path.replace("::", ".");
-            // Compile both std.* and relative imports (./ or ../) and external crates
+            let module_path = path.join("::");
+            // Compile both std::* and relative imports (./ or ../) and external crates
             module_compiler.compile_module(&module_path, Some(input_path))?;
         }
     }

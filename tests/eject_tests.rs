@@ -449,7 +449,7 @@ fn test_cargo_dependencies_json() {
     let input = create_temp_wj_project(&[(
         "main.wj",
         r#"
-use std.json
+use std::json
 
 fn main() {
     // Use JSON functionality
@@ -474,9 +474,9 @@ fn test_cargo_dependencies_multiple_modules() {
     let input = create_temp_wj_project(&[(
         "main.wj",
         r#"
-use std.json
-use std.regex
-use std.time
+use std::json
+use std::regex
+use std::time
 
 fn main() {
     // Use multiple stdlib modules
