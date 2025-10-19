@@ -1505,11 +1505,22 @@ impl Parser {
                 Type::String
             }
             Token::LBracket => {
-                // Array/Slice type: [T]
+                // Array/Slice type: [T] or fixed-size array: [T; N]
                 self.advance();
                 let inner = Box::new(self.parse_type()?);
+
+                // Check for fixed-size array syntax: [T; N]
+                if self.current_token() == &Token::Semicolon {
+                    self.advance();
+                    // Skip the size expression - we'll just treat it as Vec<T>
+                    // TODO: Properly support fixed-size arrays
+                    while self.current_token() != &Token::RBracket {
+                        self.advance();
+                    }
+                }
+
                 self.expect(Token::RBracket)?;
-                // In Windjammer, [T] translates to Vec<T> in Rust
+                // In Windjammer, [T] and [T; N] both translate to Vec<T> in Rust
                 Type::Vec(inner)
             }
             Token::LParen => {
@@ -2279,7 +2290,7 @@ impl Parser {
                 }
             }
             Token::LBracket => {
-                // Array literal: [a, b, c]
+                // Array literal: [a, b, c] or array repeat: [value; count]
                 self.advance();
 
                 // Check for empty array []
@@ -2288,8 +2299,24 @@ impl Parser {
                     return Ok(Expression::Array(vec![]));
                 }
 
-                let mut elements = vec![];
-                elements.push(self.parse_expression()?);
+                let first_element = self.parse_expression()?;
+
+                // Check for array repeat syntax: [value; count]
+                if self.current_token() == &Token::Semicolon {
+                    self.advance();
+                    let count = self.parse_expression()?;
+                    self.expect(Token::RBracket)?;
+
+                    // Represent as a macro invocation: vec![value; count]
+                    return Ok(Expression::MacroInvocation {
+                        name: "vec".to_string(),
+                        args: vec![first_element, count],
+                        delimiter: MacroDelimiter::Brackets,
+                    });
+                }
+
+                // Regular array literal
+                let mut elements = vec![first_element];
 
                 while self.current_token() == &Token::Comma {
                     self.advance(); // consume comma
@@ -2762,7 +2789,7 @@ impl Parser {
                 }
             }
             Token::LBracket => {
-                // Array literal: [a, b, c]
+                // Array literal: [a, b, c] or array repeat: [value; count]
                 self.advance();
 
                 // Check for empty array []
@@ -2770,22 +2797,38 @@ impl Parser {
                     self.advance();
                     Expression::Array(vec![])
                 } else {
-                    let mut elements = vec![];
-                    elements.push(self.parse_expression()?);
+                    let first_element = self.parse_expression()?;
 
-                    while self.current_token() == &Token::Comma {
-                        self.advance(); // consume comma
+                    // Check for array repeat syntax: [value; count]
+                    if self.current_token() == &Token::Semicolon {
+                        self.advance();
+                        let count = self.parse_expression()?;
+                        self.expect(Token::RBracket)?;
 
-                        // Allow trailing comma
-                        if self.current_token() == &Token::RBracket {
-                            break;
+                        // Represent as a macro invocation: vec![value; count]
+                        Expression::MacroInvocation {
+                            name: "vec".to_string(),
+                            args: vec![first_element, count],
+                            delimiter: MacroDelimiter::Brackets,
+                        }
+                    } else {
+                        // Regular array literal
+                        let mut elements = vec![first_element];
+
+                        while self.current_token() == &Token::Comma {
+                            self.advance(); // consume comma
+
+                            // Allow trailing comma
+                            if self.current_token() == &Token::RBracket {
+                                break;
+                            }
+
+                            elements.push(self.parse_expression()?);
                         }
 
-                        elements.push(self.parse_expression()?);
+                        self.expect(Token::RBracket)?;
+                        Expression::Array(elements)
                     }
-
-                    self.expect(Token::RBracket)?;
-                    Expression::Array(elements)
                 }
             }
             Token::Match => {
