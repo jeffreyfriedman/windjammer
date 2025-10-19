@@ -50,10 +50,7 @@ mod vdom_tests {
         if let VNode::Element(el) = node {
             assert_eq!(el.attrs.len(), 3);
             assert_eq!(el.attrs.get("type"), Some(&"text".to_string()));
-            assert_eq!(
-                el.attrs.get("placeholder"),
-                Some(&"Enter name".to_string())
-            );
+            assert_eq!(el.attrs.get("placeholder"), Some(&"Enter name".to_string()));
             assert_eq!(el.attrs.get("class"), Some(&"form-control".to_string()));
         }
     }
@@ -88,7 +85,11 @@ mod diff_tests {
         let new = VNode::Text(VText::new("Hello"));
 
         let patches = diff(&old, &new);
-        assert_eq!(patches.len(), 0, "Identical nodes should produce no patches");
+        assert_eq!(
+            patches.len(),
+            0,
+            "Identical nodes should produce no patches"
+        );
     }
 
     #[test]
@@ -135,7 +136,7 @@ mod diff_tests {
             .into();
 
         let patches = diff(&old, &new);
-        assert!(patches.len() >= 1, "Should have at least one patch");
+        assert!(!patches.is_empty(), "Should have at least one patch");
         assert!(
             patches.iter().any(|p| matches!(p, Patch::Append { .. })),
             "Should generate Append patch"
@@ -150,7 +151,7 @@ mod diff_tests {
         let new = VElement::new("div").into();
 
         let patches = diff(&old, &new);
-        assert!(patches.len() >= 1);
+        assert!(!patches.is_empty());
         assert!(patches.iter().any(|p| matches!(p, Patch::Remove { .. })));
     }
 
@@ -179,7 +180,10 @@ mod diff_tests {
             .into();
 
         let patches = diff(&old, &new);
-        assert!(patches.len() >= 3, "Complex diff should generate multiple patches");
+        assert!(
+            patches.len() >= 3,
+            "Complex diff should generate multiple patches"
+        );
     }
 }
 
@@ -195,13 +199,13 @@ mod component_tests {
         fn render(&self) -> VNode {
             VElement::new("div")
                 .attr("class", "counter")
-                .child(VNode::Element(
-                    VElement::new("span").child(VNode::Text(VText::new(format!("Count: {}", self.count)))),
-                ))
+                .child(VNode::Element(VElement::new("span").child(VNode::Text(
+                    VText::new(format!("Count: {}", self.count)),
+                ))))
                 .child(VNode::Element(
                     VElement::new("button")
                         .attr("onclick", "increment")
-                        .child(VNode::Text(VText::new("+")))
+                        .child(VNode::Text(VText::new("+"))),
                 ))
                 .into()
         }
@@ -230,15 +234,14 @@ mod component_tests {
         let vnode2 = counter2.render();
 
         let patches = diff(&vnode1, &vnode2);
-        assert!(patches.len() > 0, "State change should produce patches");
+        assert!(!patches.is_empty(), "State change should produce patches");
     }
 }
 
 mod reactivity_tests {
-    use super::*;
-    use windjammer_ui::reactivity::Signal;
-    use std::rc::Rc;
     use std::cell::RefCell;
+    use std::rc::Rc;
+    use windjammer_ui::reactivity::Signal;
 
     #[test]
     fn test_signal_creation() {
@@ -308,12 +311,12 @@ mod performance_tests {
         for i in 0..100 {
             old_children.push(VNode::Element(
                 VElement::new("div")
-                    .attr("id", &format!("item-{}", i))
+                    .attr("id", format!("item-{}", i))
                     .child(VNode::Text(VText::new(format!("Item {}", i)))),
             ));
             new_children.push(VNode::Element(
                 VElement::new("div")
-                    .attr("id", &format!("item-{}", i))
+                    .attr("id", format!("item-{}", i))
                     .child(VNode::Text(VText::new(format!("Item {}", i)))),
             ));
         }
@@ -325,7 +328,11 @@ mod performance_tests {
         let patches = diff(&old, &new);
         let elapsed = start.elapsed();
 
-        assert_eq!(patches.len(), 0, "Identical large trees should have no patches");
+        assert_eq!(
+            patches.len(),
+            0,
+            "Identical large trees should have no patches"
+        );
         assert!(
             elapsed.as_millis() < 100,
             "Diff of 100 identical nodes should be fast"
@@ -356,4 +363,3 @@ mod performance_tests {
         );
     }
 }
-
