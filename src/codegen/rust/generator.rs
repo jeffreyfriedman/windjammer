@@ -170,9 +170,9 @@ impl CodeGenerator {
         // Check for stdlib modules that need special imports
         for item in &program.items {
             if let Item::Use { path, .. } = item {
-                // Path can be either ["std", "json"] or ["std.json"] depending on parsing
-                let path_str = path.join(".");
-                if (path_str.starts_with("std.") || path_str == "std") && path_str.contains("json")
+                // Path is ["std", "json"] for "use std::json"
+                let path_str = path.join("::");
+                if (path_str.starts_with("std::") || path_str == "std") && path_str.contains("json")
                 {
                     self.needs_serde_imports = true;
                 }
@@ -401,10 +401,10 @@ impl CodeGenerator {
             }
         }
 
-        // Handle stdlib imports: std.fs -> use std::fs (Rust stdlib)
+        // Handle stdlib imports: std::fs -> use std::fs (Rust stdlib)
         // Map Windjammer stdlib modules to Rust equivalents
-        if full_path.starts_with("std.") {
-            let module_name = full_path.strip_prefix("std.").unwrap();
+        if full_path.starts_with("std::") {
+            let module_name = full_path.strip_prefix("std::").unwrap();
 
             // Map to Rust standard library or common crates
             let rust_import = match module_name {
@@ -1567,9 +1567,10 @@ impl CodeGenerator {
         match expr_to_generate {
             Expression::Literal(lit) => self.generate_literal(lit),
             Expression::Identifier(name) => {
-                // Convert qualified paths: std.fs.read -> std::fs::read
-                // But keep simple identifiers: variable_name -> variable_name
+                // Qualified paths already use :: from parser
+                // Simple identifiers: variable_name -> variable_name
                 if name.contains('.') {
+                    // Legacy support: convert . to :: if found
                     name.replace('.', "::")
                 } else {
                     // Check if this is a struct field and we're in an impl block
@@ -1755,7 +1756,7 @@ impl CodeGenerator {
                             "." // x.abs(), value.method()
                         }
                     }
-                    Expression::FieldAccess { .. } => "::", // Module path: std.fs.read() -> std::fs::read()
+                    Expression::FieldAccess { .. } => "::", // Module path: std::fs::read() -> std::fs::read()
                     _ => ".",                               // Instance method on expressions
                 };
 

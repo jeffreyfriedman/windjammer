@@ -445,7 +445,7 @@ pub enum Item {
     Use {
         path: Vec<String>,
         alias: Option<String>,
-    }, // use std.fs as fs -> path=["std", "fs"], alias=Some("fs")
+    }, // use std::fs as fs -> path=["std", "fs"], alias=Some("fs")
     BoundAlias {
         name: String,
         traits: Vec<String>,
