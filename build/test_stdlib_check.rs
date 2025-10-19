@@ -19,11 +19,11 @@ pub fn size(self) -> i64 {
         self::size
 }
 #[inline]
-pub fn is_file(&self, path: &String) -> bool {
+pub fn is_file(path: &String) -> bool {
         false
 }
 #[inline]
-pub fn is_dir(&self, path: &String) -> bool {
+pub fn is_dir(path: &String) -> bool {
         false
 }
 #[inline]
@@ -42,15 +42,15 @@ pub fn path(self) -> String {
         self::path
 }
 #[inline]
-pub fn is_file(&self, path: &String) -> bool {
+pub fn is_file(path: &String) -> bool {
         false
 }
 #[inline]
-pub fn is_dir(&self, path: &String) -> bool {
+pub fn is_dir(path: &String) -> bool {
         false
 }
 #[inline]
-pub fn metadata(&self, path: &String) -> Result<Metadata, String> {
+pub fn metadata(path: &String) -> Result<Metadata, String> {
         Err("Metadata operation failed")
 }
 }
@@ -179,24 +179,11 @@ pub fn is_relative(path: &String) -> bool {
 }
 
 
-use std::fs::*;
+use fs::*;
 
 
 fn main() {
-    println!("=== File System Module Test ===
-");
-    println!("1. Check /tmp directory:");
-    if fs::exists("/tmp") {
-        println!("✓ /tmp exists")
-    } else {
-        println!("✗ /tmp doesn't exist")
-    }
-    if fs::is_dir("/tmp") {
-        println!("✓ /tmp is a directory")
-    } else {
-        println!("✗ /tmp is not a directory")
-    }
-    println!("
-✅ File system test complete!")
+    let content = fs.read_to_string("README.md");
+    print(content)
 }
 

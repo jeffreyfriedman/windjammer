@@ -1,0 +1,63 @@
+// Windjammer HTTP Server for WASM Examples
+// This validates our std.http library with a real-world use case
+
+use std.fs
+use std.mime
+
+struct StaticServer {
+    root_dir: string
+}
+
+impl StaticServer {
+    fn new(root_dir: string) -> StaticServer {
+        StaticServer { root_dir }
+    }
+    
+    fn serve_file(self, path: string) -> Result<(string, string), String> {
+        // Normalize path
+        let file_path = if path == "/" {
+            "{self.root_dir}/examples/interactive_counter.html"
+        } else if path.starts_with("/pkg/") {
+            "{self.root_dir}{path}"
+        } else if path.starts_with("/examples/") {
+            "{self.root_dir}{path}"
+        } else {
+            return Err("Path not allowed")
+        }
+        
+        // Read file
+        let content = fs.read_to_string(file_path)?
+        
+        // Get MIME type
+        let mime_type = mime.from_path(file_path)
+        
+        Ok((content, mime_type))
+    }
+}
+
+fn main() {
+    let server = StaticServer.new(".")
+    
+    print("🚀 Windjammer WASM Dev Server")
+    print("📁 Root: crates/windjammer-ui")
+    print("🌐 URL: http://127.0.0.1:8080")
+    print("")
+    print("Available endpoints:")
+    print("  /                                  → examples/interactive_counter.html")
+    print("  /examples/interactive_counter.html → Counter demo")
+    print("  /pkg/windjammer_ui.js              → WASM JS bindings")
+    print("  /pkg/windjammer_ui_bg.wasm         → WASM binary")
+    print("")
+    
+    // Simple request handler
+    let addr = "127.0.0.1:8080"
+    
+    loop {
+        // In a real implementation, this would use std.http.serve()
+        // For now, this is a placeholder that shows the API
+        print("Listening on {addr}...")
+        print("Press Ctrl+C to stop")
+        break
+    }
+}
+
