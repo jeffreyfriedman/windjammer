@@ -51,7 +51,12 @@ web-sys = { version = "0.3", features = [
 ], optional = true }
 js-sys = { version = "0.3", optional = true }
 
-# Desktop platform (Tauri)
+# Desktop platform (winit + wgpu)
+winit = { version = "0.30", optional = true }
+wgpu = { version = "23.0", optional = true }
+pollster = { version = "0.3", optional = true }
+
+# Desktop platform (Tauri - legacy, keeping for compatibility)
 tauri = { version = "2.0", features = ["protocol-asset"], optional = true }
 
 # Mobile platform (iOS)
@@ -70,7 +75,8 @@ default = ["web"]
 
 # Platform features
 web = ["wasm-bindgen", "web-sys", "js-sys"]
-desktop = ["tauri", "tokio"]
+desktop = ["winit", "wgpu", "pollster", "tokio"]
+desktop-tauri = ["tauri", "tokio"]
 mobile-ios = ["objc", "cocoa"]
 mobile-android = ["jni"]
 
