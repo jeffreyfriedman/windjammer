@@ -28,14 +28,16 @@ impl DesktopPlatform {
     pub fn create_window(&mut self, title: &str, width: u32, height: u32) -> Result<(), String> {
         use winit::event_loop::EventLoop;
         use winit::window::WindowAttributes;
-        
-        let event_loop = EventLoop::new().map_err(|e| format!("Failed to create event loop: {}", e))?;
-        
+
+        let event_loop =
+            EventLoop::new().map_err(|e| format!("Failed to create event loop: {}", e))?;
+
         let window_attrs = WindowAttributes::default()
             .with_title(title)
             .with_inner_size(winit::dpi::LogicalSize::new(width, height));
-            
-        let window = event_loop.create_window(window_attrs)
+
+        let window = event_loop
+            .create_window(window_attrs)
             .map_err(|e| format!("Failed to create window: {}", e))?;
 
         self.window = Some(std::sync::Arc::new(window));
@@ -89,8 +91,8 @@ impl Platform for DesktopPlatform {
             use winit::event::{Event, WindowEvent};
             use winit::event_loop::{ControlFlow, EventLoop};
 
-            let event_loop = EventLoop::new()
-                .map_err(|e| format!("Failed to create event loop: {}", e))?;
+            let event_loop =
+                EventLoop::new().map_err(|e| format!("Failed to create event loop: {}", e))?;
 
             event_loop
                 .run(move |event, elwt| {
