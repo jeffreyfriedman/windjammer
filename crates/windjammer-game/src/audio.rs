@@ -37,9 +37,7 @@ impl AudioSystem {
 
         #[cfg(not(feature = "audio"))]
         {
-            Ok(Self {
-                master_volume: 1.0,
-            })
+            Ok(Self { master_volume: 1.0 })
         }
     }
 
@@ -47,8 +45,7 @@ impl AudioSystem {
     pub fn play_sound(&mut self, path: &str) -> Result<(), String> {
         #[cfg(feature = "audio")]
         {
-            let file =
-                File::open(path).map_err(|e| format!("Failed to open audio file: {}", e))?;
+            let file = File::open(path).map_err(|e| format!("Failed to open audio file: {}", e))?;
             let source = Decoder::new(BufReader::new(file))
                 .map_err(|e| format!("Failed to decode audio: {}", e))?;
 
@@ -78,8 +75,7 @@ impl AudioSystem {
                 sink.stop();
             }
 
-            let file =
-                File::open(path).map_err(|e| format!("Failed to open music file: {}", e))?;
+            let file = File::open(path).map_err(|e| format!("Failed to open music file: {}", e))?;
             let source = Decoder::new(BufReader::new(file))
                 .map_err(|e| format!("Failed to decode music: {}", e))?;
 
