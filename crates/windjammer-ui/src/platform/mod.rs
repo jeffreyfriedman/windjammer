@@ -8,6 +8,7 @@
 pub mod capabilities;
 pub mod capability_impl;
 pub mod desktop;
+pub mod desktop_renderer;
 pub mod mobile;
 pub mod web;
 
