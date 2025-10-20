@@ -1,17 +1,51 @@
-//! Desktop platform implementation (Tauri)
+//! Desktop platform implementation (winit + wgpu)
 
 use super::capabilities::Capability;
 use super::{Platform, PlatformType};
 
+#[cfg(feature = "desktop")]
+use winit::window::Window;
+
 /// Desktop platform implementation
 pub struct DesktopPlatform {
     initialized: bool,
+    #[cfg(feature = "desktop")]
+    window: Option<std::sync::Arc<Window>>,
 }
 
 impl DesktopPlatform {
     /// Create a new desktop platform instance
     pub fn new() -> Self {
-        Self { initialized: false }
+        Self {
+            initialized: false,
+            #[cfg(feature = "desktop")]
+            window: None,
+        }
+    }
+
+    /// Create a window with the given title and size
+    #[cfg(feature = "desktop")]
+    pub fn create_window(&mut self, title: &str, width: u32, height: u32) -> Result<(), String> {
+        use winit::event_loop::EventLoop;
+        use winit::window::WindowAttributes;
+        
+        let event_loop = EventLoop::new().map_err(|e| format!("Failed to create event loop: {}", e))?;
+        
+        let window_attrs = WindowAttributes::default()
+            .with_title(title)
+            .with_inner_size(winit::dpi::LogicalSize::new(width, height));
+            
+        let window = event_loop.create_window(window_attrs)
+            .map_err(|e| format!("Failed to create window: {}", e))?;
+
+        self.window = Some(std::sync::Arc::new(window));
+        Ok(())
+    }
+
+    /// Get a reference to the window
+    #[cfg(feature = "desktop")]
+    pub fn window(&self) -> Option<std::sync::Arc<Window>> {
+        self.window.clone()
     }
 }
 
@@ -33,8 +67,10 @@ impl Platform for DesktopPlatform {
 
         #[cfg(feature = "desktop")]
         {
-            // Initialize Tauri
-            // This would be done by the Tauri runtime
+            // Create default window if not already created
+            if self.window.is_none() {
+                self.create_window("Windjammer App", 800, 600)?;
+            }
         }
 
         self.initialized = true;
@@ -42,10 +78,43 @@ impl Platform for DesktopPlatform {
     }
 
     fn run(&mut self) -> Result<(), String> {
+        if !self.initialized {
+            self.init()?;
+        }
+
         #[cfg(feature = "desktop")]
         {
-            // Tauri event loop
-            // This would be handled by Tauri's runtime
+            // Event loop must be created and run in the same scope
+            // This is a limitation of winit's design
+            use winit::event::{Event, WindowEvent};
+            use winit::event_loop::{ControlFlow, EventLoop};
+
+            let event_loop = EventLoop::new()
+                .map_err(|e| format!("Failed to create event loop: {}", e))?;
+
+            event_loop
+                .run(move |event, elwt| {
+                    elwt.set_control_flow(ControlFlow::Wait);
+
+                    match event {
+                        Event::WindowEvent {
+                            event: WindowEvent::CloseRequested,
+                            ..
+                        } => {
+                            elwt.exit();
+                        }
+                        Event::WindowEvent {
+                            event: WindowEvent::RedrawRequested,
+                            ..
+                        } => {
+                            // Render frame
+                            // TODO: Integrate with wgpu renderer
+                        }
+                        _ => {}
+                    }
+                })
+                .map_err(|e| format!("Event loop error: {}", e))?;
+
             Ok(())
         }
 
