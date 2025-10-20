@@ -8,9 +8,12 @@
 
 pub mod backend;
 pub mod pipeline_2d;
+pub mod pipeline_3d;
 pub mod sprite;
 
+pub use backend::Vertex3D;
 pub use pipeline_2d::Pipeline2D;
+pub use pipeline_3d::{CameraUniform, LightUniform, MaterialUniform, Pipeline3D};
 pub use sprite::{Sprite, SpriteBatch};
 
 use crate::math::{Mat4, Vec2, Vec3, Vec4};
@@ -87,6 +90,26 @@ impl Camera {
             near: 0.1,
             far: 1000.0,
         }
+    }
+
+    /// Build view matrix (look-at)
+    pub fn view_matrix(&self) -> Mat4 {
+        Mat4::look_at_rh(self.position, self.target, self.up)
+    }
+
+    /// Build projection matrix (perspective)
+    pub fn projection_matrix(&self) -> Mat4 {
+        Mat4::perspective_rh(self.fov.to_radians(), self.aspect, self.near, self.far)
+    }
+
+    /// Build combined view-projection matrix
+    pub fn view_projection_matrix(&self) -> Mat4 {
+        self.projection_matrix() * self.view_matrix()
+    }
+
+    /// Build orthographic projection
+    pub fn orthographic(left: f32, right: f32, bottom: f32, top: f32, near: f32, far: f32) -> Mat4 {
+        Mat4::orthographic_rh(left, right, bottom, top, near, far)
     }
 }
 
