@@ -11,8 +11,10 @@ use windjammer_lsp::database::WindjammerDatabase;
 
 #[derive(Debug, Deserialize)]
 struct SearchWorkspaceRequest {
+    #[allow(dead_code)]
     query: String,
     #[serde(default = "default_file_pattern")]
+    #[allow(dead_code)]
     file_pattern: String,
 }
 

@@ -1,0 +1,47 @@
+[package]
+name = "windjammer-runtime"
+version = "0.34.0"
+edition = "2021"
+authors = ["Windjammer Contributors"]
+description = "Runtime library for Windjammer standard library implementations"
+license = "MIT OR Apache-2.0"
+
+[dependencies]
+# HTTP Client & Server
+reqwest = { version = "0.11", features = ["json", "blocking"] }
+axum = { version = "0.7", features = ["macros"] }
+tokio = { version = "1", features = ["full"] }
+tower = "0.4"
+tower-http = { version = "0.5", features = ["fs", "trace"] }
+
+# JSON
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+
+# MIME types
+mime_guess = "2.0"
+
+# File system (uses std::fs, no extra deps needed)
+
+# Async runtime
+async-trait = "0.1"
+
+# Error handling
+anyhow = "1.0"
+thiserror = "1.0"
+
+# URL parsing
+url = "2.5"
+
+# Additional stdlib modules
+clap = { version = "4.5", features = ["derive"] }
+sha2 = "0.10"
+bcrypt = "0.15"
+base64 = "0.21"
+csv = "1.3"
+sqlx = { version = "0.7", features = ["runtime-tokio-native-tls", "sqlite"], optional = true }
+log = "0.4"
+env_logger = "0.11"
+rand = "0.8"
+regex = "1.10"
+chrono = "0.4"

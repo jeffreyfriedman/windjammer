@@ -1,8 +1,8 @@
 // CLI Tool Example - File processor with concurrency
-use std.fs
-use std.path.Path
+use std::fs
+use std::path.Path
 use clap.Parser
-use std.sync.mpsc
+use std::sync.mpsc
 use rayon.prelude
 
 @command(

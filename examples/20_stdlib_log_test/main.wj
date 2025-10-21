@@ -1,5 +1,5 @@
 // Test std/log module
-use std.log
+use std::log
 
 fn main() {
     println!("Testing std/log module...")

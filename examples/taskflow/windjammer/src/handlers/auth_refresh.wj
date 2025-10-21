@@ -1,18 +1,18 @@
 // Token refresh endpoint
 
-use std.http
-use std.json
-use std.log
+use std::http
+use std::json
+use std::log
 
 use ../auth.jwt
 use ../config
 
-@derive(Debug, Serialize, Deserialize)]
+@derive(Debug, Serialize, Deserialize))
 struct RefreshRequest {
     refresh_token: string,
 }
 
-@derive(Debug, Serialize, Deserialize)]
+@derive(Debug, Serialize, Deserialize))
 struct RefreshResponse {
     access_token: string,
     expires_at: int,

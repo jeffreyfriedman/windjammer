@@ -1,7 +1,7 @@
 // Example 47: Simple HTTP Server
 // Demonstrates the simplest possible HTTP server in Windjammer
 
-use std.http
+use std::http
 
 @async
 fn main() {

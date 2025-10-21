@@ -325,11 +325,11 @@ fn optimize_statement_escape_analysis(
             body: optimize_statements_escape_analysis(body, escape_info, stats),
         },
         Statement::For {
-            variable,
+            pattern,
             iterable,
             body,
         } => Statement::For {
-            variable: variable.clone(),
+            pattern: pattern.clone(),
             iterable: optimize_expression_escape_analysis(iterable, escape_info, stats),
             body: optimize_statements_escape_analysis(body, escape_info, stats),
         },

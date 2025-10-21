@@ -4,13 +4,13 @@
 @derive(Clone, Debug, PartialEq)
 struct Point {
     x: int,
-    y: int
+    y: int,
 }
 
 @derive(Clone, Debug, PartialEq, Eq, Hash)
 struct User {
     id: int,
-    name: string
+    name: string,
 }
 
 fn main() {

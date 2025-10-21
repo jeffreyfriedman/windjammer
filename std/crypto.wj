@@ -80,7 +80,7 @@ fn sha512_bytes(data: Vec<u8>) -> Vec<u8> {
 
 // USAGE EXAMPLES (what users should write):
 //
-// use std.crypto
+// use std::crypto
 //
 // fn main() {
 //     // Base64 - Windjammer API! ✅

@@ -1,8 +1,8 @@
 // Prometheus metrics for wschat
 
-use std.http
-use std.json
-use std.time
+use std::http
+use std::json
+use std::time
 
 use ./server.ServerState
 

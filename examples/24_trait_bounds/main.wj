@@ -15,7 +15,7 @@ fn display_and_clone<T: Display + Clone>(value: T) {
 
 // Trait bounds on struct
 struct Container<T: Clone> {
-    value: T
+    value: T,
 }
 
 impl<T: Clone> Container<T> {

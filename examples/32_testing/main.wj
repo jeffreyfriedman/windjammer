@@ -1,7 +1,7 @@
 // Example 32: Testing Framework
 // Demonstrates testing utilities and assertions
 
-use std.testing
+use std::testing
 
 // Function to test
 fn add(a: int, b: int) -> int {

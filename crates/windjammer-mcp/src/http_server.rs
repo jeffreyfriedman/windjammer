@@ -160,6 +160,7 @@ pub struct McpHttpServer {
     config: HttpServerConfig,
     session_manager: Arc<SessionManager>,
     oauth_manager: Option<Arc<OAuthManager>>,
+    #[allow(dead_code)]
     mcp_server: Arc<Mutex<McpServer>>,
 }
 
@@ -332,7 +333,7 @@ mod tests {
     async fn test_session_expiry() {
         let manager = SessionManager::new(1); // 1 second TTL
 
-        let session = manager
+        let _session = manager
             .get_or_create(Some("test-session".to_string()))
             .await;
         assert_eq!(manager.count().await, 1);
@@ -351,11 +352,13 @@ mod tests {
         use std::sync::Arc;
         use tokio::sync::Mutex;
 
-        let mut config = HttpServerConfig::default();
-        config.enable_oauth = true;
-        config.oauth_secret_key = Some("test-secret-key".to_string());
-        config.oauth_issuer = Some("test-issuer".to_string());
-        config.oauth_audience = Some("test-audience".to_string());
+        let config = HttpServerConfig {
+            enable_oauth: true,
+            oauth_secret_key: Some("test-secret-key".to_string()),
+            oauth_issuer: Some("test-issuer".to_string()),
+            oauth_audience: Some("test-audience".to_string()),
+            ..Default::default()
+        };
 
         let mcp_server = Arc::new(Mutex::new(crate::server::McpServer::new().await.unwrap()));
         let http_server = McpHttpServer::new(config, mcp_server).unwrap();

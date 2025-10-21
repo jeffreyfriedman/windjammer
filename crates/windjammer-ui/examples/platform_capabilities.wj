@@ -1,0 +1,176 @@
+// Note: This is a conceptual example showing Windjammer UI syntax
+// In a real application, types would be imported from windjammer_ui
+
+// Platform Capabilities Example
+// Demonstrates filesystem, GPS, camera, clipboard, and notifications
+
+    Filesystem, GPS, Camera, Clipboard, Notifications,
+    Location, Notification, CameraImage
+}
+
+fn demo_filesystem() {
+    print("📁 Filesystem API Demo")
+    print("=" * 40)
+    
+    let fs = Filesystem.new()
+    
+    // Request permission
+    fs.request_permission("/tmp").unwrap()
+    print("✅ Permission granted for /tmp")
+    
+    // Write file
+    let path = "/tmp/windjammer_test.txt"
+    fs.write_text(path, "Hello from Windjammer UI!").unwrap()
+    print("✅ Wrote file: {path}")
+    
+    // Read file
+    let content = fs.read_text(path).unwrap()
+    print("✅ Read file: \"{content}\"")
+    
+    // Check existence
+    print("✅ File exists: {}", fs.exists(path))
+    
+    // List directory
+    let files = fs.list_dir("/tmp").unwrap()
+    print("✅ Files in /tmp: {} files", files.len())
+    
+    // Clean up
+    print("")
+}
+
+fn demo_gps() {
+    print("📍 GPS/Location API Demo")
+    print("=" * 40)
+    
+    let gps = GPS.new()
+    
+    // Enable GPS
+    gps.enable().unwrap()
+    print("✅ GPS enabled")
+    
+    // Set location (simulated)
+    let location = Location {
+        latitude: 37.7749,
+        longitude: -122.4194,
+        altitude: Some(10.0),
+        accuracy: 5.0,
+        timestamp: 1234567890,
+    }
+    gps.set_location(location)
+    print("✅ Location set (simulated)")
+    
+    // Get location
+    let current = gps.get_location().unwrap()
+    print("✅ Current location:")
+    print("   Latitude: {current.latitude}")
+    print("   Longitude: {current.longitude}")
+    print("   Altitude: {current.altitude:?}")
+    print("   Accuracy: ±{current.accuracy}m")
+    print("")
+}
+
+fn demo_camera() {
+    print("📷 Camera API Demo")
+    print("=" * 40)
+    
+    let camera = Camera.new()
+    
+    // Request permission
+    camera.request_permission().unwrap()
+    print("✅ Camera permission granted")
+    
+    // Capture image
+    let image = camera.capture().unwrap()
+    print("✅ Image captured:")
+    print("   Size: {}x{}", image.width, image.height)
+    print("   Format: {image.format:?}")
+    print("   Data size: {} bytes", image.data.len())
+    
+    // Capture another
+    camera.capture().unwrap()
+    print("✅ Second image captured")
+    
+    let images = camera.get_captured_images()
+    print("✅ Total images: {images.len()}")
+    print("")
+}
+
+fn demo_clipboard() {
+    print("📋 Clipboard API Demo")
+    print("=" * 40)
+    
+    let clipboard = Clipboard.new()
+    
+    // Write to clipboard
+    clipboard.write_text("Windjammer UI is awesome!").unwrap()
+    print("✅ Wrote to clipboard")
+    
+    // Read from clipboard
+    let content = clipboard.read_text().unwrap()
+    print("✅ Read from clipboard: \"{content}\"")
+    
+    // Check if has content
+    print("✅ Has content: {clipboard.has_content()}")
+    print("")
+}
+
+fn demo_notifications() {
+    print("🔔 Notifications API Demo")
+    print("=" * 40)
+    
+    let notifications = Notifications.new()
+    
+    // Request permission
+    notifications.request_permission().unwrap()
+    print("✅ Notification permission granted")
+    
+    // Send notifications
+    notifications.send(Notification {
+        title: "Welcome!".to_string(),
+        body: "Windjammer UI is running".to_string(),
+        icon: Some("icon.png".to_string()),
+    }).unwrap()
+    print("✅ Notification sent: Welcome")
+    
+    notifications.send(Notification {
+        title: "New Message".to_string(),
+        body: "You have 3 unread messages".to_string(),
+        icon: None,
+    }).unwrap()
+    print("✅ Notification sent: New Message")
+    
+    let sent = notifications.get_sent()
+    print("✅ Total notifications sent: {sent.len()}")
+    print("")
+}
+
+fn main() {
+    print("=== Platform Capabilities Example ===\n")
+    
+    demo_filesystem()
+    demo_gps()
+    demo_camera()
+    demo_clipboard()
+    demo_notifications()
+    
+    print("🎯 Key Features:")
+    print("  ✅ Permission-based security model")
+    print("  ✅ Cross-platform API (Web, Desktop, Mobile)")
+    print("  ✅ Filesystem access with path restrictions")
+    print("  ✅ GPS/Location services")
+    print("  ✅ Camera capture")
+    print("  ✅ Clipboard read/write")
+    print("  ✅ Native notifications")
+    
+    print("\n🔒 Security:")
+    print("  • All capabilities require explicit permission")
+    print("  • Filesystem access is path-restricted")
+    print("  • Follows principle of least privilege")
+    print("  • Permission denials are graceful")
+    
+    print("\n🌍 Platform Support:")
+    print("  • Web: Uses Web APIs (File API, Geolocation API, etc)")
+    print("  • Desktop: Native file access, system notifications")
+    print("  • Mobile: Native APIs (iOS/Android)")
+}
+

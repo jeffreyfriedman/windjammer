@@ -164,6 +164,10 @@ impl SemanticTokensProvider {
                 self.collect_type_tokens(inner, tokens);
                 return;
             }
+            WJType::Array(inner, _size) => {
+                self.collect_type_tokens(inner, tokens);
+                return;
+            }
             WJType::Result(ok, err) => {
                 self.collect_type_tokens(ok, tokens);
                 self.collect_type_tokens(err, tokens);

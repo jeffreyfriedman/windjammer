@@ -1,13 +1,13 @@
 // Example 41: JSON Serialization
 // Demonstrates JSON handling with Windjammer's std.json abstraction
 
-use std.json
+use std::json
 
 @derive(Serialize, Deserialize, Debug, Clone)
 struct User {
     id: int,
     name: string,
-    email: string
+    email: string,
 }
 
 fn main() {
@@ -19,7 +19,7 @@ fn main() {
     let user = User {
         id: 1,
         name: "Alice".to_string(),
-        email: "alice@example.com".to_string()
+        email: "alice@example.com".to_string(),
     }
     
     // Use Windjammer's json abstraction - no direct serde_json access!

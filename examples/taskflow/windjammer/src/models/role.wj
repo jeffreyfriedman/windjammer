@@ -1,6 +1,6 @@
 // Role-based access control models
 
-@derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+@derive(Debug, Clone, Serialize, Deserialize, PartialEq))
 pub enum Role {
     Admin,
     Member,
@@ -51,7 +51,7 @@ impl Role {
     }
 }
 
-@derive(Debug, Serialize, Deserialize)]
+@derive(Debug, Serialize, Deserialize))
 pub struct UserRole {
     pub user_id: int,
     pub role: Role,

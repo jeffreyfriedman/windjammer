@@ -1,0 +1,117 @@
+// Note: This is a conceptual example showing Windjammer UI syntax
+// In a real application, types would be imported from windjammer_ui
+
+// SSR with Client-Side Hydration Example
+// Demonstrates server-side rendering and rehydrating on the client
+
+
+@component
+struct BlogPost {
+    title: string,
+    content: string,
+    author: string,
+    views: int,
+}
+
+impl BlogPost {
+    fn render() -> VNode {
+        VElement.new("article")
+            .attr("class", "blog-post")
+            .attr("data-component", "BlogPost")
+            .child(VNode.Element(
+                VElement.new("h1")
+                    .attr("class", "title")
+                    .child(VNode.Text(VText.new(title)))
+            ))
+            .child(VNode.Element(
+                VElement.new("p")
+                    .attr("class", "meta")
+                    .child(VNode.Text(VText.new("By {author} • {views} views")))
+            ))
+            .child(VNode.Element(
+                VElement.new("div")
+                    .attr("class", "content")
+                    .child(VNode.Text(VText.new(content)))
+            ))
+            .child(VNode.Element(
+                VElement.new("button")
+                    .attr("class", "like-btn")
+                    .attr("data-action", "like")
+                    .child(VNode.Text(VText.new("❤️ Like")))
+            ))
+            .into()
+    }
+}
+
+// Server-side: Generate HTML
+fn render_server_side() -> string {
+    print("🖥️  SERVER: Rendering blog post...")
+    
+    let post = BlogPost {
+        title: "Building with Windjammer UI",
+        content: "Windjammer UI makes it easy to build cross-platform apps with SSR and hydration. The same component code runs on server and client!",
+        author: "Alice",
+        views: 1337,
+    }
+    
+    let mut renderer = SSRRenderer.new()
+    
+    // Add state for hydration
+    renderer.add_state("title".to_string(), post.title.clone())
+    renderer.add_state("author".to_string(), post.author.clone())
+    renderer.add_state("views".to_string(), post.views.to_string())
+    
+    // Render to full HTML document
+    let html = renderer.render_to_document(post, "Windjammer Blog")
+    
+    print("✅ SERVER: HTML generated ({html.len()} bytes)")
+    html
+}
+
+// Client-side: Hydrate existing HTML
+fn hydrate_client_side(html: string) {
+    print("\n🌐 CLIENT: Hydrating HTML...")
+    
+    // Extract state from HTML
+    // In real implementation, would parse <script id="__WINDJAMMER_STATE__">
+    let state_json = r#"{"title":"Building with Windjammer UI","author":"Alice","views":"1337"}"#
+    
+    let hydration = Hydration.from_state(state_json).unwrap()
+    
+    print("✅ CLIENT: State loaded from server:")
+    print("   Title: {}", hydration.get("title").unwrap())
+    print("   Author: {}", hydration.get("author").unwrap())
+    print("   Views: {}", hydration.get("views").unwrap())
+    
+    // Attach event listeners to existing DOM
+    print("✅ CLIENT: Event listeners attached")
+    print("✅ CLIENT: Component is now interactive!")
+}
+
+fn main() {
+    print("=== SSR + Hydration Example ===\n")
+    
+    // Step 1: Server renders HTML
+    let html = render_server_side()
+    
+    // Step 2: HTML sent to browser
+    print("\n📤 Sending HTML to browser...")
+    
+    // Step 3: Browser receives and displays HTML instantly
+    print("📥 Browser displays content immediately (no JS needed yet!)")
+    
+    // Step 4: Client-side JS loads and hydrates
+    hydrate_client_side(html)
+    
+    print("\n🎯 Key Benefits:")
+    print("  ✅ Fast initial page load (HTML rendered on server)")
+    print("  ✅ SEO-friendly (search engines see full content)")
+    print("  ✅ Interactive after hydration (events work)")
+    print("  ✅ Progressive enhancement (works without JS)")
+    print("  ✅ Same component code for server and client")
+    
+    print("\n📄 Generated HTML preview:")
+    print(html[0..500])
+    print("...")
+}
+

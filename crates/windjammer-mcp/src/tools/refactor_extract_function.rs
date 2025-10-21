@@ -3,7 +3,7 @@
 //! Transforms selected code into a new reusable function.
 
 use crate::error::{McpError, McpResult};
-use crate::protocol::{Position, Range, ToolCallResult};
+use crate::protocol::{Range, ToolCallResult};
 use crate::tools::text_response;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -11,9 +11,7 @@ use std::collections::HashSet;
 use std::sync::Arc;
 use tokio::sync::Mutex;
 use windjammer::lexer::Lexer;
-use windjammer::parser::{
-    Expression, FunctionDecl, OwnershipHint, Parameter, Parser, Statement, Type,
-};
+use windjammer::parser::{Expression, Parser, Statement, Type};
 use windjammer_lsp::database::WindjammerDatabase;
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -153,7 +151,9 @@ fn extract_statements_in_range(
 struct VariableAnalysis {
     parameters: Vec<(String, Type)>,
     return_type: Option<Type>,
+    #[allow(dead_code)]
     used_variables: HashSet<String>,
+    #[allow(dead_code)]
     defined_variables: HashSet<String>,
 }
 
@@ -220,11 +220,14 @@ fn collect_variable_usage(
             }
         }
         Statement::For {
-            variable,
+            pattern,
             iterable,
             body,
         } => {
-            defined.insert(variable.clone());
+            // Extract identifier from pattern
+            if let windjammer::parser::Pattern::Identifier(var) = pattern {
+                defined.insert(var.clone());
+            }
             collect_expr_variables(iterable, used);
             for s in body {
                 collect_variable_usage(s, used, defined);

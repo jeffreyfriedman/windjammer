@@ -10,7 +10,7 @@ use serde_json::Value;
 use std::sync::Arc;
 use tokio::sync::Mutex;
 use windjammer::lexer::Lexer;
-use windjammer::parser::{Expression, Parser, Statement};
+use windjammer::parser::{Expression, Parser};
 use windjammer_lsp::database::WindjammerDatabase;
 
 #[derive(Debug, Serialize, Deserialize)]

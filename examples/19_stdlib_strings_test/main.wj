@@ -1,5 +1,5 @@
 // Test std/strings module
-use std.strings
+use std::strings
 
 fn main() {
     println!("Testing std/strings module...")

@@ -145,7 +145,7 @@ impl Duration {
 
 // USAGE EXAMPLES (what users should write):
 //
-// use std.time
+// use std::time
 //
 // fn main() {
 //     // Windjammer API - no chrono exposed! ✅

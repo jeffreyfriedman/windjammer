@@ -1,6 +1,6 @@
 // Test std.json module
 
-use std.json
+use std::json
 
 fn main() {
     println!("=== JSON Module Test ===\n")

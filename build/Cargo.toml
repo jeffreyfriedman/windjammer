@@ -3,9 +3,27 @@ name = "windjammer-app"
 version = "0.1.0"
 edition = "2021"
 
+# Prevent this from being treated as part of parent workspace
+[workspace]
+
+[dependencies]
+windjammer-runtime = { path = "/Users/jeffreyfriedman/src/windjammer/crates/windjammer-runtime" }
+
 [[bin]]
-name = "app"
+name = "test_stdlib_check"
+path = "test_stdlib_check.rs"
+
+[[bin]]
+name = "http_server_test"
+path = "http_server_test.rs"
+
+[[bin]]
+name = "main"
 path = "main.rs"
+
+[[bin]]
+name = "test_minimal"
+path = "test_minimal.rs"
 
 [profile.release]
 opt-level = 3

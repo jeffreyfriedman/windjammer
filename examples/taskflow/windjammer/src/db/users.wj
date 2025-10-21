@@ -1,7 +1,7 @@
 // Database operations for users
 
-use std.db
-use std.log
+use std::db
+use std::log
 use ../models.user.{User, RegisterRequest}
 
 // Create a new user

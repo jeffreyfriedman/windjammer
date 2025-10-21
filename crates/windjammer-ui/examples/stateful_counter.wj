@@ -1,0 +1,82 @@
+// Stateful Counter Example with Reactivity
+// Demonstrates: Signal, state management, event handling
+
+use windjammer_ui.prelude.*
+use windjammer_ui.vdom.{VElement, VNode, VText}
+use windjammer_ui.reactivity.Signal
+
+@component
+struct Counter {
+    count: Signal<int>,
+}
+
+impl Component for Counter {
+    fn render() -> VNode {
+        let current_count = count.get()
+        
+        VElement.new("div")
+            .attr("class", "counter-app")
+            .child(VNode.Element(
+                VElement.new("h1")
+                    .child(VNode.Text(VText.new("Reactive Counter")))
+            ))
+            .child(VNode.Element(
+                VElement.new("div")
+                    .attr("class", "count-display")
+                    .child(VNode.Text(VText.new("Count: {current_count}")))
+            ))
+            .child(VNode.Element(
+                VElement.new("div")
+                    .attr("class", "button-group")
+                    .child(VNode.Element(
+                        VElement.new("button")
+                            .attr("onclick", "decrement")
+                            .child(VNode.Text(VText.new("-")))
+                    ))
+                    .child(VNode.Element(
+                        VElement.new("button")
+                            .attr("onclick", "increment")
+                            .child(VNode.Text(VText.new("+")))
+                    ))
+                    .child(VNode.Element(
+                        VElement.new("button")
+                            .attr("onclick", "reset")
+                            .child(VNode.Text(VText.new("Reset")))
+                    ))
+            ))
+            .into()
+    }
+}
+
+impl Counter {
+    fn new() -> Self {
+        Self {
+            count: Signal.new(0),
+        }
+    }
+    
+    fn increment() {
+        count.update(|c| *c += 1)
+    }
+    
+    fn decrement() {
+        count.update(|c| *c -= 1)
+    }
+    
+    fn reset() {
+        count.set(0)
+    }
+}
+
+fn main() {
+    let counter = Counter.new()
+    
+    // Subscribe to changes
+    counter.count.subscribe(|value| {
+        print("Count changed to: {value}")
+    })
+    
+    // Mount to DOM
+    mount("#app", counter)
+}
+
