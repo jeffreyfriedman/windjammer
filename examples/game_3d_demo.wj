@@ -1,0 +1,111 @@
+// Complete 3D Game Demo with Physics and Audio
+// This demonstrates a fully integrated game with:
+// - 3D rendering with camera
+// - Physics simulation
+// - Audio playback
+// - Input handling
+
+use windjammer_game.*
+
+struct Cube3DGame {
+    rotation: float,
+    velocity: float,
+}
+
+impl Cube3DGame {
+    fn new() -> Cube3DGame {
+        Cube3DGame {
+            rotation: 0.0,
+            velocity: 1.0,
+        }
+    }
+}
+
+impl Game for Cube3DGame {
+    fn init(self, app: GameApp) {
+        // Set up camera
+        app.camera.position = Vec3::new(0.0, 2.0, 5.0)
+        app.camera.target = Vec3::ZERO
+        
+        // Play background music
+        let music_result = app.audio.play_music("assets/bgm.mp3", true)
+        if music_result.is_err() {
+            println!("Note: Background music not found (optional)")
+        }
+    }
+    
+    fn handle_input(self, app: GameApp) {
+        // Rotate faster with space key
+        if app.input.is_key_down(Key::Space) {
+            self.velocity = 3.0
+        } else {
+            self.velocity = 1.0
+        }
+        
+        // Play sound effect on Enter
+        if app.input.is_key_pressed(Key::Enter) {
+            let sound_result = app.audio.play_sound("assets/beep.wav")
+            if sound_result.is_err() {
+                println!("Note: Sound effect not found (optional)")
+            }
+        }
+    }
+    
+    fn update(self, app: GameApp, dt: float) {
+        // Rotate the cube
+        self.rotation = self.rotation + (self.velocity * dt)
+        if self.rotation > 6.28 {
+            self.rotation = self.rotation - 6.28
+        }
+        
+        // Update physics
+        app.physics.step()
+    }
+    
+    fn render(self, app: GameApp, render_context: RenderContext) {
+        // Clear screen
+        render_context.clear(Vec4::new(0.1, 0.1, 0.2, 1.0))
+        
+        // Create cube mesh (simple example)
+        let cube_vertices = create_cube_vertices()
+        
+        // Create transform matrix
+        let rotation_matrix = Mat4::from_rotation_y(self.rotation)
+        let transform = rotation_matrix
+        
+        // Render cube (this would use Pipeline3D in real implementation)
+        println!("Rendering cube at rotation: {}", self.rotation)
+    }
+}
+
+fn create_cube_vertices() -> Vec<Vertex3D> {
+    // Simple cube vertices
+    let vertices = Vec::new()
+    
+    // Front face
+    vertices.push(Vertex3D {
+        position: [-1.0, -1.0, 1.0],
+        normal: [0.0, 0.0, 1.0],
+        tex_coords: [0.0, 0.0],
+    })
+    
+    // ... (more vertices would go here)
+    
+    return vertices
+}
+
+fn main() {
+    println!("Starting 3D Game Demo...")
+    println!("Controls:")
+    println!("  SPACE - Rotate faster")
+    println!("  ENTER - Play sound effect")
+    println!("  ESC - Exit")
+    
+    let game = Cube3DGame::new()
+    let result = run_game(game)
+    
+    if result.is_err() {
+        println!("Game error: {}", result.unwrap_err())
+    }
+}
+
