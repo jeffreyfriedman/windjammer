@@ -3,7 +3,10 @@
 //! Windjammer's `std::collections` module maps to these functions.
 //! Note: Most collections are built into Rust std, this provides helpers.
 
-use std::collections::{HashMap, HashSet};
+// Re-export standard collections for public use
+pub use std::collections::HashMap;
+pub use std::collections::HashSet;
+pub use std::collections::VecDeque;
 
 /// Create a new HashMap
 pub fn new_map<K, V>() -> HashMap<K, V>
@@ -19,6 +22,11 @@ where
     T: std::hash::Hash + Eq,
 {
     HashSet::new()
+}
+
+/// Create a new VecDeque
+pub fn new_deque<T>() -> VecDeque<T> {
+    VecDeque::new()
 }
 
 /// Check if slice contains element
