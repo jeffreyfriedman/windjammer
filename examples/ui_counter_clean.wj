@@ -1,0 +1,44 @@
+// Idiomatic Windjammer UI Counter Example
+// This demonstrates the clean, Svelte-inspired syntax
+
+use std::ui::*
+
+@component
+struct Counter {
+    count: int,
+}
+
+impl Counter {
+    fn new() -> Self {
+        Self { count: 0 }
+    }
+    
+    fn increment(&mut self) {
+        self.count = self.count + 1
+    }
+    
+    fn decrement(&mut self) {
+        self.count = self.count - 1
+    }
+    
+    fn reset(&mut self) {
+        self.count = 0
+    }
+    
+    // The render method returns the UI as a tree of VNodes
+    fn render(&self) -> VNode {
+        // For now, demonstrate structure without closures
+        h1("Counter App")
+    }
+}
+
+
+fn main() {
+    // Create and render the counter component
+    let counter = Counter::new()
+    println!("Counter app initialized with count: {}", counter.count)
+    
+    // In a full UI runtime, this would mount the component to the DOM
+    // For now, we just demonstrate the structure compiles
+}
+
