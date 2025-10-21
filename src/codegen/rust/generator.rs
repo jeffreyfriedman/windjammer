@@ -265,6 +265,16 @@ impl CodeGenerator {
                 Item::Struct(s) => {
                     body.push_str(&self.generate_struct(s));
                     body.push_str("\n\n");
+
+                    // Check for @component or @game decorators and generate trait implementations
+                    if s.decorators.iter().any(|d| d.name == "component") {
+                        body.push_str(&self.generate_component_impl(s));
+                        body.push_str("\n\n");
+                    }
+                    if s.decorators.iter().any(|d| d.name == "game") {
+                        body.push_str(&self.generate_game_impl(s));
+                        body.push_str("\n\n");
+                    }
                 }
                 Item::Enum(e) => {
                     body.push_str(&self.generate_enum(e));
@@ -481,6 +491,11 @@ impl CodeGenerator {
 
         // Convert decorators to Rust attributes
         for decorator in &s.decorators {
+            // Skip framework decorators - they're handled separately
+            if decorator.name == "component" || decorator.name == "game" {
+                continue;
+            }
+
             if decorator.name == "auto" {
                 // Special handling for @auto decorator
                 let traits = if decorator.arguments.is_empty() {
@@ -2507,6 +2522,34 @@ impl CodeGenerator {
             // Most other expressions are not const-evaluable
             _ => false,
         }
+    }
+
+    /// Generate automatic trait implementation for @component decorator
+    fn generate_component_impl(&mut self, s: &StructDecl) -> String {
+        let mut output = String::new();
+
+        // For now, generate a marker comment
+        // In future iterations, we'll generate actual trait implementations
+        output.push_str(&format!(
+            "// Component trait implementation for {}\n// TODO: Implement Component trait",
+            s.name
+        ));
+
+        output
+    }
+
+    /// Generate automatic trait implementation for @game decorator
+    fn generate_game_impl(&mut self, s: &StructDecl) -> String {
+        let mut output = String::new();
+
+        // For now, generate a marker comment
+        // In future iterations, we'll generate actual trait implementations
+        output.push_str(&format!(
+            "// Game trait implementation for {}\n// TODO: Implement Game trait",
+            s.name
+        ));
+
+        output
     }
 }
 
