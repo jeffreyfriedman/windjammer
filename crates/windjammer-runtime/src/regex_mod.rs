@@ -4,10 +4,20 @@
 
 use regex::Regex;
 
-/// Check if pattern matches string
+/// Create a new regex (for reuse across multiple operations)
+pub fn new(pattern: &str) -> Result<Regex, String> {
+    Regex::new(pattern).map_err(|e| e.to_string())
+}
+
+/// Check if pattern matches string (compiles regex each time - use new() for better performance)
 pub fn is_match(pattern: &str, text: &str) -> Result<bool, String> {
     let re = Regex::new(pattern).map_err(|e| e.to_string())?;
     Ok(re.is_match(text))
+}
+
+/// Check if regex matches string (with pre-compiled regex)
+pub fn is_match_compiled(re: &Regex, text: &str) -> bool {
+    re.is_match(text)
 }
 
 /// Find first match
@@ -16,10 +26,20 @@ pub fn find(pattern: &str, text: &str) -> Result<Option<String>, String> {
     Ok(re.find(text).map(|m| m.as_str().to_string()))
 }
 
+/// Find first match (with pre-compiled regex)
+pub fn find_compiled(re: &Regex, text: &str) -> Option<String> {
+    re.find(text).map(|m| m.as_str().to_string())
+}
+
 /// Find all matches
 pub fn find_all(pattern: &str, text: &str) -> Result<Vec<String>, String> {
     let re = Regex::new(pattern).map_err(|e| e.to_string())?;
     Ok(re.find_iter(text).map(|m| m.as_str().to_string()).collect())
+}
+
+/// Find all matches (with pre-compiled regex)
+pub fn find_all_compiled(re: &Regex, text: &str) -> Vec<String> {
+    re.find_iter(text).map(|m| m.as_str().to_string()).collect()
 }
 
 /// Replace first match
@@ -28,10 +48,20 @@ pub fn replace(pattern: &str, text: &str, replacement: &str) -> Result<String, S
     Ok(re.replace(text, replacement).to_string())
 }
 
+/// Replace first match (with pre-compiled regex)
+pub fn replace_compiled(re: &Regex, text: &str, replacement: &str) -> String {
+    re.replace(text, replacement).to_string()
+}
+
 /// Replace all matches
 pub fn replace_all(pattern: &str, text: &str, replacement: &str) -> Result<String, String> {
     let re = Regex::new(pattern).map_err(|e| e.to_string())?;
     Ok(re.replace_all(text, replacement).to_string())
+}
+
+/// Replace all matches (with pre-compiled regex)
+pub fn replace_all_compiled(re: &Regex, text: &str, replacement: &str) -> String {
+    re.replace_all(text, replacement).to_string()
 }
 
 /// Split string by regex pattern
