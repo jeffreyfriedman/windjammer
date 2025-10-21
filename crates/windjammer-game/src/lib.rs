@@ -37,6 +37,7 @@
 pub mod assets; // Asset loading and management
 pub mod audio; // Audio playback
 pub mod ecs; // Entity-Component-System
+pub mod game_app; // Complete game application with integrated systems
 pub mod game_loop; // Game loop with fixed timestep
 pub mod input; // Input handling
 pub mod math; // Math types (Vec2, Vec3, Mat4, etc.)

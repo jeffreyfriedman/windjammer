@@ -46,6 +46,7 @@ pub mod reactivity;
 pub mod renderer;
 pub mod routing;
 pub mod runtime;
+pub mod simple_renderer;
 pub mod ssr;
 pub mod vdom;
 
