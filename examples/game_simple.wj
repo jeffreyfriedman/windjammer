@@ -1,0 +1,45 @@
+// Idiomatic Windjammer Game Example
+// This demonstrates the clean, ECS-inspired syntax
+
+use std::game::*
+
+@game
+struct SimpleGame {
+    player_x: float,
+    player_y: float,
+    score: int,
+}
+
+impl SimpleGame {
+    fn new() -> Self {
+        Self {
+            player_x: 0.0,
+            player_y: 0.0,
+            score: 0,
+        }
+    }
+    
+    fn move_player(&mut self, dx: float, dy: float) {
+        self.player_x = self.player_x + dx
+        self.player_y = self.player_y + dy
+    }
+    
+    fn add_score(&mut self, points: int) {
+        self.score = self.score + points
+    }
+}
+
+fn main() {
+    // Create and initialize the game
+    let mut game = SimpleGame::new()
+    println!("Game initialized at position: ({}, {})", game.player_x, game.player_y)
+    
+    // Simulate some movement
+    game.move_player(10.0, 5.0)
+    println!("Player moved to: ({}, {})", game.player_x, game.player_y)
+    
+    // Add score
+    game.add_score(100)
+    println!("Score: {}", game.score)
+}
+
