@@ -14,9 +14,19 @@ pub fn read<P: AsRef<Path>>(path: P) -> Result<Vec<u8>, String> {
     std::fs::read(path).map_err(|e| e.to_string())
 }
 
-/// Write string to file
+/// Alias for read() for clarity  
+pub fn read_bytes<P: AsRef<Path>>(path: P) -> Result<Vec<u8>, String> {
+    read(path)
+}
+
+/// Write to file (accepts bytes or strings)
 pub fn write<P: AsRef<Path>, C: AsRef<[u8]>>(path: P, contents: C) -> Result<(), String> {
     std::fs::write(path, contents).map_err(|e| e.to_string())
+}
+
+/// Write string to file (helper for common case)
+pub fn write_string<P: AsRef<Path>>(path: P, contents: &str) -> Result<(), String> {
+    write(path, contents.as_bytes())
 }
 
 /// Check if path exists

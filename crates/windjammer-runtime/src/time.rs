@@ -24,9 +24,16 @@ pub fn now_local() -> String {
     Local::now().to_rfc3339()
 }
 
-/// Parse ISO 8601 date string
+/// Parse ISO 8601 date string  
 pub fn parse(s: &str) -> Result<i64, String> {
     s.parse::<DateTime<Utc>>()
+        .map(|dt| dt.timestamp())
+        .map_err(|e| e.to_string())
+}
+
+/// Parse date string with custom format
+pub fn parse_format(s: &str, fmt: &str) -> Result<i64, String> {
+    DateTime::parse_from_str(s, fmt)
         .map(|dt| dt.timestamp())
         .map_err(|e| e.to_string())
 }
@@ -63,6 +70,16 @@ pub fn add_days(timestamp: i64, days: i64) -> i64 {
         .and_then(|dt| dt.checked_add_signed(Duration::days(days)))
         .map(|dt| dt.timestamp())
         .unwrap_or(timestamp)
+}
+
+/// Calculate duration in seconds between two timestamps
+pub fn duration_secs(start: i64, end: i64) -> i64 {
+    end - start
+}
+
+/// Calculate duration in milliseconds between two timestamps
+pub fn duration_millis(start: i64, end: i64) -> i64 {
+    (end - start) * 1000
 }
 
 #[cfg(test)]
