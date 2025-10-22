@@ -199,9 +199,17 @@ impl Default for SignatureRegistry {
 
 impl SignatureRegistry {
     pub fn new() -> Self {
-        SignatureRegistry {
+        let mut registry = SignatureRegistry {
             signatures: HashMap::new(),
+        };
+
+        // Populate with stdlib signatures by scanning windjammer-runtime source
+        if let Err(e) = crate::stdlib_scanner::populate_runtime_signatures(&mut registry) {
+            eprintln!("Warning: Failed to scan runtime signatures: {}", e);
+            eprintln!("Continuing with empty registry - may generate incorrect borrows");
         }
+
+        registry
     }
 
     pub fn add_function(&mut self, name: String, sig: FunctionSignature) {

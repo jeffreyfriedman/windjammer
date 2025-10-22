@@ -1996,14 +1996,22 @@ impl CodeGenerator {
                 } else {
                     match **object {
                         Expression::Identifier(ref name)
-                            if name.contains('.')
+                            if name.contains("::")
                                 || (!name.is_empty()
                                     && name.chars().next().unwrap().is_uppercase()) =>
                         {
-                            "::"
+                            "::" // Module path: std::fs or Type::CONST
                         }
-                        Expression::FieldAccess { .. } => "::", // Chained path
-                        _ => ".",                               // Actual field access
+                        Expression::FieldAccess { .. } => {
+                            // Check if this is a module path or a field chain
+                            // If the object string contains ::, it's a module path
+                            if obj_str.contains("::") {
+                                "::" // Module path: std::fs::File
+                            } else {
+                                "." // Field chain: transform.position.x
+                            }
+                        }
+                        _ => ".", // Actual field access
                     }
                 };
 
