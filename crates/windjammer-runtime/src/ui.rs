@@ -5,6 +5,8 @@ use std::collections::HashMap;
 use std::rc::Rc;
 
 #[cfg(feature = "wasm")]
+use wasm_bindgen::closure::Closure;
+#[cfg(feature = "wasm")]
 use wasm_bindgen::prelude::*;
 #[cfg(feature = "wasm")]
 use web_sys::{Document, Element, Node, Window};
@@ -17,12 +19,38 @@ pub enum VNode {
     Component(VComponent),
 }
 
+/// Event handler type
+#[cfg(feature = "wasm")]
+pub type EventHandler = Rc<RefCell<dyn FnMut()>>;
+
 /// Virtual Element - represents an HTML element
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Clone)]
 pub struct VElement {
     pub tag: String,
     pub attributes: HashMap<String, String>,
     pub children: Vec<VNode>,
+    #[cfg(feature = "wasm")]
+    pub event_handlers: HashMap<String, EventHandler>,
+}
+
+// Manual Debug implementation since EventHandler doesn't implement Debug
+impl std::fmt::Debug for VElement {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("VElement")
+            .field("tag", &self.tag)
+            .field("attributes", &self.attributes)
+            .field("children", &self.children)
+            .finish()
+    }
+}
+
+// Manual PartialEq implementation (compare structure, not handlers)
+impl PartialEq for VElement {
+    fn eq(&self, other: &Self) -> bool {
+        self.tag == other.tag
+            && self.attributes == other.attributes
+            && self.children == other.children
+    }
 }
 
 impl VElement {
@@ -31,6 +59,8 @@ impl VElement {
             tag: tag.to_string(),
             attributes: HashMap::new(),
             children: Vec::new(),
+            #[cfg(feature = "wasm")]
+            event_handlers: HashMap::new(),
         }
     }
 
@@ -41,6 +71,16 @@ impl VElement {
 
     pub fn child(mut self, node: VNode) -> Self {
         self.children.push(node);
+        self
+    }
+
+    #[cfg(feature = "wasm")]
+    pub fn on<F>(mut self, event: &str, handler: F) -> Self
+    where
+        F: FnMut() + 'static,
+    {
+        self.event_handlers
+            .insert(event.to_string(), Rc::new(RefCell::new(handler)));
         self
     }
 
@@ -203,6 +243,22 @@ fn vnode_to_dom(node: &VNode, document: &Document) -> Result<Node, JsValue> {
             // Set attributes
             for (key, value) in &el.attributes {
                 element.set_attribute(key, value)?;
+            }
+
+            // Attach event handlers
+            for (event_name, handler) in &el.event_handlers {
+                let handler_clone = handler.clone();
+                let closure = Closure::wrap(Box::new(move |_event: web_sys::Event| {
+                    handler_clone.borrow_mut()();
+                }) as Box<dyn FnMut(_)>);
+
+                element.add_event_listener_with_callback(
+                    event_name,
+                    closure.as_ref().unchecked_ref(),
+                )?;
+
+                // Leak the closure to keep it alive
+                closure.forget();
             }
 
             // Add children
