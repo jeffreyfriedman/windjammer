@@ -285,23 +285,23 @@ impl Rectangle {
         Rectangle { width, height }
     }
     
-    // Method that borrows self
-    fn area(&self) -> int {
-        self.width * self.height
+    // Method that reads fields - compiler adds &self automatically!
+    fn area() -> int {
+        width * height
     }
     
-    // Method that mutably borrows self
-    fn scale(&mut self, factor: int) {
-        self.width *= factor
-        self.height *= factor
+    // Method that mutates fields - compiler adds &mut self automatically!
+    fn scale(factor: int) {
+        width *= factor
+        height *= factor
     }
     
-    // Method that consumes self
+    // Method that consumes self (explicit when needed)
     fn into_square(self) -> Rectangle {
-        let size = if self.width > self.height {
-            self.width
+        let size = if width > height {
+            width
         } else {
-            self.height
+            height
         }
         Rectangle::new(size, size)
     }
@@ -316,10 +316,38 @@ fn main() {
 }
 ```
 
-**Self Parameters:**
+### 🔥 Automatic Borrow Inference (v0.34.0) 🆕
+
+**You never need to write `&self` or `&mut self`!** The compiler automatically infers the correct self parameter based on what your method does:
+
+**How it works:**
+
+```windjammer
+impl Counter {
+    // Reads fields → compiler adds &self
+    fn get_count() -> int {
+        count  // Just reading, no &self needed!
+    }
+    
+    // Mutates fields → compiler adds &mut self
+    fn increment() {
+        count = count + 1  // Mutating, no &mut self needed!
+    }
+    
+    // Doesn't access fields → no self parameter
+    fn create_default() -> Self {
+        Self { count: 0 }  // No fields accessed
+    }
+}
+```
+
+**Traditional Self Parameters (still supported if you want explicit control):**
 - `&self` - Immutable borrow (read-only access)
 - `&mut self` - Mutable borrow (can modify)
 - `self` - Takes ownership (consumes the value)
+
+**When to be explicit:**
+You can still write `&self`, `&mut self`, or `self` explicitly if you want control, but in 95% of cases, the compiler gets it right automatically!
 
 ---
 

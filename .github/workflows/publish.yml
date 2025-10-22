@@ -111,10 +111,16 @@ jobs:
         run: |
           echo "Dry run: windjammer (core)"
           cargo publish --dry-run
+          echo "Dry run: windjammer-runtime"
+          cargo publish --dry-run -p windjammer-runtime
           echo "Dry run: windjammer-lsp"
           cargo publish --dry-run -p windjammer-lsp
           echo "Dry run: windjammer-mcp"
           cargo publish --dry-run -p windjammer-mcp
+          echo "Dry run: windjammer-ui"
+          cargo publish --dry-run -p windjammer-ui
+          echo "Dry run: windjammer-game"
+          cargo publish --dry-run -p windjammer-game
 
       - name: Publish windjammer (core) to crates.io
         env:
@@ -122,6 +128,15 @@ jobs:
         run: |
           echo "Publishing windjammer (core library)..."
           cargo publish
+          echo "Waiting 30 seconds for crates.io to propagate..."
+          sleep 30
+
+      - name: Publish windjammer-runtime to crates.io
+        env:
+          CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
+        run: |
+          echo "Publishing windjammer-runtime (runtime library for stdlib)..."
+          cargo publish -p windjammer-runtime
           echo "Waiting 30 seconds for crates.io to propagate..."
           sleep 30
 
@@ -140,6 +155,24 @@ jobs:
         run: |
           echo "Publishing windjammer-mcp (depends on windjammer + windjammer-lsp)..."
           cargo publish -p windjammer-mcp
+          echo "Waiting 30 seconds for crates.io to propagate..."
+          sleep 30
+
+      - name: Publish windjammer-ui to crates.io
+        env:
+          CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
+        run: |
+          echo "Publishing windjammer-ui (UI framework)..."
+          cargo publish -p windjammer-ui
+          echo "Waiting 30 seconds for crates.io to propagate..."
+          sleep 30
+
+      - name: Publish windjammer-game to crates.io
+        env:
+          CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
+        run: |
+          echo "Publishing windjammer-game (game engine)..."
+          cargo publish -p windjammer-game
 
       - name: Notify success
         if: success()
