@@ -22,6 +22,14 @@ name = "test_stdlib_check"
 path = "test_stdlib_check.rs"
 
 [[bin]]
+name = "game_ecs_demo"
+path = "game_ecs_demo.rs"
+
+[[bin]]
+name = "ui_simple"
+path = "ui_simple.rs"
+
+[[bin]]
 name = "ui_hello_world"
 path = "ui_hello_world.rs"
 

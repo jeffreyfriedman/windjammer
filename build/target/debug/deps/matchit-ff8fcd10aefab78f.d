@@ -1,0 +1,11 @@
+/Users/jeffreyfriedman/src/windjammer/build/target/debug/deps/matchit-ff8fcd10aefab78f.d: /Users/jeffreyfriedman/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/matchit-0.7.3/src/lib.rs /Users/jeffreyfriedman/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/matchit-0.7.3/src/error.rs /Users/jeffreyfriedman/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/matchit-0.7.3/src/params.rs /Users/jeffreyfriedman/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/matchit-0.7.3/src/router.rs /Users/jeffreyfriedman/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/matchit-0.7.3/src/tree.rs
+
+/Users/jeffreyfriedman/src/windjammer/build/target/debug/deps/libmatchit-ff8fcd10aefab78f.rlib: /Users/jeffreyfriedman/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/matchit-0.7.3/src/lib.rs /Users/jeffreyfriedman/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/matchit-0.7.3/src/error.rs /Users/jeffreyfriedman/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/matchit-0.7.3/src/params.rs /Users/jeffreyfriedman/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/matchit-0.7.3/src/router.rs /Users/jeffreyfriedman/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/matchit-0.7.3/src/tree.rs
+
+/Users/jeffreyfriedman/src/windjammer/build/target/debug/deps/libmatchit-ff8fcd10aefab78f.rmeta: /Users/jeffreyfriedman/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/matchit-0.7.3/src/lib.rs /Users/jeffreyfriedman/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/matchit-0.7.3/src/error.rs /Users/jeffreyfriedman/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/matchit-0.7.3/src/params.rs /Users/jeffreyfriedman/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/matchit-0.7.3/src/router.rs /Users/jeffreyfriedman/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/matchit-0.7.3/src/tree.rs
+
+/Users/jeffreyfriedman/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/matchit-0.7.3/src/lib.rs:
+/Users/jeffreyfriedman/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/matchit-0.7.3/src/error.rs:
+/Users/jeffreyfriedman/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/matchit-0.7.3/src/params.rs:
+/Users/jeffreyfriedman/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/matchit-0.7.3/src/router.rs:
+/Users/jeffreyfriedman/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/matchit-0.7.3/src/tree.rs:
