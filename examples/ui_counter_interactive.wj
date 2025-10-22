@@ -1,0 +1,69 @@
+// Interactive counter example - demonstrates UI framework with reactivity and events
+// This example works in the browser via WASM
+
+use std::ui
+
+fn main() {
+    // Create reactive state
+    let count = ui::signal(0)
+    
+    // Build UI with event handlers
+    let app = ui::div()
+        .attr("class", "container")
+        .attr("style", "padding: 20px; font-family: sans-serif;")
+        .child(
+            ui::h1("Interactive Counter")
+        )
+        .child(
+            ui::p(&format!("Current count: {}", count.get()))
+                .attr("style", "font-size: 24px; color: #333;")
+        )
+        .child(
+            ui::button("Increment")
+                .attr("style", "padding: 10px 20px; margin: 5px; font-size: 16px;")
+                .on("click", {
+                    let count = count.clone()
+                    move || {
+                        count.set(count.get() + 1)
+                        println!("Count incremented to: {}", count.get())
+                    }
+                })
+        )
+        .child(
+            ui::button("Decrement")
+                .attr("style", "padding: 10px 20px; margin: 5px; font-size: 16px;")
+                .on("click", {
+                    let count = count.clone()
+                    move || {
+                        count.set(count.get() - 1)
+                        println!("Count decremented to: {}", count.get())
+                    }
+                })
+        )
+        .child(
+            ui::button("Reset")
+                .attr("style", "padding: 10px 20px; margin: 5px; font-size: 16px;")
+                .on("click", {
+                    let count = count.clone()
+                    move || {
+                        count.set(0)
+                        println!("Count reset to 0")
+                    }
+                })
+        )
+        .into_vnode()
+    
+    // Mount to DOM (WASM only)
+    #[cfg(target_arch = "wasm32")]
+    {
+        ui::mount(&app, "#app").expect("Failed to mount app")
+    }
+    
+    // For non-WASM, just print the HTML
+    #[cfg(not(target_arch = "wasm32"))]
+    {
+        println!("Generated HTML:");
+        println!("{}", ui::render_to_string(&app))
+    }
+}
+
