@@ -83,6 +83,41 @@ fn process(data: string) {
 // Safe, fast, and you never wrote &!
 ```
 
+### 🔥 Automatic Borrow Inference for Methods (v0.34.0) 🆕
+
+**Never write `&self` or `&mut self` again!** The compiler automatically infers the correct borrow based on what your method does:
+
+```windjammer
+struct Counter {
+    count: int,
+}
+
+impl Counter {
+    // Compiler infers &self (read-only)
+    fn get_count() -> int {
+        count
+    }
+    
+    // Compiler infers &mut self (mutates field)
+    fn increment() {
+        count = count + 1
+    }
+    
+    // No self needed (doesn't access fields)
+    fn create_default() -> Self {
+        Self { count: 0 }
+    }
+}
+```
+
+**How it works:**
+- **Reads fields** → adds `&self` automatically
+- **Mutates fields** → adds `&mut self` automatically  
+- **Doesn't access fields** → no self parameter
+- **Works everywhere**: macros, closures, match expressions, all control flow
+
+**Cleaner than Go** (which requires explicit receivers) and **easier than Rust** (no manual borrowing)!
+
 ### ⚡ 393x Faster Returns - Automatically!
 
 **Windjammer automatically defers heavy deallocations to background threads**, making your functions return **393x faster**:

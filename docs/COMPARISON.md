@@ -80,6 +80,50 @@ fn process(data: string) {  // Compiler infers &mut
 }
 ```
 
+### Automatic Borrow Inference for Methods (v0.34.0) 🆕
+
+**Windjammer goes even further** - you never need to write `&self` or `&mut self` in method signatures!
+
+```rust
+// Rust - Manual self parameters
+impl Counter {
+    fn get_count(&self) -> i32 {        // Must write &self
+        self.count
+    }
+    
+    fn increment(&mut self) {           // Must write &mut self
+        self.count += 1;
+    }
+}
+
+// Go - Explicit receivers
+func (c *Counter) GetCount() int {     // Must write receiver
+    return c.count
+}
+
+func (c *Counter) Increment() {        // Must write receiver
+    c.count++
+}
+
+// Windjammer - Automatic inference
+impl Counter {
+    fn get_count() -> int {             // Compiler adds &self
+        count                           // Reads field → &self
+    }
+    
+    fn increment() {                    // Compiler adds &mut self
+        count = count + 1               // Mutates field → &mut self
+    }
+}
+```
+
+**Analysis:**
+- ✅ **Windjammer**: Zero manual annotations, compiler infers everything
+- ⚠️ **Rust**: Must choose between `&self`, `&mut self`, `self` every time
+- ⚠️ **Go**: Must write receiver on every method
+
+**Verdict**: Windjammer is **more ergonomic than both** Rust and Go for method definitions!
+
 ### Syntax Ergonomics
 
 | Feature | Rust | Go | Windjammer |
