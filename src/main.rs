@@ -12,6 +12,7 @@ pub mod optimizer;
 pub mod parser;
 pub mod parser_recovery;
 pub mod source_map;
+pub mod stdlib_scanner;
 
 use anyhow::Result;
 use clap::{Parser, Subcommand, ValueEnum};
