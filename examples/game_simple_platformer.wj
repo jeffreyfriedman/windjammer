@@ -1,0 +1,91 @@
+// Simple platformer game - demonstrates ECS architecture
+// Shows entity management, components, and game loop logic
+
+use std::game
+
+fn main() {
+    println!("=== Windjammer Game Engine Demo ===")
+    println!("Creating a simple platformer...")
+    
+    // Create game world
+    let mut world = game::World::new()
+    
+    // Create player entity
+    let player = game::create_entity(&mut world)
+    game::add_transform(&mut world, player, game::Vec3::new(0.0, 0.0, 0.0))
+    game::add_velocity(&mut world, player, game::Vec3::new(0.0, 0.0, 0.0))
+    println!("✓ Created player entity")
+    
+    // Create platform entities
+    let platform1 = game::create_entity(&mut world)
+    game::add_transform(&mut world, platform1, game::Vec3::new(0.0, -2.0, 0.0))
+    game::add_mesh(&mut world, platform1, game::Mesh::cube(4.0))
+    
+    let platform2 = game::create_entity(&mut world)
+    game::add_transform(&mut world, platform2, game::Vec3::new(5.0, -1.0, 0.0))
+    game::add_mesh(&mut world, platform2, game::Mesh::cube(3.0))
+    
+    println!("✓ Created {} platforms", 2)
+    
+    // Create enemy entities
+    let enemy1 = game::create_entity(&mut world)
+    game::add_transform(&mut world, enemy1, game::Vec3::new(3.0, 0.0, 0.0))
+    game::add_velocity(&mut world, enemy1, game::Vec3::new(-1.0, 0.0, 0.0))
+    
+    let enemy2 = game::create_entity(&mut world)
+    game::add_transform(&mut world, enemy2, game::Vec3::new(-3.0, 0.0, 0.0))
+    game::add_velocity(&mut world, enemy2, game::Vec3::new(1.0, 0.0, 0.0))
+    
+    println!("✓ Created {} enemies", 2)
+    
+    // Query all entities with transforms
+    let transforms = world.query::<game::Transform>()
+    println!("\n=== World State ===")
+    println!("Total entities with transforms: {}", transforms.len())
+    
+    // Print player position
+    if let Some(transform) = world.get_component::<game::Transform>(player) {
+        println!("Player position: ({:.1}, {:.1}, {:.1})", 
+            transform.position.x,
+            transform.position.y,
+            transform.position.z)
+    }
+    
+    // Simulate a few game updates
+    println!("\n=== Simulating Game Loop ===")
+    let delta_time = 0.016  // 60 FPS
+    
+    for frame in 0..5 {
+        println!("\nFrame {}:", frame)
+        
+        // Update all entities with velocity
+        let entities_with_velocity = world.query::<game::Velocity>()
+        for (entity_id, velocity) in entities_with_velocity {
+            if let Some(transform) = world.get_component_mut::<game::Transform>(entity_id) {
+                // Apply velocity to position
+                transform.position.x += velocity.linear.x * delta_time
+                transform.position.y += velocity.linear.y * delta_time
+                transform.position.z += velocity.linear.z * delta_time
+                
+                println!("  Entity {:?} moved to ({:.2}, {:.2}, {:.2})",
+                    entity_id,
+                    transform.position.x,
+                    transform.position.y,
+                    transform.position.z)
+            }
+        }
+    }
+    
+    // Final state
+    println!("\n=== Final State ===")
+    if let Some(transform) = world.get_component::<game::Transform>(player) {
+        println!("Player final position: ({:.2}, {:.2}, {:.2})", 
+            transform.position.x,
+            transform.position.y,
+            transform.position.z)
+    }
+    
+    println!("\n✓ Game simulation complete!")
+    println!("Note: Add wgpu rendering to see graphics on screen")
+}
+
