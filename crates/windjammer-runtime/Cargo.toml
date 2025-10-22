@@ -6,6 +6,11 @@ authors = ["Windjammer Contributors"]
 description = "Runtime library for Windjammer standard library implementations"
 license = "MIT OR Apache-2.0"
 
+[features]
+default = []
+db = ["sqlx"]
+wasm = ["wasm-bindgen", "web-sys", "js-sys"]
+
 [dependencies]
 # HTTP Client & Server
 reqwest = { version = "0.11", features = ["json", "blocking"] }
@@ -45,3 +50,22 @@ env_logger = "0.11"
 rand = "0.8"
 regex = "1.10"
 chrono = "0.4"
+
+# Web/WASM support for UI
+wasm-bindgen = { version = "0.2", optional = true }
+web-sys = { version = "0.3", features = [
+    "Document",
+    "Element",
+    "HtmlElement",
+    "Node",
+    "Text",
+    "Window",
+    "Event",
+    "EventTarget",
+    "MouseEvent",
+    "KeyboardEvent",
+    "InputEvent",
+    "HtmlInputElement",
+    "HtmlButtonElement",
+], optional = true }
+js-sys = { version = "0.3", optional = true }

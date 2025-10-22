@@ -2,6 +2,11 @@
 
 use std::collections::HashMap;
 
+#[cfg(feature = "wasm")]
+use wasm_bindgen::prelude::*;
+#[cfg(feature = "wasm")]
+use web_sys::{Document, Element, Node, Window};
+
 /// Virtual Node - represents a UI element
 #[derive(Debug, Clone, PartialEq)]
 pub enum VNode {
@@ -163,6 +168,69 @@ pub fn render_to_string(node: &VNode) -> String {
             format!("<component name=\"{}\" />", comp.name)
         }
     }
+}
+
+// ============================================================================
+// DOM Rendering (WASM only)
+// ============================================================================
+
+#[cfg(feature = "wasm")]
+pub fn get_window() -> Option<Window> {
+    web_sys::window()
+}
+
+#[cfg(feature = "wasm")]
+pub fn get_document() -> Option<Document> {
+    get_window()?.document()
+}
+
+#[cfg(feature = "wasm")]
+pub fn render_to_dom(node: &VNode, parent: &Element) -> Result<(), JsValue> {
+    let document = get_document().ok_or_else(|| JsValue::from_str("No document"))?;
+    let dom_node = vnode_to_dom(node, &document)?;
+    parent.append_child(&dom_node)?;
+    Ok(())
+}
+
+#[cfg(feature = "wasm")]
+fn vnode_to_dom(node: &VNode, document: &Document) -> Result<Node, JsValue> {
+    match node {
+        VNode::Element(el) => {
+            let element = document.create_element(&el.tag)?;
+
+            // Set attributes
+            for (key, value) in &el.attributes {
+                element.set_attribute(key, value)?;
+            }
+
+            // Add children
+            for child in &el.children {
+                let child_node = vnode_to_dom(child, document)?;
+                element.append_child(&child_node)?;
+            }
+
+            Ok(element.into())
+        }
+        VNode::Text(text) => {
+            let text_node = document.create_text_node(&text.content);
+            Ok(text_node.into())
+        }
+        VNode::Component(_comp) => {
+            // For now, components render as empty text
+            let text_node = document.create_text_node("");
+            Ok(text_node.into())
+        }
+    }
+}
+
+#[cfg(feature = "wasm")]
+pub fn mount(node: &VNode, selector: &str) -> Result<(), JsValue> {
+    let document = get_document().ok_or_else(|| JsValue::from_str("No document"))?;
+    let container = document
+        .query_selector(selector)?
+        .ok_or_else(|| JsValue::from_str("Container not found"))?;
+
+    render_to_dom(node, &container)
 }
 
 #[cfg(test)]
