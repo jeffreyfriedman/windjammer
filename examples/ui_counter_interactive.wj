@@ -1,55 +1,55 @@
-// Interactive counter example - demonstrates UI framework with reactivity and events
-// This example works in the browser via WASM
-
+// Interactive counter example - demonstrates reactivity and event handling
 use std::ui
 
 fn main() {
     // Create reactive state
     let count = ui::signal(0)
     
-    // Build UI with event handlers
+    // Create UI with event handlers
     let app = ui::div()
-        .attr("class", "container")
+        .attr("class", "counter-app")
         .attr("style", "padding: 20px; font-family: sans-serif;")
         .child(
             ui::h1("Interactive Counter")
         )
         .child(
-            ui::p(&format!("Current count: {}", count.get()))
-                .attr("style", "font-size: 24px; color: #333;")
+            ui::div()
+                .attr("style", "font-size: 48px; margin: 20px 0;")
+                .child(ui::text(&format!("Count: {}", count.get())))
         )
         .child(
-            ui::button("Increment")
-                .attr("style", "padding: 10px 20px; margin: 5px; font-size: 16px;")
-                .on("click", {
-                    let count = count.clone()
-                    move || {
-                        count.set(count.get() + 1)
-                        println!("Count incremented to: {}", count.get())
-                    }
-                })
-        )
-        .child(
-            ui::button("Decrement")
-                .attr("style", "padding: 10px 20px; margin: 5px; font-size: 16px;")
-                .on("click", {
-                    let count = count.clone()
-                    move || {
-                        count.set(count.get() - 1)
-                        println!("Count decremented to: {}", count.get())
-                    }
-                })
-        )
-        .child(
-            ui::button("Reset")
-                .attr("style", "padding: 10px 20px; margin: 5px; font-size: 16px;")
-                .on("click", {
-                    let count = count.clone()
-                    move || {
-                        count.set(0)
-                        println!("Count reset to 0")
-                    }
-                })
+            ui::div()
+                .attr("style", "display: flex; gap: 10px;")
+                .child(
+                    ui::button("Increment")
+                        .attr("style", "padding: 10px 20px; font-size: 16px;")
+                        .on("click", {
+                            let count = count.clone()
+                            move || {
+                                count.update(|c| *c += 1)
+                            }
+                        })
+                )
+                .child(
+                    ui::button("Decrement")
+                        .attr("style", "padding: 10px 20px; font-size: 16px;")
+                        .on("click", {
+                            let count = count.clone()
+                            move || {
+                                count.update(|c| *c -= 1)
+                            }
+                        })
+                )
+                .child(
+                    ui::button("Reset")
+                        .attr("style", "padding: 10px 20px; font-size: 16px;")
+                        .on("click", {
+                            let count = count.clone()
+                            move || {
+                                count.set(0)
+                            }
+                        })
+                )
         )
         .into_vnode()
     

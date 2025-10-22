@@ -2521,6 +2521,83 @@ impl Parser {
                         index,
                     };
                 }
+                Token::ColonColon => {
+                    // Handle turbofish and static method calls in match values
+                    self.advance(); // consume ::
+
+                    if self.current_token() == &Token::Lt {
+                        // Turbofish: expr::<Type>
+                        self.advance(); // consume <
+                        let mut types = vec![self.parse_type()?];
+                        while self.current_token() == &Token::Comma {
+                            self.advance();
+                            if self.current_token() != &Token::Gt {
+                                types.push(self.parse_type()?);
+                            }
+                        }
+                        self.expect(Token::Gt)?;
+
+                        // Expect function call after turbofish
+                        if self.current_token() == &Token::LParen {
+                            self.advance();
+                            let arguments = self.parse_arguments()?;
+                            self.expect(Token::RParen)?;
+                            left = Expression::MethodCall {
+                                object: Box::new(left),
+                                method: String::new(), // Empty method name signals turbofish call
+                                type_args: Some(types),
+                                arguments,
+                            };
+                        } else {
+                            return Err("Expected '(' after turbofish".to_string());
+                        }
+                    } else if let Token::Ident(method) = self.current_token() {
+                        // Static method or path continuation
+                        let method = method.clone();
+                        self.advance();
+
+                        // Check for turbofish on this method
+                        let type_args = if self.current_token() == &Token::ColonColon {
+                            self.advance();
+                            if self.current_token() == &Token::Lt {
+                                self.advance();
+                                let mut types = vec![self.parse_type()?];
+                                while self.current_token() == &Token::Comma {
+                                    self.advance();
+                                    if self.current_token() != &Token::Gt {
+                                        types.push(self.parse_type()?);
+                                    }
+                                }
+                                self.expect(Token::Gt)?;
+                                Some(types)
+                            } else {
+                                return Err("Expected '<' after '::'".to_string());
+                            }
+                        } else {
+                            None
+                        };
+
+                        if self.current_token() == &Token::LParen {
+                            self.advance();
+                            let arguments = self.parse_arguments()?;
+                            self.expect(Token::RParen)?;
+                            left = Expression::MethodCall {
+                                object: Box::new(left),
+                                method,
+                                type_args,
+                                arguments,
+                            };
+                        } else {
+                            // Just a path, treat as field access
+                            left = Expression::FieldAccess {
+                                object: Box::new(left),
+                                field: method,
+                            };
+                        }
+                    } else {
+                        return Err("Expected '<' or identifier after '::'".to_string());
+                    }
+                }
                 Token::LParen => {
                     // Function call
                     self.advance();
