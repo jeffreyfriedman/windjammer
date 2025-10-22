@@ -53,17 +53,9 @@ fn main() {
         )
         .into_vnode()
     
-    // Mount to DOM (WASM only)
-    #[cfg(target_arch = "wasm32")]
-    {
-        ui::mount(&app, "#app").expect("Failed to mount app")
-    }
-    
-    // For non-WASM, just print the HTML
-    #[cfg(not(target_arch = "wasm32"))]
-    {
-        println!("Generated HTML:");
-        println!("{}", ui::render_to_string(&app))
-    }
+    // For now, just print the HTML
+    // (WASM mounting will be added in a future version)
+    println!("Generated HTML:")
+    println!("{}", ui::render_to_string(&app))
 }
 

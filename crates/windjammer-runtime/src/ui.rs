@@ -156,8 +156,10 @@ pub fn p(text: &str) -> VNode {
         .into_vnode()
 }
 
-pub fn button(text: &str) -> VElement {
-    VElement::new("button").child(VNode::Text(VText::new(text)))
+pub fn button(text: &str) -> VNode {
+    VElement::new("button")
+        .child(VNode::Text(VText::new(text)))
+        .into_vnode()
 }
 
 pub fn input() -> VElement {
