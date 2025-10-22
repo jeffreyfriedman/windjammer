@@ -442,6 +442,7 @@ impl CodeGenerator {
                 "testing" => "windjammer_runtime::testing",
                 "time" => "windjammer_runtime::time",
                 "ui" => "windjammer_runtime::ui",
+                "game" => "windjammer_runtime::game",
 
                 _ => {
                     // Unknown module - try windjammer_runtime
