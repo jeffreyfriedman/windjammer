@@ -823,10 +823,194 @@ impl CodeGenerator {
     // Check if a function accesses any struct fields
     // For now, we use a simple heuristic: if we're in an impl block and the function
     // has a non-empty body, assume it might need &self
-    fn function_accesses_fields(&self, _func: &FunctionDecl) -> bool {
-        // Simple heuristic: methods in impl blocks typically need &self
-        // The identifier generation will add self. prefix where needed
-        true
+    fn function_accesses_fields(&self, func: &FunctionDecl) -> bool {
+        // Check if the function body accesses any struct fields
+        for stmt in &func.body {
+            if self.statement_accesses_fields(stmt) {
+                return true;
+            }
+        }
+        false
+    }
+
+    fn function_mutates_fields(&self, func: &FunctionDecl) -> bool {
+        // Check if the function body mutates any struct fields
+        for stmt in &func.body {
+            if self.statement_mutates_fields(stmt) {
+                return true;
+            }
+        }
+        false
+    }
+
+    fn statement_accesses_fields(&self, stmt: &Statement) -> bool {
+        match stmt {
+            Statement::Expression(expr) | Statement::Return(Some(expr)) => {
+                self.expression_accesses_fields(expr)
+            }
+            Statement::Let { value, .. } => self.expression_accesses_fields(value),
+            Statement::Assignment { target, value } => {
+                self.expression_accesses_fields(target) || self.expression_accesses_fields(value)
+            }
+            Statement::If {
+                condition,
+                then_block,
+                else_block,
+            } => {
+                self.expression_accesses_fields(condition)
+                    || then_block.iter().any(|s| self.statement_accesses_fields(s))
+                    || else_block.as_ref().is_some_and(|block| {
+                        block.iter().any(|s| self.statement_accesses_fields(s))
+                    })
+            }
+            Statement::While { condition, body } => {
+                self.expression_accesses_fields(condition)
+                    || body.iter().any(|s| self.statement_accesses_fields(s))
+            }
+            Statement::For { iterable, body, .. } => {
+                self.expression_accesses_fields(iterable)
+                    || body.iter().any(|s| self.statement_accesses_fields(s))
+            }
+            Statement::Match { value, arms } => {
+                self.expression_accesses_fields(value)
+                    || arms
+                        .iter()
+                        .any(|arm| self.expression_accesses_fields(&arm.body))
+            }
+            _ => false,
+        }
+    }
+
+    fn statement_mutates_fields(&self, stmt: &Statement) -> bool {
+        match stmt {
+            Statement::Assignment { target, .. } => {
+                // Check if we're assigning to a field: self.field = ...
+                self.expression_is_field_access(target)
+            }
+            Statement::If {
+                then_block,
+                else_block,
+                ..
+            } => {
+                then_block.iter().any(|s| self.statement_mutates_fields(s))
+                    || else_block
+                        .as_ref()
+                        .is_some_and(|block| block.iter().any(|s| self.statement_mutates_fields(s)))
+            }
+            Statement::While { body, .. } | Statement::For { body, .. } => {
+                body.iter().any(|s| self.statement_mutates_fields(s))
+            }
+            Statement::Match { arms, .. } => {
+                arms.iter().any(|arm| {
+                    // MatchArm body is an Expression, need to check for blocks
+                    self.expression_mutates_fields(&arm.body)
+                })
+            }
+            _ => false,
+        }
+    }
+
+    fn expression_accesses_fields(&self, expr: &Expression) -> bool {
+        match expr {
+            Expression::Identifier(name) => self.current_struct_fields.contains(name),
+            Expression::FieldAccess { object, .. } => {
+                // Check for self.field or nested field access
+                if let Expression::Identifier(obj_name) = &**object {
+                    obj_name == "self"
+                } else {
+                    self.expression_accesses_fields(object)
+                }
+            }
+            Expression::MethodCall {
+                object, arguments, ..
+            } => {
+                self.expression_accesses_fields(object)
+                    || arguments
+                        .iter()
+                        .any(|(_, arg)| self.expression_accesses_fields(arg))
+            }
+            Expression::Call { arguments, .. } => arguments
+                .iter()
+                .any(|(_, arg)| self.expression_accesses_fields(arg)),
+            Expression::Binary { left, right, .. } => {
+                self.expression_accesses_fields(left) || self.expression_accesses_fields(right)
+            }
+            Expression::Unary { operand, .. } => self.expression_accesses_fields(operand),
+            Expression::Index { object, index } => {
+                self.expression_accesses_fields(object) || self.expression_accesses_fields(index)
+            }
+            Expression::StructLiteral { fields, .. } => fields
+                .iter()
+                .any(|(_, expr)| self.expression_accesses_fields(expr)),
+            Expression::Array(elements) => {
+                elements.iter().any(|e| self.expression_accesses_fields(e))
+            }
+            Expression::Tuple(elements) => {
+                elements.iter().any(|e| self.expression_accesses_fields(e))
+            }
+            Expression::Ternary {
+                condition,
+                true_expr,
+                false_expr,
+            } => {
+                self.expression_accesses_fields(condition)
+                    || self.expression_accesses_fields(true_expr)
+                    || self.expression_accesses_fields(false_expr)
+            }
+            Expression::Closure { body, .. } => self.expression_accesses_fields(body),
+            Expression::TryOp(expr) | Expression::Await(expr) | Expression::Cast { expr, .. } => {
+                self.expression_accesses_fields(expr)
+            }
+            Expression::MacroInvocation { args, .. } => {
+                // Check if any macro arguments access fields
+                args.iter().any(|arg| self.expression_accesses_fields(arg))
+            }
+            Expression::Range { start, end, .. } => {
+                self.expression_accesses_fields(start) || self.expression_accesses_fields(end)
+            }
+            Expression::ChannelSend { channel, value } => {
+                self.expression_accesses_fields(channel) || self.expression_accesses_fields(value)
+            }
+            Expression::ChannelRecv(expr) => self.expression_accesses_fields(expr),
+            Expression::Block(statements) => {
+                // Check if any statement in the block accesses fields
+                statements.iter().any(|s| self.statement_accesses_fields(s))
+            }
+            _ => false,
+        }
+    }
+
+    fn expression_is_field_access(&self, expr: &Expression) -> bool {
+        match expr {
+            Expression::Identifier(name) => self.current_struct_fields.contains(name),
+            Expression::FieldAccess { object, .. } => {
+                if let Expression::Identifier(obj_name) = &**object {
+                    obj_name == "self"
+                } else {
+                    false
+                }
+            }
+            _ => false,
+        }
+    }
+
+    fn expression_mutates_fields(&self, expr: &Expression) -> bool {
+        match expr {
+            Expression::Block(statements) => {
+                // Check if any statement in the block mutates fields
+                statements.iter().any(|s| self.statement_mutates_fields(s))
+            }
+            Expression::Ternary {
+                true_expr,
+                false_expr,
+                ..
+            } => {
+                // Check both branches
+                self.expression_mutates_fields(true_expr)
+                    || self.expression_mutates_fields(false_expr)
+            }
+            _ => false,
+        }
     }
 
     fn generate_function(&mut self, analyzed: &AnalyzedFunction) -> String {
@@ -954,13 +1138,16 @@ impl CodeGenerator {
 
         output.push('(');
 
-        // Add implicit &self for impl block methods that access fields
+        // Add implicit &self or &mut self for impl block methods that access fields
         let mut params: Vec<String> = Vec::new();
         let has_explicit_self = func.parameters.iter().any(|p| p.name == "self");
 
         if self.in_impl_block && !has_explicit_self && !self.current_struct_fields.is_empty() {
-            // Check if function body accesses any struct fields
-            if self.function_accesses_fields(func) {
+            // Check if function body mutates any struct fields
+            if self.function_mutates_fields(func) {
+                params.push("&mut self".to_string());
+            } else if self.function_accesses_fields(func) {
+                // Only read access needed
                 params.push("&self".to_string());
             }
         }
