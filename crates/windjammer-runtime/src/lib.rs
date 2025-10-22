@@ -27,6 +27,8 @@ pub mod regex_mod;
 pub mod strings;
 pub mod testing;
 pub mod time;
+pub mod ui;
 
 // Re-export commonly used types
 pub use http::{Request, Response, Router, ServerResponse};
+pub use ui::{VComponent, VElement, VNode, VText};
