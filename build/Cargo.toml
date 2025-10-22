@@ -42,6 +42,10 @@ name = "test_auto_borrow"
 path = "test_auto_borrow.rs"
 
 [[bin]]
+name = "game_hello_world"
+path = "game_hello_world.rs"
+
+[[bin]]
 name = "test_minimal"
 path = "test_minimal.rs"
 

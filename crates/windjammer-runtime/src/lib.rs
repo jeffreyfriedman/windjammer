@@ -19,6 +19,7 @@ pub mod csv_mod;
 pub mod db;
 pub mod encoding;
 pub mod env;
+pub mod game;
 pub mod log_mod;
 pub mod math;
 pub mod process;
@@ -30,5 +31,6 @@ pub mod time;
 pub mod ui;
 
 // Re-export commonly used types
+pub use game::{EntityId, Game, Mat4, Mesh, Sprite, Transform, Vec2, Vec3, Velocity, World};
 pub use http::{Request, Response, Router, ServerResponse};
 pub use ui::{VComponent, VElement, VNode, VText};
