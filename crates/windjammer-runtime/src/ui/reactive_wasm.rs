@@ -10,9 +10,11 @@ use wasm_bindgen::prelude::*;
 use web_sys::{window, Document, Element, HtmlElement};
 
 /// WASM-based Signal that automatically updates DOM
+type Subscribers<T> = Rc<RefCell<Vec<Box<dyn Fn(&T)>>>>;
+
 pub struct WasmSignal<T> {
     value: Rc<RefCell<T>>,
-    subscribers: Rc<RefCell<Vec<Box<dyn Fn(&T)>>>>,
+    subscribers: Subscribers<T>,
     element_bindings: Rc<RefCell<Vec<String>>>, // DOM element IDs bound to this signal
 }
 
@@ -73,26 +75,25 @@ impl<T: Clone> WasmSignal<T> {
 }
 
 /// Virtual DOM differ for efficient updates
+#[derive(Default)]
 pub struct VDomDiffer {
+    #[allow(dead_code)]
     current_tree: RefCell<Option<super::VNode>>,
 }
 
 impl VDomDiffer {
     pub fn new() -> Self {
-        VDomDiffer {
-            current_tree: RefCell::new(None),
-        }
+        Self::default()
     }
 
     /// Diff two VNode trees and return patches
     pub fn diff(&self, old: &super::VNode, new: &super::VNode) -> Vec<DomPatch> {
         let mut patches = Vec::new();
-        self.diff_recursive(old, new, &[], &mut patches);
+        Self::diff_recursive(old, new, &[], &mut patches);
         patches
     }
 
     fn diff_recursive(
-        &self,
         old: &super::VNode,
         new: &super::VNode,
         path: &[usize],
@@ -149,7 +150,7 @@ impl VDomDiffer {
                 {
                     let mut child_path = path.to_vec();
                     child_path.push(i);
-                    self.diff_recursive(old_child, new_child, &child_path, patches);
+                    Self::diff_recursive(old_child, new_child, &child_path, patches);
                 }
 
                 // Handle different lengths
@@ -309,15 +310,14 @@ pub enum DomPatch {
 }
 
 /// Event handler registry for WASM
+#[derive(Default)]
 pub struct WasmEventRegistry {
     handlers: RefCell<HashMap<String, Box<dyn Fn()>>>,
 }
 
 impl WasmEventRegistry {
     pub fn new() -> Self {
-        WasmEventRegistry {
-            handlers: RefCell::new(HashMap::new()),
-        }
+        Self::default()
     }
 
     pub fn register<F>(&self, event_id: &str, handler: F)
@@ -344,6 +344,7 @@ impl WasmEventRegistry {
 }
 
 /// Main reactive app for WASM
+#[allow(dead_code)]
 pub struct WasmReactiveApp {
     differ: VDomDiffer,
     event_registry: WasmEventRegistry,

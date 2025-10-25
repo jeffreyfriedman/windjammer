@@ -3,9 +3,9 @@
 use crate::audio::AudioSystem;
 use crate::ecs::World;
 use crate::input::Input;
-use crate::math::{Vec2, Vec3};
+use crate::math::Vec2;
 use crate::physics::PhysicsWorld;
-use crate::rendering::{Camera, Pipeline3D, RenderContext};
+use crate::rendering::{Camera, RenderContext};
 use crate::time::Time;
 
 /// Complete game application
@@ -39,15 +39,15 @@ impl GameApp {
     }
 
     /// Update game logic
-    pub fn update(&mut self, dt: f32) {
+    pub fn update(&mut self, _dt: f32) {
         // Update time
-        self.time.update(dt);
+        self.time.update();
 
         // Update physics
         self.physics.step();
 
-        // Update ECS world
-        self.world.update(dt);
+        // Note: World doesn't have an update method - systems should be run manually
+        // or through a system scheduler
 
         // Clear input state for next frame
         self.input.clear_frame_state();

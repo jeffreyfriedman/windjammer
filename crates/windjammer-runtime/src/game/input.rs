@@ -102,6 +102,12 @@ pub struct Input {
 
 impl Input {
     pub fn new() -> Self {
+        Self::default()
+    }
+}
+
+impl Default for Input {
+    fn default() -> Self {
         Input {
             keys_down: HashSet::new(),
             keys_pressed: HashSet::new(),
@@ -114,7 +120,9 @@ impl Input {
             mouse_wheel: 0.0,
         }
     }
+}
 
+impl Input {
     /// Call at the start of each frame to update state
     pub fn update(&mut self) {
         self.keys_pressed.clear();

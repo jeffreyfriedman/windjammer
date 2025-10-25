@@ -59,11 +59,14 @@ js-sys = { version = "0.3", optional = true }
 env_logger = "0.11"
 
 [features]
-default = ["2d", "audio-rodio"]
+default = ["2d", "audio"]
 
 # Dimension features
 2d = []
 3d = ["rapier3d"]
+
+# Audio feature (enables rodio by default)
+audio = ["audio-rodio"]
 
 # Audio backends
 audio-rodio = ["rodio"]
@@ -74,4 +77,4 @@ web = ["wasm-bindgen", "web-sys", "js-sys"]
 async = ["tokio"]
 
 # All features (for testing)
-all = ["2d", "3d", "audio-rodio", "audio-kira", "web", "async"]
+all = ["2d", "3d", "audio", "audio-kira", "web", "async"]

@@ -662,10 +662,10 @@ fn compile_file(
     // Read source file
     let source = std::fs::read_to_string(input_path)?;
 
-    // Check if this is a component file by trying to parse it as a component first
+    // Check if this is a component file by looking for component-specific syntax
+    // Components must have a "view {" block
     let is_component = if target == CompilationTarget::Wasm {
-        use component::parser::ComponentParser;
-        ComponentParser::parse(&source).is_ok()
+        source.contains("view {") || source.contains("view{")
     } else {
         false
     };

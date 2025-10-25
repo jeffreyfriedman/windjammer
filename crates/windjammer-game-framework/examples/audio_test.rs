@@ -1,22 +1,15 @@
 #[cfg(feature = "audio")]
-use windjammer_game::audio::AudioPlayer;
+use windjammer_game_framework::audio::AudioSystem;
 
 fn main() {
     println!("=== Windjammer Audio Test ===\n");
 
     #[cfg(feature = "audio")]
     {
-        match AudioPlayer::new() {
-            Ok(mut player) => {
-                println!("✅ Audio system initialized");
-                player.set_master_volume(0.5);
-                println!("✅ Volume set to 50%");
-                println!("✅ Audio system ready!");
-            }
-            Err(e) => {
-                println!("❌ Audio system failed: {}", e);
-            }
-        }
+        let audio_system = AudioSystem::new();
+        println!("✅ Audio system initialized");
+        println!("✅ Audio system ready!");
+        drop(audio_system); // Ensure it's used
     }
 
     #[cfg(not(feature = "audio"))]
