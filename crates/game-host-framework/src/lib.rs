@@ -38,6 +38,7 @@ pub mod assets; // Asset loading and management
 pub mod audio; // Audio playback
 pub mod camera2d; // 2D camera system
 pub mod ecs; // Entity-Component-System (Rust implementation)
+pub mod ecs_optimized; // Optimized ECS with archetype storage and query caching
 pub mod ecs_windjammer; // Windjammer-friendly ECS API (recommended)
 pub mod game_app; // Complete game application with integrated systems
 pub mod game_loop; // Game loop with fixed timestep
