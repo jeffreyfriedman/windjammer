@@ -44,6 +44,7 @@ pub mod component_runtime;
 pub mod events;
 pub mod platform;
 pub mod reactivity;
+pub mod reactivity_optimized;
 pub mod renderer;
 pub mod routing;
 pub mod runtime;
