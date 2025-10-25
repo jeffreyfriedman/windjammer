@@ -64,7 +64,7 @@ fn bench_multiple_signals(c: &mut Criterion) {
             signal_count,
             |b, &count| {
                 b.iter(|| {
-                    let signals: Vec<_> = (0..count).map(|i| Signal::new(i)).collect();
+                    let signals: Vec<_> = (0..count).map(Signal::new).collect();
 
                     for signal in &signals {
                         signal.set(black_box(42));
@@ -110,7 +110,7 @@ fn bench_signal_chain(c: &mut Criterion) {
 fn bench_signal_memory(c: &mut Criterion) {
     c.bench_function("signal_memory_footprint", |b| {
         b.iter(|| {
-            let signals: Vec<_> = (0..1000).map(|i| Signal::new(i)).collect();
+            let signals: Vec<_> = (0..1000).map(Signal::new).collect();
             black_box(signals);
         });
     });
