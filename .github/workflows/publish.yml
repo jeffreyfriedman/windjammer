@@ -119,8 +119,8 @@ jobs:
           cargo publish --dry-run -p windjammer-mcp
           echo "Dry run: windjammer-ui"
           cargo publish --dry-run -p windjammer-ui
-          echo "Dry run: game-host"
-          cargo publish --dry-run -p game-host
+          echo "Dry run: game-host-framework"
+          cargo publish --dry-run -p game-host-framework
 
       - name: Publish windjammer (core) to crates.io
         env:
@@ -167,12 +167,12 @@ jobs:
           echo "Waiting 30 seconds for crates.io to propagate..."
           sleep 30
 
-      - name: Publish game-host to crates.io
+      - name: Publish game-host-framework to crates.io
         env:
           CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
         run: |
-          echo "Publishing game-host (game engine)..."
-          cargo publish -p game-host
+          echo "Publishing game-host-framework (game engine)..."
+          cargo publish -p game-host-framework
 
       - name: Notify success
         if: success()

@@ -58,7 +58,7 @@ git clone https://github.com/jeffreyfriedman/windjammer
 cd windjammer
 
 # The game engine is part of the workspace
-cargo build --package game-host
+cargo build --package game-host-framework
 ```
 
 ### Current Capabilities
@@ -134,7 +134,7 @@ See `examples/shooter_2d.wj` for a complete 2D game with:
 - Score tracking
 
 ```bash
-windjammer run crates/game-host/examples/shooter_2d.wj
+windjammer run crates/game-host-framework/examples/shooter_2d.wj
 ```
 
 ### 3D Rotating Cube
@@ -145,7 +145,7 @@ See `examples/cube_3d.wj` for a 3D example with:
 - Rotation and orbiting
 
 ```bash
-windjammer run crates/game-host/examples/cube_3d.wj
+windjammer run crates/game-host-framework/examples/cube_3d.wj
 ```
 
 ## 🏗️ Architecture
@@ -280,7 +280,7 @@ Enable optional features in `Cargo.toml`:
 
 ```toml
 [dependencies]
-game-host = { version = "0.34.0", features = ["3d"] }
+game-host-framework = { version = "0.34.0", features = ["3d"] }
 ```
 
 Available features:

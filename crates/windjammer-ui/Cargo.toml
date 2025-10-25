@@ -47,6 +47,7 @@ web-sys = { version = "0.3", features = [
     "Event",
     "MouseEvent",
     "KeyboardEvent",
+    "DomTokenList",
     "console",
 ], optional = true }
 js-sys = { version = "0.3", optional = true }

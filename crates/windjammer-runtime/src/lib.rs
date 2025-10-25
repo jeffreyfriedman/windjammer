@@ -6,11 +6,13 @@
 
 // Core modules (fully implemented)
 pub mod fs;
+#[cfg(feature = "server")]
 pub mod http;
 pub mod json;
 pub mod mime;
 
 // Additional stdlib modules
+#[cfg(feature = "server")]
 pub mod async_runtime;
 pub mod cli;
 pub mod collections;
@@ -32,5 +34,6 @@ pub mod ui;
 
 // Re-export commonly used types
 pub use game::{EntityId, Game, Mat4, Mesh, Sprite, Transform, Vec2, Vec3, Velocity, World};
+#[cfg(feature = "server")]
 pub use http::{Request, Response, Router, ServerResponse};
 pub use ui::{VComponent, VElement, VNode, VText};

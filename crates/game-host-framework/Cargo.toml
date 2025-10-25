@@ -1,5 +1,5 @@
 [package]
-name = "game-host"
+name = "game-host-framework"
 version.workspace = true
 edition.workspace = true
 authors.workspace = true
@@ -10,7 +10,7 @@ keywords = ["game", "engine", "graphics", "wgpu", "ecs"]
 categories = ["game-engines", "graphics", "rendering"]
 
 [lib]
-name = "game_host"
+name = "game_host_framework"
 path = "src/lib.rs"
 
 [dependencies]

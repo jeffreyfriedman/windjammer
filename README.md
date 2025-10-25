@@ -444,67 +444,114 @@ All targets benefit from the same 15-phase optimization pipeline:
 
 ### 🎨 UI Framework (`windjammer-ui`) 🆕
 
-**Build beautiful, cross-platform applications!** Windjammer includes a complete UI framework inspired by Svelte, Dioxus, and Flutter for web, desktop, and mobile development.
+**Build beautiful, reactive web applications!** Windjammer includes a complete UI framework with **Svelte-inspired minimal syntax** that compiles to WebAssembly with zero JavaScript.
+
+#### Minimal Syntax (Recommended)
+
+Create `counter.wj`:
 
 ```windjammer
-use windjammer_ui.prelude.*
-use windjammer_ui.vdom.{VElement, VNode, VText}
+// State - automatically reactive
+count: int = 0
 
+// Functions - event handlers
+fn increment() {
+    count = count + 1
+}
+
+fn decrement() {
+    count = count - 1
+}
+
+// View - JSX-like template
+view {
+    div(class: "counter-app") {
+        h1 { "Windjammer Counter" }
+        div(class: "display") {
+            "Count: ${count}"  // String interpolation
+        }
+        div(class: "controls") {
+            button(on_click: decrement) { "-" }
+            button(on_click: increment) { "+" }
+        }
+    }
+}
+```
+
+Compile and run:
+
+```bash
+wj build counter.wj --target wasm --output ./counter_output
+cd counter_output
+wasm-pack build --target web
+python3 -m http.server 8080
+# Open http://localhost:8080
+```
+
+#### Advanced Syntax (Escape Hatch)
+
+For more control, use the advanced syntax:
+
+```windjammer
 @component
 struct Counter {
-    count: int
+    count: Signal<int>
 }
 
 impl Counter {
-    fn render() -> VNode {
-        VElement::new("div")
-            .attr("class", "counter")
-            .child(VNode::Element(
-                VElement::new("h1")
-                    .child(VNode::Text(VText::new("Count: {count}")))
-            ))
-            .child(VNode::Element(
-                VElement::new("button")
-                    .attr("onclick", "increment")
-                    .child(VNode::Text(VText::new("Increment")))
-            ))
-            .into()
+    fn new() -> Self {
+        Self { count: Signal::new(0) }
+    }
+    
+    fn increment(&mut self) {
+        self.count.set(self.count.get() + 1)
     }
 }
 ```
 
 **What You Get:**
-- ✅ **Svelte-inspired** - Simple, easy-to-reason-about component model
-- ✅ **Cross-platform** - Web (WASM), Desktop (Tauri), Mobile
-- ✅ **Reactive** - `Signal<T>`, `Computed`, `Effect` for state management
-- ✅ **Virtual DOM** - Efficient reconciliation and patching
-- ✅ **Game Development** - ECS architecture, 2D/3D rendering support
-- ✅ **Idiomatic Windjammer** - Implicit `self`, automatic borrows, clean syntax
-- ✅ **LSP/MCP Integration** - Completions, hover docs, code generation tools
+- ✅ **Zero JavaScript** - Compiles to pure WebAssembly
+- ✅ **Svelte-inspired Syntax** - Minimal, easy-to-reason-about
+- ✅ **Automatic Reactivity** - No `useState` or `useEffect`
+- ✅ **Signal-based State** - `Signal<T>`, `Computed`, `Effect`
+- ✅ **Type-safe** - Full Rust type system
+- ✅ **Fast Compilation** - Incremental builds
+- ✅ **Progressive Disclosure** - Simple things simple, complex things possible
+- ✅ **Idiomatic Windjammer** - Automatic borrows, string interpolation, clean syntax
 
-**Features:**
-- Server-side rendering (SSR) with hydration
-- Client-side routing
-- Platform-specific capabilities (Camera, GPS, Filesystem)
-- Form validation and state management
-- Game loop with input handling and rendering
-- Full IDE support with completions and refactoring
+**Component Features:**
+- **Minimal Syntax**: State, functions, and view in one file
+- **Advanced Syntax**: Full control with `@component` decorator
+- **Text Interpolation**: `${variable}` in strings
+- **Event Handlers**: Simple `on_click: handler` syntax
+- **Computed Values**: `@computed` for derived state
+- **Lifecycle Hooks**: `@on_mount`, `@on_destroy`, `@on_update`
+- **Conditionals**: `if/else` in templates
+- **Lists**: `for item in items` loops
+- **Component Composition**: Nest components naturally
 
 **Getting Started:**
 ```bash
-# Run a UI example
-wj run crates/windjammer-ui/examples/counter.wj
+# Compile a component example
+wj build examples/components/counter.wj --target wasm --output ./counter_output
 
-# Build for web (WASM)
-cd crates/windjammer-ui
-./build-wasm.sh
+# Build with wasm-pack
+cd counter_output
+wasm-pack build --target web
+
+# Serve and test
+python3 -m http.server 8080
+# Open http://localhost:8080 in your browser
 ```
 
-See [`crates/windjammer-ui/README.md`](crates/windjammer-ui/README.md) for full documentation and examples.
+**Learn More:**
+- [UI Framework Guide](docs/UI_FRAMEWORK_GUIDE.md) - Complete guide with examples
+- [Component Examples](examples/components/) - Counter, TODO app, and more
+- [API Reference](docs/API_REFERENCE.md) - Full API documentation
 
 ---
 
-### 🎮 Game Engine (`game-host`) 🆕
+### 🎮 Game Engine (`game-host-framework`) 🆕
 
 **Build high-performance 2D and 3D games!** Windjammer includes a complete game engine with ECS architecture, physics, and modern graphics.
 
@@ -553,13 +600,13 @@ fn main() {
 **Getting Started:**
 ```bash
 # Run a game example
-wj run crates/game-host/examples/shooter_2d.wj
+wj run crates/game-host-framework/examples/shooter_2d.wj
 
 # Build for WASM
-wj build crates/game-host/examples/shooter_2d.wj --target wasm
+wj build crates/game-host-framework/examples/shooter_2d.wj --target wasm
 ```
 
-See [`crates/game-host/README.md`](crates/game-host/README.md) for full documentation and examples.
+See [`crates/game-host-framework/README.md`](crates/game-host-framework/README.md) for full documentation and examples.
 
 ---
 
