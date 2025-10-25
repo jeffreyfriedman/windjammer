@@ -373,7 +373,9 @@ mod tests {
             pos.x += 10.0;
         }
 
-        let positions = world.query::<Position>();
+        let mut positions = world.query::<Position>();
+        // Sort by x to ensure consistent order
+        positions.sort_by(|a, b| a.1.x.partial_cmp(&b.1.x).unwrap());
         assert_eq!(positions[0].1.x, 11.0);
         assert_eq!(positions[1].1.x, 13.0);
     }
