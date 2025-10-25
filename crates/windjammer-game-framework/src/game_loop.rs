@@ -226,6 +226,9 @@ mod tests {
             input_handled: false,
         };
 
+        // Simulate some time passing to ensure accumulator has enough time for an update
+        std::thread::sleep(std::time::Duration::from_millis(20));
+
         runner.tick(&mut game);
 
         // Game should have been updated and rendered
