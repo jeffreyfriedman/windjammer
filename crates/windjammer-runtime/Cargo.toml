@@ -7,17 +7,18 @@ description = "Runtime library for Windjammer standard library implementations"
 license = "MIT OR Apache-2.0"
 
 [features]
-default = []
-db = ["sqlx"]
-wasm = ["wasm-bindgen", "web-sys", "js-sys"]
+default = ["server"]
+server = ["reqwest", "axum", "tokio", "tower", "tower-http"]
+db = ["sqlx", "tokio"]
+wasm = ["wasm-bindgen", "web-sys", "js-sys", "console_error_panic_hook"]
 
 [dependencies]
-# HTTP Client & Server
-reqwest = { version = "0.11", features = ["json", "blocking"] }
-axum = { version = "0.7", features = ["macros"] }
-tokio = { version = "1", features = ["full"] }
-tower = "0.4"
-tower-http = { version = "0.5", features = ["fs", "trace"] }
+# HTTP Client & Server (not available on WASM)
+reqwest = { version = "0.11", features = ["json", "blocking"], optional = true }
+axum = { version = "0.7", features = ["macros"], optional = true }
+tokio = { version = "1", features = ["full"], optional = true }
+tower = { version = "0.4", optional = true }
+tower-http = { version = "0.5", features = ["fs", "trace"], optional = true }
 
 # JSON
 serde = { version = "1.0", features = ["derive"] }
@@ -48,6 +49,7 @@ sqlx = { version = "0.7", features = ["runtime-tokio-native-tls", "sqlite"], opt
 log = "0.4"
 env_logger = "0.11"
 rand = "0.8"
+getrandom = { version = "0.2", features = ["js"] }
 regex = "1.10"
 chrono = "0.4"
 
@@ -67,5 +69,8 @@ web-sys = { version = "0.3", features = [
     "InputEvent",
     "HtmlInputElement",
     "HtmlButtonElement",
+    "DomTokenList",  # For classList
+    "console",       # For console logging
 ], optional = true }
 js-sys = { version = "0.3", optional = true }
+console_error_panic_hook = { version = "0.1", optional = true }

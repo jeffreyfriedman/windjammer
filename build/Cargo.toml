@@ -26,8 +26,20 @@ name = "game_ecs_demo"
 path = "game_ecs_demo.rs"
 
 [[bin]]
+name = "test_minimal_fail"
+path = "test_minimal_fail.rs"
+
+[[bin]]
 name = "ui_simple"
 path = "ui_simple.rs"
+
+[[bin]]
+name = "test_nested_static"
+path = "test_nested_static.rs"
+
+[[bin]]
+name = "test_game_subset"
+path = "test_game_subset.rs"
 
 [[bin]]
 name = "ui_hello_world"
@@ -40,6 +52,10 @@ path = "game_simple.rs"
 [[bin]]
 name = "ui_counter_clean"
 path = "ui_counter_clean.rs"
+
+[[bin]]
+name = "game_asteroids_full"
+path = "game_asteroids_full.rs"
 
 [[bin]]
 name = "http_server_test"

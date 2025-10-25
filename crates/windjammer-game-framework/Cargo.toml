@@ -1,0 +1,77 @@
+[package]
+name = "windjammer-game-framework"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+rust-version.workspace = true
+description = "2D/3D game engine for Windjammer with Metal, Vulkan, DirectX, and WebGPU support"
+keywords = ["game", "engine", "graphics", "wgpu", "ecs"]
+categories = ["game-engines", "graphics", "rendering"]
+
+[lib]
+name = "windjammer_game_framework"
+path = "src/lib.rs"
+
+[dependencies]
+# Core Windjammer dependency
+windjammer = { path = "../..", version = "0.34.0" }
+
+# Graphics API abstraction (Metal, Vulkan, DirectX, WebGPU)
+wgpu = "0.19"
+winit = "0.29"  # Window management and input
+
+# Math library
+glam = "0.25"  # Fast math for games (SIMD-optimized)
+bytemuck = { version = "1.14", features = ["derive"] }  # For wgpu vertex data
+
+# Physics engines
+rapier2d = { version = "0.18", features = ["serde-serialize"] }
+rapier3d = { version = "0.18", features = ["serde-serialize"], optional = true }
+# Note: Jolt physics (jolt-physics-rs) is still experimental in Rust
+# For now, we'll use Rapier for both 2D and 3D, with Jolt as a future option
+
+# Audio
+rodio = { version = "0.17", optional = true }
+kira = { version = "0.8", optional = true }
+
+# Asset loading
+image = "0.24"  # Image loading
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+
+# Async runtime
+tokio = { version = "1.35", features = ["rt", "sync"], optional = true }
+pollster = "0.3"  # Block on async for simple cases
+
+# Web platform (WASM)
+wasm-bindgen = { version = "0.2", optional = true }
+web-sys = { version = "0.3", features = [
+    "Window",
+    "Document",
+    "HtmlCanvasElement",
+    "WebGl2RenderingContext",
+    "Performance",
+], optional = true }
+js-sys = { version = "0.3", optional = true }
+
+[dev-dependencies]
+env_logger = "0.11"
+
+[features]
+default = ["2d", "audio-rodio"]
+
+# Dimension features
+2d = []
+3d = ["rapier3d"]
+
+# Audio backends
+audio-rodio = ["rodio"]
+audio-kira = ["kira"]
+
+# Platform features
+web = ["wasm-bindgen", "web-sys", "js-sys"]
+async = ["tokio"]
+
+# All features (for testing)
+all = ["2d", "3d", "audio-rodio", "audio-kira", "web", "async"]

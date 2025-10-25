@@ -2,6 +2,10 @@
 
 use std::cell::RefCell;
 use std::collections::HashMap;
+
+// WASM reactive runtime
+pub mod reactive_wasm;
+pub mod wasm_app;
 use std::rc::Rc;
 
 #[cfg(feature = "wasm")]
@@ -138,10 +142,8 @@ pub fn div() -> VElement {
     VElement::new("div")
 }
 
-pub fn h1(text: &str) -> VNode {
-    VElement::new("h1")
-        .child(VNode::Text(VText::new(text)))
-        .into_vnode()
+pub fn h1(text: &str) -> VElement {
+    VElement::new("h1").child(VNode::Text(VText::new(text)))
 }
 
 pub fn h2(text: &str) -> VNode {
@@ -150,16 +152,12 @@ pub fn h2(text: &str) -> VNode {
         .into_vnode()
 }
 
-pub fn p(text: &str) -> VNode {
-    VElement::new("p")
-        .child(VNode::Text(VText::new(text)))
-        .into_vnode()
+pub fn p(text: &str) -> VElement {
+    VElement::new("p").child(VNode::Text(VText::new(text)))
 }
 
-pub fn button(text: &str) -> VNode {
-    VElement::new("button")
-        .child(VNode::Text(VText::new(text)))
-        .into_vnode()
+pub fn button(text: &str) -> VElement {
+    VElement::new("button").child(VNode::Text(VText::new(text)))
 }
 
 pub fn input() -> VElement {
@@ -226,6 +224,35 @@ pub fn get_window() -> Option<Window> {
 #[cfg(feature = "wasm")]
 pub fn get_document() -> Option<Document> {
     get_window()?.document()
+}
+
+#[cfg(feature = "wasm")]
+pub fn get_element_by_id(id: &str) -> Option<Element> {
+    get_document()?.get_element_by_id(id)
+}
+
+#[cfg(feature = "wasm")]
+pub fn set_inner_html(element: &Element, html: &str) {
+    element.set_inner_html(html);
+}
+
+#[cfg(feature = "wasm")]
+pub fn set_text_content(element: &Element, text: &str) {
+    element.set_text_content(Some(text));
+}
+
+#[cfg(feature = "wasm")]
+pub fn add_class(element: &Element, class: &str) {
+    if let Ok(class_list) = element.class_list().add_1(class) {
+        let _ = class_list;
+    }
+}
+
+#[cfg(feature = "wasm")]
+pub fn remove_class(element: &Element, class: &str) {
+    if let Ok(class_list) = element.class_list().remove_1(class) {
+        let _ = class_list;
+    }
 }
 
 #[cfg(feature = "wasm")]
@@ -397,6 +424,66 @@ where
     // Run immediately
     f();
     // In a full implementation, would track dependencies and re-run on changes
+}
+
+// ============================================================================
+// Reactive Application Runtime
+// ============================================================================
+
+/// ReactiveApp manages reactive state and event handling
+pub struct ReactiveApp {
+    signals: HashMap<String, String>,  // Signal name -> initial value
+    handlers: HashMap<String, String>, // Event ID -> handler name
+}
+
+impl ReactiveApp {
+    pub fn new() -> Self {
+        ReactiveApp {
+            signals: HashMap::new(),
+            handlers: HashMap::new(),
+        }
+    }
+
+    pub fn register_signal(&mut self, name: &str, initial_value: &str) {
+        self.signals
+            .insert(name.to_string(), initial_value.to_string());
+    }
+
+    pub fn register_handler(&mut self, event_id: &str, handler_name: &str) {
+        self.handlers
+            .insert(event_id.to_string(), handler_name.to_string());
+    }
+
+    /// Generate minimal reactive JavaScript runtime
+    pub fn generate_runtime_js(&self) -> String {
+        let mut js = String::new();
+
+        // Windjammer reactive runtime
+        js.push_str("// Windjammer Reactive Runtime\n");
+        js.push_str("class WindjammerSignal {\n");
+        js.push_str("  constructor(value) { this.value = value; this.subs = []; }\n");
+        js.push_str("  get() { return this.value; }\n");
+        js.push_str("  set(v) { this.value = v; this.subs.forEach(fn => fn(v)); }\n");
+        js.push_str("  subscribe(fn) { this.subs.push(fn); }\n");
+        js.push_str("}\n\n");
+
+        js.push_str("const WJ = {\n");
+        js.push_str("  signals: {},\n");
+        js.push_str("  signal(name, initial) {\n");
+        js.push_str("    this.signals[name] = new WindjammerSignal(initial);\n");
+        js.push_str("    return this.signals[name];\n");
+        js.push_str("  },\n");
+        js.push_str("  get(name) { return this.signals[name]; }\n");
+        js.push_str("};\n\n");
+
+        // Initialize registered signals
+        for (name, initial) in &self.signals {
+            js.push_str(&format!("WJ.signal('{}', {});\n", name, initial));
+        }
+
+        js.push_str("\n");
+        js
+    }
 }
 
 #[cfg(test)]

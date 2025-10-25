@@ -311,7 +311,7 @@ export function fibonacci(n) {
 
 ## UI Framework (`windjammer-ui`) - v0.34.0 🆕
 
-**Build cross-platform applications** with a Svelte-inspired component model!
+**Build reactive web applications** with a Svelte-inspired minimal syntax that compiles to WebAssembly with **zero JavaScript**!
 
 ### Comparison with Other UI Frameworks
 
@@ -331,20 +331,41 @@ export function fibonacci(n) {
 
 **Key Advantages:**
 
-1. **Idiomatic Windjammer** - No Rust leakage, clean syntax
+1. **Minimal Syntax** - Svelte-inspired, zero boilerplate
    ```windjammer
-   // Windjammer UI (implicit self, auto-borrows)
-   fn render() -> VNode {
-       VElement::new("div")
-           .attr("class", "counter")
-           .child(VNode::Text(VText::new("Count: {count}")))
-           .into()
+   // Windjammer UI - Minimal Syntax
+   count: int = 0
+   
+   fn increment() {
+       count = count + 1
    }
    
-   // React (verbose, manual tracking)
-   function render() {
-       return <div className="counter">Count: {count}</div>;
+   view {
+       div(class: "counter") {
+           "Count: ${count}"
+           button(on_click: increment) { "+" }
+       }
    }
+   
+   // React - Verbose, manual tracking
+   function Counter() {
+       const [count, setCount] = useState(0);
+       return (
+           <div className="counter">
+               Count: {count}
+               <button onClick={() => setCount(count + 1)}>+</button>
+           </div>
+       );
+   }
+   
+   // Svelte - Similar, but JavaScript
+   <script>
+       let count = 0;
+   </script>
+   <div class="counter">
+       Count: {count}
+       <button on:click={() => count++}>+</button>
+   </div>
    ```
 
 2. **Cross-Platform by Default** - Same code for web, desktop, mobile
@@ -375,6 +396,13 @@ export function fibonacci(n) {
    - "Generate a todo list component" → Full working code
    - "Add a game enemy entity" → Complete ECS entity
    - "Analyze SSR setup" → Suggestions and best practices
+
+7. **Component Compiler** - Automatic transformation to reactive code
+   - State variables → `Signal<T>` with automatic dependency tracking
+   - Functions → Event handlers with proper closures
+   - View blocks → Optimized DOM manipulation
+   - Text interpolation → `${variable}` syntax
+   - **Result:** Write simple code, get reactive apps
 
 ### When to Use Windjammer UI
 
