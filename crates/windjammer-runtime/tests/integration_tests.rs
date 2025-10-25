@@ -205,7 +205,7 @@ fn test_cli_app_creation() {
         "Input file",
         false,
     );
-    let app = app.flag(
+    let _app = app.flag(
         "verbose",
         Some('v'),
         Some("verbose".to_string()),
@@ -213,7 +213,7 @@ fn test_cli_app_creation() {
     );
 
     // Can't easily test parse() without mocking args, but we can verify structure
-    assert!(true); // App builds successfully
+    // App builds successfully if we get here
 }
 
 // ============================================================================
@@ -440,7 +440,7 @@ fn test_log_init() {
 #[test]
 fn test_log_messages() {
     // Logger may already be initialized - ignore error
-    let _ = std::panic::catch_unwind(|| log_mod::init());
+    let _ = std::panic::catch_unwind(log_mod::init);
 
     // These should work regardless of init state
     log_mod::info("Test info message");
@@ -506,13 +506,13 @@ fn test_process_run_failure() {
 #[test]
 fn test_random_int() {
     let num = random::int_range(1, 10);
-    assert!(num >= 1 && num <= 10);
+    assert!((1..=10).contains(&num));
 }
 
 #[test]
 fn test_random_float() {
     let num = random::float_range(0.0, 1.0);
-    assert!(num >= 0.0 && num <= 1.0);
+    assert!((0.0..=1.0).contains(&num));
 }
 
 #[test]
