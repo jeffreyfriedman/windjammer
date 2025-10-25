@@ -82,7 +82,7 @@ mod tests {
     #[test]
     fn test_abs() {
         assert_eq!(abs_i64(-5), 5);
-        assert_eq!(abs_f64(-3.14), 3.14);
+        assert_eq!(abs_f64(-2.5), 2.5);
     }
 
     #[test]

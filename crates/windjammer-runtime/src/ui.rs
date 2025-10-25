@@ -325,10 +325,12 @@ pub fn mount(node: &VNode, selector: &str) -> Result<(), JsValue> {
 // ============================================================================
 
 /// Signal<T> - Reactive state container
+type SignalSubscribers<T> = Rc<RefCell<Vec<Box<dyn Fn(&T)>>>>;
+
 #[derive(Clone)]
 pub struct Signal<T> {
     value: Rc<RefCell<T>>,
-    subscribers: Rc<RefCell<Vec<Box<dyn Fn(&T)>>>>,
+    subscribers: SignalSubscribers<T>,
 }
 
 impl<T> Signal<T> {
@@ -431,6 +433,7 @@ where
 // ============================================================================
 
 /// ReactiveApp manages reactive state and event handling
+#[derive(Default)]
 pub struct ReactiveApp {
     signals: HashMap<String, String>,  // Signal name -> initial value
     handlers: HashMap<String, String>, // Event ID -> handler name
@@ -438,10 +441,7 @@ pub struct ReactiveApp {
 
 impl ReactiveApp {
     pub fn new() -> Self {
-        ReactiveApp {
-            signals: HashMap::new(),
-            handlers: HashMap::new(),
-        }
+        Self::default()
     }
 
     pub fn register_signal(&mut self, name: &str, initial_value: &str) {
@@ -481,7 +481,7 @@ impl ReactiveApp {
             js.push_str(&format!("WJ.signal('{}', {});\n", name, initial));
         }
 
-        js.push_str("\n");
+        js.push('\n');
         js
     }
 }
@@ -522,20 +522,15 @@ mod tests {
     #[test]
     fn test_helper_functions() {
         let heading = h1("Title");
-        match heading {
-            VNode::Element(el) => {
-                assert_eq!(el.tag, "h1");
-                assert_eq!(el.children.len(), 1);
-            }
-            _ => panic!("Expected element"),
-        }
+        assert_eq!(heading.tag, "h1");
+        assert_eq!(heading.children.len(), 1);
     }
 
     #[test]
     fn test_render_to_string() {
         let node = VElement::new("div")
             .attr("class", "container")
-            .child(h1("Hello"))
+            .child(h1("Hello").into_vnode())
             .into_vnode();
 
         let html = render_to_string(&node);

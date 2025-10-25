@@ -44,7 +44,7 @@ mod tests {
     fn test_int_range() {
         for _ in 0..100 {
             let n = int_range(0, 10);
-            assert!(n >= 0 && n < 10);
+            assert!((0..10).contains(&n));
         }
     }
 
@@ -52,7 +52,7 @@ mod tests {
     fn test_float() {
         for _ in 0..100 {
             let f = float();
-            assert!(f >= 0.0 && f < 1.0);
+            assert!((0.0..1.0).contains(&f));
         }
     }
 

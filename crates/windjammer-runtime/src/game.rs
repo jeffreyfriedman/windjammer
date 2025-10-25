@@ -51,7 +51,7 @@ impl World {
         let type_id = TypeId::of::<T>();
         self.components
             .entry(type_id)
-            .or_insert_with(HashMap::new)
+            .or_default()
             .insert(entity, Box::new(component));
     }
 
@@ -378,22 +378,22 @@ impl Mesh {
 }
 
 /// Player marker component
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, Default)]
 pub struct Player;
 
 impl Player {
     pub fn new() -> Self {
-        Player
+        Self
     }
 }
 
 /// Goal marker component
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, Default)]
 pub struct Goal;
 
 impl Goal {
     pub fn new() -> Self {
-        Goal
+        Self
     }
 }
 

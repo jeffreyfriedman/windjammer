@@ -1,10 +1,10 @@
-use game_host::math::Vec3;
-use game_host::physics::PhysicsWorld;
+use game_host_framework::math::Vec2;
+use game_host_framework::physics::PhysicsWorld;
 
 fn main() {
     println!("=== Windjammer Physics Test ===\n");
 
-    let mut world = PhysicsWorld::new(Vec3::new(0.0, -9.81, 0.0));
+    let mut world = PhysicsWorld::new(Vec2::new(0.0, -9.81));
 
     println!("Physics world created with gravity: (0, -9.81, 0)");
     println!("Stepping physics simulation...");

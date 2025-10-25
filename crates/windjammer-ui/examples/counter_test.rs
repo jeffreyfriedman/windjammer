@@ -14,7 +14,7 @@ fn main() {
         tag: "div".to_string(),
         attrs: HashMap::new(),
         children: vec![
-            VNode::Text(VText::new(&format!("Count: {}", count))),
+            VNode::Text(VText::new(format!("Count: {}", count))),
             VNode::Element(VElement {
                 tag: "button".to_string(),
                 attrs: {
@@ -38,7 +38,7 @@ fn main() {
             tag: "div".to_string(),
             attrs: HashMap::new(),
             children: vec![
-                VNode::Text(VText::new(&format!("Count: {}", count))),
+                VNode::Text(VText::new(format!("Count: {}", count))),
                 VNode::Element(VElement {
                     tag: "button".to_string(),
                     attrs: {
