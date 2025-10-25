@@ -70,6 +70,11 @@ jni = { version = "0.21", optional = true }
 [dev-dependencies]
 tokio-test = "0.4"
 console_error_panic_hook = "0.1"
+criterion = "0.5"
+
+[[bench]]
+name = "signal_benchmarks"
+harness = false
 
 [features]
 default = ["web"]
