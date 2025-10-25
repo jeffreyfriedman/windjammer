@@ -1,5 +1,5 @@
 [package]
-name = "windjammer-game"
+name = "windjammer-game-framework"
 version.workspace = true
 edition.workspace = true
 authors.workspace = true
@@ -10,7 +10,7 @@ keywords = ["game", "engine", "graphics", "wgpu", "ecs"]
 categories = ["game-engines", "graphics", "rendering"]
 
 [lib]
-name = "windjammer_game"
+name = "windjammer_game_framework"
 path = "src/lib.rs"
 
 [dependencies]

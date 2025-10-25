@@ -1,0 +1,81 @@
+// TODO app component demonstrating lists and more complex state
+todos: Vec<String> = vec![]
+input: String = ""
+filter: String = "all"
+
+fn add_todo() {
+    if input != "" {
+        todos.push(input)
+        input = ""
+    }
+}
+
+fn remove_todo(index: int) {
+    todos.remove(index)
+}
+
+fn clear_completed() {
+    todos = vec![]
+}
+
+fn set_filter(new_filter: String) {
+    filter = new_filter
+}
+
+@computed
+active_count: int = todos.len()
+
+@computed
+completed_count: int = 0
+
+view {
+    div(class: "todo-app") {
+        h1 { "Windjammer TODO" }
+        
+        div(class: "todo-input") {
+            input(
+                type: "text",
+                placeholder: "What needs to be done?",
+                value: input,
+                on_input: update_input,
+                on_keypress: handle_keypress
+            )
+            button(on_click: add_todo) { "Add" }
+        }
+        
+        div(class: "todo-list") {
+            for todo in todos {
+                div(class: "todo-item") {
+                    span { "{todo}" }
+                    button(class: "delete-btn", on_click: remove_todo) { "×" }
+                }
+            }
+        }
+        
+        div(class: "todo-footer") {
+            span(class: "todo-count") {
+                "{active_count} items left"
+            }
+            
+            div(class: "filters") {
+                button(
+                    class: if filter == "all" { "active" } else { "" },
+                    on_click: set_filter("all")
+                ) { "All" }
+                button(
+                    class: if filter == "active" { "active" } else { "" },
+                    on_click: set_filter("active")
+                ) { "Active" }
+                button(
+                    class: if filter == "completed" { "active" } else { "" },
+                    on_click: set_filter("completed")
+                ) { "Completed" }
+            }
+            
+            button(class: "clear-completed", on_click: clear_completed) {
+                "Clear completed"
+            }
+        }
+    }
+}
+

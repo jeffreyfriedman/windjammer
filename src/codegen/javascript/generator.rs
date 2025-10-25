@@ -819,6 +819,7 @@ if (import.meta.url === `file://${process.argv[1]}`) {
             UnaryOp::Not => "!".to_string(),
             UnaryOp::Neg => "-".to_string(),
             UnaryOp::Ref => "".to_string(), // & doesn't apply in JS (auto-reference)
+            UnaryOp::MutRef => "".to_string(), // &mut doesn't apply in JS (auto-reference)
             UnaryOp::Deref => "".to_string(), // * doesn't apply in JS
         }
     }

@@ -7,6 +7,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+- **Critical**: Double reference/borrow bug in code generation (`&&` and `&mut &mut`)
+  - Added `UnaryOp::MutRef` to distinguish `&` from `&mut` in AST
+  - Fixed parser to preserve mutability information in unary expressions
+  - Fixed parameter generation to avoid double-wrapping reference types
+  - Added comprehensive test suite for reference handling
+  - All 243 tests passing
+
+### Added
+- Reactive WASM runtime with `WasmSignal<T>` for automatic DOM updates
+- Virtual DOM differ with patch generation for efficient updates
+- Event registry system for WASM-based event handling
+- Game rendering backend with `Renderer2D`, `Camera2D`, and sprite batching
+- Full input system with keyboard, mouse, and frame-based state management
+- Blanket `Component` trait implementation for ECS
+
 ## [0.34.0] - 2025-10-18
 
 **Windjammer UI Framework + Game Engine: Cross-Platform Everything** 🎨🎮
@@ -15,7 +31,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 v0.34.0 introduces TWO major frameworks: a Svelte-inspired UI framework for building apps, and a complete 2D/3D game engine. Write once, deploy to Web, Desktop, and Mobile - for both UI apps AND games. Same language, idiomatic Windjammer syntax, Rust performance.
 
 **Major Achievements**: 
-- Separated game engine into dedicated `windjammer-game` crate with full ECS, physics, and wgpu rendering backend
+- Separated game engine into dedicated `windjammer-game-framework` crate with full ECS, physics, and wgpu rendering backend
 - Implemented key language features: `if let` patterns, fixed-size arrays `[T; N]`, closure compound assignments
 - 97/164 examples passing (59%), comprehensive test coverage
 
@@ -60,7 +76,7 @@ v0.34.0 introduces TWO major frameworks: a Svelte-inspired UI framework for buil
 - `new()` and `with_state()` constructors
 - `#[derive(Props)]` for component props
 
-**windjammer-game (Dedicated Game Engine):**
+**windjammer-game-framework (Dedicated Game Engine):**
 - Entity-Component System (ECS) with World, Entity, Component
 - 2D/3D math (Vec2, Vec3, Mat4) with SIMD (glam)
 - 2D/3D physics (Rapier2D/3D integration)

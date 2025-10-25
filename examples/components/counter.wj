@@ -1,0 +1,29 @@
+// Simple counter component in minimal Windjammer syntax
+count: int = 0
+
+fn increment() {
+    count = count + 1
+}
+
+fn decrement() {
+    count = count - 1
+}
+
+fn reset() {
+    count = 0
+}
+
+view {
+    div(class: "counter-app") {
+        h1 { "Windjammer Counter" }
+        div(class: "counter-display") {
+            "Count: ${count}"
+        }
+        div(class: "counter-controls") {
+            button(class: "btn btn-decrement", on_click: decrement) { "-" }
+            button(class: "btn btn-reset", on_click: reset) { "Reset" }
+            button(class: "btn btn-increment", on_click: increment) { "+" }
+        }
+    }
+}
+
