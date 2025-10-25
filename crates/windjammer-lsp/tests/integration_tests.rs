@@ -170,11 +170,11 @@ fn test_func() {
         // Test programs that use stdlib modules
         let stdlib_program = r#"
 fn main() {
-    use std.fs
-    use std.http
-    use std.json
+    use std::fs
+    use std::http
+    use std::json
     
-    let content = fs.read("file.txt")
+    let content = fs::read("file.txt")
     print(content)
 }
 "#;
