@@ -390,8 +390,9 @@ pub enum BinaryOp {
 pub enum UnaryOp {
     Not,
     Neg,
-    Ref,   // & operator
-    Deref, // * operator (dereference)
+    Ref,    // & operator
+    MutRef, // &mut operator
+    Deref,  // * operator (dereference)
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
@@ -1401,8 +1402,6 @@ impl Parser {
                 });
             } else {
                 // Regular parameter - could be a simple name or a pattern
-                let ownership = OwnershipHint::Inferred;
-
                 // Check if this is a pattern parameter (starts with '(')
                 if self.current_token() == &Token::LParen {
                     // Parse tuple pattern
@@ -1412,6 +1411,14 @@ impl Parser {
 
                     // Extract a name from the pattern for backward compatibility
                     let name = Self::pattern_to_name(&pattern);
+
+                    // If the type already specifies ownership (& or &mut), use Owned to prevent double-wrapping
+                    let ownership =
+                        if matches!(type_, Type::Reference(_) | Type::MutableReference(_)) {
+                            OwnershipHint::Owned
+                        } else {
+                            OwnershipHint::Inferred
+                        };
 
                     params.push(Parameter {
                         name,
@@ -1431,6 +1438,14 @@ impl Parser {
 
                     self.expect(Token::Colon)?;
                     let type_ = self.parse_type()?;
+
+                    // If the type already specifies ownership (& or &mut), use Owned to prevent double-wrapping
+                    let ownership =
+                        if matches!(type_, Type::Reference(_) | Type::MutableReference(_)) {
+                            OwnershipHint::Owned
+                        } else {
+                            OwnershipHint::Inferred
+                        };
 
                     params.push(Parameter {
                         name,
@@ -2414,16 +2429,19 @@ impl Parser {
             Token::Ampersand => {
                 // Handle & and &mut unary operators
                 self.advance();
-                let _mutable = if self.current_token() == &Token::Mut {
+                let is_mut = if self.current_token() == &Token::Mut {
                     self.advance();
                     true
                 } else {
                     false
                 };
-                // TODO: Properly handle &mut as separate UnaryOp variant
                 let inner = self.parse_match_value()?;
                 Expression::Unary {
-                    op: UnaryOp::Ref,
+                    op: if is_mut {
+                        UnaryOp::MutRef
+                    } else {
+                        UnaryOp::Ref
+                    },
                     operand: Box::new(inner),
                 }
             }
@@ -2714,17 +2732,19 @@ impl Parser {
             Token::Ampersand => {
                 // Reference: &expr or &mut expr
                 self.advance();
-                let _is_mut = if self.current_token() == &Token::Mut {
+                let is_mut = if self.current_token() == &Token::Mut {
                     self.advance();
                     true
                 } else {
                     false
                 };
-                // For now, just parse the expression and wrap it
-                // In full implementation, we'd track whether it's &mut
                 let operand = self.parse_primary_expression()?;
                 Expression::Unary {
-                    op: UnaryOp::Ref,
+                    op: if is_mut {
+                        UnaryOp::MutRef
+                    } else {
+                        UnaryOp::Ref
+                    },
                     operand: Box::new(operand),
                 }
             }
@@ -3520,5 +3540,18 @@ impl Parser {
                 }
             }
         }
+    }
+
+    // Public wrapper methods for component compiler
+    pub fn parse_expression_public(&mut self) -> Result<Expression, String> {
+        self.parse_expression()
+    }
+
+    pub fn parse_type_public(&mut self) -> Result<Type, String> {
+        self.parse_type()
+    }
+
+    pub fn parse_function_public(&mut self) -> Result<FunctionDecl, String> {
+        self.parse_function()
     }
 }

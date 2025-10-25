@@ -1,0 +1,17 @@
+// Test for &mut reference handling
+
+fn modify(data: &mut Vec<i32>) {
+    data.push(42)
+}
+
+fn read(data: &Vec<i32>) -> i32 {
+    data.len() as i32
+}
+
+fn main() {
+    let mut vec = Vec::new()
+    modify(&mut vec)
+    let len = read(&vec)
+    print("Vector length: {len}")
+}
+

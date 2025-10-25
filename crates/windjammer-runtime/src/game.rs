@@ -3,12 +3,24 @@
 use std::any::{Any, TypeId};
 use std::collections::HashMap;
 
+// Sub-modules
+pub mod input;
+pub mod render;
+
+// Re-export key types
+pub use input::{Input, Key, MouseButton};
+pub use render::{Camera2D, RenderBackend, Renderer2D, SpriteBatch};
+
 /// Entity ID - unique identifier for game entities
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct EntityId(pub u64);
 
 /// Component trait - marker for game components
 pub trait Component: Any + Send + Sync {}
+
+// Blanket impl for any type that is Any + Send + Sync
+// This allows user-defined structs to automatically be components
+impl<T: Any + Send + Sync> Component for T {}
 
 /// World - ECS world containing all entities and components
 pub struct World {
@@ -282,8 +294,6 @@ impl Transform {
     }
 }
 
-impl Component for Transform {}
-
 /// Velocity component - movement speed
 #[derive(Debug, Clone, Copy)]
 pub struct Velocity {
@@ -306,8 +316,6 @@ impl Velocity {
         }
     }
 }
-
-impl Component for Velocity {}
 
 /// Sprite component - 2D rendering
 #[derive(Debug, Clone)]
@@ -333,8 +341,6 @@ impl Sprite {
         self
     }
 }
-
-impl Component for Sprite {}
 
 /// Mesh component - 3D rendering
 #[derive(Debug, Clone)]
@@ -371,7 +377,78 @@ impl Mesh {
     }
 }
 
-impl Component for Mesh {}
+/// Player marker component
+#[derive(Debug, Clone, Copy)]
+pub struct Player;
+
+impl Player {
+    pub fn new() -> Self {
+        Player
+    }
+}
+
+/// Goal marker component
+#[derive(Debug, Clone, Copy)]
+pub struct Goal;
+
+impl Goal {
+    pub fn new() -> Self {
+        Goal
+    }
+}
+
+/// Collider component for physics
+#[derive(Debug, Clone, Copy)]
+pub struct Collider {
+    pub width: f32,
+    pub height: f32,
+}
+
+impl Collider {
+    pub fn new(width: f32, height: f32) -> Self {
+        Collider { width, height }
+    }
+}
+
+/// Color helper
+#[derive(Debug, Clone, Copy)]
+pub struct Color {
+    pub r: u8,
+    pub g: u8,
+    pub b: u8,
+    pub a: u8,
+}
+
+impl Color {
+    pub fn rgb(r: u8, g: u8, b: u8) -> Self {
+        Color { r, g, b, a: 255 }
+    }
+
+    pub fn rgba(r: u8, g: u8, b: u8, a: u8) -> Self {
+        Color { r, g, b, a }
+    }
+
+    pub fn to_f32_array(&self) -> [f32; 4] {
+        [
+            self.r as f32 / 255.0,
+            self.g as f32 / 255.0,
+            self.b as f32 / 255.0,
+            self.a as f32 / 255.0,
+        ]
+    }
+}
+
+// Update Sprite to accept Color
+impl Sprite {
+    pub fn new_with_color(texture_path: &str, width: f32, height: f32, color: Color) -> Self {
+        Sprite {
+            texture_path: texture_path.to_string(),
+            width,
+            height,
+            color: color.to_f32_array(),
+        }
+    }
+}
 
 // ============================================================================
 // Game Loop and Systems

@@ -1182,13 +1182,23 @@ impl CodeGenerator {
                         if param.name == "self" {
                             return "&self".to_string();
                         }
-                        format!("&{}", self.type_to_rust(&param.type_))
+                        // Don't add & if the type is already a Reference
+                        if matches!(param.type_, Type::Reference(_) | Type::MutableReference(_)) {
+                            self.type_to_rust(&param.type_)
+                        } else {
+                            format!("&{}", self.type_to_rust(&param.type_))
+                        }
                     }
                     OwnershipHint::Mut => {
                         if param.name == "self" {
                             return "&mut self".to_string();
                         }
-                        format!("&mut {}", self.type_to_rust(&param.type_))
+                        // Don't add &mut if the type is already a MutableReference
+                        if matches!(param.type_, Type::MutableReference(_)) {
+                            self.type_to_rust(&param.type_)
+                        } else {
+                            format!("&mut {}", self.type_to_rust(&param.type_))
+                        }
                     }
                     OwnershipHint::Inferred => {
                         // Use analyzer's inference
@@ -2284,7 +2294,7 @@ impl CodeGenerator {
 
                     if args.is_empty() {
                         // No interpolation found, just a regular string
-                        format!("\"{}\"", s)
+                        format!("\"{}\"", s.replace('\\', "\\\\").replace('"', "\\\""))
                     } else {
                         // Generate format! call with implicit self for struct fields
                         let formatted_args = args
@@ -2299,10 +2309,14 @@ impl CodeGenerator {
                             })
                             .collect::<String>();
 
-                        format!("format!(\"{}\"{})", format_str, formatted_args)
+                        format!(
+                            "format!(\"{}\"{})",
+                            format_str.replace('\\', "\\\\").replace('"', "\\\""),
+                            formatted_args
+                        )
                     }
                 } else {
-                    format!("\"{}\"", s)
+                    format!("\"{}\"", s.replace('\\', "\\\\").replace('"', "\\\""))
                 }
             }
             Literal::Char(c) => {
@@ -2355,6 +2369,7 @@ impl CodeGenerator {
             UnaryOp::Not => "!",
             UnaryOp::Neg => "-",
             UnaryOp::Ref => "&",
+            UnaryOp::MutRef => "&mut ",
             UnaryOp::Deref => "*",
         }
     }
@@ -2371,7 +2386,7 @@ impl CodeGenerator {
         matches!(
             expr,
             Expression::Unary {
-                op: UnaryOp::Ref,
+                op: UnaryOp::Ref | UnaryOp::MutRef,
                 ..
             }
         )

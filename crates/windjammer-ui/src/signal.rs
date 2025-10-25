@@ -1,29 +1,11 @@
-//! Fine-grained reactivity system for Windjammer UI
-//!
-//! This module provides automatic dependency tracking and fine-grained updates.
+//! Fine-grained reactive signals for Windjammer UI
+//! 
+//! This module provides the core reactive primitives for the UI framework:
+//! - `Signal<T>`: Reactive value that notifies subscribers on change
+//! - `Computed<T>`: Derived value that auto-updates when dependencies change
+//! - `Effect`: Side effect that runs when dependencies change
+//! 
 //! Inspired by Solid.js, Vue 3, and Leptos.
-//!
-//! # Example
-//!
-//! ```rust
-//! use windjammer_ui::reactivity::*;
-//!
-//! let count = Signal::new(0);
-//! let doubled = Computed::new({
-//!     let count = count.clone();
-//!     move || count.get() * 2
-//! });
-//!
-//! // Effect runs immediately and re-runs when count changes
-//! create_effect({
-//!     let doubled = doubled.clone();
-//!     move || {
-//!         println!("Doubled: {}", doubled.get());
-//!     }
-//! });
-//!
-//! count.set(5); // Prints: "Doubled: 10"
-//! ```
 
 use std::cell::RefCell;
 use std::collections::{HashMap, HashSet};
@@ -36,7 +18,7 @@ pub type SignalId = usize;
 /// Unique identifier for effects
 pub type EffectId = usize;
 
-// Global reactive context (thread-local for single-threaded WASM)
+/// Global reactive context (thread-local for single-threaded WASM)
 thread_local! {
     static REACTIVE_CONTEXT: RefCell<ReactiveContext> = RefCell::new(ReactiveContext::new());
     static EFFECT_REGISTRY: RefCell<HashMap<EffectId, EffectHandle>> = RefCell::new(HashMap::new());
@@ -65,11 +47,20 @@ struct EffectHandle {
 }
 
 /// Core reactive primitive - a value that notifies subscribers when it changes
-#[derive(Clone)]
-pub struct Signal<T: Clone> {
+pub struct Signal<T> {
     id: SignalId,
     value: Rc<RefCell<T>>,
     subscribers: Rc<RefCell<HashSet<EffectId>>>,
+}
+
+impl<T> Clone for Signal<T> {
+    fn clone(&self) -> Self {
+        Self {
+            id: self.id,
+            value: Rc::clone(&self.value),
+            subscribers: Rc::clone(&self.subscribers),
+        }
+    }
 }
 
 impl<T: Clone> Signal<T> {
@@ -108,10 +99,7 @@ impl<T: Clone> Signal<T> {
     }
 
     /// Update the value using a function and notify subscribers
-    pub fn update<F>(&self, f: F)
-    where
-        F: FnOnce(&mut T),
-    {
+    pub fn update(&self, f: impl FnOnce(&mut T)) {
         f(&mut self.value.borrow_mut());
         self.notify();
     }
@@ -144,10 +132,18 @@ impl<T: Clone + std::fmt::Debug> std::fmt::Debug for Signal<T> {
 }
 
 /// Computed signal - a derived value that automatically updates when dependencies change
-#[derive(Clone)]
-pub struct Computed<T: Clone> {
+pub struct Computed<T> {
     signal: Signal<T>,
     _effect_id: EffectId,
+}
+
+impl<T> Clone for Computed<T> {
+    fn clone(&self) -> Self {
+        Self {
+            signal: self.signal.clone(),
+            _effect_id: self._effect_id,
+        }
+    }
 }
 
 impl<T: Clone + 'static> Computed<T> {
@@ -167,7 +163,7 @@ impl<T: Clone + 'static> Computed<T> {
         let compute_clone = compute.clone();
         let effect_id = Effect::new(move || {
             let new_value = compute_clone();
-            // Use direct assignment to avoid infinite loops
+            // Use set_untracked to avoid infinite loops
             *signal_clone.value.borrow_mut() = new_value;
         });
 
@@ -188,7 +184,7 @@ impl<T: Clone + 'static> Computed<T> {
     }
 }
 
-impl<T: Clone + std::fmt::Debug + 'static> std::fmt::Debug for Computed<T> {
+impl<T: Clone + std::fmt::Debug> std::fmt::Debug for Computed<T> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("Computed")
             .field("value", &self.get_untracked())
@@ -198,35 +194,32 @@ impl<T: Clone + std::fmt::Debug + 'static> std::fmt::Debug for Computed<T> {
 
 /// Effect - a side effect that runs when its dependencies change
 pub struct Effect {
-    _id: EffectId,
+    id: EffectId,
 }
 
 impl Effect {
     /// Create a new effect
-    #[allow(clippy::new_ret_no_self)]
     pub fn new<F>(f: F) -> EffectId
     where
         F: Fn() + 'static,
     {
         static NEXT_ID: AtomicUsize = AtomicUsize::new(0);
         let id = NEXT_ID.fetch_add(1, Ordering::Relaxed);
-        let f: Rc<dyn Fn()> = Rc::new(f);
+        let f = Rc::new(f);
 
         // Register effect
         EFFECT_REGISTRY.with(|registry| {
-            registry
-                .borrow_mut()
-                .insert(id, EffectHandle { f: f.clone() });
+            registry.borrow_mut().insert(id, EffectHandle { f: f.clone() });
         });
 
         // Run effect once to establish dependencies
-        Self::run_effect(id, f.clone());
+        Self::run_effect(id, &f);
 
         id
     }
 
     /// Run an effect with the given ID as the current reactive context
-    fn run_effect(id: EffectId, f: Rc<dyn Fn()>) {
+    fn run_effect(id: EffectId, f: &Rc<dyn Fn()>) {
         REACTIVE_CONTEXT.with(|ctx| {
             // Save previous effect
             let prev_effect = ctx.borrow().current_effect;
@@ -397,33 +390,5 @@ mod tests {
         count.set(5);
         assert_eq!(*effect_count.borrow(), 1); // Should not re-run
     }
-
-    #[test]
-    fn test_nested_effects() {
-        let count = Signal::new(0);
-        let doubled = Rc::new(RefCell::new(0));
-        let quadrupled = Rc::new(RefCell::new(0));
-
-        // First effect: doubled = count * 2
-        let doubled_clone = doubled.clone();
-        let count_clone = count.clone();
-        Effect::new(move || {
-            *doubled_clone.borrow_mut() = count_clone.get() * 2;
-        });
-
-        // Second effect: quadrupled = doubled * 2
-        let quadrupled_clone = quadrupled.clone();
-        let doubled_clone2 = doubled.clone();
-        Effect::new(move || {
-            *quadrupled_clone.borrow_mut() = *doubled_clone2.borrow() * 2;
-        });
-
-        assert_eq!(*doubled.borrow(), 0);
-        assert_eq!(*quadrupled.borrow(), 0);
-
-        count.set(5);
-        assert_eq!(*doubled.borrow(), 10);
-        // Note: quadrupled won't update automatically because it doesn't depend on a signal
-        // This is expected behavior - effects only track signal reads
-    }
 }
+

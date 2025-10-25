@@ -1,6 +1,7 @@
 pub mod analyzer;
 pub mod cli;
 pub mod codegen;
+pub mod component_analyzer;
 // Removed: codegen_legacy is now codegen::rust::generator
 pub mod compiler_database;
 pub mod config;
@@ -14,12 +15,15 @@ pub mod parser_recovery;
 pub mod source_map;
 pub mod stdlib_scanner;
 
+// UI component compilation
+pub mod component;
+
 use anyhow::Result;
 use clap::{Parser, Subcommand, ValueEnum};
 use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
 
-#[derive(Debug, Clone, Copy, ValueEnum)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, ValueEnum)]
 pub enum CompilationTarget {
     /// WebAssembly (default)
     Wasm,
@@ -245,6 +249,7 @@ fn build_project(path: &Path, output: &Path, target: CompilationTarget) -> Resul
     let mut has_errors = false;
     let mut all_stdlib_modules = HashSet::new();
     let mut all_external_crates = Vec::new();
+    let mut is_component_project = false;
 
     for file in &wj_files {
         let file_name = file.file_name().unwrap().to_str().unwrap();
@@ -253,6 +258,13 @@ fn build_project(path: &Path, output: &Path, target: CompilationTarget) -> Resul
         match compile_file(file, output, target) {
             Ok((stdlib_modules, external_crates)) => {
                 println!("{}", "✓".green());
+                // If both are empty, this might be a component (which handles its own Cargo.toml)
+                if stdlib_modules.is_empty() && external_crates.is_empty() {
+                    // Check if Cargo.toml already exists (component generated it)
+                    if output.join("Cargo.toml").exists() {
+                        is_component_project = true;
+                    }
+                }
                 all_stdlib_modules.extend(stdlib_modules);
                 all_external_crates.extend(external_crates);
             }
@@ -265,8 +277,10 @@ fn build_project(path: &Path, output: &Path, target: CompilationTarget) -> Resul
     }
 
     if !has_errors {
-        // Create Cargo.toml with stdlib and external dependencies
-        create_cargo_toml_with_deps(output, &all_stdlib_modules, &all_external_crates)?;
+        // Create Cargo.toml with stdlib and external dependencies (unless it's a component project)
+        if !is_component_project {
+            create_cargo_toml_with_deps(output, &all_stdlib_modules, &all_external_crates)?;
+        }
 
         println!("\n{} Transpilation complete!", "Success!".green().bold());
         println!("Output directory: {:?}", output);
@@ -648,6 +662,73 @@ fn compile_file(
     // Read source file
     let source = std::fs::read_to_string(input_path)?;
 
+    // Check if this is a component file by trying to parse it as a component first
+    let is_component = if target == CompilationTarget::Wasm {
+        use component::parser::ComponentParser;
+        ComponentParser::parse(&source).is_ok()
+    } else {
+        false
+    };
+
+    // If it's a component file, handle it specially
+    if is_component {
+        use component::analyzer::DependencyAnalyzer;
+        use component::codegen::ComponentCodegen;
+        use component::parser::ComponentParser;
+        use component::transformer::SignalTransformer;
+
+        // Parse as component
+        let component_file = ComponentParser::parse(&source)
+            .map_err(|e| anyhow::anyhow!("Component parse error: {}", e))?;
+
+        // Analyze dependencies
+        let deps = DependencyAnalyzer::analyze(&component_file)
+            .map_err(|e| anyhow::anyhow!("Component analysis error: {}", e))?;
+
+        // Transform to signals
+        let transformed = SignalTransformer::transform(&component_file, &deps)
+            .map_err(|e| anyhow::anyhow!("Component transformation error: {}", e))?;
+
+        // Generate code
+        let rust_code = ComponentCodegen::generate(&transformed)
+            .map_err(|e| anyhow::anyhow!("Component codegen error: {}", e))?;
+
+        // Write lib.rs
+        std::fs::create_dir_all(output_dir.join("src"))?;
+        let lib_path = output_dir.join("src").join("lib.rs");
+        std::fs::write(&lib_path, &rust_code)?;
+
+        // Get component name (use filename if not specified)
+        let component_name = component_file.name.as_deref().unwrap_or_else(|| {
+            input_path
+                .file_stem()
+                .and_then(|s| s.to_str())
+                .unwrap_or("Component")
+        });
+
+        // Generate Cargo.toml
+        let cargo_toml = ComponentCodegen::generate_cargo_toml(component_name)?;
+        std::fs::write(output_dir.join("Cargo.toml"), &cargo_toml)?;
+
+        // Generate index.html
+        let index_html = ComponentCodegen::generate_index_html(component_name)?;
+        std::fs::write(output_dir.join("index.html"), &index_html)?;
+
+        // Generate README
+        let readme = ComponentCodegen::generate_readme(component_name)?;
+        std::fs::write(output_dir.join("README.md"), &readme)?;
+
+        println!("  Component compiled successfully!");
+        println!("  Output directory: {}", output_dir.display());
+        println!("  Next steps:");
+        println!("    cd {}", output_dir.display());
+        println!("    wasm-pack build --target web");
+        println!("    python3 -m http.server 8080");
+
+        return Ok((HashSet::new(), Vec::new()));
+    }
+
+    // Regular Windjammer file - use standard parser
     // Lex
     let mut lexer = lexer::Lexer::new(&source);
     let tokens = lexer.tokenize();
@@ -685,10 +766,50 @@ fn compile_file(
         }
     }
 
-    // Generate Rust code for main file
-    let mut generator = codegen::CodeGenerator::new(signatures, target);
-    generator.set_inferred_bounds(inferred_bounds_map);
-    let rust_code = generator.generate_program(&program, &analyzed);
+    // Generate code for main file
+    let rust_code = if target == CompilationTarget::Wasm {
+        // Check if program has components
+        use component_analyzer::ComponentAnalyzer;
+        let mut comp_analyzer = ComponentAnalyzer::new();
+        let has_components = comp_analyzer.analyze(&program.items).is_ok()
+            && comp_analyzer.all_components().next().is_some();
+
+        if has_components {
+            // Use new backend system for component-based WASM
+            use codegen::backend::{CodegenConfig, Target};
+            let config = CodegenConfig {
+                target: Target::WebAssembly,
+                output_dir: output_dir.to_path_buf(),
+                ..Default::default()
+            };
+
+            let output = codegen::generate(&program, Target::WebAssembly, Some(config))
+                .map_err(|e| anyhow::anyhow!("Component codegen error: {}", e))?;
+
+            // Write main.rs
+            let output_file = output_dir.join("lib.rs"); // WASM uses lib.rs
+            std::fs::write(output_file, &output.source)?;
+
+            // Write additional files (Cargo.toml, index.html)
+            for (filename, content) in &output.additional_files {
+                let file_path = output_dir.join(filename);
+                std::fs::write(file_path, content)?;
+            }
+
+            // Return empty to signal we've handled everything
+            return Ok((HashSet::new(), Vec::new()));
+        } else {
+            // Use old generator for non-component WASM
+            let mut generator = codegen::CodeGenerator::new(signatures, target);
+            generator.set_inferred_bounds(inferred_bounds_map);
+            generator.generate_program(&program, &analyzed)
+        }
+    } else {
+        // Use old generator for Rust target
+        let mut generator = codegen::CodeGenerator::new(signatures, target);
+        generator.set_inferred_bounds(inferred_bounds_map);
+        generator.generate_program(&program, &analyzed)
+    };
 
     // Combine module code with main code
     let module_code = module_compiler.get_compiled_modules().join("\n");

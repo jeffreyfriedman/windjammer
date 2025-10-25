@@ -1,7 +1,7 @@
 [workspace]
 members = [
     ".",
-    "crates/windjammer-game",
+    "crates/windjammer-game-framework",
     "crates/windjammer-lsp",
     "crates/windjammer-mcp",
     "crates/windjammer-runtime",
@@ -51,6 +51,9 @@ path = "src/main.rs"
 [[bin]]
 name = "wj"
 path = "src/bin/wj.rs"
+
+[features]
+default = []
 
 [dependencies]
 # Parser combinator library
