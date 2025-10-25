@@ -57,6 +57,11 @@ js-sys = { version = "0.3", optional = true }
 
 [dev-dependencies]
 env_logger = "0.11"
+criterion = "0.5"
+
+[[bench]]
+name = "ecs_benchmarks"
+harness = false
 
 [features]
 default = ["2d", "audio"]
