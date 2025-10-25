@@ -44,8 +44,7 @@ impl RenderBackend for Renderer2D {
     }
 
     fn draw_sprite(&mut self, sprite: &Sprite, transform: &Transform) {
-        self.sprites_to_draw
-            .push((sprite.clone(), transform.clone()));
+        self.sprites_to_draw.push((sprite.clone(), *transform));
     }
 
     fn present(&mut self) {
@@ -60,12 +59,15 @@ impl RenderBackend for Renderer2D {
 }
 
 /// Sprite batch for efficient rendering
+#[derive(Default)]
 pub struct SpriteBatch {
     sprites: Vec<SpriteInstance>,
+    #[allow(dead_code)]
     texture_id: Option<u32>,
 }
 
 #[derive(Clone)]
+#[allow(dead_code)]
 struct SpriteInstance {
     position: [f32; 2],
     scale: [f32; 2],
@@ -76,17 +78,16 @@ struct SpriteInstance {
 
 impl SpriteBatch {
     pub fn new() -> Self {
-        SpriteBatch {
-            sprites: Vec::new(),
-            texture_id: None,
-        }
+        Self::default()
     }
+}
 
+impl SpriteBatch {
     pub fn add(&mut self, sprite: &Sprite, transform: &Transform) {
         self.sprites.push(SpriteInstance {
-            position: [transform.position.x as f32, transform.position.y as f32],
-            scale: [transform.scale.x as f32, transform.scale.y as f32],
-            rotation: transform.rotation.y as f32, // Using y rotation for 2D
+            position: [transform.position.x, transform.position.y],
+            scale: [transform.scale.x, transform.scale.y],
+            rotation: transform.rotation.y, // Using y rotation for 2D
             color: sprite.color,
             uv: [0.0, 0.0, 1.0, 1.0], // Full texture for now
         });
@@ -107,29 +108,32 @@ pub struct Camera2D {
 
 impl Camera2D {
     pub fn new() -> Self {
+        Self::default()
+    }
+}
+
+impl Default for Camera2D {
+    fn default() -> Self {
         Camera2D {
             position: Vec3::zero(),
             zoom: 1.0,
             rotation: 0.0,
         }
     }
+}
 
+impl Camera2D {
     pub fn view_matrix(&self) -> [[f32; 4]; 4] {
         // Simple 2D view matrix
-        let cos_r = self.rotation.cos() as f32;
-        let sin_r = self.rotation.sin() as f32;
-        let z = self.zoom as f32;
+        let cos_r = self.rotation.cos();
+        let sin_r = self.rotation.sin();
+        let z = self.zoom;
 
         [
             [cos_r * z, sin_r * z, 0.0, 0.0],
             [-sin_r * z, cos_r * z, 0.0, 0.0],
             [0.0, 0.0, 1.0, 0.0],
-            [
-                -(self.position.x as f32),
-                -(self.position.y as f32),
-                0.0,
-                1.0,
-            ],
+            [-self.position.x, -self.position.y, 0.0, 1.0],
         ]
     }
 }

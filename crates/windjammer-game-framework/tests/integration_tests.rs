@@ -14,7 +14,7 @@ mod ecs_tests {
 }
 
 mod math_tests {
-    use windjammer_game::math::{Vec2, Vec3};
+    use windjammer_game_framework::math::{Vec2, Vec3};
 
     #[test]
     fn test_vec2_creation() {
@@ -100,7 +100,7 @@ mod math_tests {
 }
 
 mod transform_tests {
-    use windjammer_game::math::{Transform, Vec2};
+    use windjammer_game_framework::math::{Transform, Vec2};
 
     #[test]
     fn test_transform_creation() {
@@ -137,7 +137,7 @@ mod transform_tests {
 }
 
 mod input_tests {
-    use windjammer_game::input::{Input, KeyCode};
+    use windjammer_game_framework::input::{Input, KeyCode};
 
     #[test]
     fn test_input_creation() {
@@ -172,8 +172,8 @@ mod input_tests {
 }
 
 mod rendering_tests {
-    use windjammer_game::math::Vec2;
-    use windjammer_game::rendering::sprite::{Sprite, SpriteBatch};
+    use windjammer_game_framework::math::Vec2;
+    use windjammer_game_framework::rendering::sprite::{Sprite, SpriteBatch};
 
     #[test]
     fn test_sprite_creation() {
@@ -182,6 +182,8 @@ mod rendering_tests {
             size: Vec2::new(32.0, 32.0),
             texture_id: Some(0),
             color: [1.0, 1.0, 1.0, 1.0],
+            rotation: 0.0,
+            scale: Vec2::new(1.0, 1.0),
         };
         assert_eq!(sprite.position.x, 100.0);
         assert_eq!(sprite.size.x, 32.0);
@@ -202,6 +204,8 @@ mod rendering_tests {
             size: Vec2::new(32.0, 32.0),
             texture_id: Some(0),
             color: [1.0, 1.0, 1.0, 1.0],
+            rotation: 0.0,
+            scale: Vec2::new(1.0, 1.0),
         };
 
         batch.add(sprite);
@@ -219,6 +223,8 @@ mod rendering_tests {
             size: Vec2::new(32.0, 32.0),
             texture_id: Some(0),
             color: [1.0, 1.0, 1.0, 1.0],
+            rotation: 0.0,
+            scale: Vec2::new(1.0, 1.0),
         };
 
         batch.add(sprite);
@@ -230,7 +236,7 @@ mod rendering_tests {
 }
 
 mod window_tests {
-    use windjammer_game::window::WindowConfig;
+    use windjammer_game_framework::window::WindowConfig;
 
     #[test]
     fn test_window_config_default() {

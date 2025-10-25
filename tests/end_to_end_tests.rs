@@ -196,17 +196,29 @@ fn test_all_targets_all_cases() {
                 test_case.name
             );
 
-            // Find the generated .rs file
-            let rust_files: Vec<_> = fs::read_dir(&rust_dir)
-                .expect("Failed to read rust dir")
-                .filter_map(|e| e.ok())
-                .filter(|e| e.path().extension().and_then(|s| s.to_str()) == Some("rs"))
-                .collect();
+            // Find the generated .rs file (should be in src/ subdirectory)
+            let src_dir = rust_dir.join("src");
+            let rust_files: Vec<_> = if src_dir.exists() {
+                fs::read_dir(&src_dir)
+                    .expect("Failed to read src dir")
+                    .filter_map(|e| e.ok())
+                    .filter(|e| e.path().extension().and_then(|s| s.to_str()) == Some("rs"))
+                    .collect()
+            } else {
+                // Fallback: look in the root directory
+                fs::read_dir(&rust_dir)
+                    .expect("Failed to read rust dir")
+                    .filter_map(|e| e.ok())
+                    .filter(|e| e.path().extension().and_then(|s| s.to_str()) == Some("rs"))
+                    .collect()
+            };
 
             assert!(
                 !rust_files.is_empty(),
-                "Should have at least one .rs file for {}",
-                test_case.name
+                "Should have at least one .rs file for {} (checked {} and {})",
+                test_case.name,
+                rust_dir.display(),
+                src_dir.display()
             );
 
             let rust_content = fs::read_to_string(rust_files[0].path())

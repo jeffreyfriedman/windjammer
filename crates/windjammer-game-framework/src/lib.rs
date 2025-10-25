@@ -36,7 +36,9 @@
 
 pub mod assets; // Asset loading and management
 pub mod audio; // Audio playback
-pub mod ecs; // Entity-Component-System
+pub mod camera2d; // 2D camera system
+pub mod ecs; // Entity-Component-System (Rust implementation)
+pub mod ecs_windjammer; // Windjammer-friendly ECS API (recommended)
 pub mod game_app; // Complete game application with integrated systems
 pub mod game_loop; // Game loop with fixed timestep
 pub mod input; // Input handling
@@ -44,20 +46,35 @@ pub mod math; // Math types (Vec2, Vec3, Mat4, etc.)
 pub mod physics; // Physics integration
 pub mod rendering; // Graphics rendering
 pub mod time; // Time and delta time management
+pub mod transform; // 2D and 3D transform components
 
 #[cfg(not(target_arch = "wasm32"))]
 pub mod window; // Window creation and management (native only)
 
 /// Prelude module with commonly used types and traits
+///
+/// **Recommended**: Use the Windjammer-friendly API from `ecs_windjammer`
+/// which hides Rust-specific concepts like lifetimes and trait bounds.
 pub mod prelude {
     pub use crate::assets::{AssetManager, Handle};
-    pub use crate::audio::{AudioPlayer, AudioSource};
-    pub use crate::ecs::{Component, Entity, System, World};
+    pub use crate::audio::{AudioSystem, SpatialAudioSource};
+    pub use crate::camera2d::Camera2D;
+
+    // Export Windjammer-friendly ECS API (recommended)
+    pub use crate::ecs_windjammer::{Entity, System, World};
+
+    // Also export Rust ECS for advanced users
+    pub use crate::ecs::{
+        Component, Entity as RustEntity, System as RustSystem, World as RustWorld,
+    };
+
+    pub use crate::game_loop::{run_game_loop, GameLoopConfig, GameLoopRunner};
     pub use crate::input::{Input, KeyCode, MouseButton};
     pub use crate::math::{Mat4, Quat, Vec2, Vec3, Vec4};
     pub use crate::physics::{Collider, PhysicsWorld, RigidBody};
-    pub use crate::rendering::{Camera, Material, Mesh, RenderContext, Sprite};
+    pub use crate::rendering::{Camera, Material, Mesh, RenderContext, Sprite, SpriteBatch};
     pub use crate::time::Time;
+    pub use crate::transform::{Transform2D, Transform3D};
 
     #[cfg(not(target_arch = "wasm32"))]
     pub use crate::window::{Window, WindowConfig, WindowRunner};

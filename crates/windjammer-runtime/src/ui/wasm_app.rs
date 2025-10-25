@@ -8,10 +8,7 @@ use wasm_bindgen::prelude::*;
 #[cfg(target_arch = "wasm32")]
 use web_sys::{window, Document, Element, Event, HtmlElement, KeyboardEvent, MouseEvent};
 
-use super::{Signal, VElement, VNode, VText};
-use std::cell::RefCell;
-use std::collections::HashMap;
-use std::rc::Rc;
+use super::VNode;
 
 /// Main WASM application that manages reactive UI
 #[cfg(target_arch = "wasm32")]
@@ -289,6 +286,7 @@ impl WasmApp {
 }
 
 #[derive(Clone, Debug)]
+#[allow(dead_code)]
 enum Patch {
     SetText {
         path: Vec<usize>,

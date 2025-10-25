@@ -2,6 +2,7 @@
 
 use super::backend::Vertex2D;
 use crate::math::Vec2;
+use crate::transform::Transform2D;
 
 /// 2D Sprite
 #[derive(Clone)]
@@ -10,6 +11,8 @@ pub struct Sprite {
     pub size: Vec2,
     pub color: [f32; 4],
     pub texture_id: Option<u32>,
+    pub rotation: f32,
+    pub scale: Vec2,
 }
 
 impl Sprite {
@@ -19,6 +22,8 @@ impl Sprite {
             size,
             color: [1.0, 1.0, 1.0, 1.0], // White
             texture_id: None,
+            rotation: 0.0,
+            scale: Vec2::ONE,
         }
     }
 
@@ -27,35 +32,81 @@ impl Sprite {
         self
     }
 
-    /// Generate vertices for this sprite
+    pub fn with_rotation(mut self, rotation: f32) -> Self {
+        self.rotation = rotation;
+        self
+    }
+
+    pub fn with_rotation_degrees(mut self, degrees: f32) -> Self {
+        self.rotation = degrees.to_radians();
+        self
+    }
+
+    pub fn with_scale(mut self, scale: Vec2) -> Self {
+        self.scale = scale;
+        self
+    }
+
+    pub fn with_uniform_scale(mut self, scale: f32) -> Self {
+        self.scale = Vec2::new(scale, scale);
+        self
+    }
+
+    /// Create a sprite from a Transform2D
+    pub fn from_transform(transform: Transform2D, size: Vec2) -> Self {
+        Self {
+            position: transform.position,
+            size,
+            color: [1.0, 1.0, 1.0, 1.0],
+            texture_id: None,
+            rotation: transform.rotation,
+            scale: transform.scale,
+        }
+    }
+
+    /// Generate vertices for this sprite (with rotation and scale applied)
     pub fn vertices(&self) -> [Vertex2D; 4] {
-        let x = self.position.x;
-        let y = self.position.y;
-        let w = self.size.x;
-        let h = self.size.y;
+        let w = self.size.x * self.scale.x;
+        let h = self.size.y * self.scale.y;
+
+        // Local space corners (centered at origin)
+        let half_w = w / 2.0;
+        let half_h = h / 2.0;
+        let corners = [
+            Vec2::new(-half_w, -half_h), // Top-left
+            Vec2::new(half_w, -half_h),  // Top-right
+            Vec2::new(half_w, half_h),   // Bottom-right
+            Vec2::new(-half_w, half_h),  // Bottom-left
+        ];
+
+        // Apply rotation and translation
+        let cos = self.rotation.cos();
+        let sin = self.rotation.sin();
+
+        let transform_point = |p: Vec2| -> [f32; 2] {
+            let rotated_x = p.x * cos - p.y * sin;
+            let rotated_y = p.x * sin + p.y * cos;
+            [rotated_x + self.position.x, rotated_y + self.position.y]
+        };
 
         [
-            // Top-left
             Vertex2D {
-                position: [x, y],
+                position: transform_point(corners[0]),
                 tex_coords: [0.0, 0.0],
                 color: self.color,
             },
-            // Top-right
             Vertex2D {
-                position: [x + w, y],
+                position: transform_point(corners[1]),
                 tex_coords: [1.0, 0.0],
                 color: self.color,
             },
-            // Bottom-right
             Vertex2D {
-                position: [x + w, y + h],
+                position: transform_point(corners[2]),
                 tex_coords: [1.0, 1.0],
                 color: self.color,
             },
-            // Bottom-left
             Vertex2D {
-                position: [x, y + h],
+                position: transform_point(corners[3]),
                 tex_coords: [0.0, 1.0],
                 color: self.color,
             },
@@ -128,6 +179,32 @@ mod tests {
         let sprite = Sprite::new(Vec2::new(10.0, 20.0), Vec2::new(32.0, 32.0));
         assert_eq!(sprite.position.x, 10.0);
         assert_eq!(sprite.size.x, 32.0);
+        assert_eq!(sprite.rotation, 0.0);
+        assert_eq!(sprite.scale, Vec2::ONE);
+    }
+
+    #[test]
+    fn test_sprite_builder() {
+        let sprite = Sprite::new(Vec2::ZERO, Vec2::new(10.0, 10.0))
+            .with_color([1.0, 0.0, 0.0, 1.0])
+            .with_rotation(std::f32::consts::PI / 4.0)
+            .with_scale(Vec2::new(2.0, 2.0));
+
+        assert_eq!(sprite.color, [1.0, 0.0, 0.0, 1.0]);
+        assert!((sprite.rotation - std::f32::consts::PI / 4.0).abs() < 0.001);
+        assert_eq!(sprite.scale, Vec2::new(2.0, 2.0));
+    }
+
+    #[test]
+    fn test_sprite_from_transform() {
+        let transform = Transform2D::new()
+            .with_position(Vec2::new(5.0, 5.0))
+            .with_rotation(std::f32::consts::PI / 2.0)
+            .with_scale(Vec2::new(2.0, 2.0));
+
+        let sprite = Sprite::from_transform(transform, Vec2::new(10.0, 10.0));
+        assert_eq!(sprite.position, Vec2::new(5.0, 5.0));
+        assert_eq!(sprite.scale, Vec2::new(2.0, 2.0));
     }
 
     #[test]
@@ -135,8 +212,37 @@ mod tests {
         let sprite = Sprite::new(Vec2::new(0.0, 0.0), Vec2::new(10.0, 10.0));
         let vertices = sprite.vertices();
         assert_eq!(vertices.len(), 4);
-        assert_eq!(vertices[0].position, [0.0, 0.0]);
-        assert_eq!(vertices[2].position, [10.0, 10.0]);
+
+        // With no rotation, vertices should be centered around origin
+        // Top-left should be at (-5, -5) + position
+        assert!((vertices[0].position[0] + 5.0).abs() < 0.001);
+        assert!((vertices[0].position[1] + 5.0).abs() < 0.001);
+    }
+
+    #[test]
+    fn test_sprite_vertices_with_rotation() {
+        let sprite = Sprite::new(Vec2::ZERO, Vec2::new(10.0, 10.0))
+            .with_rotation(std::f32::consts::PI / 2.0); // 90 degrees
+
+        let vertices = sprite.vertices();
+        assert_eq!(vertices.len(), 4);
+
+        // After 90 degree rotation, top-left becomes top-right in screen space
+        // Verify rotation was applied (positions should be different from unrotated)
+        let unrotated = Sprite::new(Vec2::ZERO, Vec2::new(10.0, 10.0)).vertices();
+        assert!((vertices[0].position[0] - unrotated[0].position[0]).abs() > 0.1);
+    }
+
+    #[test]
+    fn test_sprite_vertices_with_scale() {
+        let sprite = Sprite::new(Vec2::ZERO, Vec2::new(10.0, 10.0)).with_scale(Vec2::new(2.0, 2.0));
+
+        let vertices = sprite.vertices();
+
+        // With 2x scale, corners should be further from center
+        // Top-left should be at (-10, -10) instead of (-5, -5)
+        assert!((vertices[0].position[0] + 10.0).abs() < 0.001);
+        assert!((vertices[0].position[1] + 10.0).abs() < 0.001);
     }
 
     #[test]
@@ -148,5 +254,17 @@ mod tests {
         assert_eq!(batch.sprites().len(), 2);
         assert_eq!(batch.vertices().len(), 8); // 4 vertices per sprite
         assert_eq!(batch.indices().len(), 12); // 6 indices per sprite
+    }
+
+    #[test]
+    fn test_sprite_batch_clear() {
+        let mut batch = SpriteBatch::new();
+        batch.add(Sprite::new(Vec2::ZERO, Vec2::ONE));
+        batch.add(Sprite::new(Vec2::ONE, Vec2::ONE));
+
+        assert_eq!(batch.sprites().len(), 2);
+
+        batch.clear();
+        assert_eq!(batch.sprites().len(), 0);
     }
 }

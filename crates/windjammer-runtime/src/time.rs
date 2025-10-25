@@ -41,7 +41,7 @@ pub fn parse_format(s: &str, fmt: &str) -> Result<i64, String> {
 /// Format timestamp as string
 pub fn format(timestamp: i64, format: &str) -> String {
     DateTime::from_timestamp(timestamp, 0)
-        .unwrap_or_else(|| Utc::now())
+        .unwrap_or_else(Utc::now)
         .format(format)
         .to_string()
 }

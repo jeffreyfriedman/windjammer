@@ -11,7 +11,6 @@ pub mod pipeline_2d;
 pub mod pipeline_3d;
 pub mod sprite;
 
-pub use backend::Vertex3D;
 pub use pipeline_2d::Pipeline2D;
 pub use pipeline_3d::{CameraUniform, LightUniform, MaterialUniform, Pipeline3D};
 pub use sprite::{Sprite, SpriteBatch};
