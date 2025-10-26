@@ -93,7 +93,7 @@ impl Texture {
         label: Option<&str>,
     ) -> Result<Self, String> {
         let mut bytes = Vec::with_capacity((size * size * 4) as usize);
-
+        
         for y in 0..size {
             for x in 0..size {
                 let is_white = (x / 8 + y / 8) % 2 == 0;
@@ -132,7 +132,7 @@ impl TextureAtlas {
         label: Option<&str>,
     ) -> Result<Self, String> {
         let texture = Texture::from_bytes(device, queue, bytes, width, height, label)?;
-
+        
         let columns = width / tile_width;
         let rows = height / tile_height;
 
@@ -206,3 +206,4 @@ mod tests {
         assert_eq!(atlas.tile_count(), 16);
     }
 }
+
