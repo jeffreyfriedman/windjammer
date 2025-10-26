@@ -401,12 +401,13 @@ impl CodeGenerator {
             return format!("use {}::*;\n", rust_path);
         }
 
-        // Handle braced imports: module.{A, B, C} -> use module::{A, B, C};
-        if full_path.contains(".{") && full_path.contains('}') {
-            // Split into base path and braced items
-            if let Some((base, items)) = full_path.split_once(".{") {
+        // Handle braced imports: module::{A, B, C} or module.{A, B, C}
+        if (full_path.contains("::{") || full_path.contains(".{")) && full_path.contains('}') {
+            // Try :: separator first, then . separator
+            if let Some((base, items)) = full_path.split_once("::{") {
+                return format!("use {}::{{{};\n", base, items);
+            } else if let Some((base, items)) = full_path.split_once(".{") {
                 let rust_base = base.replace('.', "::");
-                // items already has the closing brace
                 return format!("use {}::{{{};\n", rust_base, items);
             }
         }
@@ -477,14 +478,26 @@ impl CodeGenerator {
             }
         }
 
-        // Convert Windjammer's Go-style imports to Rust's glob imports
-        // e.g., "use wasm_bindgen.prelude" -> "use wasm_bindgen::prelude::*;"
-        // or "use wasm_bindgen.prelude as wb" -> "use wasm_bindgen::prelude as wb;"
+        // Convert Windjammer's Go-style imports to Rust imports
+        // Heuristic: If the last segment starts with an uppercase letter, it's likely a type/struct
+        // Otherwise, it's a module and we should add ::*
         let rust_path = full_path.replace('.', "::");
         if let Some(alias_name) = alias {
             format!("use {} as {};\n", rust_path, alias_name)
         } else {
-            format!("use {}::*;\n", rust_path)
+            // Check if the last segment looks like a type (starts with uppercase)
+            let last_segment = rust_path.split("::").last().unwrap_or("");
+            if last_segment
+                .chars()
+                .next()
+                .is_some_and(|c| c.is_uppercase())
+            {
+                // Likely a type, don't add ::*
+                format!("use {};\n", rust_path)
+            } else {
+                // Likely a module, add ::*
+                format!("use {}::*;\n", rust_path)
+            }
         }
     }
 
@@ -1972,8 +1985,24 @@ impl CodeGenerator {
                             "." // x.abs(), value.method()
                         }
                     }
-                    Expression::FieldAccess { .. } => "::", // Module path: std::fs::read() -> std::fs::read()
-                    _ => ".",                               // Instance method on expressions
+                    Expression::FieldAccess { ref object, .. } => {
+                        // Check if this is a module path (e.g., std::fs) or a field access (e.g., self.count)
+                        // If the object is an identifier that looks like a module, use ::
+                        // Otherwise, use . for instance methods on fields
+                        match object.as_ref() {
+                            Expression::Identifier(name) => {
+                                if name.chars().next().is_some_and(|c| c.is_uppercase())
+                                    || name == "std"
+                                {
+                                    "::" // Module::path::method() -> static method
+                                } else {
+                                    "." // self.field.method() or variable.field.method() -> instance method
+                                }
+                            }
+                            _ => ".", // Default to instance method
+                        }
+                    }
+                    _ => ".", // Instance method on expressions
                 };
 
                 // PHASE 2 OPTIMIZATION: Eliminate unnecessary .clone() calls
