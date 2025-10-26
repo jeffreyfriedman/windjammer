@@ -532,17 +532,24 @@ impl Counter {
 
 **Getting Started:**
 ```bash
-# Compile a component example
-wj build examples/components/counter.wj --target wasm --output ./counter_output
-
-# Build with wasm-pack
-cd counter_output
+# Try the working WASM counter example
+cd crates/windjammer-ui
 wasm-pack build --target web
+# Then serve examples/counter_wasm.html
 
-# Serve and test
-python3 -m http.server 8080
-# Open http://localhost:8080 in your browser
+# Or use wj run (auto-detects UI apps)
+wj run examples/ui_counter_simple.wj  # Automatically uses WASM target
 ```
+
+**What's Implemented (v0.34.0):**
+- ✅ **Reactive State** - Signal-based reactivity system
+- ✅ **DOM Manipulation** - Full web-sys integration
+- ✅ **Event Handling** - Browser event wiring with closures
+- ✅ **WASM Compilation** - Working counter demo in browser
+- ✅ **Auto-Detection** - `wj run` automatically uses WASM for UI apps
+- ✅ **5 Integration Tests** - Core functionality tested
+
+**Note:** The minimal syntax (view blocks) is planned for future releases. Currently use the advanced Signal-based syntax shown above.
 
 **Learn More:**
 - [UI Framework Guide](docs/UI_FRAMEWORK_GUIDE.md) - Complete guide with examples
@@ -599,12 +606,23 @@ fn main() {
 
 **Getting Started:**
 ```bash
-# Run a game example
-wj run crates/windjammer-game-framework/examples/shooter_2d.wj
+# Try the working examples
+cargo run --example window_test -p windjammer-game-framework
+cargo run --example sprite_test -p windjammer-game-framework
+cargo run --example physics_test -p windjammer-game-framework
+cargo run --example game_loop_test -p windjammer-game-framework
 
-# Build for WASM
-wj build crates/windjammer-game-framework/examples/shooter_2d.wj --target wasm
+# Or use wj run (auto-detects game apps)
+wj run examples/platformer_2d.wj  # Automatically uses Rust target
 ```
+
+**What's Implemented (v0.34.0):**
+- ✅ **Window Creation** - winit integration with event handling
+- ✅ **Sprite Rendering** - wgpu-based rendering with shaders
+- ✅ **Physics Engine** - Rapier2D with gravity, collisions, bouncing
+- ✅ **Game Loop** - Fixed timestep updates, synchronized rendering
+- ✅ **Input Handling** - Keyboard and mouse support
+- ✅ **14 Integration Tests** - All examples tested and working
 
 See [`crates/windjammer-game-framework/README.md`](crates/windjammer-game-framework/README.md) for full documentation and examples.
 
