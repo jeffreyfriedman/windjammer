@@ -431,11 +431,13 @@ impl ModuleCompiler {
                 .strip_prefix("__external__::")
                 .unwrap()
                 .replace(".*", "") // Remove glob imports
-                .replace(".{", "") // Remove braced imports
-                .split('}')
+                .split("::{") // Remove braced imports (::{ syntax)
                 .next()
                 .unwrap()
-                .split('.')
+                .split(".{") // Remove braced imports (.{ syntax)
+                .next()
+                .unwrap()
+                .split("::") // Take first segment
                 .next()
                 .unwrap()
                 .to_string();
