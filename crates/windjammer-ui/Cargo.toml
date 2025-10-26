@@ -18,6 +18,10 @@ crate-type = ["cdylib", "rlib"]
 name = "serve_wasm"
 path = "src/bin/serve_wasm.rs"
 
+[[bin]]
+name = "counter_wasm"
+path = "src/bin/counter_wasm.rs"
+
 [dependencies]
 # Core Windjammer dependency
 windjammer = { path = "../..", version = "0.34.0" }
@@ -49,6 +53,7 @@ web-sys = { version = "0.3", features = [
     "MouseEvent",
     "KeyboardEvent",
     "DomTokenList",
+    "CssStyleDeclaration",
     "console",
 ], optional = true }
 js-sys = { version = "0.3", optional = true }
@@ -68,9 +73,11 @@ cocoa = { version = "0.25", optional = true }
 # Mobile platform (Android)
 jni = { version = "0.21", optional = true }
 
+# WASM utilities
+console_error_panic_hook = { version = "0.1", optional = true }
+
 [dev-dependencies]
 tokio-test = "0.4"
-console_error_panic_hook = "0.1"
 criterion = "0.5"
 
 [[bench]]
@@ -81,7 +88,7 @@ harness = false
 default = ["web"]
 
 # Platform features
-web = ["wasm-bindgen", "web-sys", "js-sys"]
+web = ["wasm-bindgen", "web-sys", "js-sys", "console_error_panic_hook"]
 desktop = ["winit", "wgpu", "pollster", "tokio"]
 desktop-tauri = ["tauri", "tokio"]
 mobile-ios = ["objc", "cocoa"]

@@ -10,8 +10,6 @@ use crate::platform::create_platform;
 pub fn mount<C: Component>(selector: &str, component: C) -> Result<(), String> {
     #[cfg(target_arch = "wasm32")]
     {
-        use wasm_bindgen::JsCast;
-
         // Get the window and document
         let window = web_sys::window().ok_or("No window found")?;
         let document = window.document().ok_or("No document found")?;
@@ -26,7 +24,7 @@ pub fn mount<C: Component>(selector: &str, component: C) -> Result<(), String> {
         let vnode = component.render();
 
         // Create a WebRenderer
-        let mut renderer = WebRenderer::new();
+        let renderer = WebRenderer::new();
 
         // Create the DOM element from VNode
         let dom_node = renderer.create_element(&vnode)?;
@@ -347,8 +345,6 @@ impl WebRenderer {
         root: &web_sys::Element,
         path: &[usize],
     ) -> Result<web_sys::Node, String> {
-        use wasm_bindgen::JsCast;
-
         let mut current: web_sys::Node = root.clone().into();
 
         for &index in path.iter().skip(1) {
