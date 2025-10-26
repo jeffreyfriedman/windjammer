@@ -51,6 +51,14 @@ impl World {
     ///
     /// Example:
     /// ```
+    /// use windjammer_game_framework::ecs_windjammer::World;
+    ///
+    /// #[derive(Clone, Copy)]
+    /// struct Position { x: f32, y: f32 }
+    /// #[derive(Clone, Copy)]
+    /// struct Velocity { x: f32, y: f32 }
+    ///
+    /// let mut world = World::new();
     /// let entity = world.spawn()
     ///     .with(Position { x: 100.0, y: 200.0 })
     ///     .with(Velocity { x: 1.0, y: 0.0 })
