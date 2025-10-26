@@ -7,7 +7,9 @@ edition = "2021"
 [workspace]
 
 [dependencies]
-windjammer-runtime = { path = "/Users/jeffreyfriedman/src/windjammer/crates/windjammer-runtime" }
+windjammer_ui::reactivity::Signal = "*"
+windjammer_ui::vdom::{VElement, VNode, VText = "*"
+windjammer_ui::wasm_events = "*"
 
 [[bin]]
 name = "test_component"
@@ -48,6 +50,10 @@ path = "ui_hello_world.rs"
 [[bin]]
 name = "game_simple"
 path = "game_simple.rs"
+
+[[bin]]
+name = "ui_counter_simple"
+path = "ui_counter_simple.rs"
 
 [[bin]]
 name = "ui_counter_clean"

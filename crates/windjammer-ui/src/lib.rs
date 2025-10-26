@@ -52,6 +52,8 @@ pub mod simple_renderer;
 pub mod simple_vnode;
 pub mod ssr;
 pub mod vdom;
+#[cfg(target_arch = "wasm32")]
+pub mod wasm_events;
 
 #[cfg(target_arch = "wasm32")]
 pub mod examples_wasm;
