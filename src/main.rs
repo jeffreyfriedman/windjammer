@@ -25,7 +25,9 @@ use std::path::{Path, PathBuf};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, ValueEnum)]
 pub enum CompilationTarget {
-    /// WebAssembly (default)
+    /// Native Rust binary
+    Rust,
+    /// WebAssembly
     Wasm,
     /// Node.js native modules (future)
     Node,
@@ -1387,7 +1389,7 @@ fn eject_project(
 }
 
 /// Run a Windjammer file (build + cargo run)
-fn run_file(file: &Path, target: CompilationTarget, args: &[String]) -> Result<()> {
+fn run_file(file: &Path, mut target: CompilationTarget, args: &[String]) -> Result<()> {
     use colored::*;
     use std::fs;
     use std::process::Command;
@@ -1400,7 +1402,28 @@ fn run_file(file: &Path, target: CompilationTarget, args: &[String]) -> Result<(
         anyhow::bail!("File must have .wj extension: {:?}", file);
     }
 
-    println!("{} {:?}", "Running".green().bold(), file);
+    // Auto-detect target based on imports if using default Rust target
+    if matches!(target, CompilationTarget::Rust) {
+        let source = fs::read_to_string(file)?;
+
+        // Check for UI framework imports - these require WASM
+        if source.contains("windjammer_ui") {
+            println!("{} UI app detected, using WASM target", "ℹ".cyan().bold());
+            target = CompilationTarget::Wasm;
+        }
+        // Check for game framework imports - these can run natively
+        else if source.contains("windjammer_game_framework") {
+            println!("{} Game app detected, using Rust target", "ℹ".cyan().bold());
+            // Keep Rust target for native games
+        }
+    }
+
+    println!(
+        "{} {:?} (target: {:?})",
+        "Running".green().bold(),
+        file,
+        target
+    );
 
     // Create a temporary build directory
     let temp_dir = std::env::temp_dir().join(format!(
@@ -1417,26 +1440,46 @@ fn run_file(file: &Path, target: CompilationTarget, args: &[String]) -> Result<(
     // Build the project
     build_project(file, &temp_dir, target)?;
 
-    // Run cargo run with any additional arguments
-    println!("\n{} the program...", "Executing".cyan().bold());
-    let mut cmd = Command::new("cargo");
-    cmd.arg("run").current_dir(&temp_dir);
+    // Handle execution based on target
+    match target {
+        CompilationTarget::Wasm => {
+            // WASM apps need to be built with wasm-pack and served
+            println!("\n{} WASM app...", "Building".cyan().bold());
+            println!("To run this WASM app:");
+            println!("  1. cd {:?}", temp_dir);
+            println!("  2. wasm-pack build --target web");
+            println!("  3. Serve the generated HTML file");
+            println!("\nOr use the pre-built counter example:");
+            println!("  cd crates/windjammer-ui");
+            println!("  wasm-pack build --target web");
+            println!("  # Then serve examples/counter_wasm.html");
 
-    // Pass through any additional arguments
-    if !args.is_empty() {
-        cmd.arg("--");
-        cmd.args(args);
-    }
+            // Don't clean up so user can inspect/run
+            println!("\n{} Build artifacts in: {:?}", "ℹ".cyan().bold(), temp_dir);
+        }
+        _ => {
+            // Native targets can be run directly
+            println!("\n{} the program...", "Executing".cyan().bold());
+            let mut cmd = Command::new("cargo");
+            cmd.arg("run").current_dir(&temp_dir);
 
-    let status = cmd.status()?;
+            // Pass through any additional arguments
+            if !args.is_empty() {
+                cmd.arg("--");
+                cmd.args(args);
+            }
 
-    if !status.success() {
-        anyhow::bail!("Program execution failed");
-    }
+            let status = cmd.status()?;
 
-    // Clean up temp directory
-    if temp_dir.exists() {
-        fs::remove_dir_all(&temp_dir)?;
+            if !status.success() {
+                anyhow::bail!("Program execution failed");
+            }
+
+            // Clean up temp directory for native builds
+            if temp_dir.exists() {
+                fs::remove_dir_all(&temp_dir)?;
+            }
+        }
     }
 
     Ok(())
