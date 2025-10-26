@@ -284,14 +284,18 @@ mod tests {
         let mut runner = GameLoopRunner::new(GameLoopConfig::default());
         runner.running = true;
 
-        // Run 10 ticks
+        // Run 10 ticks with sufficient sleep to ensure accumulator fills
         for _ in 0..10 {
+            std::thread::sleep(Duration::from_millis(20)); // Sleep before tick to ensure time accumulates
             runner.tick(&mut game);
-            std::thread::sleep(Duration::from_millis(16));
         }
 
         // Should have updated and rendered multiple times
-        assert!(game.update_count >= 10);
+        assert!(
+            game.update_count >= 10,
+            "Expected at least 10 updates, got {}",
+            game.update_count
+        );
         assert_eq!(game.render_count, 10);
     }
 }
