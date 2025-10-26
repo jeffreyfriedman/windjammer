@@ -163,8 +163,16 @@ pub fn get_inner_html(element: &Element) -> String {
 /// Set style property
 #[cfg(target_arch = "wasm32")]
 pub fn set_style(element: &Element, property: &str, value: &str) -> Result<(), JsValue> {
+    use wasm_bindgen::JsCast;
     if let Some(html_element) = element.dyn_ref::<HtmlElement>() {
-        html_element.style().set_property(property, value)?;
+        // Get the style attribute and set it
+        let current_style = html_element.get_attribute("style").unwrap_or_default();
+        let new_style = if current_style.is_empty() {
+            format!("{}: {};", property, value)
+        } else {
+            format!("{}; {}: {};", current_style, property, value)
+        };
+        html_element.set_attribute("style", &new_style)?;
     }
     Ok(())
 }
@@ -173,10 +181,17 @@ pub fn set_style(element: &Element, property: &str, value: &str) -> Result<(), J
 #[cfg(target_arch = "wasm32")]
 pub fn get_style(element: &Element, property: &str) -> Result<String, JsValue> {
     if let Some(html_element) = element.dyn_ref::<HtmlElement>() {
-        html_element.style().get_property_value(property)
-    } else {
-        Ok(String::new())
+        // Parse the style attribute
+        if let Some(style_attr) = html_element.get_attribute("style") {
+            for part in style_attr.split(';') {
+                let parts: Vec<&str> = part.split(':').collect();
+                if parts.len() == 2 && parts[0].trim() == property {
+                    return Ok(parts[1].trim().to_string());
+                }
+            }
+        }
     }
+    Ok(String::new())
 }
 
 /// Focus an element

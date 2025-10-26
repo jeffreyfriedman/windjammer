@@ -17,7 +17,6 @@ impl WebPlatform {
     /// Check if running in a browser
     #[cfg(target_family = "wasm")]
     pub fn is_browser() -> bool {
-        use wasm_bindgen::JsCast;
         web_sys::window().is_some()
     }
 
