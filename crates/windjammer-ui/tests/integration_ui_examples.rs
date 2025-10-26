@@ -23,13 +23,7 @@ fn test_ui_framework_compiles() {
 #[ignore] // WASM compilation has some trait bound issues to resolve
 fn test_ui_framework_wasm_compiles() {
     let output = Command::new("cargo")
-        .args([
-            "build",
-            "-p",
-            "windjammer-ui",
-            "--target",
-            "wasm32-unknown-unknown",
-        ])
+        .args(["build", "-p", "windjammer-ui", "--target", "wasm32-unknown-unknown"])
         .output()
         .expect("Failed to execute cargo build");
 
@@ -45,15 +39,7 @@ fn test_ui_framework_wasm_compiles() {
 #[ignore] // WASM compilation has some trait bound issues to resolve
 fn test_counter_wasm_binary_compiles() {
     let output = Command::new("cargo")
-        .args([
-            "build",
-            "--bin",
-            "counter_wasm",
-            "-p",
-            "windjammer-ui",
-            "--target",
-            "wasm32-unknown-unknown",
-        ])
+        .args(["build", "--bin", "counter_wasm", "-p", "windjammer-ui", "--target", "wasm32-unknown-unknown"])
         .output()
         .expect("Failed to execute cargo build");
 
@@ -139,3 +125,4 @@ fn test_ui_framework_tests_pass() {
         String::from_utf8_lossy(&output.stderr)
     );
 }
+
