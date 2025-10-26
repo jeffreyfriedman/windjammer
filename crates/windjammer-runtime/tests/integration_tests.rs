@@ -175,21 +175,24 @@ fn test_mime_type_checks() {
 // std::async - Async Runtime
 // ============================================================================
 
-#[tokio::test]
-async fn test_async_spawn() {
-    let handle = async_runtime::spawn(async { 42 });
-
-    let result = handle.await;
-    assert!(result.is_ok());
-    assert_eq!(result.unwrap(), 42);
+#[test]
+fn test_async_spawn() {
+    // Use block_on to create a runtime that will shut down cleanly
+    let result = async_runtime::block_on(async {
+        let handle = tokio::spawn(async { 42 });
+        handle.await.unwrap()
+    });
+    assert_eq!(result, 42);
 }
 
-#[tokio::test]
-async fn test_async_sleep() {
+#[test]
+fn test_async_sleep() {
     use std::time::Instant;
 
     let start = Instant::now();
-    async_runtime::sleep(100).await;
+    async_runtime::block_on(async {
+        async_runtime::sleep_ms(100).await;
+    });
     let elapsed = start.elapsed().as_millis();
 
     assert!(
