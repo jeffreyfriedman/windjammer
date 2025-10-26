@@ -2,8 +2,16 @@
 //!
 //! These tests ensure that every stdlib module is properly implemented
 //! and not just a stub.
+//!
+//! Note: Some tests (especially HTTP server tests) must be serialized to avoid
+//! port conflicts and resource contention.
 
+use std::sync::Mutex;
 use windjammer_runtime::*;
+
+// Global mutex to serialize tests that use shared resources (ports, files, etc.)
+#[allow(dead_code)]
+static TEST_MUTEX: Mutex<()> = Mutex::new(());
 
 // ============================================================================
 // std::fs - File System Operations
