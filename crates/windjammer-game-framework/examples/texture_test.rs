@@ -11,10 +11,10 @@ fn main() {
 
     // Test texture atlas UV calculations
     println!("\n🎨 Testing texture atlas:");
-
+    
     // Simulate a 64x64 texture atlas with 16x16 tiles (4x4 grid)
     let atlas = create_mock_atlas(64, 64, 16, 16);
-
+    
     println!("  Atlas: {}x{} texture", atlas.width, atlas.height);
     println!("  Tiles: {}x{} pixels", atlas.tile_width, atlas.tile_height);
     println!("  Grid: {}x{} tiles", atlas.columns, atlas.rows);
@@ -22,22 +22,16 @@ fn main() {
 
     // Test UV coordinates for different tiles
     let tile0_uv = atlas.get_tile_uv(0);
-    println!(
-        "\n  Tile 0 (top-left): UV = [{:.2}, {:.2}, {:.2}, {:.2}]",
-        tile0_uv[0], tile0_uv[1], tile0_uv[2], tile0_uv[3]
-    );
-
+    println!("\n  Tile 0 (top-left): UV = [{:.2}, {:.2}, {:.2}, {:.2}]", 
+             tile0_uv[0], tile0_uv[1], tile0_uv[2], tile0_uv[3]);
+    
     let tile1_uv = atlas.get_tile_uv(1);
-    println!(
-        "  Tile 1 (top-right): UV = [{:.2}, {:.2}, {:.2}, {:.2}]",
-        tile1_uv[0], tile1_uv[1], tile1_uv[2], tile1_uv[3]
-    );
-
+    println!("  Tile 1 (top-right): UV = [{:.2}, {:.2}, {:.2}, {:.2}]",
+             tile1_uv[0], tile1_uv[1], tile1_uv[2], tile1_uv[3]);
+    
     let tile15_uv = atlas.get_tile_uv(15);
-    println!(
-        "  Tile 15 (bottom-right): UV = [{:.2}, {:.2}, {:.2}, {:.2}]",
-        tile15_uv[0], tile15_uv[1], tile15_uv[2], tile15_uv[3]
-    );
+    println!("  Tile 15 (bottom-right): UV = [{:.2}, {:.2}, {:.2}, {:.2}]",
+             tile15_uv[0], tile15_uv[1], tile15_uv[2], tile15_uv[3]);
 
     // Verify UV calculations
     assert_eq!(tile0_uv, [0.0, 0.0, 0.25, 0.25], "Tile 0 UV incorrect");
@@ -88,12 +82,7 @@ impl MockTextureAtlas {
 }
 
 // Helper function to create a mock texture atlas for testing
-fn create_mock_atlas(
-    width: u32,
-    height: u32,
-    tile_width: u32,
-    tile_height: u32,
-) -> MockTextureAtlas {
+fn create_mock_atlas(width: u32, height: u32, tile_width: u32, tile_height: u32) -> MockTextureAtlas {
     MockTextureAtlas {
         width,
         height,
@@ -103,3 +92,4 @@ fn create_mock_atlas(
         rows: height / tile_height,
     }
 }
+

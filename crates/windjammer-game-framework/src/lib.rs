@@ -61,16 +61,14 @@ pub mod prelude {
     pub use crate::assets::{AssetManager, Handle};
     pub use crate::audio::{AudioSystem, SpatialAudioSource};
     pub use crate::camera2d::Camera2D;
-
+    
     // Export Windjammer-friendly ECS API (recommended)
     pub use crate::ecs_windjammer::{Entity, System, World};
-
+    
     // Also export Rust ECS for advanced users
-    pub use crate::ecs::{
-        Component, Entity as RustEntity, System as RustSystem, World as RustWorld,
-    };
-
-    pub use crate::game_loop::{run_game_loop, GameLoopConfig, GameLoopRunner};
+    pub use crate::ecs::{Component, Entity as RustEntity, System as RustSystem, World as RustWorld};
+    
+    pub use crate::game_loop::{GameLoopConfig, GameLoopRunner, run_game_loop};
     pub use crate::input::{Input, KeyCode, MouseButton};
     pub use crate::math::{Mat4, Quat, Vec2, Vec3, Vec4};
     pub use crate::physics::{Collider, PhysicsWorld, RigidBody};
