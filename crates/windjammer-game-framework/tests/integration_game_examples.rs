@@ -7,7 +7,13 @@ use std::process::Command;
 #[test]
 fn test_window_example_compiles() {
     let output = Command::new("cargo")
-        .args(["build", "--example", "window_test", "-p", "windjammer-game-framework"])
+        .args([
+            "build",
+            "--example",
+            "window_test",
+            "-p",
+            "windjammer-game-framework",
+        ])
         .output()
         .expect("Failed to execute cargo build");
 
@@ -22,7 +28,13 @@ fn test_window_example_compiles() {
 #[test]
 fn test_sprite_example_compiles() {
     let output = Command::new("cargo")
-        .args(["build", "--example", "sprite_test", "-p", "windjammer-game-framework"])
+        .args([
+            "build",
+            "--example",
+            "sprite_test",
+            "-p",
+            "windjammer-game-framework",
+        ])
         .output()
         .expect("Failed to execute cargo build");
 
@@ -38,7 +50,13 @@ fn test_sprite_example_compiles() {
 fn test_physics_example_runs() {
     // Physics example doesn't require a display, so we can run it
     let run_output = Command::new("cargo")
-        .args(["run", "--example", "physics_test", "-p", "windjammer-game-framework"])
+        .args([
+            "run",
+            "--example",
+            "physics_test",
+            "-p",
+            "windjammer-game-framework",
+        ])
         .output()
         .expect("Failed to execute cargo run");
 
@@ -51,17 +69,29 @@ fn test_physics_example_runs() {
 
     // Check for expected output
     let stdout = String::from_utf8_lossy(&run_output.stdout);
-    assert!(stdout.contains("Physics world created"), "Missing physics initialization");
+    assert!(
+        stdout.contains("Physics world created"),
+        "Missing physics initialization"
+    );
     assert!(stdout.contains("Ball"), "Missing ball creation");
     assert!(stdout.contains("Ground created"), "Missing ground creation");
-    assert!(stdout.contains("Simulation complete"), "Simulation didn't complete");
+    assert!(
+        stdout.contains("Simulation complete"),
+        "Simulation didn't complete"
+    );
 }
 
 /// Test that the game loop example compiles
 #[test]
 fn test_game_loop_example_compiles() {
     let output = Command::new("cargo")
-        .args(["build", "--example", "game_loop_test", "-p", "windjammer-game-framework"])
+        .args([
+            "build",
+            "--example",
+            "game_loop_test",
+            "-p",
+            "windjammer-game-framework",
+        ])
         .output()
         .expect("Failed to execute cargo build");
 
@@ -76,7 +106,13 @@ fn test_game_loop_example_compiles() {
 #[test]
 fn test_rendering_example_compiles() {
     let output = Command::new("cargo")
-        .args(["build", "--example", "rendering_test", "-p", "windjammer-game-framework"])
+        .args([
+            "build",
+            "--example",
+            "rendering_test",
+            "-p",
+            "windjammer-game-framework",
+        ])
         .output()
         .expect("Failed to execute cargo build");
 
@@ -91,7 +127,15 @@ fn test_rendering_example_compiles() {
 #[test]
 fn test_audio_example_compiles() {
     let output = Command::new("cargo")
-        .args(["build", "--example", "audio_test", "-p", "windjammer-game-framework", "--features", "audio"])
+        .args([
+            "build",
+            "--example",
+            "audio_test",
+            "-p",
+            "windjammer-game-framework",
+            "--features",
+            "audio",
+        ])
         .output()
         .expect("Failed to execute cargo build");
 
@@ -106,7 +150,13 @@ fn test_audio_example_compiles() {
 #[test]
 fn test_physics_example_compiles() {
     let output = Command::new("cargo")
-        .args(["build", "--example", "physics_test", "-p", "windjammer-game-framework"])
+        .args([
+            "build",
+            "--example",
+            "physics_test",
+            "-p",
+            "windjammer-game-framework",
+        ])
         .output()
         .expect("Failed to execute cargo build");
 
@@ -146,4 +196,3 @@ fn test_default_features_compile() {
         String::from_utf8_lossy(&output.stderr)
     );
 }
-
