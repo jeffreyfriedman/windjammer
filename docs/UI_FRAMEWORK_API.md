@@ -350,8 +350,8 @@ wasm-pack build --target web
 ### Deployment
 
 ```bash
-# Serve locally
-python3 -m http.server 8080
+# Serve locally with Windjammer dev server
+wj run ../examples/dev_server.wj
 
 # Or use any static file server
 ```

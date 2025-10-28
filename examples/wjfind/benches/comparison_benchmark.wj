@@ -6,14 +6,14 @@ use std::fs
 use std::path
 use std::log
 
-@derive(Debug, Clone))
+@derive(Debug, Clone)
 struct BenchmarkConfig {
     test_directory: string,
     pattern: string,
     iterations: int,
 }
 
-@derive(Debug))
+@derive(Debug)
 struct BenchmarkResults {
     tool_name: string,
     average_time_ms: float,

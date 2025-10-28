@@ -2,8 +2,8 @@
 
 use std::regex
 
-use ./config.Config
-use ./search.Match
+use ./config::Config
+use ./search::Match
 
 pub fn find_match(line: string, line_num: int, file: string, config: Config) -> Option<Match> {
     // Try to find a match in the line

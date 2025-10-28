@@ -2,7 +2,7 @@
 
 use std::time
 
-@derive(Debug, Clone))
+@derive(Debug, Clone)
 pub struct FilterParams {
     pub status: Option<string>,
     pub priority: Option<string>,
@@ -91,7 +91,7 @@ fn parse_date(date_str: string) -> Option<int> {
     time.parse_iso8601(&date_str).ok()
 }
 
-@derive(Debug))
+@derive(Debug)
 pub enum Value {
     String(string),
     Int(int),

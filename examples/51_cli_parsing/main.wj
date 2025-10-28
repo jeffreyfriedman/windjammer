@@ -79,7 +79,7 @@ fn main() {
             println!("✓ Arguments parsed successfully!")
             println!()
             process_file(args)
-        },
+        }
         Err(e) => {
             println!("✗ Error parsing arguments: {}", e)
             println!()

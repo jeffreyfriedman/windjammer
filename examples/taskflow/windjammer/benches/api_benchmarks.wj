@@ -6,13 +6,13 @@ use std::json
 use std::crypto
 
 // Import models
-use ../src/models/user
-use ../src/models/project
-use ../src/models/task
+use crate::models::user
+use crate::models::project
+use crate::models::task
 
 // Import auth functions
-use ../src/auth/password
-use ../src/auth/jwt
+use crate::auth::password
+use crate::auth::jwt
 
 struct RegisterRequest {
     username: string,
@@ -106,7 +106,7 @@ fn bench_jwt_generate() {
     
     // Generate token 1000 times for benchmark
     for i in 0..1000 {
-        let token = jwt::generate_token(1, "testuser", "user", secret_key)
+        let token = jwt::generate_token(1, "testuse", "user", secret_key)
     }
 }
 
@@ -114,7 +114,7 @@ fn bench_jwt_generate() {
 fn bench_jwt_verify() {
     // Benchmark JWT token verification
     let secret_key = "secret-key"
-    let token = jwt::generate_token(1, "testuser", "user", secret_key)
+    let token = jwt::generate_token(1, "testuse", "user", secret_key)
     
     // Verify token 1000 times for benchmark
     for i in 0..1000 {

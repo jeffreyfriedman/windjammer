@@ -1,0 +1,21 @@
+// Basic Windjammer Tests
+
+fn test_math() {
+    let x = 5
+    let y = 10
+    let sum = x + y
+    assert(sum == 15)
+}
+
+fn test_strings() {
+    let name = "Windjammer"
+    assert(name == "Windjammer")
+}
+
+fn test_booleans() {
+    let is_true = true
+    let is_false = false
+    assert(is_true)
+    assert(!is_false)
+}
+

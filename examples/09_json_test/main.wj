@@ -40,10 +40,10 @@ fn main() {
                     println!("Active: {}", active)
                 }
             }
-        },
+        }
         Err(e) => {
             println!("Parse error: {}", e)
-        },
+        }
     }
     
     println!("\n✅ JSON test complete!")

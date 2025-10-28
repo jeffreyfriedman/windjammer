@@ -1,48 +1,48 @@
 // Simple 2D Platformer Game Example
 // Demonstrates: ECS, Physics, Input, Camera, Rendering
 
-use std::collections
+use std::collections::HashMap
 
 // Game components
 struct Player {
     speed: f32,
     jump_force: f32,
     grounded: bool
-}
+,}
 
 struct Enemy {
     patrol_speed: f32,
     patrol_range: f32,
     start_x: f32
-}
+,}
 
 struct Platform {
     width: f32,
     height: f32
-}
+,}
 
 struct Velocity {
     x: f32,
     y: f32
-}
+,}
 
 struct Position {
     x: f32,
     y: f32
-}
+,}
 
 struct Sprite {
     color: [f32; 4],
     width: f32,
     height: f32
-}
+,}
 
 // Game state
 struct GameState {
     player_entity: i64,
     score: i32,
     game_over: bool
-}
+,}
 
 fn create_player(world: World, x: f32, y: f32) -> i64 {
     let entity = world.spawn()
@@ -208,10 +208,10 @@ fn main() {
     print("=== Windjammer 2D Platformer ===")
     
     // Initialize game systems
-    let world = World.new()
-    let input = Input.new()
-    let renderer = Renderer.new(800, 600)
-    let camera = Camera2D.new()
+    let world = World::new()
+    let input = Input::new()
+    let renderer = Renderer::new(800, 600)
+    let camera = Camera2D::new()
     
     // Create game state
     let state = GameState {

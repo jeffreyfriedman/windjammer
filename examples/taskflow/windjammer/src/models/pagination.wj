@@ -2,13 +2,13 @@
 
 use std::crypto
 
-@derive(Debug, Serialize, Deserialize))
+@derive(Debug, Serialize, Deserialize)
 pub struct PaginationParams {
     pub cursor: Option<string>,
     pub limit: int,
 }
 
-@derive(Debug, Serialize, Deserialize))
+@derive(Debug, Serialize, Deserialize)
 pub struct PaginatedResponse<T> {
     pub data: Vec<T>,
     pub next_cursor: Option<string>,
@@ -30,7 +30,7 @@ impl PaginationParams {
                 } else {
                     l
                 }
-            },
+            }
             None => default_limit,
         }
         

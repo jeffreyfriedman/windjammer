@@ -68,14 +68,19 @@ impl Default for EventRegistry {
     }
 }
 
-use std::sync::OnceLock;
+use std::cell::OnceCell;
 
-/// Global event registry
-static GLOBAL_REGISTRY: OnceLock<EventRegistry> = OnceLock::new();
+thread_local! {
+    /// Global event registry (thread-local for WASM single-threaded environment)
+    static GLOBAL_REGISTRY: OnceCell<EventRegistry> = OnceCell::new();
+}
 
 /// Get the global event registry
-pub fn global_registry() -> &'static EventRegistry {
-    GLOBAL_REGISTRY.get_or_init(EventRegistry::new)
+pub fn with_global_registry<F, R>(f: F) -> R
+where
+    F: FnOnce(&EventRegistry) -> R,
+{
+    GLOBAL_REGISTRY.with(|registry| f(registry.get_or_init(EventRegistry::new)))
 }
 
 /// Attach an event handler to an element by ID
@@ -83,7 +88,7 @@ pub fn attach_handler<F>(element_id: &str, event_type: &str, handler: F) -> Resu
 where
     F: FnMut(web_sys::Event) + 'static,
 {
-    global_registry().register(element_id, event_type, handler)
+    with_global_registry(|registry| registry.register(element_id, event_type, handler))
 }
 
 /// Helper to attach a click handler

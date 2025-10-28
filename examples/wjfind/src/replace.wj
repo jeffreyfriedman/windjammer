@@ -5,8 +5,8 @@ use std::io
 use std::path
 use std::log
 
-use ./config.Config
-use ./search.Match
+use ./config::Config
+use ./search::Match
 
 pub struct ReplaceManager {
     dry_run: bool,
@@ -51,7 +51,7 @@ impl ReplaceManager {
                 Ok(count) => {
                     stats.files_modified += 1
                     stats.total_replacements += count
-                },
+                }
                 Err(e) => {
                     stats.errors.push(ReplaceError {
                         file: file_path,
@@ -186,20 +186,20 @@ impl ReplaceManager {
     }
 }
 
-@derive(Debug, Clone))
+@derive(Debug, Clone)
 pub struct ReplaceStats {
     pub files_modified: int,
     pub total_replacements: int,
     pub errors: Vec<ReplaceError>,
 }
 
-@derive(Debug, Clone))
+@derive(Debug, Clone)
 pub struct ReplaceError {
     pub file: string,
     pub error: string,
 }
 
-@derive(Debug, Clone))
+@derive(Debug, Clone)
 pub struct ReplacementPreview {
     pub file: string,
     pub line_number: int,

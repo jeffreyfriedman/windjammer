@@ -2,7 +2,7 @@
 
 use std::fs
 use std::path
-use std::collections.HashSet
+use std::collections::HashSet
 
 pub struct GitignoreRules {
     patterns: Vec<string>,

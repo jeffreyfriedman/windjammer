@@ -1,0 +1,98 @@
+// Comprehensive Stdlib Tests - Written in Windjammer!
+// This validates that the stdlib actually works from Windjammer code
+
+use std::http
+use std::math
+use std::time
+use std::random
+
+fn main() {
+    print("========================================")
+    print("Windjammer Stdlib Test Suite")
+    print("========================================")
+    print("")
+    
+    test_http()
+    test_math()
+    test_time()
+    test_random()
+    
+    print("")
+    print("========================================")
+    print("✓ All stdlib tests passed!")
+    print("========================================")
+}
+
+fn test_http() {
+    print("Testing std::http...")
+    
+    // Test ServerResponse creation
+    let response = http::ServerResponse::ok("Hello")
+    assert(response.status == 200)
+    assert(response.body == "Hello")
+    print("  ✓ ServerResponse::ok() works")
+    
+    // Test 404 response
+    let not_found = http::ServerResponse::not_found()
+    assert(not_found.status == 404)
+    print("  ✓ ServerResponse::not_found() works")
+    
+    // Test custom status
+    let mut custom = http::ServerResponse::ok("Test")
+    custom.status = 201
+    assert(custom.status == 201)
+    print("  ✓ Custom status codes work")
+}
+
+fn test_math() {
+    print("Testing std::math...")
+    
+    // Test abs
+    let result = math::abs(-42)
+    assert(result == 42)
+    print("  ✓ math::abs() works")
+    
+    // Test min/max
+    let min_val = math::min(5, 10)
+    assert(min_val == 5)
+    print("  ✓ math::min() works")
+    
+    let max_val = math::max(5, 10)
+    assert(max_val == 10)
+    print("  ✓ math::max() works")
+    
+    // Test pow
+    let power = math::pow(2, 3)
+    assert(power == 8)
+    print("  ✓ math::pow() works")
+}
+
+fn test_time() {
+    print("Testing std::time...")
+    
+    // Test timestamp
+    let now = time::now()
+    assert(now > 0)
+    print("  ✓ time::now() works")
+    
+    // Test sleep (just verify it doesn't crash)
+    time::sleep(1)
+    print("  ✓ time::sleep() works")
+}
+
+fn test_random() {
+    print("Testing std::random...")
+    
+    // Test random number generation
+    let num = random::int(1, 100)
+    assert(num >= 1)
+    assert(num <= 100)
+    print("  ✓ random::int() works")
+    
+    // Test random float
+    let fnum = random::float()
+    assert(fnum >= 0.0)
+    assert(fnum <= 1.0)
+    print("  ✓ random::float() works")
+}
+

@@ -1,9 +1,9 @@
 // Configuration for wjfind search
 
 use std::regex
-use ./main.Args
+use ./main::Args
 
-@derive(Debug, Clone))
+@derive(Debug, Clone)
 pub struct Config {
     pub pattern: Regex,
     pub paths: Vec<string>,
@@ -27,7 +27,8 @@ pub struct Config {
 pub fn from_args(args: Args) -> Result<Config, Error> {
     // Build regex pattern
     let pattern_str = if args.whole_word {
-        format!(r"\b{}\b", regex.escape(args.pattern))
+        let escaped = regex.escape(args.pattern)
+        "\\b" + escaped + "\\b"
     } else {
         args.pattern
     }
@@ -70,7 +71,7 @@ pub fn from_args(args: Args) -> Result<Config, Error> {
 pub fn get_file_extensions(file_type: string) -> Vec<string> {
     match file_type {
         "rust" => vec!["rs"],
-        "windjammer" | "wj" => vec!["wj"],
+        "windjamme" | "wj" => vec!["wj"],
         "python" | "py" => vec!["py", "pyw"],
         "javascript" | "js" => vec!["js", "jsx", "mjs"],
         "typescript" | "ts" => vec!["ts", "tsx"],

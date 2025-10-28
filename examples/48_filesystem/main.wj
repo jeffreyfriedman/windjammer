@@ -73,10 +73,10 @@ fn main() {
         Ok(entries) => {
             println!("   Contents of test_dir:")
             for entry in entries {
-                let type_str = if entry.is_dir() { "dir" } else { "file" }
+                let type_str = if entry.is_dir() { "di" } else { "file" }
                 println!("     - {} ({})", entry.name(), type_str)
             }
-        },
+        }
         Err(e) => println!("   ✗ Read dir failed: {}", e)
     }
     
@@ -92,7 +92,7 @@ fn main() {
             println!("     Is file: {}", meta.is_file())
             println!("     Is directory: {}", meta.is_dir())
             println!("     Read-only: {}", meta.is_readonly())
-        },
+        }
         Err(e) => println!("   ✗ Metadata failed: {}", e)
     }
     
@@ -101,7 +101,7 @@ fn main() {
     // 6. Path operations
     println!("6. Path Utilities:")
     
-    let path = fs.join("test_dir", "file1.txt")
+    let path = fs.join("test_di", "file1.txt")
     println!("   Joined path: {}", path)
     
     match fs.file_name("test_dir/file1.txt") {

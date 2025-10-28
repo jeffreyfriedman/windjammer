@@ -4,7 +4,7 @@ use std::crypto
 use std::time
 use std::json
 
-@derive(Debug, Clone, Serialize, Deserialize))
+@derive(Debug, Clone, Serialize, Deserialize)
 pub struct Claims {
     pub user_id: string,
     pub username: string,
