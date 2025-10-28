@@ -288,6 +288,7 @@ pub enum Expression {
         name: String,
         fields: Vec<(String, Expression)>,
     },
+    MapLiteral(Vec<(Expression, Expression)>), // {key: value, ...}
     Range {
         start: Box<Expression>,
         end: Box<Expression>,
@@ -3396,11 +3397,68 @@ impl Parser {
                 Expression::Block(body)
             }
             Token::LBrace => {
-                // Block expression: { ... }
+                // Could be block expression or map literal
+                // Disambiguate by looking ahead:
+                // - { key: value } → map literal
+                // - { stmt; stmt } → block
                 self.advance(); // consume '{'
-                let body = self.parse_block_statements()?;
-                self.expect(Token::RBrace)?;
-                Expression::Block(body)
+
+                // Check for empty braces
+                if self.current_token() == &Token::RBrace {
+                    self.advance();
+                    // Empty map literal
+                    return Ok(Expression::MapLiteral(vec![]));
+                }
+
+                // Try to detect map literal by parsing first item
+                // Save position in case we need to backtrack
+                let checkpoint = self.position;
+
+                // Try parsing as map literal first
+                let is_map = if let Ok(_key) = self.parse_ternary_expression() {
+                    // If followed by ':', it's a map literal
+                    self.current_token() == &Token::Colon
+                } else {
+                    false
+                };
+
+                // Restore position
+                self.position = checkpoint;
+
+                if is_map {
+                    // Parse as map literal
+                    let mut entries = vec![];
+
+                    loop {
+                        if self.current_token() == &Token::RBrace {
+                            break;
+                        }
+
+                        let key = self.parse_ternary_expression()?;
+                        self.expect(Token::Colon)?;
+                        let value = self.parse_expression()?;
+
+                        entries.push((key, value));
+
+                        if self.current_token() == &Token::Comma {
+                            self.advance();
+                            // Allow trailing comma
+                            if self.current_token() == &Token::RBrace {
+                                break;
+                            }
+                        } else if self.current_token() != &Token::RBrace {
+                            return Err("Expected ',' or '}' in map literal".to_string());
+                        }
+                    }
+
+                    self.expect(Token::RBrace)?;
+                    Expression::MapLiteral(entries)
+                } else {
+                    // Parse as block expression
+                    let body = self.parse_block_statements()?;
+                    self.expect(Token::RBrace)?;
+                    Expression::Block(body)
+                }
             }
             Token::Return => {
                 // Return expression: return expr
