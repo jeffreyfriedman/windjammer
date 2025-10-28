@@ -1,0 +1,174 @@
+// Note: This is a conceptual example showing Windjammer UI syntax
+// In a real application, types would be imported from windjammer_ui
+
+// Todo App Example - Demonstrates state management and events
+
+
+@derive(Debug, Clone)
+struct TodoItem {
+    id: int,
+    text: string,
+    completed: bool,
+}
+
+@component
+struct TodoApp {
+    todos: [TodoItem],
+    next_id: int,
+    input_value: string,
+}
+
+impl TodoApp {
+    fn new() -> TodoApp {
+        TodoApp {
+            todos: [
+                TodoItem { id: 1, text: "Learn Windjammer", completed: false },
+                TodoItem { id: 2, text: "Build awesome apps", completed: false }
+            ],
+            next_id: 3,
+            input_value: "",
+        }
+    }
+
+    fn add_todo(text: string) {
+        if !text.is_empty() {
+            todos.push(TodoItem {
+                id: next_id,
+                text: text,
+                completed: false,
+            })
+            next_id += 1
+            input_value = ""
+        }
+    }
+
+    fn toggle_todo(id: int) {
+        for todo in todos {
+            if todo.id == id {
+                todo.completed = !todo.completed
+                break
+            }
+        }
+    }
+
+    fn delete_todo(id: int) {
+        todos = todos.filter(|t| t.id != id)
+    }
+
+    fn render() -> VNode {
+        VElement::new("div")
+            .attr("class", "todo-app")
+            .child(render_header())
+            .child(render_input())
+            .child(render_list())
+            .child(render_stats())
+            .into()
+    }
+
+    fn render_header() -> VNode {
+        VElement::new("h1")
+            .child(VNode::Text(VText::new("📝 Windjammer Todos")))
+            .into()
+    }
+
+    fn render_input() -> VNode {
+        VElement::new("div")
+            .attr("class", "input-section")
+            .child(VNode::Element(
+                VElement::new("input")
+                    .attr("type", "text")
+                    .attr("placeholder", "What needs to be done?")
+                    .attr("value", input_value)
+            ))
+            .child(VNode::Element(
+                VElement::new("button")
+                    .attr("class", "add-btn")
+                    .child(VNode::Text(VText::new("Add")))
+            ))
+            .into()
+    }
+
+    fn render_list() -> VNode {
+        let mut ul = VElement::new("ul").attr("class", "todo-list")
+
+        for todo in todos {
+            ul = ul.child(render_todo_item(todo))
+        }
+
+        ul.into()
+    }
+
+    fn render_todo_item(todo: TodoItem) -> VNode {
+        let class = if todo.completed {
+            "todo-item completed"
+        } else {
+            "todo-item"
+        }
+
+        VElement::new("li")
+            .attr("class", class)
+            .attr("data-id", todo.id.to_string())
+            .child(VNode::Element(
+                VElement::new("input")
+                    .attr("type", "checkbox")
+                    .attr("checked", if todo.completed { "checked" } else { "" })
+            ))
+            .child(VNode::Element(
+                VElement::new("span")
+                    .attr("class", "todo-text")
+                    .child(VNode::Text(VText::new(todo.text)))
+            ))
+            .child(VNode::Element(
+                VElement::new("button")
+                    .attr("class", "delete-btn")
+                    .child(VNode::Text(VText::new("🗑️")))
+            ))
+            .into()
+    }
+
+    fn render_stats() -> VNode {
+        let total = todos.len()
+        let completed = todos.filter(|t| t.completed).len()
+        let remaining = total - completed
+
+        VElement::new("div")
+            .attr("class", "stats")
+            .child(VNode::Text(VText::new(
+                "Total: {total} | Completed: {completed} | Remaining: {remaining}"
+            )))
+            .into()
+    }
+}
+
+fn main() {
+    print("🎨 Windjammer Todo App Example")
+    print("================================\n")
+
+    let mut app = TodoApp::new()
+
+    // Render initial state
+    print("Initial state:")
+    let vnode = app.render()
+    print("{vnode:#?}\n")
+
+    // Add a todo
+    print("Adding todo: 'Write more examples'")
+    app.add_todo("Write more examples")
+    print("Total todos: {app.todos.len()}\n")
+
+    // Toggle a todo
+    print("Completing todo #1")
+    app.toggle_todo(1)
+
+    // Print final stats
+    let completed = app.todos.filter(|t| t.completed).len()
+    print("Completed: {completed}/{app.todos.len()}")
+
+    // Demonstrate SSR
+    use windjammer_ui.ssr.SSRRenderer
+    let mut renderer = SSRRenderer.new()
+    let html = renderer.render_to_string(app)
+    print("\n📄 Server-Side Rendered HTML:")
+    print(html)
+}
+

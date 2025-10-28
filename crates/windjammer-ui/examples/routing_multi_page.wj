@@ -1,0 +1,205 @@
+// Multi-Page Routing Example
+// Demonstrates file-based routing and navigation
+// Note: This is a conceptual example showing the Windjammer routing API
+// In a real application, routing types would be imported from windjammer_ui
+
+@component
+struct HomePage {
+    visits: int,
+}
+
+impl HomePage {
+    fn render() -> VNode {
+        VElement.new("div")
+            .attr("class", "page home")
+            .child(VNode.Element(
+                VElement.new("h1").child(VNode.Text(VText.new("🏠 Home Page")))
+            ))
+            .child(VNode.Element(
+                VElement.new("p").child(VNode.Text(VText.new("Welcome to Windjammer UI!")))
+            ))
+            .child(VNode.Element(
+                VElement.new("p").child(VNode.Text(VText.new("Page visits: {visits}")))
+            ))
+            .child(render_nav())
+            .into()
+    }
+}
+
+@component
+struct AboutPage {
+    version: string,
+}
+
+impl AboutPage {
+    fn render() -> VNode {
+        VElement.new("div")
+            .attr("class", "page about")
+            .child(VNode.Element(
+                VElement.new("h1").child(VNode.Text(VText.new("ℹ️ About")))
+            ))
+            .child(VNode.Element(
+                VElement.new("p").child(VNode.Text(VText.new("Windjammer UI Framework")))
+            ))
+            .child(VNode.Element(
+                VElement.new("p").child(VNode.Text(VText.new("Version: {version}")))
+            ))
+            .child(render_nav())
+            .into()
+    }
+}
+
+@component
+struct UserPage {
+    user_id: string,
+    username: string,
+}
+
+impl UserPage {
+    fn render() -> VNode {
+        VElement.new("div")
+            .attr("class", "page user")
+            .child(VNode.Element(
+                VElement.new("h1").child(VNode.Text(VText.new("👤 User Profile")))
+            ))
+            .child(VNode.Element(
+                VElement.new("p").child(VNode.Text(VText.new("ID: {user_id}")))
+            ))
+            .child(VNode.Element(
+                VElement.new("p").child(VNode.Text(VText.new("Username: {username}")))
+            ))
+            .child(render_nav())
+            .into()
+    }
+}
+
+@component
+struct NotFoundPage {
+    path: string,
+}
+
+impl NotFoundPage {
+    fn render() -> VNode {
+        VElement.new("div")
+            .attr("class", "page not-found")
+            .child(VNode.Element(
+                VElement.new("h1").child(VNode.Text(VText.new("404 Not Found")))
+            ))
+            .child(VNode.Element(
+                VElement.new("p").child(VNode.Text(VText.new("Page not found: {path}")))
+            ))
+            .child(render_nav())
+            .into()
+    }
+}
+
+fn render_nav() -> VNode {
+    VElement.new("nav")
+        .child(VNode.Element(
+            VElement.new("a")
+                .attr("href", "/")
+                .child(VNode.Text(VText.new("Home")))
+        ))
+        .child(VNode.Text(VText.new(" | ")))
+        .child(VNode.Element(
+            VElement.new("a")
+                .attr("href", "/about")
+                .child(VNode.Text(VText.new("About")))
+        ))
+        .child(VNode.Text(VText.new(" | ")))
+        .child(VNode.Element(
+            VElement.new("a")
+                .attr("href", "/users/123")
+                .child(VNode.Text(VText.new("User 123")))
+        ))
+        .child(VNode.Text(VText.new(" | ")))
+        .child(VNode.Element(
+            VElement.new("a")
+                .attr("href", "/search?q=windjammer")
+                .child(VNode.Text(VText.new("Search")))
+        ))
+        .into()
+}
+
+fn main() {
+    print("=== Multi-Page Routing Example ===\n")
+    
+    // Create router
+    let router = Router.new()
+    
+    // Register routes
+    router.add_route(Route.new("/".to_string(), "HomePage".to_string()))
+    router.add_route(Route.new("/about".to_string(), "AboutPage".to_string()))
+    router.add_route(Route.new("/users/:id".to_string(), "UserPage".to_string()))
+    
+    print("📋 Registered routes:")
+    print("  / -> HomePage")
+    print("  /about -> AboutPage")
+    print("  /users/:id -> UserPage\n")
+    
+    // Navigate to home
+    print("1️⃣  Navigating to /")
+    router.navigate("/").unwrap()
+    let home = HomePage { visits: 42 }
+    print("   Current page: {}", router.current().unwrap().handler)
+    print("   Rendered: {home.render():?}\n")
+    
+    // Navigate to about
+    print("2️⃣  Navigating to /about")
+    router.navigate("/about").unwrap()
+    let about = AboutPage { version: "0.34.0".to_string() }
+    print("   Current page: {}", router.current().unwrap().handler)
+    print("   Rendered: {about.render():?}\n")
+    
+    // Navigate with parameters
+    print("3️⃣  Navigating to /users/123")
+    router.navigate("/users/123").unwrap()
+    print("   Current page: {}", router.current().unwrap().handler)
+    print("   Route param 'id': {}", router.param("id").unwrap())
+    let user = UserPage {
+        user_id: router.param("id").unwrap(),
+        username: "Alice".to_string(),
+    }
+    print("   Rendered: {user.render():?}\n")
+    
+    // Navigate with query string
+    print("4️⃣  Navigating to /search?q=windjammer&page=2")
+    router.navigate("/search?q=windjammer&page=2").unwrap_or_else(|_| {
+        print("   Route not found (expected)")
+    })
+    
+    // Test query parameters
+    if let Some(current) = router.current() {
+        if let Some(q) = router.query("q") {
+            print("   Query param 'q': {q}")
+        }
+        if let Some(page) = router.query("page") {
+            print("   Query param 'page': {page}")
+        }
+    }
+    
+    // Go back
+    print("\n5️⃣  Going back")
+    router.back().unwrap()
+    print("   Current page: {}", router.current().unwrap().handler)
+    
+    // File-based routing
+    print("\n📁 File-Based Routing:")
+    let mut file_router = FileBasedRouter.new("pages")
+    print("   Base directory: pages/")
+    print("   Auto-discovered routes:")
+    print("     pages/index.wj -> /")
+    print("     pages/about.wj -> /about")
+    print("     pages/users/[id].wj -> /users/:id")
+    print("     pages/blog/[...slug].wj -> /blog/*slug")
+    
+    print("\n🎯 Key Features Demonstrated:")
+    print("  ✅ Static routes (/about)")
+    print("  ✅ Dynamic routes (/users/:id)")
+    print("  ✅ Query parameters (?q=value)")
+    print("  ✅ Navigation history (back/forward)")
+    print("  ✅ File-based routing")
+    print("  ✅ Route parameters extraction")
+    print("  ✅ Not found handling")
+}
+

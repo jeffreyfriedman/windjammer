@@ -1,3 +1,4 @@
+#![allow(dead_code)] // Refactoring implementation - some parts planned for future versions
 //! Inline Variable/Function refactoring
 //!
 //! Replaces all usages of a variable or function with its definition.

@@ -30,7 +30,7 @@ async fn main() {
     let stdout = tokio::io::stdout();
 
     // Create the LSP service
-    let (service, socket) = LspService::new(|client| WindjammerLanguageServer::new(client));
+    let (service, socket) = LspService::new(WindjammerLanguageServer::new);
 
     // Run the server
     Server::new(stdin, stdout, socket).serve(service).await;

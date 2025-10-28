@@ -131,7 +131,7 @@ impl Array {
 
 // USAGE EXAMPLES (what users should write):
 //
-// use std.json
+// use std::json
 //
 // @derive(Serialize, Deserialize)
 // struct User {

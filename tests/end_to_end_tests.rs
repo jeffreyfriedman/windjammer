@@ -2,13 +2,21 @@
 //!
 //! These tests compile Windjammer code to all three targets and verify
 //! the generated output is correct and executable.
+//!
+//! Note: These tests spawn cargo processes and must be serialized to avoid
+//! file system contention and process interference.
 
 #![allow(clippy::expect_fun_call)]
 
 use std::fs;
 use std::path::PathBuf;
 use std::process::Command;
+use std::sync::Mutex;
 use tempfile::TempDir;
+
+// Global mutex to serialize tests that spawn cargo processes
+// This prevents file system contention and process interference
+static TEST_MUTEX: Mutex<()> = Mutex::new(());
 
 /// Test case structure
 struct TestCase {
@@ -136,6 +144,9 @@ fn compile_to_target(source: &str, target: &str, temp_dir: &TempDir) -> Result<P
 
 #[test]
 fn test_all_targets_all_cases() {
+    // Acquire mutex to serialize this test
+    let _lock = TEST_MUTEX.lock().unwrap();
+
     for test_case in TEST_CASES {
         println!("\n=== Testing: {} ===", test_case.name);
 
@@ -196,17 +207,29 @@ fn test_all_targets_all_cases() {
                 test_case.name
             );
 
-            // Find the generated .rs file
-            let rust_files: Vec<_> = fs::read_dir(&rust_dir)
-                .expect("Failed to read rust dir")
-                .filter_map(|e| e.ok())
-                .filter(|e| e.path().extension().and_then(|s| s.to_str()) == Some("rs"))
-                .collect();
+            // Find the generated .rs file (should be in src/ subdirectory)
+            let src_dir = rust_dir.join("src");
+            let rust_files: Vec<_> = if src_dir.exists() {
+                fs::read_dir(&src_dir)
+                    .expect("Failed to read src dir")
+                    .filter_map(|e| e.ok())
+                    .filter(|e| e.path().extension().and_then(|s| s.to_str()) == Some("rs"))
+                    .collect()
+            } else {
+                // Fallback: look in the root directory
+                fs::read_dir(&rust_dir)
+                    .expect("Failed to read rust dir")
+                    .filter_map(|e| e.ok())
+                    .filter(|e| e.path().extension().and_then(|s| s.to_str()) == Some("rs"))
+                    .collect()
+            };
 
             assert!(
                 !rust_files.is_empty(),
-                "Should have at least one .rs file for {}",
-                test_case.name
+                "Should have at least one .rs file for {} (checked {} and {})",
+                test_case.name,
+                rust_dir.display(),
+                src_dir.display()
             );
 
             let rust_content = fs::read_to_string(rust_files[0].path())
@@ -243,6 +266,9 @@ fn test_all_targets_all_cases() {
 
 #[test]
 fn test_javascript_string_interpolation() {
+    // Acquire mutex to serialize this test
+    let _lock = TEST_MUTEX.lock().unwrap();
+
     let source = r#"
 fn greet(name: string) {
     println!("Hello, {}", name)
@@ -277,6 +303,9 @@ fn main() {
 
 #[test]
 fn test_javascript_jsdoc_generation() {
+    // Acquire mutex to serialize this test
+    let _lock = TEST_MUTEX.lock().unwrap();
+
     let source = r#"
 fn calculate(x: int, y: int, z: float) -> float {
     (x + y) as float + z
@@ -305,6 +334,9 @@ fn calculate(x: int, y: int, z: float) -> float {
 
 #[test]
 fn test_typescript_definitions_quality() {
+    // Acquire mutex to serialize this test
+    let _lock = TEST_MUTEX.lock().unwrap();
+
     let source = r#"
 struct User {
     name: string,
@@ -344,6 +376,8 @@ fn create_user(name: string, age: int) -> User {
 
 #[test]
 fn test_complex_program_all_targets() {
+    // Acquire mutex to serialize this test
+    let _lock = TEST_MUTEX.lock().unwrap();
     let source = r#"
 struct Task {
     id: int,

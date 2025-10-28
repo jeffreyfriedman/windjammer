@@ -199,9 +199,17 @@ impl Default for SignatureRegistry {
 
 impl SignatureRegistry {
     pub fn new() -> Self {
-        SignatureRegistry {
+        let mut registry = SignatureRegistry {
             signatures: HashMap::new(),
+        };
+
+        // Populate with stdlib signatures by scanning windjammer-runtime source
+        if let Err(e) = crate::stdlib_scanner::populate_runtime_signatures(&mut registry) {
+            eprintln!("Warning: Failed to scan runtime signatures: {}", e);
+            eprintln!("Continuing with empty registry - may generate incorrect borrows");
         }
+
+        registry
     }
 
     pub fn add_function(&mut self, name: String, sig: FunctionSignature) {
@@ -1442,9 +1450,21 @@ impl Analyzer {
             } if name == "vec" && *delimiter == MacroDelimiter::Brackets => Some(args.len()),
 
             // Vec::new() - starts empty
+            // IMPORTANT: Only match if the object is actually "Vec", not any arbitrary type
             Expression::MethodCall {
-                method, arguments, ..
-            } if method == "new" && arguments.is_empty() => Some(0),
+                object,
+                method,
+                arguments,
+                ..
+            } if method == "new" && arguments.is_empty() => {
+                // Check if the object is an identifier named "Vec"
+                if let Expression::Identifier(name) = object.as_ref() {
+                    if name == "Vec" {
+                        return Some(0);
+                    }
+                }
+                None
+            }
 
             // Static method Vec::<T>::with_capacity(n) where n is a literal
             Expression::Call {
@@ -1452,11 +1472,14 @@ impl Analyzer {
                 arguments,
             } => {
                 // Check if it's Vec::with_capacity or similar
-                if let Expression::FieldAccess { object: _, field } = function.as_ref() {
-                    if field == "with_capacity" {
-                        // Try to extract capacity from first argument
-                        if let Some((_, arg)) = arguments.first() {
-                            return self.extract_literal_int(arg);
+                if let Expression::FieldAccess { object, field } = function.as_ref() {
+                    // Ensure the object is "Vec"
+                    if let Expression::Identifier(name) = object.as_ref() {
+                        if name == "Vec" && field == "with_capacity" {
+                            // Try to extract capacity from first argument
+                            if let Some((_, arg)) = arguments.first() {
+                                return self.extract_literal_int(arg);
+                            }
                         }
                     }
                 }

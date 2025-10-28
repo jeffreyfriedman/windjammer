@@ -109,9 +109,25 @@ enum Commands {
 
     /// Run tests
     Test {
-        /// Test name filter
-        #[arg(value_name = "FILTER")]
+        /// Directory or file containing tests (defaults to current directory)
+        #[arg(value_name = "PATH")]
+        path: Option<PathBuf>,
+
+        /// Run only tests matching this pattern
+        #[arg(short, long)]
         filter: Option<String>,
+
+        /// Show output from passing tests
+        #[arg(long)]
+        nocapture: bool,
+
+        /// Run tests in parallel (default: true)
+        #[arg(long, default_value = "true")]
+        parallel: bool,
+
+        /// Output results as JSON for tooling
+        #[arg(long)]
+        json: bool,
     },
 
     /// Format Windjammer code
@@ -219,8 +235,20 @@ fn main() -> anyhow::Result<()> {
             let _ = (defer_drop, defer_drop_threshold);
             windjammer::cli::run::execute(&path, &args, &target)?;
         }
-        Commands::Test { filter } => {
-            windjammer::cli::test::execute(filter.as_deref())?;
+        Commands::Test {
+            path,
+            filter,
+            nocapture,
+            parallel,
+            json,
+        } => {
+            windjammer::run_tests(
+                path.as_deref(),
+                filter.as_deref(),
+                nocapture,
+                parallel,
+                json,
+            )?;
         }
         Commands::Fmt { check } => {
             windjammer::cli::fmt::execute(check)?;

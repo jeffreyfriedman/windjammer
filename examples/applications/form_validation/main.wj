@@ -1,0 +1,225 @@
+// Form Validation Example
+// Demonstrates: Reactive forms, validation, computed values
+
+@component
+struct ContactForm {
+    // Form fields
+    name: Signal<String>,
+    email: Signal<String>,
+    message: Signal<String>,
+    
+    // Validation state
+    name_error: Signal<String>,
+    email_error: Signal<String>,
+    message_error: Signal<String>,
+    
+    // Form state
+    submitted: Signal<bool>,
+    submitting: Signal<bool>
+,}
+
+impl ContactForm {
+    fn new() -> ContactForm {
+        ContactForm {
+            name: Signal::new(""),
+            email: Signal::new(""),
+            message: Signal::new(""),
+            name_error: Signal::new(""),
+            email_error: Signal::new(""),
+            message_error: Signal::new(""),
+            submitted: Signal::new(false),
+            submitting: Signal::new(false)
+        }
+    }
+    
+    fn validate_name(name: String) -> String {
+        if name.len() == 0 {
+            return "Name is required"
+        }
+        if name.len() < 2 {
+            return "Name must be at least 2 characters"
+        }
+        ""
+    }
+    
+    fn validate_email(email: String) -> String {
+        if email.len() == 0 {
+            return "Email is required"
+        }
+        if !email.contains("@") || !email.contains(".") {
+            return "Please enter a valid email address"
+        }
+        ""
+    }
+    
+    fn validate_message(message: String) -> String {
+        if message.len() == 0 {
+            return "Message is required"
+        }
+        if message.len() < 10 {
+            return "Message must be at least 10 characters"
+        }
+        ""
+    }
+    
+    fn is_valid() -> bool {
+        let name_val = self.name.get()
+        let email_val = self.email.get()
+        let message_val = self.message.get()
+        
+        let name_err = ContactForm::validate_name(name_val)
+        let email_err = ContactForm::validate_email(email_val)
+        let message_err = ContactForm::validate_message(message_val)
+        
+        name_err.len() == 0 && email_err.len() == 0 && message_err.len() == 0
+    }
+    
+    fn handle_name_change(value: String) {
+        self.name.set(value)
+        let error = ContactForm::validate_name(value)
+        self.name_error.set(error)
+    }
+    
+    fn handle_email_change(value: String) {
+        self.email.set(value)
+        let error = ContactForm::validate_email(value)
+        self.email_error.set(error)
+    }
+    
+    fn handle_message_change(value: String) {
+        self.message.set(value)
+        let error = ContactForm::validate_message(value)
+        self.message_error.set(error)
+    }
+    
+    fn handle_submit() {
+        // Validate all fields
+        let name_val = self.name.get()
+        let email_val = self.email.get()
+        let message_val = self.message.get()
+        
+        self.name_error.set(ContactForm::validate_name(name_val))
+        self.email_error.set(ContactForm::validate_email(email_val))
+        self.message_error.set(ContactForm::validate_message(message_val))
+        
+        if !self.is_valid() {
+            print("Form has validation errors")
+            return
+        }
+        
+        // Submit form
+        self.submitting.set(true)
+        print("Submitting form...")
+        print("Name: ${name_val}")
+        print("Email: ${email_val}")
+        print("Message: ${message_val}")
+        
+        // Simulate API call
+        time.sleep(1.0)
+        
+        self.submitting.set(false)
+        self.submitted.set(true)
+        
+        // Reset form
+        self.name.set("")
+        self.email.set("")
+        self.message.set("")
+        self.name_error.set("")
+        self.email_error.set("")
+        self.message_error.set("")
+    }
+    
+    fn view() -> VNode {
+        if self.submitted.get() {
+            return div([class("success-message")], [
+                h2([], [text("Thank You!")]),
+                p([], [text("Your message has been sent successfully.")]),
+                button([
+                    class("btn-primary"),
+                    onclick(|| self.submitted.set(false))
+                ], [text("Send Another Message")])
+            ])
+        }
+        
+        div([class("form-container")], [
+            h1([], [text("Contact Us")]),
+            
+            // Name field
+            div([class("form-group")], [
+                label([for("name")], [text("Name")]),
+                input([
+                    id("name"),
+                    type("text"),
+                    value(self.name.get()),
+                    oninput(|e| self.handle_name_change(e.target.value)),
+                    class(if self.name_error.get().len() > 0 { "erro" } else { "" })
+                ]),
+                if self.name_error.get().len() > 0 {
+                    span([class("error-message")], [text(self.name_error.get())])
+                } else {
+                    span([], [])
+                }
+            ]),
+            
+            // Email field
+            div([class("form-group")], [
+                label([for("email")], [text("Email")]),
+                input([
+                    id("email"),
+                    type("email"),
+                    value(self.email.get()),
+                    oninput(|e| self.handle_email_change(e.target.value)),
+                    class(if self.email_error.get().len() > 0 { "erro" } else { "" })
+                ]),
+                if self.email_error.get().len() > 0 {
+                    span([class("error-message")], [text(self.email_error.get())])
+                } else {
+                    span([], [])
+                }
+            ]),
+            
+            // Message field
+            div([class("form-group")], [
+                label([for("message")], [text("Message")]),
+                textarea([
+                    id("message"),
+                    value(self.message.get()),
+                    oninput(|e| self.handle_message_change(e.target.value)),
+                    class(if self.message_error.get().len() > 0 { "erro" } else { "" }),
+                    rows("5")
+                ]),
+                if self.message_error.get().len() > 0 {
+                    span([class("error-message")], [text(self.message_error.get())])
+                } else {
+                    span([], [])
+                }
+            ]),
+            
+            // Character count
+            div([class("char-count")], [
+                text("${self.message.get().len()} characters")
+            ]),
+            
+            // Submit button
+            button([
+                class("btn-primary"),
+                onclick(|| self.handle_submit()),
+                disabled(self.submitting.get())
+            ], [
+                text(if self.submitting.get() { "Sending..." } else { "Send Message" })
+            ])
+        ])
+    }
+}
+
+fn main() {
+    print("=== Form Validation Example ===")
+    
+    let form = ContactForm::new()
+    let app = App::new()
+    
+    app.mount("root", form.view())
+    
+    print("Form ready! Fill out the form and submit.")
+}
+

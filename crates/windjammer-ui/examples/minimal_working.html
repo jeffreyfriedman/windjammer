@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Windjammer UI - Minimal Working Counter</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+        
+        #app {
+            background: white;
+            border-radius: 15px;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.2);
+            min-width: 400px;
+        }
+        
+        button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(0,0,0,0.2);
+            transition: all 0.2s;
+        }
+        
+        button:active {
+            transform: translateY(0);
+        }
+    </style>
+</head>
+<body>
+    <div id="app">
+        <p style="text-align: center; padding: 20px; color: #666;">
+            Loading Windjammer UI...
+        </p>
+    </div>
+    
+    <script type="module">
+        import init from '../pkg/windjammer_ui.js';
+        
+        async function run() {
+            try {
+                // Initialize the WASM module
+                await init();
+                console.log('✅ Windjammer UI WASM initialized');
+                
+                // The main() function in Rust will automatically run
+                // and mount the counter to #app
+                
+            } catch (error) {
+                console.error('❌ Failed to initialize:', error);
+                document.getElementById('app').innerHTML = `
+                    <div style="padding: 40px; text-align: center; color: #f44336;">
+                        <h2>Failed to load Windjammer UI</h2>
+                        <p>${error.message}</p>
+                        <p style="font-size: 12px; color: #666; margin-top: 20px;">
+                            Make sure you've built the WASM module:<br>
+                            <code>cd crates/windjammer-ui && wasm-pack build --target web --dev</code>
+                        </p>
+                    </div>
+                `;
+            }
+        }
+        
+        run();
+    </script>
+</body>
+</html>
+

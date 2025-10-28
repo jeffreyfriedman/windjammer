@@ -1,0 +1,52 @@
+// Math operations tests
+
+fn test_addition() {
+    let result = 2 + 2
+    assert(result == 4)
+}
+
+fn test_subtraction() {
+    let result = 10 - 3
+    assert(result == 7)
+}
+
+fn test_multiplication() {
+    let result = 3 * 4
+    assert(result == 12)
+}
+
+fn test_division() {
+    let result = 10 / 2
+    assert(result == 5)
+}
+
+fn test_modulo() {
+    let result = 10 % 3
+    assert(result == 1)
+}
+
+fn test_negative_numbers() {
+    let result = -5 + 3
+    assert(result == -2)
+}
+
+fn test_float_operations() {
+    let result = 3.14 + 2.86
+    assert(result > 5.99 && result < 6.01)
+}
+
+fn test_comparison() {
+    assert(5 > 3)
+    assert(3 < 5)
+    assert(5 >= 5)
+    assert(5 <= 5)
+    assert(5 == 5)
+    assert(5 != 4)
+}
+
+fn test_boolean_operations() {
+    assert(true && true)
+    assert(true || false)
+    assert(!false)
+}
+

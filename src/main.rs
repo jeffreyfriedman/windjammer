@@ -1,7 +1,8 @@
 pub mod analyzer;
 pub mod cli;
 pub mod codegen;
-pub mod codegen_legacy;
+pub mod component_analyzer;
+// Removed: codegen_legacy is now codegen::rust::generator
 pub mod compiler_database;
 pub mod config;
 pub mod ejector;
@@ -9,18 +10,25 @@ pub mod error_mapper;
 pub mod inference;
 pub mod lexer;
 pub mod optimizer;
-pub mod parser;
+pub mod parser; // New modular parser structure
+pub mod parser_impl; // Temporary: old monolithic parser
 pub mod parser_recovery;
 pub mod source_map;
+pub mod stdlib_scanner;
+
+// UI component compilation
+pub mod component;
 
 use anyhow::Result;
 use clap::{Parser, Subcommand, ValueEnum};
 use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
 
-#[derive(Debug, Clone, Copy, ValueEnum)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, ValueEnum)]
 pub enum CompilationTarget {
-    /// WebAssembly (default)
+    /// Native Rust binary
+    Rust,
+    /// WebAssembly
     Wasm,
     /// Node.js native modules (future)
     Node,
@@ -136,6 +144,42 @@ enum Commands {
         #[arg(long)]
         no_cargo_toml: bool,
     },
+    /// Run a Windjammer file (build + cargo run)
+    Run {
+        /// Input file to run
+        #[arg(value_name = "FILE")]
+        file: PathBuf,
+
+        /// Compilation target
+        #[arg(short, long, value_enum, default_value = "rust")]
+        target: CompilationTarget,
+
+        /// Arguments to pass to the program
+        #[arg(last = true)]
+        args: Vec<String>,
+    },
+    /// Run tests (discovers and runs all test functions)
+    Test {
+        /// Directory or file containing tests (defaults to current directory)
+        #[arg(value_name = "PATH")]
+        path: Option<PathBuf>,
+
+        /// Run only tests matching this pattern
+        #[arg(short, long)]
+        filter: Option<String>,
+
+        /// Show output from passing tests
+        #[arg(long)]
+        nocapture: bool,
+
+        /// Run tests in parallel (default: true)
+        #[arg(long, default_value = "true")]
+        parallel: bool,
+
+        /// Output results as JSON for tooling
+        #[arg(long)]
+        json: bool,
+    },
 }
 
 #[allow(dead_code)]
@@ -195,6 +239,24 @@ fn main() -> Result<()> {
         } => {
             eject_project(&path, &output, target, format, comments, !no_cargo_toml)?;
         }
+        Commands::Run { file, target, args } => {
+            run_file(&file, target, &args)?;
+        }
+        Commands::Test {
+            path,
+            filter,
+            nocapture,
+            parallel,
+            json,
+        } => {
+            run_tests(
+                path.as_deref(),
+                filter.as_deref(),
+                nocapture,
+                parallel,
+                json,
+            )?;
+        }
     }
 
     Ok(())
@@ -226,15 +288,25 @@ fn build_project(path: &Path, output: &Path, target: CompilationTarget) -> Resul
 
     let mut has_errors = false;
     let mut all_stdlib_modules = HashSet::new();
+    let mut all_external_crates = Vec::new();
+    let mut is_component_project = false;
 
     for file in &wj_files {
         let file_name = file.file_name().unwrap().to_str().unwrap();
         print!("  Compiling {:?}... ", file_name);
 
         match compile_file(file, output, target) {
-            Ok(stdlib_modules) => {
+            Ok((stdlib_modules, external_crates)) => {
                 println!("{}", "✓".green());
+                // If both are empty, this might be a component (which handles its own Cargo.toml)
+                if stdlib_modules.is_empty() && external_crates.is_empty() {
+                    // Check if Cargo.toml already exists (component generated it)
+                    if output.join("Cargo.toml").exists() {
+                        is_component_project = true;
+                    }
+                }
                 all_stdlib_modules.extend(stdlib_modules);
+                all_external_crates.extend(external_crates);
             }
             Err(e) => {
                 println!("{}", "✗".red());
@@ -245,8 +317,10 @@ fn build_project(path: &Path, output: &Path, target: CompilationTarget) -> Resul
     }
 
     if !has_errors {
-        // Create Cargo.toml with stdlib dependencies
-        create_cargo_toml_with_deps(output, &all_stdlib_modules)?;
+        // Create Cargo.toml with stdlib and external dependencies (unless it's a component project)
+        if !is_component_project {
+            create_cargo_toml_with_deps(output, &all_stdlib_modules, &all_external_crates)?;
+        }
 
         println!("\n{} Transpilation complete!", "Success!".green().bold());
         println!("Output directory: {:?}", output);
@@ -254,11 +328,11 @@ fn build_project(path: &Path, output: &Path, target: CompilationTarget) -> Resul
         println!("  cd {:?}", output);
         println!("  cargo run");
         println!("\nOr use 'windjammer check' to see any Rust compilation errors");
+        Ok(())
     } else {
         println!("\n{} Compilation failed with errors", "Error:".red().bold());
+        anyhow::bail!("Compilation failed")
     }
-
-    Ok(())
 }
 
 #[allow(dead_code)]
@@ -344,6 +418,7 @@ struct ModuleCompiler {
     target: CompilationTarget,
     stdlib_path: PathBuf,
     imported_stdlib_modules: HashSet<String>, // Track which stdlib modules are used
+    external_crates: Vec<String>,             // Track external crates (e.g., windjammer_ui)
 }
 
 #[allow(dead_code)]
@@ -359,6 +434,7 @@ impl ModuleCompiler {
             target,
             stdlib_path,
             imported_stdlib_modules: HashSet::new(),
+            external_crates: Vec::new(),
         }
     }
 
@@ -368,8 +444,54 @@ impl ModuleCompiler {
             return Ok(());
         }
 
+        // Skip stdlib modules - they're implemented in windjammer-runtime
+        if module_path.starts_with("std::") {
+            // Track that we used this stdlib module
+            let module_name = module_path.strip_prefix("std::").unwrap().to_string();
+            self.imported_stdlib_modules.insert(module_name);
+
+            // Mark as compiled (no code generated, handled by runtime)
+            self.compiled_modules
+                .insert(module_path.to_string(), String::new());
+            return Ok(());
+        }
+
         // Resolve module path to file path
         let file_path = self.resolve_module_path(module_path, source_file)?;
+
+        // Check if this is an external crate (marked by __external__ prefix)
+        if file_path
+            .to_str()
+            .is_some_and(|s| s.starts_with("__external__::"))
+        {
+            // External crate - extract crate name and mark as external dependency
+            let crate_name = file_path
+                .to_str()
+                .unwrap()
+                .strip_prefix("__external__::")
+                .unwrap()
+                .replace(".*", "") // Remove glob imports
+                .split("::{") // Remove braced imports (::{ syntax)
+                .next()
+                .unwrap()
+                .split(".{") // Remove braced imports (.{ syntax)
+                .next()
+                .unwrap()
+                .split("::") // Take first segment
+                .next()
+                .unwrap()
+                .to_string();
+
+            // Add to external crates if not already present
+            if !self.external_crates.contains(&crate_name) {
+                self.external_crates.push(crate_name.clone());
+            }
+
+            // Mark as compiled (external, no code generated)
+            self.compiled_modules
+                .insert(module_path.to_string(), String::new());
+            return Ok(());
+        }
 
         // Read and parse module
         let source = std::fs::read_to_string(&file_path)
@@ -385,7 +507,7 @@ impl ModuleCompiler {
         // Recursively compile dependencies
         for item in &program.items {
             if let parser::Item::Use { path, alias: _ } = item {
-                let dep_path = path.join(".");
+                let dep_path = path.join("::");
                 // Pass the current file's path for resolving relative imports
                 self.compile_module(&dep_path, Some(&file_path))?;
             }
@@ -402,10 +524,10 @@ impl ModuleCompiler {
         let rust_code = generator.generate_program(&program, &analyzed);
 
         // Extract module name from path
-        // For "std.json" -> "json"
+        // For "std::json" -> "json"
         // For "./utils" -> "utils"
-        let module_name = if module_path.starts_with("std.") {
-            module_path.strip_prefix("std.").unwrap().to_string()
+        let module_name = if module_path.starts_with("std::") {
+            module_path.strip_prefix("std::").unwrap().to_string()
         } else {
             // For relative paths, use the last component
             module_path
@@ -418,7 +540,7 @@ impl ModuleCompiler {
         };
 
         // Track stdlib imports for Cargo.toml generation
-        if module_path.starts_with("std.") {
+        if module_path.starts_with("std::") {
             self.imported_stdlib_modules.insert(module_name.clone());
         }
 
@@ -435,9 +557,9 @@ impl ModuleCompiler {
         module_path: &str,
         source_file: Option<&Path>,
     ) -> Result<PathBuf> {
-        if module_path.starts_with("std.") {
-            // Stdlib module: std.json -> ./std/json.wj
-            let module_name = module_path.strip_prefix("std.").unwrap();
+        if module_path.starts_with("std::") {
+            // Stdlib module: std::json -> ./std/json.wj
+            let module_name = module_path.strip_prefix("std::").unwrap();
             let mut path = self.stdlib_path.clone();
             path.push(format!("{}.wj", module_name));
 
@@ -491,11 +613,11 @@ impl ModuleCompiler {
                 source_dir.join(rel_path).join("mod.wj")
             ))
         } else {
-            // Absolute imports not yet supported
-            Err(anyhow::anyhow!(
-                "Absolute imports not yet supported: {}",
-                module_path
-            ))
+            // External crate imports (e.g., windjammer_ui, external_crate)
+            // These are treated as Rust crate dependencies and passed through to generated code
+            // Mark as external by returning a special "external" path
+            // We'll handle this specially in the compilation phase
+            Ok(PathBuf::from(format!("__external__::{}", module_path)))
         }
     }
 
@@ -576,12 +698,79 @@ fn compile_file(
     input_path: &Path,
     output_dir: &Path,
     target: CompilationTarget,
-) -> Result<HashSet<String>> {
+) -> Result<(HashSet<String>, Vec<String>)> {
     let mut module_compiler = ModuleCompiler::new(target);
 
     // Read source file
     let source = std::fs::read_to_string(input_path)?;
 
+    // Check if this is a component file by looking for component-specific syntax
+    // Components must have a "view {" block
+    let is_component = if target == CompilationTarget::Wasm {
+        source.contains("view {") || source.contains("view{")
+    } else {
+        false
+    };
+
+    // If it's a component file, handle it specially
+    if is_component {
+        use component::analyzer::DependencyAnalyzer;
+        use component::codegen::ComponentCodegen;
+        use component::parser::ComponentParser;
+        use component::transformer::SignalTransformer;
+
+        // Parse as component
+        let component_file = ComponentParser::parse(&source)
+            .map_err(|e| anyhow::anyhow!("Component parse error: {}", e))?;
+
+        // Analyze dependencies
+        let deps = DependencyAnalyzer::analyze(&component_file)
+            .map_err(|e| anyhow::anyhow!("Component analysis error: {}", e))?;
+
+        // Transform to signals
+        let transformed = SignalTransformer::transform(&component_file, &deps)
+            .map_err(|e| anyhow::anyhow!("Component transformation error: {}", e))?;
+
+        // Generate code
+        let rust_code = ComponentCodegen::generate(&transformed)
+            .map_err(|e| anyhow::anyhow!("Component codegen error: {}", e))?;
+
+        // Write lib.rs
+        std::fs::create_dir_all(output_dir.join("src"))?;
+        let lib_path = output_dir.join("src").join("lib.rs");
+        std::fs::write(&lib_path, &rust_code)?;
+
+        // Get component name (use filename if not specified)
+        let component_name = component_file.name.as_deref().unwrap_or_else(|| {
+            input_path
+                .file_stem()
+                .and_then(|s| s.to_str())
+                .unwrap_or("Component")
+        });
+
+        // Generate Cargo.toml
+        let cargo_toml = ComponentCodegen::generate_cargo_toml(component_name)?;
+        std::fs::write(output_dir.join("Cargo.toml"), &cargo_toml)?;
+
+        // Generate index.html
+        let index_html = ComponentCodegen::generate_index_html(component_name)?;
+        std::fs::write(output_dir.join("index.html"), &index_html)?;
+
+        // Generate README
+        let readme = ComponentCodegen::generate_readme(component_name)?;
+        std::fs::write(output_dir.join("README.md"), &readme)?;
+
+        println!("  Component compiled successfully!");
+        println!("  Output directory: {}", output_dir.display());
+        println!("  Next steps:");
+        println!("    cd {}", output_dir.display());
+        println!("    wasm-pack build --target web");
+        println!("    python3 -m http.server 8080");
+
+        return Ok((HashSet::new(), Vec::new()));
+    }
+
+    // Regular Windjammer file - use standard parser
     // Lex
     let mut lexer = lexer::Lexer::new(&source);
     let tokens = lexer.tokenize();
@@ -595,8 +784,8 @@ fn compile_file(
     // Compile dependencies first
     for item in &program.items {
         if let parser::Item::Use { path, alias: _ } = item {
-            let module_path = path.join(".");
-            // Compile both std.* and relative imports (./ or ../)
+            let module_path = path.join("::");
+            // Compile both std::* and relative imports (./ or ../) and external crates
             module_compiler.compile_module(&module_path, Some(input_path))?;
         }
     }
@@ -619,10 +808,50 @@ fn compile_file(
         }
     }
 
-    // Generate Rust code for main file
-    let mut generator = codegen::CodeGenerator::new(signatures, target);
-    generator.set_inferred_bounds(inferred_bounds_map);
-    let rust_code = generator.generate_program(&program, &analyzed);
+    // Generate code for main file
+    let rust_code = if target == CompilationTarget::Wasm {
+        // Check if program has components
+        use component_analyzer::ComponentAnalyzer;
+        let mut comp_analyzer = ComponentAnalyzer::new();
+        let has_components = comp_analyzer.analyze(&program.items).is_ok()
+            && comp_analyzer.all_components().next().is_some();
+
+        if has_components {
+            // Use new backend system for component-based WASM
+            use codegen::backend::{CodegenConfig, Target};
+            let config = CodegenConfig {
+                target: Target::WebAssembly,
+                output_dir: output_dir.to_path_buf(),
+                ..Default::default()
+            };
+
+            let output = codegen::generate(&program, Target::WebAssembly, Some(config))
+                .map_err(|e| anyhow::anyhow!("Component codegen error: {}", e))?;
+
+            // Write main.rs
+            let output_file = output_dir.join("lib.rs"); // WASM uses lib.rs
+            std::fs::write(output_file, &output.source)?;
+
+            // Write additional files (Cargo.toml, index.html)
+            for (filename, content) in &output.additional_files {
+                let file_path = output_dir.join(filename);
+                std::fs::write(file_path, content)?;
+            }
+
+            // Return empty to signal we've handled everything
+            return Ok((HashSet::new(), Vec::new()));
+        } else {
+            // Use old generator for non-component WASM
+            let mut generator = codegen::CodeGenerator::new(signatures, target);
+            generator.set_inferred_bounds(inferred_bounds_map);
+            generator.generate_program(&program, &analyzed)
+        }
+    } else {
+        // Use old generator for Rust target
+        let mut generator = codegen::CodeGenerator::new(signatures, target);
+        generator.set_inferred_bounds(inferred_bounds_map);
+        generator.generate_program(&program, &analyzed)
+    };
 
     // Combine module code with main code
     let module_code = module_compiler.get_compiled_modules().join("\n");
@@ -644,8 +873,11 @@ fn compile_file(
 
     std::fs::write(output_file, combined_code)?;
 
-    // Return the set of imported stdlib modules for Cargo.toml generation
-    Ok(module_compiler.imported_stdlib_modules)
+    // Return the set of imported stdlib modules and external crates for Cargo.toml generation
+    Ok((
+        module_compiler.imported_stdlib_modules,
+        module_compiler.external_crates,
+    ))
 }
 
 #[allow(dead_code)]
@@ -667,59 +899,117 @@ fn check_file(file_path: &Path) -> Result<()> {
 fn create_cargo_toml_with_deps(
     output_dir: &Path,
     imported_modules: &HashSet<String>,
+    external_crates: &[String],
 ) -> Result<()> {
+    use std::env;
     use std::fs;
 
     // Map imported stdlib modules to their Cargo dependencies
     let mut deps = Vec::new();
 
+    // If ANY stdlib module is used, add windjammer-runtime
+    if !imported_modules.is_empty() {
+        // Add windjammer-runtime dependency (path-based for now)
+        let windjammer_runtime_path = if let Ok(manifest_dir) = env::var("CARGO_MANIFEST_DIR") {
+            PathBuf::from(manifest_dir).join("crates/windjammer-runtime")
+        } else {
+            env::current_dir()
+                .unwrap_or_else(|_| PathBuf::from("."))
+                .join("crates/windjammer-runtime")
+        };
+
+        deps.push(format!(
+            "windjammer-runtime = {{ path = \"{}\" }}",
+            windjammer_runtime_path.display()
+        ));
+    }
+
+    // Legacy: Keep old dependencies for modules not yet in runtime
     for module in imported_modules {
         match module.as_str() {
-            "json" => {
-                deps.push("serde = { version = \"1.0\", features = [\"derive\"] }");
-                deps.push("serde_json = \"1.0\"");
-            }
+            // These are now in windjammer-runtime, no extra deps needed
+            "fs" | "http" | "mime" | "json" => {}
+
+            // Legacy modules that still need direct dependencies
             "csv" => {
-                deps.push("csv = \"1.3\"");
-            }
-            "http" => {
-                // HTTP client (reqwest) + HTTP server (axum)
-                deps.push("reqwest = { version = \"0.11\", features = [\"json\"] }");
-                deps.push("axum = \"0.7\"");
-                deps.push("tokio = { version = \"1\", features = [\"full\"] }");
+                deps.push("csv = \"1.3\"".to_string());
             }
             "time" => {
-                deps.push("chrono = \"0.4\"");
+                deps.push("chrono = \"0.4\"".to_string());
             }
             "log" => {
-                deps.push("log = \"0.4\"");
-                deps.push("env_logger = \"0.11\"");
+                deps.push("log = \"0.4\"".to_string());
+                deps.push("env_logger = \"0.11\"".to_string());
             }
             "regex" => {
-                deps.push("regex = \"1.10\"");
+                deps.push("regex = \"1.10\"".to_string());
             }
             "cli" => {
-                deps.push("clap = { version = \"4.5\", features = [\"derive\"] }");
+                deps.push("clap = { version = \"4.5\", features = [\"derive\"] }".to_string());
             }
             "crypto" => {
-                deps.push("sha2 = \"0.10\"");
-                deps.push("bcrypt = \"0.15\"");
-                deps.push("base64 = \"0.21\"");
+                deps.push("sha2 = \"0.10\"".to_string());
+                deps.push("bcrypt = \"0.15\"".to_string());
+                deps.push("base64 = \"0.21\"".to_string());
             }
             "random" => {
-                deps.push("rand = \"0.8\"");
+                deps.push("rand = \"0.8\"".to_string());
             }
             "async" => {
-                deps.push("tokio = { version = \"1\", features = [\"full\"] }");
+                deps.push("tokio = { version = \"1\", features = [\"full\"] }".to_string());
             }
             "db" => {
-                deps.push("sqlx = { version = \"0.7\", features = [\"runtime-tokio-native-tls\", \"sqlite\"] }");
-                deps.push("tokio = { version = \"1\", features = [\"full\"] }");
+                deps.push("sqlx = { version = \"0.7\", features = [\"runtime-tokio-native-tls\", \"sqlite\"] }".to_string());
+                deps.push("tokio = { version = \"1\", features = [\"full\"] }".to_string());
             }
-            // fs, strings, math, env, process use std library (no extra deps needed)
+            // fs, strings, math, env, process use std library or windjammer-runtime
             _ => {}
         }
     }
+
+    // Add external crates (from workspace or crates.io)
+    let mut external_deps = Vec::new();
+    for crate_name in external_crates {
+        match crate_name.as_str() {
+            "windjammer_ui" => {
+                // Use absolute path to the workspace crate
+                // Try to find it relative to current directory or use CARGO_MANIFEST_DIR
+                let windjammer_ui_path = if let Ok(manifest_dir) = env::var("CARGO_MANIFEST_DIR") {
+                    PathBuf::from(manifest_dir).join("crates/windjammer-ui")
+                } else {
+                    env::current_dir()
+                        .unwrap_or_else(|_| PathBuf::from("."))
+                        .join("crates/windjammer-ui")
+                };
+
+                external_deps.push(format!(
+                    "windjammer-ui = {{ path = \"{}\" }}",
+                    windjammer_ui_path.display()
+                ));
+
+                // Also add the macro crate (needed for #[component], #[derive(Props)])
+                let windjammer_ui_macro_path =
+                    if let Ok(manifest_dir) = env::var("CARGO_MANIFEST_DIR") {
+                        PathBuf::from(manifest_dir).join("crates/windjammer-ui-macro")
+                    } else {
+                        env::current_dir()
+                            .unwrap_or_else(|_| PathBuf::from("."))
+                            .join("crates/windjammer-ui-macro")
+                    };
+
+                external_deps.push(format!(
+                    "windjammer-ui-macro = {{ path = \"{}\" }}",
+                    windjammer_ui_macro_path.display()
+                ));
+            }
+            _ => {
+                // Default: assume it's a crates.io dependency
+                external_deps.push(format!("{} = \"*\"", crate_name));
+            }
+        }
+    }
+
+    deps.extend(external_deps);
 
     deps.sort();
     deps.dedup();
@@ -730,12 +1020,26 @@ fn create_cargo_toml_with_deps(
         format!("[dependencies]\n{}\n\n", deps.join("\n"))
     };
 
-    // Check if main.rs exists to determine if we need a [[bin]] section
-    let main_rs = output_dir.join("main.rs");
-    let bin_section = if main_rs.exists() {
-        "[[bin]]\nname = \"app\"\npath = \"main.rs\"\n\n"
+    // Find all .rs files to create [[bin]] sections
+    let mut bin_sections = Vec::new();
+    if let Ok(entries) = fs::read_dir(output_dir) {
+        for entry in entries.flatten() {
+            if let Some(filename) = entry.file_name().to_str() {
+                if filename.ends_with(".rs") && filename != "lib.rs" {
+                    let bin_name = filename.strip_suffix(".rs").unwrap_or(filename);
+                    bin_sections.push(format!(
+                        "[[bin]]\nname = \"{}\"\npath = \"{}\"\n",
+                        bin_name, filename
+                    ));
+                }
+            }
+        }
+    }
+
+    let bin_section = if !bin_sections.is_empty() {
+        format!("{}\n", bin_sections.join("\n"))
     } else {
-        ""
+        String::new()
     };
 
     let cargo_toml = format!(
@@ -743,6 +1047,9 @@ fn create_cargo_toml_with_deps(
 name = "windjammer-app"
 version = "0.1.0"
 edition = "2021"
+
+# Prevent this from being treated as part of parent workspace
+[workspace]
 
 {}{}[profile.release]
 opt-level = 3
@@ -1115,6 +1422,702 @@ fn eject_project(
 
     let mut ejector = ejector::Ejector::new(config);
     ejector.eject_project(path, output)?;
+
+    Ok(())
+}
+
+/// Run a Windjammer file (build + cargo run)
+fn run_file(file: &Path, mut target: CompilationTarget, args: &[String]) -> Result<()> {
+    use colored::*;
+    use std::fs;
+    use std::process::Command;
+
+    // Validate that the file exists and is a .wj file
+    if !file.exists() {
+        anyhow::bail!("File not found: {:?}", file);
+    }
+    if file.extension().is_none_or(|ext| ext != "wj") {
+        anyhow::bail!("File must have .wj extension: {:?}", file);
+    }
+
+    // Auto-detect target based on imports if using default Rust target
+    if matches!(target, CompilationTarget::Rust) {
+        let source = fs::read_to_string(file)?;
+
+        // Check for UI framework imports - these require WASM
+        if source.contains("windjammer_ui") {
+            println!("{} UI app detected, using WASM target", "ℹ".cyan().bold());
+            target = CompilationTarget::Wasm;
+        }
+        // Check for game framework imports - these can run natively
+        else if source.contains("windjammer_game_framework") {
+            println!("{} Game app detected, using Rust target", "ℹ".cyan().bold());
+            // Keep Rust target for native games
+        }
+    }
+
+    println!(
+        "{} {:?} (target: {:?})",
+        "Running".green().bold(),
+        file,
+        target
+    );
+
+    // Create a temporary build directory
+    let temp_dir = std::env::temp_dir().join(format!(
+        "windjammer-run-{}",
+        file.file_stem().and_then(|s| s.to_str()).unwrap_or("app")
+    ));
+
+    // Clean up any previous build
+    if temp_dir.exists() {
+        fs::remove_dir_all(&temp_dir)?;
+    }
+    fs::create_dir_all(&temp_dir)?;
+
+    // Build the project
+    build_project(file, &temp_dir, target)?;
+
+    // Handle execution based on target
+    match target {
+        CompilationTarget::Wasm => {
+            // WASM apps need to be built with wasm-pack and served
+            println!("\n{} WASM app...", "Building".cyan().bold());
+            println!("To run this WASM app:");
+            println!("  1. cd {:?}", temp_dir);
+            println!("  2. wasm-pack build --target web");
+            println!("  3. Serve the generated HTML file");
+            println!("\nOr use the pre-built counter example:");
+            println!("  cd crates/windjammer-ui");
+            println!("  wasm-pack build --target web");
+            println!("  # Then serve examples/counter_wasm.html");
+
+            // Don't clean up so user can inspect/run
+            println!("\n{} Build artifacts in: {:?}", "ℹ".cyan().bold(), temp_dir);
+        }
+        _ => {
+            // Native targets can be run directly
+            println!("\n{} the program...", "Executing".cyan().bold());
+            let mut cmd = Command::new("cargo");
+            cmd.arg("run").current_dir(&temp_dir);
+
+            // Pass through any additional arguments
+            if !args.is_empty() {
+                cmd.arg("--");
+                cmd.args(args);
+            }
+
+            let status = cmd.status()?;
+
+            if !status.success() {
+                anyhow::bail!("Program execution failed");
+            }
+
+            // Clean up temp directory for native builds
+            if temp_dir.exists() {
+                fs::remove_dir_all(&temp_dir)?;
+            }
+        }
+    }
+
+    Ok(())
+}
+
+/// Run tests (discovers and runs all test functions)
+pub fn run_tests(
+    path: Option<&Path>,
+    filter: Option<&str>,
+    nocapture: bool,
+    parallel: bool,
+    json: bool,
+) -> Result<()> {
+    use colored::*;
+    use std::fs;
+    use std::process::Command;
+    use std::time::Instant;
+
+    let start_time = Instant::now();
+
+    // Determine test directory
+    let test_dir = path.unwrap_or_else(|| Path::new("."));
+
+    if !test_dir.exists() {
+        anyhow::bail!("Test path does not exist: {:?}", test_dir);
+    }
+
+    // Discover test files
+    if !json {
+        println!();
+        println!(
+            "{}",
+            "╭─────────────────────────────────────────────╮".cyan()
+        );
+        println!(
+            "{}",
+            "│  🧪  Windjammer Test Framework            │"
+                .cyan()
+                .bold()
+        );
+        println!(
+            "{}",
+            "╰─────────────────────────────────────────────╯".cyan()
+        );
+        println!();
+        println!("{} Discovering tests...", "→".bright_blue().bold());
+    }
+
+    let test_files = discover_test_files(test_dir)?;
+
+    if test_files.is_empty() {
+        if json {
+            println!("{{\"error\": \"No test files found\", \"files\": [], \"tests\": []}}");
+        } else {
+            println!();
+            println!("{} No test files found", "✗".red().bold());
+            println!();
+            println!("  {} Test files should:", "ℹ".blue());
+            println!(
+                "    • Be named {}  or {}",
+                "*_test.wj".yellow(),
+                "test_*.wj".yellow()
+            );
+            println!("    • Contain functions starting with {}", "test_".yellow());
+            println!();
+        }
+        return Ok(());
+    }
+
+    if !json {
+        println!(
+            "{} Found {} test file(s)",
+            "✓".green().bold(),
+            test_files.len().to_string().bright_white().bold()
+        );
+        for file in &test_files {
+            println!(
+                "    {} {}",
+                "•".bright_black(),
+                file.display().to_string().bright_white()
+            );
+        }
+        println!();
+    }
+
+    // Create temporary test directory
+    let temp_dir = std::env::temp_dir().join("windjammer-test");
+    if temp_dir.exists() {
+        fs::remove_dir_all(&temp_dir)?;
+    }
+    fs::create_dir_all(&temp_dir)?;
+
+    // Compile test files
+    if !json {
+        println!("{} Compiling tests...", "→".bright_blue().bold());
+    }
+
+    let mut all_tests = Vec::new();
+
+    for test_file in &test_files {
+        let tests = compile_test_file(test_file, &temp_dir)?;
+        all_tests.extend(tests);
+    }
+
+    if !json {
+        println!(
+            "{} Found {} test function(s)",
+            "✓".green().bold(),
+            all_tests.len().to_string().bright_white().bold()
+        );
+        println!();
+    }
+
+    // Generate test harness
+    generate_test_harness(&temp_dir, &all_tests, filter)?;
+
+    // Run tests
+    if !json {
+        println!("{}", "─".repeat(50).bright_black());
+        println!("{} Running tests...", "▶".bright_green().bold());
+        println!("{}", "─".repeat(50).bright_black());
+        println!();
+    }
+
+    let mut cmd = Command::new("cargo");
+    cmd.arg("test").current_dir(&temp_dir);
+
+    if !parallel {
+        cmd.arg("--").arg("--test-threads").arg("1");
+    }
+
+    if let Some(filter_str) = filter {
+        cmd.arg("--").arg(filter_str);
+    }
+
+    if nocapture {
+        if filter.is_none() {
+            cmd.arg("--");
+        }
+        cmd.arg("--nocapture");
+    }
+
+    let output = cmd.output()?;
+    let duration = start_time.elapsed();
+
+    // Parse test output
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let stderr = String::from_utf8_lossy(&output.stderr);
+
+    let test_results = parse_test_output(&stdout, &stderr);
+
+    if json {
+        // JSON output for tooling
+        println!("{{");
+        println!("  \"success\": {},", output.status.success());
+        println!("  \"duration_ms\": {},", duration.as_millis());
+        println!("  \"test_files\": {},", test_files.len());
+        println!("  \"total_tests\": {},", all_tests.len());
+        println!("  \"passed\": {},", test_results.passed);
+        println!("  \"failed\": {},", test_results.failed);
+        println!("  \"ignored\": {},", test_results.ignored);
+        println!("  \"files\": [");
+        for (i, file) in test_files.iter().enumerate() {
+            println!(
+                "    \"{}\"{}",
+                file.display(),
+                if i < test_files.len() - 1 { "," } else { "" }
+            );
+        }
+        println!("  ],");
+        println!("  \"tests\": [");
+        for (i, test) in all_tests.iter().enumerate() {
+            // Look up the status for this test
+            // The test name in cargo output is "module::test_name"
+            let full_test_name = format!(
+                "{}::{}",
+                test.file.file_stem().unwrap().to_string_lossy(),
+                test.name
+            );
+            let status = test_results
+                .individual_results
+                .get(&full_test_name)
+                .or_else(|| test_results.individual_results.get(&test.name))
+                .map(|s| s.as_str())
+                .unwrap_or("unknown");
+
+            println!(
+                "    {{\"name\": \"{}\", \"file\": \"{}\", \"status\": \"{}\"}}{}",
+                test.name,
+                test.file.display(),
+                status,
+                if i < all_tests.len() - 1 { "," } else { "" }
+            );
+        }
+        println!("  ]");
+        println!("}}");
+    } else {
+        // Pretty output for humans
+        print!("{}", stdout);
+        print!("{}", stderr);
+
+        println!();
+        println!("{}", "─".repeat(50).bright_black());
+
+        if output.status.success() {
+            println!();
+            println!(
+                "{} {} All tests passed! {}",
+                "✓".green().bold(),
+                "🎉".bright_white(),
+                "✓".green().bold()
+            );
+            println!();
+            println!(
+                "  {} {} passed",
+                "✓".green(),
+                test_results.passed.to_string().bright_white().bold()
+            );
+            if test_results.ignored > 0 {
+                println!(
+                    "  {} {} ignored",
+                    "○".yellow(),
+                    test_results.ignored.to_string().bright_white()
+                );
+            }
+            println!(
+                "  {} Completed in {}",
+                "⏱".bright_blue(),
+                format!("{:.2}s", duration.as_secs_f64())
+                    .bright_white()
+                    .bold()
+            );
+        } else {
+            println!();
+            println!(
+                "{} {} Tests failed {}",
+                "✗".red().bold(),
+                "⚠".bright_yellow(),
+                "✗".red().bold()
+            );
+            println!();
+            println!(
+                "  {} {} passed",
+                "✓".green(),
+                test_results.passed.to_string().bright_white()
+            );
+            println!(
+                "  {} {} failed",
+                "✗".red().bold(),
+                test_results.failed.to_string().bright_white().bold()
+            );
+            if test_results.ignored > 0 {
+                println!(
+                    "  {} {} ignored",
+                    "○".yellow(),
+                    test_results.ignored.to_string().bright_white()
+                );
+            }
+            println!(
+                "  {} Completed in {}",
+                "⏱".bright_blue(),
+                format!("{:.2}s", duration.as_secs_f64()).bright_white()
+            );
+        }
+
+        println!();
+        println!("{}", "─".repeat(50).bright_black());
+        println!();
+
+        // Check for coverage flag in environment
+        if std::env::var("WINDJAMMER_COVERAGE").is_ok() {
+            println!("{} Generating coverage report...", "→".bright_blue().bold());
+            generate_coverage_report(&temp_dir)?;
+        }
+    }
+
+    if !output.status.success() {
+        anyhow::bail!("Tests failed");
+    }
+
+    // Clean up
+    if temp_dir.exists() {
+        fs::remove_dir_all(&temp_dir)?;
+    }
+
+    Ok(())
+}
+
+#[derive(Debug, Default)]
+struct TestResults {
+    passed: usize,
+    failed: usize,
+    ignored: usize,
+    individual_results: std::collections::HashMap<String, String>, // test_name -> status
+}
+
+fn parse_test_output(stdout: &str, _stderr: &str) -> TestResults {
+    let mut results = TestResults::default();
+
+    // Parse individual test results
+    for line in stdout.lines() {
+        let line = line.trim();
+
+        // Parse individual test lines: "test module::test_name ... ok"
+        if line.starts_with("test ")
+            && (line.contains(" ... ok")
+                || line.contains(" ... FAILED")
+                || line.contains(" ... ignored"))
+        {
+            let parts: Vec<&str> = line.split_whitespace().collect();
+            if parts.len() >= 4 && parts[0] == "test" {
+                let test_name = parts[1].to_string();
+                let status = if line.contains(" ... ok") {
+                    "passed"
+                } else if line.contains(" ... FAILED") {
+                    "failed"
+                } else if line.contains(" ... ignored") {
+                    "ignored"
+                } else {
+                    "unknown"
+                };
+                results
+                    .individual_results
+                    .insert(test_name, status.to_string());
+            }
+        }
+
+        // Parse summary line for aggregate counts
+        if line.contains("test result:") {
+            // Example: "test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out"
+            let parts: Vec<&str> = line.split_whitespace().collect();
+            for (i, part) in parts.iter().enumerate() {
+                if part == &"passed;" && i > 0 {
+                    if let Ok(n) = parts[i - 1].parse::<usize>() {
+                        results.passed += n; // Sum instead of replace
+                    }
+                }
+                if part == &"failed;" && i > 0 {
+                    if let Ok(n) = parts[i - 1].parse::<usize>() {
+                        results.failed += n; // Sum instead of replace
+                    }
+                }
+                if part == &"ignored;" && i > 0 {
+                    if let Ok(n) = parts[i - 1].parse::<usize>() {
+                        results.ignored += n; // Sum instead of replace
+                    }
+                }
+            }
+        }
+    }
+
+    results
+}
+
+/// Discover test files in a directory
+fn discover_test_files(dir: &Path) -> Result<Vec<PathBuf>> {
+    let mut test_files = Vec::new();
+
+    if dir.is_file() {
+        // Single file
+        if is_test_file(dir) {
+            test_files.push(dir.to_path_buf());
+        }
+    } else {
+        // Directory - search recursively
+        visit_dirs(dir, &mut test_files)?;
+    }
+
+    Ok(test_files)
+}
+
+/// Visit directories recursively to find test files
+fn visit_dirs(dir: &Path, test_files: &mut Vec<PathBuf>) -> Result<()> {
+    use std::fs;
+
+    if dir.is_dir() {
+        for entry in fs::read_dir(dir)? {
+            let entry = entry?;
+            let path = entry.path();
+
+            if path.is_dir() {
+                // Skip target, build, and hidden directories
+                if let Some(name) = path.file_name() {
+                    let name_str = name.to_string_lossy();
+                    if name_str.starts_with('.') || name_str == "target" || name_str == "build" {
+                        continue;
+                    }
+                }
+                visit_dirs(&path, test_files)?;
+            } else if is_test_file(&path) {
+                test_files.push(path);
+            }
+        }
+    }
+
+    Ok(())
+}
+
+/// Check if a file is a test file
+fn is_test_file(path: &Path) -> bool {
+    if let Some(name) = path.file_name() {
+        let name_str = name.to_string_lossy();
+        (name_str.ends_with("_test.wj") || name_str.starts_with("test_"))
+            && name_str.ends_with(".wj")
+    } else {
+        false
+    }
+}
+
+/// Compile a test file and extract test functions
+fn compile_test_file(test_file: &Path, _output_dir: &Path) -> Result<Vec<TestFunction>> {
+    use crate::lexer::Lexer;
+    use crate::parser::Parser;
+    use std::fs;
+
+    let source = fs::read_to_string(test_file)?;
+
+    // Lex and parse
+    let mut lexer = Lexer::new(&source);
+    let tokens = lexer.tokenize();
+    let mut parser = Parser::new(tokens);
+    let program = parser.parse().map_err(|e| anyhow::anyhow!("{}", e))?;
+
+    // Find test functions
+    let mut tests = Vec::new();
+    for item in &program.items {
+        if let crate::parser::Item::Function(func) = item {
+            if func.name.starts_with("test_") {
+                tests.push(TestFunction {
+                    name: func.name.clone(),
+                    file: test_file.to_path_buf(),
+                });
+            }
+        }
+    }
+
+    Ok(tests)
+}
+
+/// Test function metadata
+#[derive(Debug, Clone)]
+struct TestFunction {
+    name: String,
+    file: PathBuf,
+}
+
+/// Generate Rust test harness from Windjammer tests
+fn generate_test_harness(
+    output_dir: &Path,
+    tests: &[TestFunction],
+    filter: Option<&str>,
+) -> Result<()> {
+    use std::collections::HashMap;
+    use std::fs;
+
+    // Group tests by file
+    let mut tests_by_file: HashMap<PathBuf, Vec<&TestFunction>> = HashMap::new();
+    for test in tests {
+        tests_by_file
+            .entry(test.file.clone())
+            .or_default()
+            .push(test);
+    }
+
+    // Compile each test file using the existing infrastructure
+    for (file, file_tests) in &tests_by_file {
+        // Skip if filter doesn't match
+        if let Some(filter_str) = filter {
+            if !file_tests.iter().any(|t| t.name.contains(filter_str)) {
+                continue;
+            }
+        }
+
+        // Compile the file to Rust
+        let _ = compile_file(file, output_dir, CompilationTarget::Rust)?;
+
+        // Read the generated Rust code
+        let output_file = output_dir.join(format!(
+            "{}.rs",
+            file.file_stem().unwrap().to_string_lossy()
+        ));
+        let mut rust_code = fs::read_to_string(&output_file)?;
+
+        // Add test attributes to test functions
+        for test in file_tests.iter() {
+            let test_fn = format!("fn {}()", test.name);
+            let test_attr = format!("#[test]\nfn {}()", test.name);
+            rust_code = rust_code.replace(&test_fn, &test_attr);
+        }
+
+        // Write back
+        fs::write(&output_file, rust_code)?;
+    }
+
+    // Create Cargo.toml
+    let cargo_toml = format!(
+        r#"[package]
+name = "windjammer-tests"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+windjammer-runtime = {{ path = "{}" }}
+smallvec = "1.13"
+
+[lib]
+name = "windjammer_tests"
+path = "lib.rs"
+"#,
+        std::env::current_dir()?
+            .join("crates/windjammer-runtime")
+            .display()
+    );
+    fs::write(output_dir.join("Cargo.toml"), cargo_toml)?;
+
+    // Create lib.rs that includes all test modules
+    let mut lib_rs = String::from("// Auto-generated test harness\n\n");
+    for (file, _) in tests_by_file {
+        let module_name = file.file_stem().unwrap().to_string_lossy();
+        lib_rs.push_str(&format!("pub mod {};\n", module_name));
+    }
+    fs::write(output_dir.join("lib.rs"), lib_rs)?;
+
+    Ok(())
+}
+
+/// Generate coverage report using cargo-llvm-cov
+fn generate_coverage_report(test_dir: &Path) -> Result<()> {
+    use colored::*;
+    use std::process::Command;
+
+    // Check if cargo-llvm-cov is installed
+    let check = Command::new("cargo")
+        .arg("llvm-cov")
+        .arg("--version")
+        .output();
+
+    if check.is_err() || !check.unwrap().status.success() {
+        println!("{} cargo-llvm-cov not found", "⚠".yellow());
+        println!("Install with: cargo install cargo-llvm-cov");
+        println!("Skipping coverage report...");
+        return Ok(());
+    }
+
+    // Generate coverage
+    let output = Command::new("cargo")
+        .arg("llvm-cov")
+        .arg("test")
+        .arg("--html")
+        .current_dir(test_dir)
+        .output()?;
+
+    if output.status.success() {
+        // Copy coverage report to project directory
+        let source_dir = test_dir.join("target/llvm-cov");
+        let dest_dir = std::path::Path::new("target/llvm-cov");
+
+        if source_dir.exists() {
+            // Create destination directory
+            std::fs::create_dir_all(dest_dir)?;
+
+            // Copy the coverage report
+            if let Err(e) = copy_dir_recursive(&source_dir, dest_dir) {
+                println!("{} Failed to copy coverage report: {}", "⚠".yellow(), e);
+            } else {
+                println!("{} Coverage report generated", "✓".green());
+                println!("  Open: target/llvm-cov/html/index.html");
+            }
+        } else {
+            println!(
+                "{} Coverage report not found at expected location",
+                "⚠".yellow()
+            );
+        }
+    } else {
+        println!("{} Coverage generation failed", "✗".red());
+        print!("{}", String::from_utf8_lossy(&output.stderr));
+    }
+
+    Ok(())
+}
+
+/// Recursively copy a directory
+fn copy_dir_recursive(src: &Path, dst: &Path) -> std::io::Result<()> {
+    if !dst.exists() {
+        std::fs::create_dir_all(dst)?;
+    }
+
+    for entry in std::fs::read_dir(src)? {
+        let entry = entry?;
+        let ty = entry.file_type()?;
+        let src_path = entry.path();
+        let dst_path = dst.join(entry.file_name());
+
+        if ty.is_dir() {
+            copy_dir_recursive(&src_path, &dst_path)?;
+        } else {
+            std::fs::copy(&src_path, &dst_path)?;
+        }
+    }
 
     Ok(())
 }

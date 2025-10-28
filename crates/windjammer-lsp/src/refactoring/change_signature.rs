@@ -1,3 +1,4 @@
+#![allow(dead_code)] // Refactoring implementation - some parts planned for future versions
 //! Change Function Signature refactoring
 //!
 //! Allows reordering, adding, and removing function parameters while

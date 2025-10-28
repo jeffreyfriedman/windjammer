@@ -1,19 +1,19 @@
 // wjfind - Fast file search utility built in Windjammer
 // A production CLI tool to validate Windjammer's capabilities
 
-use std.cli
-use std.fs
-use std.io
-use std.env
-use std.time
-use std.log
+use std::cli
+use std::fs
+use std::io
+use std::env
+use std::time
+use std::log
 
 use ./config
 use ./search
 use ./output
 use ./gitignore
 
-@derive(Debug)]
+@derive(Debug)
 struct Args {
     pattern: string,
     paths: Vec<string>,
@@ -29,7 +29,7 @@ struct Args {
     max_count: Option<int>,
     threads: int,
     json: bool,
-    color: string,  // auto, always, never
+    color: string,  // auto, always, never,
     hidden: bool,
     no_ignore: bool,
 }

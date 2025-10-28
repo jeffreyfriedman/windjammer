@@ -464,11 +464,11 @@ fn replace_strings_in_statement(stmt: Statement, pool_map: &HashMap<String, Stri
                 .collect(),
         },
         Statement::For {
-            variable,
+            pattern,
             iterable,
             body,
         } => Statement::For {
-            variable,
+            pattern,
             iterable: replace_strings_in_expression(iterable, pool_map),
             body: body
                 .into_iter()

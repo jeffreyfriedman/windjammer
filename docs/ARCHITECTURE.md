@@ -1,341 +1,503 @@
-# Windjammer Architecture
-
-This document describes the architecture of the Windjammer compiler and language server.
+# Windjammer Compiler Architecture
 
 ## Overview
 
+Windjammer is a systems programming language that transpiles to Rust, designed to provide 80% of Rust's power with 20% of its complexity.
+
+## Crate Structure
+
 ```
-┌─────────────┐      ┌──────────┐      ┌──────────┐      ┌─────────────┐
-│  .wj files  │─────▶│  Lexer   │─────▶│  Parser  │─────▶│  Analyzer   │
-└─────────────┘      └──────────┘      └──────────┘      └─────────────┘
-                          │                  │                    │
-                          │                  │                    │
-                          ▼                  ▼                    ▼
-                      Tokens            AST (Program)     Ownership Info
-                                                                   │
-                                                                   │
-                                                                   ▼
-                                                          ┌─────────────┐
-                                                          │  Code Gen   │
-                                                          └─────────────┘
-                                                                   │
-                                                                   ▼
-                                                          ┌─────────────┐
-                                                          │ .rs files   │
-                                                          └─────────────┘
-```
-
-## Components
-
-### 1. Lexer (`src/lexer.rs`)
-
-**Purpose**: Convert source text into tokens
-
-**Key Features**:
-- Recognizes keywords (`fn`, `let`, `go`, `async`, etc.)
-- Handles decorators (`@route`, `@timing`)
-- Parses string literals with escape sequences
-- Supports numeric literals (int and float)
-- Line and block comments
-
-**Example**:
-```
-"fn add(x: int) -> int" → [Fn, Ident("add"), LParen, Ident("x"), Colon, Int, RParen, Arrow, Int]
+windjammer/
+├── windjammer (main compiler)
+│   ├── Parser
+│   ├── Type inference
+│   ├── Code generation
+│   └── component/ (optional, feature-gated)
+│       └── UI component compilation
+│
+└── crates/
+    ├── windjammer-runtime      (stdlib implementations)
+    ├── windjammer-ui           (UI framework runtime)
+    ├── windjammer-ui-macro     (procedural macros)
+    ├── windjammer-lsp          (Language Server Protocol)
+    ├── windjammer-mcp          (Model Context Protocol)
+    └── windjammer-game-framework (game engine)
 ```
 
-### 2. Parser (`src/parser.rs`)
+## Dependency Graph
 
-**Purpose**: Build an Abstract Syntax Tree (AST) from tokens
+### Core Dependencies
 
-**Key Structures**:
-- `Program`: Top-level container
-- `Item`: Function, Struct, Enum, or Use statement
-- `Statement`: Let, Return, If, Match, Loop, While, Go, Defer
-- `Expression`: Literal, Binary, Call, MethodCall, TryOp, Await
-- `Type`: Int, String, Custom, Option, Result, Vec
+```
+┌─────────────────────────────────────────────────────────────┐
+│                      windjammer (compiler)                   │
+│                                                              │
+│  Core:                                                       │
+│  - Parser                                                    │
+│  - Type inference                                            │
+│  - Code generation                                           │
+│                                                              │
+│  Optional (feature = "ui-components"):                       │
+│  ┌────────────────────────────────────────────────────────┐ │
+│  │ component/                                              │ │
+│  │  - Parse .wj component files                           │ │
+│  │  - Analyze reactive dependencies                       │ │
+│  │  - Transform to signals                                │ │
+│  │  - Generate component code                             │ │
+│  └────────────────────────────────────────────────────────┘ │
+└────────────────────────┬─────────────────────────────────────┘
+                         │ optional dependency
+                         │ (feature = "ui-components")
+                         ▼
+         ┌───────────────────────────────┐
+         │     windjammer-ui             │
+         │     (runtime only)            │
+         │                               │
+         │  - Signal<T>                  │
+         │  - Computed<T>                │
+         │  - Effect                     │
+         │  - Virtual DOM                │
+         │  - Platform abstraction       │
+         └───────────────────────────────┘
+                         ▲
+                         │ NO dependencies
+                         │ (pure runtime)
+```
+
+### Key Principle: No Circular Dependencies
+
+**Decision**: The compiler can optionally depend on the UI runtime, but the runtime NEVER depends on the compiler.
+
+**Rationale**:
+1. **Runtime is standalone** - Can be used without the compiler for hand-written components
+2. **Clean separation** - Compile-time vs. runtime concerns are separate
+3. **Smaller binaries** - Users can use runtime without compiler overhead
+4. **Easier testing** - Runtime can be tested independently
+
+**Implementation**:
+```toml
+# Cargo.toml
+[features]
+default = []
+ui-components = ["windjammer-ui"]
+
+[dependencies]
+windjammer-ui = { path = "crates/windjammer-ui", optional = true }
+```
+
+```rust
+// src/main.rs
+#[cfg(feature = "ui-components")]
+pub mod component;
+```
+
+### Why Not Other Approaches?
+
+#### ❌ Component Compiler in Main Compiler (Always)
+```
+windjammer → windjammer-ui (always)
+```
+**Problem**: Tight coupling, can't use UI without full compiler
+
+#### ❌ Component Compiler in UI Crate
+```
+windjammer ↔ windjammer-ui (circular!)
+```
+**Problem**: Circular dependency, runtime depends on compiler
+
+#### ❌ Separate Component Compiler Crate
+```
+windjammer → windjammer-component-compiler → windjammer-ui
+```
+**Problem**: More crates to manage, potential code duplication
+
+#### ✅ Feature-Gated in Main Compiler (Chosen)
+```
+windjammer --[feature="ui-components"]--> windjammer-ui
+```
+**Benefits**: 
+- Clean one-way dependency
+- Optional compilation
+- Code reuse (shared parser)
+- Single crate to manage
+
+---
+
+## UI Component Architecture
+
+### Design Philosophy
+
+**Goal**: 80% of React/Svelte's power with 20% of the complexity
+
+**Strategy**: Progressive disclosure
+- **Simple components**: Minimal syntax (no boilerplate)
+- **Complex components**: JSX-style with full control
+
+### Component Syntax
+
+#### Primary: Minimal Syntax (for 80% of cases)
+
+```windjammer
+// counter.wj - Simple component
+
+// State (compiler makes reactive automatically)
+count: int = 0
+
+// Computed values
+@computed
+doubled: int = count * 2
+
+// Functions
+fn increment() {
+    count += 1
+}
+
+// View (declarative)
+view {
+    div {
+        p { "Count: {count}" }
+        p { "Doubled: {doubled}" }
+        button(on_click: increment) { "+" }
+    }
+}
+```
 
 **Features**:
-- **Decorator parsing**: Captures `@decorator(args)`
-- **Pattern matching**: For `match` expressions
-- **Operator precedence**: Correct expression parsing
-- **Error recovery**: Attempts to continue parsing after errors
+- ✅ No boilerplate (no struct, no impl, no @component)
+- ✅ Compiler infers reactivity automatically
+- ✅ Pure Windjammer syntax (no HTML/XML)
+- ✅ Declarative view definition
+- ✅ Type-safe
 
-### 3. Analyzer (`src/analyzer.rs`)
+**Compilation**:
+1. Parse top-level declarations
+2. Identify reactive variables
+3. Transform to `Signal<T>`
+4. Generate component struct
+5. Generate render function
 
-**Purpose**: Infer ownership and borrowing patterns
+#### Advanced: JSX-Style (for 20% of cases)
 
-**Algorithm**:
+```windjammer
+// todo_list.wj - Complex component
 
-```
-For each function parameter:
-  1. Check if parameter is mutated → &mut
-  2. Check if parameter is returned → owned
-  3. Check if parameter is stored → owned
-  4. Default → & (immutable borrow)
-```
-
-**Inference Rules**:
-- **Mutation detection**: Looks for assignments and mutable method calls
-- **Escape analysis**: Tracks if values leave the function scope
-- **Storage detection**: Checks if values are stored in structs/collections
-
-**Example**:
-```go
-fn print_length(s: string) {  // Inferred: s: &String
-    println("{}", s.len())
+@component
+struct TodoList {
+    todos: Vec<Todo>,
+    filter: Filter,
 }
 
-fn append(s: string) {        // Inferred: s: &mut String
-    s.push_str("!")
-}
-
-fn consume(s: string) -> string {  // Inferred: s: String
-    s
+impl TodoList {
+    @computed
+    fn filtered_todos(&self) -> Vec<&Todo> {
+        self.todos.iter()
+            .filter(|t| self.filter.matches(t))
+            .collect()
+    }
+    
+    fn render(&self) -> View {
+        view! {
+            <div class="todo-list">
+                <FilterBar filter={self.filter} />
+                {#each self.filtered_todos() as todo}
+                    <TodoItem todo={todo} on:delete={self.delete} />
+                {/each}
+            </div>
+        }
+    }
 }
 ```
-
-### 4. Code Generator (`src/codegen.rs`)
-
-**Purpose**: Generate Rust code from analyzed AST
-
-**Transformations**:
-- `int` → `i64`
-- `string` → `String` or `&str`
-- `go { ... }` → `tokio::spawn(async move { ... })`
-- `@decorator` → Rust procedural macros or wrapper code
-- `async fn` → `async fn` in Rust
-- `.await` → `.await` in Rust
 
 **Features**:
-- Proper indentation
-- Type mapping
-- Ownership annotations
-- Decorator expansion
+- ✅ Explicit control (manual struct definition)
+- ✅ Familiar to React developers
+- ✅ Type-safe (macro validates at compile time)
+- ✅ Composable (can use in any expression)
 
-### 5. Language Server (`crates/windjammer-lsp/`)
+**Use Cases**:
+- Complex state management
+- Multiple lifecycle hooks
+- Props and composition
+- Advanced patterns
 
-**Purpose**: Provide IDE integration with incremental compilation
+### State Management: Hybrid Approach
 
-**Architecture**:
-
-```
-┌─────────────────────────────────────┐
-│         VSCode Extension            │
-│   (editors/vscode/)                 │
-└─────────────────┬───────────────────┘
-                  │ LSP Protocol
-                  │ (JSON-RPC)
-┌─────────────────▼───────────────────┐
-│      Language Server                │
-│   (tower-lsp)                       │
-└─────────────────┬───────────────────┘
-                  │
-┌─────────────────▼───────────────────┐
-│      Salsa Database                 │
-│   (Incremental Queries)             │
-├─────────────────────────────────────┤
-│ Input Queries:                      │
-│  - source_text(file) → String       │
-│  - all_files() → Vec<FileId>        │
-├─────────────────────────────────────┤
-│ Derived Queries:                    │
-│  - tokens(file) → Vec<Token>        │
-│  - parse(file) → AST                │
-│  - analyze(file) → OwnershipInfo    │
-│  - symbols(file) → Vec<Symbol>      │
-│  - errors(file) → Vec<Diagnostic>   │
-└─────────────────────────────────────┘
+**User writes**: Simple reactive variables
+```windjammer
+count: int = 0
 ```
 
-**Key Technologies**:
-
-1. **Salsa**: Incremental computation framework
-   - Caches query results
-   - Tracks dependencies
-   - Only recomputes what changed
-   - Same tech as rust-analyzer
-
-2. **tower-lsp**: LSP protocol implementation
-   - Handles JSON-RPC
-   - Provides LSP types
-   - Async request handling
-
-**Incremental Compilation Example**:
-
-```
-User types in file.wj:
-  ↓
-source_text(file) changes
-  ↓
-Salsa marks dependent queries as dirty:
-  - tokens(file)
-  - parse(file)
-  - analyze(file)
-  ↓
-Editor requests diagnostics
-  ↓
-Salsa recomputes only affected queries
-  ↓
-Results returned to editor
-  ↓
-Other files? Still cached! ✨
+**Compiler generates**: Signal-based reactivity
+```rust
+struct Counter {
+    count: Signal<i32>,
+}
 ```
 
-## Performance Characteristics
+**Benefits**:
+- ✅ Simple syntax for users
+- ✅ Powerful runtime (fine-grained reactivity)
+- ✅ Automatic dependency tracking
+- ✅ Optimal performance
 
-### Compiler
+**Advanced users can use signals directly**:
+```windjammer
+count: Signal<int> = signal(0)  // Explicit signal
 
-| Phase | Time (10K LOC) | Optimization |
-|-------|----------------|--------------|
-| Lexing | ~5ms | Single-pass |
-| Parsing | ~20ms | Recursive descent |
-| Analysis | ~50ms | Cached ownership inference |
-| Codegen | ~30ms | String builder |
-| **Total** | **~105ms** | |
+fn increment() {
+    count.set(count.get() + 1)  // Manual control
+}
+```
 
-### Language Server
+---
 
-| Operation | Time | Strategy |
-|-----------|------|----------|
-| Cold start | ~50ms | Lazy initialization |
-| File open | ~10ms | Parse + analyze |
-| Keystroke | <5ms | Incremental reparse |
-| Completion | <1ms | Cached symbols |
-| Diagnostics | <10ms | Incremental |
+## Compilation Pipeline
 
-**Memory Usage**:
-- ~5MB base
-- ~10MB per file (includes parsed AST + analysis)
-- Shared strings and interning reduce overhead
+### Standard Windjammer Compilation
+
+```
+.wj file
+   ↓
+[Lexer] → Tokens
+   ↓
+[Parser] → AST
+   ↓
+[Type Inference] → Typed AST
+   ↓
+[Optimizer] → Optimized AST
+   ↓
+[Codegen] → Rust code
+   ↓
+rustc → Binary/WASM
+```
+
+### UI Component Compilation (feature = "ui-components")
+
+```
+.wj component file
+   ↓
+[Component Parser] → Parse state, computed, functions, view
+   ↓
+[Dependency Analyzer] → Track reactive dependencies
+   ↓
+[Signal Transformer] → Transform reactive vars → Signal<T>
+   ↓
+[Template Compiler] → Compile view { } → DOM operations
+   ↓
+[Component Codegen] → Generate component struct + impl
+   ↓
+[Standard Pipeline] → Rust code → Binary/WASM
+```
+
+---
+
+## Module Organization
+
+### Main Compiler (`src/`)
+
+```
+src/
+├── main.rs              # Entry point, CLI
+├── parser.rs            # Core parser
+├── lexer.rs             # Lexer
+├── analyzer.rs          # Type inference
+├── codegen/             # Code generation
+│   ├── mod.rs
+│   ├── rust.rs          # Rust backend
+│   ├── javascript.rs    # JavaScript backend
+│   └── wasm.rs          # WASM backend
+│
+└── component/           # UI component compilation (optional)
+    ├── mod.rs           # Public API
+    ├── ast.rs           # Component AST
+    ├── parser.rs        # Parse .wj components
+    ├── analyzer.rs      # Dependency analysis
+    ├── transformer.rs   # Reactive var → Signal
+    ├── template.rs      # Template compilation
+    └── codegen.rs       # Component code generation
+```
+
+### UI Runtime (`crates/windjammer-ui/src/`)
+
+```
+crates/windjammer-ui/src/
+├── lib.rs               # Public API
+├── reactivity.rs        # Signal, Computed, Effect
+├── vdom.rs              # Virtual DOM
+├── component.rs         # Component trait
+├── platform/            # Platform abstraction
+│   ├── web.rs           # Web (WASM)
+│   ├── desktop.rs       # Desktop (Tauri)
+│   └── mobile.rs        # Mobile
+└── renderer.rs          # Rendering
+```
+
+---
 
 ## Design Decisions
 
-### 1. Why Go-like Syntax?
+### 1. Feature-Gated Component Compilation
 
-**Pro**:
-- Familiar to many developers
-- Simple and readable
-- Less syntax to learn
-- Faster onboarding
+**Decision**: UI component compilation is behind `ui-components` feature flag
 
-**Con**:
-- Different from Rust (learning curve for transpiled code)
+**Rationale**:
+- Not all users need UI features
+- Keeps default build small
+- Clean separation of concerns
+- Optional dependency on runtime
 
-**Decision**: Worth it for simplicity and approachability
+**Trade-offs**:
+- ✅ Smaller default binary
+- ✅ Faster compilation (when not needed)
+- ⚠️ Users must enable feature explicitly
 
-### 2. Why Transpile to Rust vs Custom Backend?
+### 2. Minimal Syntax as Primary
 
-**Pro**:
-- Leverage Rust's mature ecosystem
-- Cargo for dependencies
-- LLVM optimizations
-- Rust's safety guarantees
+**Decision**: Simple syntax without boilerplate is the primary way to write components
 
-**Con**:
-- Debugging shows Rust code, not Windjammer
-- Limited by Rust's capabilities
+**Rationale**:
+- Matches "20% complexity" mission
+- Lowers barrier to entry
+- Reduces cognitive load
+- Most components are simple
 
-**Decision**: Transpiling provides immediate value and ecosystem access
+**Trade-offs**:
+- ✅ Simplest possible for common cases
+- ✅ Less code to write
+- ⚠️ Less explicit (more "magic")
+- ⚠️ Less familiar to Rust developers
 
-### 3. Why Automatic Ownership Inference?
+### 3. JSX as Escape Hatch
 
-**Pro**:
-- Eliminates the hardest part of Rust
-- Faster development
-- More accessible to beginners
+**Decision**: Provide JSX-style syntax for complex components
 
-**Con**:
-- May infer suboptimally in some cases
-- Hides some control from advanced users
+**Rationale**:
+- Familiar to React developers
+- Provides full control when needed
+- Progressive disclosure of complexity
+- Handles edge cases
 
-**Decision**: Provide escape hatches (`&`, `&mut`) for when needed
+**Trade-offs**:
+- ✅ Powerful for complex cases
+- ✅ Familiar syntax
+- ⚠️ Requires proc macro
+- ⚠️ More verbose
 
-### 4. Why Salsa for LSP?
+### 4. Signal-Based Reactivity
 
-**Pro**:
-- Battle-tested (rust-analyzer)
-- Excellent performance
-- Natural fit for incremental compilation
-- Strong type safety
+**Decision**: Use fine-grained signals for reactivity, not Virtual DOM diffing
 
-**Con**:
-- Additional dependency
-- Learning curve for contributors
+**Rationale**:
+- Better performance (no full tree diff)
+- Simpler mental model (direct updates)
+- Proven pattern (Solid.js, Vue 3, Leptos)
+- Composable primitives
 
-**Decision**: Performance and reliability are critical for LSP
+**Trade-offs**:
+- ✅ Excellent performance
+- ✅ Fine-grained updates
+- ⚠️ Requires automatic dependency tracking
+- ⚠️ More complex compiler
 
-## Extension Points
+### 5. Hybrid State Management
 
-### Adding a New Feature
+**Decision**: Users write simple variables, compiler generates signals
 
-#### 1. New Syntax
+**Rationale**:
+- Best ergonomics (simple syntax)
+- Best performance (signal runtime)
+- Progressive disclosure (can use signals explicitly)
+- Matches mission (80/20)
 
-1. Add token to `lexer.rs`
-2. Add AST node to `parser.rs`
-3. Parse the syntax in `parser.rs`
-4. Generate Rust code in `codegen.rs`
+**Trade-offs**:
+- ✅ Simple for beginners
+- ✅ Powerful for experts
+- ⚠️ Compiler must infer reactivity
+- ⚠️ Two mental models (simple vs. explicit)
 
-#### 2. New Analysis
+---
 
-1. Add query to `database.rs`
-2. Implement query function
-3. Use in diagnostics or completion
+## Future Considerations
 
-#### 3. New LSP Feature
+### Potential Additions
 
-1. Add capability in `handlers.rs::initialize()`
-2. Implement handler method
-3. Update VSCode extension if needed
+1. **Server-Side Rendering (SSR)**
+   - Render components to HTML on server
+   - Hydration on client
+   - SEO benefits
 
-### Testing Strategy
+2. **Hot Module Replacement (HMR)**
+   - Update components without full reload
+   - Preserve state across updates
+   - Better DX
 
-```
-Unit Tests:
-  - Lexer: Token recognition
-  - Parser: AST construction
-  - Analyzer: Ownership inference
-  - Codegen: Rust output
+3. **Component Library**
+   - Standard components (Button, Input, etc.)
+   - Accessible by default
+   - Themeable
 
-Integration Tests:
-  - Full compile pipeline
-  - Example programs
+4. **DevTools**
+   - Inspect component tree
+   - Track signal updates
+   - Performance profiling
 
-LSP Tests:
-  - Query correctness
-  - Incremental updates
-  - Protocol compliance
-```
+### Potential Changes
 
-## Future Enhancements
+1. **Separate Component Compiler Crate**
+   - If component compilation becomes very complex
+   - If other tools need to use it
+   - If we want to version independently
 
-### Short Term
-- [ ] Implement go-to-definition
-- [ ] Add find-references
-- [ ] Improve error messages
-- [ ] Add more built-in decorators
+2. **Multiple Syntax Styles**
+   - Support both minimal and JSX simultaneously
+   - Let users choose their preference
+   - Provide migration tools
 
-### Medium Term
-- [ ] Macro system
-- [ ] Generic types
-- [ ] Trait-like interfaces
-- [ ] Better async/await integration
+3. **Alternative Runtimes**
+   - Different reactivity systems
+   - Different rendering strategies
+   - Platform-specific optimizations
 
-### Long Term
-- [ ] Self-hosting (Windjammer compiler in Windjammer)
-- [ ] Direct LLVM backend (optional)
-- [ ] Package manager integration
-- [ ] Debugging support (source maps)
+---
 
-## Contributing
+## References
 
-See areas where you can contribute:
+### Inspiration
 
-1. **Parser**: Add support for more Rust syntax
-2. **Analyzer**: Improve ownership inference heuristics
-3. **LSP**: Implement missing features (rename, code actions)
-4. **Examples**: More real-world examples
-5. **Documentation**: Tutorials and guides
-6. **Testing**: Increase test coverage
+- **Svelte**: Compiled reactivity, minimal syntax
+- **Solid.js**: Fine-grained signals
+- **React**: JSX, component model
+- **Vue 3**: Hybrid reactivity (Proxy + signals)
+- **Leptos**: Rust + signals + WASM
 
-Read `CONTRIBUTING.md` for guidelines.
+### Related Documents
 
+- `docs/GUIDE.md` - User guide
+- `docs/COMPARISON.md` - Comparison with other languages
+- `ROADMAP.md` - Future plans
+- `crates/windjammer-ui/README.md` - UI framework documentation
+
+---
+
+## Conclusion
+
+This architecture provides:
+- ✅ Clean separation between compiler and runtime
+- ✅ No circular dependencies
+- ✅ Progressive disclosure of complexity
+- ✅ Simple syntax for common cases
+- ✅ Powerful escape hatches for complex cases
+- ✅ Production-quality reactivity system
+- ✅ Matches Windjammer's mission (80% power, 20% complexity)
+
+The feature-gated approach allows us to:
+- Keep the default build small
+- Provide optional UI features
+- Maintain clean architecture
+- Enable future growth
+
+The minimal syntax with JSX escape hatch provides:
+- Simple syntax for beginners
+- Powerful tools for experts
+- Familiar patterns for web developers
+- Pure Windjammer (no HTML/XML in files)

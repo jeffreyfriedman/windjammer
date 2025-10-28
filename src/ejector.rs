@@ -265,8 +265,8 @@ impl Ejector {
 
         for item in &program.items {
             if let parser::Item::Use { path, alias: _ } = item {
-                let module_path = path.join(".");
-                if let Some(module) = module_path.strip_prefix("std.") {
+                let module_path = path.join("::");
+                if let Some(module) = module_path.strip_prefix("std::") {
                     modules.insert(module.to_string());
                 }
             }

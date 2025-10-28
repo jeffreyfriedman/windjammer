@@ -1,0 +1,48 @@
+// Note: This is a conceptual example showing Windjammer UI syntax
+// In a real application, types would be imported from windjammer_ui
+
+// Simple counter example using windjammer-ui
+
+
+@component
+struct Counter {
+    count: int,
+}
+
+impl Counter {
+    fn render() -> VNode {
+        VElement::new("div")
+            .attr("class", "counter")
+            .child(VNode::Element(
+                VElement::new("h1").child(VNode::Text(
+                    VText::new("Count: {count}")
+                ))
+            ))
+            .child(VNode::Element(
+                VElement::new("button")
+                    .attr("onclick", "increment")
+                    .child(VNode::Text(VText::new("Increment")))
+            ))
+            .into()
+    }
+}
+
+fn main() {
+    // Create a counter component
+    let counter = Counter::new()
+    print("Counter component created")
+
+    // Create with initial state
+    let counter_with_state = Counter::with_state(42)
+    print("Counter with state 42 created")
+
+    // Render the component
+    let vnode = counter.render()
+    print("Rendered VNode: {vnode:?}")
+
+    let vnode_with_state = counter_with_state.render()
+    print("Rendered VNode with state: {vnode_with_state:?}")
+
+    print("\n✅ Counter example completed successfully!")
+}
+

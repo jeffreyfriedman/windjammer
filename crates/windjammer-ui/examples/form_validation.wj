@@ -1,0 +1,348 @@
+// Form Validation Example
+// Demonstrates form handling, validation, and error display
+// Note: This is a conceptual example showing the Windjammer UI API
+// In a real application, these types would be imported from windjammer_ui
+
+@derive(Debug, Clone)
+struct ValidationError {
+    field: string,
+    message: string,
+}
+
+@derive(Debug, Clone)
+struct UserForm {
+    username: string,
+    email: string,
+    password: string,
+    confirm_password: string,
+    age: string,
+    agree_terms: bool,
+    errors: [ValidationError],
+    submitted: bool,
+}
+
+impl UserForm {
+    fn new() -> UserForm {
+        UserForm {
+            username: "",
+            email: "",
+            password: "",
+            confirm_password: "",
+            age: "",
+            agree_terms: false,
+            errors: [],
+            submitted: false,
+        }
+    }
+
+    fn validate() -> bool {
+        errors = []
+
+        // Username validation
+        if username.is_empty() {
+            errors.push(ValidationError {
+                field: "username",
+                message: "Username is required",
+            })
+        } else if username.len() < 3 {
+            errors.push(ValidationError {
+                field: "username",
+                message: "Username must be at least 3 characters",
+            })
+        } else if !username.chars().all(|c| c.is_alphanumeric() || c == '_') {
+            errors.push(ValidationError {
+                field: "username",
+                message: "Username can only contain letters, numbers, and underscores",
+            })
+        }
+
+        // Email validation
+        if email.is_empty() {
+            errors.push(ValidationError {
+                field: "email",
+                message: "Email is required",
+            })
+        } else if !email.contains("@") || !email.contains(".") {
+            errors.push(ValidationError {
+                field: "email",
+                message: "Email must be valid (e.g., user@example.com)",
+            })
+        }
+
+        // Password validation
+        if password.is_empty() {
+            errors.push(ValidationError {
+                field: "password",
+                message: "Password is required",
+            })
+        } else if password.len() < 8 {
+            errors.push(ValidationError {
+                field: "password",
+                message: "Password must be at least 8 characters",
+            })
+        } else if !password.chars().any(|c| c.is_numeric()) {
+            errors.push(ValidationError {
+                field: "password",
+                message: "Password must contain at least one number",
+            })
+        } else if !password.chars().any(|c| c.is_uppercase()) {
+            errors.push(ValidationError {
+                field: "password",
+                message: "Password must contain at least one uppercase letter",
+            })
+        }
+
+        // Confirm password validation
+        if confirm_password != password {
+            errors.push(ValidationError {
+                field: "confirm_password",
+                message: "Passwords do not match",
+            })
+        }
+
+        // Age validation
+        if age.is_empty() {
+            errors.push(ValidationError {
+                field: "age",
+                message: "Age is required",
+            })
+        } else if let Some(age_num) = age.parse::<int>() {
+            if age_num < 13 {
+                errors.push(ValidationError {
+                    field: "age",
+                    message: "You must be at least 13 years old",
+                })
+            } else if age_num > 120 {
+                errors.push(ValidationError {
+                    field: "age",
+                    message: "Please enter a valid age",
+                })
+            }
+        } else {
+            errors.push(ValidationError {
+                field: "age",
+                message: "Age must be a number",
+            })
+        }
+
+        // Terms validation
+        if !agree_terms {
+            errors.push(ValidationError {
+                field: "terms",
+                message: "You must agree to the terms and conditions",
+            })
+        }
+
+        errors.is_empty()
+    }
+
+    fn submit() {
+        submitted = true
+
+        if validate() {
+            print("✅ Form submitted successfully!")
+            print("   Username: {username}")
+            print("   Email: {email}")
+            print("   Age: {age}")
+        } else {
+            print("❌ Form has validation errors ({errors.len()} errors)")
+        }
+    }
+
+    fn get_field_error(field: string) -> Option<string> {
+        errors
+            .iter()
+            .find(|e| e.field == field)
+            .map(|e| e.message.clone())
+    }
+
+    fn render() -> VNode {
+        VElement.new("div")
+            .attr("class", "form-container")
+            .child(VNode.Element(
+                VElement.new("h1").child(VNode.Text(VText.new("🔐 User Registration")))
+            ))
+            .child(render_form_field(
+                "username",
+                "Username",
+                "text",
+                username,
+                get_field_error("username")
+            ))
+            .child(render_form_field(
+                "email",
+                "Email",
+                "email",
+                email,
+                get_field_error("email")
+            ))
+            .child(render_form_field(
+                "password",
+                "Password",
+                "password",
+                password,
+                get_field_error("password")
+            ))
+            .child(render_form_field(
+                "confirm_password",
+                "Confirm Password",
+                "password",
+                confirm_password,
+                get_field_error("confirm_password")
+            ))
+            .child(render_form_field(
+                "age",
+                "Age",
+                "number",
+                age,
+                get_field_error("age")
+            ))
+            .child(render_checkbox())
+            .child(render_submit_button())
+            .child(render_summary())
+            .into()
+    }
+
+    fn render_form_field(
+        name: string,
+        label: string,
+        input_type: string,
+        value: string,
+        error: Option<string>
+    ) -> VNode {
+        let has_error = error.is_some()
+        let field_class = if has_error { "form-field error" } else { "form-field" }
+
+        VElement.new("div")
+            .attr("class", field_class)
+            .child(VNode.Element(
+                VElement.new("label")
+                    .attr("for", name)
+                    .child(VNode.Text(VText.new(label)))
+            ))
+            .child(VNode.Element(
+                VElement.new("input")
+                    .attr("type", input_type)
+                    .attr("id", name)
+                    .attr("name", name)
+                    .attr("value", value)
+                    .attr("class", if has_error { "error" } else { "" })
+            ))
+            .child(if let Some(err) = error {
+                VNode.Element(
+                    VElement.new("span")
+                        .attr("class", "error-message")
+                        .child(VNode.Text(VText.new("⚠️ {err}")))
+                )
+            } else {
+                VNode.Empty
+            })
+            .into()
+    }
+
+    fn render_checkbox() -> VNode {
+        let error = get_field_error("terms")
+        let has_error = error.is_some()
+
+        VElement.new("div")
+            .attr("class", if has_error { "form-field error" } else { "form-field" })
+            .child(VNode.Element(
+                VElement.new("label")
+                    .child(VNode.Element(
+                        VElement.new("input")
+                            .attr("type", "checkbox")
+                            .attr("id", "terms")
+                            .attr("checked", if agree_terms { "checked" } else { "" })
+                    ))
+                    .child(VNode.Text(VText.new(" I agree to the terms and conditions")))
+            ))
+            .child(if let Some(err) = error {
+                VNode.Element(
+                    VElement.new("span")
+                        .attr("class", "error-message")
+                        .child(VNode.Text(VText.new("⚠️ {err}")))
+                )
+            } else {
+                VNode.Empty
+            })
+            .into()
+    }
+
+    fn render_submit_button() -> VNode {
+        VElement.new("button")
+            .attr("type", "submit")
+            .attr("class", "submit-btn")
+            .child(VNode.Text(VText.new("Create Account")))
+            .into()
+    }
+
+    fn render_summary() -> VNode {
+        if !submitted {
+            return VNode.Empty
+        }
+
+        if errors.is_empty() {
+            VElement.new("div")
+                .attr("class", "message success")
+                .child(VNode.Text(VText.new("✅ Account created successfully!")))
+                .into()
+        } else {
+            VElement.new("div")
+                .attr("class", "message error")
+                .child(VNode.Text(VText.new("❌ Please fix the errors above ({errors.len()} errors)")))
+                .into()
+        }
+    }
+}
+
+fn main() {
+    print("=== Form Validation Example ===\n")
+
+    let mut form = UserForm.new()
+
+    // Test 1: Empty form (should fail)
+    print("Test 1: Submit empty form")
+    form.submit()
+    print("")
+
+    // Test 2: Fill with invalid data
+    print("Test 2: Invalid data")
+    form.username = "ab"  // Too short
+    form.email = "invalid-email"  // Missing @ or .
+    form.password = "short"  // Too short, no uppercase, no number
+    form.confirm_password = "different"  // Doesn't match
+    form.age = "10"  // Too young
+    form.agree_terms = false
+    form.submit()
+    print("")
+
+    // Test 3: Valid data
+    print("Test 3: Valid data")
+    form.username = "alice_123"
+    form.email = "alice@example.com"
+    form.password = "SecurePass123"
+    form.confirm_password = "SecurePass123"
+    form.age = "25"
+    form.agree_terms = true
+    form.submit()
+    print("")
+
+    print("🎯 Validation Rules:")
+    print("  • Username: 3+ chars, alphanumeric + underscore")
+    print("  • Email: Must contain @ and .")
+    print("  • Password: 8+ chars, 1 uppercase, 1 number")
+    print("  • Confirm: Must match password")
+    print("  • Age: 13-120")
+    print("  • Terms: Must be checked")
+
+    print("\n✨ Features Demonstrated:")
+    print("  ✅ Real-time validation")
+    print("  ✅ Field-specific error messages")
+    print("  ✅ Visual error indicators")
+    print("  ✅ Password strength requirements")
+    print("  ✅ Checkbox validation")
+    print("  ✅ Number range validation")
+    print("  ✅ Email format validation")
+    print("  ✅ Success/error summary")
+}
+

@@ -264,6 +264,39 @@ if (import.meta.url === `file://${process.argv[1]}`) {
         output
     }
 
+    #[allow(clippy::only_used_in_recursion)]
+    fn pattern_to_js(&self, pattern: &crate::parser::Pattern) -> String {
+        match pattern {
+            crate::parser::Pattern::Wildcard => "_".to_string(),
+            crate::parser::Pattern::Identifier(name) => name.clone(),
+            crate::parser::Pattern::Reference(inner) => {
+                // JavaScript doesn't have references, just use the inner pattern
+                self.pattern_to_js(inner)
+            }
+            crate::parser::Pattern::Tuple(patterns) => {
+                let js_patterns: Vec<String> =
+                    patterns.iter().map(|p| self.pattern_to_js(p)).collect();
+                format!("[{}]", js_patterns.join(", "))
+            }
+            crate::parser::Pattern::EnumVariant(variant, binding) => {
+                use crate::parser::EnumPatternBinding;
+                // JavaScript doesn't have pattern matching like Rust, simplify
+                match binding {
+                    EnumPatternBinding::Named(bind) => bind.clone(),
+                    EnumPatternBinding::Wildcard | EnumPatternBinding::None => variant.clone(),
+                }
+            }
+            crate::parser::Pattern::Literal(lit) => {
+                // This is unusual for a for loop pattern, but handle it
+                format!("{:?}", lit)
+            }
+            crate::parser::Pattern::Or(_) => {
+                // Or patterns don't work in for loops, use wildcard
+                "_".to_string()
+            }
+        }
+    }
+
     fn generate_statement(&mut self, stmt: &Statement) -> String {
         let mut output = String::new();
 
@@ -369,14 +402,14 @@ if (import.meta.url === `file://${process.argv[1]}`) {
             }
 
             Statement::For {
-                variable,
+                pattern,
                 iterable,
                 body,
             } => {
                 output.push_str(&self.indent());
                 output.push_str(&format!(
                     "for (const {} of {}) {{\n",
-                    variable,
+                    self.pattern_to_js(pattern),
                     self.generate_expression(iterable)
                 ));
 
@@ -475,6 +508,19 @@ if (import.meta.url === `file://${process.argv[1]}`) {
             Statement::Continue => {
                 output.push_str(&self.indent());
                 output.push_str("continue;\n");
+            }
+
+            Statement::Use { path, alias } => {
+                output.push_str(&self.indent());
+                // In JavaScript, we use import or require, but for local scope we can just skip it
+                // since JavaScript modules work differently. For now, add a comment.
+                output.push_str(&format!(
+                    "// use {} {}\n",
+                    path.join("."),
+                    alias
+                        .as_ref()
+                        .map_or(String::new(), |a| format!("as {}", a))
+                ));
             }
 
             Statement::Defer(_) => {
@@ -593,6 +639,14 @@ if (import.meta.url === `file://${process.argv[1]}`) {
             }
 
             Expression::Tuple(elements) => {
+                let elems: Vec<String> = elements
+                    .iter()
+                    .map(|e| self.generate_expression(e))
+                    .collect();
+                format!("[{}]", elems.join(", "))
+            }
+
+            Expression::Array(elements) => {
                 let elems: Vec<String> = elements
                     .iter()
                     .map(|e| self.generate_expression(e))
@@ -722,12 +776,20 @@ if (import.meta.url === `file://${process.argv[1]}`) {
         match pattern {
             Pattern::Wildcard => "true".to_string(),
             Pattern::Identifier(id) => format!("(({} = {}) || true)", id, match_value),
+            Pattern::Reference(inner) => {
+                // JavaScript doesn't have references, just match the inner pattern
+                self.generate_pattern_match(inner, match_value)
+            }
             Pattern::Literal(lit) => format!("{} === {}", match_value, self.generate_literal(lit)),
             Pattern::EnumVariant(name, binding) => {
-                if let Some(var) = binding {
-                    format!("{} === {}.{}", match_value, name, var)
-                } else {
-                    format!("{} === {}", match_value, name)
+                use crate::parser::EnumPatternBinding;
+                match binding {
+                    EnumPatternBinding::Named(var) => {
+                        format!("{} === {}.{}", match_value, name, var)
+                    }
+                    EnumPatternBinding::Wildcard | EnumPatternBinding::None => {
+                        format!("{} === {}", match_value, name)
+                    }
                 }
             }
             Pattern::Or(patterns) => {
@@ -765,6 +827,7 @@ if (import.meta.url === `file://${process.argv[1]}`) {
             UnaryOp::Not => "!".to_string(),
             UnaryOp::Neg => "-".to_string(),
             UnaryOp::Ref => "".to_string(), // & doesn't apply in JS (auto-reference)
+            UnaryOp::MutRef => "".to_string(), // &mut doesn't apply in JS (auto-reference)
             UnaryOp::Deref => "".to_string(), // * doesn't apply in JS
         }
     }

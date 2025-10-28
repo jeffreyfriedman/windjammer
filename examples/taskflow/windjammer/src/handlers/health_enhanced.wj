@@ -1,11 +1,11 @@
 // Enhanced health check endpoints for production monitoring
 
-use std.http
-use std.json
-use std.time
-use std.db
+use std::http
+use std::json
+use std::time
+use std::db
 
-@derive(Debug, Serialize)]
+@derive(Debug, Serialize)
 struct HealthResponse {
     status: string,
     version: string,
@@ -13,7 +13,7 @@ struct HealthResponse {
     timestamp: int,
 }
 
-@derive(Debug, Serialize)]
+@derive(Debug, Serialize)
 struct DetailedHealthResponse {
     status: string,
     version: string,
@@ -22,14 +22,14 @@ struct DetailedHealthResponse {
     checks: HealthChecks,
 }
 
-@derive(Debug, Serialize)]
+@derive(Debug, Serialize)
 struct HealthChecks {
     database: HealthCheck,
     memory: HealthCheck,
     disk: HealthCheck,
 }
 
-@derive(Debug, Serialize)]
+@derive(Debug, Serialize)
 struct HealthCheck {
     status: string,
     message: Option<string>,
@@ -113,7 +113,7 @@ pub fn detailed(req: Request, pool: DbPool) -> Response {
             database: db_check,
             memory: memory_check,
             disk: disk_check,
-        },
+        }
     }
     
     let status_code = match overall_status {
@@ -135,16 +135,22 @@ async fn check_database(pool: DbPool) -> HealthCheck {
     let duration = time.now().timestamp_millis() - start
     
     match result {
-        Ok(_) => HealthCheck {
-            status: "ok".to_string(),
-            message: Some(format!("Connected, query time: {}ms", duration)),
-            response_time_ms: Some(duration as int),
-        },
-        Err(e) => HealthCheck {
-            status: "error".to_string(),
-            message: Some(format!("Database error: {}", e)),
-            response_time_ms: None,
-        },
+        Ok(_) => {
+            let msg = "Connected, query time: " + duration.to_string() + "ms"
+            HealthCheck {
+                status: "ok".to_string(),
+                message: Some(msg),
+                response_time_ms: Some(duration as int),
+            }
+        }
+        Err(e) => {
+            let msg = "Database error: " + e.to_string()
+            HealthCheck {
+                status: "error".to_string(),
+                message: Some(msg),
+                response_time_ms: None,
+            }
+        }
     }
 }
 

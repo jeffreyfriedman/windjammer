@@ -327,15 +327,12 @@ pub fn extract_references<'db>(
 
     // Walk the AST to find all identifier references
     // For now, we'll extract function calls as a starting point
-    for (_idx, item) in program.items.iter().enumerate() {
-        match item {
-            parser::Item::Function(func) => {
-                // Scan function body for references
-                // TODO: Implement proper AST walking
-                // For now, we'll just note that references exist
-                tracing::debug!("TODO: Scan function '{}' body for references", func.name);
-            }
-            _ => {}
+    for item in program.items.iter() {
+        if let parser::Item::Function(func) = item {
+            // Scan function body for references
+            // TODO: Implement proper AST walking
+            // For now, we'll just note that references exist
+            tracing::debug!("TODO: Scan function '{}' body for references", func.name);
         }
     }
 
@@ -421,10 +418,15 @@ impl WindjammerDatabase {
 
         // Extract the selected code
         let mut selected_code = String::new();
-        for line_idx in start_line..=end_line {
+        for (idx, line) in lines
+            .iter()
+            .enumerate()
+            .skip(start_line)
+            .take(end_line - start_line + 1)
+        {
+            let line_idx = idx;
             if line_idx == start_line && line_idx == end_line {
                 // Single line selection
-                let line = lines[line_idx];
                 let start_char = range.start.character as usize;
                 let end_char = range.end.character as usize;
                 if start_char < line.len() && end_char <= line.len() {
@@ -1754,10 +1756,8 @@ impl DependencyGraph {
 
         // Check all dependencies
         for dep in &self.dependencies {
-            if dep.from == *file {
-                if self.has_cycle_util(&dep.to, visited, rec_stack) {
-                    return true;
-                }
+            if dep.from == *file && self.has_cycle_util(&dep.to, visited, rec_stack) {
+                return true;
             }
         }
 
@@ -1840,7 +1840,7 @@ impl WindjammerDatabase {
     /// Find circular dependencies in the workspace
     pub fn find_circular_dependencies(&mut self, files: &[SourceFile]) -> Vec<Vec<Url>> {
         let graph = self.build_dependency_graph(files);
-        let mut cycles = Vec::new();
+        let cycles = Vec::new();
 
         if graph.has_circular_dependencies() {
             // For now, just report that cycles exist
@@ -2356,9 +2356,8 @@ impl WindjammerDatabase {
                             severity: DiagnosticSeverity::Info,
                             category: DiagnosticCategory::Documentation,
                             message: format!(
-                                "{} '{}' is missing documentation",
-                                format!("{:?}", symbol.kind),
-                                symbol.name
+                                "{:?} '{}' is missing documentation",
+                                symbol.kind, symbol.name
                             ),
                             location: tower_lsp::lsp_types::Location {
                                 uri: uri.clone(),
@@ -3728,10 +3727,10 @@ mod dependency_tests {
         let metrics = db.calculate_coupling(&files);
         assert_eq!(metrics.len(), 2);
 
-        for (uri, afferent, efferent) in metrics {
+        for (uri, _afferent, _efferent) in metrics {
             assert!(uri.as_str().starts_with("file:///"));
-            assert!(afferent >= 0);
-            assert!(efferent >= 0);
+            // assert!(afferent >= 0); // Always true for usize
+            // assert!(efferent >= 0); // Always true for usize
         }
     }
 
@@ -3811,7 +3810,7 @@ struct Point {
         let metrics = db.calculate_file_metrics(file);
         assert!(metrics.lines_of_code > 0);
         // Parser may not extract all symbols, just check that we got some data
-        assert!(metrics.complexity_score >= 0);
+        // assert!(metrics.complexity_score >= 0); // Always true for usize
     }
 
     #[test]
@@ -3857,7 +3856,7 @@ struct Point {
         .collect();
 
         let large = db.find_large_files(&files, 2);
-        assert!(large.len() > 0);
+        assert!(!large.is_empty());
         assert!(large.iter().any(|(uri, _)| uri.as_str().contains("large")));
     }
 
@@ -3873,9 +3872,9 @@ struct Point {
         .map(|(uri, text)| db.set_source_text(uri, text))
         .collect();
 
-        let long = db.find_long_functions(&files, 3);
+        let _long = db.find_long_functions(&files, 3);
         // May or may not find long functions depending on AST parsing
-        assert!(long.len() >= 0);
+        // assert!(long.len() >= 0); // Always true for usize
     }
 
     #[test]
@@ -3889,7 +3888,7 @@ struct Point {
         let metrics = db.calculate_file_metrics(file);
         assert_eq!(metrics.uri, uri);
         assert!(metrics.avg_function_length >= 0.0);
-        assert!(metrics.complexity_score >= 0);
+        // assert!(metrics.complexity_score >= 0); // Always true for usize
     }
 
     #[test]
@@ -4049,9 +4048,9 @@ mod diagnostics_tests {
         .map(|(uri, text)| db.set_source_text(uri, text))
         .collect();
 
-        let diagnostics = db.lint_workspace(&files, &config);
+        let _diagnostics = db.lint_workspace(&files, &config);
         // Should return some diagnostics
-        assert!(diagnostics.len() >= 0);
+        // assert!(diagnostics.len() >= 0); // Always true for Vec
     }
 
     #[test]
@@ -4188,8 +4187,8 @@ mod lazy_loading_tests {
         let file = db.set_source_text(uri, "fn test() {}".to_string());
 
         // Get symbols with lazy loading
-        let symbols = db.get_symbols_lazy(file);
-        assert!(symbols.len() >= 0);
+        let _symbols = db.get_symbols_lazy(file);
+        // assert!(symbols.len() >= 0); // Always true for Vec
 
         // Should be marked as loaded now
         assert!(db.are_symbols_loaded(file));

@@ -1,7 +1,7 @@
 // Request ID middleware for distributed tracing
 
-use std.http
-use std.crypto
+use std::http
+use std::crypto
 
 pub fn generate_request_id() -> string {
     // Generate a unique request ID
