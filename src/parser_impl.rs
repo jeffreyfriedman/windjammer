@@ -2609,12 +2609,76 @@ impl Parser {
                 }
                 Token::LBracket => {
                     self.advance();
-                    let index = Box::new(self.parse_expression()?);
-                    self.expect(Token::RBracket)?;
-                    left = Expression::Index {
-                        object: Box::new(left),
-                        index,
-                    };
+
+                    // Check for slice syntax: [start..end], [start..], [..end]
+                    if self.current_token() == &Token::DotDot {
+                        // [..end] - slice from beginning
+                        self.advance(); // consume '..'
+                        let end = if self.current_token() != &Token::RBracket {
+                            Some(Box::new(self.parse_expression()?))
+                        } else {
+                            None
+                        };
+                        self.expect(Token::RBracket)?;
+
+                        // Desugar [..end] to .slice(0, end)
+                        let end_expr = end.unwrap_or_else(|| {
+                            Box::new(Expression::MethodCall {
+                                object: Box::new(left.clone()),
+                                method: "len".to_string(),
+                                type_args: None,
+                                arguments: vec![],
+                            })
+                        });
+
+                        left = Expression::MethodCall {
+                            object: Box::new(left),
+                            method: "slice".to_string(),
+                            type_args: None,
+                            arguments: vec![
+                                (None, Expression::Literal(Literal::Int(0))),
+                                (None, *end_expr),
+                            ],
+                        };
+                    } else {
+                        let start_or_index = Box::new(self.parse_expression()?);
+
+                        // Check if this is a slice or regular index
+                        if self.current_token() == &Token::DotDot {
+                            // [start..] or [start..end] - slice syntax
+                            self.advance(); // consume '..'
+                            let end = if self.current_token() != &Token::RBracket {
+                                Some(Box::new(self.parse_expression()?))
+                            } else {
+                                None
+                            };
+                            self.expect(Token::RBracket)?;
+
+                            // Desugar [start..end] to .slice(start, end)
+                            let end_expr = end.unwrap_or_else(|| {
+                                Box::new(Expression::MethodCall {
+                                    object: Box::new(left.clone()),
+                                    method: "len".to_string(),
+                                    type_args: None,
+                                    arguments: vec![],
+                                })
+                            });
+
+                            left = Expression::MethodCall {
+                                object: Box::new(left),
+                                method: "slice".to_string(),
+                                type_args: None,
+                                arguments: vec![(None, *start_or_index), (None, *end_expr)],
+                            };
+                        } else {
+                            // Regular index: [i]
+                            self.expect(Token::RBracket)?;
+                            left = Expression::Index {
+                                object: Box::new(left),
+                                index: start_or_index,
+                            };
+                        }
+                    }
                 }
                 Token::ColonColon => {
                     // Handle turbofish and static method calls in match values
@@ -3583,14 +3647,90 @@ impl Parser {
                 }
                 Token::LBracket => {
                     self.advance();
-                    let index = self.parse_expression()?;
-                    self.expect(Token::RBracket)?;
-                    Expression::Index {
-                        object: Box::new(expr),
-                        index: Box::new(index),
+
+                    // Check for slice syntax: [start..end], [start..], [..end]
+                    if self.current_token() == &Token::DotDot {
+                        // [..end] - slice from beginning
+                        self.advance(); // consume '..'
+                        let end = if self.current_token() != &Token::RBracket {
+                            Some(Box::new(self.parse_expression()?))
+                        } else {
+                            None
+                        };
+                        self.expect(Token::RBracket)?;
+
+                        // Desugar [..end] to .slice(0, end)
+                        let end_expr = end.unwrap_or_else(|| {
+                            Box::new(Expression::MethodCall {
+                                object: Box::new(expr.clone()),
+                                method: "len".to_string(),
+                                type_args: None,
+                                arguments: vec![],
+                            })
+                        });
+
+                        Expression::MethodCall {
+                            object: Box::new(expr),
+                            method: "slice".to_string(),
+                            type_args: None,
+                            arguments: vec![
+                                (None, Expression::Literal(Literal::Int(0))),
+                                (None, *end_expr),
+                            ],
+                        }
+                    } else {
+                        // Parse the first expression
+                        // We need to parse without consuming .. as a range operator
+                        // So we manually parse a binary expression that stops at ..
+                        let start_or_index = self.parse_binary_expression(0)?;
+
+                        // Check if this is a slice or regular index
+                        if self.current_token() == &Token::DotDot {
+                            // [start..] or [start..end] - slice syntax
+                            self.advance(); // consume '..'
+                            let end = if self.current_token() != &Token::RBracket {
+                                Some(Box::new(self.parse_expression()?))
+                            } else {
+                                None
+                            };
+                            self.expect(Token::RBracket)?;
+
+                            // Desugar [start..end] to .slice(start, end)
+                            let end_expr = end.unwrap_or_else(|| {
+                                Box::new(Expression::MethodCall {
+                                    object: Box::new(expr.clone()),
+                                    method: "len".to_string(),
+                                    type_args: None,
+                                    arguments: vec![],
+                                })
+                            });
+
+                            Expression::MethodCall {
+                                object: Box::new(expr),
+                                method: "slice".to_string(),
+                                type_args: None,
+                                arguments: vec![(None, start_or_index), (None, *end_expr)],
+                            }
+                        } else {
+                            // Regular index: [i]
+                            self.expect(Token::RBracket)?;
+                            Expression::Index {
+                                object: Box::new(expr),
+                                index: Box::new(start_or_index),
+                            }
+                        }
                     }
                 }
                 Token::DotDot | Token::DotDotEq => {
+                    // Don't parse as range if followed by ] (that's slice syntax)
+                    if let Some(next_tok) = self.peek(1) {
+                        if next_tok == &Token::RBracket {
+                            // This is slice syntax like [1..], not a range
+                            // Let the LBracket handler deal with it
+                            break;
+                        }
+                    }
+
                     let inclusive = self.current_token() == &Token::DotDotEq;
                     self.advance();
                     let end = self.parse_primary_expression()?;
