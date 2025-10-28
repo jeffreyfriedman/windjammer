@@ -1,0 +1,20 @@
+// Test std::http module - HTTP client and server
+use std::http
+
+fn test_http_ok_response() {
+    let response = http::ServerResponse::ok("Hello, World!")
+    assert(response.status == 200)
+    assert(response.body == "Hello, World!")
+}
+
+fn test_http_not_found_response() {
+    let not_found = http::ServerResponse::not_found()
+    assert(not_found.status == 404)
+}
+
+fn test_http_custom_response() {
+    let mut custom = http::ServerResponse::ok("Custom")
+    custom.status = 201
+    assert(custom.status == 201)
+}
+

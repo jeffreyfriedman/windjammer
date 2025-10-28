@@ -6,7 +6,7 @@ use std::db
 use std::log
 use std::time
 
-use ../models.project
+use crate::models::project
 
 @async
 pub fn list(req: Request, pool: DbPool) -> Response {
@@ -149,7 +149,7 @@ pub fn update(req: Request, pool: DbPool) -> Response {
     // Update project
     let query = "UPDATE projects SET name = $1, description = $2, updated_at = $3 WHERE id = $4"
     match db.execute(pool, query, vec![update_req.name, update_req.description, time.now_unix(), project_id]) {
-        Ok(_) => {},
+        Ok(_) => {}
         Err(e) => {
             log.error("Failed to update project: ${e}")
             return http.json_response(500, "Failed to update project")
@@ -184,7 +184,7 @@ pub fn delete(req: Request, pool: DbPool) -> Response {
     // Delete project
     let query = "DELETE FROM projects WHERE id = $1"
     match db.execute(pool, query, vec![project_id]) {
-        Ok(_) => {},
+        Ok(_) => {}
         Err(e) => {
             log.error("Failed to delete project: ${e}")
             return http.json_response(500, "Failed to delete project")
@@ -231,7 +231,7 @@ pub fn add_member(req: Request, pool: DbPool) -> Response {
     let now = time.now_unix()
     let query = "INSERT INTO project_members (project_id, user_id, role, added_at) VALUES ($1, $2, 'member', $3)"
     match db.execute(pool, query, vec![project_id, member_req.user_id, now]) {
-        Ok(_) => {},
+        Ok(_) => {}
         Err(e) => {
             log.error("Failed to add member: ${e}")
             return http.json_response(500, "Failed to add member")
@@ -268,7 +268,7 @@ pub fn remove_member(req: Request, pool: DbPool) -> Response {
     // Remove member
     let query = "DELETE FROM project_members WHERE project_id = $1 AND user_id = $2"
     match db.execute(pool, query, vec![project_id, member_id]) {
-        Ok(_) => {},
+        Ok(_) => {}
         Err(e) => {
             log.error("Failed to remove member: ${e}")
             return http.json_response(500, "Failed to remove member")

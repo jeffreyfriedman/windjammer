@@ -2,12 +2,19 @@
 //!
 //! Windjammer's `std::mime` module maps to these functions.
 
-use mime_guess::from_path;
+use mime_guess;
 use std::path::Path;
 
 /// Guess MIME type from file path
 pub fn from_filename<P: AsRef<Path>>(path: P) -> String {
-    from_path(path).first_or_octet_stream().to_string()
+    mime_guess::from_path(path)
+        .first_or_octet_stream()
+        .to_string()
+}
+
+/// Alias for from_filename (for consistency with mime_guess API)
+pub fn from_path<P: AsRef<Path>>(path: P) -> String {
+    from_filename(path)
 }
 
 /// Guess MIME type from file extension

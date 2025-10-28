@@ -10,7 +10,8 @@ pub mod error_mapper;
 pub mod inference;
 pub mod lexer;
 pub mod optimizer;
-pub mod parser;
+pub mod parser; // New modular parser structure
+pub mod parser_impl; // Temporary: old monolithic parser
 pub mod parser_recovery;
 pub mod source_map;
 pub mod stdlib_scanner;
@@ -157,6 +158,28 @@ enum Commands {
         #[arg(last = true)]
         args: Vec<String>,
     },
+    /// Run tests (discovers and runs all test functions)
+    Test {
+        /// Directory or file containing tests (defaults to current directory)
+        #[arg(value_name = "PATH")]
+        path: Option<PathBuf>,
+
+        /// Run only tests matching this pattern
+        #[arg(short, long)]
+        filter: Option<String>,
+
+        /// Show output from passing tests
+        #[arg(long)]
+        nocapture: bool,
+
+        /// Run tests in parallel (default: true)
+        #[arg(long, default_value = "true")]
+        parallel: bool,
+
+        /// Output results as JSON for tooling
+        #[arg(long)]
+        json: bool,
+    },
 }
 
 #[allow(dead_code)]
@@ -218,6 +241,21 @@ fn main() -> Result<()> {
         }
         Commands::Run { file, target, args } => {
             run_file(&file, target, &args)?;
+        }
+        Commands::Test {
+            path,
+            filter,
+            nocapture,
+            parallel,
+            json,
+        } => {
+            run_tests(
+                path.as_deref(),
+                filter.as_deref(),
+                nocapture,
+                parallel,
+                json,
+            )?;
         }
     }
 
@@ -1479,6 +1517,605 @@ fn run_file(file: &Path, mut target: CompilationTarget, args: &[String]) -> Resu
             if temp_dir.exists() {
                 fs::remove_dir_all(&temp_dir)?;
             }
+        }
+    }
+
+    Ok(())
+}
+
+/// Run tests (discovers and runs all test functions)
+pub fn run_tests(
+    path: Option<&Path>,
+    filter: Option<&str>,
+    nocapture: bool,
+    parallel: bool,
+    json: bool,
+) -> Result<()> {
+    use colored::*;
+    use std::fs;
+    use std::process::Command;
+    use std::time::Instant;
+
+    let start_time = Instant::now();
+
+    // Determine test directory
+    let test_dir = path.unwrap_or_else(|| Path::new("."));
+
+    if !test_dir.exists() {
+        anyhow::bail!("Test path does not exist: {:?}", test_dir);
+    }
+
+    // Discover test files
+    if !json {
+        println!();
+        println!(
+            "{}",
+            "╭─────────────────────────────────────────────╮".cyan()
+        );
+        println!(
+            "{}",
+            "│  🧪  Windjammer Test Framework            │"
+                .cyan()
+                .bold()
+        );
+        println!(
+            "{}",
+            "╰─────────────────────────────────────────────╯".cyan()
+        );
+        println!();
+        println!("{} Discovering tests...", "→".bright_blue().bold());
+    }
+
+    let test_files = discover_test_files(test_dir)?;
+
+    if test_files.is_empty() {
+        if json {
+            println!("{{\"error\": \"No test files found\", \"files\": [], \"tests\": []}}");
+        } else {
+            println!();
+            println!("{} No test files found", "✗".red().bold());
+            println!();
+            println!("  {} Test files should:", "ℹ".blue());
+            println!(
+                "    • Be named {}  or {}",
+                "*_test.wj".yellow(),
+                "test_*.wj".yellow()
+            );
+            println!("    • Contain functions starting with {}", "test_".yellow());
+            println!();
+        }
+        return Ok(());
+    }
+
+    if !json {
+        println!(
+            "{} Found {} test file(s)",
+            "✓".green().bold(),
+            test_files.len().to_string().bright_white().bold()
+        );
+        for file in &test_files {
+            println!(
+                "    {} {}",
+                "•".bright_black(),
+                file.display().to_string().bright_white()
+            );
+        }
+        println!();
+    }
+
+    // Create temporary test directory
+    let temp_dir = std::env::temp_dir().join("windjammer-test");
+    if temp_dir.exists() {
+        fs::remove_dir_all(&temp_dir)?;
+    }
+    fs::create_dir_all(&temp_dir)?;
+
+    // Compile test files
+    if !json {
+        println!("{} Compiling tests...", "→".bright_blue().bold());
+    }
+
+    let mut all_tests = Vec::new();
+
+    for test_file in &test_files {
+        let tests = compile_test_file(test_file, &temp_dir)?;
+        all_tests.extend(tests);
+    }
+
+    if !json {
+        println!(
+            "{} Found {} test function(s)",
+            "✓".green().bold(),
+            all_tests.len().to_string().bright_white().bold()
+        );
+        println!();
+    }
+
+    // Generate test harness
+    generate_test_harness(&temp_dir, &all_tests, filter)?;
+
+    // Run tests
+    if !json {
+        println!("{}", "─".repeat(50).bright_black());
+        println!("{} Running tests...", "▶".bright_green().bold());
+        println!("{}", "─".repeat(50).bright_black());
+        println!();
+    }
+
+    let mut cmd = Command::new("cargo");
+    cmd.arg("test").current_dir(&temp_dir);
+
+    if !parallel {
+        cmd.arg("--").arg("--test-threads").arg("1");
+    }
+
+    if let Some(filter_str) = filter {
+        cmd.arg("--").arg(filter_str);
+    }
+
+    if nocapture {
+        if filter.is_none() {
+            cmd.arg("--");
+        }
+        cmd.arg("--nocapture");
+    }
+
+    let output = cmd.output()?;
+    let duration = start_time.elapsed();
+
+    // Parse test output
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let stderr = String::from_utf8_lossy(&output.stderr);
+
+    let test_results = parse_test_output(&stdout, &stderr);
+
+    if json {
+        // JSON output for tooling
+        println!("{{");
+        println!("  \"success\": {},", output.status.success());
+        println!("  \"duration_ms\": {},", duration.as_millis());
+        println!("  \"test_files\": {},", test_files.len());
+        println!("  \"total_tests\": {},", all_tests.len());
+        println!("  \"passed\": {},", test_results.passed);
+        println!("  \"failed\": {},", test_results.failed);
+        println!("  \"ignored\": {},", test_results.ignored);
+        println!("  \"files\": [");
+        for (i, file) in test_files.iter().enumerate() {
+            println!(
+                "    \"{}\"{}",
+                file.display(),
+                if i < test_files.len() - 1 { "," } else { "" }
+            );
+        }
+        println!("  ],");
+        println!("  \"tests\": [");
+        for (i, test) in all_tests.iter().enumerate() {
+            // Look up the status for this test
+            // The test name in cargo output is "module::test_name"
+            let full_test_name = format!(
+                "{}::{}",
+                test.file.file_stem().unwrap().to_string_lossy(),
+                test.name
+            );
+            let status = test_results
+                .individual_results
+                .get(&full_test_name)
+                .or_else(|| test_results.individual_results.get(&test.name))
+                .map(|s| s.as_str())
+                .unwrap_or("unknown");
+
+            println!(
+                "    {{\"name\": \"{}\", \"file\": \"{}\", \"status\": \"{}\"}}{}",
+                test.name,
+                test.file.display(),
+                status,
+                if i < all_tests.len() - 1 { "," } else { "" }
+            );
+        }
+        println!("  ]");
+        println!("}}");
+    } else {
+        // Pretty output for humans
+        print!("{}", stdout);
+        print!("{}", stderr);
+
+        println!();
+        println!("{}", "─".repeat(50).bright_black());
+
+        if output.status.success() {
+            println!();
+            println!(
+                "{} {} All tests passed! {}",
+                "✓".green().bold(),
+                "🎉".bright_white(),
+                "✓".green().bold()
+            );
+            println!();
+            println!(
+                "  {} {} passed",
+                "✓".green(),
+                test_results.passed.to_string().bright_white().bold()
+            );
+            if test_results.ignored > 0 {
+                println!(
+                    "  {} {} ignored",
+                    "○".yellow(),
+                    test_results.ignored.to_string().bright_white()
+                );
+            }
+            println!(
+                "  {} Completed in {}",
+                "⏱".bright_blue(),
+                format!("{:.2}s", duration.as_secs_f64())
+                    .bright_white()
+                    .bold()
+            );
+        } else {
+            println!();
+            println!(
+                "{} {} Tests failed {}",
+                "✗".red().bold(),
+                "⚠".bright_yellow(),
+                "✗".red().bold()
+            );
+            println!();
+            println!(
+                "  {} {} passed",
+                "✓".green(),
+                test_results.passed.to_string().bright_white()
+            );
+            println!(
+                "  {} {} failed",
+                "✗".red().bold(),
+                test_results.failed.to_string().bright_white().bold()
+            );
+            if test_results.ignored > 0 {
+                println!(
+                    "  {} {} ignored",
+                    "○".yellow(),
+                    test_results.ignored.to_string().bright_white()
+                );
+            }
+            println!(
+                "  {} Completed in {}",
+                "⏱".bright_blue(),
+                format!("{:.2}s", duration.as_secs_f64()).bright_white()
+            );
+        }
+
+        println!();
+        println!("{}", "─".repeat(50).bright_black());
+        println!();
+
+        // Check for coverage flag in environment
+        if std::env::var("WINDJAMMER_COVERAGE").is_ok() {
+            println!("{} Generating coverage report...", "→".bright_blue().bold());
+            generate_coverage_report(&temp_dir)?;
+        }
+    }
+
+    if !output.status.success() {
+        anyhow::bail!("Tests failed");
+    }
+
+    // Clean up
+    if temp_dir.exists() {
+        fs::remove_dir_all(&temp_dir)?;
+    }
+
+    Ok(())
+}
+
+#[derive(Debug, Default)]
+struct TestResults {
+    passed: usize,
+    failed: usize,
+    ignored: usize,
+    individual_results: std::collections::HashMap<String, String>, // test_name -> status
+}
+
+fn parse_test_output(stdout: &str, _stderr: &str) -> TestResults {
+    let mut results = TestResults::default();
+
+    // Parse individual test results
+    for line in stdout.lines() {
+        let line = line.trim();
+
+        // Parse individual test lines: "test module::test_name ... ok"
+        if line.starts_with("test ")
+            && (line.contains(" ... ok")
+                || line.contains(" ... FAILED")
+                || line.contains(" ... ignored"))
+        {
+            let parts: Vec<&str> = line.split_whitespace().collect();
+            if parts.len() >= 4 && parts[0] == "test" {
+                let test_name = parts[1].to_string();
+                let status = if line.contains(" ... ok") {
+                    "passed"
+                } else if line.contains(" ... FAILED") {
+                    "failed"
+                } else if line.contains(" ... ignored") {
+                    "ignored"
+                } else {
+                    "unknown"
+                };
+                results
+                    .individual_results
+                    .insert(test_name, status.to_string());
+            }
+        }
+
+        // Parse summary line for aggregate counts
+        if line.contains("test result:") {
+            // Example: "test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out"
+            let parts: Vec<&str> = line.split_whitespace().collect();
+            for (i, part) in parts.iter().enumerate() {
+                if part == &"passed;" && i > 0 {
+                    if let Ok(n) = parts[i - 1].parse::<usize>() {
+                        results.passed += n; // Sum instead of replace
+                    }
+                }
+                if part == &"failed;" && i > 0 {
+                    if let Ok(n) = parts[i - 1].parse::<usize>() {
+                        results.failed += n; // Sum instead of replace
+                    }
+                }
+                if part == &"ignored;" && i > 0 {
+                    if let Ok(n) = parts[i - 1].parse::<usize>() {
+                        results.ignored += n; // Sum instead of replace
+                    }
+                }
+            }
+        }
+    }
+
+    results
+}
+
+/// Discover test files in a directory
+fn discover_test_files(dir: &Path) -> Result<Vec<PathBuf>> {
+    let mut test_files = Vec::new();
+
+    if dir.is_file() {
+        // Single file
+        if is_test_file(dir) {
+            test_files.push(dir.to_path_buf());
+        }
+    } else {
+        // Directory - search recursively
+        visit_dirs(dir, &mut test_files)?;
+    }
+
+    Ok(test_files)
+}
+
+/// Visit directories recursively to find test files
+fn visit_dirs(dir: &Path, test_files: &mut Vec<PathBuf>) -> Result<()> {
+    use std::fs;
+
+    if dir.is_dir() {
+        for entry in fs::read_dir(dir)? {
+            let entry = entry?;
+            let path = entry.path();
+
+            if path.is_dir() {
+                // Skip target, build, and hidden directories
+                if let Some(name) = path.file_name() {
+                    let name_str = name.to_string_lossy();
+                    if name_str.starts_with('.') || name_str == "target" || name_str == "build" {
+                        continue;
+                    }
+                }
+                visit_dirs(&path, test_files)?;
+            } else if is_test_file(&path) {
+                test_files.push(path);
+            }
+        }
+    }
+
+    Ok(())
+}
+
+/// Check if a file is a test file
+fn is_test_file(path: &Path) -> bool {
+    if let Some(name) = path.file_name() {
+        let name_str = name.to_string_lossy();
+        (name_str.ends_with("_test.wj") || name_str.starts_with("test_"))
+            && name_str.ends_with(".wj")
+    } else {
+        false
+    }
+}
+
+/// Compile a test file and extract test functions
+fn compile_test_file(test_file: &Path, _output_dir: &Path) -> Result<Vec<TestFunction>> {
+    use crate::lexer::Lexer;
+    use crate::parser::Parser;
+    use std::fs;
+
+    let source = fs::read_to_string(test_file)?;
+
+    // Lex and parse
+    let mut lexer = Lexer::new(&source);
+    let tokens = lexer.tokenize();
+    let mut parser = Parser::new(tokens);
+    let program = parser.parse().map_err(|e| anyhow::anyhow!("{}", e))?;
+
+    // Find test functions
+    let mut tests = Vec::new();
+    for item in &program.items {
+        if let crate::parser::Item::Function(func) = item {
+            if func.name.starts_with("test_") {
+                tests.push(TestFunction {
+                    name: func.name.clone(),
+                    file: test_file.to_path_buf(),
+                });
+            }
+        }
+    }
+
+    Ok(tests)
+}
+
+/// Test function metadata
+#[derive(Debug, Clone)]
+struct TestFunction {
+    name: String,
+    file: PathBuf,
+}
+
+/// Generate Rust test harness from Windjammer tests
+fn generate_test_harness(
+    output_dir: &Path,
+    tests: &[TestFunction],
+    filter: Option<&str>,
+) -> Result<()> {
+    use std::collections::HashMap;
+    use std::fs;
+
+    // Group tests by file
+    let mut tests_by_file: HashMap<PathBuf, Vec<&TestFunction>> = HashMap::new();
+    for test in tests {
+        tests_by_file
+            .entry(test.file.clone())
+            .or_default()
+            .push(test);
+    }
+
+    // Compile each test file using the existing infrastructure
+    for (file, file_tests) in &tests_by_file {
+        // Skip if filter doesn't match
+        if let Some(filter_str) = filter {
+            if !file_tests.iter().any(|t| t.name.contains(filter_str)) {
+                continue;
+            }
+        }
+
+        // Compile the file to Rust
+        let _ = compile_file(file, output_dir, CompilationTarget::Rust)?;
+
+        // Read the generated Rust code
+        let output_file = output_dir.join(format!(
+            "{}.rs",
+            file.file_stem().unwrap().to_string_lossy()
+        ));
+        let mut rust_code = fs::read_to_string(&output_file)?;
+
+        // Add test attributes to test functions
+        for test in file_tests.iter() {
+            let test_fn = format!("fn {}()", test.name);
+            let test_attr = format!("#[test]\nfn {}()", test.name);
+            rust_code = rust_code.replace(&test_fn, &test_attr);
+        }
+
+        // Write back
+        fs::write(&output_file, rust_code)?;
+    }
+
+    // Create Cargo.toml
+    let cargo_toml = format!(
+        r#"[package]
+name = "windjammer-tests"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+windjammer-runtime = {{ path = "{}" }}
+smallvec = "1.13"
+
+[lib]
+name = "windjammer_tests"
+path = "lib.rs"
+"#,
+        std::env::current_dir()?
+            .join("crates/windjammer-runtime")
+            .display()
+    );
+    fs::write(output_dir.join("Cargo.toml"), cargo_toml)?;
+
+    // Create lib.rs that includes all test modules
+    let mut lib_rs = String::from("// Auto-generated test harness\n\n");
+    for (file, _) in tests_by_file {
+        let module_name = file.file_stem().unwrap().to_string_lossy();
+        lib_rs.push_str(&format!("pub mod {};\n", module_name));
+    }
+    fs::write(output_dir.join("lib.rs"), lib_rs)?;
+
+    Ok(())
+}
+
+/// Generate coverage report using cargo-llvm-cov
+fn generate_coverage_report(test_dir: &Path) -> Result<()> {
+    use colored::*;
+    use std::process::Command;
+
+    // Check if cargo-llvm-cov is installed
+    let check = Command::new("cargo")
+        .arg("llvm-cov")
+        .arg("--version")
+        .output();
+
+    if check.is_err() || !check.unwrap().status.success() {
+        println!("{} cargo-llvm-cov not found", "⚠".yellow());
+        println!("Install with: cargo install cargo-llvm-cov");
+        println!("Skipping coverage report...");
+        return Ok(());
+    }
+
+    // Generate coverage
+    let output = Command::new("cargo")
+        .arg("llvm-cov")
+        .arg("test")
+        .arg("--html")
+        .current_dir(test_dir)
+        .output()?;
+
+    if output.status.success() {
+        // Copy coverage report to project directory
+        let source_dir = test_dir.join("target/llvm-cov");
+        let dest_dir = std::path::Path::new("target/llvm-cov");
+
+        if source_dir.exists() {
+            // Create destination directory
+            std::fs::create_dir_all(dest_dir)?;
+
+            // Copy the coverage report
+            if let Err(e) = copy_dir_recursive(&source_dir, dest_dir) {
+                println!("{} Failed to copy coverage report: {}", "⚠".yellow(), e);
+            } else {
+                println!("{} Coverage report generated", "✓".green());
+                println!("  Open: target/llvm-cov/html/index.html");
+            }
+        } else {
+            println!(
+                "{} Coverage report not found at expected location",
+                "⚠".yellow()
+            );
+        }
+    } else {
+        println!("{} Coverage generation failed", "✗".red());
+        print!("{}", String::from_utf8_lossy(&output.stderr));
+    }
+
+    Ok(())
+}
+
+/// Recursively copy a directory
+fn copy_dir_recursive(src: &Path, dst: &Path) -> std::io::Result<()> {
+    if !dst.exists() {
+        std::fs::create_dir_all(dst)?;
+    }
+
+    for entry in std::fs::read_dir(src)? {
+        let entry = entry?;
+        let ty = entry.file_type()?;
+        let src_path = entry.path();
+        let dst_path = dst.join(entry.file_name());
+
+        if ty.is_dir() {
+            copy_dir_recursive(&src_path, &dst_path)?;
+        } else {
+            std::fs::copy(&src_path, &dst_path)?;
         }
     }
 

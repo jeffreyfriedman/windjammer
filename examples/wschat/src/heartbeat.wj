@@ -1,12 +1,12 @@
 // Connection heartbeat and recovery for wschat
 
 use std::time
-use std::collections.HashMap
+use std::collections::HashMap
 use std::sync.{Arc, RwLock}
 use std::thread
 use std::log
 
-use ./connection.Connection
+use ./connection::Connection
 
 pub struct HeartbeatManager {
     // Map of connection_id -> last heartbeat time
@@ -179,7 +179,7 @@ impl HeartbeatManager {
     }
 }
 
-@derive(Debug, Clone, PartialEq))
+@derive(Debug, Clone, PartialEq)
 pub enum ConnectionStatus {
     Healthy,
     Warning,
@@ -187,7 +187,7 @@ pub enum ConnectionStatus {
     Unknown,
 }
 
-@derive(Debug, Clone))
+@derive(Debug, Clone)
 pub struct ConnectionHeartbeatInfo {
     pub connection_id: string,
     pub last_heartbeat: int,
@@ -291,7 +291,7 @@ impl RecoveryManager {
     }
 }
 
-@derive(Debug, Clone))
+@derive(Debug, Clone)
 struct RecoveryToken {
     old_connection_id: string,
     user_id: string,

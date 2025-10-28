@@ -2,10 +2,10 @@
 
 use std::fs
 use std::path
-use std::collections.Vec
+use std::collections::Vec
 
-use ./config.Config
-use ./gitignore.GitignoreCache
+use ./config::Config
+use ./gitignore::GitignoreCache
 
 pub fn collect_files(paths: Vec<string>, config: Config) -> Result<Vec<string>, Error> {
     let mut all_files = vec![]
@@ -141,7 +141,7 @@ fn is_likely_binary(path: string) -> bool {
     let binary_extensions = vec![
         "exe", "dll", "so", "dylib", "a", "o",
         "png", "jpg", "jpeg", "gif", "bmp", "ico",
-        "pdf", "zip", "tar", "gz", "bz2", "xz",
+        "pdf", "zip", "ta", "gz", "bz2", "xz",
         "mp3", "mp4", "avi", "mov", "mkv",
         "wasm", "class", "pyc",
     ]

@@ -6,15 +6,15 @@ use windjammer_ui::vdom::{VElement, VNode, VText}
 use windjammer_ui::wasm_events
 
 struct CounterApp {
-    count: Signal<i32>
-    root_element: Option<web_sys::Element>
+    count: Signal<i32>,
+    root_element: Option<web_sys::Element>,
 }
 
 impl CounterApp {
     fn new() -> CounterApp {
         CounterApp {
-            count: Signal::new(0)
-            root_element: None
+            count: Signal::new(0),
+            root_element: None,
         }
     }
     

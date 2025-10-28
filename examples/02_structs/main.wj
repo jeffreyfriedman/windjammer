@@ -54,23 +54,23 @@ impl Rectangle {
 
 fn main() {
     // Create points
-    let p1 = Point.new(3, 4)
+    let p1 = Point::new(3, 4)
     println!("Point 1: (${p1.x}, ${p1.y})")
     println!("Distance from origin: ${p1.distance_from_origin()}")
     
     // Mutable point
-    let mut p2 = Point.new(0, 0)
+    let mut p2 = Point::new(0, 0)
     p2.translate(5, 5)
     println!("Point 2 after translation: (${p2.x}, ${p2.y})")
     
     // Consuming self
-    let p3 = Point.new(1, 2)
+    let p3 = Point::new(1, 2)
     let tuple = p3.into_tuple()
     println!("As tuple: (${tuple.0}, ${tuple.1})")
     
     // Rectangles
-    let rect1 = Rectangle.new(10, 20)
-    let rect2 = Rectangle.new(15, 15)
+    let rect1 = Rectangle::new(10, 20)
+    let rect2 = Rectangle::new(15, 15)
     
     println!("Rectangle 1 area: ${rect1.area()}")
     println!("Rectangle 1 is square: ${rect1.is_square()}")

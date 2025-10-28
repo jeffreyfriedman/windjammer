@@ -169,9 +169,7 @@ impl WasmComponentGenerator {
 
             // Generate dynamic content based on state fields
             for _field in &component_info.state_fields {
-                code.push_str(
-                    "                    <span class=\"count-text\">Count: {{}}</span>\n",
-                );
+                code.push_str("                    <span class=\"count-text\">Count: {}</span>\n");
             }
 
             code.push_str("                </div>\n");

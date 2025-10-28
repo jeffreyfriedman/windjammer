@@ -425,7 +425,9 @@ cargo run --release
 wj build game.wj --target wasm --output ./game_web
 cd game_web
 wasm-pack build --target web
-python3 -m http.server 8080
+
+# Serve with Windjammer's built-in dev server
+wj run ../examples/dev_server.wj
 ```
 
 ### Mobile Build (via Tauri)

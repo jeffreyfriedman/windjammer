@@ -7,7 +7,7 @@ use std::time
 use std::db
 use std::log
 
-use ../models.user
+use crate::models::user
 
 @derive(Debug, Serialize, Deserialize)
 pub struct LoginRequest {
@@ -71,7 +71,7 @@ pub fn register(req: Request, pool: DbPool) -> Response {
             username: register_req.username,
             email: register_req.email,
             created_at: now,
-        },
+        }
     }
     
     log.info("User registered successfully: ${user_id}")
@@ -125,7 +125,7 @@ pub fn login(req: Request, pool: DbPool) -> Response {
             username: db.get_string(user, "username"),
             email: db.get_string(user, "email"),
             created_at: db.get_int(user, "created_at"),
-        },
+        }
     }
     
     log.info("User logged in successfully: ${user_id}")
@@ -185,10 +185,10 @@ fn extract_user_id(req: Request) -> Option<int> {
                 Ok(payload) => {
                     // Parse user_id from payload
                     Some(1)  // Simplified - would parse actual ID
-                },
+                }
                 Err(_) => None,
             }
-        },
+        }
         None => None,
     }
 }

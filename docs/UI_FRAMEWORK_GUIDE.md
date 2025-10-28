@@ -35,7 +35,9 @@ wj build counter.wj --target wasm --output ./counter_output
 ```bash
 cd counter_output
 wasm-pack build --target web
-python3 -m http.server 8080
+
+# Serve with Windjammer dev server
+wj run ../examples/dev_server.wj
 ```
 
 Open `http://localhost:8080` and see your component in action!

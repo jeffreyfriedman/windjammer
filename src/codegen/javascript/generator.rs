@@ -269,6 +269,10 @@ if (import.meta.url === `file://${process.argv[1]}`) {
         match pattern {
             crate::parser::Pattern::Wildcard => "_".to_string(),
             crate::parser::Pattern::Identifier(name) => name.clone(),
+            crate::parser::Pattern::Reference(inner) => {
+                // JavaScript doesn't have references, just use the inner pattern
+                self.pattern_to_js(inner)
+            }
             crate::parser::Pattern::Tuple(patterns) => {
                 let js_patterns: Vec<String> =
                     patterns.iter().map(|p| self.pattern_to_js(p)).collect();
@@ -772,6 +776,10 @@ if (import.meta.url === `file://${process.argv[1]}`) {
         match pattern {
             Pattern::Wildcard => "true".to_string(),
             Pattern::Identifier(id) => format!("(({} = {}) || true)", id, match_value),
+            Pattern::Reference(inner) => {
+                // JavaScript doesn't have references, just match the inner pattern
+                self.generate_pattern_match(inner, match_value)
+            }
             Pattern::Literal(lit) => format!("{} === {}", match_value, self.generate_literal(lit)),
             Pattern::EnumVariant(name, binding) => {
                 use crate::parser::EnumPatternBinding;

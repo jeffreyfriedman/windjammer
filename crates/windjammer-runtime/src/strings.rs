@@ -47,6 +47,14 @@ pub fn replace(s: &str, from: &str, to: &str) -> String {
     s.replace(from, to)
 }
 
+/// Get substring from start to end index (exclusive)
+pub fn substring(s: &str, start: usize, end: usize) -> String {
+    s.chars()
+        .skip(start)
+        .take(end.saturating_sub(start))
+        .collect()
+}
+
 /// Get string length
 pub fn len(s: &str) -> usize {
     s.len()

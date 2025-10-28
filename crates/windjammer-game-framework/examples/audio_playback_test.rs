@@ -45,7 +45,10 @@ fn main() {
 
         let source3 = SpatialAudioSource::new(Vec3::new(150.0, 0.0, 0.0));
         let volume3 = source3.calculate_volume(listener_pos);
-        println!("  Source at (150, 0, 0): volume = {:.2} (beyond max distance)", volume3);
+        println!(
+            "  Source at (150, 0, 0): volume = {:.2} (beyond max distance)",
+            volume3
+        );
 
         // Verify attenuation
         assert!(volume1 > volume2, "Closer source should be louder");
@@ -72,4 +75,3 @@ fn main() {
         println!("Run with: cargo run --example audio_playback_test -p windjammer-game-framework --features audio");
     }
 }
-
