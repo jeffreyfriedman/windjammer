@@ -79,7 +79,7 @@ async fn auth_middleware(req: Request, next: Next) -> Response {
     // Simple API key check
     match req.headers().get("X-API-Key") {
         Some(key) if key == "secret-key" => next.run(req).await,
-        _ => Response.builder()
+        _ => Response::builder()
             .status(401)
             .body("Unauthorized")
             .unwrap(),
@@ -109,10 +109,10 @@ async fn main() {
         .route("/users/:id", get(get_user).delete(delete_user))
         .layer(auth_middleware)
     
-    let listener = tokio.net.TcpListener.bind("127.0.0.1:3000").await.unwrap()
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:3000").await.unwrap()
     
     println("Server running on http://127.0.0.1:3000")
     
-    axum.serve(listener, app).await.unwrap()
+    axum::serve(listener, app).await.unwrap()
 }
 
