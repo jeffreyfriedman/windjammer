@@ -284,6 +284,3 @@ fn extract_user_id(req: Request) -> Option<int> {
     // Simplified extraction - would use proper JWT validation
     Some(1)
 }
-
-    ServerResponse::no_content()
-}
