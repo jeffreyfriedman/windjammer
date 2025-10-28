@@ -2163,6 +2163,12 @@ impl CodeGenerator {
                     _ => ".", // Instance method on expressions
                 };
 
+                // SPECIAL CASE: .slice() method is our desugared slice syntax [start..end]
+                // Convert it back to proper Rust slice syntax
+                if method == "slice" && args.len() == 2 {
+                    return format!("{}[{}..{}]", obj_str, args[0], args[1]);
+                }
+
                 // PHASE 2 OPTIMIZATION: Eliminate unnecessary .clone() calls
                 // If this is a .clone() on a variable that doesn't need cloning, skip it
                 if method == "clone" && arguments.is_empty() {
