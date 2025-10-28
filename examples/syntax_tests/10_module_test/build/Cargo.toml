@@ -1,0 +1,8 @@
+[package]
+name = "module-test"
+version = "0.1.0"
+edition = "2021"
+
+[[bin]]
+name = "module-test"
+path = "main.rs"
