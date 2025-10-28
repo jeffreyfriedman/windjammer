@@ -101,7 +101,7 @@ fn main() {
     // Test Phase 1: Inline hints
     println("Phase 1: Testing inline hints...")
     for i in 0..1000 {
-        let user = create_user(i, "Test User", "test@example.com")
+        let user = create_user(i, "Test Use", "test@example.com")
         let task = create_task(i, "Test Task")
     }
     println("  ✓ Created 1000 users and tasks")

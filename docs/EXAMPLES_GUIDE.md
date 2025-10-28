@@ -56,8 +56,8 @@ wj build examples/components/counter.wj --target wasm --output ./counter_app
 cd counter_app
 wasm-pack build --target web
 
-# Serve
-python3 -m http.server 8080
+# Serve with Windjammer dev server
+wj run ../examples/dev_server.wj
 
 # Open browser
 open http://localhost:8080/index.html
@@ -325,7 +325,9 @@ cd output && cargo run
 wj build <component.wj> --target wasm --output ./output
 cd output
 wasm-pack build --target web
-python3 -m http.server 8080
+
+# Serve with Windjammer dev server
+wj run ../examples/dev_server.wj
 ```
 
 **Testing**:

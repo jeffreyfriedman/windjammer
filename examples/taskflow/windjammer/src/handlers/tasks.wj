@@ -6,7 +6,7 @@ use std::db
 use std::log
 use std::time
 
-use ../models.task
+use crate::models::task
 
 @async
 pub fn list_by_project(req: Request, pool: DbPool) -> Response {
@@ -22,7 +22,7 @@ pub fn list_by_project(req: Request, pool: DbPool) -> Response {
     // Verify access to project
     let check_query = "SELECT 1 FROM projects p LEFT JOIN project_members pm ON p.id = pm.project_id WHERE p.id = $1 AND (p.owner_id = $2 OR pm.user_id = $2)"
     match db.query_one(pool, check_query, vec![project_id, user_id]) {
-        Ok(_) => {},
+        Ok(_) => {}
         Err(_) => return http.json_response(403, "Forbidden"),
     }
     
@@ -70,7 +70,7 @@ pub fn create(req: Request, pool: DbPool) -> Response {
     // Verify access to project
     let check_query = "SELECT 1 FROM projects p LEFT JOIN project_members pm ON p.id = pm.project_id WHERE p.id = $1 AND (p.owner_id = $2 OR pm.user_id = $2)"
     match db.query_one(pool, check_query, vec![project_id, user_id]) {
-        Ok(_) => {},
+        Ok(_) => {}
         Err(_) => return http.json_response(403, "Forbidden"),
     }
     
@@ -163,7 +163,7 @@ pub fn update(req: Request, pool: DbPool) -> Response {
     // Verify access
     let check_query = "SELECT t.project_id FROM tasks t JOIN projects p ON t.project_id = p.id LEFT JOIN project_members pm ON p.id = pm.project_id WHERE t.id = $1 AND (p.owner_id = $2 OR pm.user_id = $2 OR t.created_by = $2)"
     match db.query_one(pool, check_query, vec![task_id, user_id]) {
-        Ok(_) => {},
+        Ok(_) => {}
         Err(_) => return http.json_response(403, "Forbidden"),
     }
     
@@ -180,7 +180,7 @@ pub fn update(req: Request, pool: DbPool) -> Response {
     // Update task
     let query = "UPDATE tasks SET title = $1, description = $2, status = $3, priority = $4, due_date = $5, updated_at = $6 WHERE id = $7"
     match db.execute(pool, query, vec![update_req.title, update_req.description, update_req.status, update_req.priority, update_req.due_date, time.now_unix(), task_id]) {
-        Ok(_) => {},
+        Ok(_) => {}
         Err(e) => {
             log.error("Failed to update task: ${e}")
             return http.json_response(500, "Failed to update task")
@@ -218,7 +218,7 @@ pub fn delete(req: Request, pool: DbPool) -> Response {
     // Delete task
     let query = "DELETE FROM tasks WHERE id = $1"
     match db.execute(pool, query, vec![task_id]) {
-        Ok(_) => {},
+        Ok(_) => {}
         Err(e) => {
             log.error("Failed to delete task: ${e}")
             return http.json_response(500, "Failed to delete task")
@@ -243,7 +243,7 @@ pub fn assign(req: Request, pool: DbPool) -> Response {
     // Verify access
     let check_query = "SELECT t.project_id FROM tasks t JOIN projects p ON t.project_id = p.id LEFT JOIN project_members pm ON p.id = pm.project_id WHERE t.id = $1 AND (p.owner_id = $2 OR pm.user_id = $2)"
     match db.query_one(pool, check_query, vec![task_id, user_id]) {
-        Ok(_) => {},
+        Ok(_) => {}
         Err(_) => return http.json_response(403, "Forbidden"),
     }
     
@@ -260,7 +260,7 @@ pub fn assign(req: Request, pool: DbPool) -> Response {
     // Assign task
     let query = "UPDATE tasks SET assigned_to = $1, updated_at = $2 WHERE id = $3"
     match db.execute(pool, query, vec![assign_req.user_id, time.now_unix(), task_id]) {
-        Ok(_) => {},
+        Ok(_) => {}
         Err(e) => {
             log.error("Failed to assign task: ${e}")
             return http.json_response(500, "Failed to assign task")

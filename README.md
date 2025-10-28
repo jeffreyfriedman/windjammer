@@ -345,7 +345,9 @@ wj new my-app --template web    # Project scaffolding
 wj run main.wj                  # Compile and execute
 wj build --target=javascript    # Compile to JavaScript 🆕
 wj build --target=wasm          # Compile to WebAssembly
-wj test                         # Run tests
+wj test                         # Run tests (discovers *_test.wj) 🆕
+wj test --json                  # JSON output for CI/CD 🆕
+wj test --filter http           # Run specific tests 🆕
 wj fmt                          # Format code
 wj lint                         # World-class linting (16 rules!)
 wj lint --fix                   # Auto-fix issues
@@ -364,6 +366,87 @@ wj eject --output rust-project  # Convert to pure Rust (no lock-in!)
 - Template-based scaffolding (CLI, web, lib, WASM)
 - Dependency management
 - Build automation
+
+### 🧪 Built-in Test Framework 🆕
+
+**Write tests in Windjammer, not Rust!** Complete test framework with automatic discovery, colorful output, and code coverage.
+
+```windjammer
+// tests/math_test.wj
+
+fn test_addition() {
+    let result = 2 + 2
+    assert(result == 4)
+}
+
+fn test_multiplication() {
+    let result = 3 * 4
+    assert(result == 12)
+}
+```
+
+**Run tests:**
+```bash
+# Discover and run all tests
+wj test
+
+# Run tests matching pattern
+wj test --filter math
+
+# JSON output for CI/CD
+wj test --json
+
+# With code coverage
+WINDJAMMER_COVERAGE=1 wj test
+```
+
+**Beautiful Output:**
+```
+╭─────────────────────────────────────────────╮
+│  🧪  Windjammer Test Framework            │
+╰─────────────────────────────────────────────╯
+
+→ Discovering tests...
+✓ Found 5 test file(s)
+
+→ Compiling tests...
+✓ Found 12 test function(s)
+
+──────────────────────────────────────────────────
+▶ Running tests...
+──────────────────────────────────────────────────
+
+✓ 🎉 All tests passed! ✓
+
+  ✓ 12 passed
+  ⏱ Completed in 2.34s
+```
+
+**What You Get:**
+- ✅ **Automatic Discovery** - Finds all `*_test.wj` files
+- ✅ **Test Functions** - Any function starting with `test_`
+- ✅ **Colorful Output** - Beautiful, informative test results
+- ✅ **JSON Mode** - Perfect for CI/CD pipelines
+- ✅ **Code Coverage** - Integrated with `cargo-llvm-cov`
+- ✅ **Fast** - Parallel execution by default
+- ✅ **Familiar** - Like `cargo test` and `go test`
+
+**JSON Output for Tooling:**
+```json
+{
+  "success": true,
+  "duration_ms": 2340,
+  "test_files": 5,
+  "total_tests": 12,
+  "passed": 12,
+  "failed": 0,
+  "ignored": 0,
+  "files": ["tests/math_test.wj", ...],
+  "tests": [{"name": "test_addition", "file": "tests/math_test.wj"}, ...]
+}
+```
+
+---
 
 ### 🎯 Multi-Target Compilation 🆕
 

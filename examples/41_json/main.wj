@@ -27,7 +27,7 @@ fn main() {
         Ok(json_compact) => {
             println!("   Compact: {}", json_compact)
             println!()
-        },
+        }
         Err(e) => println!("   Error: {}", e)
     }
     
@@ -37,7 +37,7 @@ fn main() {
         Ok(json_pretty) => {
             println!("{}", json_pretty)
             println!()
-        },
+        }
         Err(e) => println!("   Error: {}", e)
     }
     

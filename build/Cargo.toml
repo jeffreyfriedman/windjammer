@@ -6,82 +6,9 @@ edition = "2021"
 # Prevent this from being treated as part of parent workspace
 [workspace]
 
-[dependencies]
-windjammer_ui::reactivity::Signal = "*"
-windjammer_ui::vdom::{VElement, VNode, VText = "*"
-windjammer_ui::wasm_events = "*"
-
 [[bin]]
-name = "test_component"
-path = "test_component.rs"
-
-[[bin]]
-name = "game_simple_platformer"
-path = "game_simple_platformer.rs"
-
-[[bin]]
-name = "test_stdlib_check"
-path = "test_stdlib_check.rs"
-
-[[bin]]
-name = "game_ecs_demo"
-path = "game_ecs_demo.rs"
-
-[[bin]]
-name = "test_minimal_fail"
-path = "test_minimal_fail.rs"
-
-[[bin]]
-name = "ui_simple"
-path = "ui_simple.rs"
-
-[[bin]]
-name = "test_nested_static"
-path = "test_nested_static.rs"
-
-[[bin]]
-name = "test_game_subset"
-path = "test_game_subset.rs"
-
-[[bin]]
-name = "ui_hello_world"
-path = "ui_hello_world.rs"
-
-[[bin]]
-name = "game_simple"
-path = "game_simple.rs"
-
-[[bin]]
-name = "ui_counter_simple"
-path = "ui_counter_simple.rs"
-
-[[bin]]
-name = "ui_counter_clean"
-path = "ui_counter_clean.rs"
-
-[[bin]]
-name = "game_asteroids_full"
-path = "game_asteroids_full.rs"
-
-[[bin]]
-name = "http_server_test"
-path = "http_server_test.rs"
-
-[[bin]]
-name = "main"
-path = "main.rs"
-
-[[bin]]
-name = "test_auto_borrow"
-path = "test_auto_borrow.rs"
-
-[[bin]]
-name = "game_hello_world"
-path = "game_hello_world.rs"
-
-[[bin]]
-name = "test_minimal"
-path = "test_minimal.rs"
+name = "stdlib_basic_test"
+path = "stdlib_basic_test.rs"
 
 [profile.release]
 opt-level = 3

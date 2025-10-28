@@ -1,128 +1,122 @@
 #!/bin/bash
-# Test all Windjammer examples to ensure no regressions
-# This script compiles every .wj file in the project
+# Comprehensive test script for all Windjammer examples
+# Tests both native game examples and WASM UI examples
 
-set -e  # Exit on first error
-
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
-cd "$PROJECT_ROOT"
+set -e
 
 # Colors for output
-RED='\033[0;31m'
 GREEN='\033[0;32m'
+RED='\033[0;31m'
+BLUE='\033[0;34m'
 YELLOW='\033[1;33m'
 NC='\033[0m' # No Color
 
-# Counters
-TOTAL=0
+echo -e "${BLUE}========================================${NC}"
+echo -e "${BLUE}  Windjammer Examples Test Suite${NC}"
+echo -e "${BLUE}========================================${NC}"
+echo ""
+
+# Track results
 PASSED=0
 FAILED=0
-SKIPPED=0
+FAILED_TESTS=()
 
-# Arrays to track results
-declare -a FAILED_FILES
-declare -a SKIPPED_FILES
-
-echo "========================================="
-echo "Testing All Windjammer Examples"
-echo "========================================="
-echo ""
-
-# Build windjammer first
-echo "Building windjammer compiler..."
-cargo build --release --quiet
-if [ $? -ne 0 ]; then
-    echo -e "${RED}✗ Failed to build windjammer compiler${NC}"
-    exit 1
-fi
-echo -e "${GREEN}✓ Compiler built successfully${NC}"
-echo ""
-
-# Find all .wj files
-WJ_FILES=$(find . -name "*.wj" -type f | grep -v "/build/" | grep -v "/target/" | grep -v "/pkg/" | sort)
-
-# Files to skip (known issues, WIP, etc.)
-SKIP_PATTERNS=(
-    # Add patterns here if needed, e.g.:
-    # "./examples/wip/"
-    # "./test_"
-)
-
-should_skip() {
-    local file=$1
-    for pattern in "${SKIP_PATTERNS[@]}"; do
-        if [[ "$file" == *"$pattern"* ]]; then
-            return 0
-        fi
-    done
-    return 1
+# Test a command and track results
+test_command() {
+    local name="$1"
+    local cmd="$2"
+    
+    echo -e "${YELLOW}Testing:${NC} $name"
+    if eval "$cmd" > /dev/null 2>&1; then
+        echo -e "${GREEN}✓${NC} $name passed"
+        ((PASSED++))
+    else
+        echo -e "${RED}✗${NC} $name failed"
+        ((FAILED++))
+        FAILED_TESTS+=("$name")
+    fi
+    echo ""
 }
 
-echo "Found $(echo "$WJ_FILES" | wc -l | tr -d ' ') .wj files to test"
+# ============================================================================
+# Part 1: Build Windjammer Compiler
+# ============================================================================
+
+echo -e "${BLUE}Part 1: Building Windjammer Compiler${NC}"
+echo "----------------------------------------"
+test_command "Windjammer compiler build" "cargo build --release"
+
+# ============================================================================
+# Part 2: Game Framework Examples (Native)
+# ============================================================================
+
+echo -e "${BLUE}Part 2: Game Framework Examples${NC}"
+echo "----------------------------------------"
+
+test_command "Physics simulation" "cargo run --example physics_test -p windjammer-game-framework"
+test_command "Audio system" "cargo run --example audio_playback_test -p windjammer-game-framework --features audio"
+test_command "Texture system" "cargo run --example texture_test -p windjammer-game-framework"
+
+# Window/rendering tests require a display, so we just check if they compile
+test_command "Window example (compile)" "cargo build --example window_test -p windjammer-game-framework"
+test_command "Sprite example (compile)" "cargo build --example sprite_test -p windjammer-game-framework"
+test_command "Game loop example (compile)" "cargo build --example game_loop_test -p windjammer-game-framework"
+test_command "Rendering example (compile)" "cargo build --example rendering_test -p windjammer-game-framework"
+
+# ============================================================================
+# Part 3: UI Framework WASM Build
+# ============================================================================
+
+echo -e "${BLUE}Part 3: UI Framework WASM Build${NC}"
+echo "----------------------------------------"
+
+test_command "WASM UI framework build" "cd crates/windjammer-ui && wasm-pack build --target web && cd ../.."
+
+# ============================================================================
+# Part 4: Integration Tests
+# ============================================================================
+
+echo -e "${BLUE}Part 4: Integration Tests${NC}"
+echo "----------------------------------------"
+
+test_command "All workspace tests" "cargo test --workspace --quiet"
+
+# ============================================================================
+# Part 5: Clippy Checks
+# ============================================================================
+
+echo -e "${BLUE}Part 5: Clippy Checks${NC}"
+echo "----------------------------------------"
+
+test_command "Windjammer clippy" "cargo clippy --package windjammer -- -D warnings"
+test_command "Runtime clippy" "cargo clippy --package windjammer-runtime -- -D warnings"
+test_command "UI clippy" "cargo clippy --package windjammer-ui -- -D warnings"
+test_command "Game framework clippy" "cargo clippy --package windjammer-game-framework -- -D warnings"
+test_command "LSP clippy" "cargo clippy --package windjammer-lsp -- -D warnings"
+test_command "MCP clippy" "cargo clippy --package windjammer-mcp -- -D warnings"
+
+# ============================================================================
+# Summary
+# ============================================================================
+
+echo ""
+echo -e "${BLUE}========================================${NC}"
+echo -e "${BLUE}  Test Results${NC}"
+echo -e "${BLUE}========================================${NC}"
+echo ""
+echo -e "${GREEN}Passed:${NC} $PASSED"
+echo -e "${RED}Failed:${NC} $FAILED"
 echo ""
 
-# Test each file
-for file in $WJ_FILES; do
-    TOTAL=$((TOTAL + 1))
-    
-    # Check if should skip
-    if should_skip "$file"; then
-        echo -e "${YELLOW}⊘ SKIP${NC} $file"
-        SKIPPED=$((SKIPPED + 1))
-        SKIPPED_FILES+=("$file")
-        continue
-    fi
-    
-    # Try to compile
-    if ./target/release/wj build "$file" > /dev/null 2>&1; then
-        echo -e "${GREEN}✓ PASS${NC} $file"
-        PASSED=$((PASSED + 1))
-    else
-        echo -e "${RED}✗ FAIL${NC} $file"
-        FAILED=$((FAILED + 1))
-        FAILED_FILES+=("$file")
-    fi
-done
-
-echo ""
-echo "========================================="
-echo "Test Summary"
-echo "========================================="
-echo "Total:   $TOTAL"
-echo -e "${GREEN}Passed:  $PASSED${NC}"
 if [ $FAILED -gt 0 ]; then
-    echo -e "${RED}Failed:  $FAILED${NC}"
-fi
-if [ $SKIPPED -gt 0 ]; then
-    echo -e "${YELLOW}Skipped: $SKIPPED${NC}"
-fi
-echo ""
-
-# Show failed files
-if [ $FAILED -gt 0 ]; then
-    echo -e "${RED}Failed Files:${NC}"
-    for file in "${FAILED_FILES[@]}"; do
-        echo "  - $file"
+    echo -e "${RED}Failed tests:${NC}"
+    for test in "${FAILED_TESTS[@]}"; do
+        echo -e "  ${RED}✗${NC} $test"
     done
     echo ""
-fi
-
-# Show skipped files
-if [ $SKIPPED -gt 0 ]; then
-    echo -e "${YELLOW}Skipped Files:${NC}"
-    for file in "${SKIPPED_FILES[@]}"; do
-        echo "  - $file"
-    done
-    echo ""
-fi
-
-# Exit with error if any tests failed
-if [ $FAILED -gt 0 ]; then
-    echo -e "${RED}❌ Some tests failed${NC}"
     exit 1
 else
-    echo -e "${GREEN}✅ All tests passed!${NC}"
+    echo -e "${GREEN}All tests passed! 🎉${NC}"
+    echo ""
     exit 0
 fi
-

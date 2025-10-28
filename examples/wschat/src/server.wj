@@ -2,7 +2,7 @@
 
 use std::websocket
 use std::sync
-use std::collections.HashMap
+use std::collections::HashMap
 use std::time
 use std::log
 
@@ -11,9 +11,9 @@ use ./room
 use ./presence
 use ./auth
 use ./rate_limit
-use ./main.Config
+use ./main::Config
 
-@derive(Clone))
+@derive(Clone)
 pub struct ServerState {
     pub connections: Arc<Mutex<HashMap<string, ConnectionInfo>>>,
     pub room_manager: room.RoomManager,
@@ -22,7 +22,7 @@ pub struct ServerState {
     pub config: Config,
 }
 
-@derive(Debug, Clone))
+@derive(Debug, Clone)
 struct ConnectionInfo {
     pub user_id: string,
     pub username: string,
@@ -249,7 +249,7 @@ async fn handle_join(
                     room: room.clone(),
                     user: user_id.clone(),
                     status: PresenceStatus::Online,
-                },
+                }
                 &state
             ).await
             
@@ -293,7 +293,7 @@ async fn handle_leave(
                     room: room.clone(),
                     user: user_id.clone(),
                     status: PresenceStatus::Offline,
-                },
+                }
                 &state
             ).await
             

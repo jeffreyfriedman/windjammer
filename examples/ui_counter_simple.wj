@@ -7,7 +7,7 @@ use windjammer_ui::wasm_events
 
 struct CounterApp {
     count: Signal<i32>
-}
+,}
 
 impl CounterApp {
     fn new() -> CounterApp {

@@ -1245,6 +1245,178 @@ Unlike golangci-lint (CLI only) or clippy (limited LSP), Windjammer provides **f
 
 ---
 
+## Built-in Test Framework (v0.34.0) 🆕
+
+Windjammer now includes a **complete test framework** that lets you write tests in Windjammer, not Rust!
+
+### 🎯 Comparison with Industry Leaders
+
+|| Feature | `go test` (Go) | `cargo test` (Rust) | Windjammer v0.34.0 |
+|---------|----------------|---------------------|-------------------|
+| **Test Discovery** | ✅ Automatic | ✅ Automatic | ✅ **Automatic** (`*_test.wj`) |
+| **Test Syntax** | Go functions | Rust functions | ✅ **Windjammer functions** |
+| **Parallel Execution** | ✅ Default | ✅ Default | ✅ **Default** |
+| **Filtering** | ✅ `-run` flag | ✅ `--test` flag | ✅ **`--filter` flag** |
+| **Output Format** | ⚠️ Basic | ⚠️ Basic | ✅ **Colorful + JSON** |
+| **Code Coverage** | ✅ Built-in | ✅ `cargo-llvm-cov` | ✅ **Integrated** |
+| **Benchmarking** | ✅ `go test -bench` | ✅ `cargo bench` | ✅ **`wj bench`** |
+| **Table Tests** | ✅ Manual | ⚠️ Manual | ✅ **Planned** |
+| **Mocking** | ⚠️ External | ⚠️ External | ⚠️ **Planned** |
+
+**Verdict**: **Windjammer matches both `go test` and `cargo test` while adding superior output formatting!** 🎉
+
+### 📋 Test Framework Features
+
+**Write Tests in Windjammer:**
+```windjammer
+// tests/math_test.wj
+
+fn test_addition() {
+    let result = 2 + 2
+    assert(result == 4)
+}
+
+fn test_multiplication() {
+    let result = 3 * 4
+    assert(result == 12)
+}
+```
+
+**Run Tests:**
+```bash
+# Discover and run all tests
+wj test
+
+# Run tests matching pattern
+wj test --filter math
+
+# JSON output for CI/CD
+wj test --json
+
+# With code coverage
+WINDJAMMER_COVERAGE=1 wj test
+```
+
+### 🎨 Beautiful CLI Output
+
+Unlike the basic output from `go test` and `cargo test`, Windjammer provides **beautiful, informative test results**:
+
+```
+╭─────────────────────────────────────────────╮
+│  🧪  Windjammer Test Framework            │
+╰─────────────────────────────────────────────╯
+
+→ Discovering tests...
+✓ Found 5 test file(s)
+
+→ Compiling tests...
+✓ Found 12 test function(s)
+
+──────────────────────────────────────────────────
+▶ Running tests...
+──────────────────────────────────────────────────
+
+✓ 🎉 All tests passed! ✓
+
+  ✓ 12 passed
+  ⏱ Completed in 2.34s
+```
+
+**Comparison:**
+
+**Go Test Output:**
+```
+PASS
+ok      mypackage    0.123s
+```
+
+**Cargo Test Output:**
+```
+running 12 tests
+test test_addition ... ok
+test test_multiplication ... ok
+
+test result: ok. 12 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out
+```
+
+**Windjammer Test Output:**
+```
+✓ 🎉 All tests passed! ✓
+  ✓ 12 passed
+  ⏱ Completed in 2.34s
+```
+
+### 📊 JSON Output for Tooling
+
+Windjammer provides **machine-readable JSON output** for CI/CD pipelines and tooling:
+
+```bash
+wj test --json
+```
+
+```json
+{
+  "success": true,
+  "duration_ms": 2340,
+  "test_files": 5,
+  "total_tests": 12,
+  "passed": 12,
+  "failed": 0,
+  "ignored": 0,
+  "files": ["tests/math_test.wj", "tests/http_test.wj", ...],
+  "tests": [
+    {"name": "test_addition", "file": "tests/math_test.wj"},
+    {"name": "test_multiplication", "file": "tests/math_test.wj"},
+    ...
+  ]
+}
+```
+
+**Comparison:**
+- **Go**: `go test -json` provides JSON output ✅
+- **Rust**: `cargo test -- --format json` is unstable ⚠️
+- **Windjammer**: `wj test --json` is stable and comprehensive ✅
+
+### 🔬 Code Coverage Integration
+
+Windjammer integrates seamlessly with `cargo-llvm-cov` for code coverage:
+
+```bash
+WINDJAMMER_COVERAGE=1 wj test
+```
+
+**Generates:**
+- HTML coverage report
+- Line-by-line coverage data
+- Branch coverage analysis
+
+**Comparison:**
+- **Go**: `go test -cover` built-in ✅
+- **Rust**: Requires `cargo-llvm-cov` or `tarpaulin` ⚠️
+- **Windjammer**: Integrated with `cargo-llvm-cov` ✅
+
+### 🏆 Why Windjammer Wins
+
+**Advantages over `go test`:**
+- ✅ **Colorful, aesthetic output** (vs plain text)
+- ✅ **Structured JSON output** (stable, not experimental)
+- ✅ **Zero-cost abstractions** (no GC overhead)
+- ✅ **Type-safe** (compile-time checks)
+
+**Advantages over `cargo test`:**
+- ✅ **Write tests in Windjammer** (not Rust!)
+- ✅ **Beautiful output** (vs basic text)
+- ✅ **Stable JSON output** (vs unstable)
+- ✅ **Simpler syntax** (no `#[test]` attributes)
+
+**Combined Benefits:**
+- ✅ Best of both worlds: Go's simplicity + Rust's performance
+- ✅ Production-ready from day one
+- ✅ Extensible for future features (table tests, mocking)
+- ✅ Seamless CI/CD integration
+
+---
+
 ## Parallel Processing: Windjammer vs Rayon
 
 One of Windjammer's **hidden gems** is its parallel processing API. Built on the same foundation as Rust's Rayon, but with dramatically simpler ergonomics.

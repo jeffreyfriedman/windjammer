@@ -28,9 +28,10 @@ Welcome to Windjammer! This guide will take you from zero to hero, teaching you 
 13. [Concurrency](#concurrency)
 14. [Multi-Target Compilation](#multi-target-compilation) 🆕
 15. [Enhanced JavaScript Features](#enhanced-javascript-features-v0330-) 🆕
-16. [Error Handling](#error-handling)
-17. [Decorators and Auto-Derive](#decorators-and-auto-derive)
-18. [Advanced Topics](#advanced-topics)
+16. [Testing](#testing-v0340-) 🆕
+17. [Error Handling](#error-handling)
+18. [Decorators and Auto-Derive](#decorators-and-auto-derive)
+19. [Advanced Topics](#advanced-topics)
 
 ---
 
@@ -1014,6 +1015,328 @@ wj build --target=javascript \
 - ✅ Works in old browsers (polyfills)
 - ✅ 10-30% faster in Chrome/Node (v8-optimize)
 - ✅ True parallelism (web-workers)
+
+---
+
+## Testing (v0.34.0) 🆕
+
+Windjammer includes a **complete test framework** that lets you write tests in Windjammer, not Rust!
+
+### Writing Tests
+
+Test files should be named with the `_test.wj` suffix (e.g., `math_test.wj`, `http_test.wj`). Test functions should start with `test_`:
+
+```windjammer
+// tests/math_test.wj
+
+fn test_addition() {
+    let result = 2 + 2
+    assert(result == 4)
+}
+
+fn test_multiplication() {
+    let result = 3 * 4
+    assert(result == 12)
+}
+
+fn test_division() {
+    let result = 10 / 2
+    assert(result == 5)
+}
+```
+
+### Running Tests
+
+```bash
+# Discover and run all tests in current directory
+wj test
+
+# Run tests in a specific directory
+wj test tests/
+
+# Run tests in a specific file
+wj test tests/math_test.wj
+
+# Run tests matching a pattern
+wj test --filter math
+
+# Show output from passing tests
+wj test --nocapture
+
+# Run tests sequentially (not in parallel)
+wj test --parallel false
+
+# Output results as JSON for CI/CD
+wj test --json
+```
+
+### Test Output
+
+Windjammer provides **beautiful, colorful test output**:
+
+```
+╭─────────────────────────────────────────────╮
+│  🧪  Windjammer Test Framework            │
+╰─────────────────────────────────────────────╯
+
+→ Discovering tests...
+✓ Found 5 test file(s)
+    • tests/math_test.wj
+    • tests/http_test.wj
+    • tests/fs_test.wj
+    • tests/json_test.wj
+    • tests/string_test.wj
+
+→ Compiling tests...
+✓ Found 12 test function(s)
+
+──────────────────────────────────────────────────
+▶ Running tests...
+──────────────────────────────────────────────────
+
+running 12 tests
+test test_addition ... ok
+test test_multiplication ... ok
+test test_division ... ok
+test test_http_get ... ok
+test test_http_post ... ok
+test test_fs_read ... ok
+test test_fs_write ... ok
+test test_json_parse ... ok
+test test_json_stringify ... ok
+test test_string_concat ... ok
+test test_string_split ... ok
+test test_string_trim ... ok
+
+test result: ok. 12 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out
+
+──────────────────────────────────────────────────
+
+✓ 🎉 All tests passed! ✓
+
+  ✓ 12 passed
+  ⏱ Completed in 2.34s
+
+──────────────────────────────────────────────────
+```
+
+### Assertion Functions
+
+Windjammer provides several assertion functions in the `std::test` module:
+
+```windjammer
+use std.test
+
+fn test_assertions() {
+    // Assert a condition is true
+    assert(true, "This should pass")
+    
+    // Assert two values are equal
+    assert_eq(1 + 1, 2, "1 + 1 should equal 2")
+    
+    // Assert two values are not equal
+    assert_ne(1 + 1, 3, "1 + 1 should not equal 3")
+    
+    // Fail a test with a message
+    // fail("This test should fail")
+}
+
+fn test_should_panic() {
+    // Test that code panics
+    let result = should_panic(|| {
+        panic!("This should panic")
+    })
+    assert(result, "Code should have panicked")
+}
+```
+
+### JSON Output for CI/CD
+
+For integration with CI/CD pipelines and tooling, use the `--json` flag:
+
+```bash
+wj test --json
+```
+
+Output:
+```json
+{
+  "success": true,
+  "duration_ms": 2340,
+  "test_files": 5,
+  "total_tests": 12,
+  "passed": 12,
+  "failed": 0,
+  "ignored": 0,
+  "files": [
+    "tests/math_test.wj",
+    "tests/http_test.wj",
+    "tests/fs_test.wj",
+    "tests/json_test.wj",
+    "tests/string_test.wj"
+  ],
+  "tests": [
+    {"name": "test_addition", "file": "tests/math_test.wj"},
+    {"name": "test_multiplication", "file": "tests/math_test.wj"},
+    {"name": "test_division", "file": "tests/math_test.wj"},
+    {"name": "test_http_get", "file": "tests/http_test.wj"},
+    {"name": "test_http_post", "file": "tests/http_test.wj"},
+    {"name": "test_fs_read", "file": "tests/fs_test.wj"},
+    {"name": "test_fs_write", "file": "tests/fs_test.wj"},
+    {"name": "test_json_parse", "file": "tests/json_test.wj"},
+    {"name": "test_json_stringify", "file": "tests/json_test.wj"},
+    {"name": "test_string_concat", "file": "tests/string_test.wj"},
+    {"name": "test_string_split", "file": "tests/string_test.wj"},
+    {"name": "test_string_trim", "file": "tests/string_test.wj"}
+  ]
+}
+```
+
+### Code Coverage
+
+Windjammer integrates with `cargo-llvm-cov` for code coverage:
+
+```bash
+# Install cargo-llvm-cov (one-time setup)
+cargo install cargo-llvm-cov
+
+# Run tests with coverage
+WINDJAMMER_COVERAGE=1 wj test
+```
+
+This generates:
+- HTML coverage report in `target/llvm-cov/html/index.html`
+- Line-by-line coverage data
+- Branch coverage analysis
+
+Open the HTML report in your browser:
+```bash
+open target/llvm-cov/html/index.html
+```
+
+### Best Practices
+
+**1. Organize tests by module:**
+```
+tests/
+  math_test.wj       # Math operations
+  http_test.wj       # HTTP client/server
+  fs_test.wj         # File system
+  json_test.wj       # JSON parsing
+  string_test.wj     # String operations
+```
+
+**2. Use descriptive test names:**
+```windjammer
+// Good
+fn test_addition_with_positive_numbers() { ... }
+fn test_addition_with_negative_numbers() { ... }
+fn test_addition_with_zero() { ... }
+
+// Bad
+fn test1() { ... }
+fn test2() { ... }
+fn test3() { ... }
+```
+
+**3. Test one thing per test:**
+```windjammer
+// Good - tests one specific behavior
+fn test_http_get_returns_200() {
+    let response = http::get("http://example.com")
+    assert_eq(response.status, 200, "Should return 200 OK")
+}
+
+// Bad - tests multiple behaviors
+fn test_http() {
+    let response = http::get("http://example.com")
+    assert_eq(response.status, 200, "Should return 200 OK")
+    assert(response.body.len() > 0, "Should have body")
+    assert(response.headers.contains("Content-Type"), "Should have headers")
+}
+```
+
+**4. Use meaningful assertion messages:**
+```windjammer
+// Good
+assert_eq(result, 42, "Expected result to be 42 after calculation")
+
+// Bad
+assert_eq(result, 42, "Failed")
+```
+
+### Example: Testing a Web Service
+
+```windjammer
+// tests/api_test.wj
+
+use std.http
+use std.json
+
+fn test_api_health_check() {
+    let response = http::get("http://localhost:8080/health")
+    assert_eq(response.status, 200, "Health check should return 200")
+}
+
+fn test_api_create_user() {
+    let user = json::stringify({"name": "Alice", "age": 30})
+    let response = http::post("http://localhost:8080/users", user)
+    assert_eq(response.status, 201, "Create user should return 201")
+    
+    let body = json::parse(response.body)
+    assert(body.id > 0, "User should have an ID")
+    assert_eq(body.name, "Alice", "User name should match")
+}
+
+fn test_api_get_user() {
+    let response = http::get("http://localhost:8080/users/1")
+    assert_eq(response.status, 200, "Get user should return 200")
+    
+    let user = json::parse(response.body)
+    assert_eq(user.id, 1, "User ID should be 1")
+}
+
+fn test_api_user_not_found() {
+    let response = http::get("http://localhost:8080/users/9999")
+    assert_eq(response.status, 404, "Non-existent user should return 404")
+}
+```
+
+### CI/CD Integration
+
+**GitHub Actions:**
+```yaml
+name: Tests
+
+on: [push, pull_request]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - name: Install Rust
+        uses: actions-rs/toolchain@v1
+        with:
+          toolchain: stable
+      - name: Build Windjammer
+        run: cargo build --release
+      - name: Run tests
+        run: ./target/release/wj test --json > test-results.json
+      - name: Upload test results
+        uses: actions/upload-artifact@v3
+        with:
+          name: test-results
+          path: test-results.json
+      - name: Run tests with coverage
+        run: |
+          cargo install cargo-llvm-cov
+          WINDJAMMER_COVERAGE=1 ./target/release/wj test
+      - name: Upload coverage
+        uses: codecov/codecov-action@v3
+        with:
+          files: target/llvm-cov/lcov.info
+```
 
 ---
 

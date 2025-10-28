@@ -13,7 +13,7 @@ use ./search
 use ./output
 use ./gitignore
 
-@derive(Debug))
+@derive(Debug)
 struct Args {
     pattern: string,
     paths: Vec<string>,

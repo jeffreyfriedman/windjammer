@@ -4,8 +4,8 @@ use std::db
 use std::time
 use std::log
 
-use ./message.InternalMessage
-use ./message.HistoryMessage
+use ./message::InternalMessage
+use ./message::HistoryMessage
 
 pub struct MessageStore {
     pool: DbPool,
