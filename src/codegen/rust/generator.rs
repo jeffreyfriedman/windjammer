@@ -957,6 +957,9 @@ impl CodeGenerator {
             Expression::StructLiteral { fields, .. } => fields
                 .iter()
                 .any(|(_, expr)| self.expression_accesses_fields(expr)),
+            Expression::MapLiteral(entries) => entries.iter().any(|(k, v)| {
+                self.expression_accesses_fields(k) || self.expression_accesses_fields(v)
+            }),
             Expression::Array(elements) => {
                 elements.iter().any(|e| self.expression_accesses_fields(e))
             }
@@ -2246,6 +2249,25 @@ impl CodeGenerator {
 
                 format!("{} {{ {} }}", name, field_str.join(", "))
             }
+            Expression::MapLiteral(entries) => {
+                // Generate HashMap literal: HashMap::from([(key, value), ...])
+                if entries.is_empty() {
+                    "std::collections::HashMap::new()".to_string()
+                } else {
+                    let entries_str: Vec<String> = entries
+                        .iter()
+                        .map(|(k, v)| {
+                            let key_str = self.generate_expression(k);
+                            let val_str = self.generate_expression(v);
+                            format!("({}, {})", key_str, val_str)
+                        })
+                        .collect();
+                    format!(
+                        "std::collections::HashMap::from([{}])",
+                        entries_str.join(", ")
+                    )
+                }
+            }
             Expression::TryOp(inner) => {
                 format!("{}?", self.generate_expression(inner))
             }
@@ -2968,6 +2990,11 @@ impl CodeGenerator {
             Expression::StructLiteral { fields, .. } => {
                 fields.iter().all(|(_, expr)| self.is_const_evaluable(expr))
             }
+
+            // Map literals with const entries might be const
+            Expression::MapLiteral(entries) => entries
+                .iter()
+                .all(|(k, v)| self.is_const_evaluable(k) && self.is_const_evaluable(v)),
 
             // Most other expressions are not const-evaluable
             _ => false,
