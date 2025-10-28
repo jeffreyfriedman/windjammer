@@ -432,8 +432,16 @@ impl Lexer {
                 self.advance();
                 if let Some(ch) = self.current_char {
                     if ch.is_alphabetic() || ch == '_' {
-                        // Read decorator name - don't treat as keyword
-                        let name = self.read_identifier_string();
+                        // Read decorator name - support paths like @tokio.main
+                        let mut name = String::new();
+                        while let Some(ch) = self.current_char {
+                            if ch.is_alphanumeric() || ch == '_' || ch == '.' {
+                                name.push(ch);
+                                self.advance();
+                            } else {
+                                break;
+                            }
+                        }
                         Token::Decorator(name)
                     } else {
                         Token::At
