@@ -630,6 +630,32 @@ if (import.meta.url === `file://${process.argv[1]}`) {
                 )
             }
 
+            Expression::MapLiteral(entries) => {
+                // Generate JavaScript object literal: {key: value, ...}
+                if entries.is_empty() {
+                    "{}".to_string()
+                } else {
+                    let entries_str: Vec<String> = entries
+                        .iter()
+                        .map(|(k, v)| {
+                            let key_str = self.generate_expression(k);
+                            let val_str = self.generate_expression(v);
+                            // If key is a simple identifier or string literal, use it directly
+                            // Otherwise, use computed property: [key]: value
+                            if matches!(
+                                k,
+                                Expression::Literal(Literal::String(_)) | Expression::Identifier(_)
+                            ) {
+                                format!("{}: {}", key_str, val_str)
+                            } else {
+                                format!("[{}]: {}", key_str, val_str)
+                            }
+                        })
+                        .collect();
+                    format!("{{ {} }}", entries_str.join(", "))
+                }
+            }
+
             Expression::Index { object, index } => {
                 format!(
                     "{}[{}]",
