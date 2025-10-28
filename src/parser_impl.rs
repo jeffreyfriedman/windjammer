@@ -2335,13 +2335,61 @@ impl Parser {
 
     fn parse_while(&mut self) -> Result<Statement, String> {
         self.expect(Token::While)?;
-        let condition = self.parse_expression()?;
 
-        self.expect(Token::LBrace)?;
-        let body = self.parse_block_statements()?;
-        self.expect(Token::RBrace)?;
+        // Check for `while let` pattern
+        if self.peek(0) == Some(&Token::Let) {
+            self.advance(); // consume 'let'
 
-        Ok(Statement::While { condition, body })
+            // Parse pattern
+            let pattern = self.parse_pattern()?;
+
+            self.expect(Token::Assign)?; // '='
+
+            // Parse the expression to match against
+            let expr = self.parse_expression()?;
+
+            self.expect(Token::LBrace)?;
+            let body = self.parse_block_statements()?;
+            self.expect(Token::RBrace)?;
+
+            // Desugar `while let` into a loop with match
+            // while let pattern = expr { body }
+            // becomes:
+            // loop {
+            //     match expr {
+            //         pattern => { body }
+            //         _ => break
+            //     }
+            // }
+            let match_stmt = Statement::Match {
+                value: expr.clone(),
+                arms: vec![
+                    MatchArm {
+                        pattern,
+                        guard: None,
+                        body: Expression::Block(body.clone()),
+                    },
+                    MatchArm {
+                        pattern: Pattern::Wildcard,
+                        guard: None,
+                        body: Expression::Block(vec![Statement::Break]),
+                    },
+                ],
+            };
+
+            Ok(Statement::Loop {
+                body: vec![match_stmt],
+            })
+        } else {
+            // Regular while loop
+            let condition = self.parse_expression()?;
+
+            self.expect(Token::LBrace)?;
+            let body = self.parse_block_statements()?;
+            self.expect(Token::RBrace)?;
+
+            Ok(Statement::While { condition, body })
+        }
     }
 
     // ========================================================================
@@ -3171,33 +3219,88 @@ impl Parser {
             }
             Token::If => {
                 // If expression: if cond { ... } else { ... }
+                // or if let pattern = expr { ... } else { ... }
                 self.advance(); // consume 'if'
-                                // Use parse_match_value to avoid struct literal ambiguity
-                let condition = Box::new(self.parse_match_value()?);
 
-                self.expect(Token::LBrace)?;
-                let then_block = self.parse_block_statements()?;
-                self.expect(Token::RBrace)?;
+                // Check for `if let` pattern
+                if self.current_token() == &Token::Let {
+                    self.advance(); // consume 'let'
 
-                let else_block = if self.current_token() == &Token::Else {
-                    self.advance();
+                    // Parse pattern
+                    let pattern = self.parse_pattern()?;
+
+                    self.expect(Token::Assign)?; // '='
+
+                    // Parse the expression to match against
+                    let expr = self.parse_match_value()?;
+
                     self.expect(Token::LBrace)?;
-                    let block = self.parse_block_statements()?;
+                    let then_block = self.parse_block_statements()?;
                     self.expect(Token::RBrace)?;
-                    Some(block)
+
+                    let else_block = if self.current_token() == &Token::Else {
+                        self.advance();
+                        self.expect(Token::LBrace)?;
+                        let block = self.parse_block_statements()?;
+                        self.expect(Token::RBrace)?;
+                        Some(block)
+                    } else {
+                        None
+                    };
+
+                    // Desugar `if let` into a match expression
+                    // if let pattern = expr { then_block } else { else_block }
+                    // becomes:
+                    // match expr {
+                    //     pattern => { then_block }
+                    //     _ => { else_block }
+                    // }
+                    let mut arms = vec![MatchArm {
+                        pattern,
+                        guard: None,
+                        body: Expression::Block(then_block),
+                    }];
+
+                    if let Some(else_block) = else_block {
+                        arms.push(MatchArm {
+                            pattern: Pattern::Wildcard,
+                            guard: None,
+                            body: Expression::Block(else_block),
+                        });
+                    }
+
+                    let match_stmt = Statement::Match { value: expr, arms };
+
+                    Expression::Block(vec![match_stmt])
                 } else {
-                    None
-                };
+                    // Regular if expression
+                    // Use parse_match_value to avoid struct literal ambiguity
+                    let condition = Box::new(self.parse_match_value()?);
 
-                // Convert to expression by wrapping in a block with an if statement
-                // that returns the value
-                let if_stmt = Statement::If {
-                    condition: *condition,
-                    then_block,
-                    else_block,
-                };
+                    self.expect(Token::LBrace)?;
+                    let then_block = self.parse_block_statements()?;
+                    self.expect(Token::RBrace)?;
 
-                Expression::Block(vec![if_stmt])
+                    let else_block = if self.current_token() == &Token::Else {
+                        self.advance();
+                        self.expect(Token::LBrace)?;
+                        let block = self.parse_block_statements()?;
+                        self.expect(Token::RBrace)?;
+                        Some(block)
+                    } else {
+                        None
+                    };
+
+                    // Convert to expression by wrapping in a block with an if statement
+                    // that returns the value
+                    let if_stmt = Statement::If {
+                        condition: *condition,
+                        then_block,
+                        else_block,
+                    };
+
+                    Expression::Block(vec![if_stmt])
+                }
             }
             Token::Unsafe => {
                 // Unsafe block: unsafe { ... }

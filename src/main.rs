@@ -504,12 +504,46 @@ impl ModuleCompiler {
             .parse()
             .map_err(|e| anyhow::anyhow!("Parse error in {}: {}", module_path, e))?;
 
+        // Mark as "being compiled" to prevent infinite recursion
+        // We'll update this with the actual code later
+        self.compiled_modules
+            .insert(module_path.to_string(), String::new());
+
         // Recursively compile dependencies
         for item in &program.items {
             if let parser::Item::Use { path, alias: _ } = item {
                 let dep_path = path.join("::");
+
+                // Handle item imports: ./main::Args -> compile ./main, not ./main::Args
+                // Split at the last :: to separate module from item
+                let module_to_compile = if dep_path.contains("::") {
+                    // Check if this looks like a module::Item import
+                    let parts: Vec<&str> = dep_path.rsplitn(2, "::").collect();
+                    if parts.len() == 2 {
+                        let potential_item = parts[0];
+                        let module_part = parts[1];
+
+                        // If the last part starts with uppercase, it's likely a type import
+                        // e.g., ./main::Args, ./types::Config
+                        if potential_item
+                            .chars()
+                            .next()
+                            .is_some_and(|c| c.is_uppercase())
+                        {
+                            module_part.to_string()
+                        } else {
+                            // It's a nested module path, compile the whole thing
+                            dep_path.clone()
+                        }
+                    } else {
+                        dep_path.clone()
+                    }
+                } else {
+                    dep_path.clone()
+                };
+
                 // Pass the current file's path for resolving relative imports
-                self.compile_module(&dep_path, Some(&file_path))?;
+                self.compile_module(&module_to_compile, Some(&file_path))?;
             }
         }
 
@@ -785,8 +819,37 @@ fn compile_file(
     for item in &program.items {
         if let parser::Item::Use { path, alias: _ } = item {
             let module_path = path.join("::");
+
+            // Handle item imports: ./main::Args -> compile ./main, not ./main::Args
+            // Split at the last :: to separate module from item
+            let module_to_compile = if module_path.contains("::") {
+                // Check if this looks like a module::Item import
+                let parts: Vec<&str> = module_path.rsplitn(2, "::").collect();
+                if parts.len() == 2 {
+                    let potential_item = parts[0];
+                    let module_part = parts[1];
+
+                    // If the last part starts with uppercase, it's likely a type import
+                    // e.g., ./main::Args, ./types::Config
+                    if potential_item
+                        .chars()
+                        .next()
+                        .is_some_and(|c| c.is_uppercase())
+                    {
+                        module_part.to_string()
+                    } else {
+                        // It's a nested module path, compile the whole thing
+                        module_path.clone()
+                    }
+                } else {
+                    module_path.clone()
+                }
+            } else {
+                module_path.clone()
+            };
+
             // Compile both std::* and relative imports (./ or ../) and external crates
-            module_compiler.compile_module(&module_path, Some(input_path))?;
+            module_compiler.compile_module(&module_to_compile, Some(input_path))?;
         }
     }
 
