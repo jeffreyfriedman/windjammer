@@ -3217,6 +3217,27 @@ impl Parser {
 
                 Expression::Closure { parameters, body }
             }
+            Token::Or => {
+                // Closure with no parameters: || body
+                self.advance(); // consume '||'
+
+                // Parse closure body - can be either an expression or a block
+                let body = if self.current_token() == &Token::LBrace {
+                    // Block closure: || { statements }
+                    self.advance();
+                    let statements = self.parse_block_statements()?;
+                    self.expect(Token::RBrace)?;
+                    Box::new(Expression::Block(statements))
+                } else {
+                    // Expression closure: || expr
+                    Box::new(self.parse_expression()?)
+                };
+
+                Expression::Closure {
+                    parameters: Vec::new(), // No parameters
+                    body,
+                }
+            }
             Token::If => {
                 // If expression: if cond { ... } else { ... }
                 // or if let pattern = expr { ... } else { ... }
