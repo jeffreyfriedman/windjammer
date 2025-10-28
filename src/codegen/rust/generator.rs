@@ -1298,6 +1298,7 @@ impl CodeGenerator {
         match pattern {
             Pattern::Wildcard => "_".to_string(),
             Pattern::Identifier(name) => name.clone(),
+            Pattern::Reference(inner) => format!("&{}", self.pattern_to_rust(inner)),
             Pattern::Tuple(patterns) => {
                 let rust_patterns: Vec<String> =
                     patterns.iter().map(|p| self.pattern_to_rust(p)).collect();
@@ -1338,7 +1339,16 @@ impl CodeGenerator {
                 // PHASE 8: Check if this variable should use SmallVec
                 if let Some(smallvec_opt) = self.smallvec_optimizations.get(name) {
                     // Use SmallVec with stack allocation
-                    output.push_str(&format!(": SmallVec<[_; {}]>", smallvec_opt.stack_size));
+                    // If there's a type annotation, extract the element type
+                    let elem_type = if let Some(Type::Vec(inner)) = type_ {
+                        self.type_to_rust(inner)
+                    } else {
+                        "_".to_string() // Type inference
+                    };
+                    output.push_str(&format!(
+                        ": SmallVec<[{}; {}]>",
+                        elem_type, smallvec_opt.stack_size
+                    ));
                     output.push_str(" = ");
 
                     // Generate the expression but wrap in smallvec! if it's a vec! macro
@@ -1648,6 +1658,7 @@ impl CodeGenerator {
         match pattern {
             Pattern::Wildcard => "_".to_string(),
             Pattern::Identifier(name) => name.clone(),
+            Pattern::Reference(inner) => format!("&{}", self.generate_pattern(inner)),
             Pattern::EnumVariant(name, binding) => {
                 use crate::parser::EnumPatternBinding;
                 match binding {
@@ -1811,6 +1822,21 @@ impl CodeGenerator {
                 }
             }
             Expression::Binary { left, op, right } => {
+                // Special handling for string concatenation
+                if matches!(op, BinaryOp::Add) {
+                    // Only treat as string concat if at least one operand is definitely a string literal
+                    let has_string_literal =
+                        matches!(left.as_ref(), Expression::Literal(Literal::String(_)))
+                            || matches!(right.as_ref(), Expression::Literal(Literal::String(_)))
+                            || Self::contains_string_literal(left)
+                            || Self::contains_string_literal(right);
+
+                    if has_string_literal {
+                        // For string concatenation, use format! macro for clean, efficient code
+                        return self.generate_string_concat(left, right);
+                    }
+                }
+
                 // Wrap operands in parens if they have lower precedence
                 let left_str = match left.as_ref() {
                     Expression::Binary { op: left_op, .. } => {
@@ -1862,11 +1888,103 @@ impl CodeGenerator {
 
                 // Special case: convert print() to println!()
                 if func_name == "print" {
+                    // Check if the first argument is a format! macro (from string interpolation)
+                    if let Some((_, first_arg)) = arguments.first() {
+                        if let Expression::MacroInvocation {
+                            name,
+                            args: macro_args,
+                            ..
+                        } = first_arg
+                        {
+                            if name == "format" && !macro_args.is_empty() {
+                                // Unwrap the format! call and put its arguments directly into println!
+                                // format!("text {}", var) -> println!("text {}", var)
+                                let format_str = self.generate_expression(&macro_args[0]);
+                                let format_args: Vec<String> = macro_args[1..]
+                                    .iter()
+                                    .map(|arg| self.generate_expression(arg))
+                                    .collect();
+
+                                let args_str = if format_args.is_empty() {
+                                    String::new()
+                                } else {
+                                    format!(", {}", format_args.join(", "))
+                                };
+
+                                return format!("println!({}{})", format_str, args_str);
+                            }
+                        }
+
+                        // Check if the first argument is a string literal with ${} (old-style, shouldn't happen but keep for safety)
+                        if let Expression::Literal(Literal::String(s)) = first_arg {
+                            if s.contains("${") {
+                                // Handle string interpolation directly in println!
+                                // Convert "${var}" to "{}" and extract variables
+                                let mut format_str = String::new();
+                                let mut args = Vec::new();
+                                let mut chars = s.chars().peekable();
+
+                                while let Some(ch) = chars.next() {
+                                    if ch == '$' && chars.peek() == Some(&'{') {
+                                        chars.next(); // consume {
+                                        let mut var_name = String::new();
+
+                                        while let Some(&next_ch) = chars.peek() {
+                                            if next_ch == '}' {
+                                                chars.next(); // consume }
+                                                break;
+                                            } else {
+                                                var_name.push(next_ch);
+                                                chars.next();
+                                            }
+                                        }
+
+                                        if !var_name.is_empty() {
+                                            format_str.push_str("{}");
+                                            // Check if this is a struct field
+                                            if self.in_impl_block
+                                                && self.current_struct_fields.contains(&var_name)
+                                            {
+                                                args.push(format!("self.{}", var_name));
+                                            } else {
+                                                args.push(var_name);
+                                            }
+                                        }
+                                    } else {
+                                        format_str.push(ch);
+                                    }
+                                }
+
+                                let args_str = if args.is_empty() {
+                                    String::new()
+                                } else {
+                                    format!(", {}", args.join(", "))
+                                };
+
+                                return format!(
+                                    "println!(\"{}\"{})",
+                                    format_str.replace('\\', "\\\\").replace('"', "\\\""),
+                                    args_str
+                                );
+                            }
+                        }
+                    }
+
+                    // No interpolation, just regular print
                     let args: Vec<String> = arguments
                         .iter()
                         .map(|(_label, arg)| self.generate_expression(arg))
                         .collect();
                     return format!("println!({})", args.join(", "));
+                }
+
+                // Special case: convert assert() to assert!()
+                if func_name == "assert" {
+                    let args: Vec<String> = arguments
+                        .iter()
+                        .map(|(_label, arg)| self.generate_expression(arg))
+                        .collect();
+                    return format!("assert!({})", args.join(", "));
                 }
 
                 let func_str = self.generate_expression(function);
@@ -1878,7 +1996,30 @@ impl CodeGenerator {
                     .iter()
                     .enumerate()
                     .map(|(i, (_label, arg))| {
-                        let arg_str = self.generate_expression(arg);
+                        let mut arg_str = self.generate_expression(arg);
+
+                        // Auto-convert string literals to String for stdlib functions
+                        if matches!(arg, Expression::Literal(Literal::String(_))) {
+                            // Check if this is a stdlib function (contains :: in the generated function string)
+                            if func_str.contains("::") {
+                                // If the signature exists and has ownership info, use that
+                                let should_convert = if let Some(ref sig) = signature {
+                                    if let Some(&ownership) = sig.param_ownership.get(i) {
+                                        matches!(ownership, OwnershipMode::Owned)
+                                    } else {
+                                        // No ownership info, default to converting for stdlib functions
+                                        true
+                                    }
+                                } else {
+                                    // No signature found, default to converting for stdlib functions
+                                    true
+                                };
+
+                                if should_convert {
+                                    arg_str = format!("{}.to_string()", arg_str);
+                                }
+                            }
+                        }
 
                         // Check if this parameter expects a borrow
                         if let Some(ref sig) = signature {
@@ -1897,7 +2038,7 @@ impl CodeGenerator {
                                         }
                                     }
                                     OwnershipMode::Owned => {
-                                        // No change needed
+                                        // No change needed (already handled above for string literals)
                                     }
                                 }
                             }
@@ -1915,9 +2056,26 @@ impl CodeGenerator {
                 arguments,
             } => {
                 let obj_str = self.generate_expression_with_precedence(object);
+
+                // Special handling for methods that commonly need String arguments
+                // Only apply to push/push_str/set, not insert (which can have different types)
+                let needs_string_conversion =
+                    matches!(method.as_str(), "push" | "push_str" | "set");
+
                 let args: Vec<String> = arguments
                     .iter()
-                    .map(|(_label, arg)| self.generate_expression(arg))
+                    .map(|(_label, arg)| {
+                        let mut arg_str = self.generate_expression(arg);
+
+                        // Auto-convert string literals to String for methods that need it
+                        if needs_string_conversion
+                            && matches!(arg, Expression::Literal(Literal::String(_)))
+                        {
+                            arg_str = format!("{}.to_string()", arg_str);
+                        }
+
+                        arg_str
+                    })
                     .collect();
 
                 // Generate turbofish if present
@@ -2379,6 +2537,51 @@ impl CodeGenerator {
             BinaryOp::Ge => ">=",
             BinaryOp::And => "&&",
             BinaryOp::Or => "||",
+        }
+    }
+
+    /// Generate efficient string concatenation using format! macro
+    fn generate_string_concat(&mut self, left: &Expression, right: &Expression) -> String {
+        // Collect all parts of the concatenation chain
+        let mut parts = Vec::new();
+        Self::collect_concat_parts_static(left, &mut parts);
+        Self::collect_concat_parts_static(right, &mut parts);
+
+        // Generate format! macro call
+        let format_str = "{}".repeat(parts.len());
+
+        // Generate expressions for each part
+        let mut args = Vec::new();
+        for expr in &parts {
+            args.push(self.generate_expression(expr));
+        }
+
+        format!("format!(\"{}\", {})", format_str, args.join(", "))
+    }
+
+    /// Recursively collect all parts of a string concatenation chain (static to avoid borrow issues)
+    fn collect_concat_parts_static(expr: &Expression, parts: &mut Vec<Expression>) {
+        match expr {
+            Expression::Binary {
+                left,
+                op: BinaryOp::Add,
+                right,
+            } => {
+                Self::collect_concat_parts_static(left, parts);
+                Self::collect_concat_parts_static(right, parts);
+            }
+            _ => parts.push(expr.clone()),
+        }
+    }
+
+    /// Check if an expression contains a string literal (recursively for binary expressions)
+    fn contains_string_literal(expr: &Expression) -> bool {
+        match expr {
+            Expression::Literal(Literal::String(_)) => true,
+            Expression::Binary { left, right, .. } => {
+                Self::contains_string_literal(left) || Self::contains_string_literal(right)
+            }
+            _ => false,
         }
     }
 

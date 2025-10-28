@@ -247,8 +247,9 @@ pub enum Pattern {
     Identifier(String),
     EnumVariant(String, EnumPatternBinding), // Enum name, binding type
     Literal(Literal),
-    Tuple(Vec<Pattern>), // Tuple pattern: (a, b, c)
-    Or(Vec<Pattern>),    // Or pattern: pattern1 | pattern2 | pattern3
+    Tuple(Vec<Pattern>),     // Tuple pattern: (a, b, c)
+    Or(Vec<Pattern>),        // Or pattern: pattern1 | pattern2 | pattern3
+    Reference(Box<Pattern>), // Reference pattern: &x
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
@@ -1943,22 +1944,45 @@ impl Parser {
     fn parse_for(&mut self) -> Result<Statement, String> {
         self.expect(Token::For)?;
 
-        // Parse pattern: either a simple identifier or a tuple pattern like (idx, item)
-        let pattern = if self.current_token() == &Token::LParen {
+        // Parse pattern: identifier, reference pattern (&x), or tuple pattern like (idx, item)
+        let pattern = if self.current_token() == &Token::Ampersand {
+            // Reference pattern: &x
+            self.advance(); // consume &
+            if let Token::Ident(name) = self.current_token() {
+                let name = name.clone();
+                self.advance();
+                Pattern::Reference(Box::new(Pattern::Identifier(name)))
+            } else {
+                return Err("Expected identifier after & in for loop pattern".to_string());
+            }
+        } else if self.current_token() == &Token::LParen {
             // Tuple pattern
             self.advance(); // consume (
             let mut patterns = Vec::new();
 
             while self.current_token() != &Token::RParen {
-                if let Token::Ident(name) = self.current_token() {
-                    patterns.push(Pattern::Identifier(name.clone()));
+                // Support reference patterns in tuples too: (&x, &y)
+                let pat = if self.current_token() == &Token::Ampersand {
                     self.advance();
-
-                    if self.current_token() == &Token::Comma {
+                    if let Token::Ident(name) = self.current_token() {
+                        let name = name.clone();
                         self.advance();
+                        Pattern::Reference(Box::new(Pattern::Identifier(name)))
+                    } else {
+                        return Err("Expected identifier after & in tuple pattern".to_string());
                     }
+                } else if let Token::Ident(name) = self.current_token() {
+                    let name = name.clone();
+                    self.advance();
+                    Pattern::Identifier(name)
                 } else {
                     return Err("Expected identifier in tuple pattern".to_string());
+                };
+
+                patterns.push(pat);
+
+                if self.current_token() == &Token::Comma {
+                    self.advance();
                 }
             }
 
@@ -1969,7 +1993,10 @@ impl Parser {
             self.advance();
             Pattern::Identifier(name)
         } else {
-            return Err("Expected variable name or tuple pattern in for loop".to_string());
+            return Err(
+                "Expected variable name, reference pattern, or tuple pattern in for loop"
+                    .to_string(),
+            );
         };
 
         self.expect(Token::In)?;
@@ -2358,7 +2385,9 @@ impl Parser {
                     return Ok(Expression::Tuple(vec![]));
                 }
 
-                let first_expr = self.parse_expression()?;
+                // Parse the first expression inside parentheses
+                // Use parse_match_value recursively to avoid parsing assignment operators
+                let first_expr = self.parse_match_value()?;
 
                 // Check if it's a tuple (has comma) or just a parenthesized expression
                 if self.current_token() == &Token::Comma {
@@ -2372,7 +2401,7 @@ impl Parser {
                             break;
                         }
 
-                        elements.push(self.parse_expression()?);
+                        elements.push(self.parse_match_value()?);
                     }
 
                     self.expect(Token::RParen)?;
@@ -3185,6 +3214,20 @@ impl Parser {
                 self.expect(Token::RBrace)?;
                 Expression::Block(body)
             }
+            Token::Return => {
+                // Return expression: return expr
+                self.advance(); // consume 'return'
+                let return_value = if matches!(
+                    self.current_token(),
+                    Token::Comma | Token::RBrace | Token::Semicolon
+                ) {
+                    None
+                } else {
+                    Some(Box::new(self.parse_expression()?))
+                };
+                // Wrap in a block with a return statement
+                Expression::Block(vec![Statement::Return(return_value.map(|b| *b))])
+            }
             _ => {
                 return Err(format!(
                     "Unexpected token in expression: {:?}",
@@ -3524,6 +3567,10 @@ impl Parser {
     fn pattern_to_name(pattern: &Pattern) -> String {
         match pattern {
             Pattern::Identifier(name) => name.clone(),
+            Pattern::Reference(inner) => {
+                // For reference patterns, use the inner pattern's name
+                Self::pattern_to_name(inner)
+            }
             Pattern::Tuple(patterns) => {
                 // For tuple patterns, generate a name like "_tuple_param"
                 format!("_tuple_{}", patterns.len())

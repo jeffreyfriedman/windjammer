@@ -1,37 +1,37 @@
 // Example 39: Stdlib Modules
-// Demonstrates new stdlib modules: env, process, random
+// Demonstrates stdlib functionality
 
-use std::env
-use std::process  
-use std::random
+use std::fs
+use std::collections::HashMap
 
 fn main() {
-    println!("=== Stdlib Modules Demo ===")
+    println!("=== Stdlib Demo ===")
     println!()
     
-    // 1. Environment variables
-    println!("1. Environment (std.env):")
-    println!("   PATH: {}", env.get_or("PATH", "not set"))
-    println!("   Current dir: {}", env.current_dir())
-    println!()
-    
-    // 2. Process execution
-    println!("2. Process (std.process):")
-    println!("   Process ID: {}", process.pid())
-    match process.run("echo 'Hello from shell'") {
-        Ok(output) => println!("   Command output: {}", output),
-        Err(err) => println!("   Command error: {}", err)
+    // 1. File system operations
+    println!("1. File System:")
+    match fs::read_to_string("README.md") {
+        Ok(content) => {
+            let lines = content.lines().count()
+            println!("   README.md has {} lines", lines)
+        },
+        Err(_) => println!("   README.md not found")
     }
     println!()
     
-    // 3. Random numbers
-    println!("3. Random (std.random):")
-    println!("   Random 1-100: {}", random.range(1, 100))
-    println!("   Random float: {}", random.float())
-    println!("   Random bool: {}", random.bool())
+    // 2. Collections
+    println!("2. Collections:")
+    let mut map: HashMap<string, int> = HashMap::new()
+    map.insert("apples", 5)
+    map.insert("oranges", 3)
+    println!("   HashMap size: {}", map.len())
+    println!()
     
+    // 3. Vectors
+    println!("3. Vectors:")
     let numbers = vec![1, 2, 3, 4, 5]
-    println!("   Random choice from [1,2,3,4,5]: {:?}", random.choice(numbers))
+    let sum = numbers.iter().sum()
+    println!("   Sum of [1,2,3,4,5]: {}", sum)
     println!()
     
     println!("✨ Stdlib makes common tasks easy!")

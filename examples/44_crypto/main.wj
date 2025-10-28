@@ -32,13 +32,14 @@ fn main() {
     println!("3. Password Hashing:")
     match crypto.hash_password("my_password") {
         Ok(password_hash) => {
-            println!("   Password hash created: {}", &password_hash[..20])
+            let preview = password_hash.substring(0, 20)
+            println!("   Password hash created: {}", preview)
             
             match crypto.verify_password("my_password", &password_hash) {
                 Ok(valid) => println!("   Verification: {}", valid),
                 Err(e) => println!("   Error: {}", e)
             }
-        },
+        }
         Err(e) => println!("   Error: {}", e)
     }
     println!()

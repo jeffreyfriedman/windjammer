@@ -1,81 +1,75 @@
 // TODO app component demonstrating lists and more complex state
-todos: Vec<String> = vec![]
-input: String = ""
-filter: String = "all"
 
-fn add_todo() {
-    if input != "" {
-        todos.push(input)
-        input = ""
+struct TodoApp {
+    todos: Vec<String>,
+    input: String,
+    filter: String,
+}
+
+impl TodoApp {
+    fn new() -> TodoApp {
+        TodoApp {
+            todos: vec![],
+            input: String::new(),
+            filter: "all".to_string(),
+        }
+    }
+    
+    fn add_todo(&mut self) {
+        if self.input != "" {
+            self.todos.push(self.input.clone())
+            self.input = String::new()
+        }
+    }
+    
+    fn remove_todo(&mut self, index: int) {
+        if index < self.todos.len() as int {
+            self.todos.remove(index as usize)
+        }
+    }
+    
+    fn clear_completed(&mut self) {
+        self.todos = vec![]
+    }
+    
+    fn set_filter(&mut self, new_filter: String) {
+        self.filter = new_filter
+    }
+    
+    fn active_count(&self) -> int {
+        self.todos.len() as int
+    }
+    
+    fn render(&self) -> String {
+        let mut html = String::new()
+        html.push_str("<div class=\"todo-app\">")
+        html.push_str("<h1>Windjammer TODO</h1>")
+        html.push_str("<div class=\"todo-input\">")
+        html.push_str("<input type=\"text\" placeholder=\"What needs to be done?\">")
+        html.push_str("<button>Add</button>")
+        html.push_str("</div>")
+        html.push_str("<div class=\"todo-list\">")
+        
+        for todo in &self.todos {
+            html.push_str("<div class=\"todo-item\">")
+            html.push_str("<span>")
+            html.push_str(todo)
+            html.push_str("</span>")
+            html.push_str("<button class=\"delete-btn\">×</button>")
+            html.push_str("</div>")
+        }
+        
+        html.push_str("</div>")
+        html.push_str("<div class=\"todo-footer\">")
+        html.push_str(&format!("<span class=\"todo-count\">{} items left</span>", self.active_count()))
+        html.push_str("</div>")
+        html.push_str("</div>")
+        
+        html
     }
 }
 
-fn remove_todo(index: int) {
-    todos.remove(index)
+fn main() {
+    let mut app = TodoApp::new()
+    println!("{}", app.render())
 }
-
-fn clear_completed() {
-    todos = vec![]
-}
-
-fn set_filter(new_filter: String) {
-    filter = new_filter
-}
-
-@computed
-active_count: int = todos.len()
-
-@computed
-completed_count: int = 0
-
-view {
-    div(class: "todo-app") {
-        h1 { "Windjammer TODO" }
-        
-        div(class: "todo-input") {
-            input(
-                type: "text",
-                placeholder: "What needs to be done?",
-                value: input,
-                on_input: update_input,
-                on_keypress: handle_keypress
-            )
-            button(on_click: add_todo) { "Add" }
-        }
-        
-        div(class: "todo-list") {
-            for todo in todos {
-                div(class: "todo-item") {
-                    span { "{todo}" }
-                    button(class: "delete-btn", on_click: remove_todo) { "×" }
-                }
-            }
-        }
-        
-        div(class: "todo-footer") {
-            span(class: "todo-count") {
-                "{active_count} items left"
-            }
-            
-            div(class: "filters") {
-                button(
-                    class: if filter == "all" { "active" } else { "" },
-                    on_click: set_filter("all")
-                ) { "All" }
-                button(
-                    class: if filter == "active" { "active" } else { "" },
-                    on_click: set_filter("active")
-                ) { "Active" }
-                button(
-                    class: if filter == "completed" { "active" } else { "" },
-                    on_click: set_filter("completed")
-                ) { "Completed" }
-            }
-            
-            button(class: "clear-completed", on_click: clear_completed) {
-                "Clear completed"
-            }
-        }
-    }
-}
-

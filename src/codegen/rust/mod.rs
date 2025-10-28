@@ -1,18 +1,22 @@
 //! Rust code generation modules
 //!
 //! This module contains the Rust code generator split into logical components:
-//! - **generator**: Main CodeGenerator (formerly codegen_legacy.rs)
+//! - **generator**: Main CodeGenerator coordinator
+//! - **expressions**: Expression generation
+//! - **statements**: Statement generation  
+//! - **items**: Top-level item generation (functions, structs, enums, etc.)
 //! - **types**: Type conversion (Windjammer → Rust)
+//! - **optimizations**: Optimization passes
+//! - **helpers**: Utility functions
 //! - **backend**: Backend trait implementation
-//!
-//! Future refactoring will extract:
-//! - expressions: Expression generation
-//! - statements: Statement generation
-//! - patterns: Pattern matching
-//! - functions: Function generation
 
 pub mod backend;
+pub mod expressions;
 pub mod generator;
+pub mod helpers;
+pub mod items;
+pub mod optimizations;
+pub mod statements;
 pub mod types;
 
 // Re-export the main CodeGenerator for backward compatibility

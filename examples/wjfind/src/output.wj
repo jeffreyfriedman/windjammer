@@ -4,8 +4,8 @@ use std::io
 use std::json
 use std::time
 
-use ./config.Config
-use ./search.SearchResults
+use ./config::Config
+use ./search::SearchResults
 
 // ANSI color codes
 const COLOR_RED: string = "\x1b[31m"

@@ -16,19 +16,19 @@ struct ContactForm {
     // Form state
     submitted: Signal<bool>,
     submitting: Signal<bool>
-}
+,}
 
 impl ContactForm {
     fn new() -> ContactForm {
         ContactForm {
-            name: Signal.new(""),
-            email: Signal.new(""),
-            message: Signal.new(""),
-            name_error: Signal.new(""),
-            email_error: Signal.new(""),
-            message_error: Signal.new(""),
-            submitted: Signal.new(false),
-            submitting: Signal.new(false)
+            name: Signal::new(""),
+            email: Signal::new(""),
+            message: Signal::new(""),
+            name_error: Signal::new(""),
+            email_error: Signal::new(""),
+            message_error: Signal::new(""),
+            submitted: Signal::new(false),
+            submitting: Signal::new(false)
         }
     }
     
@@ -67,28 +67,28 @@ impl ContactForm {
         let email_val = self.email.get()
         let message_val = self.message.get()
         
-        let name_err = ContactForm.validate_name(name_val)
-        let email_err = ContactForm.validate_email(email_val)
-        let message_err = ContactForm.validate_message(message_val)
+        let name_err = ContactForm::validate_name(name_val)
+        let email_err = ContactForm::validate_email(email_val)
+        let message_err = ContactForm::validate_message(message_val)
         
         name_err.len() == 0 && email_err.len() == 0 && message_err.len() == 0
     }
     
     fn handle_name_change(value: String) {
         self.name.set(value)
-        let error = ContactForm.validate_name(value)
+        let error = ContactForm::validate_name(value)
         self.name_error.set(error)
     }
     
     fn handle_email_change(value: String) {
         self.email.set(value)
-        let error = ContactForm.validate_email(value)
+        let error = ContactForm::validate_email(value)
         self.email_error.set(error)
     }
     
     fn handle_message_change(value: String) {
         self.message.set(value)
-        let error = ContactForm.validate_message(value)
+        let error = ContactForm::validate_message(value)
         self.message_error.set(error)
     }
     
@@ -98,9 +98,9 @@ impl ContactForm {
         let email_val = self.email.get()
         let message_val = self.message.get()
         
-        self.name_error.set(ContactForm.validate_name(name_val))
-        self.email_error.set(ContactForm.validate_email(email_val))
-        self.message_error.set(ContactForm.validate_message(message_val))
+        self.name_error.set(ContactForm::validate_name(name_val))
+        self.email_error.set(ContactForm::validate_email(email_val))
+        self.message_error.set(ContactForm::validate_message(message_val))
         
         if !self.is_valid() {
             print("Form has validation errors")
@@ -152,7 +152,7 @@ impl ContactForm {
                     type("text"),
                     value(self.name.get()),
                     oninput(|e| self.handle_name_change(e.target.value)),
-                    class(if self.name_error.get().len() > 0 { "error" } else { "" })
+                    class(if self.name_error.get().len() > 0 { "erro" } else { "" })
                 ]),
                 if self.name_error.get().len() > 0 {
                     span([class("error-message")], [text(self.name_error.get())])
@@ -169,7 +169,7 @@ impl ContactForm {
                     type("email"),
                     value(self.email.get()),
                     oninput(|e| self.handle_email_change(e.target.value)),
-                    class(if self.email_error.get().len() > 0 { "error" } else { "" })
+                    class(if self.email_error.get().len() > 0 { "erro" } else { "" })
                 ]),
                 if self.email_error.get().len() > 0 {
                     span([class("error-message")], [text(self.email_error.get())])
@@ -185,7 +185,7 @@ impl ContactForm {
                     id("message"),
                     value(self.message.get()),
                     oninput(|e| self.handle_message_change(e.target.value)),
-                    class(if self.message_error.get().len() > 0 { "error" } else { "" }),
+                    class(if self.message_error.get().len() > 0 { "erro" } else { "" }),
                     rows("5")
                 ]),
                 if self.message_error.get().len() > 0 {
@@ -215,8 +215,8 @@ impl ContactForm {
 fn main() {
     print("=== Form Validation Example ===")
     
-    let form = ContactForm.new()
-    let app = App.new()
+    let form = ContactForm::new()
+    let app = App::new()
     
     app.mount("root", form.view())
     

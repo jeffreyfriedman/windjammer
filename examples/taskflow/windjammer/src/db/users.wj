@@ -2,11 +2,11 @@
 
 use std::db
 use std::log
-use ../models.user.{User, RegisterRequest}
+use ../models/user.{User, RegisterRequest}
 
 // Create a new user
 pub async fn create(conn: Connection, req: RegisterRequest, password_hash: string) -> Result<User, Error> {
-    log.debug_with("Creating user", "username", &req.username)
+    log.debug_with("Creating use", "username", &req.username)
     
     let query = r#"
         INSERT INTO users (username, email, password_hash, full_name, role)
@@ -62,7 +62,7 @@ pub async fn find_by_username(conn: Connection, username: string) -> Result<Opti
                 created_at: row.get("created_at")?,
                 updated_at: row.get("updated_at")?,
             }))
-        },
+        }
         None => Ok(None)
     }
 }
@@ -94,7 +94,7 @@ pub async fn find_by_id(conn: Connection, user_id: int) -> Result<Option<User>, 
                 created_at: row.get("created_at")?,
                 updated_at: row.get("updated_at")?,
             }))
-        },
+        }
         None => Ok(None)
     }
 }

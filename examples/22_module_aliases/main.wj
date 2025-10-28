@@ -48,7 +48,7 @@ fn main() {
     let upper = to_upper("hello")
     println!("  to_upper('hello') = '{}'", upper)
     
-    let contains_result = contains("windjammer", "jam")
+    let contains_result = contains("windjamme", "jam")
     println!("  contains('windjammer', 'jam') = {}", contains_result)
     
     println!("")

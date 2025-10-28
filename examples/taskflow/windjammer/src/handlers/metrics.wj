@@ -26,7 +26,7 @@ pub fn metrics(req: Request) -> Response {
     output.push_str(&format!("# TYPE http_requests_total counter\n"))
     
     unsafe {
-        for (endpoint, count) in REQUEST_COUNT.iter() {
+        for (endpoint, count) in REQUEST_COUNT::iter() {
             output.push_str(&format!("http_requests_total{{endpoint=\"{}\"}} {}\n", endpoint, count))
         }
     }
@@ -37,8 +37,8 @@ pub fn metrics(req: Request) -> Response {
     output.push_str(&format!("# TYPE http_request_duration_seconds summary\n"))
     
     unsafe {
-        for (endpoint, duration_sum) in REQUEST_DURATION_SUM.iter() {
-            let count = REQUEST_COUNT.get(endpoint).unwrap_or(&0)
+        for (endpoint, duration_sum) in REQUEST_DURATION_SUM::iter() {
+            let count = REQUEST_COUNT::get(endpoint).unwrap_or(&0)
             if *count > 0 {
                 let avg_duration = (*duration_sum as f64) / (*count as f64) / 1000.0
                 output.push_str(&format!("http_request_duration_seconds_sum{{endpoint=\"{}\"}} {:.3}\n", endpoint, avg_duration))
@@ -53,7 +53,7 @@ pub fn metrics(req: Request) -> Response {
     output.push_str(&format!("# TYPE http_errors_total counter\n"))
     
     unsafe {
-        for (endpoint, count) in ERROR_COUNT.iter() {
+        for (endpoint, count) in ERROR_COUNT::iter() {
             output.push_str(&format!("http_errors_total{{endpoint=\"{}\"}} {}\n", endpoint, count))
         }
     }
@@ -76,17 +76,20 @@ pub fn metrics(req: Request) -> Response {
 pub fn record_request(endpoint: string, duration_ms: int, status_code: int) {
     unsafe {
         // Increment request count
-        let count = REQUEST_COUNT.entry(endpoint.clone()).or_insert(0)
-        *count += 1
+        let mut current_count = REQUEST_COUNT::get(&endpoint).unwrap_or(&0).clone()
+        current_count += 1
+        REQUEST_COUNT::insert(endpoint.clone(), current_count)
         
         // Add to duration sum
-        let duration_sum = REQUEST_DURATION_SUM.entry(endpoint.clone()).or_insert(0)
-        *duration_sum += duration_ms
+        let mut current_duration = REQUEST_DURATION_SUM::get(&endpoint).unwrap_or(&0).clone()
+        current_duration += duration_ms
+        REQUEST_DURATION_SUM::insert(endpoint.clone(), current_duration)
         
         // Increment error count if error status
         if status_code >= 400 {
-            let error_count = ERROR_COUNT.entry(endpoint.clone()).or_insert(0)
-            *error_count += 1
+            let mut current_errors = ERROR_COUNT::get(&endpoint).unwrap_or(&0).clone()
+            current_errors += 1
+            ERROR_COUNT::insert(endpoint.clone(), current_errors)
         }
     }
 }
@@ -116,25 +119,25 @@ pub fn metrics_json(req: Request) -> Response {
     let mut metrics = json!({
         "uptime_seconds": uptime,
         "timestamp": now,
-        "requests": {},
-        "errors": {},
+        "requests": {}
+        "errors": {}
         "durations": {}
     })
     
     unsafe {
         // Add request counts
-        for (endpoint, count) in REQUEST_COUNT.iter() {
+        for (endpoint, count) in REQUEST_COUNT::iter() {
             metrics["requests"][endpoint] = json!(count)
         }
         
         // Add error counts
-        for (endpoint, count) in ERROR_COUNT.iter() {
+        for (endpoint, count) in ERROR_COUNT::iter() {
             metrics["errors"][endpoint] = json!(count)
         }
         
         // Add average durations
-        for (endpoint, duration_sum) in REQUEST_DURATION_SUM.iter() {
-            let count = REQUEST_COUNT.get(endpoint).unwrap_or(&0)
+        for (endpoint, duration_sum) in REQUEST_DURATION_SUM::iter() {
+            let count = REQUEST_COUNT::get(endpoint).unwrap_or(&0)
             if *count > 0 {
                 let avg_duration = (*duration_sum as f64) / (*count as f64)
                 metrics["durations"][endpoint] = json!(avg_duration)

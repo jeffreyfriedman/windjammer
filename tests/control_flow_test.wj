@@ -1,0 +1,74 @@
+// Control flow tests
+
+fn test_if_statement() {
+    let x = 5
+    let result = if x > 3 {
+        "greater"
+    } else {
+        "less"
+    }
+    assert(result == "greater")
+}
+
+fn test_if_else() {
+    let x = 2
+    let result = if x > 3 {
+        "greater"
+    } else {
+        "less"
+    }
+    assert(result == "less")
+}
+
+fn test_while_loop() {
+    let mut count = 0
+    while count < 5 {
+        count = count + 1
+    }
+    assert(count == 5)
+}
+
+fn test_for_loop() {
+    let mut sum = 0
+    for i in 0..5 {
+        sum = sum + i
+    }
+    assert(sum == 10)
+}
+
+fn test_match_statement() {
+    let x = 2
+    let result = match x {
+        1 => "one",
+        2 => "two",
+        3 => "three",
+        _ => "other",
+    }
+    assert(result == "two")
+}
+
+fn test_match_with_default() {
+    let x = 99
+    let result = match x {
+        1 => "one",
+        2 => "two",
+        _ => "other",
+    }
+    assert(result == "other")
+}
+
+fn test_nested_if() {
+    let x = 5
+    let y = 10
+    let result = if x > 3 {
+        if y > 8 {
+            "both"
+        } else {
+            "x only"
+        }
+    } else {
+        "neither"
+    }
+    assert(result == "both")
+}
+
