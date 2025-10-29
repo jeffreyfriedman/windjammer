@@ -71,7 +71,7 @@ pub async fn run_load_test(config: LoadTestConfig) -> Result<LoadTestResults, Er
         let latencies = latencies.clone()
         let messages_to_send = config.messages_per_connection
         
-        let handle = thread.spawn(move || {
+        let handle = thread.spawn(|| {
             // Connect to server
             let start_connect = time.now_unix_nano()
             

@@ -2299,7 +2299,11 @@ impl CodeGenerator {
             Expression::Closure { parameters, body } => {
                 let params = parameters.join(", ");
                 let body_str = self.generate_expression(body);
-                format!("|{}| {}", params, body_str)
+
+                // In Windjammer, closures automatically use move semantics when needed
+                // This is more ergonomic than requiring explicit 'move' keyword
+                // We always generate 'move' for safety in concurrent contexts
+                format!("move |{}| {}", params, body_str)
             }
             Expression::Index { object, index } => {
                 let obj_str = self.generate_expression(object);

@@ -68,7 +68,7 @@ impl HeartbeatManager {
         let running_flag = self.running.clone()
         
         // Spawn background thread to check heartbeats
-        thread.spawn(move || {
+        thread.spawn(|| {
             log.info("Heartbeat monitor started", {
                 "interval_seconds": interval,
                 "timeout_seconds": timeout,
