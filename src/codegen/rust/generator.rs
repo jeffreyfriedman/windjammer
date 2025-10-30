@@ -1653,8 +1653,25 @@ impl CodeGenerator {
                 output.push_str(";\n");
                 output
             }
-            Statement::Spawn { body } => {
-                // Transpile to tokio::spawn or std::thread::spawn
+            Statement::Thread { body } => {
+                // Transpile to std::thread::spawn for parallelism
+                // Note: No semicolon so it can be used as an expression (returns JoinHandle)
+                let mut output = self.indent();
+                output.push_str("std::thread::spawn(move || {\n");
+
+                self.indent_level += 1;
+                for stmt in body {
+                    output.push_str(&self.generate_statement(stmt));
+                }
+                self.indent_level -= 1;
+
+                output.push_str(&self.indent());
+                output.push_str("})");
+                output
+            }
+            Statement::Async { body } => {
+                // Transpile to tokio::spawn for async concurrency
+                // Note: No semicolon so it can be used as an expression (returns JoinHandle)
                 let mut output = self.indent();
                 output.push_str("tokio::spawn(async move {\n");
 
@@ -1665,7 +1682,7 @@ impl CodeGenerator {
                 self.indent_level -= 1;
 
                 output.push_str(&self.indent());
-                output.push_str("});\n");
+                output.push_str("})");
                 output
             }
             Statement::Defer(stmt) => {
@@ -2870,7 +2887,8 @@ impl CodeGenerator {
                 Statement::For { .. } => 3,
                 Statement::Match { .. } => 5, // Match statements are complex
                 Statement::Assignment { .. } => 1,
-                Statement::Spawn { .. } => 2, // Async spawn
+                Statement::Thread { .. } => 2, // Thread spawn
+                Statement::Async { .. } => 2,  // Async spawn
                 Statement::Defer(_) => 1,
                 Statement::Break => 1,
                 Statement::Continue => 1,

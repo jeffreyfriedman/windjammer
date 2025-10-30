@@ -485,10 +485,27 @@ if (import.meta.url === `file://${process.argv[1]}`) {
                 output.push_str("}\n");
             }
 
-            Statement::Spawn { body } => {
-                // Translate go{} to Promise or setTimeout
+            Statement::Thread { body } => {
+                // Thread in JS = Web Worker or setTimeout (for demo)
                 output.push_str(&self.indent());
-                output.push_str("Promise.resolve().then(() => {\n");
+                output.push_str("// Note: true threading requires Web Workers\n");
+                output.push_str(&self.indent());
+                output.push_str("setTimeout(() => {\n");
+
+                self.indent_level += 1;
+                for s in body {
+                    output.push_str(&self.generate_statement(s));
+                }
+                self.indent_level -= 1;
+
+                output.push_str(&self.indent());
+                output.push_str("}, 0);\n");
+            }
+
+            Statement::Async { body } => {
+                // Async in JS = Promise
+                output.push_str(&self.indent());
+                output.push_str("Promise.resolve().then(async () => {\n");
 
                 self.indent_level += 1;
                 for s in body {
