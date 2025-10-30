@@ -40,7 +40,7 @@ cargo run -- *.txt -w 8 -o output/
 - `@timing` - Measure function execution time
 
 ### Concurrency
-- `go { ... }` - Spawn goroutines for concurrent file processing
+- `spawn { ... }` - Spawn goroutines for concurrent file processing
 - Channels (`mpsc`) for collecting results from workers
 - Demonstrates Go-style concurrency in Windjammer
 
