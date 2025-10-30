@@ -15,10 +15,10 @@ impl WebWorkerGenerator {
         Self { worker_count: 0 }
     }
 
-    /// Check if a statement uses spawn
+    /// Check if a statement uses thread or async
     pub fn contains_spawn(stmt: &Statement) -> bool {
         match stmt {
-            Statement::Spawn { .. } => true,
+            Statement::Thread { .. } | Statement::Async { .. } => true,
             Statement::If {
                 then_block,
                 else_block,
@@ -181,8 +181,11 @@ pub fn transform_spawn_to_workers(statements: &[Statement]) -> String {
     output.push('\n');
 
     for stmt in statements {
-        if let Statement::Spawn { body } = stmt {
-            output.push_str(&generator.generate_worker(body));
+        match stmt {
+            Statement::Thread { body } | Statement::Async { body } => {
+                output.push_str(&generator.generate_worker(body));
+            }
+            _ => {}
         }
     }
 
@@ -214,9 +217,11 @@ mod tests {
 
     #[test]
     fn test_contains_spawn() {
-        let spawn_stmt = Statement::Spawn { body: vec![] };
+        let thread_stmt = Statement::Thread { body: vec![] };
+        let async_stmt = Statement::Async { body: vec![] };
 
-        assert!(WebWorkerGenerator::contains_spawn(&spawn_stmt));
+        assert!(WebWorkerGenerator::contains_spawn(&thread_stmt));
+        assert!(WebWorkerGenerator::contains_spawn(&async_stmt));
 
         let regular_stmt =
             Statement::Expression(Expression::Literal(crate::parser::Literal::Int(42)));
