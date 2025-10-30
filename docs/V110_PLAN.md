@@ -152,7 +152,7 @@ Automatically infer `Send` and `Sync` bounds for concurrent code.
 
 ```windjammer
 fn process_parallel<T>(items: Vec<T>) {
-    go {
+    spawn {
         // Closure uses T - compiler infers T: Send
         for item in items {
             process_item(item)

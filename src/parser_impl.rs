@@ -215,7 +215,7 @@ pub enum Statement {
         condition: Expression,
         body: Vec<Statement>,
     },
-    Go {
+    Spawn {
         body: Vec<Statement>,
     },
     Defer(Box<Statement>),
@@ -1853,7 +1853,7 @@ impl Parser {
             Token::For => self.parse_for(),
             Token::Loop => self.parse_loop(),
             Token::While => self.parse_while(),
-            Token::Go => self.parse_go(),
+            Token::Spawn => self.parse_spawn(),
             Token::Defer => self.parse_defer(),
             Token::Break => {
                 self.advance();
@@ -2014,13 +2014,13 @@ impl Parser {
         })
     }
 
-    fn parse_go(&mut self) -> Result<Statement, String> {
-        self.expect(Token::Go)?;
+    fn parse_spawn(&mut self) -> Result<Statement, String> {
+        self.expect(Token::Spawn)?;
         self.expect(Token::LBrace)?;
         let body = self.parse_block_statements()?;
         self.expect(Token::RBrace)?;
 
-        Ok(Statement::Go { body })
+        Ok(Statement::Spawn { body })
     }
 
     fn parse_defer(&mut self) -> Result<Statement, String> {
