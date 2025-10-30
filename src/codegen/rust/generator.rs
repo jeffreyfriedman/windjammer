@@ -1327,7 +1327,7 @@ impl CodeGenerator {
     fn generate_statement(&mut self, stmt: &Statement) -> String {
         match stmt {
             Statement::Let {
-                name,
+                pattern,
                 mutable,
                 type_,
                 value,
@@ -1337,42 +1337,64 @@ impl CodeGenerator {
                 if *mutable {
                     output.push_str("mut ");
                 }
-                output.push_str(name);
+
+                // Generate pattern (could be simple name or tuple)
+                let pattern_str = self.generate_pattern(pattern);
+                output.push_str(&pattern_str);
+
+                // Extract variable name for optimizations (only works for simple identifiers)
+                let var_name = match pattern {
+                    Pattern::Identifier(name) => Some(name.as_str()),
+                    _ => None,
+                };
 
                 // PHASE 8: Check if this variable should use SmallVec
-                if let Some(smallvec_opt) = self.smallvec_optimizations.get(name) {
-                    // Use SmallVec with stack allocation
-                    // If there's a type annotation, extract the element type
-                    let elem_type = if let Some(Type::Vec(inner)) = type_ {
-                        self.type_to_rust(inner)
-                    } else {
-                        "_".to_string() // Type inference
-                    };
-                    output.push_str(&format!(
-                        ": SmallVec<[{}; {}]>",
-                        elem_type, smallvec_opt.stack_size
-                    ));
-                    output.push_str(" = ");
+                if let Some(name) = var_name {
+                    if let Some(smallvec_opt) = self.smallvec_optimizations.get(name) {
+                        // Use SmallVec with stack allocation
+                        // If there's a type annotation, extract the element type
+                        let elem_type = if let Some(Type::Vec(inner)) = type_ {
+                            self.type_to_rust(inner)
+                        } else {
+                            "_".to_string() // Type inference
+                        };
+                        output.push_str(&format!(
+                            ": SmallVec<[{}; {}]>",
+                            elem_type, smallvec_opt.stack_size
+                        ));
+                        output.push_str(" = ");
 
-                    // Generate the expression but wrap in smallvec! if it's a vec! macro
-                    let expr_str = self.generate_expression(value);
-                    if let Some(stripped) = expr_str.strip_prefix("vec!") {
-                        // Replace vec! with smallvec!
-                        output.push_str("smallvec!");
-                        output.push_str(stripped);
+                        // Generate the expression but wrap in smallvec! if it's a vec! macro
+                        let expr_str = self.generate_expression(value);
+                        if let Some(stripped) = expr_str.strip_prefix("vec!") {
+                            // Replace vec! with smallvec!
+                            output.push_str("smallvec!");
+                            output.push_str(stripped);
+                        } else {
+                            // For other expressions, try to convert
+                            output.push_str(&expr_str);
+                            output.push_str(".into()"); // Convert Vec to SmallVec
+                        }
+                    } else if let Some(t) = type_ {
+                        output.push_str(": ");
+                        output.push_str(&self.type_to_rust(t));
+                        output.push_str(" = ");
+                        output.push_str(&self.generate_expression(value));
                     } else {
-                        // For other expressions, try to convert
-                        output.push_str(&expr_str);
-                        output.push_str(".into()"); // Convert Vec to SmallVec
+                        output.push_str(" = ");
+                        output.push_str(&self.generate_expression(value));
                     }
-                } else if let Some(t) = type_ {
-                    output.push_str(": ");
-                    output.push_str(&self.type_to_rust(t));
-                    output.push_str(" = ");
-                    output.push_str(&self.generate_expression(value));
                 } else {
-                    output.push_str(" = ");
-                    output.push_str(&self.generate_expression(value));
+                    // No SmallVec optimization for this variable
+                    if let Some(t) = type_ {
+                        output.push_str(": ");
+                        output.push_str(&self.type_to_rust(t));
+                        output.push_str(" = ");
+                        output.push_str(&self.generate_expression(value));
+                    } else {
+                        output.push_str(" = ");
+                        output.push_str(&self.generate_expression(value));
+                    }
                 }
 
                 output.push_str(";\n");
@@ -2848,7 +2870,7 @@ impl CodeGenerator {
                 Statement::For { .. } => 3,
                 Statement::Match { .. } => 5, // Match statements are complex
                 Statement::Assignment { .. } => 1,
-                Statement::Spawn { .. } => 2, // Goroutine spawn
+                Statement::Spawn { .. } => 2, // Async spawn
                 Statement::Defer(_) => 1,
                 Statement::Break => 1,
                 Statement::Continue => 1,

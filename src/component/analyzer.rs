@@ -1,7 +1,7 @@
 //! Dependency analyzer for reactive variables
 
 use super::ast::*;
-use crate::parser::{Expression, Statement};
+use crate::parser::{Expression, Pattern, Statement};
 use anyhow::Result;
 use std::collections::{HashMap, HashSet};
 
@@ -316,8 +316,11 @@ impl DependencyAnalyzer {
     #[allow(clippy::only_used_in_recursion)]
     fn extract_writes_from_statement(&self, stmt: &Statement, writes: &mut HashSet<String>) {
         match stmt {
-            Statement::Let { name, .. } => {
-                writes.insert(name.clone());
+            Statement::Let { pattern, .. } => {
+                // Only track simple identifier patterns
+                if let Pattern::Identifier(name) = pattern {
+                    writes.insert(name.clone());
+                }
             }
             Statement::Assignment {
                 target: Expression::Identifier(name),
