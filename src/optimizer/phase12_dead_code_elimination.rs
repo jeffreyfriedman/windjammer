@@ -370,12 +370,12 @@ fn eliminate_dead_code_in_statement(stmt: &Statement, stats: &mut DeadCodeStats)
         }
         Statement::Return(None) => Statement::Return(None),
         Statement::Let {
-            name,
+            pattern,
             mutable,
             type_,
             value,
         } => Statement::Let {
-            name: name.clone(),
+            pattern: pattern.clone(),
             mutable: *mutable,
             type_: type_.clone(),
             value: eliminate_dead_code_in_expression(value),

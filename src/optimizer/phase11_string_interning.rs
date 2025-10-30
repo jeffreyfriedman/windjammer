@@ -403,12 +403,12 @@ fn replace_strings_in_expression(
 fn replace_strings_in_statement(stmt: Statement, pool_map: &HashMap<String, String>) -> Statement {
     match stmt {
         Statement::Let {
-            name,
+            pattern,
             mutable,
             type_,
             value,
         } => Statement::Let {
-            name,
+            pattern,
             mutable,
             type_,
             value: replace_strings_in_expression(value, pool_map),

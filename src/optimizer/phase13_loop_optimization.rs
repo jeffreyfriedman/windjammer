@@ -256,12 +256,12 @@ fn optimize_loops_in_statement(
             Statement::Return(Some(optimize_loops_in_expression(expr, config, stats)))
         }
         Statement::Let {
-            name,
+            pattern,
             mutable,
             type_,
             value,
         } => Statement::Let {
-            name: name.clone(),
+            pattern: pattern.clone(),
             mutable: *mutable,
             type_: type_.clone(),
             value: optimize_loops_in_expression(value, config, stats),
@@ -659,12 +659,12 @@ fn replace_variable_in_statement(
             replacement,
         ))),
         Statement::Let {
-            name,
+            pattern,
             mutable,
             type_,
             value,
         } => Statement::Let {
-            name: name.clone(),
+            pattern: pattern.clone(),
             mutable: *mutable,
             type_: type_.clone(),
             value: replace_variable_in_expression(value, var_name, replacement),

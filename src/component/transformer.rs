@@ -2,7 +2,7 @@
 
 use super::analyzer::DependencyInfo;
 use super::ast::*;
-use crate::parser::{Expression, Statement, Type};
+use crate::parser::{Expression, Pattern, Statement, Type};
 use anyhow::Result;
 use std::collections::HashMap;
 
@@ -665,14 +665,31 @@ impl SignalTransformer {
     fn transform_statement(&self, stmt: &Statement) -> String {
         match stmt {
             Statement::Let {
-                name, type_, value, ..
+                pattern,
+                type_,
+                value,
+                ..
             } => {
+                let pattern_str = match pattern {
+                    Pattern::Identifier(name) => name.clone(),
+                    Pattern::Tuple(patterns) => {
+                        let names: Vec<String> = patterns
+                            .iter()
+                            .map(|p| match p {
+                                Pattern::Identifier(n) => n.clone(),
+                                _ => "_".to_string(),
+                            })
+                            .collect();
+                        format!("({})", names.join(", "))
+                    }
+                    _ => "_".to_string(),
+                };
                 let type_str = type_
                     .as_ref()
                     .map(|t| format!(": {}", self.type_to_rust(t)))
                     .unwrap_or_default();
                 let value_rust = self.expression_to_rust(value);
-                format!("let {}{} = {};", name, type_str, value_rust)
+                format!("let {}{} = {};", pattern_str, type_str, value_rust)
             }
             Statement::Assignment { target, value } => {
                 // Check if target is a signal variable

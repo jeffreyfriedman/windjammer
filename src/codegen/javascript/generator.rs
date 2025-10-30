@@ -302,7 +302,7 @@ if (import.meta.url === `file://${process.argv[1]}`) {
 
         match stmt {
             Statement::Let {
-                name,
+                pattern,
                 value,
                 mutable,
                 ..
@@ -313,7 +313,7 @@ if (import.meta.url === `file://${process.argv[1]}`) {
                 } else {
                     output.push_str("const ");
                 }
-                output.push_str(name);
+                output.push_str(&self.generate_pattern(pattern));
                 output.push_str(" = ");
                 output.push_str(&self.generate_expression(value));
                 output.push_str(";\n");
@@ -873,6 +873,22 @@ if (import.meta.url === `file://${process.argv[1]}`) {
 
     fn indent(&self) -> String {
         "    ".repeat(self.indent_level)
+    }
+
+    fn generate_pattern(&self, pattern: &Pattern) -> String {
+        match pattern {
+            Pattern::Wildcard => "_".to_string(),
+            Pattern::Identifier(name) => name.clone(),
+            Pattern::Tuple(patterns) => {
+                let pattern_strs: Vec<String> =
+                    patterns.iter().map(|p| self.generate_pattern(p)).collect();
+                format!("[{}]", pattern_strs.join(", "))
+            }
+            Pattern::Reference(inner) => self.generate_pattern(inner), // JS doesn't have references
+            Pattern::EnumVariant(name, _) => name.clone(),             // Simplified for JS
+            Pattern::Literal(lit) => self.generate_literal(lit),
+            Pattern::Or(_) => "_".to_string(), // Simplified for JS
+        }
     }
 }
 
