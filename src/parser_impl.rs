@@ -2046,7 +2046,10 @@ impl Parser {
             self.advance();
             name
         } else {
-            return Err("Expected variable name".to_string());
+            return Err(format!(
+                "Expected variable name (at token position {})",
+                self.position
+            ));
         };
 
         let type_ = if self.current_token() == &Token::Colon {
