@@ -33,7 +33,7 @@
   - Const and static declarations
   - All statement types
   - All expression types
-  - `go { }` → `tokio::spawn(async move { })`
+  - `spawn { }` → `tokio::spawn(async move { })`
 
 - **CLI**: Command-line interface
   - `wj build` - Transpile .wj files to Rust
@@ -60,7 +60,7 @@
 - ✅ Try operator (`?`)
 - ✅ Await syntax (`.await`)
 - ✅ Decorators (`@timing`, `@route`, etc.)
-- ✅ Go-style concurrency (`go { }`)
+- ✅ Go-style concurrency (`spawn { }`)
 - ✅ Macro invocations (`vec![1, 2, 3]`, `println!("Hello")`)
 - ✅ Qualified type names (`web_sys.CanvasRenderingContext2d`)
 - ✅ Unsafe blocks (`unsafe { ... }`)

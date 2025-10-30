@@ -18,7 +18,7 @@ impl WebWorkerGenerator {
     /// Check if a statement uses spawn
     pub fn contains_spawn(stmt: &Statement) -> bool {
         match stmt {
-            Statement::Go { .. } => true,
+            Statement::Spawn { .. } => true,
             Statement::If {
                 then_block,
                 else_block,
@@ -181,7 +181,7 @@ pub fn transform_spawn_to_workers(statements: &[Statement]) -> String {
     output.push('\n');
 
     for stmt in statements {
-        if let Statement::Go { body } = stmt {
+        if let Statement::Spawn { body } = stmt {
             output.push_str(&generator.generate_worker(body));
         }
     }
@@ -214,7 +214,7 @@ mod tests {
 
     #[test]
     fn test_contains_spawn() {
-        let spawn_stmt = Statement::Go { body: vec![] };
+        let spawn_stmt = Statement::Spawn { body: vec![] };
 
         assert!(WebWorkerGenerator::contains_spawn(&spawn_stmt));
 
