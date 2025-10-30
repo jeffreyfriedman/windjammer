@@ -528,9 +528,10 @@ impl Parser {
             Ok(())
         } else {
             Err(format!(
-                "Expected {:?}, got {:?}",
+                "Expected {:?}, got {:?} (at token position {})",
                 expected,
-                self.current_token()
+                self.current_token(),
+                self.position
             ))
         }
     }
