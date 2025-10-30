@@ -1125,8 +1125,15 @@ impl Parser {
 
         // Parse the rest of the path (identifiers separated by :: or /)
         loop {
-            if let Token::Ident(name) = self.current_token() {
-                let name = name.clone();
+            // Allow keywords as identifiers in module paths
+            let name_opt = match self.current_token() {
+                Token::Ident(n) => Some(n.clone()),
+                Token::Thread => Some("thread".to_string()),
+                Token::Async => Some("async".to_string()),
+                _ => None,
+            };
+
+            if let Some(name) = name_opt {
                 path_str.push_str(&name);
                 self.advance();
 
@@ -3520,8 +3527,9 @@ impl Parser {
             }
             _ => {
                 return Err(format!(
-                    "Unexpected token in expression: {:?}",
-                    self.current_token()
+                    "Unexpected token in expression: {:?} (at token position {})",
+                    self.current_token(),
+                    self.position
                 ))
             }
         };
