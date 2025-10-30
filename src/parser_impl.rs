@@ -172,7 +172,7 @@ pub struct EnumDecl {
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum Statement {
     Let {
-        name: String,
+        pattern: Pattern,
         mutable: bool,
         type_: Option<Type>,
         value: Expression,
@@ -2041,13 +2041,18 @@ impl Parser {
             false
         };
 
-        let name = if let Token::Ident(n) = self.current_token() {
+        // Parse pattern (could be simple name or tuple destructuring)
+        let pattern = if self.current_token() == &Token::LParen {
+            // Tuple destructuring: let (x, y) = ...
+            self.parse_pattern()?
+        } else if let Token::Ident(n) = self.current_token() {
+            // Simple variable: let x = ...
             let name = n.clone();
             self.advance();
-            name
+            Pattern::Identifier(name)
         } else {
             return Err(format!(
-                "Expected variable name (at token position {})",
+                "Expected variable name or pattern (at token position {})",
                 self.position
             ));
         };
@@ -2063,7 +2068,7 @@ impl Parser {
         let value = self.parse_expression()?;
 
         Ok(Statement::Let {
-            name,
+            pattern,
             mutable,
             type_,
             value,
