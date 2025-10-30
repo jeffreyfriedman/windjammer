@@ -1631,7 +1631,7 @@ impl CodeGenerator {
                 output.push_str(";\n");
                 output
             }
-            Statement::Go { body } => {
+            Statement::Spawn { body } => {
                 // Transpile to tokio::spawn or std::thread::spawn
                 let mut output = self.indent();
                 output.push_str("tokio::spawn(async move {\n");
@@ -2848,7 +2848,7 @@ impl CodeGenerator {
                 Statement::For { .. } => 3,
                 Statement::Match { .. } => 5, // Match statements are complex
                 Statement::Assignment { .. } => 1,
-                Statement::Go { .. } => 2, // Goroutine spawn
+                Statement::Spawn { .. } => 2, // Goroutine spawn
                 Statement::Defer(_) => 1,
                 Statement::Break => 1,
                 Statement::Continue => 1,

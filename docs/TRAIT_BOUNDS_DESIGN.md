@@ -82,7 +82,7 @@ fn compare<T: Comparable>(a: T, b: T) -> bool {
 }
 
 fn spawn_task<T: Threadsafe>(data: T) {
-    go {
+    spawn {
         // Safe to send across threads
         process(data)
     }

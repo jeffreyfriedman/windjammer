@@ -485,7 +485,7 @@ if (import.meta.url === `file://${process.argv[1]}`) {
                 output.push_str("}\n");
             }
 
-            Statement::Go { body } => {
+            Statement::Spawn { body } => {
                 // Translate go{} to Promise or setTimeout
                 output.push_str(&self.indent());
                 output.push_str("Promise.resolve().then(() => {\n");

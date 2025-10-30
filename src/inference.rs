@@ -208,7 +208,7 @@ impl InferenceEngine {
             Statement::Loop { body } => {
                 self.collect_constraints_from_statements(body, bounds);
             }
-            Statement::Go { body } => {
+            Statement::Spawn { body } => {
                 self.collect_constraints_from_statements(body, bounds);
             }
             _ => {

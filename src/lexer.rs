@@ -29,7 +29,7 @@ pub enum Token {
     Break,
     Continue,
     Use,
-    Go,
+    Spawn,
     Async,
     Await,
     Defer,
@@ -385,7 +385,7 @@ impl Lexer {
             "break" => Token::Break,
             "continue" => Token::Continue,
             "use" => Token::Use,
-            "go" => Token::Go,
+            "spawn" => Token::Spawn,
             "async" => Token::Async,
             "await" => Token::Await,
             "defer" => Token::Defer,
@@ -683,11 +683,11 @@ mod tests {
     }
 
     #[test]
-    fn test_lexer_go_keyword() {
-        let mut lexer = Lexer::new("go async await");
+    fn test_lexer_spawn_keyword() {
+        let mut lexer = Lexer::new("spawn async await");
         let tokens = lexer.tokenize();
 
-        assert_eq!(tokens[0], Token::Go);
+        assert_eq!(tokens[0], Token::Spawn);
         assert_eq!(tokens[1], Token::Async);
         assert_eq!(tokens[2], Token::Await);
     }

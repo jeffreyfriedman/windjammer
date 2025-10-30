@@ -596,11 +596,11 @@ fn main() {
     let (tx, rx) = mpsc.channel()
     
     // Spawn concurrent tasks
-    go {
+    spawn {
         tx <- "Hello from goroutine!"
     }
     
-    go {
+    spawn {
         tx <- "Another message"
     }
     
@@ -967,7 +967,7 @@ Automatic browser parallelism for `spawn`:
 
 ```windjammer
 // Windjammer code
-go {
+spawn {
     let result = heavy_computation()
     println!("Result: ${result}")
 }
