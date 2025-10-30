@@ -1424,16 +1424,19 @@ impl Analyzer {
         stmt: &Statement,
         optimizations: &mut Vec<SmallVecOptimization>,
     ) {
-        if let Statement::Let { name, value, .. } = stmt {
-            if let Some(size) = self.estimate_vec_literal_size(value) {
-                if size <= 8 {
-                    // Recommend SmallVec with power-of-2 stack size
-                    let stack_size = size.next_power_of_two().max(4);
-                    optimizations.push(SmallVecOptimization {
-                        variable: name.clone(),
-                        estimated_max_size: size,
-                        stack_size,
-                    });
+        if let Statement::Let { pattern, value, .. } = stmt {
+            // Only optimize simple identifier patterns
+            if let Pattern::Identifier(name) = pattern {
+                if let Some(size) = self.estimate_vec_literal_size(value) {
+                    if size <= 8 {
+                        // Recommend SmallVec with power-of-2 stack size
+                        let stack_size = size.next_power_of_two().max(4);
+                        optimizations.push(SmallVecOptimization {
+                            variable: name.clone(),
+                            estimated_max_size: size,
+                            stack_size,
+                        });
+                    }
                 }
             }
         }

@@ -283,27 +283,33 @@ fn optimize_statement_escape_analysis(
 ) -> Statement {
     match stmt {
         Statement::Let {
-            name,
+            pattern,
             mutable,
             type_,
             value,
         } => {
-            // Check if this is a vec! macro that doesn't escape
-            if !escape_info.escaped_vars.contains(name) {
-                if let Some(new_value) = try_optimize_vec_to_smallvec(value) {
-                    stats.vectors_stack_allocated += 1;
-                    stats.total_optimizations += 1;
-                    return Statement::Let {
-                        name: name.clone(),
-                        mutable: *mutable,
-                        type_: type_.clone(),
-                        value: new_value,
-                    };
+            // Check if this is a vec! macro that doesn't escape (only for simple identifiers)
+            let var_name = match pattern {
+                Pattern::Identifier(name) => Some(name.as_str()),
+                _ => None,
+            };
+            if let Some(name) = var_name {
+                if !escape_info.escaped_vars.contains(name) {
+                    if let Some(new_value) = try_optimize_vec_to_smallvec(value) {
+                        stats.vectors_stack_allocated += 1;
+                        stats.total_optimizations += 1;
+                        return Statement::Let {
+                            pattern: Pattern::Identifier(name.to_string()),
+                            mutable: *mutable,
+                            type_: type_.clone(),
+                            value: new_value,
+                        };
+                    }
                 }
             }
 
             Statement::Let {
-                name: name.clone(),
+                pattern: pattern.clone(),
                 mutable: *mutable,
                 type_: type_.clone(),
                 value: optimize_expression_escape_analysis(value, escape_info, stats),
