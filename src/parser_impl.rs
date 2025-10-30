@@ -215,7 +215,10 @@ pub enum Statement {
         condition: Expression,
         body: Vec<Statement>,
     },
-    Spawn {
+    Thread {
+        body: Vec<Statement>,
+    },
+    Async {
         body: Vec<Statement>,
     },
     Defer(Box<Statement>),
@@ -637,7 +640,11 @@ impl Parser {
                 self.advance(); // consume 'bound'
                 self.parse_bound_alias()
             }
-            _ => Err(format!("Unexpected token: {:?}", self.current_token())),
+            _ => Err(format!(
+                "Unexpected token: {:?} (at token position {})",
+                self.current_token(),
+                self.position
+            )),
         }
     }
 
@@ -1854,7 +1861,8 @@ impl Parser {
             Token::For => self.parse_for(),
             Token::Loop => self.parse_loop(),
             Token::While => self.parse_while(),
-            Token::Spawn => self.parse_spawn(),
+            Token::Thread => self.parse_thread(),
+            Token::Async => self.parse_async(),
             Token::Defer => self.parse_defer(),
             Token::Break => {
                 self.advance();
@@ -2015,13 +2023,22 @@ impl Parser {
         })
     }
 
-    fn parse_spawn(&mut self) -> Result<Statement, String> {
-        self.expect(Token::Spawn)?;
+    fn parse_thread(&mut self) -> Result<Statement, String> {
+        self.expect(Token::Thread)?;
         self.expect(Token::LBrace)?;
         let body = self.parse_block_statements()?;
         self.expect(Token::RBrace)?;
 
-        Ok(Statement::Spawn { body })
+        Ok(Statement::Thread { body })
+    }
+
+    fn parse_async(&mut self) -> Result<Statement, String> {
+        self.expect(Token::Async)?;
+        self.expect(Token::LBrace)?;
+        let body = self.parse_block_statements()?;
+        self.expect(Token::RBrace)?;
+
+        Ok(Statement::Async { body })
     }
 
     fn parse_defer(&mut self) -> Result<Statement, String> {
@@ -2874,6 +2891,24 @@ impl Parser {
 
     fn parse_primary_expression(&mut self) -> Result<Expression, String> {
         let mut expr = match self.current_token() {
+            Token::Thread => {
+                // Thread block: thread { ... }
+                self.advance();
+                self.expect(Token::LBrace)?;
+                let body = self.parse_block_statements()?;
+                self.expect(Token::RBrace)?;
+                // Wrap in a statement expression
+                Expression::Block(vec![Statement::Thread { body }])
+            }
+            Token::Async => {
+                // Async block: async { ... }
+                self.advance();
+                self.expect(Token::LBrace)?;
+                let body = self.parse_block_statements()?;
+                self.expect(Token::RBrace)?;
+                // Wrap in a statement expression
+                Expression::Block(vec![Statement::Async { body }])
+            }
             Token::LeftArrow => {
                 // Channel receive: <-ch
                 self.advance();
@@ -3550,7 +3585,10 @@ impl Parser {
                                 }
                             }
                         } else {
-                            return Err("Expected field or method name".to_string());
+                            return Err(format!(
+                                "Expected field or method name (at token position {})",
+                                self.position
+                            ));
                         }
                     }
                 }
