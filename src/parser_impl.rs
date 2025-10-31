@@ -3594,8 +3594,14 @@ impl Parser {
                         Expression::Await(Box::new(expr))
                     } else {
                         self.advance();
-                        if let Token::Ident(field) = self.current_token() {
-                            let field = field.clone();
+                        // Allow keywords as field names (e.g., std.thread, std.async)
+                        let field_opt = match self.current_token() {
+                            Token::Ident(f) => Some(f.clone()),
+                            Token::Thread => Some("thread".to_string()),
+                            Token::Async => Some("async".to_string()),
+                            _ => None,
+                        };
+                        if let Some(field) = field_opt {
                             self.advance();
 
                             // Check for turbofish ::<Type>
