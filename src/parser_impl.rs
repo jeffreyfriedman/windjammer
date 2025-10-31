@@ -2794,9 +2794,11 @@ impl Parser {
 
                         // Check for turbofish on this method
                         let type_args = if self.current_token() == &Token::ColonColon {
-                            self.advance();
-                            if self.current_token() == &Token::Lt {
-                                self.advance();
+                            // Peek ahead to see if this is turbofish or path continuation
+                            if self.peek(1) == Some(&Token::Lt) {
+                                // Turbofish: Type::<T>
+                                self.advance(); // consume ::
+                                self.advance(); // consume <
                                 let mut types = vec![self.parse_type()?];
                                 while self.current_token() == &Token::Comma {
                                     self.advance();
@@ -2807,7 +2809,8 @@ impl Parser {
                                 self.expect(Token::Gt)?;
                                 Some(types)
                             } else {
-                                return Err("Expected '<' after '::'".to_string());
+                                // Not turbofish - don't consume ::, let the loop handle it
+                                None
                             }
                         } else {
                             None
@@ -3603,9 +3606,10 @@ impl Parser {
 
                             // Check for turbofish ::<Type>
                             let type_args = if self.current_token() == &Token::ColonColon {
-                                self.advance();
-                                if self.current_token() == &Token::Lt {
-                                    self.advance();
+                                // Peek ahead to see if this is turbofish
+                                if self.peek(1) == Some(&Token::Lt) {
+                                    self.advance(); // consume ::
+                                    self.advance(); // consume <
                                     let mut types = vec![self.parse_type()?];
                                     while self.current_token() == &Token::Comma {
                                         self.advance();
@@ -3616,7 +3620,8 @@ impl Parser {
                                     self.expect(Token::Gt)?;
                                     Some(types)
                                 } else {
-                                    return Err("Expected '<' after '::'".to_string());
+                                    // Not turbofish - don't consume ::
+                                    None
                                 }
                             } else {
                                 None
@@ -3727,9 +3732,10 @@ impl Parser {
 
                         // Check for turbofish on this method
                         let type_args = if self.current_token() == &Token::ColonColon {
-                            self.advance();
-                            if self.current_token() == &Token::Lt {
-                                self.advance();
+                            // Peek ahead to see if this is turbofish
+                            if self.peek(1) == Some(&Token::Lt) {
+                                self.advance(); // consume ::
+                                self.advance(); // consume <
                                 let mut types = vec![self.parse_type()?];
                                 while self.current_token() == &Token::Comma {
                                     self.advance();
@@ -3740,7 +3746,8 @@ impl Parser {
                                 self.expect(Token::Gt)?;
                                 Some(types)
                             } else {
-                                return Err("Expected '<' after '::'".to_string());
+                                // Not turbofish - don't consume ::
+                                None
                             }
                         } else {
                             None
