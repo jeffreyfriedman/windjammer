@@ -966,15 +966,6 @@ impl CodeGenerator {
             Expression::Tuple(elements) => {
                 elements.iter().any(|e| self.expression_accesses_fields(e))
             }
-            Expression::Ternary {
-                condition,
-                true_expr,
-                false_expr,
-            } => {
-                self.expression_accesses_fields(condition)
-                    || self.expression_accesses_fields(true_expr)
-                    || self.expression_accesses_fields(false_expr)
-            }
             Expression::Closure { body, .. } => self.expression_accesses_fields(body),
             Expression::TryOp(expr) | Expression::Await(expr) | Expression::Cast { expr, .. } => {
                 self.expression_accesses_fields(expr)
@@ -1017,15 +1008,6 @@ impl CodeGenerator {
             Expression::Block(statements) => {
                 // Check if any statement in the block mutates fields
                 statements.iter().any(|s| self.statement_mutates_fields(s))
-            }
-            Expression::Ternary {
-                true_expr,
-                false_expr,
-                ..
-            } => {
-                // Check both branches
-                self.expression_mutates_fields(true_expr)
-                    || self.expression_mutates_fields(false_expr)
             }
             _ => false,
         }
@@ -1733,10 +1715,7 @@ impl CodeGenerator {
         // Wrap expressions in parentheses if they need them for proper precedence
         // when used as the object of a method call or field access
         match expr {
-            Expression::Range { .. }
-            | Expression::Binary { .. }
-            | Expression::Closure { .. }
-            | Expression::Ternary { .. } => {
+            Expression::Range { .. } | Expression::Binary { .. } | Expression::Closure { .. } => {
                 format!("({})", self.generate_expression(expr))
             }
             _ => self.generate_expression(expr),
@@ -1816,29 +1795,6 @@ impl CodeGenerator {
                 }
                 None
             }
-            Expression::Ternary {
-                condition,
-                true_expr,
-                false_expr,
-            } => {
-                let cond_folded = self
-                    .try_fold_constant(condition)
-                    .unwrap_or_else(|| (**condition).clone());
-
-                if let Expression::Literal(Literal::Bool(b)) = &cond_folded {
-                    // If condition is constant, return the appropriate branch
-                    if *b {
-                        return self
-                            .try_fold_constant(true_expr)
-                            .or_else(|| Some((**true_expr).clone()));
-                    } else {
-                        return self
-                            .try_fold_constant(false_expr)
-                            .or_else(|| Some((**false_expr).clone()));
-                    }
-                }
-                None
-            }
             // Already a literal - can't fold further
             Expression::Literal(_) => None,
             // Can't fold non-constant expressions
@@ -1902,19 +1858,6 @@ impl CodeGenerator {
                 };
                 let op_str = self.binary_op_to_rust(op);
                 format!("{} {} {}", left_str, op_str, right_str)
-            }
-            Expression::Ternary {
-                condition,
-                true_expr,
-                false_expr,
-            } => {
-                let cond_str = self.generate_expression(condition);
-                let true_str = self.generate_expression(true_expr);
-                let false_str = self.generate_expression(false_expr);
-                format!(
-                    "if {} {{ {} }} else {{ {} }}",
-                    cond_str, true_str, false_str
-                )
             }
             Expression::Unary { op, operand } => {
                 let operand_str = self.generate_expression(operand);
