@@ -1412,6 +1412,16 @@ impl Parser {
                     type_: Type::Custom("Self".to_string()),
                     ownership: OwnershipHint::Owned,
                 });
+            } else if self.current_token() == &Token::Mut {
+                // mut self (owned mutable)
+                self.advance();
+                self.expect(Token::Self_)?;
+                params.push(Parameter {
+                    name: "mut self".to_string(),
+                    pattern: None,
+                    type_: Type::Custom("Self".to_string()),
+                    ownership: OwnershipHint::Owned,
+                });
             } else {
                 // Regular parameter - could be a simple name or a pattern
                 // Check if this is a pattern parameter (starts with '(')
