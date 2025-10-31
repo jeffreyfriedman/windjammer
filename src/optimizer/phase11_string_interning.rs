@@ -105,15 +105,6 @@ fn collect_strings_from_expression(expr: &Expression, frequency: &mut HashMap<St
             collect_strings_from_expression(left, frequency);
             collect_strings_from_expression(right, frequency);
         }
-        Expression::Ternary {
-            condition,
-            true_expr,
-            false_expr,
-        } => {
-            collect_strings_from_expression(condition, frequency);
-            collect_strings_from_expression(true_expr, frequency);
-            collect_strings_from_expression(false_expr, frequency);
-        }
         Expression::Unary { operand, .. } => {
             collect_strings_from_expression(operand, frequency);
         }
@@ -288,15 +279,6 @@ fn replace_strings_in_expression(
             left: Box::new(replace_strings_in_expression(*left, pool_map)),
             right: Box::new(replace_strings_in_expression(*right, pool_map)),
             op,
-        },
-        Expression::Ternary {
-            condition,
-            true_expr,
-            false_expr,
-        } => Expression::Ternary {
-            condition: Box::new(replace_strings_in_expression(*condition, pool_map)),
-            true_expr: Box::new(replace_strings_in_expression(*true_expr, pool_map)),
-            false_expr: Box::new(replace_strings_in_expression(*false_expr, pool_map)),
         },
         Expression::Unary { op, operand } => Expression::Unary {
             op,

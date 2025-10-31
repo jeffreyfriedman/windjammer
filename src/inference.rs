@@ -317,15 +317,6 @@ impl InferenceEngine {
             }
 
             // Ternary operator
-            Expression::Ternary {
-                condition,
-                true_expr,
-                false_expr,
-            } => {
-                self.collect_constraints_from_expression(condition, bounds);
-                self.collect_constraints_from_expression(true_expr, bounds);
-                self.collect_constraints_from_expression(false_expr, bounds);
-            }
 
             // Block expression
             Expression::Block(statements) => {

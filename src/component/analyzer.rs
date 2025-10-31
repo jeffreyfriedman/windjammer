@@ -198,15 +198,6 @@ impl DependencyAnalyzer {
                 self.extract_dependencies_recursive(object, deps);
                 self.extract_dependencies_recursive(index, deps);
             }
-            Expression::Ternary {
-                condition,
-                true_expr,
-                false_expr,
-            } => {
-                self.extract_dependencies_recursive(condition, deps);
-                self.extract_dependencies_recursive(true_expr, deps);
-                self.extract_dependencies_recursive(false_expr, deps);
-            }
             Expression::Array(elements) => {
                 for elem in elements {
                     self.extract_dependencies_recursive(elem, deps);
