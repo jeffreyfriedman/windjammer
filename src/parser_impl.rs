@@ -1412,10 +1412,10 @@ impl Parser {
                     type_: Type::Custom("Self".to_string()),
                     ownership: OwnershipHint::Owned,
                 });
-            } else if self.current_token() == &Token::Mut {
-                // mut self (owned mutable)
-                self.advance();
-                self.expect(Token::Self_)?;
+            } else if self.current_token() == &Token::Mut && self.peek(1) == Some(&Token::Self_) {
+                // mut self (owned mutable) - only if next token is Self_
+                self.advance(); // consume mut
+                self.advance(); // consume self
                 params.push(Parameter {
                     name: "mut self".to_string(),
                     pattern: None,
