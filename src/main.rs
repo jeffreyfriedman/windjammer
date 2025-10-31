@@ -739,9 +739,16 @@ fn compile_file(
     let source = std::fs::read_to_string(input_path)?;
 
     // Check if this is a component file by looking for component-specific syntax
-    // Components must have a "view {" block
+    // Components must have a "view {" block (as a standalone token, not substring)
     let is_component = if target == CompilationTarget::Wasm {
-        source.contains("view {") || source.contains("view{")
+        // Use regex or simple token-aware check to avoid false positives like "preview"
+        source
+            .split_whitespace()
+            .any(|word| word == "view" || word.starts_with("view{"))
+            || source.contains("\nview {")
+            || source.contains("\nview{")
+            || source.starts_with("view {")
+            || source.starts_with("view{")
     } else {
         false
     };
