@@ -485,7 +485,7 @@ Target Chrome/Node.js JavaScript engine:
 #### 6. **Web Workers** (Automatic)
 Browser parallelism for `spawn`:
 ```windjammer
-spawn {
+go {
     heavy_computation()  // Automatically becomes Web Worker
 }
 ```
