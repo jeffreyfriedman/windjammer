@@ -1444,11 +1444,22 @@ impl Parser {
                         ownership,
                     });
                 } else {
-                    // Simple identifier parameter
+                    // Simple identifier parameter (with optional mut)
+                    let is_mut = if self.current_token() == &Token::Mut {
+                        self.advance();
+                        true
+                    } else {
+                        false
+                    };
+
                     let name = if let Token::Ident(n) = self.current_token() {
                         let name = n.clone();
                         self.advance();
-                        name
+                        if is_mut {
+                            format!("mut {}", name)
+                        } else {
+                            name
+                        }
                     } else {
                         return Err(format!(
                             "Expected parameter name (at token position {})",
