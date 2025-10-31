@@ -71,7 +71,7 @@ pub fn from_args(args: Args) -> Result<Config, Error> {
 pub fn get_file_extensions(file_type: string) -> Vec<string> {
     match file_type {
         "rust" => vec!["rs"],
-        "windjamme" | "wj" => vec!["wj"],
+        "windjammer" | "wj" => vec!["wj"],
         "python" | "py" => vec!["py", "pyw"],
         "javascript" | "js" => vec!["js", "jsx", "mjs"],
         "typescript" | "ts" => vec!["ts", "tsx"],

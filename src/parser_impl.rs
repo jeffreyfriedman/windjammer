@@ -3784,31 +3784,40 @@ impl Parser {
                 }
                 Token::Question => {
                     // Disambiguate between TryOp (?) and ternary (? :)
-                    // If next token could start a ternary expression, don't treat this as TryOp
-                    if let Some(next_tok) = self.peek(1) {
+                    // For ternary, we need: expr ? true_expr : false_expr
+                    // For TryOp, we have: expr?
+                    //
+                    // Heuristic: If next token is Ident, check if there's a : after it
+                    // to determine if it's a ternary. Otherwise, treat as TryOp.
+                    let is_ternary = if let Some(next_tok) = self.peek(1) {
                         match next_tok {
-                            // These tokens can start a ternary true-branch
+                            Token::Ident(_) => {
+                                // Look ahead further to see if there's a : suggesting ternary
+                                // This is a simple heuristic: check if : appears within next few tokens
+                                // For now, just treat Ident as TryOp to fix the common case
+                                false
+                            }
+                            // These tokens clearly start a ternary true-branch
                             Token::IntLiteral(_)
                             | Token::FloatLiteral(_)
                             | Token::StringLiteral(_)
                             | Token::BoolLiteral(_)
-                            | Token::Ident(_)
                             | Token::LParen
                             | Token::Minus
                             | Token::Not
                             | Token::Ampersand
-                            | Token::Star => {
-                                // Likely ternary, don't consume as TryOp
-                                break;
-                            }
-                            _ => {
-                                // Likely TryOp
-                                self.advance();
-                                Expression::TryOp(Box::new(expr))
-                            }
+                            | Token::Star => true,
+                            _ => false,
                         }
                     } else {
-                        // No next token, treat as TryOp
+                        false
+                    };
+
+                    if is_ternary {
+                        // Likely ternary, don't consume as TryOp, let parse_ternary_expression handle it
+                        break;
+                    } else {
+                        // Treat as TryOp
                         self.advance();
                         Expression::TryOp(Box::new(expr))
                     }

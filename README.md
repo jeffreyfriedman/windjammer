@@ -275,7 +275,7 @@ fn main() {
     let (tx, rx) = mpsc.channel()
     
     // Spawn goroutines
-    spawn {
+    go {
         tx <- "Hello from thread!"  // Go-style send
     }
     
