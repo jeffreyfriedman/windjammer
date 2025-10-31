@@ -264,11 +264,6 @@ pub enum Expression {
         op: BinaryOp,
         right: Box<Expression>,
     },
-    Ternary {
-        condition: Box<Expression>,
-        true_expr: Box<Expression>,
-        false_expr: Box<Expression>,
-    },
     Unary {
         op: UnaryOp,
         operand: Box<Expression>,
@@ -2160,10 +2155,18 @@ impl Parser {
 
             let else_block = if self.current_token() == &Token::Else {
                 self.advance();
-                self.expect(Token::LBrace)?;
-                let block = self.parse_block_statements()?;
-                self.expect(Token::RBrace)?;
-                Some(block)
+                // Check for else if
+                if self.current_token() == &Token::If {
+                    // else if - parse as nested if statement
+                    let if_stmt = self.parse_if()?;
+                    Some(vec![if_stmt])
+                } else {
+                    // else - parse block
+                    self.expect(Token::LBrace)?;
+                    let block = self.parse_block_statements()?;
+                    self.expect(Token::RBrace)?;
+                    Some(block)
+                }
             } else {
                 None
             };
@@ -2197,10 +2200,18 @@ impl Parser {
 
             let else_block = if self.current_token() == &Token::Else {
                 self.advance();
-                self.expect(Token::LBrace)?;
-                let block = self.parse_block_statements()?;
-                self.expect(Token::RBrace)?;
-                Some(block)
+                // Check for else if
+                if self.current_token() == &Token::If {
+                    // else if - parse as nested if statement
+                    let if_stmt = self.parse_if()?;
+                    Some(vec![if_stmt])
+                } else {
+                    // else - parse block
+                    self.expect(Token::LBrace)?;
+                    let block = self.parse_block_statements()?;
+                    self.expect(Token::RBrace)?;
+                    Some(block)
+                }
             } else {
                 None
             };
@@ -2481,23 +2492,9 @@ impl Parser {
     }
 
     fn parse_ternary_expression(&mut self) -> Result<Expression, String> {
-        let condition = self.parse_binary_expression(0)?;
-
-        // Check for ternary operator: condition ? true_expr : false_expr
-        if self.current_token() == &Token::Question {
-            self.advance();
-            let true_expr = self.parse_ternary_expression()?; // Right-associative
-            self.expect(Token::Colon)?;
-            let false_expr = self.parse_ternary_expression()?;
-
-            Ok(Expression::Ternary {
-                condition: Box::new(condition),
-                true_expr: Box::new(true_expr),
-                false_expr: Box::new(false_expr),
-            })
-        } else {
-            Ok(condition)
-        }
+        // Ternary operator removed - use if/else expressions instead
+        // This simplifies the parser and eliminates ambiguity with TryOp (?)
+        self.parse_binary_expression(0)
     }
 
     fn parse_match_value(&mut self) -> Result<Expression, String> {
@@ -3783,44 +3780,10 @@ impl Parser {
                     }
                 }
                 Token::Question => {
-                    // Disambiguate between TryOp (?) and ternary (? :)
-                    // For ternary, we need: expr ? true_expr : false_expr
-                    // For TryOp, we have: expr?
-                    //
-                    // Heuristic: If next token is Ident, check if there's a : after it
-                    // to determine if it's a ternary. Otherwise, treat as TryOp.
-                    let is_ternary = if let Some(next_tok) = self.peek(1) {
-                        match next_tok {
-                            Token::Ident(_) => {
-                                // Look ahead further to see if there's a : suggesting ternary
-                                // This is a simple heuristic: check if : appears within next few tokens
-                                // For now, just treat Ident as TryOp to fix the common case
-                                false
-                            }
-                            // These tokens clearly start a ternary true-branch
-                            Token::IntLiteral(_)
-                            | Token::FloatLiteral(_)
-                            | Token::StringLiteral(_)
-                            | Token::BoolLiteral(_)
-                            | Token::LParen
-                            | Token::Minus
-                            | Token::Not
-                            | Token::Ampersand
-                            | Token::Star => true,
-                            _ => false,
-                        }
-                    } else {
-                        false
-                    };
-
-                    if is_ternary {
-                        // Likely ternary, don't consume as TryOp, let parse_ternary_expression handle it
-                        break;
-                    } else {
-                        // Treat as TryOp
-                        self.advance();
-                        Expression::TryOp(Box::new(expr))
-                    }
+                    // TryOp: expr?
+                    // No ambiguity since we removed ternary operator
+                    self.advance();
+                    Expression::TryOp(Box::new(expr))
                 }
                 Token::LBracket => {
                     self.advance();
