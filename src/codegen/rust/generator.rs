@@ -269,7 +269,7 @@ impl CodeGenerator {
                     // Check for @component or @game decorators and generate trait implementations
                     if s.decorators.iter().any(|d| d.name == "component") {
                         body.push_str(&self.generate_component_impl(s));
-                        body.push_str("\n\n");
+                    body.push_str("\n\n");
                     }
                     if s.decorators.iter().any(|d| d.name == "game") {
                         body.push_str(&self.generate_game_impl(s));
@@ -487,16 +487,12 @@ impl CodeGenerator {
         } else {
             // Check if the last segment looks like a type (starts with uppercase)
             let last_segment = rust_path.split("::").last().unwrap_or("");
-            if last_segment
-                .chars()
-                .next()
-                .is_some_and(|c| c.is_uppercase())
-            {
+            if last_segment.chars().next().is_some_and(|c| c.is_uppercase()) {
                 // Likely a type, don't add ::*
                 format!("use {};\n", rust_path)
             } else {
                 // Likely a module, add ::*
-                format!("use {}::*;\n", rust_path)
+            format!("use {}::*;\n", rust_path)
             }
         }
     }
@@ -681,9 +677,11 @@ impl CodeGenerator {
                     let type_str = match &param.ownership {
                         OwnershipHint::Owned => {
                             if param.name == "self" {
-                                return "self".to_string();
+                                // Owned self is always mutable in Windjammer
+                                return "mut self".to_string();
                             }
-                            self.type_to_rust(&param.type_)
+                            // Owned parameters are always mutable in Windjammer
+                            return format!("mut {}: {}", param.name, self.type_to_rust(&param.type_));
                         }
                         OwnershipHint::Ref => {
                             if param.name == "self" {
@@ -957,9 +955,9 @@ impl CodeGenerator {
             Expression::StructLiteral { fields, .. } => fields
                 .iter()
                 .any(|(_, expr)| self.expression_accesses_fields(expr)),
-            Expression::MapLiteral(entries) => entries.iter().any(|(k, v)| {
-                self.expression_accesses_fields(k) || self.expression_accesses_fields(v)
-            }),
+            Expression::MapLiteral(entries) => entries
+                .iter()
+                .any(|(k, v)| self.expression_accesses_fields(k) || self.expression_accesses_fields(v)),
             Expression::Array(elements) => {
                 elements.iter().any(|e| self.expression_accesses_fields(e))
             }
@@ -1172,9 +1170,11 @@ impl CodeGenerator {
                 let type_str = match &param.ownership {
                     OwnershipHint::Owned => {
                         if param.name == "self" {
-                            return "self".to_string();
+                            // Owned self is always mutable in Windjammer
+                            return "mut self".to_string();
                         }
-                        self.type_to_rust(&param.type_)
+                        // Owned parameters are always mutable in Windjammer
+                        return format!("mut {}: {}", param.name, self.type_to_rust(&param.type_));
                     }
                     OwnershipHint::Ref => {
                         if param.name == "self" {
@@ -1184,7 +1184,7 @@ impl CodeGenerator {
                         if matches!(param.type_, Type::Reference(_) | Type::MutableReference(_)) {
                             self.type_to_rust(&param.type_)
                         } else {
-                            format!("&{}", self.type_to_rust(&param.type_))
+                        format!("&{}", self.type_to_rust(&param.type_))
                         }
                     }
                     OwnershipHint::Mut => {
@@ -1195,7 +1195,7 @@ impl CodeGenerator {
                         if matches!(param.type_, Type::MutableReference(_)) {
                             self.type_to_rust(&param.type_)
                         } else {
-                            format!("&mut {}", self.type_to_rust(&param.type_))
+                        format!("&mut {}", self.type_to_rust(&param.type_))
                         }
                     }
                     OwnershipHint::Inferred => {
@@ -1319,11 +1319,11 @@ impl CodeGenerator {
                 if *mutable {
                     output.push_str("mut ");
                 }
-
+                
                 // Generate pattern (could be simple name or tuple)
                 let pattern_str = self.generate_pattern(pattern);
                 output.push_str(&pattern_str);
-
+                
                 // Extract variable name for optimizations (only works for simple identifiers)
                 let var_name = match pattern {
                     Pattern::Identifier(name) => Some(name.as_str()),
@@ -1332,40 +1332,37 @@ impl CodeGenerator {
 
                 // PHASE 8: Check if this variable should use SmallVec
                 if let Some(name) = var_name {
-                    if let Some(smallvec_opt) = self.smallvec_optimizations.get(name) {
-                        // Use SmallVec with stack allocation
-                        // If there's a type annotation, extract the element type
-                        let elem_type = if let Some(Type::Vec(inner)) = type_ {
-                            self.type_to_rust(inner)
-                        } else {
-                            "_".to_string() // Type inference
-                        };
-                        output.push_str(&format!(
-                            ": SmallVec<[{}; {}]>",
-                            elem_type, smallvec_opt.stack_size
-                        ));
-                        output.push_str(" = ");
-
-                        // Generate the expression but wrap in smallvec! if it's a vec! macro
-                        let expr_str = self.generate_expression(value);
-                        if let Some(stripped) = expr_str.strip_prefix("vec!") {
-                            // Replace vec! with smallvec!
-                            output.push_str("smallvec!");
-                            output.push_str(stripped);
-                        } else {
-                            // For other expressions, try to convert
-                            output.push_str(&expr_str);
-                            output.push_str(".into()"); // Convert Vec to SmallVec
-                        }
-                    } else if let Some(t) = type_ {
-                        output.push_str(": ");
-                        output.push_str(&self.type_to_rust(t));
-                        output.push_str(" = ");
-                        output.push_str(&self.generate_expression(value));
+                if let Some(smallvec_opt) = self.smallvec_optimizations.get(name) {
+                    // Use SmallVec with stack allocation
+                    // If there's a type annotation, extract the element type
+                    let elem_type = if let Some(Type::Vec(inner)) = type_ {
+                        self.type_to_rust(inner)
                     } else {
-                        output.push_str(" = ");
-                        output.push_str(&self.generate_expression(value));
+                        "_".to_string() // Type inference
+                    };
+                    output.push_str(&format!(": SmallVec<[{}; {}]>", elem_type, smallvec_opt.stack_size));
+                    output.push_str(" = ");
+
+                    // Generate the expression but wrap in smallvec! if it's a vec! macro
+                    let expr_str = self.generate_expression(value);
+                    if let Some(stripped) = expr_str.strip_prefix("vec!") {
+                        // Replace vec! with smallvec!
+                        output.push_str("smallvec!");
+                        output.push_str(stripped);
+                    } else {
+                        // For other expressions, try to convert
+                        output.push_str(&expr_str);
+                        output.push_str(".into()"); // Convert Vec to SmallVec
                     }
+                } else if let Some(t) = type_ {
+                    output.push_str(": ");
+                    output.push_str(&self.type_to_rust(t));
+                    output.push_str(" = ");
+                    output.push_str(&self.generate_expression(value));
+                } else {
+                    output.push_str(" = ");
+                    output.push_str(&self.generate_expression(value));
+                }
                 } else {
                     // No SmallVec optimization for this variable
                     if let Some(t) = type_ {
@@ -1715,7 +1712,9 @@ impl CodeGenerator {
         // Wrap expressions in parentheses if they need them for proper precedence
         // when used as the object of a method call or field access
         match expr {
-            Expression::Range { .. } | Expression::Binary { .. } | Expression::Closure { .. } => {
+            Expression::Range { .. }
+            | Expression::Binary { .. }
+            | Expression::Closure { .. } => {
                 format!("({})", self.generate_expression(expr))
             }
             _ => self.generate_expression(expr),
@@ -1812,19 +1811,18 @@ impl CodeGenerator {
             Expression::Identifier(name) => {
                 // Qualified paths use :: from parser (e.g., std::fs::read)
                 // Simple identifiers: variable_name -> variable_name
-                // Check if this is a struct field and we're in an impl block
-                if self.in_impl_block && self.current_struct_fields.contains(name) {
-                    format!("self.{}", name)
-                } else {
-                    name.clone()
+                    // Check if this is a struct field and we're in an impl block
+                    if self.in_impl_block && self.current_struct_fields.contains(name) {
+                        format!("self.{}", name)
+                    } else {
+                        name.clone()
                 }
             }
             Expression::Binary { left, op, right } => {
                 // Special handling for string concatenation
                 if matches!(op, BinaryOp::Add) {
-                    // Only treat as string concat if at least one operand is definitely a string literal
-                    let has_string_literal =
-                        matches!(left.as_ref(), Expression::Literal(Literal::String(_)))
+                        // Only treat as string concat if at least one operand is definitely a string literal
+                        let has_string_literal = matches!(left.as_ref(), Expression::Literal(Literal::String(_)))
                             || matches!(right.as_ref(), Expression::Literal(Literal::String(_)))
                             || Self::contains_string_literal(left)
                             || Self::contains_string_literal(right);
@@ -1875,12 +1873,7 @@ impl CodeGenerator {
                 if func_name == "print" {
                     // Check if the first argument is a format! macro (from string interpolation)
                     if let Some((_, first_arg)) = arguments.first() {
-                        if let Expression::MacroInvocation {
-                            name,
-                            args: macro_args,
-                            ..
-                        } = first_arg
-                        {
+                        if let Expression::MacroInvocation { name, args: macro_args, .. } = first_arg {
                             if name == "format" && !macro_args.is_empty() {
                                 // Unwrap the format! call and put its arguments directly into println!
                                 // format!("text {}", var) -> println!("text {}", var)
@@ -1889,17 +1882,17 @@ impl CodeGenerator {
                                     .iter()
                                     .map(|arg| self.generate_expression(arg))
                                     .collect();
-
+                                
                                 let args_str = if format_args.is_empty() {
                                     String::new()
                                 } else {
                                     format!(", {}", format_args.join(", "))
                                 };
-
+                                
                                 return format!("println!({}{})", format_str, args_str);
                             }
                         }
-
+                        
                         // Check if the first argument is a string literal with ${} (old-style, shouldn't happen but keep for safety)
                         if let Expression::Literal(Literal::String(s)) = first_arg {
                             if s.contains("${") {
@@ -1913,7 +1906,7 @@ impl CodeGenerator {
                                     if ch == '$' && chars.peek() == Some(&'{') {
                                         chars.next(); // consume {
                                         let mut var_name = String::new();
-
+                                        
                                         while let Some(&next_ch) = chars.peek() {
                                             if next_ch == '}' {
                                                 chars.next(); // consume }
@@ -1923,13 +1916,11 @@ impl CodeGenerator {
                                                 chars.next();
                                             }
                                         }
-
+                                        
                                         if !var_name.is_empty() {
                                             format_str.push_str("{}");
                                             // Check if this is a struct field
-                                            if self.in_impl_block
-                                                && self.current_struct_fields.contains(&var_name)
-                                            {
+                                            if self.in_impl_block && self.current_struct_fields.contains(&var_name) {
                                                 args.push(format!("self.{}", var_name));
                                             } else {
                                                 args.push(var_name);
@@ -1939,22 +1930,20 @@ impl CodeGenerator {
                                         format_str.push(ch);
                                     }
                                 }
-
+                                
                                 let args_str = if args.is_empty() {
                                     String::new()
                                 } else {
                                     format!(", {}", args.join(", "))
                                 };
-
-                                return format!(
-                                    "println!(\"{}\"{})",
+                                
+                                return format!("println!(\"{}\"{})", 
                                     format_str.replace('\\', "\\\\").replace('"', "\\\""),
-                                    args_str
-                                );
+                                    args_str);
                             }
                         }
                     }
-
+                    
                     // No interpolation, just regular print
                     let args: Vec<String> = arguments
                         .iter()
@@ -1999,7 +1988,7 @@ impl CodeGenerator {
                                     // No signature found, default to converting for stdlib functions
                                     true
                                 };
-
+                                
                                 if should_convert {
                                     arg_str = format!("{}.to_string()", arg_str);
                                 }
@@ -2041,24 +2030,21 @@ impl CodeGenerator {
                 arguments,
             } => {
                 let obj_str = self.generate_expression_with_precedence(object);
-
+                
                 // Special handling for methods that commonly need String arguments
                 // Only apply to push/push_str/set, not insert (which can have different types)
-                let needs_string_conversion =
-                    matches!(method.as_str(), "push" | "push_str" | "set");
-
+                let needs_string_conversion = matches!(method.as_str(), "push" | "push_str" | "set");
+                
                 let args: Vec<String> = arguments
                     .iter()
                     .map(|(_label, arg)| {
                         let mut arg_str = self.generate_expression(arg);
-
+                        
                         // Auto-convert string literals to String for methods that need it
-                        if needs_string_conversion
-                            && matches!(arg, Expression::Literal(Literal::String(_)))
-                        {
+                        if needs_string_conversion && matches!(arg, Expression::Literal(Literal::String(_))) {
                             arg_str = format!("{}.to_string()", arg_str);
                         }
-
+                        
                         arg_str
                     })
                     .collect();
@@ -2244,10 +2230,7 @@ impl CodeGenerator {
                             format!("({}, {})", key_str, val_str)
                         })
                         .collect();
-                    format!(
-                        "std::collections::HashMap::from([{}])",
-                        entries_str.join(", ")
-                    )
+                    format!("std::collections::HashMap::from([{}])", entries_str.join(", "))
                 }
             }
             Expression::TryOp(inner) => {
@@ -2281,7 +2264,7 @@ impl CodeGenerator {
             Expression::Closure { parameters, body } => {
                 let params = parameters.join(", ");
                 let body_str = self.generate_expression(body);
-
+                
                 // In Windjammer, closures automatically use move semantics when needed
                 // This is more ergonomic than requiring explicit 'move' keyword
                 // We always generate 'move' for safety in concurrent contexts
@@ -2510,11 +2493,7 @@ impl CodeGenerator {
                             })
                             .collect::<String>();
 
-                        format!(
-                            "format!(\"{}\"{})",
-                            format_str.replace('\\', "\\\\").replace('"', "\\\""),
-                            formatted_args
-                        )
+                        format!("format!(\"{}\"{})", format_str.replace('\\', "\\\\").replace('"', "\\\""), formatted_args)
                     }
                 } else {
                     format!("\"{}\"", s.replace('\\', "\\\\").replace('"', "\\\""))
@@ -2563,7 +2542,7 @@ impl CodeGenerator {
 
         // Generate format! macro call
         let format_str = "{}".repeat(parts.len());
-
+        
         // Generate expressions for each part
         let mut args = Vec::new();
         for expr in &parts {
@@ -2831,7 +2810,7 @@ impl CodeGenerator {
                 Statement::Match { .. } => 5, // Match statements are complex
                 Statement::Assignment { .. } => 1,
                 Statement::Thread { .. } => 2, // Thread spawn
-                Statement::Async { .. } => 2,  // Async spawn
+                Statement::Async { .. } => 2, // Async spawn
                 Statement::Defer(_) => 1,
                 Statement::Break => 1,
                 Statement::Continue => 1,
@@ -2977,11 +2956,11 @@ impl CodeGenerator {
             Expression::StructLiteral { fields, .. } => {
                 fields.iter().all(|(_, expr)| self.is_const_evaluable(expr))
             }
-
+            
             // Map literals with const entries might be const
-            Expression::MapLiteral(entries) => entries
-                .iter()
-                .all(|(k, v)| self.is_const_evaluable(k) && self.is_const_evaluable(v)),
+            Expression::MapLiteral(entries) => {
+                entries.iter().all(|(k, v)| self.is_const_evaluable(k) && self.is_const_evaluable(v))
+            }
 
             // Most other expressions are not const-evaluable
             _ => false,
