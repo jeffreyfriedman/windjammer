@@ -60,7 +60,7 @@ fn process_file(path: string, args: &Args) -> Result<ProcessResult, Error> {
     // Determine output path
     let output_path = match &args.output_dir {
         Some(dir) => {
-            let filename = Path::new(&path).file_name().unwrap()
+            let filename = Path.new(&path).file_name().unwrap()
             format!("{}/{}", dir, filename.to_string_lossy())
         }
         None => {
@@ -79,7 +79,7 @@ fn process_file(path: string, args: &Args) -> Result<ProcessResult, Error> {
 }
 
 fn main() -> Result<(), Error> {
-    let args = Args::parse()
+    let args = Args.parse()
     
     // Create output directory if needed
     if let Some(dir) = &args.output_dir {
