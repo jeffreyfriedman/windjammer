@@ -365,15 +365,6 @@ fn optimize_loops_in_expression(
             parameters: parameters.clone(),
             body: Box::new(optimize_loops_in_expression(body, config, stats)),
         },
-        Expression::Ternary {
-            condition,
-            true_expr,
-            false_expr,
-        } => Expression::Ternary {
-            condition: Box::new(optimize_loops_in_expression(condition, config, stats)),
-            true_expr: Box::new(optimize_loops_in_expression(true_expr, config, stats)),
-            false_expr: Box::new(optimize_loops_in_expression(false_expr, config, stats)),
-        },
         Expression::Index { object, index } => Expression::Index {
             object: Box::new(optimize_loops_in_expression(object, config, stats)),
             index: Box::new(optimize_loops_in_expression(index, config, stats)),
@@ -557,15 +548,6 @@ fn expression_uses_variable(expr: &Expression, var_name: &str) -> bool {
             .any(|(_, v)| expression_uses_variable(v, var_name)),
         Expression::Range { start, end, .. } => {
             expression_uses_variable(start, var_name) || expression_uses_variable(end, var_name)
-        }
-        Expression::Ternary {
-            condition,
-            true_expr,
-            false_expr,
-        } => {
-            expression_uses_variable(condition, var_name)
-                || expression_uses_variable(true_expr, var_name)
-                || expression_uses_variable(false_expr, var_name)
         }
         Expression::Closure { body, .. } => expression_uses_variable(body, var_name),
         Expression::Block(statements) => statements

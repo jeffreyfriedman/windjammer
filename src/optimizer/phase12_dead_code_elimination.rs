@@ -262,15 +262,6 @@ fn find_calls_in_expression(expr: &Expression, called: &mut HashSet<String>) {
         Expression::TryOp(expr) => {
             find_calls_in_expression(expr, called);
         }
-        Expression::Ternary {
-            condition,
-            true_expr,
-            false_expr,
-        } => {
-            find_calls_in_expression(condition, called);
-            find_calls_in_expression(true_expr, called);
-            find_calls_in_expression(false_expr, called);
-        }
         Expression::MacroInvocation { args, .. } => {
             for arg in args {
                 find_calls_in_expression(arg, called);
@@ -567,15 +558,6 @@ fn eliminate_dead_code_in_expression(expr: &Expression) -> Expression {
         Expression::TryOp(expr) => {
             Expression::TryOp(Box::new(eliminate_dead_code_in_expression(expr)))
         }
-        Expression::Ternary {
-            condition,
-            true_expr,
-            false_expr,
-        } => Expression::Ternary {
-            condition: Box::new(eliminate_dead_code_in_expression(condition)),
-            true_expr: Box::new(eliminate_dead_code_in_expression(true_expr)),
-            false_expr: Box::new(eliminate_dead_code_in_expression(false_expr)),
-        },
         Expression::MacroInvocation {
             name,
             args,

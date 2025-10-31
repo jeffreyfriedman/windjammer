@@ -568,19 +568,6 @@ if (import.meta.url === `file://${process.argv[1]}`) {
                 )
             }
 
-            Expression::Ternary {
-                condition,
-                true_expr,
-                false_expr,
-            } => {
-                format!(
-                    "({} ? {} : {})",
-                    self.generate_expression(condition),
-                    self.generate_expression(true_expr),
-                    self.generate_expression(false_expr)
-                )
-            }
-
             Expression::Unary { op, operand } => {
                 format!(
                     "({}{})",

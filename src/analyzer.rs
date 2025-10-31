@@ -1132,15 +1132,6 @@ impl Analyzer {
                     self.analyze_expression_for_clones_in_loop(value, usage);
                 }
             }
-            Expression::Ternary {
-                condition,
-                true_expr,
-                false_expr,
-            } => {
-                self.analyze_expression_for_clones_in_loop(condition, usage);
-                self.analyze_expression_for_clones_in_loop(true_expr, usage);
-                self.analyze_expression_for_clones_in_loop(false_expr, usage);
-            }
             Expression::Cast { expr, .. } => {
                 self.analyze_expression_for_clones_in_loop(expr, usage);
             }
@@ -1197,16 +1188,6 @@ impl Analyzer {
                 for (_, field_expr) in fields {
                     self.analyze_expression_for_clones(field_expr, usage);
                 }
-            }
-            Expression::Ternary {
-                condition,
-                true_expr,
-                false_expr,
-                ..
-            } => {
-                self.analyze_expression_for_clones(condition, usage);
-                self.analyze_expression_for_clones(true_expr, usage);
-                self.analyze_expression_for_clones(false_expr, usage);
             }
             Expression::Cast { expr, .. } => {
                 self.analyze_expression_for_clones(expr, usage);
