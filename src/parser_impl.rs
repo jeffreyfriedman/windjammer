@@ -1450,7 +1450,10 @@ impl Parser {
                         self.advance();
                         name
                     } else {
-                        return Err("Expected parameter name".to_string());
+                        return Err(format!(
+                            "Expected parameter name (at token position {})",
+                            self.position
+                        ));
                     };
 
                     self.expect(Token::Colon)?;
@@ -1893,6 +1896,12 @@ impl Parser {
                     Token::Assign => {
                         self.advance(); // consume '='
                         let value = self.parse_expression()?;
+
+                        // Optionally consume semicolon
+                        if self.current_token() == &Token::Semicolon {
+                            self.advance();
+                        }
+
                         Ok(Statement::Assignment {
                             target: expr,
                             value,
@@ -1923,6 +1932,11 @@ impl Parser {
                             op,
                             right: Box::new(rhs),
                         };
+
+                        // Optionally consume semicolon
+                        if self.current_token() == &Token::Semicolon {
+                            self.advance();
+                        }
 
                         Ok(Statement::Assignment {
                             target: expr,
@@ -2335,11 +2349,24 @@ impl Parser {
                     // Unqualified enum variant with parameter: Some(x), Ok(value), Err(e), Some(_)
                     self.advance();
 
-                    // Handle underscore (Some(_)) or identifier (Some(x))
+                    // Handle underscore (Some(_)), identifier (Some(x)), or mut identifier (Some(mut x))
                     let binding = match self.current_token() {
                         Token::Underscore => {
                             self.advance();
                             EnumPatternBinding::Wildcard
+                        }
+                        Token::Mut => {
+                            // mut binding: Some(mut x)
+                            self.advance();
+                            if let Token::Ident(b) = self.current_token() {
+                                let b = b.clone();
+                                self.advance();
+                                // For now, treat mut bindings same as regular bindings
+                                // The Rust codegen will handle the mut keyword
+                                EnumPatternBinding::Named(format!("mut {}", b))
+                            } else {
+                                return Err(format!("Expected identifier after mut in enum pattern (at token position {})", self.position));
+                            }
                         }
                         Token::Ident(b) => {
                             let b = b.clone();
@@ -2347,7 +2374,10 @@ impl Parser {
                             EnumPatternBinding::Named(b)
                         }
                         _ => {
-                            return Err("Expected binding name or _ in enum pattern".to_string());
+                            return Err(format!(
+                                "Expected binding name or _ in enum pattern (at token position {})",
+                                self.position
+                            ));
                         }
                     };
 
@@ -3285,7 +3315,10 @@ impl Parser {
                             "_".to_string()
                         }
                         _ => {
-                            return Err("Expected parameter name in closure".to_string());
+                            return Err(format!(
+                                "Expected parameter name in closure (at token position {})",
+                                self.position
+                            ));
                         }
                     };
 
