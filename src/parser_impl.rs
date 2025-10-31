@@ -89,6 +89,7 @@ pub enum Type {
     Reference(Box<Type>),
     MutableReference(Box<Type>),
     Tuple(Vec<Type>), // Tuple type: (T1, T2, T3)
+    Infer,            // Type inference placeholder: _
 }
 
 // Type parameter with optional trait bounds
@@ -517,6 +518,7 @@ impl Parser {
             }
             Type::Associated(base, name) => format!("{}::{}", base, name),
             Type::TraitObject(trait_name) => format!("dyn {}", trait_name),
+            Type::Infer => "_".to_string(),
         }
     }
 
@@ -1731,6 +1733,11 @@ impl Parser {
                 } else {
                     Type::Custom(type_name)
                 }
+            }
+            Token::Underscore => {
+                // Type inference placeholder: _
+                self.advance();
+                Type::Infer
             }
             _ => return Err(format!("Expected type, got {:?}", self.current_token())),
         };

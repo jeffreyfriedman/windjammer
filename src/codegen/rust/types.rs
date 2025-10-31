@@ -69,6 +69,7 @@ pub fn type_to_rust(type_: &Type) -> String {
             let rust_types: Vec<String> = types.iter().map(type_to_rust).collect();
             format!("({})", rust_types.join(", "))
         }
+        Type::Infer => "_".to_string(), // Type inference placeholder
     }
 }
 
