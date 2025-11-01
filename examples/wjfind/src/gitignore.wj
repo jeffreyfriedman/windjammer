@@ -149,7 +149,7 @@ impl GitignoreCache {
         }
     }
     
-    pub fn get_rules(mut self, dir: string) -> GitignoreRules {
+    pub fn get_rules(self, dir: string) -> GitignoreRules {
         if let Some(rules) = self.cache.get(&dir) {
             return rules.clone()
         }
