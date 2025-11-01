@@ -2,6 +2,7 @@ pub mod analyzer;
 pub mod cli;
 pub mod codegen;
 pub mod component_analyzer;
+pub mod error;
 // Removed: codegen_legacy is now codegen::rust::generator
 pub mod compiler_database;
 pub mod config;
