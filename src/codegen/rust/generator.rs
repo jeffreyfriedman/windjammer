@@ -1369,7 +1369,17 @@ impl CodeGenerator {
                         output.push_str(": ");
                         output.push_str(&self.type_to_rust(t));
                         output.push_str(" = ");
-                        output.push_str(&self.generate_expression(value));
+
+                        // Auto-convert string literals to String if type is String
+                        let mut value_str = self.generate_expression(value);
+                        if matches!(value, Expression::Literal(Literal::String(_))) {
+                            let is_string_type = matches!(t, Type::String)
+                                || matches!(t, Type::Custom(name) if name == "String");
+                            if is_string_type {
+                                value_str = format!("{}.to_string()", value_str);
+                            }
+                        }
+                        output.push_str(&value_str);
                     } else {
                         output.push_str(" = ");
                         output.push_str(&self.generate_expression(value));
@@ -1380,7 +1390,17 @@ impl CodeGenerator {
                         output.push_str(": ");
                         output.push_str(&self.type_to_rust(t));
                         output.push_str(" = ");
-                        output.push_str(&self.generate_expression(value));
+
+                        // Auto-convert string literals to String if type is String
+                        let mut value_str = self.generate_expression(value);
+                        if matches!(value, Expression::Literal(Literal::String(_))) {
+                            let is_string_type = matches!(t, Type::String)
+                                || matches!(t, Type::Custom(name) if name == "String");
+                            if is_string_type {
+                                value_str = format!("{}.to_string()", value_str);
+                            }
+                        }
+                        output.push_str(&value_str);
                     } else {
                         output.push_str(" = ");
                         output.push_str(&self.generate_expression(value));
@@ -1991,26 +2011,25 @@ impl CodeGenerator {
                     .map(|(i, (_label, arg))| {
                         let mut arg_str = self.generate_expression(arg);
 
-                        // Auto-convert string literals to String for stdlib functions
+                        // Auto-convert string literals to String for functions expecting owned String
                         if matches!(arg, Expression::Literal(Literal::String(_))) {
-                            // Check if this is a stdlib function (contains :: in the generated function string)
-                            if func_str.contains("::") {
-                                // If the signature exists and has ownership info, use that
-                                let should_convert = if let Some(ref sig) = signature {
-                                    if let Some(&ownership) = sig.param_ownership.get(i) {
-                                        matches!(ownership, OwnershipMode::Owned)
-                                    } else {
-                                        // No ownership info, default to converting for stdlib functions
-                                        true
-                                    }
+                            // Check if the parameter expects an owned String
+                            let should_convert = if let Some(ref sig) = signature {
+                                if let Some(&ownership) = sig.param_ownership.get(i) {
+                                    // Convert if parameter expects owned String
+                                    matches!(ownership, OwnershipMode::Owned)
                                 } else {
-                                    // No signature found, default to converting for stdlib functions
-                                    true
-                                };
-
-                                if should_convert {
-                                    arg_str = format!("{}.to_string()", arg_str);
+                                    // No ownership info - check if it's a stdlib function
+                                    // (stdlib functions typically expect owned String)
+                                    func_str.contains("::")
                                 }
+                            } else {
+                                // No signature found - check if it's a stdlib function
+                                func_str.contains("::")
+                            };
+
+                            if should_convert {
+                                arg_str = format!("{}.to_string()", arg_str);
                             }
                         }
 
