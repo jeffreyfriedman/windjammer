@@ -596,7 +596,7 @@ fn is_empty_statement(stmt: &Statement) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::parser::{Decorator, Literal, Type};
+    use crate::parser::{Decorator, Literal, Pattern, Type};
 
     fn make_pub_func(name: &str, body: Vec<Statement>) -> FunctionDecl {
         FunctionDecl {
@@ -764,7 +764,7 @@ mod tests {
                 "test",
                 vec![
                     Statement::Let {
-                        name: "x".to_string(),
+                        pattern: Pattern::Identifier("x".to_string()),
                         mutable: false,
                         type_: None,
                         value: Expression::Literal(Literal::Int(42)),

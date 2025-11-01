@@ -72,3 +72,4 @@ fn test_nested_if() {
     assert(result == "both")
 }
 
+

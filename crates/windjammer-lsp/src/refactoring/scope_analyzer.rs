@@ -7,7 +7,7 @@
 //! - Which variables are purely local (→ stay inside)
 
 use std::collections::{HashMap, HashSet};
-use windjammer::parser::{Expression, Statement};
+use windjammer::parser::{Expression, Pattern, Statement};
 
 /// Result of analyzing a code selection for extraction
 #[derive(Debug, Clone)]
@@ -123,27 +123,33 @@ impl ScopeAnalyzer {
     fn analyze_statement(&mut self, stmt: &Statement) {
         match stmt {
             Statement::Let {
-                name,
+                pattern,
                 mutable,
                 value,
                 ..
             } => {
-                // Record definition
-                self.inner_scope.insert(name.clone());
+                // Only handle simple identifier patterns
+                if let Pattern::Identifier(name) = pattern {
+                    // Record definition
+                    self.inner_scope.insert(name.clone());
 
-                // Analyze the value expression
-                self.analyze_expression(value);
+                    // Analyze the value expression
+                    self.analyze_expression(value);
 
-                // Record write
-                self.writes.insert(
-                    name.clone(),
-                    Variable {
-                        name: name.clone(),
-                        type_name: None, // TODO: Type inference
-                        is_mutable: *mutable,
-                        defined_at: None,
-                    },
-                );
+                    // Record write
+                    self.writes.insert(
+                        name.clone(),
+                        Variable {
+                            name: name.clone(),
+                            type_name: None, // TODO: Type inference
+                            is_mutable: *mutable,
+                            defined_at: None,
+                        },
+                    );
+                } else {
+                    // For non-identifier patterns (tuple, wildcard), just analyze the value
+                    self.analyze_expression(value);
+                }
             }
 
             Statement::Expression(expr) => {
@@ -250,16 +256,7 @@ impl ScopeAnalyzer {
                 self.analyze_expression(object);
             }
 
-            Expression::Ternary {
-                condition,
-                true_expr,
-                false_expr,
-            } => {
-                self.analyze_expression(condition);
-                self.analyze_expression(true_expr);
-                self.analyze_expression(false_expr);
-            }
-
+            // Ternary operator removed from Windjammer - use if/else expressions instead
             _ => {
                 // Literals, etc. don't have variable usage
             }
@@ -269,8 +266,14 @@ impl ScopeAnalyzer {
     /// Collect variable definitions in a statement
     fn collect_definitions_in_statement(stmt: &Statement, scope: &mut HashSet<String>) {
         match stmt {
-            Statement::Let { name, .. } => {
+            Statement::Let {
+                pattern: windjammer::parser::Pattern::Identifier(name),
+                ..
+            } => {
                 scope.insert(name.clone());
+            }
+            Statement::Let { .. } => {
+                // Non-identifier patterns (tuple, wildcard) - skip for now
             }
             Statement::For {
                 pattern: windjammer::parser::Pattern::Identifier(var),
@@ -395,7 +398,7 @@ mod tests {
 
         // Before: let x = 10;
         let before = vec![Statement::Let {
-            name: "x".to_string(),
+            pattern: windjammer::parser::Pattern::Identifier("x".to_string()),
             mutable: false,
             type_: None,
             value: Expression::Literal(windjammer::parser::Literal::Int(10)),
@@ -403,7 +406,7 @@ mod tests {
 
         // Selection: let y = x + 5;
         let selected = vec![Statement::Let {
-            name: "y".to_string(),
+            pattern: windjammer::parser::Pattern::Identifier("y".to_string()),
             mutable: false,
             type_: None,
             value: Expression::Binary {
@@ -434,7 +437,7 @@ mod tests {
 
         // Selection: let result = 42;
         let selected = vec![Statement::Let {
-            name: "result".to_string(),
+            pattern: windjammer::parser::Pattern::Identifier("result".to_string()),
             mutable: false,
             type_: None,
             value: Expression::Literal(windjammer::parser::Literal::Int(42)),
@@ -459,7 +462,7 @@ mod tests {
 
         // Before: let x = 10;
         let before = vec![Statement::Let {
-            name: "x".to_string(),
+            pattern: windjammer::parser::Pattern::Identifier("x".to_string()),
             mutable: false,
             type_: None,
             value: Expression::Literal(windjammer::parser::Literal::Int(10)),
@@ -467,7 +470,7 @@ mod tests {
 
         // Selection: let y = x * 2;
         let selected = vec![Statement::Let {
-            name: "y".to_string(),
+            pattern: windjammer::parser::Pattern::Identifier("y".to_string()),
             mutable: false,
             type_: None,
             value: Expression::Binary {

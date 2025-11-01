@@ -96,3 +96,4 @@ fn test_random() {
     print("  ✓ random::float() works")
 }
 
+

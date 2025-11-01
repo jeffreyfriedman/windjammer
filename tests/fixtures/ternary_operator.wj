@@ -1,22 +1,21 @@
-// Test ternary operator
+// Test if/else expressions (ternary operator removed)
 fn main() {
     let x = 5
     
-    // Simple ternary
-    let status = x > 0 ? "positive" : "non-positive"
+    // Simple if/else expression
+    let status = if x > 0 { "positive" } else { "non-positive" }
     println!("Status: {}", status)
     
-    // Nested ternary
-    let grade = x >= 90 ? "A" : x >= 80 ? "B" : "C"
+    // Nested if/else expression
+    let grade = if x >= 90 { "A" } else if x >= 80 { "B" } else { "C" }
     println!("Grade: {}", grade)
     
-    // Ternary with expressions
+    // If/else with expressions
     let y = 10
-    let max = x > y ? x : y
+    let max = if x > y { x } else { y }
     println!("Max: {}", max)
     
-    // Ternary in assignment
-    let is_even = x % 2 == 0 ? true : false
+    // If/else in assignment
+    let is_even = if x % 2 == 0 { true } else { false }
     println!("Is even: {}", is_even)
 }
-

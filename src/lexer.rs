@@ -684,10 +684,10 @@ mod tests {
 
     #[test]
     fn test_lexer_spawn_keyword() {
-        let mut lexer = Lexer::new("spawn async await");
+        let mut lexer = Lexer::new("thread async await");
         let tokens = lexer.tokenize();
 
-        assert_eq!(tokens[0], Token::Spawn);
+        assert_eq!(tokens[0], Token::Thread);
         assert_eq!(tokens[1], Token::Async);
         assert_eq!(tokens[2], Token::Await);
     }
