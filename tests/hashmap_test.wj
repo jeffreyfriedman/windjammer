@@ -22,3 +22,4 @@ fn test_hashmap_insert_mixed() {
     assert(map.len() == 2)
 }
 
+

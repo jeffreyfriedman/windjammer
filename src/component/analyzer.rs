@@ -307,11 +307,15 @@ impl DependencyAnalyzer {
     #[allow(clippy::only_used_in_recursion)]
     fn extract_writes_from_statement(&self, stmt: &Statement, writes: &mut HashSet<String>) {
         match stmt {
-            Statement::Let { pattern, .. } => {
+            Statement::Let {
+                pattern: Pattern::Identifier(name),
+                ..
+            } => {
                 // Only track simple identifier patterns
-                if let Pattern::Identifier(name) = pattern {
-                    writes.insert(name.clone());
-                }
+                writes.insert(name.clone());
+            }
+            Statement::Let { .. } => {
+                // Non-identifier patterns (tuple, wildcard, etc.) don't count as simple writes
             }
             Statement::Assignment {
                 target: Expression::Identifier(name),

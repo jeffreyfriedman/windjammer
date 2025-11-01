@@ -269,6 +269,7 @@ impl WindjammerLanguageServer {
                     .join(", ");
                 format!("({})", types_str)
             }
+            Type::Infer => "_".to_string(),
         }
     }
 

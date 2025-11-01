@@ -185,13 +185,14 @@ impl SemanticTokensProvider {
             }
             WJType::TraitObject(name) => name.as_str(),
             WJType::Associated(base, _assoc) => base.as_str(),
-            // Primitive types - don't need highlighting
+            // Primitive types and infer - don't need highlighting
             WJType::Int
             | WJType::Int32
             | WJType::Uint
             | WJType::Float
             | WJType::Bool
-            | WJType::String => return,
+            | WJType::String
+            | WJType::Infer => return,
         };
 
         if let Ok(pos) = self.find_identifier_position(type_name, 0) {
