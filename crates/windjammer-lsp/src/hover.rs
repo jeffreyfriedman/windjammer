@@ -201,6 +201,7 @@ impl HoverProvider {
                 s.push(')');
                 s
             }
+            Type::Infer => "_".to_string(),
         }
     }
 }

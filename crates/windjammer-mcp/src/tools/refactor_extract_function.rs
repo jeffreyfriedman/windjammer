@@ -190,9 +190,12 @@ fn collect_variable_usage(
     defined: &mut HashSet<String>,
 ) {
     match stmt {
-        Statement::Let { name, value, .. } => {
+        Statement::Let { pattern, value, .. } => {
             collect_expr_variables(value, used);
-            defined.insert(name.clone());
+            // Only handle simple identifier patterns
+            if let windjammer::parser::Pattern::Identifier(name) = pattern {
+                defined.insert(name.clone());
+            }
         }
         Statement::Assignment { target, value } => {
             collect_expr_variables(target, used);

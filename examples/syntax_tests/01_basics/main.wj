@@ -15,9 +15,9 @@ fn increment(counter: int) -> int {
     counter + 1
 }
 
-// Using the ternary operator
+// Using if/else expression
 fn sign(x: int) -> string {
-    x >= 0 ? "positive" : "negative"
+    if x >= 0 { "positive" } else { "negative" }
 }
 
 // Pattern matching
@@ -56,7 +56,7 @@ fn main() {
     let new_count = increment(count)
     print(new_count)
     
-    // Ternary operator
+    // If/else expression
     print(sign(5))
     print(sign(-3))
     

@@ -45,10 +45,10 @@ fn main() {
     let ch_tab = '\t'
     println!("Character: ${ch_a}")
     
-    // Ternary operator
-    println!("\n=== Ternary Operator ===")
+    // If/else expression
+    println!("\n=== If/Else Expression ===")
     for i in -2..3 {
-        let sign = i >= 0 ? "positive" : "negative"
+        let sign = if i >= 0 { "positive" } else { "negative" }
         println!("${i} is ${sign}")
     }
     

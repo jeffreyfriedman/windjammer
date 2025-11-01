@@ -773,7 +773,7 @@ mod tests {
                     body: vec![
                         // Loop-invariant: doesn't use 'i'
                         Statement::Let {
-                            name: "x".to_string(),
+                            pattern: Pattern::Identifier("x".to_string()),
                             mutable: false,
                             type_: None,
                             value: Expression::Literal(Literal::Int(42)),
@@ -885,7 +885,7 @@ mod tests {
                     body: vec![
                         // Loop-variant: uses 'i'
                         Statement::Let {
-                            name: "x".to_string(),
+                            pattern: Pattern::Identifier("x".to_string()),
                             mutable: false,
                             type_: None,
                             value: Expression::Binary {
