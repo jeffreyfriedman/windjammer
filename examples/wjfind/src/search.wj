@@ -146,7 +146,7 @@ fn search_file(path: string, config: Config) -> Result<Vec<Match>, Error> {
 }
 
 fn add_context(
-    mut match_obj: Match,
+    match_obj: Match,
     all_lines: &Vec<string>,
     lines_before: int,
     lines_after: int
