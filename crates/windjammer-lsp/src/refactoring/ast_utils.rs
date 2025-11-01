@@ -105,6 +105,7 @@ pub fn format_type(ty: &Type) -> String {
             let types_str = types.iter().map(format_type).collect::<Vec<_>>().join(", ");
             format!("({})", types_str)
         }
+        Type::Infer => "_".to_string(),
     }
 }
 

@@ -384,7 +384,7 @@ mod tests {
                 return_type: None,
                 body: vec![
                     Statement::Let {
-                        name: "sum".to_string(),
+                        pattern: Pattern::Identifier("sum".to_string()),
                         mutable: true,
                         type_: Some(Type::Custom("f64".to_string())),
                         value: Expression::Literal(Literal::Float(0.0)),

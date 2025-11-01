@@ -409,7 +409,7 @@ mod tests {
                 parameters: vec![],
                 return_type: None,
                 body: vec![Statement::Let {
-                    name: "temp".to_string(),
+                    pattern: Pattern::Identifier("temp".to_string()),
                     mutable: false,
                     type_: None,
                     value: Expression::MacroInvocation {
@@ -455,7 +455,7 @@ mod tests {
                 return_type: None,
                 body: vec![
                     Statement::Let {
-                        name: "temp".to_string(),
+                        pattern: Pattern::Identifier("temp".to_string()),
                         mutable: false,
                         type_: None,
                         value: Expression::MacroInvocation {

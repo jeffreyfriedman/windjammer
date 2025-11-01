@@ -49,7 +49,7 @@ use std::cell::RefCell;"#
             code.push_str(&format!("    {}: {},\n", field.name, field.type_));
         }
 
-        code.push_str("}");
+        code.push('}');
         code
     }
 
@@ -60,10 +60,10 @@ use std::cell::RefCell;"#
 
         for method in &component.methods {
             code.push_str(&Self::generate_method(method));
-            code.push_str("\n");
+            code.push('\n');
         }
 
-        code.push_str("}");
+        code.push('}');
         code
     }
 
@@ -73,11 +73,11 @@ use std::cell::RefCell;"#
         // Generate method signature
         code.push_str("    /// ");
         code.push_str(&method.name);
-        code.push_str("\n");
+        code.push('\n');
         code.push_str("    #[wasm_bindgen]\n");
         code.push_str("    pub fn ");
         code.push_str(&method.name);
-        code.push_str("(");
+        code.push('(');
 
         // Add self parameter for non-constructor methods
         if method.name != "new" {
@@ -89,7 +89,7 @@ use std::cell::RefCell;"#
 
         // Add parameters
         code.push_str(&method.params.join(", "));
-        code.push_str(")");
+        code.push(')');
 
         // Add return type
         if let Some(return_type) = &method.return_type {
@@ -105,7 +105,7 @@ use std::cell::RefCell;"#
                 code.push_str("        ");
                 code.push_str(line);
             }
-            code.push_str("\n");
+            code.push('\n');
         }
 
         code.push_str("    }\n");
