@@ -470,6 +470,10 @@ pub struct Program {
 pub struct Parser {
     tokens: Vec<Token>,
     position: usize,
+    #[allow(dead_code)]
+    filename: String,
+    #[allow(dead_code)]
+    source: String,
 }
 
 impl Parser {
@@ -477,6 +481,17 @@ impl Parser {
         Parser {
             tokens,
             position: 0,
+            filename: String::new(),
+            source: String::new(),
+        }
+    }
+
+    pub fn new_with_source(tokens: Vec<Token>, filename: String, source: String) -> Self {
+        Parser {
+            tokens,
+            position: 0,
+            filename,
+            source,
         }
     }
 
