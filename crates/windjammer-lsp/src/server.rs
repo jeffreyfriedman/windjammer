@@ -6,6 +6,7 @@ use tower_lsp::lsp_types::*;
 use tower_lsp::{Client, LanguageServer};
 
 use crate::analysis::AnalysisDatabase;
+use crate::cache::{CacheEntry, CacheManager};
 use crate::completion::CompletionProvider;
 use crate::database::{ParallelConfig, WindjammerDatabase};
 use crate::diagnostics::DiagnosticsEngine;
@@ -13,7 +14,6 @@ use crate::hover::HoverProvider;
 use crate::inlay_hints::InlayHintsProvider;
 use crate::refactoring::RefactoringEngine;
 use crate::semantic_tokens::SemanticTokensProvider;
-use windjammer_lsp::cache::CacheManager;
 
 /// The Windjammer Language Server
 ///
@@ -86,7 +86,7 @@ impl WindjammerLanguageServer {
             tracing::debug!("Analyzing document: {}", uri);
 
             // Check cache for this file
-            let content_hash = windjammer_lsp::cache::calculate_content_hash(&content);
+            let content_hash = crate::cache::calculate_content_hash(&content);
             let cache_hit = {
                 let cache = self.cache_manager.lock().unwrap();
                 cache.is_valid(&uri, content_hash)
@@ -117,9 +117,9 @@ impl WindjammerLanguageServer {
                 let symbols = db.get_symbols(source_file);
 
                 // Convert symbols to cached format
-                let cached_symbols: Vec<windjammer_lsp::cache::CachedSymbol> = symbols
+                let cached_symbols: Vec<crate::cache::CachedSymbol> = symbols
                     .iter()
-                    .map(|s| windjammer_lsp::cache::CachedSymbol {
+                    .map(|s| crate::cache::CachedSymbol {
                         name: s.name.clone(),
                         kind: format!("{:?}", s.kind),
                         line: s.line,
@@ -130,7 +130,7 @@ impl WindjammerLanguageServer {
 
                 // Update cache with new symbols
                 let mut cache = self.cache_manager.lock().unwrap();
-                let entry = windjammer_lsp::cache::CacheEntry {
+                let entry = CacheEntry {
                     uri: uri.to_string(),
                     content_hash,
                     modified_time: std::time::SystemTime::now(),
@@ -270,6 +270,22 @@ impl WindjammerLanguageServer {
                 format!("({})", types_str)
             }
             Type::Infer => "_".to_string(),
+            Type::FunctionPointer {
+                params,
+                return_type,
+            } => {
+                let param_strs: Vec<String> =
+                    params.iter().map(|t| self.type_to_string(t)).collect();
+                if let Some(ret) = return_type {
+                    format!(
+                        "fn({}) -> {}",
+                        param_strs.join(", "),
+                        self.type_to_string(ret)
+                    )
+                } else {
+                    format!("fn({})", param_strs.join(", "))
+                }
+            }
         }
     }
 

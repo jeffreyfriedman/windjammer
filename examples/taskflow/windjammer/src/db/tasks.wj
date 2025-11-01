@@ -2,7 +2,7 @@
 
 use std::db
 use std::log
-use ../models/task.{Task, CreateTaskRequest, TaskSearchQuery}
+use ../models/task::{Task, CreateTaskRequest, TaskSearchQuery}
 
 // Create a new task
 pub async fn create(conn: Connection, project_id: int, req: CreateTaskRequest) -> Result<Task, Error> {
@@ -109,13 +109,13 @@ pub async fn list_by_project(conn: Connection, project_id: int) -> Result<Vec<Ta
 
 // Update task
 pub async fn update(
-    pub conn: Connection,
-    pub task_id: int,
-    pub title: Option<string>,
-    pub description: Option<string>,
-    pub status: Option<string>,
-    pub priority: Option<string>,
-    pub assigned_to: Option<int>
+    conn: Connection,
+    task_id: int,
+    title: Option<string>,
+    description: Option<string>,
+    status: Option<string>,
+    priority: Option<string>,
+    assigned_to: Option<int>
 ) -> Result<Task, Error> {
     log.debug_with("Updating task", "id", &task_id.to_string())
     

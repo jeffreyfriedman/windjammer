@@ -2,7 +2,7 @@
 
 use std::db
 use std::log
-use ../models/project.{Project, CreateProjectRequest, ProjectMember}
+use ../models/project::{Project, CreateProjectRequest, ProjectMember}
 
 // Create a new project
 pub async fn create(conn: Connection, req: CreateProjectRequest, owner_id: int) -> Result<Project, Error> {

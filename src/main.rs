@@ -10,8 +10,8 @@ pub mod error_mapper;
 pub mod inference;
 pub mod lexer;
 pub mod optimizer;
-pub mod parser; // New modular parser structure
-pub mod parser_impl; // Temporary: old monolithic parser
+pub mod parser_impl; // Parser implementation (TODO: refactor into modules)
+pub use parser_impl as parser; // Re-export for backward compatibility
 pub mod parser_recovery;
 pub mod source_map;
 pub mod stdlib_scanner;
@@ -515,20 +515,21 @@ impl ModuleCompiler {
                 let dep_path = path.join("::");
 
                 // Handle item imports: ./main::Args -> compile ./main, not ./main::Args
+                // Also handle braced imports: ./message::{A, B, C} -> compile ./message
                 // Split at the last :: to separate module from item
                 let module_to_compile = if dep_path.contains("::") {
-                    // Check if this looks like a module::Item import
+                    // Check if this looks like a module::Item import or module::{...} import
                     let parts: Vec<&str> = dep_path.rsplitn(2, "::").collect();
                     if parts.len() == 2 {
                         let potential_item = parts[0];
                         let module_part = parts[1];
 
-                        // If the last part starts with uppercase, it's likely a type import
-                        // e.g., ./main::Args, ./types::Config
+                        // If the last part starts with uppercase or {, it's likely a type/braced import
+                        // e.g., ./main::Args, ./types::Config, ./message::{A, B, C}
                         if potential_item
                             .chars()
                             .next()
-                            .is_some_and(|c| c.is_uppercase())
+                            .is_some_and(|c| c.is_uppercase() || c == '{')
                         {
                             module_part.to_string()
                         } else {
@@ -741,14 +742,10 @@ fn compile_file(
     // Check if this is a component file by looking for component-specific syntax
     // Components must have a "view {" block (as a standalone token, not substring)
     let is_component = if target == CompilationTarget::Wasm {
-        // Use regex or simple token-aware check to avoid false positives like "preview"
-        source
-            .split_whitespace()
-            .any(|word| word == "view" || word.starts_with("view{"))
-            || source.contains("\nview {")
-            || source.contains("\nview{")
-            || source.starts_with("view {")
-            || source.starts_with("view{")
+        // Only detect as component if "view" is followed by "{" (not just any "view" word)
+        source.contains("view {")
+            || source.contains("view{")
+            || source.contains("\nview ") && (source.contains("view {") || source.contains("view{"))
     } else {
         false
     };
@@ -828,20 +825,21 @@ fn compile_file(
             let module_path = path.join("::");
 
             // Handle item imports: ./main::Args -> compile ./main, not ./main::Args
+            // Also handle braced imports: ./message::{A, B, C} -> compile ./message
             // Split at the last :: to separate module from item
             let module_to_compile = if module_path.contains("::") {
-                // Check if this looks like a module::Item import
+                // Check if this looks like a module::Item import or module::{...} import
                 let parts: Vec<&str> = module_path.rsplitn(2, "::").collect();
                 if parts.len() == 2 {
                     let potential_item = parts[0];
                     let module_part = parts[1];
 
-                    // If the last part starts with uppercase, it's likely a type import
-                    // e.g., ./main::Args, ./types::Config
+                    // If the last part starts with uppercase or {, it's likely a type/braced import
+                    // e.g., ./main::Args, ./types::Config, ./message::{A, B, C}
                     if potential_item
                         .chars()
                         .next()
-                        .is_some_and(|c| c.is_uppercase())
+                        .is_some_and(|c| c.is_uppercase() || c == '{')
                     {
                         module_part.to_string()
                     } else {

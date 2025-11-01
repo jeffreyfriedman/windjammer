@@ -70,6 +70,17 @@ pub fn type_to_rust(type_: &Type) -> String {
             format!("({})", rust_types.join(", "))
         }
         Type::Infer => "_".to_string(), // Type inference placeholder
+        Type::FunctionPointer {
+            params,
+            return_type,
+        } => {
+            let param_strs: Vec<String> = params.iter().map(type_to_rust).collect();
+            if let Some(ret) = return_type {
+                format!("fn({}) -> {}", param_strs.join(", "), type_to_rust(ret))
+            } else {
+                format!("fn({})", param_strs.join(", "))
+            }
+        }
     }
 }
 

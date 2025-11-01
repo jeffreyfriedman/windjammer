@@ -106,6 +106,17 @@ pub fn format_type(ty: &Type) -> String {
             format!("({})", types_str)
         }
         Type::Infer => "_".to_string(),
+        Type::FunctionPointer {
+            params,
+            return_type,
+        } => {
+            let param_strs: Vec<String> = params.iter().map(format_type).collect();
+            if let Some(ret) = return_type {
+                format!("fn({}) -> {}", param_strs.join(", "), format_type(ret))
+            } else {
+                format!("fn({})", param_strs.join(", "))
+            }
+        }
     }
 }
 

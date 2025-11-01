@@ -2,7 +2,7 @@
 
 use std::time
 use std::collections::HashMap
-use std::sync.{Arc, RwLock}
+use std::sync::{Arc, RwLock}
 use std::thread
 use std::log
 
@@ -58,17 +58,17 @@ impl HeartbeatManager {
     }
     
     pub fn start(self) {
-        let mut running = self.running.write()
-        *running = true
+        let mut running = self.running.write();
+        *running = true;
         drop(running)
         
         let heartbeats = self.last_heartbeats.clone()
         let timeout = self.timeout_seconds
         let interval = self.interval_seconds
-        let running_flag = self.running.clone()
+        let running_flag = self.running.clone();
         
         // Spawn background thread to check heartbeats
-        thread.spawn(|| {
+        thread {
             log.info("Heartbeat monitor started", {
                 "interval_seconds": interval,
                 "timeout_seconds": timeout,
@@ -113,16 +113,16 @@ impl HeartbeatManager {
                 }
                 
                 // Sleep for interval
-                thread.sleep_seconds(interval)
+                thread::sleep_seconds(interval)
             }
             
             log.info("Heartbeat monitor stopped")
-        })
+        }
     }
     
     pub fn stop(self) {
-        let mut running = self.running.write()
-        *running = false
+        let mut running = self.running.write();
+        *running = false;
         
         log.info("Heartbeat monitor stopping")
     }
@@ -269,16 +269,18 @@ impl RecoveryManager {
         let mut tokens = self.recovery_tokens.write()
         let now = time.now_unix()
         
-        let expired_users: Vec<string> = tokens
-            .iter()
-            .filter(|(_, token)| now > token.expires_at)
-            .map(|(user_id, _)| user_id.clone())
-            .collect()
+        let mut expired_users = vec![];
         
-        let count = expired_users.len()
+        for (user_id, token) in tokens.iter() {
+            if now > token.expires_at {
+                expired_users.push(user_id.clone())
+            }
+        }
+        
+        let count = expired_users.len();
         
         for user_id in expired_users {
-            tokens.remove(&user_id)
+            tokens.remove(&user_id);
         }
         
         if count > 0 {
