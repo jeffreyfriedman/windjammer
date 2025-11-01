@@ -2,7 +2,7 @@
 
 use std::db
 use std::log
-use ../models/user.{User, RegisterRequest}
+use ../models/user::{User, RegisterRequest}
 
 // Create a new user
 pub async fn create(conn: Connection, req: RegisterRequest, password_hash: string) -> Result<User, Error> {

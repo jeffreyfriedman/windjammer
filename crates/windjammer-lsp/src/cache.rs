@@ -65,6 +65,7 @@ impl Default for CacheIndex {
     }
 }
 
+#[allow(dead_code)]
 impl CacheIndex {
     /// Create a new empty cache index
     pub fn new() -> Self {
@@ -125,6 +126,7 @@ pub struct CacheManager {
     enabled: bool,
 }
 
+#[allow(dead_code)]
 impl CacheManager {
     /// Create a new cache manager
     pub fn new(cache_dir: Option<PathBuf>) -> Self {
@@ -285,6 +287,7 @@ impl CacheManager {
 
 /// Cache statistics
 #[derive(Debug, Clone)]
+#[allow(dead_code)]
 pub struct CacheStats {
     pub enabled: bool,
     pub entries: usize,
@@ -415,7 +418,7 @@ mod tests {
         let manager = CacheManager::new(None);
         // Without a valid cache directory, it should work but be disabled
         // or have default cache enabled
-        assert!(manager.index.len() == 0);
+        assert!(manager.index.is_empty());
     }
 
     #[test]

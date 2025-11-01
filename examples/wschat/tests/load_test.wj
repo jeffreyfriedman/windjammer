@@ -5,7 +5,7 @@ use std::thread
 use std::time
 use std::log
 use std::collections::Vec
-use std::sync.{Arc, Mutex}
+use std::sync::{Arc, Mutex}
 
 @derive(Debug, Clone)
 struct LoadTestConfig {
@@ -217,12 +217,11 @@ pub fn print_results(results: LoadTestResults) {
     println!("\n=========================\n")
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*
-    
-    #[test]
-    async fn test_100_connections() {
+// Tests module
+// TODO: Implement proper test framework support
+
+@test
+async fn test_100_connections() {
         let config = LoadTestConfig {
             server_url: "ws://localhost:8080/ws",
             target_connections: 100,
@@ -235,10 +234,10 @@ mod tests {
         
         assert!(results.successful_connections >= 95)  // At least 95% success
         assert!(results.p99_latency_ms < 100.0)  // p99 < 100ms
-    }
-    
-    #[test]
-    async fn test_1000_connections() {
+}
+
+@test
+async fn test_1000_connections() {
         let config = LoadTestConfig {
             server_url: "ws://localhost:8080/ws",
             target_connections: 1000,
@@ -251,7 +250,6 @@ mod tests {
         
         assert!(results.successful_connections >= 950)  // At least 95% success
         assert!(results.p99_latency_ms < 200.0)  // p99 < 200ms
-    }
 }
 
 // CLI entry point
