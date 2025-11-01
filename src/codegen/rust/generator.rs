@@ -2104,6 +2104,11 @@ impl CodeGenerator {
                     return format!("{}{}({})", obj_str, turbofish, args.join(", "));
                 }
 
+                // Special case: substring(start, end) -> &text[start..end]
+                if method == "substring" && args.len() == 2 {
+                    return format!("&{}[{}..{}]", obj_str, args[0], args[1]);
+                }
+
                 // Determine separator: :: for static calls, . for instance methods
                 // - Type/Module (starts with uppercase): use ::
                 // - Variable (starts with lowercase): use .
