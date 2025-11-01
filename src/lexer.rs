@@ -155,6 +155,8 @@ pub struct Lexer {
     input: Vec<char>,
     position: usize,
     current_char: Option<char>,
+    line: usize,
+    column: usize,
 }
 
 impl Lexer {
@@ -166,10 +168,20 @@ impl Lexer {
             input: chars,
             position: 0,
             current_char,
+            line: 1,
+            column: 1,
         }
     }
 
     fn advance(&mut self) {
+        // Track newlines for line/column tracking
+        if self.current_char == Some('\n') {
+            self.line += 1;
+            self.column = 1;
+        } else {
+            self.column += 1;
+        }
+
         self.position += 1;
         self.current_char = self.input.get(self.position).copied();
     }
