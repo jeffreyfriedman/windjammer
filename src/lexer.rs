@@ -206,6 +206,9 @@ impl Lexer {
             if ch.is_ascii_digit() {
                 num_str.push(ch);
                 self.advance();
+            } else if ch == '_' {
+                // Skip underscores in numeric literals (e.g., 1_000_000)
+                self.advance();
             } else if ch == '.' && !is_float && self.peek(1).is_some_and(|c| c.is_ascii_digit()) {
                 is_float = true;
                 num_str.push(ch);
@@ -304,6 +307,30 @@ impl Lexer {
                 Token::StringLiteral(String::new())
             }
         }
+    }
+
+    fn read_raw_string(&mut self) -> Token {
+        // Skip r#"
+        self.advance(); // r
+        self.advance(); // #
+        self.advance(); // "
+
+        let mut content = String::new();
+
+        // Read until we find "#
+        while let Some(ch) = self.current_char {
+            if ch == '"' && self.peek(1) == Some('#') {
+                // Found closing "#
+                self.advance(); // "
+                self.advance(); // #
+                break;
+            } else {
+                content.push(ch);
+                self.advance();
+            }
+        }
+
+        Token::StringLiteral(content)
     }
 
     fn read_char(&mut self) -> Token {
@@ -423,6 +450,10 @@ impl Lexer {
             Some('/') if self.peek(1) == Some('/') => {
                 self.skip_comment();
                 return self.next_token();
+            }
+            Some('r') if self.peek(1) == Some('#') && self.peek(2) == Some('"') => {
+                // Raw string literal: r#"..."#
+                self.read_raw_string()
             }
             Some('"') => self.read_string(),
             Some('\'') => self.read_char(),

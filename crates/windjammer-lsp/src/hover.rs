@@ -202,6 +202,17 @@ impl HoverProvider {
                 s
             }
             Type::Infer => "_".to_string(),
+            Type::FunctionPointer {
+                params,
+                return_type,
+            } => {
+                let param_strs: Vec<String> = params.iter().map(|t| self.format_type(t)).collect();
+                if let Some(ret) = return_type {
+                    format!("fn({}) -> {}", param_strs.join(", "), self.format_type(ret))
+                } else {
+                    format!("fn({})", param_strs.join(", "))
+                }
+            }
         }
     }
 }
