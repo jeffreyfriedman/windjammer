@@ -192,7 +192,8 @@ impl SemanticTokensProvider {
             | WJType::Float
             | WJType::Bool
             | WJType::String
-            | WJType::Infer => return,
+            | WJType::Infer
+            | WJType::FunctionPointer { .. } => return,
         };
 
         if let Ok(pos) = self.find_identifier_position(type_name, 0) {

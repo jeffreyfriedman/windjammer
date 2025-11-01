@@ -538,36 +538,75 @@ impl ComponentParser {
         // Extract tokens from current position to next delimiter
         let start = self.pos;
         let mut depth = 0;
+        let mut brace_depth = 0; // Track braces separately for if/match/loop expressions
         while self.pos < self.tokens.len() {
             match self.current_token() {
                 Token::LParen | Token::LBracket => {
                     depth += 1;
                     self.advance();
                 }
-                Token::LBrace if depth > 0 => {
-                    depth += 1;
-                    self.advance();
+                Token::LBrace => {
+                    if depth > 0 || brace_depth > 0 {
+                        // Inside parens/brackets or already in a brace block
+                        brace_depth += 1;
+                        self.advance();
+                    } else {
+                        // Check if this is part of an if/match/loop expression
+                        // by scanning backwards for control flow keywords
+                        let mut found_control_flow = false;
+                        for i in (start..self.pos).rev() {
+                            match &self.tokens[i] {
+                                Token::If
+                                | Token::Else
+                                | Token::Match
+                                | Token::Loop
+                                | Token::While
+                                | Token::For => {
+                                    found_control_flow = true;
+                                    break;
+                                }
+                                // Stop searching if we hit a delimiter
+                                Token::Comma | Token::Semicolon => break,
+                                _ => continue,
+                            }
+                        }
+
+                        if found_control_flow {
+                            // This brace is part of a control flow expression
+                            brace_depth += 1;
+                            self.advance();
+                        } else {
+                            // Stop at opening brace at depth 0 (start of HTML block)
+                            break;
+                        }
+                    }
                 }
-                Token::LBrace if depth == 0 => {
-                    // Stop at opening brace at depth 0 (start of block)
-                    break;
+                Token::RBrace => {
+                    if brace_depth > 0 {
+                        brace_depth -= 1;
+                        self.advance();
+                    } else if depth == 0 {
+                        break;
+                    } else {
+                        self.advance();
+                    }
                 }
-                Token::RParen | Token::RBrace | Token::RBracket => {
+                Token::RParen | Token::RBracket => {
                     if depth == 0 {
                         break;
                     }
                     depth -= 1;
                     self.advance();
                 }
-                Token::Comma | Token::Colon if depth == 0 => break,
+                Token::Comma | Token::Colon if depth == 0 && brace_depth == 0 => break,
                 Token::Eof => break,
                 // Stop at decorators, keywords, and other top-level constructs
                 Token::Decorator(_) | Token::Fn | Token::Struct | Token::Enum | Token::Impl
-                    if depth == 0 =>
+                    if depth == 0 && brace_depth == 0 =>
                 {
                     break
                 }
-                Token::Ident(name) if depth == 0 && name == "view" => break,
+                Token::Ident(name) if depth == 0 && brace_depth == 0 && name == "view" => break,
                 _ => {
                     self.advance();
                 }

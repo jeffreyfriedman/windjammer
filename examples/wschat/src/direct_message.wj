@@ -1,11 +1,11 @@
 // Direct messaging (1-to-1 chat) for wschat
 
 use std::collections::HashMap
-use std::sync.{Arc, RwLock}
+use std::sync::{Arc, RwLock}
 use std::time
 use std::log
 
-use ./message.{ClientMessage, ServerMessage, InternalMessage}
+use ./message::{ClientMessage, ServerMessage, InternalMessage}
 use ./storage::MessageStore
 
 // Direct message manager for handling 1-to-1 conversations

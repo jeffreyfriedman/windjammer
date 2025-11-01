@@ -34,7 +34,7 @@ pub fn execute(
 
     // Parse target string
     let target = match target_str.to_lowercase().as_str() {
-        "rust" => crate::CompilationTarget::Wasm, // Use Wasm target for now (generates Rust)
+        "rust" => crate::CompilationTarget::Rust,
         "javascript" | "js" => {
             // Use new JavaScript backend
             use crate::codegen::backend::{CodegenConfig, Target};

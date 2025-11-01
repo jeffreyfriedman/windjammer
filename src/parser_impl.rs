@@ -90,6 +90,10 @@ pub enum Type {
     MutableReference(Box<Type>),
     Tuple(Vec<Type>), // Tuple type: (T1, T2, T3)
     Infer,            // Type inference placeholder: _
+    FunctionPointer {
+        params: Vec<Type>,
+        return_type: Option<Box<Type>>,
+    }, // Function pointer: fn(int, string) -> bool
 }
 
 // Type parameter with optional trait bounds
@@ -519,6 +523,22 @@ impl Parser {
             Type::Associated(base, name) => format!("{}::{}", base, name),
             Type::TraitObject(trait_name) => format!("dyn {}", trait_name),
             Type::Infer => "_".to_string(),
+            Type::FunctionPointer {
+                params,
+                return_type,
+            } => {
+                let param_strs: Vec<String> =
+                    params.iter().map(|t| self.type_to_string(t)).collect();
+                if let Some(ret) = return_type {
+                    format!(
+                        "fn({}) -> {}",
+                        param_strs.join(", "),
+                        self.type_to_string(ret)
+                    )
+                } else {
+                    format!("fn({})", param_strs.join(", "))
+                }
+            }
         }
     }
 
@@ -1118,6 +1138,14 @@ impl Parser {
                     self.advance();
                 }
             }
+        } else if self.current_token() == &Token::DotDot {
+            // Handle .. token (lexer generates this for ..)
+            path_str.push_str("..");
+            self.advance();
+            if self.current_token() == &Token::Slash {
+                path_str.push('/');
+                self.advance();
+            }
         }
 
         // Parse the rest of the path (identifiers separated by :: or /)
@@ -1448,6 +1476,12 @@ impl Parser {
                     });
                 } else {
                     // Simple identifier parameter
+                    // Optional: consume 'mut' keyword (for backward compatibility)
+                    // In Windjammer, owned parameters are auto-mutable, so 'mut' is redundant
+                    if self.current_token() == &Token::Mut {
+                        self.advance();
+                    }
+
                     let name = if let Token::Ident(n) = self.current_token() {
                         let name = n.clone();
                         self.advance();
@@ -1569,6 +1603,36 @@ impl Parser {
                     self.expect(Token::RBracket)?;
                     // [T] without size is a dynamic array (Vec)
                     Type::Vec(inner)
+                }
+            }
+            Token::Fn => {
+                // Function pointer type: fn(int, string) -> bool
+                self.advance(); // consume 'fn'
+                self.expect(Token::LParen)?;
+
+                let mut params = Vec::new();
+                while self.current_token() != &Token::RParen {
+                    params.push(self.parse_type()?);
+
+                    if self.current_token() == &Token::Comma {
+                        self.advance();
+                    } else {
+                        break;
+                    }
+                }
+
+                self.expect(Token::RParen)?;
+
+                let return_type = if self.current_token() == &Token::Arrow {
+                    self.advance();
+                    Some(Box::new(self.parse_type()?))
+                } else {
+                    None
+                };
+
+                Type::FunctionPointer {
+                    params,
+                    return_type,
                 }
             }
             Token::LParen => {
@@ -1830,10 +1894,33 @@ impl Parser {
             };
 
             let data = if self.current_token() == &Token::LParen {
+                // Tuple-style variant: Variant(Type)
                 self.advance();
                 let type_ = self.parse_type()?;
                 self.expect(Token::RParen)?;
                 Some(type_)
+            } else if self.current_token() == &Token::LBrace {
+                // Struct-style variant: Variant { field1: Type1, field2: Type2 }
+                // For now, we'll parse this as a tuple containing a struct type
+                // TODO: Extend EnumVariant to properly represent struct-style variants
+                self.advance(); // consume {
+
+                // Skip the struct fields for now - just consume until we hit }
+                let mut depth = 1;
+                while depth > 0 && self.current_token() != &Token::Eof {
+                    match self.current_token() {
+                        Token::LBrace => depth += 1,
+                        Token::RBrace => depth -= 1,
+                        _ => {}
+                    }
+                    if depth > 0 {
+                        self.advance();
+                    }
+                }
+                self.expect(Token::RBrace)?;
+
+                // Represent as None for now - struct-style variants don't have a single type
+                None
             } else {
                 None
             };
@@ -1882,8 +1969,32 @@ impl Parser {
             Token::For => self.parse_for(),
             Token::Loop => self.parse_loop(),
             Token::While => self.parse_while(),
-            Token::Thread => self.parse_thread(),
-            Token::Async => self.parse_async(),
+            Token::Thread => {
+                // Check if this is a thread block or a module path (thread::...)
+                if self.peek(1) == Some(&Token::LBrace) {
+                    self.parse_thread()
+                } else {
+                    // It's an expression like thread::spawn() or thread::sleep()
+                    let expr = self.parse_expression()?;
+                    if self.current_token() == &Token::Semicolon {
+                        self.advance();
+                    }
+                    Ok(Statement::Expression(expr))
+                }
+            }
+            Token::Async => {
+                // Check if this is an async block or a module path (async::...)
+                if self.peek(1) == Some(&Token::LBrace) {
+                    self.parse_async()
+                } else {
+                    // It's an expression like async::something()
+                    let expr = self.parse_expression()?;
+                    if self.current_token() == &Token::Semicolon {
+                        self.advance();
+                    }
+                    Ok(Statement::Expression(expr))
+                }
+            }
             Token::Defer => self.parse_defer(),
             Token::Break => {
                 self.advance();
@@ -1954,7 +2065,13 @@ impl Parser {
                             value,
                         })
                     }
-                    _ => Ok(Statement::Expression(expr)),
+                    _ => {
+                        // Optionally consume semicolon after expression statement
+                        if self.current_token() == &Token::Semicolon {
+                            self.advance();
+                        }
+                        Ok(Statement::Expression(expr))
+                    }
                 }
             }
         }
@@ -2341,46 +2458,100 @@ impl Parser {
                 let name = name.clone();
                 self.advance();
 
-                // Check if it's a qualified enum variant: Result.Ok(x)
-                if self.current_token() == &Token::Dot {
-                    self.advance();
-                    if let Token::Ident(variant) = self.current_token() {
-                        let variant = variant.clone();
-                        self.advance();
-
-                        // Check for binding: Result.Ok(x) or Result.Ok(_)
-                        let binding = if self.current_token() == &Token::LParen {
-                            self.advance();
-                            let b = match self.current_token() {
-                                Token::Underscore => {
-                                    self.advance();
-                                    EnumPatternBinding::Wildcard
-                                }
-                                Token::Ident(name) => {
-                                    let name = name.clone();
-                                    self.advance();
-                                    EnumPatternBinding::Named(name)
-                                }
-                                _ => EnumPatternBinding::None,
-                            };
-                            self.expect(Token::RParen)?;
-                            b
-                        } else {
-                            EnumPatternBinding::None
-                        };
-
-                        Ok(Pattern::EnumVariant(
-                            format!("{}.{}", name, variant),
-                            binding,
-                        ))
+                // Check if it's a qualified enum variant: Result.Ok(x) or ClientMessage::Ping
+                if self.current_token() == &Token::Dot || self.current_token() == &Token::ColonColon
+                {
+                    let separator = if self.current_token() == &Token::Dot {
+                        "."
                     } else {
-                        Err("Expected variant name".to_string())
-                    }
-                } else if self.current_token() == &Token::LParen {
-                    // Unqualified enum variant with parameter: Some(x), Ok(value), Err(e), Some(_)
+                        "::"
+                    };
                     self.advance();
 
-                    // Handle underscore (Some(_)), identifier (Some(x)), or mut identifier (Some(mut x))
+                    // Get variant name - must be an identifier
+                    let variant = if let Token::Ident(v) = self.current_token() {
+                        v.clone()
+                    } else {
+                        return Err(format!(
+                            "Expected variant name after {}, got {:?}",
+                            separator,
+                            self.current_token()
+                        ));
+                    };
+                    self.advance();
+
+                    // Check for binding: Result.Ok(x) or Result.Ok(_) or Result.Ok(true)
+                    let binding = if self.current_token() == &Token::LParen {
+                        self.advance();
+                        let b = match self.current_token() {
+                            Token::Underscore => {
+                                self.advance();
+                                EnumPatternBinding::Wildcard
+                            }
+                            Token::Ident(name) => {
+                                let name = name.clone();
+                                self.advance();
+                                EnumPatternBinding::Named(name)
+                            }
+                            Token::BoolLiteral(_)
+                            | Token::IntLiteral(_)
+                            | Token::StringLiteral(_)
+                            | Token::CharLiteral(_) => {
+                                // Literal pattern inside enum variant: Ok(true), Err(404), etc.
+                                // Parse the literal pattern recursively
+                                let _pattern = self.parse_pattern()?;
+                                // For now, treat literal patterns as wildcards in enum bindings
+                                // TODO: Properly support literal patterns in enum variants
+                                EnumPatternBinding::Wildcard
+                            }
+                            Token::LBrace => {
+                                // Struct-like enum variant: Variant { field1, field2 }
+                                // For now, just consume the whole thing and treat as wildcard
+                                // TODO: Properly parse struct patterns
+                                let mut depth = 1;
+                                self.advance(); // consume {
+                                while depth > 0 && self.current_token() != &Token::Eof {
+                                    match self.current_token() {
+                                        Token::LBrace => depth += 1,
+                                        Token::RBrace => depth -= 1,
+                                        _ => {}
+                                    }
+                                    self.advance();
+                                }
+                                EnumPatternBinding::Wildcard
+                            }
+                            _ => EnumPatternBinding::None,
+                        };
+                        if self.current_token() == &Token::RParen {
+                            self.expect(Token::RParen)?;
+                        }
+                        b
+                    } else if self.current_token() == &Token::LBrace {
+                        // Struct-like enum variant without parens: Variant { field1, field2 }
+                        let mut depth = 1;
+                        self.advance(); // consume {
+                        while depth > 0 && self.current_token() != &Token::Eof {
+                            match self.current_token() {
+                                Token::LBrace => depth += 1,
+                                Token::RBrace => depth -= 1,
+                                _ => {}
+                            }
+                            self.advance();
+                        }
+                        EnumPatternBinding::Wildcard
+                    } else {
+                        EnumPatternBinding::None
+                    };
+
+                    Ok(Pattern::EnumVariant(
+                        format!("{}{}{}", name, separator, variant),
+                        binding,
+                    ))
+                } else if self.current_token() == &Token::LParen {
+                    // Unqualified enum variant with parameter: Some(x), Ok(value), Err(e), Some(_), Ok((a, b))
+                    self.advance();
+
+                    // Handle underscore (Some(_)), identifier (Some(x)), mut identifier (Some(mut x)), or nested patterns (Ok((a, b)))
                     let binding = match self.current_token() {
                         Token::Underscore => {
                             self.advance();
@@ -2403,6 +2574,23 @@ impl Parser {
                             let b = b.clone();
                             self.advance();
                             EnumPatternBinding::Named(b)
+                        }
+                        Token::LParen => {
+                            // Nested pattern like Ok((a, b))
+                            // Parse as a tuple pattern and convert to string representation
+                            let nested_pattern = self.parse_pattern()?;
+                            // Convert the pattern to a string for now
+                            // TODO: Extend EnumPatternBinding to support nested patterns
+                            EnumPatternBinding::Named(Self::pattern_to_string(&nested_pattern))
+                        }
+                        Token::BoolLiteral(_)
+                        | Token::IntLiteral(_)
+                        | Token::StringLiteral(_)
+                        | Token::CharLiteral(_) => {
+                            // Literal pattern inside enum variant: Ok(true), Err(404), etc.
+                            // Parse the literal pattern and convert to string
+                            let pattern = self.parse_pattern()?;
+                            EnumPatternBinding::Named(Self::pattern_to_string(&pattern))
                         }
                         _ => {
                             return Err(format!(
@@ -2666,7 +2854,7 @@ impl Parser {
                 // and continue to postfix operators
                 Expression::Identifier(qualified_name)
             }
-            _ => return self.parse_primary_expression(),
+            _ => self.parse_primary_expression()?,
         };
 
         // Handle postfix operators (., [, etc.) before binary operators
@@ -2954,22 +3142,39 @@ impl Parser {
     fn parse_primary_expression(&mut self) -> Result<Expression, String> {
         let mut expr = match self.current_token() {
             Token::Thread => {
-                // Thread block: thread { ... }
-                self.advance();
-                self.expect(Token::LBrace)?;
-                let body = self.parse_block_statements()?;
-                self.expect(Token::RBrace)?;
-                // Wrap in a statement expression
-                Expression::Block(vec![Statement::Thread { body }])
+                // Check if this is a thread block or a module path
+                if self.peek(1) == Some(&Token::LBrace) {
+                    // Thread block: thread { ... }
+                    self.advance();
+                    self.expect(Token::LBrace)?;
+                    let body = self.parse_block_statements()?;
+                    self.expect(Token::RBrace)?;
+                    // Wrap in a statement expression
+                    Expression::Block(vec![Statement::Thread { body }])
+                } else {
+                    // Module path like thread::sleep_seconds
+                    // Parse as identifier and let postfix operators handle ::
+                    let name = "thread".to_string();
+                    self.advance();
+                    Expression::Identifier(name)
+                }
             }
             Token::Async => {
-                // Async block: async { ... }
-                self.advance();
-                self.expect(Token::LBrace)?;
-                let body = self.parse_block_statements()?;
-                self.expect(Token::RBrace)?;
-                // Wrap in a statement expression
-                Expression::Block(vec![Statement::Async { body }])
+                // Check if this is an async block or a module path
+                if self.peek(1) == Some(&Token::LBrace) {
+                    // Async block: async { ... }
+                    self.advance();
+                    self.expect(Token::LBrace)?;
+                    let body = self.parse_block_statements()?;
+                    self.expect(Token::RBrace)?;
+                    // Wrap in a statement expression
+                    Expression::Block(vec![Statement::Async { body }])
+                } else {
+                    // Module path like async::something
+                    let name = "async".to_string();
+                    self.advance();
+                    Expression::Identifier(name)
+                }
             }
             Token::LeftArrow => {
                 // Channel receive: <-ch
@@ -3128,45 +3333,78 @@ impl Parser {
 
                 // Check for struct literal
                 // Only parse as struct literal if the name looks like a type (starts with uppercase)
+                // AND the next tokens look like struct literal syntax (field: value or field,)
                 // This avoids ambiguity in contexts like "for item in items { ... }"
                 let looks_like_type = qualified_name
                     .chars()
                     .next()
                     .is_some_and(|c| c.is_uppercase());
 
-                if looks_like_type && self.current_token() == &Token::LBrace {
+                let looks_like_struct_literal =
+                    if looks_like_type && self.current_token() == &Token::LBrace {
+                        // Lookahead: check if the first token after { looks like a field name
+                        // followed by : or , or }
+                        if self.position + 1 < self.tokens.len() {
+                            match &self.tokens[self.position + 1] {
+                                Token::Ident(_) | Token::RBrace => {
+                                    // Could be struct literal: { field: ... } or { field, ... } or { }
+                                    if self.position + 2 < self.tokens.len() {
+                                        matches!(
+                                            &self.tokens[self.position + 2],
+                                            Token::Colon | Token::Comma | Token::RBrace
+                                        )
+                                    } else {
+                                        true
+                                    }
+                                }
+                                _ => false,
+                            }
+                        } else {
+                            false
+                        }
+                    } else {
+                        false
+                    };
+
+                if looks_like_struct_literal {
                     self.advance();
                     let mut fields = Vec::new();
 
                     while self.current_token() != &Token::RBrace {
-                        if let Token::Ident(field_name) = self.current_token() {
-                            let field_name = field_name.clone();
-                            self.advance();
-
-                            let field_value = if self.current_token() == &Token::Colon {
-                                // Regular syntax: field: value
-                                self.advance();
-                                self.parse_expression()?
-                            } else {
-                                // Shorthand syntax: field (implicitly field: field)
-                                Expression::Identifier(field_name.clone())
-                            };
-
-                            fields.push((field_name, field_value));
-
-                            if self.current_token() == &Token::Comma {
-                                self.advance();
-                                // Allow trailing comma
-                                if self.current_token() == &Token::RBrace {
-                                    break;
-                                }
-                            } else if self.current_token() != &Token::RBrace {
-                                return Err(
-                                    "Expected comma or closing brace in struct literal".to_string()
-                                );
+                        // Allow identifiers or keywords as field names
+                        let field_name = match self.current_token() {
+                            Token::Ident(name) => name.clone(),
+                            Token::Async => "async".to_string(),
+                            Token::Thread => "thread".to_string(),
+                            Token::Type => "type".to_string(),
+                            Token::Self_ => "self".to_string(),
+                            tok => {
+                                return Err(format!("Expected field name in struct literal, got {:?} at position {}", tok, self.position));
                             }
+                        };
+                        self.advance();
+
+                        let field_value = if self.current_token() == &Token::Colon {
+                            // Regular syntax: field: value
+                            self.advance();
+                            self.parse_expression()?
                         } else {
-                            return Err("Expected field name in struct literal".to_string());
+                            // Shorthand syntax: field (implicitly field: field)
+                            Expression::Identifier(field_name.clone())
+                        };
+
+                        fields.push((field_name, field_value));
+
+                        if self.current_token() == &Token::Comma {
+                            self.advance();
+                            // Allow trailing comma
+                            if self.current_token() == &Token::RBrace {
+                                break;
+                            }
+                        } else if self.current_token() != &Token::RBrace {
+                            return Err(
+                                    format!("Expected comma or closing brace in struct literal, got {:?} at position {}", self.current_token(), self.position)
+                                );
                         }
                     }
 
@@ -3591,6 +3829,15 @@ impl Parser {
                 // Wrap in a block with a return statement
                 Expression::Block(vec![Statement::Return(return_value.map(|b| *b))])
             }
+            // Allow certain keywords as identifiers in expression context (e.g., HTML attributes)
+            Token::For => {
+                self.advance();
+                Expression::Identifier("for".to_string())
+            }
+            Token::Type => {
+                self.advance();
+                Expression::Identifier("type".to_string())
+            }
             _ => {
                 return Err(format!(
                     "Unexpected token in expression: {:?} (at token position {})",
@@ -4013,6 +4260,29 @@ impl Parser {
                 } else {
                     "_or_pattern".to_string()
                 }
+            }
+        }
+    }
+
+    // Helper: Convert a pattern to a string representation for enum bindings
+    fn pattern_to_string(pattern: &Pattern) -> String {
+        match pattern {
+            Pattern::Identifier(name) => name.clone(),
+            Pattern::Wildcard => "_".to_string(),
+            Pattern::Tuple(patterns) => {
+                let parts: Vec<String> = patterns.iter().map(Self::pattern_to_string).collect();
+                format!("({})", parts.join(", "))
+            }
+            Pattern::Reference(inner) => format!("&{}", Self::pattern_to_string(inner)),
+            Pattern::EnumVariant(name, binding) => match binding {
+                EnumPatternBinding::None => name.clone(),
+                EnumPatternBinding::Named(b) => format!("{}({})", name, b),
+                EnumPatternBinding::Wildcard => format!("{}(_)", name),
+            },
+            Pattern::Literal(lit) => format!("{:?}", lit),
+            Pattern::Or(patterns) => {
+                let parts: Vec<String> = patterns.iter().map(Self::pattern_to_string).collect();
+                parts.join(" | ")
             }
         }
     }
