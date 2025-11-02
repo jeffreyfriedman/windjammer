@@ -1370,12 +1370,18 @@ impl CodeGenerator {
                         output.push_str(&self.type_to_rust(t));
                         output.push_str(" = ");
 
-                        // Auto-convert string literals to String if type is String
+                        // Auto-convert &str to String if type is String
                         let mut value_str = self.generate_expression(value);
-                        if matches!(value, Expression::Literal(Literal::String(_))) {
-                            let is_string_type = matches!(t, Type::String)
-                                || matches!(t, Type::Custom(name) if name == "String");
-                            if is_string_type {
+                        let is_string_type = matches!(t, Type::String)
+                            || matches!(t, Type::Custom(name) if name == "String");
+                        
+                        // Convert string literals OR identifiers to String when target is String
+                        if is_string_type {
+                            let should_convert = matches!(value, 
+                                Expression::Literal(Literal::String(_)) | 
+                                Expression::Identifier(_)
+                            );
+                            if should_convert {
                                 value_str = format!("{}.to_string()", value_str);
                             }
                         }
@@ -1391,12 +1397,18 @@ impl CodeGenerator {
                         output.push_str(&self.type_to_rust(t));
                         output.push_str(" = ");
 
-                        // Auto-convert string literals to String if type is String
+                        // Auto-convert &str to String if type is String
                         let mut value_str = self.generate_expression(value);
-                        if matches!(value, Expression::Literal(Literal::String(_))) {
-                            let is_string_type = matches!(t, Type::String)
-                                || matches!(t, Type::Custom(name) if name == "String");
-                            if is_string_type {
+                        let is_string_type = matches!(t, Type::String)
+                            || matches!(t, Type::Custom(name) if name == "String");
+                        
+                        // Convert string literals OR identifiers to String when target is String
+                        if is_string_type {
+                            let should_convert = matches!(value, 
+                                Expression::Literal(Literal::String(_)) | 
+                                Expression::Identifier(_)
+                            );
+                            if should_convert {
                                 value_str = format!("{}.to_string()", value_str);
                             }
                         }
@@ -2182,8 +2194,9 @@ impl CodeGenerator {
 
                 // SPECIAL CASE: .slice() method is our desugared slice syntax [start..end]
                 // Convert it back to proper Rust slice syntax
+                // For strings, we need to add & to get &str (a reference)
                 if method == "slice" && args.len() == 2 {
-                    return format!("{}[{}..{}]", obj_str, args[0], args[1]);
+                    return format!("&{}[{}..{}]", obj_str, args[0], args[1]);
                 }
 
                 // PHASE 2 OPTIMIZATION: Eliminate unnecessary .clone() calls
@@ -2321,6 +2334,16 @@ impl CodeGenerator {
             }
             Expression::Index { object, index } => {
                 let obj_str = self.generate_expression(object);
+                
+                // Special case: if index is a Range, this is slice syntax
+                // text[0..5] -> &text[0..5]
+                if let Expression::Range { start, end, inclusive } = &**index {
+                    let start_str = self.generate_expression(start);
+                    let end_str = self.generate_expression(end);
+                    let range_op = if *inclusive { "..=" } else { ".." };
+                    return format!("&{}[{}{}{}]", obj_str, start_str, range_op, end_str);
+                }
+                
                 let idx_str = self.generate_expression(index);
                 format!("{}[{}]", obj_str, idx_str)
             }
@@ -2387,7 +2410,19 @@ impl CodeGenerator {
                         args.iter().map(|e| self.generate_expression(e)).collect()
                     }
                 } else {
-                    args.iter().map(|e| self.generate_expression(e)).collect()
+                    // Special case: if this is println!/eprintln!/print!/eprint! with a single non-literal arg,
+                    // wrap it with "{}" to make it valid Rust: println!(var) -> println!("{}", var)
+                    if (name == "println"
+                        || name == "eprintln"
+                        || name == "print"
+                        || name == "eprint")
+                        && args.len() == 1
+                        && !matches!(&args[0], Expression::Literal(Literal::String(_)))
+                    {
+                        vec!["\"{}\"".to_string(), self.generate_expression(&args[0])]
+                    } else {
+                        args.iter().map(|e| self.generate_expression(e)).collect()
+                    }
                 };
 
                 let (open, close) = match delimiter {
