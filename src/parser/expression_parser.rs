@@ -869,8 +869,39 @@ impl Parser {
                 let mut parameters = Vec::new();
 
                 while self.current_token() != &Token::Pipe {
-                    // Handle patterns like &x, &mut x, or just x
+                    // Handle patterns like &x, &mut x, (a, b), or just x
                     let param_name = match self.current_token() {
+                        Token::LParen => {
+                            // Tuple destructuring: |(a, b)| or |(a, b, c)|
+                            self.advance();
+                            let mut tuple_parts = Vec::new();
+
+                            while self.current_token() != &Token::RParen {
+                                if let Token::Ident(name) = self.current_token() {
+                                    tuple_parts.push(name.clone());
+                                    self.advance();
+                                } else {
+                                    return Err(format!(
+                                        "Expected identifier in tuple pattern (at token position {})",
+                                        self.position
+                                    ));
+                                }
+
+                                if self.current_token() == &Token::Comma {
+                                    self.advance();
+                                } else if self.current_token() != &Token::RParen {
+                                    return Err(format!(
+                                        "Expected ',' or ')' in tuple pattern (at token position {})",
+                                        self.position
+                                    ));
+                                }
+                            }
+
+                            self.expect(Token::RParen)?;
+
+                            // Format as tuple pattern: (a, b)
+                            format!("({})", tuple_parts.join(", "))
+                        }
                         Token::Ampersand => {
                             self.advance();
                             // Skip optional 'mut'
