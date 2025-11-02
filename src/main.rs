@@ -14,7 +14,7 @@ pub mod optimizer;
 pub mod parser; // Parser module (refactored structure)
 pub mod parser_impl; // Parser implementation (being migrated to parser/)
 pub mod parser_recovery;
-pub mod source_map;
+pub mod source_map; // Source map for error message translation
 pub mod stdlib_scanner;
 
 // UI component compilation
