@@ -76,16 +76,21 @@ $ cd build && cargo check
 - ❌ `@timing` decorator (not implemented)
 
 **Blocking Issues:**
-1. **`go` keyword not implemented** - `error: cannot find value 'go'`
+1. ~~**`go` keyword not implemented**~~ → **FIXED**: Updated to use `thread { }` blocks
 2. **Decorators not fully functional** - `@command`, `@arg`, `@timing`
 3. **Match expressions** - Some pattern matching issues
-4. **Channel/concurrency primitives** - Not yet implemented
+4. **Type inference issues** - Some cases need explicit annotations
 
 **To Fix:**
-- Implement `go` blocks → spawn async/threaded tasks
+- ~~Implement `go` blocks~~ → **DONE**: Already implemented as `thread { }` and `async { }`
 - Implement decorator expansion for `@command` → clap derive
 - Implement `@arg` → clap field attributes
-- Add mpsc channel support
+- Improve type inference for complex scenarios
+
+**Note on Concurrency:** 
+- Windjammer uses `thread { }` → `std::thread::spawn(move || { })`
+- And `async { }` → `tokio::spawn(async move { })`
+- NOT using `go` keyword (that was old syntax)
 
 ---
 
@@ -177,29 +182,32 @@ cargo check
 
 ## 🐛 **Critical Blocking Issues**
 
-### Issue 1: `go` Blocks Not Implemented
+### ~~Issue 1: `go` Blocks Not Implemented~~ ✅ RESOLVED
 
-**Severity:** HIGH  
-**Impact:** Blocks concurrency examples  
-**Examples Affected:** cli_tool, wschat
+**Status:** ✅ **RESOLVED** - Already implemented as `thread { }` and `async { }` blocks
 
-**Description:**
+**Windjammer Concurrency Model:**
 ```windjammer
-go {
+// Thread-based concurrency (blocking I/O, CPU-bound work)
+thread {
     // code here
 }
-```
-Should generate:
-```rust
-std::thread::spawn(|| {
-    // code here
-});
+// Generates: std::thread::spawn(move || { ... })
+
+// Async concurrency (non-blocking I/O)
+async {
+    // code here  
+}
+// Generates: tokio::spawn(async move { ... })
 ```
 
-**Implementation Needed:**
-- Parser support for `go` statement
-- AST node for `Go { body: Vec<Statement> }`
-- Codegen to `std::thread::spawn` or `tokio::spawn`
+**Implementation Status:**
+- ✅ Parser support complete (`src/parser/statement_parser.rs`)
+- ✅ AST nodes complete (`Statement::Thread`, `Statement::Async`)
+- ✅ Codegen complete (`src/codegen/rust/generator.rs`)
+- ✅ Used in production examples (`wjfind`, `wschat`)
+
+**Note:** The old `go { }` syntax was from an early prototype and has been replaced.
 
 ---
 
@@ -255,11 +263,11 @@ Some complex pattern matching cases are not handled correctly.
 - [ ] Create more simple examples
 - [ ] Test all basic features
 
-### Phase 2: Implement `go` Blocks
-1. Add `go` keyword to lexer
-2. Add `Statement::Go` to AST
-3. Implement codegen for thread spawning
-4. Test with cli_tool example
+### ~~Phase 2: Implement `go` Blocks~~ ✅ COMPLETE
+1. ~~Add `go` keyword to lexer~~ → Using `thread`/`async` keywords (already in lexer)
+2. ~~Add `Statement::Go` to AST~~ → `Statement::Thread` and `Statement::Async` exist
+3. ~~Implement codegen~~ → Complete (generates `thread::spawn` and `tokio::spawn`)
+4. ~~Test with cli_tool~~ → Updated cli_tool to use `thread { }` syntax
 
 ### Phase 3: Implement Decorators
 1. Expand `@command` → `#[derive(Parser)]`
