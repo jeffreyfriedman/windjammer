@@ -95,12 +95,12 @@ fn main() -> Result<(), Error> {
     
     let file_count = args.files.len()
     
-    // Spawn worker goroutines
+    // Spawn worker threads
     for file in args.files {
         let tx = tx.clone()
         let args_copy = args.clone()
         
-        go {
+        thread {
             let result = process_file(file, &args_copy)
             tx.send(result).unwrap()
         }
