@@ -1911,8 +1911,20 @@ impl CodeGenerator {
                 // Extract function name for signature lookup
                 let func_name = self.extract_function_name(function);
 
-                // Special case: convert print() to println!()
-                if func_name == "print" {
+                // Special case: convert print/println/eprintln/eprint() to macros
+                if func_name == "print"
+                    || func_name == "println"
+                    || func_name == "eprintln"
+                    || func_name == "eprint"
+                {
+                    let macro_name = func_name.clone();
+
+                    // For print() -> println!(), otherwise keep the same name
+                    let target_macro = if macro_name == "print" {
+                        "println".to_string()
+                    } else {
+                        macro_name.clone()
+                    };
                     // Check if the first argument is a format! macro (from string interpolation)
                     if let Some((_, first_arg)) = arguments.first() {
                         if let Expression::MacroInvocation {
@@ -1936,7 +1948,7 @@ impl CodeGenerator {
                                     format!(", {}", format_args.join(", "))
                                 };
 
-                                return format!("println!({}{})", format_str, args_str);
+                                return format!("{}!({}{})", target_macro, format_str, args_str);
                             }
                         }
 
@@ -1987,7 +1999,8 @@ impl CodeGenerator {
                                 };
 
                                 return format!(
-                                    "println!(\"{}\"{})",
+                                    "{}!(\"{}\"{})",
+                                    target_macro,
                                     format_str.replace('\\', "\\\\").replace('"', "\\\""),
                                     args_str
                                 );
@@ -2000,7 +2013,7 @@ impl CodeGenerator {
                         .iter()
                         .map(|(_label, arg)| self.generate_expression(arg))
                         .collect();
-                    return format!("println!({})", args.join(", "));
+                    return format!("{}!({})", target_macro, args.join(", "));
                 }
 
                 // Special case: convert assert() to assert!()

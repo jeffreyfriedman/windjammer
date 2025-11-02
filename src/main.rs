@@ -979,12 +979,42 @@ fn create_cargo_toml_with_deps(
     // If ANY stdlib module is used, add windjammer-runtime
     if !imported_modules.is_empty() {
         // Add windjammer-runtime dependency (path-based for now)
+        // Search upward for the windjammer root directory
         let windjammer_runtime_path = if let Ok(manifest_dir) = env::var("CARGO_MANIFEST_DIR") {
             PathBuf::from(manifest_dir).join("crates/windjammer-runtime")
         } else {
-            env::current_dir()
-                .unwrap_or_else(|_| PathBuf::from("."))
-                .join("crates/windjammer-runtime")
+            // Start from current directory and search upward
+            let mut current = env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
+            let mut found = false;
+
+            // Try current directory first
+            if current
+                .join("crates/windjammer-runtime/Cargo.toml")
+                .exists()
+            {
+                current.join("crates/windjammer-runtime")
+            } else {
+                // Search upward (up to 5 levels)
+                for _ in 0..5 {
+                    if let Some(parent) = current.parent() {
+                        if parent.join("crates/windjammer-runtime/Cargo.toml").exists() {
+                            current = parent.to_path_buf();
+                            found = true;
+                            break;
+                        }
+                        current = parent.to_path_buf();
+                    } else {
+                        break;
+                    }
+                }
+
+                if found {
+                    current.join("crates/windjammer-runtime")
+                } else {
+                    // Fallback: assume we're in the root
+                    PathBuf::from("./crates/windjammer-runtime")
+                }
+            }
         };
 
         deps.push(format!(
@@ -1042,13 +1072,39 @@ fn create_cargo_toml_with_deps(
         match crate_name.as_str() {
             "windjammer_ui" => {
                 // Use absolute path to the workspace crate
-                // Try to find it relative to current directory or use CARGO_MANIFEST_DIR
+                // Search upward for the windjammer root directory
                 let windjammer_ui_path = if let Ok(manifest_dir) = env::var("CARGO_MANIFEST_DIR") {
                     PathBuf::from(manifest_dir).join("crates/windjammer-ui")
                 } else {
-                    env::current_dir()
-                        .unwrap_or_else(|_| PathBuf::from("."))
-                        .join("crates/windjammer-ui")
+                    // Start from current directory and search upward
+                    let mut current = env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
+                    let mut found = false;
+
+                    // Try current directory first
+                    if current.join("crates/windjammer-ui/Cargo.toml").exists() {
+                        current.join("crates/windjammer-ui")
+                    } else {
+                        // Search upward (up to 5 levels)
+                        for _ in 0..5 {
+                            if let Some(parent) = current.parent() {
+                                if parent.join("crates/windjammer-ui/Cargo.toml").exists() {
+                                    current = parent.to_path_buf();
+                                    found = true;
+                                    break;
+                                }
+                                current = parent.to_path_buf();
+                            } else {
+                                break;
+                            }
+                        }
+
+                        if found {
+                            current.join("crates/windjammer-ui")
+                        } else {
+                            // Fallback: assume we're in the root
+                            PathBuf::from("./crates/windjammer-ui")
+                        }
+                    }
                 };
 
                 external_deps.push(format!(
@@ -1061,9 +1117,41 @@ fn create_cargo_toml_with_deps(
                     if let Ok(manifest_dir) = env::var("CARGO_MANIFEST_DIR") {
                         PathBuf::from(manifest_dir).join("crates/windjammer-ui-macro")
                     } else {
-                        env::current_dir()
-                            .unwrap_or_else(|_| PathBuf::from("."))
-                            .join("crates/windjammer-ui-macro")
+                        // Start from current directory and search upward
+                        let mut current = env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
+                        let mut found = false;
+
+                        // Try current directory first
+                        if current
+                            .join("crates/windjammer-ui-macro/Cargo.toml")
+                            .exists()
+                        {
+                            current.join("crates/windjammer-ui-macro")
+                        } else {
+                            // Search upward (up to 5 levels)
+                            for _ in 0..5 {
+                                if let Some(parent) = current.parent() {
+                                    if parent
+                                        .join("crates/windjammer-ui-macro/Cargo.toml")
+                                        .exists()
+                                    {
+                                        current = parent.to_path_buf();
+                                        found = true;
+                                        break;
+                                    }
+                                    current = parent.to_path_buf();
+                                } else {
+                                    break;
+                                }
+                            }
+
+                            if found {
+                                current.join("crates/windjammer-ui-macro")
+                            } else {
+                                // Fallback: assume we're in the root
+                                PathBuf::from("./crates/windjammer-ui-macro")
+                            }
+                        }
                     };
 
                 external_deps.push(format!(
