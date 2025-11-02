@@ -535,7 +535,7 @@ impl Analyzer {
                         // Not an explicit reference, use inference
                     }
                 }
-                
+
                 let inferred = func
                     .inferred_ownership
                     .get(&param.name)

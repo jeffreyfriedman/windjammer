@@ -1374,12 +1374,12 @@ impl CodeGenerator {
                         let mut value_str = self.generate_expression(value);
                         let is_string_type = matches!(t, Type::String)
                             || matches!(t, Type::Custom(name) if name == "String");
-                        
+
                         // Convert string literals OR identifiers to String when target is String
                         if is_string_type {
-                            let should_convert = matches!(value, 
-                                Expression::Literal(Literal::String(_)) | 
-                                Expression::Identifier(_)
+                            let should_convert = matches!(
+                                value,
+                                Expression::Literal(Literal::String(_)) | Expression::Identifier(_)
                             );
                             if should_convert {
                                 value_str = format!("{}.to_string()", value_str);
@@ -1401,12 +1401,12 @@ impl CodeGenerator {
                         let mut value_str = self.generate_expression(value);
                         let is_string_type = matches!(t, Type::String)
                             || matches!(t, Type::Custom(name) if name == "String");
-                        
+
                         // Convert string literals OR identifiers to String when target is String
                         if is_string_type {
-                            let should_convert = matches!(value, 
-                                Expression::Literal(Literal::String(_)) | 
-                                Expression::Identifier(_)
+                            let should_convert = matches!(
+                                value,
+                                Expression::Literal(Literal::String(_)) | Expression::Identifier(_)
                             );
                             if should_convert {
                                 value_str = format!("{}.to_string()", value_str);
@@ -2334,16 +2334,21 @@ impl CodeGenerator {
             }
             Expression::Index { object, index } => {
                 let obj_str = self.generate_expression(object);
-                
+
                 // Special case: if index is a Range, this is slice syntax
                 // text[0..5] -> &text[0..5]
-                if let Expression::Range { start, end, inclusive } = &**index {
+                if let Expression::Range {
+                    start,
+                    end,
+                    inclusive,
+                } = &**index
+                {
                     let start_str = self.generate_expression(start);
                     let end_str = self.generate_expression(end);
                     let range_op = if *inclusive { "..=" } else { ".." };
                     return format!("&{}[{}{}{}]", obj_str, start_str, range_op, end_str);
                 }
-                
+
                 let idx_str = self.generate_expression(index);
                 format!("{}[{}]", obj_str, idx_str)
             }
