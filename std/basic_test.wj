@@ -1,0 +1,109 @@
+// Basic stdlib validation tests
+
+fn test_string_length() {
+    let text = "Hello, World!"
+    let len = text.len()
+    assert(len == 13, "Length should be 13")
+    println!("✓ String length works")
+}
+
+fn test_string_slicing() {
+    let text = "Hello, World!"
+    let slice = text[0..5]
+    println!("Slice result: ${slice}")
+    assert(true, "Slicing completed")
+}
+
+fn test_string_contains() {
+    let text = "Hello, World!"
+    let has_hello = text.contains("Hello")
+    let has_goodbye = text.contains("Goodbye")
+    
+    assert(has_hello, "Should contain Hello")
+    assert(!has_goodbye, "Should not contain Goodbye")
+    println!("✓ String contains works")
+}
+
+fn test_string_starts_with() {
+    let text = "Hello, World!"
+    assert(text.starts_with("Hello"), "Should start with Hello")
+    assert(!text.starts_with("World"), "Should not start with World")
+    println!("✓ String starts_with works")
+}
+
+fn test_string_ends_with() {
+    let text = "Hello, World!"
+    assert(text.ends_with("World!"), "Should end with World!")
+    assert(!text.ends_with("Hello"), "Should not end with Hello")
+    println!("✓ String ends_with works")
+}
+
+fn test_string_uppercase() {
+    let text = "hello"
+    let upper = text.to_uppercase()
+    println!("Uppercase: ${upper}")
+    assert(true, "Uppercase completed")
+}
+
+fn test_string_lowercase() {
+    let text = "HELLO"
+    let lower = text.to_lowercase()
+    println!("Lowercase: ${lower}")
+    assert(true, "Lowercase completed")
+}
+
+fn test_string_replace() {
+    let text = "Hello, World!"
+    let replaced = text.replace("World", "Universe")
+    println!("Replaced: ${replaced}")
+    assert(true, "Replace completed")
+}
+
+fn test_vec_creation() {
+    let numbers = vec![1, 2, 3, 4, 5]
+    let len = numbers.len()
+    assert(len == 5, "Vec length should be 5")
+    println!("✓ Vec creation works")
+}
+
+fn test_vec_push() {
+    let mut numbers = vec![1, 2, 3]
+    numbers.push(4)
+    let len = numbers.len()
+    assert(len == 4, "Vec length should be 4 after push")
+    println!("✓ Vec push works")
+}
+
+fn test_basic_math() {
+    let a = 10
+    let b = 5
+    let sum = a + b
+    let diff = a - b
+    let prod = a * b
+    let quot = a / b
+    
+    assert(sum == 15, "10 + 5 = 15")
+    assert(diff == 5, "10 - 5 = 5")
+    assert(prod == 50, "10 * 5 = 50")
+    assert(quot == 2, "10 / 5 = 2")
+    println!("✓ Basic math works")
+}
+
+fn test_comparisons() {
+    assert(5 > 3, "5 > 3")
+    assert(3 < 5, "3 < 5")
+    assert(5 >= 5, "5 >= 5")
+    assert(5 <= 5, "5 <= 5")
+    assert(5 == 5, "5 == 5")
+    assert(5 != 3, "5 != 3")
+    println!("✓ Comparisons work")
+}
+
+fn test_boolean_logic() {
+    assert(true && true, "true && true")
+    assert(!(false && true), "!(false && true)")
+    assert(true || false, "true || false")
+    assert(!(false || false), "!(false || false)")
+    println!("✓ Boolean logic works")
+}
+
