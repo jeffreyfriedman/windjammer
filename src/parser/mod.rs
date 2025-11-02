@@ -12,6 +12,9 @@
 // AST module - extracted from parser_impl.rs
 pub mod ast;
 
+// Type parsing module - extracted from parser_impl.rs
+pub mod type_parser;
+
 // Re-export AST types for convenience
 pub use ast::*;
 
@@ -20,7 +23,6 @@ pub use crate::parser_impl::Parser;
 
 // TODO: Uncomment these as we create the modules
 // pub mod core;
-// pub mod types;
 // pub mod patterns;
 // pub mod expressions;
 // pub mod statements;
