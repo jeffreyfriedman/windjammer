@@ -9,11 +9,16 @@
 //! This is a work in progress - modules will be added incrementally as we
 //! refactor the monolithic parser_impl.rs file.
 
-// Re-export everything from parser_impl for now to maintain backward compatibility
-pub use crate::parser_impl::*;
+// AST module - extracted from parser_impl.rs
+pub mod ast;
+
+// Re-export AST types for convenience
+pub use ast::*;
+
+// Re-export everything else from parser_impl for now to maintain backward compatibility
+pub use crate::parser_impl::Parser;
 
 // TODO: Uncomment these as we create the modules
-// pub mod ast;
 // pub mod core;
 // pub mod types;
 // pub mod patterns;
