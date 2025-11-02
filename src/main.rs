@@ -11,8 +11,8 @@ pub mod error_mapper;
 pub mod inference;
 pub mod lexer;
 pub mod optimizer;
-pub mod parser_impl; // Parser implementation (TODO: refactor into modules)
-pub use parser_impl as parser; // Re-export for backward compatibility
+pub mod parser; // Parser module (refactored structure)
+pub mod parser_impl; // Parser implementation (being migrated to parser/)
 pub mod parser_recovery;
 pub mod source_map;
 pub mod stdlib_scanner;
