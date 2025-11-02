@@ -519,6 +519,23 @@ impl Analyzer {
             .parameters
             .iter()
             .map(|param| {
+                // CRITICAL FIX: Check the actual type annotation FIRST
+                // If parameter is explicitly declared as &T or &mut T, respect that
+                use crate::parser::Type;
+                match &param.type_ {
+                    Type::Reference(_) => {
+                        // Parameter is explicitly &T - must borrow
+                        return OwnershipMode::Borrowed;
+                    }
+                    Type::MutableReference(_) => {
+                        // Parameter is explicitly &mut T - must mut borrow
+                        return OwnershipMode::MutBorrowed;
+                    }
+                    _ => {
+                        // Not an explicit reference, use inference
+                    }
+                }
+                
                 let inferred = func
                     .inferred_ownership
                     .get(&param.name)
