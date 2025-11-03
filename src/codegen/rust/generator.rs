@@ -119,6 +119,12 @@ impl CodeGenerator {
             }
             ("test", _) => "test".to_string(),
             ("async", _) => "async".to_string(),
+            // HTTP method decorators for Axum
+            ("get", _) => "axum::routing::get".to_string(),
+            ("post", _) => "axum::routing::post".to_string(),
+            ("put", _) => "axum::routing::put".to_string(),
+            ("delete", _) => "axum::routing::delete".to_string(),
+            ("patch", _) => "axum::routing::patch".to_string(),
             // Pass through other decorators as-is
             (other, _) => other.to_string(),
         }
@@ -511,7 +517,25 @@ impl CodeGenerator {
                 continue;
             }
 
-            if decorator.name == "auto" {
+            if decorator.name == "command" {
+                // Special handling for @command decorator - generates clap attributes
+                // @command(name: "app", about: "Description") -> #[derive(Parser)] + #[command(...)]
+                output.push_str("#[derive(Parser)]\n");
+
+                if !decorator.arguments.is_empty() {
+                    output.push_str("#[command(");
+                    let args: Vec<String> = decorator
+                        .arguments
+                        .iter()
+                        .map(|(key, expr)| {
+                            format!("{} = {}", key, self.generate_expression_immut(expr))
+                        })
+                        .collect();
+                    output.push_str(&args.join(", "));
+                    output.push_str(")]\n");
+                }
+                continue;
+            } else if decorator.name == "auto" {
                 // Special handling for @auto decorator
                 let traits = if decorator.arguments.is_empty() {
                     // Smart inference: no arguments, so infer traits based on field types
@@ -578,16 +602,51 @@ impl CodeGenerator {
         for field in &s.fields {
             // Generate decorators for the field (convert to Rust attributes)
             for decorator in &field.decorators {
-                output.push_str(&format!("    #[{}(", decorator.name));
-                let args: Vec<String> = decorator
-                    .arguments
-                    .iter()
-                    .map(|(key, expr)| {
-                        format!("{} = {}", key, self.generate_expression_immut(expr))
-                    })
-                    .collect();
-                output.push_str(&args.join(", "));
-                output.push_str(")]\n");
+                // Handle @arg decorator specially - it's a clap field attribute
+                if decorator.name == "arg" {
+                    output.push_str("    #[arg(");
+                    let args: Vec<String> = decorator
+                        .arguments
+                        .iter()
+                        .map(|(key, expr)| {
+                            // Handle special cases for clap arguments
+                            match key.as_str() {
+                                "short" => {
+                                    // short takes a character literal
+                                    format!("short = {}", self.generate_expression_immut(expr))
+                                }
+                                "long" => {
+                                    // long takes a string literal
+                                    format!("long = {}", self.generate_expression_immut(expr))
+                                }
+                                "default_value" => {
+                                    format!(
+                                        "default_value = {}",
+                                        self.generate_expression_immut(expr)
+                                    )
+                                }
+                                "help" => {
+                                    format!("help = {}", self.generate_expression_immut(expr))
+                                }
+                                _ => format!("{} = {}", key, self.generate_expression_immut(expr)),
+                            }
+                        })
+                        .collect();
+                    output.push_str(&args.join(", "));
+                    output.push_str(")]\n");
+                } else {
+                    // Generic decorator handling
+                    output.push_str(&format!("    #[{}(", decorator.name));
+                    let args: Vec<String> = decorator
+                        .arguments
+                        .iter()
+                        .map(|(key, expr)| {
+                            format!("{} = {}", key, self.generate_expression_immut(expr))
+                        })
+                        .collect();
+                    output.push_str(&args.join(", "));
+                    output.push_str(")]\n");
+                }
             }
             let pub_keyword = if field.is_pub { "pub " } else { "" };
             output.push_str(&format!(
