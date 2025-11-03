@@ -22,13 +22,17 @@ pub mod db;
 pub mod encoding;
 pub mod env;
 pub mod game;
+pub mod io;
 pub mod log_mod;
 pub mod math;
+pub mod path;
 pub mod process;
 pub mod random;
 pub mod regex_mod;
 pub mod strings;
+pub mod sync;
 pub mod testing;
+pub mod thread;
 pub mod time;
 pub mod ui;
 
