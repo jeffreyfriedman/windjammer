@@ -1168,6 +1168,11 @@ fn create_cargo_toml_with_deps(
 
     deps.extend(external_deps);
 
+    // Add optimization dependencies (always included for now)
+    // TODO: Only add these if actually used by checking CodeGenerator flags
+    deps.push("smallvec = \"1.13\"".to_string());
+    deps.push("serde = { version = \"1.0\", features = [\"derive\"] }".to_string());
+
     deps.sort();
     deps.dedup();
 
