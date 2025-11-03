@@ -1,35 +1,107 @@
-pub mod matcher {
-use smallvec::{SmallVec, smallvec};
 
+
+
+
+pub mod config {
 use windjammer_runtime::regex_mod;
 
-use crate::config::Config::*;
-
-use crate::search::Match::*;
+use crate::main::Args::*;
 
 
-#[inline]
-pub fn find_match(mut line: &str, mut line_num: i64, mut file: &str, mut config: &Config) -> Option<Match> {
-    let captures = config::pattern.captures(line)?;
-    let match_obj = captures.get(0)?;
-    let match_text = match_obj.as_str();
-    let column = (match_obj.start() + 1) as i64;
-    Some(Match { file: file.clone(), line_number: line_num, column, line_text: line.to_string(), match_text: match_text.to_string(), context_before: vec![], context_after: vec![] })
+#[derive(Debug, Clone)]
+pub struct Config {
+    pub pattern: Regex,
+    pub paths: Vec<String>,
+    pub case_insensitive: bool,
+    pub whole_word: bool,
+    pub line_numbers: bool,
+    pub count_only: bool,
+    pub files_with_matches: bool,
+    pub context_before: i64,
+    pub context_after: i64,
+    pub file_types: Vec<String>,
+    pub exclude_patterns: Vec<String>,
+    pub max_count: Option<i64>,
+    pub threads: i64,
+    pub json: bool,
+    pub use_color: bool,
+    pub search_hidden: bool,
+    pub respect_ignore: bool,
 }
 
 #[inline]
-pub fn find_all_matches(mut line: &str, mut line_num: i64, mut file: &str, mut config: &Config) -> Vec<Match> {
-    let mut matches: SmallVec<[_; 4]> = smallvec![];
-    for capture in config::pattern.captures_iter(line) {
-        match capture.get(0) {
-            Some(match_obj) => {
-                let match_text = match_obj.as_str();
-                let column = (match_obj.start() + 1) as i64;
-                matches.push(Match { file: file.clone(), line_number: line_num, column, line_text: line.to_string(), match_text: match_text.to_string(), context_before: vec![], context_after: vec![] })
-            },
+pub fn from_args(mut args: Args) -> Result<Config, String> {
+    let pattern_str = {
+        if args::whole_word {
+            let escaped = regex::escape(&args::pattern);
+            format!("{}{}{}", "\\b", &escaped, "\\b")
+        } else {
+            args::pattern
+        }
+    };
+    let pattern = {
+        if args::case_insensitive {
+            regex::compile_with_flags(&pattern_str, "i".to_string())?
+        } else {
+            regex::compile(&pattern_str)?
+        }
+    };
+    let use_color = match args::color::as_str().as_str() {
+        "always" => true,
+        "never" => false,
+        _ => std::io::is_terminal(std::io::stdout()),
+    };
+    Ok(Config { pattern, paths: args::paths, case_insensitive: args::case_insensitive, whole_word: args::whole_word, line_numbers: args::line_numbers, count_only: args::count_only, files_with_matches: args::files_with_matches, context_before: args::context_before, context_after: args::context_after, file_types: args::file_types, exclude_patterns: args::exclude, max_count: args::max_count, threads: args::threads, json: args::json, use_color, search_hidden: args::hidden, respect_ignore: !args::no_ignore })
+}
+
+#[inline]
+pub fn get_file_extensions(mut file_type: String) -> Vec<String> {
+    match file_type.as_str() {
+        "rust" => vec!["rs"],
+        "windjammer" | "wj" => vec!["wj"],
+        "python" | "py" => vec!["py", "pyw"],
+        "javascript" | "js" => vec!["js", "jsx", "mjs"],
+        "typescript" | "ts" => vec!["ts", "tsx"],
+        "go" => vec!["go"],
+        "c" => vec!["c", "h"],
+        "cpp" | "c++" => vec!["cpp", "cc", "cxx", "hpp", "hxx"],
+        "java" => vec!["java"],
+        "markdown" | "md" => vec!["md", "markdown"],
+        "json" => vec!["json"],
+        "yaml" | "yml" => vec!["yaml", "yml"],
+        "toml" => vec!["toml"],
+        "xml" => vec!["xml"],
+        "html" => vec!["html", "htm"],
+        "css" => vec!["css", "scss", "sass"],
+        "sql" => vec!["sql"],
+        "shell" | "sh" => vec!["sh", "bash", "zsh"],
+        _ => vec![],
+    }
+}
+
+#[inline]
+pub fn matches_file_type(mut path: &str, mut file_types: &[String]) -> bool {
+    if file_types.is_empty() {
+        return true;
+    }
+    let ext = std::path::extension(path).unwrap_or("");
+    for file_type in file_types {
+        let extensions = get_file_extensions(file_type.clone());
+        if extensions.contains(&ext.to_string()) {
+            return true;
         }
     }
-    matches
+    false
+}
+
+#[inline]
+pub fn should_exclude(mut path: &str, mut exclude_patterns: &[String]) -> bool {
+    for pattern in exclude_patterns {
+        if path.contains(pattern) {
+            return true;
+        }
+    }
+    false
 }
 
 
@@ -188,6 +260,7 @@ pub fn highlight_match(mut line: &str, mut match_text: &str, mut column: i64) ->
 
 }
 
+
 pub mod search {
 use smallvec::{SmallVec, smallvec};
 
@@ -211,14 +284,14 @@ use crate::matcher::*;
 
 
 #[derive(Debug)]
-struct SearchResults {
+pub struct SearchResults {
     pub matches: Vec<Match>,
     pub files_searched: i64,
     pub total_matches: i64,
 }
 
 #[derive(Debug, Clone)]
-struct Match {
+pub struct Match {
     pub file: String,
     pub line_number: i64,
     pub column: i64,
@@ -349,10 +422,6 @@ pub fn add_context(mut match_obj: Match, mut all_lines: &[String], mut lines_bef
 
 
 
-
-
-
-
 pub mod gitignore {
 use smallvec::{SmallVec, smallvec};
 
@@ -363,7 +432,7 @@ use windjammer_runtime::path;
 use windjammer_runtime::collections::HashSet;
 
 
-struct GitignoreRules {
+pub struct GitignoreRules {
     patterns: Vec<String>,
 }
 
@@ -462,7 +531,7 @@ pub fn wildcard_match(&self, mut name: String, mut pattern: &str) -> bool {
 }
 }
 
-struct GitignoreCache {
+pub struct GitignoreCache {
     cache: std::collections::HashMap<String, GitignoreRules>,
 }
 
@@ -487,6 +556,136 @@ pub fn get_rules(&mut self, mut dir: &str) -> GitignoreRules {
 
 }
 
+pub mod main {
+use windjammer_runtime::cli;
+
+use windjammer_runtime::fs;
+
+use windjammer_runtime::io;
+
+use windjammer_runtime::env;
+
+use windjammer_runtime::time;
+
+use windjammer_runtime::log_mod;
+
+use crate::config::*;
+
+use crate::search::*;
+
+use crate::output::*;
+
+use crate::gitignore::*;
+
+
+#[derive(Debug)]
+pub struct Args {
+    pattern: String,
+    paths: Vec<String>,
+    case_insensitive: bool,
+    whole_word: bool,
+    line_numbers: bool,
+    count_only: bool,
+    files_with_matches: bool,
+    context_before: i64,
+    context_after: i64,
+    file_types: Vec<String>,
+    exclude: Vec<String>,
+    max_count: Option<i64>,
+    threads: i64,
+    json: bool,
+    color: String,
+    hidden: bool,
+    no_ignore: bool,
+}
+
+#[inline]
+pub fn parse_args() -> Args {
+    let mut app = cli::new("wjfind".to_string()).version("0.1.0").author("Windjammer Team").about("Fast file search utility - like ripgrep, but in Windjammer!").arg(cli::arg("pattern".to_string()).help("Pattern to search for (regex)").required(true)).arg(cli::arg("paths".to_string()).help("Paths to search (default: current directory)").multiple(true).default_value(".")).arg(cli::flag("case-insensitive".to_string()).short("i").help("Case-insensitive search")).arg(cli::flag("whole-word".to_string()).short("w").help("Match whole words only")).arg(cli::flag("line-numbers".to_string()).short("n").help("Show line numbers")).arg(cli::flag("count".to_string()).short("c").help("Only show count of matches")).arg(cli::flag("files-with-matches".to_string()).short("l").help("Only show files with matches")).arg(cli::option("context-before".to_string()).short("B").help("Lines of context before match").default_value("0")).arg(cli::option("context-after".to_string()).short("A").help("Lines of context after match").default_value("0")).arg(cli::option("context".to_string()).short("C").help("Lines of context before and after match").default_value("0")).arg(cli::option("type".to_string()).short("t").help("Filter by file type (rust, js, py, etc.)").multiple(true)).arg(cli::option("exclude".to_string()).help("Exclude directories or files").multiple(true)).arg(cli::option("max-count".to_string()).short("m").help("Maximum number of matches")).arg(cli::option("threads".to_string()).short("j").help("Number of threads").default_value("0")).arg(cli::flag("json".to_string()).help("Output results as JSON")).arg(cli::option("color".to_string()).help("When to use colors (auto, always, never)").default_value("auto")).arg(cli::flag("hidden".to_string()).help("Search hidden files and directories")).arg(cli::flag("no-ignore".to_string()).help("Don't respect .gitignore files"));
+    let matches = app.get_matches();
+    let pattern = matches.value_of("pattern").unwrap();
+    let paths = matches.values_of("paths").unwrap_or(vec!["."]);
+    let case_insensitive = matches.is_present("case-insensitive");
+    let whole_word = matches.is_present("whole-word");
+    let line_numbers = matches.is_present("line-numbers");
+    let count_only = matches.is_present("count");
+    let files_with_matches = matches.is_present("files-with-matches");
+    let context = matches.value_of("context").unwrap().parse::<i64>().unwrap_or(0);
+    let context_before = {
+        if context > 0 {
+            context
+        } else {
+            matches.value_of("context-before").unwrap().parse::<i64>().unwrap_or(0)
+        }
+    };
+    let context_after = {
+        if context > 0 {
+            context
+        } else {
+            matches.value_of("context-after").unwrap().parse::<i64>().unwrap_or(0)
+        }
+    };
+    let file_types = matches.values_of("type").unwrap_or(vec![]);
+    let exclude = matches.values_of("exclude").unwrap_or(vec![]);
+    let max_count = matches.value_of("max-count").map(move |s| s.parse::<i64>().unwrap());
+    let threads = matches.value_of("threads").unwrap().parse::<i64>().unwrap_or(0);
+    let threads = {
+        if threads == 0 {
+            std::thread::available_parallelism().unwrap_or(4)
+        } else {
+            threads
+        }
+    };
+    let json = matches.is_present("json");
+    let color = matches.value_of("color").unwrap();
+    let hidden = matches.is_present("hidden");
+    let no_ignore = matches.is_present("no-ignore");
+    Args { pattern, paths, case_insensitive, whole_word, line_numbers, count_only, files_with_matches, context_before, context_after, file_types, exclude, max_count, threads, json, color, hidden, no_ignore }
+}
+
+
+}
+
+
+
+
+
+pub mod matcher {
+use smallvec::{SmallVec, smallvec};
+
+use windjammer_runtime::regex_mod;
+
+use crate::config::Config::*;
+
+use crate::search::Match::*;
+
+
+#[inline]
+pub fn find_match(mut line: &str, mut line_num: i64, mut file: &str, mut config: &Config) -> Option<Match> {
+    let captures = config::pattern.captures(line)?;
+    let match_obj = captures.get(0)?;
+    let match_text = match_obj.as_str();
+    let column = (match_obj.start() + 1) as i64;
+    Some(Match { file: file.clone(), line_number: line_num, column, line_text: line.to_string(), match_text: match_text.to_string(), context_before: vec![], context_after: vec![] })
+}
+
+#[inline]
+pub fn find_all_matches(mut line: &str, mut line_num: i64, mut file: &str, mut config: &Config) -> Vec<Match> {
+    let mut matches: SmallVec<[_; 4]> = smallvec![];
+    for capture in config::pattern.captures_iter(line) {
+        match capture.get(0) {
+            Some(match_obj) => {
+                let match_text = match_obj.as_str();
+                let column = (match_obj.start() + 1) as i64;
+                matches.push(Match { file: file.clone(), line_number: line_num, column, line_text: line.to_string(), match_text: match_text.to_string(), context_before: vec![], context_after: vec![] })
+            },
+        }
+    }
+    matches
+}
+
+
+}
 
 
 pub mod walker {
@@ -601,234 +800,6 @@ pub fn is_likely_binary(mut path: &str) -> bool {
     let binary_extensions = vec!["exe", "dll", "so", "dylib", "a", "o", "png", "jpg", "jpeg", "gif", "bmp", "ico", "pdf", "zip", "ta", "gz", "bz2", "xz", "mp3", "mp4", "avi", "mov", "mkv", "wasm", "class", "pyc"];
     let ext = path::extension(&path).unwrap_or("");
     binary_extensions.contains(&ext)
-}
-
-
-}
-
-
-
-
-
-pub mod main {
-use windjammer_runtime::cli;
-
-use windjammer_runtime::fs;
-
-use windjammer_runtime::io;
-
-use windjammer_runtime::env;
-
-use windjammer_runtime::time;
-
-use windjammer_runtime::log_mod;
-
-use crate::config::*;
-
-use crate::search::*;
-
-use crate::output::*;
-
-use crate::gitignore::*;
-
-
-#[derive(Debug)]
-struct Args {
-    pattern: String,
-    paths: Vec<String>,
-    case_insensitive: bool,
-    whole_word: bool,
-    line_numbers: bool,
-    count_only: bool,
-    files_with_matches: bool,
-    context_before: i64,
-    context_after: i64,
-    file_types: Vec<String>,
-    exclude: Vec<String>,
-    max_count: Option<i64>,
-    threads: i64,
-    json: bool,
-    color: String,
-    hidden: bool,
-    no_ignore: bool,
-}
-
-pub fn main() {
-    let args = parse_args();
-    if env::var(&"WJFIND_LOG").is_ok() {
-        log::init("debug".to_string())
-    }
-    let config = config::from_args(args).unwrap_or_else(move |e| {
-        eprintln!("Error: {}", e);
-        std::process::exit(1)
-    });
-    let start = time::now();
-    let results = match search::run(config.clone()) {
-        Ok(r) => r,
-        Err(e) => {
-            eprintln!("Error: {}", e);
-            std::process::exit(1)
-        },
-    };
-    let duration = time::now().duration_since(&start);
-    output::print_results(&results, &config, duration);
-    let exit_code = {
-        if results::matches::is_empty() {
-            1
-        } else {
-            0
-        }
-    };
-    std::process::exit(exit_code)
-}
-
-#[inline]
-pub fn parse_args() -> Args {
-    let mut app = cli::new("wjfind".to_string()).version("0.1.0").author("Windjammer Team").about("Fast file search utility - like ripgrep, but in Windjammer!").arg(cli::arg("pattern".to_string()).help("Pattern to search for (regex)").required(true)).arg(cli::arg("paths".to_string()).help("Paths to search (default: current directory)").multiple(true).default_value(".")).arg(cli::flag("case-insensitive".to_string()).short("i").help("Case-insensitive search")).arg(cli::flag("whole-word".to_string()).short("w").help("Match whole words only")).arg(cli::flag("line-numbers".to_string()).short("n").help("Show line numbers")).arg(cli::flag("count".to_string()).short("c").help("Only show count of matches")).arg(cli::flag("files-with-matches".to_string()).short("l").help("Only show files with matches")).arg(cli::option("context-before".to_string()).short("B").help("Lines of context before match").default_value("0")).arg(cli::option("context-after".to_string()).short("A").help("Lines of context after match").default_value("0")).arg(cli::option("context".to_string()).short("C").help("Lines of context before and after match").default_value("0")).arg(cli::option("type".to_string()).short("t").help("Filter by file type (rust, js, py, etc.)").multiple(true)).arg(cli::option("exclude".to_string()).help("Exclude directories or files").multiple(true)).arg(cli::option("max-count".to_string()).short("m").help("Maximum number of matches")).arg(cli::option("threads".to_string()).short("j").help("Number of threads").default_value("0")).arg(cli::flag("json".to_string()).help("Output results as JSON")).arg(cli::option("color".to_string()).help("When to use colors (auto, always, never)").default_value("auto")).arg(cli::flag("hidden".to_string()).help("Search hidden files and directories")).arg(cli::flag("no-ignore".to_string()).help("Don't respect .gitignore files"));
-    let matches = app.get_matches();
-    let pattern = matches.value_of("pattern").unwrap();
-    let paths = matches.values_of("paths").unwrap_or(vec!["."]);
-    let case_insensitive = matches.is_present("case-insensitive");
-    let whole_word = matches.is_present("whole-word");
-    let line_numbers = matches.is_present("line-numbers");
-    let count_only = matches.is_present("count");
-    let files_with_matches = matches.is_present("files-with-matches");
-    let context = matches.value_of("context").unwrap().parse::<i64>().unwrap_or(0);
-    let context_before = {
-        if context > 0 {
-            context
-        } else {
-            matches.value_of("context-before").unwrap().parse::<i64>().unwrap_or(0)
-        }
-    };
-    let context_after = {
-        if context > 0 {
-            context
-        } else {
-            matches.value_of("context-after").unwrap().parse::<i64>().unwrap_or(0)
-        }
-    };
-    let file_types = matches.values_of("type").unwrap_or(vec![]);
-    let exclude = matches.values_of("exclude").unwrap_or(vec![]);
-    let max_count = matches.value_of("max-count").map(move |s| s.parse::<i64>().unwrap());
-    let threads = matches.value_of("threads").unwrap().parse::<i64>().unwrap_or(0);
-    let threads = {
-        if threads == 0 {
-            std::thread::available_parallelism().unwrap_or(4)
-        } else {
-            threads
-        }
-    };
-    let json = matches.is_present("json");
-    let color = matches.value_of("color").unwrap();
-    let hidden = matches.is_present("hidden");
-    let no_ignore = matches.is_present("no-ignore");
-    Args { pattern, paths, case_insensitive, whole_word, line_numbers, count_only, files_with_matches, context_before, context_after, file_types, exclude, max_count, threads, json, color, hidden, no_ignore }
-}
-
-
-}
-
-pub mod config {
-use windjammer_runtime::regex_mod;
-
-use crate::main::Args::*;
-
-
-#[derive(Debug, Clone)]
-struct Config {
-    pub pattern: Regex,
-    pub paths: Vec<String>,
-    pub case_insensitive: bool,
-    pub whole_word: bool,
-    pub line_numbers: bool,
-    pub count_only: bool,
-    pub files_with_matches: bool,
-    pub context_before: i64,
-    pub context_after: i64,
-    pub file_types: Vec<String>,
-    pub exclude_patterns: Vec<String>,
-    pub max_count: Option<i64>,
-    pub threads: i64,
-    pub json: bool,
-    pub use_color: bool,
-    pub search_hidden: bool,
-    pub respect_ignore: bool,
-}
-
-#[inline]
-pub fn from_args(mut args: Args) -> Result<Config, String> {
-    let pattern_str = {
-        if args::whole_word {
-            let escaped = regex::escape(&args::pattern);
-            format!("{}{}{}", "\\b", &escaped, "\\b")
-        } else {
-            args::pattern
-        }
-    };
-    let pattern = {
-        if args::case_insensitive {
-            regex::compile_with_flags(&pattern_str, "i".to_string())?
-        } else {
-            regex::compile(&pattern_str)?
-        }
-    };
-    let use_color = match args::color::as_str().as_str() {
-        "always" => true,
-        "never" => false,
-        _ => std::io::is_terminal(std::io::stdout()),
-    };
-    Ok(Config { pattern, paths: args::paths, case_insensitive: args::case_insensitive, whole_word: args::whole_word, line_numbers: args::line_numbers, count_only: args::count_only, files_with_matches: args::files_with_matches, context_before: args::context_before, context_after: args::context_after, file_types: args::file_types, exclude_patterns: args::exclude, max_count: args::max_count, threads: args::threads, json: args::json, use_color, search_hidden: args::hidden, respect_ignore: !args::no_ignore })
-}
-
-#[inline]
-pub fn get_file_extensions(mut file_type: String) -> Vec<String> {
-    match file_type.as_str() {
-        "rust" => vec!["rs"],
-        "windjammer" | "wj" => vec!["wj"],
-        "python" | "py" => vec!["py", "pyw"],
-        "javascript" | "js" => vec!["js", "jsx", "mjs"],
-        "typescript" | "ts" => vec!["ts", "tsx"],
-        "go" => vec!["go"],
-        "c" => vec!["c", "h"],
-        "cpp" | "c++" => vec!["cpp", "cc", "cxx", "hpp", "hxx"],
-        "java" => vec!["java"],
-        "markdown" | "md" => vec!["md", "markdown"],
-        "json" => vec!["json"],
-        "yaml" | "yml" => vec!["yaml", "yml"],
-        "toml" => vec!["toml"],
-        "xml" => vec!["xml"],
-        "html" => vec!["html", "htm"],
-        "css" => vec!["css", "scss", "sass"],
-        "sql" => vec!["sql"],
-        "shell" | "sh" => vec!["sh", "bash", "zsh"],
-        _ => vec![],
-    }
-}
-
-#[inline]
-pub fn matches_file_type(mut path: &str, mut file_types: &[String]) -> bool {
-    if file_types.is_empty() {
-        return true;
-    }
-    let ext = std::path::extension(path).unwrap_or("");
-    for file_type in file_types {
-        let extensions = get_file_extensions(file_type.clone());
-        if extensions.contains(&ext.to_string()) {
-            return true;
-        }
-    }
-    false
-}
-
-#[inline]
-pub fn should_exclude(mut path: &str, mut exclude_patterns: &[String]) -> bool {
-    for pattern in exclude_patterns {
-        if path.contains(pattern) {
-            return true;
-        }
-    }
-    false
 }
 
 
