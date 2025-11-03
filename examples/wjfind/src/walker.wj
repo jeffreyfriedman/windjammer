@@ -2,7 +2,6 @@
 
 use std::fs
 use std::path
-use std::collections::Vec
 
 use ./config::Config
 use ./gitignore::GitignoreCache

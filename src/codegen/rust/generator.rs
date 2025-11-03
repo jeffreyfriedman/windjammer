@@ -427,6 +427,17 @@ impl CodeGenerator {
         if full_path.starts_with("std::") {
             let module_name = full_path.strip_prefix("std::").unwrap();
 
+            // Handle Rust stdlib modules that should NOT be mapped to windjammer_runtime
+            // These are native Rust modules that should be used directly
+            if module_name.starts_with("collections::")
+                || module_name.starts_with("cmp::")
+                || module_name == "collections"
+                || module_name == "cmp"
+            {
+                // Pass through to Rust's std library
+                return format!("use std::{};\n", module_name);
+            }
+
             // Map to windjammer_runtime (all stdlib modules are now implemented!)
             let rust_import = match module_name {
                 // Core modules
@@ -438,7 +449,6 @@ impl CodeGenerator {
                 // Additional modules
                 "async" => "windjammer_runtime::async_runtime",
                 "cli" => "windjammer_runtime::cli",
-                "collections" => "windjammer_runtime::collections",
                 "crypto" => "windjammer_runtime::crypto",
                 "csv" => "windjammer_runtime::csv_mod",
                 "db" => "windjammer_runtime::db",
@@ -473,22 +483,39 @@ impl CodeGenerator {
             return String::new();
         }
 
-        // Handle relative imports: ./utils or ../utils
+        // Handle relative imports: ./utils or ../utils or ./config::Config
         if full_path.starts_with("./") || full_path.starts_with("../") {
-            // Extract module name: ./utils -> utils, ../utils/helpers -> helpers
+            // Strip the leading ./ or ../
             let stripped = full_path
                 .strip_prefix("./")
                 .or_else(|| full_path.strip_prefix("../"))
                 .unwrap_or(&full_path);
-            let module_name = stripped.split('/').next_back().unwrap_or(stripped);
 
             // When generating for modules (is_module=true), use crate:: prefix for cross-module imports
             let prefix = if self.is_module { "crate::" } else { "" };
 
-            if let Some(alias_name) = alias {
-                return format!("use {}{} as {};\n", prefix, module_name, alias_name);
+            // Check if this is importing a specific item (e.g., ./config::Config)
+            if stripped.contains("::") {
+                // Split into module path and item
+                let rust_path = stripped.replace('/', "::");
+                // Check if the last segment looks like a type (uppercase)
+                let segments: Vec<&str> = rust_path.split("::").collect();
+                if let Some(last) = segments.last() {
+                    if last.chars().next().is_some_and(|c| c.is_uppercase()) {
+                        // Importing a specific type: ./config::Config -> use crate::config::Config;
+                        return format!("use {}{};\n", prefix, rust_path);
+                    }
+                }
+                // Otherwise, import all from the path
+                return format!("use {}{}::*;\n", prefix, rust_path);
             } else {
-                return format!("use {}{}::*;\n", prefix, module_name);
+                // Module import: ./utils -> use crate::utils::*;
+                let module_name = stripped.split('/').next_back().unwrap_or(stripped);
+                if let Some(alias_name) = alias {
+                    return format!("use {}{} as {};\n", prefix, module_name, alias_name);
+                } else {
+                    return format!("use {}{}::*;\n", prefix, module_name);
+                }
             }
         }
 
