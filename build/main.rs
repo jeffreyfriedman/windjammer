@@ -1,268 +1,3 @@
-
-
-pub mod walker {
-use smallvec::{SmallVec, smallvec};
-
-use windjammer_runtime::fs;
-
-use windjammer_runtime::path;
-
-use crate::config::Config;
-
-use crate::gitignore::GitignoreCache;
-
-
-#[inline]
-pub fn collect_files(mut paths: Vec<String>, mut config: &Config) -> Result<Vec<String>, String> {
-    let mut all_files: SmallVec<[_; 4]> = smallvec![];
-    let mut gitignore_cache = GitignoreCache::new();
-    for path in paths {
-        let files = walk_path(path, &config, &mut gitignore_cache)?;
-        all_files.extend(files);
-    }
-    Ok(all_files)
-}
-
-#[inline]
-pub fn walk_path(mut path: String, mut config: &Config, mut gitignore_cache: &mut GitignoreCache) -> Result<Vec<String>, String> {
-    let mut files: SmallVec<[_; 4]> = smallvec![];
-    if !fs::exists(&path) {
-        return Err(format!("Path does not exist: {}", path));
-    }
-    if fs::is_file(&path) {
-        if should_include_file(&path, &config, &mut gitignore_cache) {
-            files.push(path)
-        }
-        return Ok(files);
-    }
-    if fs::is_dir(&path) {
-        walk_dir(path, &config, &mut files, &mut gitignore_cache)?
-    }
-    Ok(files)
-}
-
-#[inline]
-pub fn walk_dir(mut dir: String, mut config: &Config, mut files: &mut [String], mut gitignore_cache: &mut GitignoreCache) -> Result<(), String> {
-    let entries = fs::read_dir(&dir)?;
-    let gitignore_rules = {
-        if config.respect_ignore {
-            Some(gitignore_cache.get_rules(&dir))
-        } else {
-            None
-        }
-    };
-    for entry in entries {
-        let path = entry.path();
-        let file_name = entry.file_name();
-        if !config.search_hidden && file_name.starts_with(".") {
-            continue;
-        }
-        if should_exclude(&path, &config.exclude_patterns) {
-            continue;
-        }
-        if config.respect_ignore && is_ignored(&file_name) {
-            continue;
-        }
-        if config.respect_ignore && gitignore_rules.is_some() {
-            if gitignore_rules.as_ref().unwrap().is_ignored(&path) {
-                continue;
-            }
-        }
-        if entry.is_dir() {
-            walk_dir(path, &config, &mut files, &mut gitignore_cache)?
-        } else {
-            if entry.is_file() {
-                if should_include_file(&path, &config, &mut gitignore_cache) {
-                    files.push(path)
-                }
-            }
-        }
-    }
-    Ok(())
-}
-
-#[inline]
-pub fn should_include_file(mut path: &str, mut config: &Config, mut gitignore_cache: &mut GitignoreCache) -> bool {
-    if !matches_file_type(path, &config.file_types) {
-        return false;
-    }
-    if config.respect_ignore {
-        let dir = path::parent(&path).unwrap_or(".");
-        let gitignore_rules = gitignore_cache.get_rules(&dir.to_string());
-        if gitignore_rules.is_ignored(path) {
-            return false;
-        }
-    }
-    if is_likely_binary(&path) {
-        return false;
-    }
-    true
-}
-
-#[inline]
-pub fn is_ignored(mut name: &str) -> bool {
-    let ignored_dirs = vec!["target", "node_modules", ".git", ".svn", ".hg", "dist", "build", "__pycache__", ".cache", ".venv", "venv"];
-    ignored_dirs.contains(&name.as_str())
-}
-
-#[inline]
-pub fn is_likely_binary(mut path: &str) -> bool {
-    let binary_extensions = vec!["exe", "dll", "so", "dylib", "a", "o", "png", "jpg", "jpeg", "gif", "bmp", "ico", "pdf", "zip", "ta", "gz", "bz2", "xz", "mp3", "mp4", "avi", "mov", "mkv", "wasm", "class", "pyc"];
-    let ext = path::extension(&path).unwrap_or("");
-    binary_extensions.contains(&ext)
-}
-
-
-}
-
-
-
-pub mod matcher {
-use smallvec::{SmallVec, smallvec};
-
-use windjammer_runtime::regex_mod;
-
-use crate::config::Config;
-
-use crate::search::Match;
-
-
-#[inline]
-pub fn find_match(mut line: &str, mut line_num: i64, mut file: &str, mut config: &Config) -> Option<Match> {
-    let captures = config.pattern.captures(line)?;
-    let match_obj = captures.get(0)?;
-    let match_text = match_obj.as_str();
-    let column = (match_obj.start() + 1) as i64;
-    Some(Match { file: file.clone(), line_number: line_num, column, line_text: line.to_string(), match_text: match_text.to_string(), context_before: vec![], context_after: vec![] })
-}
-
-#[inline]
-pub fn find_all_matches(mut line: &str, mut line_num: i64, mut file: &str, mut config: &Config) -> Vec<Match> {
-    let mut matches: SmallVec<[_; 4]> = smallvec![];
-    for capture in config.pattern.captures_iter(line) {
-        match capture.get(0) {
-            Some(match_obj) => {
-                let match_text = match_obj.as_str();
-                let column = (match_obj.start() + 1) as i64;
-                matches.push(Match { file: file.clone(), line_number: line_num, column, line_text: line.to_string(), match_text: match_text.to_string(), context_before: vec![], context_after: vec![] })
-            },
-        }
-    }
-    matches
-}
-
-
-}
-
-
-
-pub mod config {
-use windjammer_runtime::regex_mod;
-
-use crate::main::Args;
-
-
-#[derive(Debug, Clone)]
-pub struct Config {
-    pub pattern: Regex,
-    pub paths: Vec<String>,
-    pub case_insensitive: bool,
-    pub whole_word: bool,
-    pub line_numbers: bool,
-    pub count_only: bool,
-    pub files_with_matches: bool,
-    pub context_before: i64,
-    pub context_after: i64,
-    pub file_types: Vec<String>,
-    pub exclude_patterns: Vec<String>,
-    pub max_count: Option<i64>,
-    pub threads: i64,
-    pub json: bool,
-    pub use_color: bool,
-    pub search_hidden: bool,
-    pub respect_ignore: bool,
-}
-
-#[inline]
-pub fn from_args(mut args: Args) -> Result<Config, String> {
-    let pattern_str = {
-        if args.whole_word {
-            let escaped = regex::escape(&args.pattern);
-            format!("{}{}{}", "\\b", &escaped, "\\b")
-        } else {
-            args.pattern
-        }
-    };
-    let pattern = {
-        if args.case_insensitive {
-            regex::compile_with_flags(&pattern_str, "i".to_string())?
-        } else {
-            regex::compile(&pattern_str)?
-        }
-    };
-    let use_color = match args.color.as_str() {
-        "always" => true,
-        "never" => false,
-        _ => std::io::is_terminal(std::io::stdout()),
-    };
-    Ok(Config { pattern, paths: args.paths, case_insensitive: args.case_insensitive, whole_word: args.whole_word, line_numbers: args.line_numbers, count_only: args.count_only, files_with_matches: args.files_with_matches, context_before: args.context_before, context_after: args.context_after, file_types: args.file_types, exclude_patterns: args.exclude, max_count: args.max_count, threads: args.threads, json: args.json, use_color, search_hidden: args.hidden, respect_ignore: !args.no_ignore })
-}
-
-#[inline]
-pub fn get_file_extensions(mut file_type: String) -> Vec<String> {
-    match file_type.as_str() {
-        "rust" => vec!["rs"],
-        "windjammer" | "wj" => vec!["wj"],
-        "python" | "py" => vec!["py", "pyw"],
-        "javascript" | "js" => vec!["js", "jsx", "mjs"],
-        "typescript" | "ts" => vec!["ts", "tsx"],
-        "go" => vec!["go"],
-        "c" => vec!["c", "h"],
-        "cpp" | "c++" => vec!["cpp", "cc", "cxx", "hpp", "hxx"],
-        "java" => vec!["java"],
-        "markdown" | "md" => vec!["md", "markdown"],
-        "json" => vec!["json"],
-        "yaml" | "yml" => vec!["yaml", "yml"],
-        "toml" => vec!["toml"],
-        "xml" => vec!["xml"],
-        "html" => vec!["html", "htm"],
-        "css" => vec!["css", "scss", "sass"],
-        "sql" => vec!["sql"],
-        "shell" | "sh" => vec!["sh", "bash", "zsh"],
-        _ => vec![],
-    }
-}
-
-#[inline]
-pub fn matches_file_type(mut path: &str, mut file_types: &[String]) -> bool {
-    if file_types.is_empty() {
-        return true;
-    }
-    let ext = std::path::extension(path).unwrap_or("");
-    for file_type in file_types {
-        let extensions = get_file_extensions(file_type.clone());
-        if extensions.contains(&ext.to_string()) {
-            return true;
-        }
-    }
-    false
-}
-
-#[inline]
-pub fn should_exclude(mut path: &str, mut exclude_patterns: &[String]) -> bool {
-    for pattern in exclude_patterns {
-        if path.contains(pattern) {
-            return true;
-        }
-    }
-    false
-}
-
-
-}
-
-
-
 pub mod output {
 use serde::{Serialize, Deserialize};
 
@@ -416,7 +151,6 @@ pub fn highlight_match(mut line: &str, mut match_text: &str, mut column: i64) ->
 
 }
 
-
 pub mod main {
 use windjammer_runtime::cli;
 
@@ -441,23 +175,23 @@ use crate::gitignore::*;
 
 #[derive(Debug)]
 pub struct Args {
-    pattern: String,
-    paths: Vec<String>,
-    case_insensitive: bool,
-    whole_word: bool,
-    line_numbers: bool,
-    count_only: bool,
-    files_with_matches: bool,
-    context_before: i64,
-    context_after: i64,
-    file_types: Vec<String>,
-    exclude: Vec<String>,
-    max_count: Option<i64>,
-    threads: i64,
-    json: bool,
-    color: String,
-    hidden: bool,
-    no_ignore: bool,
+    pub pattern: String,
+    pub paths: Vec<String>,
+    pub case_insensitive: bool,
+    pub whole_word: bool,
+    pub line_numbers: bool,
+    pub count_only: bool,
+    pub files_with_matches: bool,
+    pub context_before: i64,
+    pub context_after: i64,
+    pub file_types: Vec<String>,
+    pub exclude: Vec<String>,
+    pub max_count: Option<i64>,
+    pub threads: i64,
+    pub json: bool,
+    pub color: String,
+    pub hidden: bool,
+    pub no_ignore: bool,
 }
 
 #[inline]
@@ -507,136 +241,262 @@ pub fn parse_args() -> Args {
 
 }
 
-
-pub mod gitignore {
+pub mod walker {
 use smallvec::{SmallVec, smallvec};
 
 use windjammer_runtime::fs;
 
 use windjammer_runtime::path;
 
-use std::collections::HashSet;
+use crate::config::Config;
+
+use crate::gitignore::GitignoreCache;
 
 
-pub struct GitignoreRules {
-    patterns: Vec<String>,
+#[inline]
+pub fn collect_files(mut paths: Vec<String>, mut config: &Config) -> Result<Vec<String>, String> {
+    let mut all_files: SmallVec<[_; 4]> = smallvec![];
+    let mut gitignore_cache = GitignoreCache::new();
+    for path in paths {
+        let files = walk_path(path, &config, &mut gitignore_cache)?;
+        all_files.extend(files);
+    }
+    Ok(all_files)
 }
 
-impl GitignoreRules {
 #[inline]
-pub fn new() -> Self {
-        GitignoreRules { patterns: vec![] }
-}
-#[inline]
-pub fn load_from_directory(&self, mut dir: String) -> Result<Self, String> {
-        let gitignore_path = path::join(&dir, &".gitignore");
-        if !fs::exists(&gitignore_path) {
-            return Ok(GitignoreRules::new());
+pub fn walk_path(mut path: String, mut config: &Config, mut gitignore_cache: &mut GitignoreCache) -> Result<Vec<String>, String> {
+    let mut files: SmallVec<[_; 4]> = smallvec![];
+    if !fs::exists(&path) {
+        return Err(format!("Path does not exist: {}", path));
+    }
+    if fs::is_file(&path) {
+        if should_include_file(&path, &config, &mut gitignore_cache) {
+            files.push(path)
         }
-        let contents = fs::read_to_string(&gitignore_path)?;
-        let mut patterns: SmallVec<[_; 4]> = smallvec![];
-        for line in contents.lines() {
-            let trimmed = line.trim();
-            if trimmed.is_empty() || trimmed.starts_with("#") {
+        return Ok(files);
+    }
+    if fs::is_dir(&path) {
+        walk_dir(path, &config, &mut files, &mut gitignore_cache)?
+    }
+    Ok(files)
+}
+
+#[inline]
+pub fn walk_dir(mut dir: String, mut config: &Config, mut files: &mut [String], mut gitignore_cache: &mut GitignoreCache) -> Result<(), String> {
+    let entries = fs::read_dir(&dir)?;
+    let gitignore_rules = {
+        if config.respect_ignore {
+            Some(gitignore_cache.get_rules(&dir))
+        } else {
+            None
+        }
+    };
+    for entry in entries {
+        let path = entry.path();
+        let file_name = entry.file_name();
+        if !config.search_hidden && file_name.starts_with(".") {
+            continue;
+        }
+        if should_exclude(&path, &config.exclude_patterns) {
+            continue;
+        }
+        if config.respect_ignore && is_ignored(&file_name) {
+            continue;
+        }
+        if config.respect_ignore && gitignore_rules.is_some() {
+            if gitignore_rules.as_ref().unwrap().is_ignored(&path) {
                 continue;
             }
-            self.patterns.push(trimmed.to_string());
         }
-        Ok(GitignoreRules { patterns })
-}
-#[inline]
-pub fn is_ignored(&self, mut path: &str) -> bool {
-        let name = path::file_name(&path).unwrap_or(path);
-        let path_str = path.clone();
-        for pattern in self.patterns.iter() {
-            if self.matches_pattern(name.clone(), pattern.clone()) || self.matches_pattern(path_str.clone(), pattern.clone()) {
-                return true;
+        if entry.is_dir() {
+            walk_dir(path, &config, &mut files, &mut gitignore_cache)?
+        } else {
+            if entry.is_file() {
+                if should_include_file(&path, &config, &mut gitignore_cache) {
+                    files.push(path)
+                }
             }
         }
-        false
+    }
+    Ok(())
 }
+
 #[inline]
-pub fn matches_pattern(&self, mut name: String, mut pattern: &str) -> bool {
-        if name == pattern {
-            return true;
-        }
-        if pattern.ends_with("/") {
-            let dir_pattern = pattern.trim_end_matches("/");
-            if name == dir_pattern {
-                return true;
-            }
-        }
-        if pattern.contains("*") {
-            return self.wildcard_match(name, pattern);
-        }
-        if pattern.starts_with("*.") {
-            let ext = pattern.trim_start_matches("*.");
-            if name.ends_with(&format!(".{}", ext)) {
-                return true;
-            }
-        }
-        if name.contains(pattern) {
-            return true;
-        }
-        false
-}
-#[inline]
-pub fn wildcard_match(&self, mut name: String, mut pattern: &str) -> bool {
-        let parts: Vec<String> = pattern.split('*').collect();
-        if parts.is_empty() {
+pub fn should_include_file(mut path: &str, mut config: &Config, mut gitignore_cache: &mut GitignoreCache) -> bool {
+    if !matches_file_type(path, &config.file_types) {
+        return false;
+    }
+    if config.respect_ignore {
+        let dir = path::parent(&path).unwrap_or(".");
+        let gitignore_rules = gitignore_cache.get_rules(&dir.to_string());
+        if gitignore_rules.is_ignored(path) {
             return false;
         }
-        if !parts[0].is_empty() && !name.starts_with(parts[0]) {
-            return false;
-        }
-        if parts.len() > 1 {
-            let last = &parts[parts.len() - 1];
-            if !last.is_empty() && !name.ends_with(last) {
-                return false;
-            }
-        }
-        let mut pos = 0;
-        for (i, part) in parts.iter().enumerate() {
-            if part.is_empty() {
-                continue;
-            }
-            if i == 0 {
-                pos = part.len();
-                continue;
-            }
-            match &name[pos..name.len()].find(part) {
-                Some(idx) => {
-                    pos = pos + idx + part.len();
-                },
-                _ => {
-                    return false;
-                },
-            }
-        }
-        true
-}
+    }
+    if is_likely_binary(&path) {
+        return false;
+    }
+    true
 }
 
-pub struct GitignoreCache {
-    cache: std::collections::HashMap<String, GitignoreRules>,
+#[inline]
+pub fn is_ignored(mut name: &str) -> bool {
+    let ignored_dirs = vec!["target", "node_modules", ".git", ".svn", ".hg", "dist", "build", "__pycache__", ".cache", ".venv", "venv"];
+    ignored_dirs.contains(&name.as_str())
 }
 
-impl GitignoreCache {
 #[inline]
-pub fn new() -> Self {
-        GitignoreRules { patterns: vec![] }
+pub fn is_likely_binary(mut path: &str) -> bool {
+    let binary_extensions = vec!["exe", "dll", "so", "dylib", "a", "o", "png", "jpg", "jpeg", "gif", "bmp", "ico", "pdf", "zip", "ta", "gz", "bz2", "xz", "mp3", "mp4", "avi", "mov", "mkv", "wasm", "class", "pyc"];
+    let ext = path::extension(&path).unwrap_or("");
+    binary_extensions.contains(&ext)
 }
+
+
+}
+
+
+
+
+pub mod matcher {
+use smallvec::{SmallVec, smallvec};
+
+use windjammer_runtime::regex_mod;
+
+use crate::config::Config;
+
+use crate::search::Match;
+
+
 #[inline]
-pub fn get_rules(&mut self, mut dir: &str) -> GitignoreRules {
-        match self.cache.get(&dir) {
-            Some(rules) => {
-                return rules.clone();
+pub fn find_match(mut line: &str, mut line_num: i64, mut file: &str, mut config: &Config) -> Option<Match> {
+    let captures = config.pattern.captures(line)?;
+    let match_obj = captures.get(0)?;
+    let match_text = match_obj.as_str();
+    let column = (match_obj.start() + 1) as i64;
+    Some(Match { file: file.clone(), line_number: line_num, column, line_text: line.to_string(), match_text: match_text.to_string(), context_before: vec![], context_after: vec![] })
+}
+
+#[inline]
+pub fn find_all_matches(mut line: &str, mut line_num: i64, mut file: &str, mut config: &Config) -> Vec<Match> {
+    let mut matches: SmallVec<[_; 4]> = smallvec![];
+    for capture in config.pattern.captures_iter(line) {
+        match capture.get(0) {
+            Some(match_obj) => {
+                let match_text = match_obj.as_str();
+                let column = (match_obj.start() + 1) as i64;
+                matches.push(Match { file: file.clone(), line_number: line_num, column, line_text: line.to_string(), match_text: match_text.to_string(), context_before: vec![], context_after: vec![] })
             },
         }
-        let rules = GitignoreRules::load_from_directory(dir.clone()).unwrap_or_else(move |_| GitignoreRules::new());
-        self.cache.insert(dir, rules.clone());
-        rules
+    }
+    matches
 }
+
+
+}
+
+
+pub mod config {
+use windjammer_runtime::regex_mod;
+
+use crate::main::Args;
+
+
+#[derive(Debug, Clone)]
+pub struct Config {
+    pub pattern: Regex,
+    pub paths: Vec<String>,
+    pub case_insensitive: bool,
+    pub whole_word: bool,
+    pub line_numbers: bool,
+    pub count_only: bool,
+    pub files_with_matches: bool,
+    pub context_before: i64,
+    pub context_after: i64,
+    pub file_types: Vec<String>,
+    pub exclude_patterns: Vec<String>,
+    pub max_count: Option<i64>,
+    pub threads: i64,
+    pub json: bool,
+    pub use_color: bool,
+    pub search_hidden: bool,
+    pub respect_ignore: bool,
+}
+
+#[inline]
+pub fn from_args(mut args: Args) -> Result<Config, String> {
+    let pattern_str = {
+        if args.whole_word {
+            let escaped = regex::escape(&args.pattern);
+            format!("{}{}{}", "\\b", &escaped, "\\b")
+        } else {
+            args.pattern
+        }
+    };
+    let pattern = {
+        if args.case_insensitive {
+            regex::compile_with_flags(&pattern_str, "i".to_string())?
+        } else {
+            regex::compile(&pattern_str)?
+        }
+    };
+    let use_color = match args.color.as_str() {
+        "always" => true,
+        "never" => false,
+        _ => std::io::is_terminal(std::io::stdout()),
+    };
+    Ok(Config { pattern, paths: args.paths, case_insensitive: args.case_insensitive, whole_word: args.whole_word, line_numbers: args.line_numbers, count_only: args.count_only, files_with_matches: args.files_with_matches, context_before: args.context_before, context_after: args.context_after, file_types: args.file_types, exclude_patterns: args.exclude, max_count: args.max_count, threads: args.threads, json: args.json, use_color, search_hidden: args.hidden, respect_ignore: !args.no_ignore })
+}
+
+#[inline]
+pub fn get_file_extensions(mut file_type: String) -> Vec<String> {
+    match file_type.as_str() {
+        "rust" => vec!["rs"],
+        "windjammer" | "wj" => vec!["wj"],
+        "python" | "py" => vec!["py", "pyw"],
+        "javascript" | "js" => vec!["js", "jsx", "mjs"],
+        "typescript" | "ts" => vec!["ts", "tsx"],
+        "go" => vec!["go"],
+        "c" => vec!["c", "h"],
+        "cpp" | "c++" => vec!["cpp", "cc", "cxx", "hpp", "hxx"],
+        "java" => vec!["java"],
+        "markdown" | "md" => vec!["md", "markdown"],
+        "json" => vec!["json"],
+        "yaml" | "yml" => vec!["yaml", "yml"],
+        "toml" => vec!["toml"],
+        "xml" => vec!["xml"],
+        "html" => vec!["html", "htm"],
+        "css" => vec!["css", "scss", "sass"],
+        "sql" => vec!["sql"],
+        "shell" | "sh" => vec!["sh", "bash", "zsh"],
+        _ => vec![],
+    }
+}
+
+#[inline]
+pub fn matches_file_type(mut path: &str, mut file_types: &[String]) -> bool {
+    if file_types.is_empty() {
+        return true;
+    }
+    let ext = std::path::extension(path).unwrap_or("");
+    for file_type in file_types {
+        let extensions = get_file_extensions(file_type.clone());
+        if extensions.contains(&ext.to_string()) {
+            return true;
+        }
+    }
+    false
+}
+
+#[inline]
+pub fn should_exclude(mut path: &str, mut exclude_patterns: &[String]) -> bool {
+    for pattern in exclude_patterns {
+        if path.contains(pattern) {
+            return true;
+        }
+    }
+    false
 }
 
 
@@ -796,6 +656,146 @@ pub fn add_context(mut match_obj: Match, mut all_lines: &[String], mut lines_bef
     let end_after = std::cmp::min(start_after + lines_after as usize, all_lines.len());
     match_obj.context_after = &all_lines[start_after..end_after].iter().map(move |s| s.clone()).collect();
     match_obj
+}
+
+
+}
+
+
+
+
+
+
+
+pub mod gitignore {
+use smallvec::{SmallVec, smallvec};
+
+use windjammer_runtime::fs;
+
+use windjammer_runtime::path;
+
+use std::collections::HashSet;
+
+
+pub struct GitignoreRules {
+    pub patterns: Vec<String>,
+}
+
+impl GitignoreRules {
+#[inline]
+pub fn new() -> Self {
+        GitignoreRules { patterns: vec![] }
+}
+#[inline]
+pub fn load_from_directory(&self, mut dir: String) -> Result<Self, String> {
+        let gitignore_path = path::join(&dir, &".gitignore");
+        if !fs::exists(&gitignore_path) {
+            return Ok(GitignoreRules::new());
+        }
+        let contents = fs::read_to_string(&gitignore_path)?;
+        let mut patterns: SmallVec<[_; 4]> = smallvec![];
+        for line in contents.lines() {
+            let trimmed = line.trim();
+            if trimmed.is_empty() || trimmed.starts_with("#") {
+                continue;
+            }
+            self.patterns.push(trimmed.to_string());
+        }
+        Ok(GitignoreRules { patterns })
+}
+#[inline]
+pub fn is_ignored(&self, mut path: &str) -> bool {
+        let name = path::file_name(&path).unwrap_or(path);
+        let path_str = path.clone();
+        for pattern in self.patterns.iter() {
+            if self.matches_pattern(name.clone(), pattern.clone()) || self.matches_pattern(path_str.clone(), pattern.clone()) {
+                return true;
+            }
+        }
+        false
+}
+#[inline]
+pub fn matches_pattern(&self, mut name: String, mut pattern: &str) -> bool {
+        if name == pattern {
+            return true;
+        }
+        if pattern.ends_with("/") {
+            let dir_pattern = pattern.trim_end_matches("/");
+            if name == dir_pattern {
+                return true;
+            }
+        }
+        if pattern.contains("*") {
+            return self.wildcard_match(name, pattern);
+        }
+        if pattern.starts_with("*.") {
+            let ext = pattern.trim_start_matches("*.");
+            if name.ends_with(&format!(".{}", ext)) {
+                return true;
+            }
+        }
+        if name.contains(pattern) {
+            return true;
+        }
+        false
+}
+#[inline]
+pub fn wildcard_match(&self, mut name: String, mut pattern: &str) -> bool {
+        let parts: Vec<String> = pattern.split('*').collect();
+        if parts.is_empty() {
+            return false;
+        }
+        if !parts[0].is_empty() && !name.starts_with(parts[0]) {
+            return false;
+        }
+        if parts.len() > 1 {
+            let last = &parts[parts.len() - 1];
+            if !last.is_empty() && !name.ends_with(last) {
+                return false;
+            }
+        }
+        let mut pos = 0;
+        for (i, part) in parts.iter().enumerate() {
+            if part.is_empty() {
+                continue;
+            }
+            if i == 0 {
+                pos = part.len();
+                continue;
+            }
+            match &name[pos..name.len()].find(part) {
+                Some(idx) => {
+                    pos = pos + idx + part.len();
+                },
+                _ => {
+                    return false;
+                },
+            }
+        }
+        true
+}
+}
+
+pub struct GitignoreCache {
+    pub cache: std::collections::HashMap<String, GitignoreRules>,
+}
+
+impl GitignoreCache {
+#[inline]
+pub fn new() -> Self {
+        GitignoreRules { patterns: vec![] }
+}
+#[inline]
+pub fn get_rules(&mut self, mut dir: &str) -> GitignoreRules {
+        match self.cache.get(&dir) {
+            Some(rules) => {
+                return rules.clone();
+            },
+        }
+        let rules = GitignoreRules::load_from_directory(dir.clone()).unwrap_or_else(move |_| GitignoreRules::new());
+        self.cache.insert(dir, rules.clone());
+        rules
+}
 }
 
 
