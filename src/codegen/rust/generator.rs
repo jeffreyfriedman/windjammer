@@ -312,6 +312,10 @@ impl CodeGenerator {
         // Generate top-level functions (skip impl methods)
         for analyzed_func in analyzed {
             if !impl_methods.contains(&analyzed_func.decl.name) {
+                // Skip main() function in modules - it should only be in the entry point
+                if self.is_module && analyzed_func.decl.name == "main" {
+                    continue;
+                }
                 body.push_str(&self.generate_function(analyzed_func));
                 body.push_str("\n\n");
             }
@@ -590,7 +594,8 @@ impl CodeGenerator {
         }
 
         // Add struct declaration with type parameters
-        output.push_str("struct ");
+        let pub_prefix = if self.is_module { "pub " } else { "" };
+        output.push_str(&format!("{}struct ", pub_prefix));
         output.push_str(&s.name);
         if !s.type_params.is_empty() {
             output.push('<');
