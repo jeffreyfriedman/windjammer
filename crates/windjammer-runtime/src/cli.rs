@@ -245,9 +245,9 @@ impl CliMatches {
         self.matches.get_one::<String>(name).cloned()
     }
 
-    /// Get string value or panic
-    pub fn value_of(&self, name: &str) -> String {
-        self.get(name).unwrap_or_default()
+    /// Get string value (returns Option for unwrap/unwrap_or chaining)
+    pub fn value_of(&self, name: &str) -> Option<String> {
+        self.get(name)
     }
 
     /// Check if flag is present
@@ -263,9 +263,12 @@ impl CliMatches {
             .unwrap_or_default()
     }
 
-    /// Get all values for an argument (alias)
-    pub fn values_of(&self, name: &str) -> Vec<String> {
-        self.get_many(name)
+    /// Get all values for an argument (returns Option for unwrap/unwrap_or chaining)
+    pub fn values_of(&self, name: &str) -> Option<Vec<String>> {
+        let vals = self.matches
+            .get_many::<String>(name)
+            .map(|vals| vals.map(|s| s.to_string()).collect::<Vec<String>>());
+        vals
     }
 }
 
