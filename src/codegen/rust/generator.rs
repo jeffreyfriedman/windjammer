@@ -2332,30 +2332,26 @@ impl CodeGenerator {
             Expression::FieldAccess { object, field } => {
                 let obj_str = self.generate_expression_with_precedence(object);
 
-                // In module context (stdlib), always use :: for Rust paths
-                // Otherwise, use :: for module/type paths and . for field access
-                let separator = if self.is_module {
-                    "::"
-                } else {
-                    match **object {
-                        Expression::Identifier(ref name)
-                            if name.contains("::")
-                                || (!name.is_empty()
-                                    && name.chars().next().unwrap().is_uppercase()) =>
-                        {
-                            "::" // Module path: std::fs or Type::CONST
-                        }
-                        Expression::FieldAccess { .. } => {
-                            // Check if this is a module path or a field chain
-                            // If the object string contains ::, it's a module path
-                            if obj_str.contains("::") {
-                                "::" // Module path: std::fs::File
-                            } else {
-                                "." // Field chain: transform.position.x
-                            }
-                        }
-                        _ => ".", // Actual field access
+                // Determine if this is a module/type path (::) or field access (.)
+                // Check the object to decide:
+                let separator = match **object {
+                    Expression::Identifier(ref name)
+                        if name.contains("::")
+                            || (!name.is_empty()
+                                && name.chars().next().unwrap().is_uppercase()) =>
+                    {
+                        "::" // Module path: std::fs or Type::CONST
                     }
+                    Expression::FieldAccess { .. } => {
+                        // Check if this is a module path or a field chain
+                        // If the object string contains ::, it's a module path
+                        if obj_str.contains("::") {
+                            "::" // Module path: std::fs::File
+                        } else {
+                            "." // Field chain: transform.position.x
+                        }
+                    }
+                    _ => ".", // Actual field access (e.g., config.field)
                 };
 
                 format!("{}{}{}", obj_str, separator, field)
