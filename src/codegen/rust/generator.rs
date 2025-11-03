@@ -684,7 +684,8 @@ impl CodeGenerator {
                     output.push_str(")]\n");
                 }
             }
-            let pub_keyword = if field.is_pub { "pub " } else { "" };
+            // In modules, all fields should be pub for cross-module access
+            let pub_keyword = if self.is_module || field.is_pub { "pub " } else { "" };
             output.push_str(&format!(
                 "    {}{}: {},\n",
                 pub_keyword,
