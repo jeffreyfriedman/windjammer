@@ -315,9 +315,15 @@ impl Parser {
                     } else if self.current_token() == &Token::ColonColon {
                         // Look ahead to check if this is an associated type or path segment
                         if self.position + 1 < self.tokens.len() {
-                            if let Token::Ident(next_segment) = &self.tokens[self.position + 1] {
-                                let next_segment_str = next_segment.clone(); // Clone before any mutable borrows
+                            // Allow keywords as identifiers in type paths (e.g., std::thread::JoinHandle)
+                            let next_segment_opt = match &self.tokens[self.position + 1] {
+                                Token::Ident(n) => Some(n.clone()),
+                                Token::Thread => Some("thread".to_string()),
+                                Token::Async => Some("async".to_string()),
+                                _ => None,
+                            };
 
+                            if let Some(next_segment_str) = next_segment_opt {
                                 // Could be either:
                                 // 1. Path segment: std::fs::File
                                 // 2. Associated type: Self::Item
