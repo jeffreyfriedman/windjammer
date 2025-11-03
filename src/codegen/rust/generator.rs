@@ -477,10 +477,14 @@ impl CodeGenerator {
                 .or_else(|| full_path.strip_prefix("../"))
                 .unwrap_or(&full_path);
             let module_name = stripped.split('/').next_back().unwrap_or(stripped);
+
+            // When generating for modules (is_module=true), use crate:: prefix for cross-module imports
+            let prefix = if self.is_module { "crate::" } else { "" };
+
             if let Some(alias_name) = alias {
-                return format!("use {} as {};\n", module_name, alias_name);
+                return format!("use {}{} as {};\n", prefix, module_name, alias_name);
             } else {
-                return format!("use {}::*;\n", module_name);
+                return format!("use {}{}::*;\n", prefix, module_name);
             }
         }
 
