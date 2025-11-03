@@ -1345,9 +1345,20 @@ impl Parser {
                                 self.current_token()
                             ));
                         }
-                    } else if let Token::Ident(method) = self.current_token() {
-                        // Type::method or module::function (no turbofish)
-                        let method = method.clone();
+                    } else {
+                        // Allow keywords as identifiers after :: (e.g., std::thread, std::async)
+                        let method = match self.current_token() {
+                            Token::Ident(n) => n.clone(),
+                            Token::Thread => "thread".to_string(),
+                            Token::Async => "async".to_string(),
+                            Token::Await => "await".to_string(),
+                            _ => {
+                                return Err(format!(
+                                    "Expected '<' or identifier after '::', got {:?}",
+                                    self.current_token()
+                                ));
+                            }
+                        };
                         self.advance();
 
                         // Check for turbofish on this method
@@ -1390,11 +1401,6 @@ impl Parser {
                                 field: method,
                             }
                         }
-                    } else {
-                        return Err(format!(
-                            "Expected '<' or identifier after '::', got {:?}",
-                            self.current_token()
-                        ));
                     }
                 }
                 Token::LParen => {

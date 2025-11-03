@@ -24,26 +24,26 @@ pub struct Config {
     pub respect_ignore: bool,
 }
 
-pub fn from_args(args: Args) -> Result<Config, Error> {
+pub fn from_args(args: Args) -> Result<Config, string> {
     // Build regex pattern
     let pattern_str = if args.whole_word {
-        let escaped = regex.escape(args.pattern)
-        "\\b" + escaped + "\\b"
+        let escaped = regex::escape(&args.pattern)
+        "\\b" + &escaped + "\\b"
     } else {
         args.pattern
     }
     
     let pattern = if args.case_insensitive {
-        regex.compile_with_flags(pattern_str, "i")?
+        regex::compile_with_flags(&pattern_str, "i")?
     } else {
-        regex.compile(pattern_str)?
+        regex::compile(&pattern_str)?
     }
     
     // Determine color usage
-    let use_color = match args.color {
+    let use_color = match args.color.as_str() {
         "always" => true,
         "never" => false,
-        _ => std.io.is_terminal(std.io.stdout()),  // auto
+        _ => std::io::is_terminal(std::io::stdout()),  // auto
     }
     
     Ok(Config {
@@ -93,16 +93,16 @@ pub fn get_file_extensions(file_type: string) -> Vec<string> {
 }
 
 // Check if file matches type filters
-pub fn matches_file_type(path: string, file_types: Vec<string>) -> bool {
+pub fn matches_file_type(path: &string, file_types: &Vec<string>) -> bool {
     if file_types.is_empty() {
         return true
     }
     
-    let ext = std.path.extension(path).unwrap_or("")
+    let ext = std::path::extension(path).unwrap_or("")
     
     for file_type in file_types {
-        let extensions = get_file_extensions(file_type)
-        if extensions.contains(&ext) {
+        let extensions = get_file_extensions(file_type.clone())
+        if extensions.contains(&ext.to_string()) {
             return true
         }
     }
@@ -111,7 +111,7 @@ pub fn matches_file_type(path: string, file_types: Vec<string>) -> bool {
 }
 
 // Check if path should be excluded
-pub fn should_exclude(path: string, exclude_patterns: Vec<string>) -> bool {
+pub fn should_exclude(path: &string, exclude_patterns: &Vec<string>) -> bool {
     for pattern in exclude_patterns {
         if path.contains(pattern) {
             return true
