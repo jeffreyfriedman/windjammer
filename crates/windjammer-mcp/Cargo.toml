@@ -47,7 +47,7 @@ clap = { version = "4.4", features = ["derive"] }
 
 # HTTP transport and OAuth
 axum = { version = "0.7", optional = true }
-tower = { version = "0.4", optional = true }
+tower = { version = "0.5", optional = true }
 tower-http = { version = "0.5", features = ["cors", "trace"], optional = true }
 uuid = { version = "1.6", features = ["v4", "serde"] }
 
