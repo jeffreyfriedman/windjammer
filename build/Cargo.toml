@@ -6,9 +6,69 @@ edition = "2021"
 # Prevent this from being treated as part of parent workspace
 [workspace]
 
+[dependencies]
+chrono = "0.4"
+clap = { version = "4.5", features = ["derive"] }
+env_logger = "0.11"
+log = "0.4"
+regex = "1.10"
+windjammer-runtime = { path = "/Users/jeffreyfriedman/src/windjammer/crates/windjammer-runtime" }
+
+[[bin]]
+name = "test_two_params"
+path = "test_two_params.rs"
+
+[[bin]]
+name = "walker"
+path = "walker.rs"
+
+[[bin]]
+name = "matcher"
+path = "matcher.rs"
+
+[[bin]]
+name = "config"
+path = "config.rs"
+
+[[bin]]
+name = "test_double_colon"
+path = "test_double_colon.rs"
+
+[[bin]]
+name = "replace"
+path = "replace.rs"
+
+[[bin]]
+name = "test_simple_type"
+path = "test_simple_type.rs"
+
+[[bin]]
+name = "output"
+path = "output.rs"
+
 [[bin]]
 name = "stdlib_basic_test"
 path = "stdlib_basic_test.rs"
+
+[[bin]]
+name = "test_hashmap"
+path = "test_hashmap.rs"
+
+[[bin]]
+name = "main"
+path = "main.rs"
+
+[[bin]]
+name = "test_generics"
+path = "test_generics.rs"
+
+[[bin]]
+name = "search"
+path = "search.rs"
+
+[[bin]]
+name = "gitignore"
+path = "gitignore.rs"
 
 [profile.release]
 opt-level = 3

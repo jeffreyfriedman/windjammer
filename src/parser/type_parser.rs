@@ -333,8 +333,16 @@ impl Parser {
                                 if self.position + 2 < self.tokens.len() {
                                     let after_next = &self.tokens[self.position + 2];
                                     match after_next {
-                                        Token::Lt
-                                        | Token::Comma
+                                        Token::Lt => {
+                                            // This is a parameterized type (e.g., HashMap<K, V>)
+                                            // Add to path and break to let generic parsing handle it
+                                            type_name.push_str("::");
+                                            type_name.push_str(&next_segment_str);
+                                            self.advance(); // consume ::
+                                            self.advance(); // consume identifier
+                                            break; // Exit loop to handle generics
+                                        }
+                                        Token::Comma
                                         | Token::Gt
                                         | Token::RParen
                                         | Token::RBrace
