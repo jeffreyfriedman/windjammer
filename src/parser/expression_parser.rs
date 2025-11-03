@@ -1117,8 +1117,8 @@ impl Parser {
                 // Check for empty braces
                 if self.current_token() == &Token::RBrace {
                     self.advance();
-                    // Empty map literal
-                    return Ok(Expression::MapLiteral(vec![]));
+                    // Empty block (not empty map - use HashMap::new() or map{} for that)
+                    return Ok(Expression::Block(vec![]));
                 }
 
                 // Try to detect map literal by parsing first item
