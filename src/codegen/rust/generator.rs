@@ -1736,9 +1736,9 @@ impl CodeGenerator {
             }
             Statement::Thread { body } => {
                 // Transpile to std::thread::spawn for parallelism
-                // Note: No semicolon so it can be used as an expression (returns JoinHandle)
+                // When used as a statement, discard the JoinHandle
                 let mut output = self.indent();
-                output.push_str("std::thread::spawn(move || {\n");
+                output.push_str("let _ = std::thread::spawn(move || {\n");
 
                 self.indent_level += 1;
                 for stmt in body {
@@ -1747,14 +1747,14 @@ impl CodeGenerator {
                 self.indent_level -= 1;
 
                 output.push_str(&self.indent());
-                output.push_str("})");
+                output.push_str("});\n");
                 output
             }
             Statement::Async { body } => {
                 // Transpile to tokio::spawn for async concurrency
-                // Note: No semicolon so it can be used as an expression (returns JoinHandle)
+                // When used as a statement, discard the JoinHandle
                 let mut output = self.indent();
-                output.push_str("tokio::spawn(async move {\n");
+                output.push_str("let _ = tokio::spawn(async move {\n");
 
                 self.indent_level += 1;
                 for stmt in body {
@@ -1763,7 +1763,7 @@ impl CodeGenerator {
                 self.indent_level -= 1;
 
                 output.push_str(&self.indent());
-                output.push_str("})");
+                output.push_str("});\n");
                 output
             }
             Statement::Defer(stmt) => {
@@ -2272,15 +2272,17 @@ impl CodeGenerator {
                 }
 
                 // PHASE 2 OPTIMIZATION: Eliminate unnecessary .clone() calls
-                // If this is a .clone() on a variable that doesn't need cloning, skip it
-                if method == "clone" && arguments.is_empty() {
-                    if let Expression::Identifier(ref var_name) = **object {
-                        if self.clone_optimizations.contains(var_name) {
-                            // Skip the .clone(), just return the variable (or borrow if needed)
-                            return obj_str;
-                        }
-                    }
-                }
+                // DISABLED: This optimization was too aggressive and removed needed clones
+                // TODO: Make this more conservative - only remove clone when we can prove
+                // the value is Copy or when it's the last use
+                // if method == "clone" && arguments.is_empty() {
+                //     if let Expression::Identifier(ref var_name) = **object {
+                //         if self.clone_optimizations.contains(var_name) {
+                //             // Skip the .clone(), just return the variable (or borrow if needed)
+                //             return obj_str;
+                //         }
+                //     }
+                // }
 
                 format!(
                     "{}{}{}{}({})",
@@ -2568,12 +2570,25 @@ impl CodeGenerator {
                     }
                 }
 
-                // Regular block
+                // Regular block - must handle last expression correctly
                 let mut output = String::from("{\n");
                 self.indent_level += 1;
-                for stmt in stmts {
-                    output.push_str(&self.generate_statement(stmt));
+
+                let len = stmts.len();
+                for (i, stmt) in stmts.iter().enumerate() {
+                    let is_last = i == len - 1;
+                    if is_last && matches!(stmt, Statement::Expression(_)) {
+                        // Last statement is an expression - generate without semicolon
+                        if let Statement::Expression(expr) = stmt {
+                            output.push_str(&self.indent());
+                            output.push_str(&self.generate_expression(expr));
+                            output.push('\n');
+                        }
+                    } else {
+                        output.push_str(&self.generate_statement(stmt));
+                    }
                 }
+
                 self.indent_level -= 1;
                 output.push_str(&self.indent());
                 output.push('}');

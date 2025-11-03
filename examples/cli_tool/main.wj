@@ -3,13 +3,13 @@ use std::fs
 use std::path::Path
 use clap::Parser
 use std::sync::mpsc
-use rayon::prelude
 
 @command(
     name: "wj-process",
     about: "Process text files concurrently",
     version: "1.0"
 )
+@derive(Clone)
 struct Args {
     @arg(help: "Input files to process")
     files: Vec<string>,
@@ -36,8 +36,7 @@ struct ProcessResult {
     lines_processed: int,
 }
 
-@timing
-fn process_file(path: string, args: &Args) -> Result<ProcessResult, Error> {
+fn process_file(path: string, args: &Args) -> Result<ProcessResult, string> {
     if args.verbose {
         println("Processing: {}", path)
     }
@@ -60,7 +59,7 @@ fn process_file(path: string, args: &Args) -> Result<ProcessResult, Error> {
     // Determine output path
     let output_path = match &args.output_dir {
         Some(dir) => {
-            let filename = Path.new(&path).file_name().unwrap()
+            let filename = Path::new(&path).file_name().unwrap()
             format!("{}/{}", dir, filename.to_string_lossy())
         }
         None => {
@@ -72,18 +71,19 @@ fn process_file(path: string, args: &Args) -> Result<ProcessResult, Error> {
     fs.write(&output_path, processed)?
     
     Ok(ProcessResult {
-        input_file: path,
+        input_file: path.clone(),
         output_file: output_path,
         lines_processed: lines.len() as int,
     })
 }
 
-fn main() -> Result<(), Error> {
+fn main() -> Result<(), string> {
     let args = Args.parse()
     
     // Create output directory if needed
-    if let Some(dir) = &args.output_dir {
-        fs.create_dir_all(dir)?
+    match &args.output_dir {
+        Some(dir) => fs.create_dir_all(dir)?,
+        None => ()
     }
     
     if args.verbose {
@@ -91,18 +91,19 @@ fn main() -> Result<(), Error> {
     }
     
     // Process files concurrently using channels
-    let (tx, rx) = mpsc.channel()
+    let (tx, rx) = mpsc::channel()
     
     let file_count = args.files.len()
+    let files = args.files.clone()
     
     // Spawn worker threads
-    for file in args.files {
-        let tx = tx.clone()
+    for file in files {
+        let tx_clone = tx.clone()
         let args_copy = args.clone()
         
         thread {
             let result = process_file(file, &args_copy)
-            tx.send(result).unwrap()
+            tx_clone.send(result).unwrap()
         }
     }
     
