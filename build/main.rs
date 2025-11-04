@@ -1,3 +1,99 @@
+
+
+
+
+
+pub mod main {
+use windjammer_runtime::cli;
+
+use windjammer_runtime::fs;
+
+use windjammer_runtime::io;
+
+use windjammer_runtime::env;
+
+use windjammer_runtime::time;
+
+use windjammer_runtime::log_mod as log;
+
+use crate::config;
+
+use crate::search;
+
+use crate::output;
+
+use crate::gitignore;
+
+
+#[derive(Debug)]
+pub struct Args {
+    pub pattern: String,
+    pub paths: Vec<String>,
+    pub case_insensitive: bool,
+    pub whole_word: bool,
+    pub line_numbers: bool,
+    pub count_only: bool,
+    pub files_with_matches: bool,
+    pub context_before: i64,
+    pub context_after: i64,
+    pub file_types: Vec<String>,
+    pub exclude: Vec<String>,
+    pub max_count: Option<i64>,
+    pub threads: i64,
+    pub json: bool,
+    pub color: String,
+    pub hidden: bool,
+    pub no_ignore: bool,
+}
+
+#[inline]
+pub fn parse_args() -> Args {
+    let mut app = cli::new("wjfind".to_string()).version("0.1.0").author("Windjammer Team").about("Fast file search utility - like ripgrep, but in Windjammer!").arg(cli::arg("pattern".to_string()).help("Pattern to search for (regex)").required(true)).arg(cli::arg("paths".to_string()).help("Paths to search (default: current directory)").multiple(true).default_value(".")).arg(cli::flag("case-insensitive".to_string()).short("i").help("Case-insensitive search")).arg(cli::flag("whole-word".to_string()).short("w").help("Match whole words only")).arg(cli::flag("line-numbers".to_string()).short("n").help("Show line numbers")).arg(cli::flag("count".to_string()).short("c").help("Only show count of matches")).arg(cli::flag("files-with-matches".to_string()).short("l").help("Only show files with matches")).arg(cli::option("context-before".to_string()).short("B").help("Lines of context before match").default_value("0")).arg(cli::option("context-after".to_string()).short("A").help("Lines of context after match").default_value("0")).arg(cli::option("context".to_string()).short("C").help("Lines of context before and after match").default_value("0")).arg(cli::option("type".to_string()).short("t").help("Filter by file type (rust, js, py, etc.)").multiple(true)).arg(cli::option("exclude".to_string()).help("Exclude directories or files").multiple(true)).arg(cli::option("max-count".to_string()).short("m").help("Maximum number of matches")).arg(cli::option("threads".to_string()).short("j").help("Number of threads").default_value("0")).arg(cli::flag("json".to_string()).help("Output results as JSON")).arg(cli::option("color".to_string()).help("When to use colors (auto, always, never)").default_value("auto")).arg(cli::flag("hidden".to_string()).help("Search hidden files and directories")).arg(cli::flag("no-ignore".to_string()).help("Don't respect .gitignore files"));
+    let matches = app.get_matches();
+    let pattern = matches.value_of("pattern").unwrap();
+    let paths = matches.values_of("paths").unwrap_or(vec!["."]);
+    let case_insensitive = matches.is_present("case-insensitive");
+    let whole_word = matches.is_present("whole-word");
+    let line_numbers = matches.is_present("line-numbers");
+    let count_only = matches.is_present("count");
+    let files_with_matches = matches.is_present("files-with-matches");
+    let context = matches.value_of("context").unwrap().parse::<i64>().unwrap_or(0);
+    let context_before = {
+        if context > 0 {
+            context
+        } else {
+            matches.value_of("context-before").unwrap().parse::<i64>().unwrap_or(0)
+        }
+    };
+    let context_after = {
+        if context > 0 {
+            context
+        } else {
+            matches.value_of("context-after").unwrap().parse::<i64>().unwrap_or(0)
+        }
+    };
+    let file_types = matches.values_of("type").unwrap_or(vec![]);
+    let exclude = matches.values_of("exclude").unwrap_or(vec![]);
+    let max_count = matches.value_of("max-count").map(move |s| s.parse::<i64>().unwrap());
+    let threads = matches.value_of("threads").unwrap().parse::<i64>().unwrap_or(0);
+    let threads = {
+        if threads == 0 {
+            std.thread::available_parallelism().unwrap_or(4)
+        } else {
+            threads
+        }
+    };
+    let json = matches.is_present("json");
+    let color = matches.value_of("color").unwrap();
+    let hidden = matches.is_present("hidden");
+    let no_ignore = matches.is_present("no-ignore");
+    Args { pattern, paths, case_insensitive, whole_word, line_numbers, count_only, files_with_matches, context_before, context_after, file_types, exclude, max_count, threads, json, color, hidden, no_ignore }
+}
+
+
+}
+
+
 pub mod walker {
 use windjammer_runtime::fs;
 
@@ -148,141 +244,6 @@ pub fn find_all_matches(mut line: &str, mut line_num: i64, mut file: &str, mut c
 
 
 }
-
-
-pub mod gitignore {
-use windjammer_runtime::fs;
-
-use windjammer_runtime::path;
-
-use std::collections::HashSet;
-
-
-#[derive(Clone)]
-pub struct GitignoreRules {
-    pub patterns: Vec<String>,
-}
-
-impl GitignoreRules {
-#[inline]
-pub fn new() -> Self {
-        GitignoreRules { patterns: vec![] }
-}
-#[inline]
-pub fn load_from_directory(&self, mut dir: String) -> Result<Self, String> {
-        let gitignore_path = path::join(&dir, &".gitignore");
-        if !fs::exists(&gitignore_path) {
-            return Ok(GitignoreRules::new());
-        }
-        let contents = fs::read_to_string(&gitignore_path)?;
-        let mut patterns = vec![];
-        for line in contents.lines() {
-            let trimmed = line.trim();
-            if trimmed.is_empty() || trimmed.starts_with("#") {
-                continue;
-            }
-            self.patterns.push(trimmed.to_string());
-        }
-        Ok(GitignoreRules { patterns })
-}
-#[inline]
-pub fn is_ignored(&self, mut path: &str) -> bool {
-        let name = path::file_name(&path).unwrap_or(path);
-        let path_str = path::clone();
-        for pattern in self.patterns.iter() {
-            if self.matches_pattern(name.clone(), pattern.clone()) || self.matches_pattern(path_str.clone(), pattern.clone()) {
-                return true;
-            }
-        }
-        false
-}
-#[inline]
-pub fn matches_pattern(&self, mut name: String, mut pattern: &str) -> bool {
-        if name == pattern {
-            return true;
-        }
-        if pattern.ends_with("/") {
-            let dir_pattern = pattern.trim_end_matches("/");
-            if name == dir_pattern {
-                return true;
-            }
-        }
-        if pattern.contains("*") {
-            return self.wildcard_match(name, pattern);
-        }
-        if pattern.starts_with("*.") {
-            let ext = pattern.trim_start_matches("*.");
-            if name.ends_with(&format!(".{}", ext)) {
-                return true;
-            }
-        }
-        if name.contains(pattern) {
-            return true;
-        }
-        false
-}
-#[inline]
-pub fn wildcard_match(&self, mut name: String, mut pattern: &str) -> bool {
-        let parts: Vec<String> = pattern.split('*').collect();
-        if parts.is_empty() {
-            return false;
-        }
-        if !parts[0].is_empty() && !name.starts_with(parts[0]) {
-            return false;
-        }
-        if parts.len() > 1 {
-            let last = &parts[parts.len() - 1];
-            if !last.is_empty() && !name.ends_with(last) {
-                return false;
-            }
-        }
-        let mut pos = 0;
-        for (i, part) in parts.iter().enumerate() {
-            if part.is_empty() {
-                continue;
-            }
-            if i == 0 {
-                pos = part.len();
-                continue;
-            }
-            match &name[pos..name.len()].find(part) {
-                Some(idx) => {
-                    pos = pos + idx + part.len();
-                },
-                _ => {
-                    return false;
-                },
-            }
-        }
-        true
-}
-}
-
-pub struct GitignoreCache {
-    pub cache: std::collections::HashMap<String, GitignoreRules>,
-}
-
-impl GitignoreCache {
-#[inline]
-pub fn new() -> Self {
-        GitignoreRules { patterns: vec![] }
-}
-#[inline]
-pub fn get_rules(&mut self, mut dir: &str) -> GitignoreRules {
-        match self.cache.get(&dir) {
-            Some(rules) => {
-                return rules.clone();
-            },
-        }
-        let rules = GitignoreRules::load_from_directory(dir.clone()).unwrap_or_else(move |_| GitignoreRules::new());
-        self.cache.insert(dir, rules.clone());
-        rules
-}
-}
-
-
-}
-
 
 pub mod output {
 use serde::{Serialize, Deserialize};
@@ -440,7 +401,248 @@ pub fn highlight_match(mut line: &str, mut match_text: &str, mut column: i64) ->
 }
 
 
+pub mod config {
+use windjammer_runtime::regex_mod as regex;
+use windjammer_runtime::regex_mod::Regex;
 
+use windjammer_runtime::path;
+
+use windjammer_runtime::io;
+
+use crate::main::Args;
+
+
+#[derive(Debug, Clone)]
+pub struct Config {
+    pub pattern: Regex,
+    pub paths: Vec<String>,
+    pub case_insensitive: bool,
+    pub whole_word: bool,
+    pub line_numbers: bool,
+    pub count_only: bool,
+    pub files_with_matches: bool,
+    pub context_before: i64,
+    pub context_after: i64,
+    pub file_types: Vec<String>,
+    pub exclude_patterns: Vec<String>,
+    pub max_count: Option<i64>,
+    pub threads: i64,
+    pub json: bool,
+    pub use_color: bool,
+    pub search_hidden: bool,
+    pub respect_ignore: bool,
+}
+
+#[inline]
+pub fn from_args(mut args: Args) -> Result<Config, String> {
+    let pattern_str = {
+        if args.whole_word {
+            let escaped = regex::escape(&args.pattern);
+            format!("{}{}{}", "\\b", &escaped, "\\b")
+        } else {
+            args.pattern
+        }
+    };
+    let pattern = {
+        if args.case_insensitive {
+            regex::compile_with_flags(&pattern_str, "i".to_string())?
+        } else {
+            regex::compile(&pattern_str)?
+        }
+    };
+    let use_color = match args.color.as_str() {
+        "always" => true,
+        "never" => false,
+        _ => io::is_terminal(),
+    };
+    Ok(Config { pattern, paths: args.paths, case_insensitive: args.case_insensitive, whole_word: args.whole_word, line_numbers: args.line_numbers, count_only: args.count_only, files_with_matches: args.files_with_matches, context_before: args.context_before, context_after: args.context_after, file_types: args.file_types, exclude_patterns: args.exclude, max_count: args.max_count, threads: args.threads, json: args.json, use_color, search_hidden: args.hidden, respect_ignore: !args.no_ignore })
+}
+
+#[inline]
+pub fn get_file_extensions(mut file_type: String) -> Vec<String> {
+    match file_type.as_str() {
+        "rust" => vec!["rs"],
+        "windjammer" | "wj" => vec!["wj"],
+        "python" | "py" => vec!["py", "pyw"],
+        "javascript" | "js" => vec!["js", "jsx", "mjs"],
+        "typescript" | "ts" => vec!["ts", "tsx"],
+        "go" => vec!["go"],
+        "c" => vec!["c", "h"],
+        "cpp" | "c++" => vec!["cpp", "cc", "cxx", "hpp", "hxx"],
+        "java" => vec!["java"],
+        "markdown" | "md" => vec!["md", "markdown"],
+        "json" => vec!["json"],
+        "yaml" | "yml" => vec!["yaml", "yml"],
+        "toml" => vec!["toml"],
+        "xml" => vec!["xml"],
+        "html" => vec!["html", "htm"],
+        "css" => vec!["css", "scss", "sass"],
+        "sql" => vec!["sql"],
+        "shell" | "sh" => vec!["sh", "bash", "zsh"],
+        _ => vec![],
+    }
+}
+
+#[inline]
+pub fn matches_file_type(mut path: &str, mut file_types: &[String]) -> bool {
+    if file_types.is_empty() {
+        return true;
+    }
+    let ext = path::extension(path).unwrap_or("".to_string());
+    for file_type in file_types {
+        let extensions = get_file_extensions(file_type.clone());
+        if extensions.contains(&ext.to_string()) {
+            return true;
+        }
+    }
+    false
+}
+
+#[inline]
+pub fn should_exclude(mut path: &str, mut exclude_patterns: &[String]) -> bool {
+    for pattern in exclude_patterns {
+        if path::contains(pattern) {
+            return true;
+        }
+    }
+    false
+}
+
+
+}
+
+pub mod gitignore {
+use windjammer_runtime::fs;
+
+use windjammer_runtime::path;
+
+use std::collections::HashSet;
+
+
+#[derive(Clone)]
+pub struct GitignoreRules {
+    pub patterns: Vec<String>,
+}
+
+impl GitignoreRules {
+#[inline]
+pub fn new() -> Self {
+        GitignoreRules { patterns: vec![] }
+}
+#[inline]
+pub fn load_from_directory(&self, mut dir: String) -> Result<Self, String> {
+        let gitignore_path = path::join(&dir, &".gitignore");
+        if !fs::exists(&gitignore_path) {
+            return Ok(GitignoreRules::new());
+        }
+        let contents = fs::read_to_string(&gitignore_path)?;
+        let mut patterns = vec![];
+        for line in contents.lines() {
+            let trimmed = line.trim();
+            if trimmed.is_empty() || trimmed.starts_with("#") {
+                continue;
+            }
+            self.patterns.push(trimmed.to_string());
+        }
+        Ok(GitignoreRules { patterns })
+}
+#[inline]
+pub fn is_ignored(&self, mut path: &str) -> bool {
+        let name = path::file_name(&path).unwrap_or(path);
+        let path_str = path::clone();
+        for pattern in self.patterns.iter() {
+            if self.matches_pattern(name.clone(), pattern.clone()) || self.matches_pattern(path_str.clone(), pattern.clone()) {
+                return true;
+            }
+        }
+        false
+}
+#[inline]
+pub fn matches_pattern(&self, mut name: String, mut pattern: &str) -> bool {
+        if name == pattern {
+            return true;
+        }
+        if pattern.ends_with("/") {
+            let dir_pattern = pattern.trim_end_matches("/");
+            if name == dir_pattern {
+                return true;
+            }
+        }
+        if pattern.contains("*") {
+            return self.wildcard_match(name, pattern);
+        }
+        if pattern.starts_with("*.") {
+            let ext = pattern.trim_start_matches("*.");
+            if name.ends_with(&format!(".{}", ext)) {
+                return true;
+            }
+        }
+        if name.contains(pattern) {
+            return true;
+        }
+        false
+}
+#[inline]
+pub fn wildcard_match(&self, mut name: String, mut pattern: &str) -> bool {
+        let parts: Vec<String> = pattern.split('*').collect();
+        if parts.is_empty() {
+            return false;
+        }
+        if !parts[0].is_empty() && !name.starts_with(parts[0]) {
+            return false;
+        }
+        if parts.len() > 1 {
+            let last = &parts[parts.len() - 1];
+            if !last.is_empty() && !name.ends_with(last) {
+                return false;
+            }
+        }
+        let mut pos = 0;
+        for (i, part) in parts.iter().enumerate() {
+            if part.is_empty() {
+                continue;
+            }
+            if i == 0 {
+                pos = part.len();
+                continue;
+            }
+            match &name[pos..name.len()].find(part) {
+                Some(idx) => {
+                    pos = pos + idx + part.len();
+                },
+                _ => {
+                    return false;
+                },
+            }
+        }
+        true
+}
+}
+
+pub struct GitignoreCache {
+    pub cache: std::collections::HashMap<String, GitignoreRules>,
+}
+
+impl GitignoreCache {
+#[inline]
+pub fn new() -> Self {
+        GitignoreRules { patterns: vec![] }
+}
+#[inline]
+pub fn get_rules(&mut self, mut dir: &str) -> GitignoreRules {
+        match self.cache.get(&dir) {
+            Some(rules) => {
+                return rules.clone();
+            },
+        }
+        let rules = GitignoreRules::load_from_directory(dir.clone()).unwrap_or_else(move |_| GitignoreRules::new());
+        self.cache.insert(dir, rules.clone());
+        rules
+}
+}
+
+
+}
 
 pub mod search {
 use windjammer_runtime::fs;
@@ -570,7 +772,11 @@ pub fn search_file(mut path: String, mut config: &Config) -> Result<Vec<Match>, 
                             break;
                         }
                     },
+                    None => {
+                    },
                 }
+            },
+            None => {
             },
         }
     }
@@ -600,208 +806,6 @@ pub fn add_context(mut match_obj: Match, mut all_lines: &[String], mut lines_bef
 
 
 
-
-
-
-pub mod main {
-use windjammer_runtime::cli;
-
-use windjammer_runtime::fs;
-
-use windjammer_runtime::io;
-
-use windjammer_runtime::env;
-
-use windjammer_runtime::time;
-
-use windjammer_runtime::log_mod as log;
-
-use crate::config;
-
-use crate::search;
-
-use crate::output;
-
-use crate::gitignore;
-
-
-#[derive(Debug)]
-pub struct Args {
-    pub pattern: String,
-    pub paths: Vec<String>,
-    pub case_insensitive: bool,
-    pub whole_word: bool,
-    pub line_numbers: bool,
-    pub count_only: bool,
-    pub files_with_matches: bool,
-    pub context_before: i64,
-    pub context_after: i64,
-    pub file_types: Vec<String>,
-    pub exclude: Vec<String>,
-    pub max_count: Option<i64>,
-    pub threads: i64,
-    pub json: bool,
-    pub color: String,
-    pub hidden: bool,
-    pub no_ignore: bool,
-}
-
-#[inline]
-pub fn parse_args() -> Args {
-    let mut app = cli::new("wjfind".to_string()).version("0.1.0").author("Windjammer Team").about("Fast file search utility - like ripgrep, but in Windjammer!").arg(cli::arg("pattern".to_string()).help("Pattern to search for (regex)").required(true)).arg(cli::arg("paths".to_string()).help("Paths to search (default: current directory)").multiple(true).default_value(".")).arg(cli::flag("case-insensitive".to_string()).short("i").help("Case-insensitive search")).arg(cli::flag("whole-word".to_string()).short("w").help("Match whole words only")).arg(cli::flag("line-numbers".to_string()).short("n").help("Show line numbers")).arg(cli::flag("count".to_string()).short("c").help("Only show count of matches")).arg(cli::flag("files-with-matches".to_string()).short("l").help("Only show files with matches")).arg(cli::option("context-before".to_string()).short("B").help("Lines of context before match").default_value("0")).arg(cli::option("context-after".to_string()).short("A").help("Lines of context after match").default_value("0")).arg(cli::option("context".to_string()).short("C").help("Lines of context before and after match").default_value("0")).arg(cli::option("type".to_string()).short("t").help("Filter by file type (rust, js, py, etc.)").multiple(true)).arg(cli::option("exclude".to_string()).help("Exclude directories or files").multiple(true)).arg(cli::option("max-count".to_string()).short("m").help("Maximum number of matches")).arg(cli::option("threads".to_string()).short("j").help("Number of threads").default_value("0")).arg(cli::flag("json".to_string()).help("Output results as JSON")).arg(cli::option("color".to_string()).help("When to use colors (auto, always, never)").default_value("auto")).arg(cli::flag("hidden".to_string()).help("Search hidden files and directories")).arg(cli::flag("no-ignore".to_string()).help("Don't respect .gitignore files"));
-    let matches = app.get_matches();
-    let pattern = matches.value_of("pattern").unwrap();
-    let paths = matches.values_of("paths").unwrap_or(vec!["."]);
-    let case_insensitive = matches.is_present("case-insensitive");
-    let whole_word = matches.is_present("whole-word");
-    let line_numbers = matches.is_present("line-numbers");
-    let count_only = matches.is_present("count");
-    let files_with_matches = matches.is_present("files-with-matches");
-    let context = matches.value_of("context").unwrap().parse::<i64>().unwrap_or(0);
-    let context_before = {
-        if context > 0 {
-            context
-        } else {
-            matches.value_of("context-before").unwrap().parse::<i64>().unwrap_or(0)
-        }
-    };
-    let context_after = {
-        if context > 0 {
-            context
-        } else {
-            matches.value_of("context-after").unwrap().parse::<i64>().unwrap_or(0)
-        }
-    };
-    let file_types = matches.values_of("type").unwrap_or(vec![]);
-    let exclude = matches.values_of("exclude").unwrap_or(vec![]);
-    let max_count = matches.value_of("max-count").map(move |s| s.parse::<i64>().unwrap());
-    let threads = matches.value_of("threads").unwrap().parse::<i64>().unwrap_or(0);
-    let threads = {
-        if threads == 0 {
-            std.thread::available_parallelism().unwrap_or(4)
-        } else {
-            threads
-        }
-    };
-    let json = matches.is_present("json");
-    let color = matches.value_of("color").unwrap();
-    let hidden = matches.is_present("hidden");
-    let no_ignore = matches.is_present("no-ignore");
-    Args { pattern, paths, case_insensitive, whole_word, line_numbers, count_only, files_with_matches, context_before, context_after, file_types, exclude, max_count, threads, json, color, hidden, no_ignore }
-}
-
-
-}
-
-pub mod config {
-use windjammer_runtime::regex_mod as regex;
-use windjammer_runtime::regex_mod::Regex;
-
-use windjammer_runtime::path;
-
-use windjammer_runtime::io;
-
-use crate::main::Args;
-
-
-#[derive(Debug, Clone)]
-pub struct Config {
-    pub pattern: Regex,
-    pub paths: Vec<String>,
-    pub case_insensitive: bool,
-    pub whole_word: bool,
-    pub line_numbers: bool,
-    pub count_only: bool,
-    pub files_with_matches: bool,
-    pub context_before: i64,
-    pub context_after: i64,
-    pub file_types: Vec<String>,
-    pub exclude_patterns: Vec<String>,
-    pub max_count: Option<i64>,
-    pub threads: i64,
-    pub json: bool,
-    pub use_color: bool,
-    pub search_hidden: bool,
-    pub respect_ignore: bool,
-}
-
-#[inline]
-pub fn from_args(mut args: Args) -> Result<Config, String> {
-    let pattern_str = {
-        if args.whole_word {
-            let escaped = regex::escape(&args.pattern);
-            format!("{}{}{}", "\\b", &escaped, "\\b")
-        } else {
-            args.pattern
-        }
-    };
-    let pattern = {
-        if args.case_insensitive {
-            regex::compile_with_flags(&pattern_str, "i".to_string())?
-        } else {
-            regex::compile(&pattern_str)?
-        }
-    };
-    let use_color = match args.color.as_str() {
-        "always" => true,
-        "never" => false,
-        _ => io::is_terminal(),
-    };
-    Ok(Config { pattern, paths: args.paths, case_insensitive: args.case_insensitive, whole_word: args.whole_word, line_numbers: args.line_numbers, count_only: args.count_only, files_with_matches: args.files_with_matches, context_before: args.context_before, context_after: args.context_after, file_types: args.file_types, exclude_patterns: args.exclude, max_count: args.max_count, threads: args.threads, json: args.json, use_color, search_hidden: args.hidden, respect_ignore: !args.no_ignore })
-}
-
-#[inline]
-pub fn get_file_extensions(mut file_type: String) -> Vec<String> {
-    match file_type.as_str() {
-        "rust" => vec!["rs"],
-        "windjammer" | "wj" => vec!["wj"],
-        "python" | "py" => vec!["py", "pyw"],
-        "javascript" | "js" => vec!["js", "jsx", "mjs"],
-        "typescript" | "ts" => vec!["ts", "tsx"],
-        "go" => vec!["go"],
-        "c" => vec!["c", "h"],
-        "cpp" | "c++" => vec!["cpp", "cc", "cxx", "hpp", "hxx"],
-        "java" => vec!["java"],
-        "markdown" | "md" => vec!["md", "markdown"],
-        "json" => vec!["json"],
-        "yaml" | "yml" => vec!["yaml", "yml"],
-        "toml" => vec!["toml"],
-        "xml" => vec!["xml"],
-        "html" => vec!["html", "htm"],
-        "css" => vec!["css", "scss", "sass"],
-        "sql" => vec!["sql"],
-        "shell" | "sh" => vec!["sh", "bash", "zsh"],
-        _ => vec![],
-    }
-}
-
-#[inline]
-pub fn matches_file_type(mut path: &str, mut file_types: &[String]) -> bool {
-    if file_types.is_empty() {
-        return true;
-    }
-    let ext = path::extension(path).unwrap_or("".to_string());
-    for file_type in file_types {
-        let extensions = get_file_extensions(file_type.clone());
-        if extensions.contains(&ext.to_string()) {
-            return true;
-        }
-    }
-    false
-}
-
-#[inline]
-pub fn should_exclude(mut path: &str, mut exclude_patterns: &[String]) -> bool {
-    for pattern in exclude_patterns {
-        if path::contains(pattern) {
-            return true;
-        }
-    }
-    false
-}
-
-
-}
 
 
 
