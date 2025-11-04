@@ -6,6 +6,7 @@ use std::time
 
 use ./config::Config
 use ./search::SearchResults
+use ./search::Match
 
 // ANSI color codes
 const COLOR_RED: string = "\x1b[31m"
