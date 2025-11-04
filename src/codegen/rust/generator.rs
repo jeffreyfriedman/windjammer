@@ -1157,12 +1157,14 @@ impl CodeGenerator {
         self.current_function_params = func.parameters.clone();
 
         // PHASE 8 OPTIMIZATION: Load SmallVec optimizations for this function
+        // DISABLED: SmallVec optimizations conflict with return types
+        // TODO: Re-enable with smarter conversion at return sites
         self.smallvec_optimizations.clear();
-        for opt in &analyzed.smallvec_optimizations {
-            self.smallvec_optimizations
-                .insert(opt.variable.clone(), opt.clone());
-            self.needs_smallvec_import = true; // Mark that we need the smallvec crate
-        }
+        // for opt in &analyzed.smallvec_optimizations {
+        //     self.smallvec_optimizations
+        //         .insert(opt.variable.clone(), opt.clone());
+        //     self.needs_smallvec_import = true; // Mark that we need the smallvec crate
+        // }
 
         // PHASE 9 OPTIMIZATION: Load Cow optimizations for this function
         self.cow_optimizations.clear();
