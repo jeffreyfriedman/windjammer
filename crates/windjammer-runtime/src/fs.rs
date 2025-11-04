@@ -79,15 +79,49 @@ pub fn rename<P: AsRef<Path>, Q: AsRef<Path>>(from: P, to: Q) -> Result<(), Stri
     std::fs::rename(from, to).map_err(|e| e.to_string())
 }
 
+/// Directory entry wrapper
+#[derive(Debug, Clone)]
+pub struct DirEntry {
+    path: String,
+}
+
+impl DirEntry {
+    /// Get the full path to this entry
+    pub fn path(&self) -> String {
+        self.path.clone()
+    }
+
+    /// Get the file name (last component of path)
+    pub fn file_name(&self) -> String {
+        Path::new(&self.path)
+            .file_name()
+            .and_then(|n| n.to_str())
+            .unwrap_or("")
+            .to_string()
+    }
+
+    /// Check if this entry is a file
+    pub fn is_file(&self) -> bool {
+        Path::new(&self.path).is_file()
+    }
+
+    /// Check if this entry is a directory
+    pub fn is_dir(&self) -> bool {
+        Path::new(&self.path).is_dir()
+    }
+}
+
 /// List directory entries
-pub fn read_dir<P: AsRef<Path>>(path: P) -> Result<Vec<String>, String> {
+pub fn read_dir<P: AsRef<Path>>(path: P) -> Result<Vec<DirEntry>, String> {
     let entries = std::fs::read_dir(path).map_err(|e| e.to_string())?;
     let mut result = Vec::new();
     for entry in entries {
         let entry = entry.map_err(|e| e.to_string())?;
         let path = entry.path();
         if let Some(path_str) = path.to_str() {
-            result.push(path_str.to_string());
+            result.push(DirEntry {
+                path: path_str.to_string(),
+            });
         }
     }
     Ok(result)

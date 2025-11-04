@@ -511,12 +511,14 @@ impl CodeGenerator {
                 // Otherwise, import all from the path
                 return format!("use {}{}::*;\n", prefix, rust_path);
             } else {
-                // Module import: ./utils -> use crate::utils::*;
+                // Module import: ./utils -> use crate::utils;
+                // This brings the module into scope, allowing utils::function() calls
                 let module_name = stripped.split('/').next_back().unwrap_or(stripped);
                 if let Some(alias_name) = alias {
                     return format!("use {}{} as {};\n", prefix, module_name, alias_name);
                 } else {
-                    return format!("use {}{}::*;\n", prefix, module_name);
+                    // Import the module itself, not its contents with ::*
+                    return format!("use {}{};\n", prefix, module_name);
                 }
             }
         }
