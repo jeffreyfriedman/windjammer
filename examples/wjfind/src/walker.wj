@@ -4,6 +4,7 @@ use std::fs
 use std::path
 
 use ./config::Config
+use ./config
 use ./gitignore::GitignoreCache
 
 pub fn collect_files(paths: Vec<string>, config: &Config) -> Result<Vec<string>, string> {
@@ -63,7 +64,7 @@ fn walk_dir(dir: string, config: &Config, files: &mut Vec<string>, gitignore_cac
         }
         
         // Skip if excluded
-        if should_exclude(&path, &config.exclude_patterns) {
+        if config::should_exclude(&path, &config.exclude_patterns) {
             continue
         }
         
@@ -95,7 +96,7 @@ fn walk_dir(dir: string, config: &Config, files: &mut Vec<string>, gitignore_cac
 
 fn should_include_file(path: &string, config: &Config, gitignore_cache: &mut GitignoreCache) -> bool {
     // Check file type filter
-    if !matches_file_type(path, &config.file_types) {
+    if !config::matches_file_type(path, &config.file_types) {
         return false
     }
     
