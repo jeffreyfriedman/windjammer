@@ -100,7 +100,7 @@ pub fn matches_file_type(path: &string, file_types: &Vec<string>) -> bool {
         return true
     }
     
-    let ext = std::path::extension(path).unwrap_or("")
+    let ext = path::extension(path).unwrap_or("")
     
     for file_type in file_types {
         let extensions = get_file_extensions(file_type.clone())

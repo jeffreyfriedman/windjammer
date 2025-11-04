@@ -2298,6 +2298,14 @@ impl CodeGenerator {
                             "cli",
                             "log",
                             "crypto",
+                            "path",
+                            "io",
+                            "env",
+                            "time",
+                            "sync",
+                            "thread",
+                            "collections",
+                            "cmp",
                         ];
 
                         // Type or module (uppercase) vs variable (lowercase)
