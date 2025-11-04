@@ -124,20 +124,26 @@ fn search_file(path: string, config: &Config) -> Result<Vec<Match>, string> {
     let mut matches = vec![]
     
     for (line_num, line) in all_lines.iter().enumerate() {
-        if let Some(mut m) = matcher::find_match(line, (line_num + 1) as int, &path, config) {
-            // Add context lines if requested
-            if config.context_before > 0 || config.context_after > 0 {
-                m = add_context(m, &all_lines, config.context_before, config.context_after)
-            }
-            
-            matches.push(m)
-            
-            // Early termination if max count reached
-            if let Some(max) = config.max_count {
-                if matches.len() >= max as usize {
-                    break
+        match matcher::find_match(line, (line_num + 1) as int, &path, config) {
+            Some(mut m) => {
+                // Add context lines if requested
+                if config.context_before > 0 || config.context_after > 0 {
+                    m = add_context(m, &all_lines, config.context_before, config.context_after)
                 }
-            }
+                
+                matches.push(m)
+                
+                // Early termination if max count reached
+                match config.max_count {
+                    Some(max) => {
+                        if matches.len() >= max as usize {
+                            break
+                        }
+                    },
+                    None => {}
+                }
+            },
+            None => {}
         }
     }
     
