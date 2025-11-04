@@ -6,9 +6,9 @@
 use clap::{Arg, ArgAction, ArgMatches, Command};
 
 /// Create a new CLI application builder
-pub fn new(name: &str) -> AppBuilder {
+pub fn new(name: impl Into<String>) -> AppBuilder {
     AppBuilder {
-        name: name.to_string(),
+        name: name.into(),
         version: None,
         author: None,
         about: None,
@@ -17,9 +17,9 @@ pub fn new(name: &str) -> AppBuilder {
 }
 
 /// Create a new argument (positional or required)
-pub fn arg(name: &str) -> ArgBuilder {
+pub fn arg(name: impl Into<String>) -> ArgBuilder {
     ArgBuilder {
-        name: name.to_string(),
+        name: name.into(),
         short: None,
         long: None,
         help: None,
@@ -31,9 +31,9 @@ pub fn arg(name: &str) -> ArgBuilder {
 }
 
 /// Create a new flag (boolean, no value)
-pub fn flag(name: &str) -> ArgBuilder {
+pub fn flag(name: impl Into<String>) -> ArgBuilder {
     ArgBuilder {
-        name: name.to_string(),
+        name: name.into(),
         short: None,
         long: None,
         help: None,
@@ -45,9 +45,9 @@ pub fn flag(name: &str) -> ArgBuilder {
 }
 
 /// Create a new option (takes a value)
-pub fn option(name: &str) -> ArgBuilder {
+pub fn option(name: impl Into<String>) -> ArgBuilder {
     ArgBuilder {
-        name: name.to_string(),
+        name: name.into(),
         short: None,
         long: None,
         help: None,
@@ -90,20 +90,20 @@ pub struct ArgBuilder {
 
 impl AppBuilder {
     /// Set the version
-    pub fn version(mut self, version: &str) -> Self {
-        self.version = Some(version.to_string());
+    pub fn version(mut self, version: impl Into<String>) -> Self {
+        self.version = Some(version.into());
         self
     }
 
     /// Set the author
-    pub fn author(mut self, author: &str) -> Self {
-        self.author = Some(author.to_string());
+    pub fn author(mut self, author: impl Into<String>) -> Self {
+        self.author = Some(author.into());
         self
     }
 
     /// Set the about text
-    pub fn about(mut self, about: &str) -> Self {
-        self.about = Some(about.to_string());
+    pub fn about(mut self, about: impl Into<String>) -> Self {
+        self.about = Some(about.into());
         self
     }
 
@@ -198,20 +198,20 @@ impl AppBuilder {
 
 impl ArgBuilder {
     /// Set the help text
-    pub fn help(mut self, help: &str) -> Self {
-        self.help = Some(help.to_string());
+    pub fn help(mut self, help: impl Into<String>) -> Self {
+        self.help = Some(help.into());
         self
     }
 
     /// Set the short flag (single character)
-    pub fn short(mut self, short: &str) -> Self {
-        self.short = Some(short.to_string());
+    pub fn short(mut self, short: impl Into<String>) -> Self {
+        self.short = Some(short.into());
         self
     }
 
     /// Set the long flag
-    pub fn long(mut self, long: &str) -> Self {
-        self.long = Some(long.to_string());
+    pub fn long(mut self, long: impl Into<String>) -> Self {
+        self.long = Some(long.into());
         self
     }
 
@@ -228,8 +228,8 @@ impl ArgBuilder {
     }
 
     /// Set default value
-    pub fn default_value(mut self, value: &str) -> Self {
-        self.default_value = Some(value.to_string());
+    pub fn default_value(mut self, value: impl Into<String>) -> Self {
+        self.default_value = Some(value.into());
         self
     }
 }
