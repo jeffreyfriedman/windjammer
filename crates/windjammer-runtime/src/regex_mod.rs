@@ -2,11 +2,42 @@
 //!
 //! Windjammer's `std::regex` module maps to these functions.
 
-use regex::Regex;
+use regex::Regex as RegexImpl;
+use regex::RegexBuilder;
+
+/// Re-export Regex type for use in Windjammer code
+pub use regex::Regex;
 
 /// Create a new regex (for reuse across multiple operations)
 pub fn new(pattern: &str) -> Result<Regex, String> {
-    Regex::new(pattern).map_err(|e| e.to_string())
+    RegexImpl::new(pattern).map_err(|e| e.to_string())
+}
+
+/// Compile a regex pattern (alias for new)
+pub fn compile(pattern: &str) -> Result<Regex, String> {
+    RegexImpl::new(pattern).map_err(|e| e.to_string())
+}
+
+/// Compile a regex pattern with flags
+/// Flags: "i" = case insensitive, "m" = multiline, "s" = dot matches newline
+pub fn compile_with_flags(pattern: &str, flags: &str) -> Result<Regex, String> {
+    let mut builder = RegexBuilder::new(pattern);
+    
+    for flag in flags.chars() {
+        match flag {
+            'i' => { builder.case_insensitive(true); },
+            'm' => { builder.multi_line(true); },
+            's' => { builder.dot_matches_new_line(true); },
+            _ => return Err(format!("Unknown regex flag: {}", flag)),
+        }
+    }
+    
+    builder.build().map_err(|e| e.to_string())
+}
+
+/// Escape special regex characters in a string
+pub fn escape(text: &str) -> String {
+    regex::escape(text)
 }
 
 /// Check if pattern matches string (compiles regex each time - use new() for better performance)
