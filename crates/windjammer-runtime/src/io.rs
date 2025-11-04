@@ -12,6 +12,12 @@ use std::io::{
 /// Re-export std::io types
 pub use std::io::{BufRead, BufReader, BufWriter, Error, Read, Result, Write};
 
+/// Check if stdout is connected to a terminal (tty)
+pub fn is_terminal() -> bool {
+    use std::io::IsTerminal;
+    std::io::stdout().is_terminal()
+}
+
 /// Create a buffered reader from a file
 pub fn buf_reader(file: File) -> StdBufReader<File> {
     StdBufReader::new(file)

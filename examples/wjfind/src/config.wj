@@ -43,7 +43,7 @@ pub fn from_args(args: Args) -> Result<Config, string> {
     let use_color = match args.color.as_str() {
         "always" => true,
         "never" => false,
-        _ => std::io::is_terminal(std::io::stdout()),  // auto
+        _ => io::is_terminal(),  // auto
     }
     
     Ok(Config {
