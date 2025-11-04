@@ -475,11 +475,26 @@ impl CodeGenerator {
                 return format!("use {} as {};\n", rust_import, alias_name);
             } else {
                 // For _mod suffixed modules (log_mod, regex_mod), alias back to the original name
+                // AND import any public types they export
                 if rust_import.ends_with("_mod") {
                     let original_name = rust_import.strip_suffix("_mod")
                         .and_then(|s| s.split("::").last())
                         .unwrap_or(&rust_import);
-                    return format!("use {} as {};\n", rust_import, original_name);
+                    
+                    let mut result = format!("use {} as {};\n", rust_import, original_name);
+                    
+                    // Import types for modules that export them
+                    match original_name {
+                        "regex" => {
+                            result.push_str(&format!("use {}::Regex;\n", rust_import));
+                        }
+                        "time" => {
+                            result.push_str(&format!("use {}::{{Duration, Instant}};\n", rust_import));
+                        }
+                        _ => {}
+                    }
+                    
+                    return result;
                 }
                 // Import the module itself (not glob) to keep module-qualified paths
                 // For types like Duration, we'll need explicit imports or full paths
