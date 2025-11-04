@@ -474,6 +474,13 @@ impl CodeGenerator {
             if let Some(alias_name) = alias {
                 return format!("use {} as {};\n", rust_import, alias_name);
             } else {
+                // For _mod suffixed modules (log_mod, regex_mod), alias back to the original name
+                if rust_import.ends_with("_mod") {
+                    let original_name = rust_import.strip_suffix("_mod")
+                        .and_then(|s| s.split("::").last())
+                        .unwrap_or(&rust_import);
+                    return format!("use {} as {};\n", rust_import, original_name);
+                }
                 // Import the module itself (not glob) to keep module-qualified paths
                 // For types like Duration, we'll need explicit imports or full paths
                 return format!("use {};\n", rust_import);
