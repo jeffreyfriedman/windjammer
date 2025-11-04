@@ -515,9 +515,6 @@ impl CodeGenerator {
                 .or_else(|| full_path.strip_prefix("../"))
                 .unwrap_or(&full_path);
 
-            // When generating for modules (is_module=true), use crate:: prefix for cross-module imports
-            let prefix = if self.is_module { "crate::" } else { "" };
-
             // Check if this is importing a specific item (e.g., ./config::Config)
             if stripped.contains("::") {
                 // Split into module path and item
@@ -527,20 +524,24 @@ impl CodeGenerator {
                 if let Some(last) = segments.last() {
                     if last.chars().next().is_some_and(|c| c.is_uppercase()) {
                         // Importing a specific type: ./config::Config -> use crate::config::Config;
-                        return format!("use {}{};\n", prefix, rust_path);
+                        return format!("use crate::{};\n", rust_path);
                     }
                 }
                 // Otherwise, import all from the path
-                return format!("use {}{}::*;\n", prefix, rust_path);
+                return format!("use crate::{}::*;\n", rust_path);
             } else {
-                // Module import: ./utils -> use crate::utils;
-                // This brings the module into scope, allowing utils::function() calls
+                // Module import: ./config
+                // In the main entry point (is_module=false), modules are already in scope via pub mod declarations
+                // In submodules (is_module=true), we need to explicitly use sibling modules
                 let module_name = stripped.split('/').next_back().unwrap_or(stripped);
                 if let Some(alias_name) = alias {
-                    return format!("use {}{} as {};\n", prefix, module_name, alias_name);
+                    return format!("use crate::{} as {};\n", module_name, alias_name);
+                } else if self.is_module {
+                    // In a module, we need to explicitly use sibling modules
+                    return format!("use crate::{};\n", module_name);
                 } else {
-                    // Import the module itself, not its contents with ::*
-                    return format!("use {}{};\n", prefix, module_name);
+                    // In main entry point, modules are already in scope
+                    return String::new();
                 }
             }
         }
