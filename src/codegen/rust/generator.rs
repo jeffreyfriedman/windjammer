@@ -2266,6 +2266,7 @@ impl CodeGenerator {
                     Expression::Call { .. } | Expression::MethodCall { .. } => ".", // Instance method on return value
                     Expression::Identifier(ref name) => {
                         // Check for known module/crate names that should use ::
+                        // Note: Avoid common variable names like "path", "config" which are used as variables
                         let known_modules = [
                             "std",
                             "serde_json",
@@ -2288,7 +2289,7 @@ impl CodeGenerator {
                             "Utc",
                             "Local",
                             "DEFAULT_COST",
-                            // Stdlib modules
+                            // Stdlib modules (avoid common variable names)
                             "mime",
                             "http",
                             "fs",
@@ -2298,7 +2299,6 @@ impl CodeGenerator {
                             "cli",
                             "log",
                             "crypto",
-                            "path",
                             "io",
                             "env",
                             "time",
