@@ -15,7 +15,7 @@ const COLOR_CYAN: string = "\x1b[36m"
 const COLOR_RESET: string = "\x1b[0m"
 const COLOR_BOLD: string = "\x1b[1m"
 
-pub fn print_results(results: &SearchResults, config: &Config, duration: Duration) {
+pub fn print_results(results: &SearchResults, config: &Config, duration: time::Duration) {
     if config.json {
         print_json(results, duration)
     } else if config.count_only {
@@ -27,7 +27,7 @@ pub fn print_results(results: &SearchResults, config: &Config, duration: Duratio
     }
 }
 
-fn print_json(results: &SearchResults, duration: Duration) {
+fn print_json(results: &SearchResults, duration: time::Duration) {
     let output = json!({
         "matches": results.matches.iter().map(|m| {
             json!({

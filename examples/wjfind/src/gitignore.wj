@@ -4,6 +4,7 @@ use std::fs
 use std::path
 use std::collections::HashSet
 
+@derive(Clone)
 pub struct GitignoreRules {
     patterns: Vec<string>,
 }

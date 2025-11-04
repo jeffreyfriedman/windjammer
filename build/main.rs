@@ -1,8 +1,449 @@
 
+
+
+pub mod output {
+use serde::{Serialize, Deserialize};
+
+use windjammer_runtime::io;
+
+use windjammer_runtime::json;
+
+use windjammer_runtime::time;
+
+use crate::config::Config;
+
+use crate::search::SearchResults;
+
+
+pub const COLOR_RED: &'static str = "x1b[31m";
+pub const COLOR_GREEN: &'static str = "x1b[32m";
+pub const COLOR_BLUE: &'static str = "x1b[34m";
+pub const COLOR_CYAN: &'static str = "x1b[36m";
+pub const COLOR_RESET: &'static str = "x1b[0m";
+pub const COLOR_BOLD: &'static str = "x1b[1m";
+
+#[inline]
+pub fn print_results(mut results: &SearchResults, mut config: &Config, mut duration: time::Duration) {
+    if config.json {
+        print_json(&results, duration)
+    } else {
+        if config.count_only {
+            print_count(&results)
+        } else {
+            if config.files_with_matches {
+                print_files_only(&results, &config)
+            } else {
+                print_default(&results, &config)
+            }
+        }
+    }
+}
+
+#[inline]
+pub fn print_json(mut results: &SearchResults, mut duration: time::Duration) {
+    let output = json!(std::collections::HashMap::from([("matches", results.matches.iter().map(move |m| {
+        json!(std::collections::HashMap::from([("file", m.file), ("line", m.line_number), ("column", m.column), ("text", m.line_text), ("match", m.match_text)]))
+    }).collect::<Vec<_>>()), ("stats", std::collections::HashMap::from([("files_searched", results.files_searched), ("matches_found", results.total_matches), ("duration_ms", duration.as_millis())]))]));
+    println!("{}", json::stringify_pretty(&output))
+}
+
+#[inline]
+pub fn print_count(mut results: &SearchResults) {
+    println!("{}", results.total_matches)
+}
+
+#[inline]
+pub fn print_files_only(mut results: &SearchResults, mut config: &Config) {
+    let mut files = std::collections::HashSet::new();
+    for m in results.matches {
+        files.insert(m.file);
+    }
+    for file in files {
+        if config.use_color {
+            println!("{}{}{}", COLOR_GREEN, file, COLOR_RESET)
+        } else {
+            println!("{}", file)
+        }
+    }
+}
+
+#[inline]
+pub fn print_default(mut results: &SearchResults, mut config: &Config) {
+    let mut by_file = std::collections::HashMap::new();
+    for m in &results.matches {
+        by_file.entry(m.file.clone()).or_insert(vec![]).push(m.clone());
+    }
+    for (file, matches) in by_file {
+        if config.use_color {
+            println!("{}{}{}{}", COLOR_BOLD, COLOR_GREEN, file, COLOR_RESET)
+        } else {
+            println!("{}", file)
+        }
+        for m in matches {
+            print_match(&m, &config);
+        }
+        println!("");
+    }
+    if config.use_color {
+        println!("{}Found {} matches in {} files (searched {} files){}", COLOR_CYAN, results.total_matches, by_file.len(), results.files_searched, COLOR_RESET)
+    } else {
+        println!("Found {} matches in {} files (searched {} files)", results.total_matches, by_file.len(), results.files_searched)
+    }
+}
+
+#[inline]
+pub fn print_match(mut m: &Match, mut config: &Config) {
+    if !m.context_before.is_empty() {
+        let start_line = m.line_number - m.context_before.len() as i64;
+        for (i, context_line) in m.context_before.iter().enumerate() {
+            let line_num = start_line + i as i64;
+            print_context_line(line_num, &context_line, &config);
+        }
+    }
+    let line_num_str = {
+        if config.line_numbers {
+            format!("{}:", m.line_number)
+        } else {
+            "".to_string()
+        }
+    };
+    let highlighted_line = {
+        if config.use_color {
+            highlight_match(&m.line_text, &m.match_text, m.column)
+        } else {
+            m.line_text.clone()
+        }
+    };
+    if config.use_color {
+        println!("  {}{}{} {}", COLOR_BLUE, line_num_str, COLOR_RESET, highlighted_line)
+    } else {
+        println!("  {}{}", line_num_str, highlighted_line)
+    }
+    if !m.context_after.is_empty() {
+        let start_line = m.line_number + 1;
+        for (i, context_line) in m.context_after.iter().enumerate() {
+            let line_num = start_line + i as i64;
+            print_context_line(line_num, &context_line, &config);
+        }
+    }
+}
+
+#[inline]
+pub fn print_context_line(mut line_num: i64, mut line: &str, mut config: &Config) {
+    let line_num_str = {
+        if config.line_numbers {
+            format!("{}-", line_num)
+        } else {
+            "".to_string()
+        }
+    };
+    if config.use_color {
+        println!("  {}{}{} {}", COLOR_CYAN, line_num_str, COLOR_RESET, line)
+    } else {
+        println!("  {}{}", line_num_str, line)
+    }
+}
+
+#[inline]
+pub fn highlight_match(mut line: &str, mut match_text: &str, mut column: i64) -> String {
+    let before = &&line[0..(column - 1) as usize];
+    let after = &&line[(column - 1 + match_text.len() as i64) as usize..line.len()];
+    format!("{}{}{}{}{}{}", before, COLOR_BOLD, COLOR_RED, match_text, COLOR_RESET, after)
+}
+
+
+}
+
+
+
+
+
+
+
+pub mod gitignore {
+use smallvec::{SmallVec, smallvec};
+
+use windjammer_runtime::fs;
+
+use windjammer_runtime::path;
+
+use std::collections::HashSet;
+
+
+#[derive(Clone)]
+pub struct GitignoreRules {
+    pub patterns: Vec<String>,
+}
+
+impl GitignoreRules {
+#[inline]
+pub fn new() -> Self {
+        GitignoreRules { patterns: vec![] }
+}
+#[inline]
+pub fn load_from_directory(&self, mut dir: String) -> Result<Self, String> {
+        let gitignore_path = path::join(&dir, &".gitignore");
+        if !fs::exists(&gitignore_path) {
+            return Ok(GitignoreRules::new());
+        }
+        let contents = fs::read_to_string(&gitignore_path)?;
+        let mut patterns: SmallVec<[_; 4]> = smallvec![];
+        for line in contents.lines() {
+            let trimmed = line.trim();
+            if trimmed.is_empty() || trimmed.starts_with("#") {
+                continue;
+            }
+            self.patterns.push(trimmed.to_string());
+        }
+        Ok(GitignoreRules { patterns })
+}
+#[inline]
+pub fn is_ignored(&self, mut path: &str) -> bool {
+        let name = path::file_name(&path).unwrap_or(path);
+        let path_str = path.clone();
+        for pattern in self.patterns.iter() {
+            if self.matches_pattern(name.clone(), pattern.clone()) || self.matches_pattern(path_str.clone(), pattern.clone()) {
+                return true;
+            }
+        }
+        false
+}
+#[inline]
+pub fn matches_pattern(&self, mut name: String, mut pattern: &str) -> bool {
+        if name == pattern {
+            return true;
+        }
+        if pattern.ends_with("/") {
+            let dir_pattern = pattern.trim_end_matches("/");
+            if name == dir_pattern {
+                return true;
+            }
+        }
+        if pattern.contains("*") {
+            return self.wildcard_match(name, pattern);
+        }
+        if pattern.starts_with("*.") {
+            let ext = pattern.trim_start_matches("*.");
+            if name.ends_with(&format!(".{}", ext)) {
+                return true;
+            }
+        }
+        if name.contains(pattern) {
+            return true;
+        }
+        false
+}
+#[inline]
+pub fn wildcard_match(&self, mut name: String, mut pattern: &str) -> bool {
+        let parts: Vec<String> = pattern.split('*').collect();
+        if parts.is_empty() {
+            return false;
+        }
+        if !parts[0].is_empty() && !name.starts_with(parts[0]) {
+            return false;
+        }
+        if parts.len() > 1 {
+            let last = &parts[parts.len() - 1];
+            if !last.is_empty() && !name.ends_with(last) {
+                return false;
+            }
+        }
+        let mut pos = 0;
+        for (i, part) in parts.iter().enumerate() {
+            if part.is_empty() {
+                continue;
+            }
+            if i == 0 {
+                pos = part.len();
+                continue;
+            }
+            match &name[pos..name.len()].find(part) {
+                Some(idx) => {
+                    pos = pos + idx + part.len();
+                },
+                _ => {
+                    return false;
+                },
+            }
+        }
+        true
+}
+}
+
+pub struct GitignoreCache {
+    pub cache: std::collections::HashMap<String, GitignoreRules>,
+}
+
+impl GitignoreCache {
+#[inline]
+pub fn new() -> Self {
+        GitignoreRules { patterns: vec![] }
+}
+#[inline]
+pub fn get_rules(&mut self, mut dir: &str) -> GitignoreRules {
+        match self.cache.get(&dir) {
+            Some(rules) => {
+                return rules.clone();
+            },
+        }
+        let rules = GitignoreRules::load_from_directory(dir.clone()).unwrap_or_else(move |_| GitignoreRules::new());
+        self.cache.insert(dir, rules.clone());
+        rules
+}
+}
+
+
+}
+
+
+
+pub mod config {
+use windjammer_runtime::regex_mod;
+
+use crate::main::Args;
+
+
+#[derive(Debug, Clone)]
+pub struct Config {
+    pub pattern: Regex,
+    pub paths: Vec<String>,
+    pub case_insensitive: bool,
+    pub whole_word: bool,
+    pub line_numbers: bool,
+    pub count_only: bool,
+    pub files_with_matches: bool,
+    pub context_before: i64,
+    pub context_after: i64,
+    pub file_types: Vec<String>,
+    pub exclude_patterns: Vec<String>,
+    pub max_count: Option<i64>,
+    pub threads: i64,
+    pub json: bool,
+    pub use_color: bool,
+    pub search_hidden: bool,
+    pub respect_ignore: bool,
+}
+
+#[inline]
+pub fn from_args(mut args: Args) -> Result<Config, String> {
+    let pattern_str = {
+        if args.whole_word {
+            let escaped = regex::escape(&args.pattern);
+            format!("{}{}{}", "\\b", &escaped, "\\b")
+        } else {
+            args.pattern
+        }
+    };
+    let pattern = {
+        if args.case_insensitive {
+            regex::compile_with_flags(&pattern_str, "i".to_string())?
+        } else {
+            regex::compile(&pattern_str)?
+        }
+    };
+    let use_color = match args.color.as_str() {
+        "always" => true,
+        "never" => false,
+        _ => std::io::is_terminal(std::io::stdout()),
+    };
+    Ok(Config { pattern, paths: args.paths, case_insensitive: args.case_insensitive, whole_word: args.whole_word, line_numbers: args.line_numbers, count_only: args.count_only, files_with_matches: args.files_with_matches, context_before: args.context_before, context_after: args.context_after, file_types: args.file_types, exclude_patterns: args.exclude, max_count: args.max_count, threads: args.threads, json: args.json, use_color, search_hidden: args.hidden, respect_ignore: !args.no_ignore })
+}
+
+#[inline]
+pub fn get_file_extensions(mut file_type: String) -> Vec<String> {
+    match file_type.as_str() {
+        "rust" => vec!["rs"],
+        "windjammer" | "wj" => vec!["wj"],
+        "python" | "py" => vec!["py", "pyw"],
+        "javascript" | "js" => vec!["js", "jsx", "mjs"],
+        "typescript" | "ts" => vec!["ts", "tsx"],
+        "go" => vec!["go"],
+        "c" => vec!["c", "h"],
+        "cpp" | "c++" => vec!["cpp", "cc", "cxx", "hpp", "hxx"],
+        "java" => vec!["java"],
+        "markdown" | "md" => vec!["md", "markdown"],
+        "json" => vec!["json"],
+        "yaml" | "yml" => vec!["yaml", "yml"],
+        "toml" => vec!["toml"],
+        "xml" => vec!["xml"],
+        "html" => vec!["html", "htm"],
+        "css" => vec!["css", "scss", "sass"],
+        "sql" => vec!["sql"],
+        "shell" | "sh" => vec!["sh", "bash", "zsh"],
+        _ => vec![],
+    }
+}
+
+#[inline]
+pub fn matches_file_type(mut path: &str, mut file_types: &[String]) -> bool {
+    if file_types.is_empty() {
+        return true;
+    }
+    let ext = std::path::extension(path).unwrap_or("");
+    for file_type in file_types {
+        let extensions = get_file_extensions(file_type.clone());
+        if extensions.contains(&ext.to_string()) {
+            return true;
+        }
+    }
+    false
+}
+
+#[inline]
+pub fn should_exclude(mut path: &str, mut exclude_patterns: &[String]) -> bool {
+    for pattern in exclude_patterns {
+        if path.contains(pattern) {
+            return true;
+        }
+    }
+    false
+}
+
+
+}
+
+
+pub mod matcher {
+use smallvec::{SmallVec, smallvec};
+
+use windjammer_runtime::regex_mod;
+
+use crate::config::Config;
+
+use crate::search::Match;
+
+
+#[inline]
+pub fn find_match(mut line: &str, mut line_num: i64, mut file: &str, mut config: &Config) -> Option<Match> {
+    let captures = config.pattern.captures(line)?;
+    let match_obj = captures.get(0)?;
+    let match_text = match_obj.as_str();
+    let column = (match_obj.start() + 1) as i64;
+    Some(Match { file: file.clone(), line_number: line_num, column, line_text: line.to_string(), match_text: match_text.to_string(), context_before: vec![], context_after: vec![] })
+}
+
+#[inline]
+pub fn find_all_matches(mut line: &str, mut line_num: i64, mut file: &str, mut config: &Config) -> Vec<Match> {
+    let mut matches: SmallVec<[_; 4]> = smallvec![];
+    for capture in config.pattern.captures_iter(line) {
+        match capture.get(0) {
+            Some(match_obj) => {
+                let match_text = match_obj.as_str();
+                let column = (match_obj.start() + 1) as i64;
+                matches.push(Match { file: file.clone(), line_number: line_num, column, line_text: line.to_string(), match_text: match_text.to_string(), context_before: vec![], context_after: vec![] })
+            },
+        }
+    }
+    matches
+}
+
+
+}
+
 pub mod search {
 use smallvec::{SmallVec, smallvec};
 
-use windjammer_runtime::fs::*;
+use windjammer_runtime::fs;
 
 use windjammer_runtime::io;
 
@@ -14,9 +455,9 @@ use windjammer_runtime::thread;
 
 use crate::config::Config;
 
-use crate::walker::*;
+use crate::walker;
 
-use crate::matcher::*;
+use crate::matcher;
 
 
 #[derive(Debug)]
@@ -156,52 +597,10 @@ pub fn add_context(mut match_obj: Match, mut all_lines: &[String], mut lines_bef
 
 }
 
-
-
-
-pub mod matcher {
-use smallvec::{SmallVec, smallvec};
-
-use windjammer_runtime::regex_mod::*;
-
-use crate::config::Config;
-
-use crate::search::Match;
-
-
-#[inline]
-pub fn find_match(mut line: &str, mut line_num: i64, mut file: &str, mut config: &Config) -> Option<Match> {
-    let captures = config.pattern.captures(line)?;
-    let match_obj = captures.get(0)?;
-    let match_text = match_obj.as_str();
-    let column = (match_obj.start() + 1) as i64;
-    Some(Match { file: file.clone(), line_number: line_num, column, line_text: line.to_string(), match_text: match_text.to_string(), context_before: vec![], context_after: vec![] })
-}
-
-#[inline]
-pub fn find_all_matches(mut line: &str, mut line_num: i64, mut file: &str, mut config: &Config) -> Vec<Match> {
-    let mut matches: SmallVec<[_; 4]> = smallvec![];
-    for capture in config.pattern.captures_iter(line) {
-        match capture.get(0) {
-            Some(match_obj) => {
-                let match_text = match_obj.as_str();
-                let column = (match_obj.start() + 1) as i64;
-                matches.push(Match { file: file.clone(), line_number: line_num, column, line_text: line.to_string(), match_text: match_text.to_string(), context_before: vec![], context_after: vec![] })
-            },
-        }
-    }
-    matches
-}
-
-
-}
-
-
-
 pub mod walker {
 use smallvec::{SmallVec, smallvec};
 
-use windjammer_runtime::fs::*;
+use windjammer_runtime::fs;
 
 use windjammer_runtime::path;
 
@@ -313,285 +712,26 @@ pub fn is_likely_binary(mut path: &str) -> bool {
 
 }
 
-pub mod output {
-use serde::{Serialize, Deserialize};
-
-use windjammer_runtime::io;
-
-use windjammer_runtime::json::*;
-
-use windjammer_runtime::time::*;
-
-use crate::config::Config;
-
-use crate::search::SearchResults;
-
-
-pub const COLOR_RED: &'static str = "x1b[31m";
-pub const COLOR_GREEN: &'static str = "x1b[32m";
-pub const COLOR_BLUE: &'static str = "x1b[34m";
-pub const COLOR_CYAN: &'static str = "x1b[36m";
-pub const COLOR_RESET: &'static str = "x1b[0m";
-pub const COLOR_BOLD: &'static str = "x1b[1m";
-
-#[inline]
-pub fn print_results(mut results: &SearchResults, mut config: &Config, mut duration: Duration) {
-    if config.json {
-        print_json(&results, duration)
-    } else {
-        if config.count_only {
-            print_count(&results)
-        } else {
-            if config.files_with_matches {
-                print_files_only(&results, &config)
-            } else {
-                print_default(&results, &config)
-            }
-        }
-    }
-}
-
-#[inline]
-pub fn print_json(mut results: &SearchResults, mut duration: Duration) {
-    let output = json!(std::collections::HashMap::from([("matches", results.matches.iter().map(move |m| {
-        json!(std::collections::HashMap::from([("file", m.file), ("line", m.line_number), ("column", m.column), ("text", m.line_text), ("match", m.match_text)]))
-    }).collect::<Vec<_>>()), ("stats", std::collections::HashMap::from([("files_searched", results.files_searched), ("matches_found", results.total_matches), ("duration_ms", duration.as_millis())]))]));
-    println!("{}", json::stringify_pretty(&output))
-}
-
-#[inline]
-pub fn print_count(mut results: &SearchResults) {
-    println!("{}", results.total_matches)
-}
-
-#[inline]
-pub fn print_files_only(mut results: &SearchResults, mut config: &Config) {
-    let mut files = std::collections::HashSet::new();
-    for m in results.matches {
-        files.insert(m.file);
-    }
-    for file in files {
-        if config.use_color {
-            println!("{}{}{}", COLOR_GREEN, file, COLOR_RESET)
-        } else {
-            println!("{}", file)
-        }
-    }
-}
-
-#[inline]
-pub fn print_default(mut results: &SearchResults, mut config: &Config) {
-    let mut by_file = std::collections::HashMap::new();
-    for m in &results.matches {
-        by_file.entry(m.file.clone()).or_insert(vec![]).push(m.clone());
-    }
-    for (file, matches) in by_file {
-        if config.use_color {
-            println!("{}{}{}{}", COLOR_BOLD, COLOR_GREEN, file, COLOR_RESET)
-        } else {
-            println!("{}", file)
-        }
-        for m in matches {
-            print_match(&m, &config);
-        }
-        println!("");
-    }
-    if config.use_color {
-        println!("{}Found {} matches in {} files (searched {} files){}", COLOR_CYAN, results.total_matches, by_file.len(), results.files_searched, COLOR_RESET)
-    } else {
-        println!("Found {} matches in {} files (searched {} files)", results.total_matches, by_file.len(), results.files_searched)
-    }
-}
-
-#[inline]
-pub fn print_match(mut m: &Match, mut config: &Config) {
-    if !m.context_before.is_empty() {
-        let start_line = m.line_number - m.context_before.len() as i64;
-        for (i, context_line) in m.context_before.iter().enumerate() {
-            let line_num = start_line + i as i64;
-            print_context_line(line_num, &context_line, &config);
-        }
-    }
-    let line_num_str = {
-        if config.line_numbers {
-            format!("{}:", m.line_number)
-        } else {
-            "".to_string()
-        }
-    };
-    let highlighted_line = {
-        if config.use_color {
-            highlight_match(&m.line_text, &m.match_text, m.column)
-        } else {
-            m.line_text.clone()
-        }
-    };
-    if config.use_color {
-        println!("  {}{}{} {}", COLOR_BLUE, line_num_str, COLOR_RESET, highlighted_line)
-    } else {
-        println!("  {}{}", line_num_str, highlighted_line)
-    }
-    if !m.context_after.is_empty() {
-        let start_line = m.line_number + 1;
-        for (i, context_line) in m.context_after.iter().enumerate() {
-            let line_num = start_line + i as i64;
-            print_context_line(line_num, &context_line, &config);
-        }
-    }
-}
-
-#[inline]
-pub fn print_context_line(mut line_num: i64, mut line: &str, mut config: &Config) {
-    let line_num_str = {
-        if config.line_numbers {
-            format!("{}-", line_num)
-        } else {
-            "".to_string()
-        }
-    };
-    if config.use_color {
-        println!("  {}{}{} {}", COLOR_CYAN, line_num_str, COLOR_RESET, line)
-    } else {
-        println!("  {}{}", line_num_str, line)
-    }
-}
-
-#[inline]
-pub fn highlight_match(mut line: &str, mut match_text: &str, mut column: i64) -> String {
-    let before = &&line[0..(column - 1) as usize];
-    let after = &&line[(column - 1 + match_text.len() as i64) as usize..line.len()];
-    format!("{}{}{}{}{}{}", before, COLOR_BOLD, COLOR_RED, match_text, COLOR_RESET, after)
-}
-
-
-}
-
-pub mod config {
-use windjammer_runtime::regex_mod::*;
-
-use crate::main::Args;
-
-
-#[derive(Debug, Clone)]
-pub struct Config {
-    pub pattern: Regex,
-    pub paths: Vec<String>,
-    pub case_insensitive: bool,
-    pub whole_word: bool,
-    pub line_numbers: bool,
-    pub count_only: bool,
-    pub files_with_matches: bool,
-    pub context_before: i64,
-    pub context_after: i64,
-    pub file_types: Vec<String>,
-    pub exclude_patterns: Vec<String>,
-    pub max_count: Option<i64>,
-    pub threads: i64,
-    pub json: bool,
-    pub use_color: bool,
-    pub search_hidden: bool,
-    pub respect_ignore: bool,
-}
-
-#[inline]
-pub fn from_args(mut args: Args) -> Result<Config, String> {
-    let pattern_str = {
-        if args.whole_word {
-            let escaped = regex::escape(&args.pattern);
-            format!("{}{}{}", "\\b", &escaped, "\\b")
-        } else {
-            args.pattern
-        }
-    };
-    let pattern = {
-        if args.case_insensitive {
-            regex::compile_with_flags(&pattern_str, "i".to_string())?
-        } else {
-            regex::compile(&pattern_str)?
-        }
-    };
-    let use_color = match args.color.as_str() {
-        "always" => true,
-        "never" => false,
-        _ => std::io::is_terminal(std::io::stdout()),
-    };
-    Ok(Config { pattern, paths: args.paths, case_insensitive: args.case_insensitive, whole_word: args.whole_word, line_numbers: args.line_numbers, count_only: args.count_only, files_with_matches: args.files_with_matches, context_before: args.context_before, context_after: args.context_after, file_types: args.file_types, exclude_patterns: args.exclude, max_count: args.max_count, threads: args.threads, json: args.json, use_color, search_hidden: args.hidden, respect_ignore: !args.no_ignore })
-}
-
-#[inline]
-pub fn get_file_extensions(mut file_type: String) -> Vec<String> {
-    match file_type.as_str() {
-        "rust" => vec!["rs"],
-        "windjammer" | "wj" => vec!["wj"],
-        "python" | "py" => vec!["py", "pyw"],
-        "javascript" | "js" => vec!["js", "jsx", "mjs"],
-        "typescript" | "ts" => vec!["ts", "tsx"],
-        "go" => vec!["go"],
-        "c" => vec!["c", "h"],
-        "cpp" | "c++" => vec!["cpp", "cc", "cxx", "hpp", "hxx"],
-        "java" => vec!["java"],
-        "markdown" | "md" => vec!["md", "markdown"],
-        "json" => vec!["json"],
-        "yaml" | "yml" => vec!["yaml", "yml"],
-        "toml" => vec!["toml"],
-        "xml" => vec!["xml"],
-        "html" => vec!["html", "htm"],
-        "css" => vec!["css", "scss", "sass"],
-        "sql" => vec!["sql"],
-        "shell" | "sh" => vec!["sh", "bash", "zsh"],
-        _ => vec![],
-    }
-}
-
-#[inline]
-pub fn matches_file_type(mut path: &str, mut file_types: &[String]) -> bool {
-    if file_types.is_empty() {
-        return true;
-    }
-    let ext = std::path::extension(path).unwrap_or("");
-    for file_type in file_types {
-        let extensions = get_file_extensions(file_type.clone());
-        if extensions.contains(&ext.to_string()) {
-            return true;
-        }
-    }
-    false
-}
-
-#[inline]
-pub fn should_exclude(mut path: &str, mut exclude_patterns: &[String]) -> bool {
-    for pattern in exclude_patterns {
-        if path.contains(pattern) {
-            return true;
-        }
-    }
-    false
-}
-
-
-}
-
-
 pub mod main {
-use windjammer_runtime::cli::*;
+use windjammer_runtime::cli;
 
-use windjammer_runtime::fs::*;
+use windjammer_runtime::fs;
 
 use windjammer_runtime::io;
 
-use windjammer_runtime::env::*;
+use windjammer_runtime::env;
 
-use windjammer_runtime::time::*;
+use windjammer_runtime::time;
 
-use windjammer_runtime::log_mod::*;
+use windjammer_runtime::log_mod;
 
-use crate::config::*;
+use crate::config;
 
-use crate::search::*;
+use crate::search;
 
-use crate::output::*;
+use crate::output;
 
-use crate::gitignore::*;
+use crate::gitignore;
 
 
 #[derive(Debug)]
@@ -663,164 +803,25 @@ pub fn parse_args() -> Args {
 }
 
 
+use windjammer_runtime::cli;
 
-
-
-pub mod gitignore {
-use smallvec::{SmallVec, smallvec};
-
-use windjammer_runtime::fs::*;
-
-use windjammer_runtime::path;
-
-use std::collections::HashSet;
-
-
-pub struct GitignoreRules {
-    pub patterns: Vec<String>,
-}
-
-impl GitignoreRules {
-#[inline]
-pub fn new() -> Self {
-        GitignoreRules { patterns: vec![] }
-}
-#[inline]
-pub fn load_from_directory(&self, mut dir: String) -> Result<Self, String> {
-        let gitignore_path = path::join(&dir, &".gitignore");
-        if !fs::exists(&gitignore_path) {
-            return Ok(GitignoreRules::new());
-        }
-        let contents = fs::read_to_string(&gitignore_path)?;
-        let mut patterns: SmallVec<[_; 4]> = smallvec![];
-        for line in contents.lines() {
-            let trimmed = line.trim();
-            if trimmed.is_empty() || trimmed.starts_with("#") {
-                continue;
-            }
-            self.patterns.push(trimmed.to_string());
-        }
-        Ok(GitignoreRules { patterns })
-}
-#[inline]
-pub fn is_ignored(&self, mut path: &str) -> bool {
-        let name = path::file_name(&path).unwrap_or(path);
-        let path_str = path.clone();
-        for pattern in self.patterns.iter() {
-            if self.matches_pattern(name.clone(), pattern.clone()) || self.matches_pattern(path_str.clone(), pattern.clone()) {
-                return true;
-            }
-        }
-        false
-}
-#[inline]
-pub fn matches_pattern(&self, mut name: String, mut pattern: &str) -> bool {
-        if name == pattern {
-            return true;
-        }
-        if pattern.ends_with("/") {
-            let dir_pattern = pattern.trim_end_matches("/");
-            if name == dir_pattern {
-                return true;
-            }
-        }
-        if pattern.contains("*") {
-            return self.wildcard_match(name, pattern);
-        }
-        if pattern.starts_with("*.") {
-            let ext = pattern.trim_start_matches("*.");
-            if name.ends_with(&format!(".{}", ext)) {
-                return true;
-            }
-        }
-        if name.contains(pattern) {
-            return true;
-        }
-        false
-}
-#[inline]
-pub fn wildcard_match(&self, mut name: String, mut pattern: &str) -> bool {
-        let parts: Vec<String> = pattern.split('*').collect();
-        if parts.is_empty() {
-            return false;
-        }
-        if !parts[0].is_empty() && !name.starts_with(parts[0]) {
-            return false;
-        }
-        if parts.len() > 1 {
-            let last = &parts[parts.len() - 1];
-            if !last.is_empty() && !name.ends_with(last) {
-                return false;
-            }
-        }
-        let mut pos = 0;
-        for (i, part) in parts.iter().enumerate() {
-            if part.is_empty() {
-                continue;
-            }
-            if i == 0 {
-                pos = part.len();
-                continue;
-            }
-            match &name[pos..name.len()].find(part) {
-                Some(idx) => {
-                    pos = pos + idx + part.len();
-                },
-                _ => {
-                    return false;
-                },
-            }
-        }
-        true
-}
-}
-
-pub struct GitignoreCache {
-    pub cache: std::collections::HashMap<String, GitignoreRules>,
-}
-
-impl GitignoreCache {
-#[inline]
-pub fn new() -> Self {
-        GitignoreRules { patterns: vec![] }
-}
-#[inline]
-pub fn get_rules(&mut self, mut dir: &str) -> GitignoreRules {
-        match self.cache.get(&dir) {
-            Some(rules) => {
-                return rules.clone();
-            },
-        }
-        let rules = GitignoreRules::load_from_directory(dir.clone()).unwrap_or_else(move |_| GitignoreRules::new());
-        self.cache.insert(dir, rules.clone());
-        rules
-}
-}
-
-
-}
-
-
-
-use windjammer_runtime::cli::*;
-
-use windjammer_runtime::fs::*;
+use windjammer_runtime::fs;
 
 use windjammer_runtime::io;
 
-use windjammer_runtime::env::*;
+use windjammer_runtime::env;
 
-use windjammer_runtime::time::*;
+use windjammer_runtime::time;
 
-use windjammer_runtime::log_mod::*;
+use windjammer_runtime::log_mod;
 
-use config::*;
+use config;
 
-use search::*;
+use search;
 
-use output::*;
+use output;
 
-use gitignore::*;
+use gitignore;
 
 
 #[derive(Debug)]
