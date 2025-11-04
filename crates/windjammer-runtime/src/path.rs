@@ -32,9 +32,12 @@ pub fn file_stem(path: &StdPath) -> Option<&str> {
     path.file_stem().and_then(|s| s.to_str())
 }
 
-/// Get the file extension
-pub fn extension(path: &StdPath) -> Option<&str> {
-    path.extension().and_then(|s| s.to_str())
+/// Get the file extension (works with &str, &String, &Path, &PathBuf)
+pub fn extension<P: AsRef<StdPath>>(path: P) -> Option<String> {
+    path.as_ref()
+        .extension()
+        .and_then(|s| s.to_str())
+        .map(|s| s.to_string())
 }
 
 /// Get the parent directory
