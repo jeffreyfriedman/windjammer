@@ -2,10 +2,35 @@
 //!
 //! Windjammer's `std::time` module maps to these functions.
 
-use chrono::{DateTime, Duration, Local, Utc};
+use chrono::{DateTime, Local, Utc};
+use std::time::Instant as StdInstant;
+
+/// Re-export Duration type for use in Windjammer code
+pub use chrono::Duration;
+
+/// Instant wrapper for time measurements (re-exported for Windjammer)
+#[derive(Debug, Clone, Copy)]
+pub struct Instant {
+    inner: StdInstant,
+}
+
+impl Instant {
+    /// Get duration since another instant
+    pub fn duration_since(&self, earlier: &Instant) -> Duration {
+        let elapsed = self.inner.duration_since(earlier.inner);
+        Duration::from_std(elapsed).unwrap_or_else(|_| Duration::zero())
+    }
+}
+
+/// Get current instant for time measurements
+pub fn now() -> Instant {
+    Instant {
+        inner: StdInstant::now(),
+    }
+}
 
 /// Get current timestamp (seconds since epoch)
-pub fn now() -> i64 {
+pub fn timestamp() -> i64 {
     Utc::now().timestamp()
 }
 

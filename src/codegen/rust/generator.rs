@@ -474,6 +474,8 @@ impl CodeGenerator {
             if let Some(alias_name) = alias {
                 return format!("use {} as {};\n", rust_import, alias_name);
             } else {
+                // Import the module itself (not glob) to keep module-qualified paths
+                // For types like Duration, we'll need explicit imports or full paths
                 return format!("use {};\n", rust_import);
             }
         }
