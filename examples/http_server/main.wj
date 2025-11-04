@@ -18,8 +18,10 @@ struct CreateUserRequest {
 }
 
 // In-memory user store (in real app, use database)
-static mut USERS: Vec<User> = Vec::new()
-static mut NEXT_ID: int = 1
+// Note: Using lazy_static for runtime initialization
+// TODO: Implement proper state management with Arc<Mutex<T>>
+static USERS: Vec<User> = vec![]
+static NEXT_ID: int = 1
 
 @get("/")
 async fn index() -> string {

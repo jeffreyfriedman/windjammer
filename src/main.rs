@@ -1173,8 +1173,40 @@ fn create_cargo_toml_with_deps(
     deps.push("smallvec = \"1.13\"".to_string());
     deps.push("serde = { version = \"1.0\", features = [\"derive\"] }".to_string());
 
-    deps.sort();
-    deps.dedup();
+    // Smart deduplication: extract package names and keep more specific versions
+    let mut seen_packages = std::collections::HashSet::new();
+    let mut deduplicated_deps = Vec::new();
+    
+    // Sort so that more specific versions (with braces) come after simple ones
+    deps.sort_by(|a, b| {
+        let a_has_braces = a.contains('{');
+        let b_has_braces = b.contains('{');
+        match (a_has_braces, b_has_braces) {
+            (false, true) => std::cmp::Ordering::Less,
+            (true, false) => std::cmp::Ordering::Greater,
+            _ => a.cmp(b),
+        }
+    });
+    
+    for dep in deps {
+        // Extract package name (everything before '=')
+        if let Some(pkg_name) = dep.split('=').next() {
+            let pkg_name = pkg_name.trim();
+            if !seen_packages.contains(pkg_name) {
+                seen_packages.insert(pkg_name.to_string());
+                deduplicated_deps.push(dep);
+            } else {
+                // If we've seen this package before, check if this version is more specific
+                if dep.contains('{') {
+                    // Remove the old simple version and add this more specific one
+                    deduplicated_deps.retain(|d| !d.starts_with(pkg_name));
+                    deduplicated_deps.push(dep);
+                }
+            }
+        }
+    }
+    
+    deps = deduplicated_deps;
 
     let deps_section = if deps.is_empty() {
         String::new()
