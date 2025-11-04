@@ -146,7 +146,7 @@ fn is_likely_binary(path: &string) -> bool {
         "wasm", "class", "pyc",
     ]
     
-    let ext = path::extension(path).unwrap_or("")
+    let ext = path::extension(path).unwrap_or("".to_string())
     binary_extensions.contains(&ext)
 }
 
