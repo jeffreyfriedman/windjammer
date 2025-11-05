@@ -25,7 +25,7 @@ impl GitignoreRules {
         }
         
         let contents = fs::read_to_string(&gitignore_path)?
-        let mut patterns = vec![]
+        let mut pattern_list = vec![]
         
         for line in contents.lines() {
             let trimmed = line.trim()
@@ -35,11 +35,11 @@ impl GitignoreRules {
                 continue
             }
             
-            patterns.push(trimmed.to_string())
+            pattern_list.push(trimmed.to_string())
         }
         
         Ok(GitignoreRules {
-            patterns: patterns,
+            patterns: pattern_list,
         })
     }
     
