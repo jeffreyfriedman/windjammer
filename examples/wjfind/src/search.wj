@@ -59,7 +59,8 @@ fn search_files_parallel(files: Vec<string>, config: &Config) -> Result<Vec<Matc
         let start = i * chunk_size
         let end = std::cmp::min(start + chunk_size, files.len())
         if start < files.len() {
-            chunks.push(files[start..end].to_vec())
+            let chunk: Vec<string> = files[start..end].to_vec()
+            chunks.push(chunk)
         }
     }
     
