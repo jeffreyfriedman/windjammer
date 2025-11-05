@@ -29,19 +29,22 @@ pub fn find_all_matches(line: &string, line_num: int, file: &string, config: &Co
     let mut matches = vec![]
     
     for capture in config.pattern.captures_iter(line) {
-        if let Some(match_obj) = capture.get(0) {
-            let match_text = match_obj.as_str()
-            let column = (match_obj.start() + 1) as int
-            
-            matches.push(Match {
-                file: file.to_string(),
-                line_number: line_num,
-                column: column,
-                line_text: line.to_string(),
-                match_text: match_text.to_string(),
-                context_before: Vec::new(),
-                context_after: Vec::new(),
-            })
+        match capture.get(0) {
+            Some(match_obj) => {
+                let match_text = match_obj.as_str()
+                let column = (match_obj.start() + 1) as int
+                
+                matches.push(Match {
+                    file: file.to_string(),
+                    line_number: line_num,
+                    column: column,
+                    line_text: line.to_string(),
+                    match_text: match_text.to_string(),
+                    context_before: Vec::new(),
+                    context_after: Vec::new(),
+                })
+            },
+            None => {}
         }
     }
     
