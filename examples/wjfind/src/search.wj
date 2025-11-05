@@ -73,7 +73,7 @@ fn search_files_parallel(files: Vec<string>, config: &Config) -> Result<Vec<Matc
         
         let handle = thread {
             for file in chunk {
-                match search_file(file, config.clone()) {
+                match search_file(file.clone(), config.clone()) {
                     Ok(matches) => {
                         for m in matches {
                             tx.send(m).unwrap()
