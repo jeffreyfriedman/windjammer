@@ -15,7 +15,7 @@ pub fn find_match(line: &string, line_num: int, file: &string, config: &Config) 
     let column = (match_obj.start() + 1) as int  // 1-indexed
     
     Some(Match {
-        file: file.clone(),
+        file: file.to_string(),
         line_number: line_num,
         column: column,
         line_text: line.to_string(),
@@ -34,7 +34,7 @@ pub fn find_all_matches(line: &string, line_num: int, file: &string, config: &Co
             let column = (match_obj.start() + 1) as int
             
             matches.push(Match {
-                file: file.clone(),
+                file: file.to_string(),
                 line_number: line_num,
                 column: column,
                 line_text: line.to_string(),
