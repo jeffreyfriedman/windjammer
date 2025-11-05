@@ -55,13 +55,12 @@ pub fn type_to_rust(type_: &Type) -> String {
             }
         }
         Type::MutableReference(inner) => {
-            // Special case: &mut [T] (mutable slice) vs &mut Vec<T>
-            if let Type::Vec(elem) = &**inner {
-                format!("&mut [{}]", type_to_rust(elem))
             // Special case: &mut dyn Trait (don't box when already a reference)
-            } else if let Type::TraitObject(trait_name) = &**inner {
+            if let Type::TraitObject(trait_name) = &**inner {
                 format!("&mut dyn {}", trait_name)
             } else {
+                // FIXED: Don't convert &mut Vec<T> to &mut [T] - slices can't push/pop!
+                // Always preserve the exact inner type with &mut prefix
                 format!("&mut {}", type_to_rust(inner))
             }
         }
