@@ -138,12 +138,39 @@ impl CodeGenerator {
             self.current_statement_idx = i;
 
             let is_last = i == len - 1;
-            if is_last && matches!(stmt, Statement::Expression(_)) {
-                // Last statement is an expression - generate without semicolon (it's the return value)
-                if let Statement::Expression(expr) = stmt {
-                    output.push_str(&self.indent());
-                    output.push_str(&self.generate_expression(expr));
-                    output.push('\n');
+            if is_last && matches!(stmt, Statement::Expression(_) | Statement::Thread { .. } | Statement::Async { .. }) {
+                // Last statement is an expression or thread/async block - generate without discard (it's the return value)
+                match stmt {
+                    Statement::Expression(expr) => {
+                        output.push_str(&self.indent());
+                        output.push_str(&self.generate_expression(expr));
+                        output.push('\n');
+                    }
+                    Statement::Thread { body } => {
+                        // Generate as expression (returns JoinHandle)
+                        output.push_str(&self.indent());
+                        output.push_str("std::thread::spawn(move || {\n");
+                        self.indent_level += 1;
+                        for stmt in body {
+                            output.push_str(&self.generate_statement(stmt));
+                        }
+                        self.indent_level -= 1;
+                        output.push_str(&self.indent());
+                        output.push_str("})\n");
+                    }
+                    Statement::Async { body } => {
+                        // Generate as expression (returns JoinHandle)
+                        output.push_str(&self.indent());
+                        output.push_str("tokio::spawn(async move {\n");
+                        self.indent_level += 1;
+                        for stmt in body {
+                            output.push_str(&self.generate_statement(stmt));
+                        }
+                        self.indent_level -= 1;
+                        output.push_str(&self.indent());
+                        output.push_str("})\n");
+                    }
+                    _ => unreachable!()
                 }
             } else {
                 output.push_str(&self.generate_statement(stmt));
@@ -2647,12 +2674,39 @@ impl CodeGenerator {
                 let len = stmts.len();
                 for (i, stmt) in stmts.iter().enumerate() {
                     let is_last = i == len - 1;
-                    if is_last && matches!(stmt, Statement::Expression(_)) {
-                        // Last statement is an expression - generate without semicolon
-                        if let Statement::Expression(expr) = stmt {
-                            output.push_str(&self.indent());
-                            output.push_str(&self.generate_expression(expr));
-                            output.push('\n');
+                    if is_last && matches!(stmt, Statement::Expression(_) | Statement::Thread { .. } | Statement::Async { .. }) {
+                        // Last statement is an expression or thread/async block - generate without discard (it's the return value)
+                        match stmt {
+                            Statement::Expression(expr) => {
+                                output.push_str(&self.indent());
+                                output.push_str(&self.generate_expression(expr));
+                                output.push('\n');
+                            }
+                            Statement::Thread { body } => {
+                                // Generate as expression (returns JoinHandle)
+                                output.push_str(&self.indent());
+                                output.push_str("std::thread::spawn(move || {\n");
+                                self.indent_level += 1;
+                                for stmt in body {
+                                    output.push_str(&self.generate_statement(stmt));
+                                }
+                                self.indent_level -= 1;
+                                output.push_str(&self.indent());
+                                output.push_str("})\n");
+                            }
+                            Statement::Async { body } => {
+                                // Generate as expression (returns JoinHandle)
+                                output.push_str(&self.indent());
+                                output.push_str("tokio::spawn(async move {\n");
+                                self.indent_level += 1;
+                                for stmt in body {
+                                    output.push_str(&self.generate_statement(stmt));
+                                }
+                                self.indent_level -= 1;
+                                output.push_str(&self.indent());
+                                output.push_str("})\n");
+                            }
+                            _ => unreachable!()
                         }
                     } else {
                         output.push_str(&self.generate_statement(stmt));
