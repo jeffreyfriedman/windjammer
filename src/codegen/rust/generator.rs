@@ -2510,7 +2510,8 @@ impl CodeGenerator {
                 let obj_str = self.generate_expression(object);
 
                 // Special case: if index is a Range, this is slice syntax
-                // text[0..5] -> &text[0..5]
+                // FIXED: Don't add & - Rust will auto-coerce to &[T] when needed
+                // This prevents "&temporary" errors when chaining methods like .to_vec()
                 if let Expression::Range {
                     start,
                     end,
@@ -2520,7 +2521,7 @@ impl CodeGenerator {
                     let start_str = self.generate_expression(start);
                     let end_str = self.generate_expression(end);
                     let range_op = if *inclusive { "..=" } else { ".." };
-                    return format!("&{}[{}{}{}]", obj_str, start_str, range_op, end_str);
+                    return format!("{}[{}{}{}]", obj_str, start_str, range_op, end_str);
                 }
 
                 let idx_str = self.generate_expression(index);
