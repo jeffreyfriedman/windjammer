@@ -367,14 +367,19 @@ impl Parser {
                 body: Expression::Block(then_block),
             }];
 
-            // Add wildcard arm for else block
-            if let Some(else_stmts) = else_block {
-                arms.push(MatchArm {
-                    pattern: Pattern::Wildcard,
-                    guard: None,
-                    body: Expression::Block(else_stmts),
-                });
-            }
+            // Add wildcard arm for else block (or empty block if no else)
+            // This ensures exhaustive pattern matching in Rust
+            let else_body = if let Some(else_stmts) = else_block {
+                Expression::Block(else_stmts)
+            } else {
+                Expression::Block(vec![]) // Empty block if no else clause
+            };
+            
+            arms.push(MatchArm {
+                pattern: Pattern::Wildcard,
+                guard: None,
+                body: else_body,
+            });
 
             Ok(Statement::Match { value, arms })
         } else {
