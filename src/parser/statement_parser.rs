@@ -468,6 +468,7 @@ impl Parser {
                 condition,
                 then_block,
                 else_block,
+                location: None,
             })
         }
     }
@@ -507,7 +508,11 @@ impl Parser {
 
         self.expect(Token::RBrace)?;
 
-        Ok(Statement::Match { value, arms })
+        Ok(Statement::Match {
+            value,
+            arms,
+            location: None,
+        })
     }
 
     // ========================================================================
@@ -520,7 +525,10 @@ impl Parser {
         let body = self.parse_block_statements()?;
         self.expect(Token::RBrace)?;
 
-        Ok(Statement::Loop { body })
+        Ok(Statement::Loop {
+            body,
+            location: None,
+        })
     }
 
     fn parse_while(&mut self) -> Result<Statement, String> {
@@ -557,18 +565,28 @@ impl Parser {
                     MatchArm {
                         pattern,
                         guard: None,
-                        body: Expression::Block(body.clone()),
+                        body: Expression::Block {
+                            statements: body.clone(),
+                            location: None,
+                        },
                     },
                     MatchArm {
                         pattern: Pattern::Wildcard,
                         guard: None,
-                        body: Expression::Block(vec![Statement::Break]),
+                        body: Expression::Block {
+                            statements: vec![Statement::Break {
+                                location: None,
+                            }],
+                            location: None,
+                        },
                     },
                 ],
+                location: None,
             };
 
             Ok(Statement::Loop {
                 body: vec![match_stmt],
+                location: None,
             })
         } else {
             // Regular while loop
@@ -578,7 +596,11 @@ impl Parser {
             let body = self.parse_block_statements()?;
             self.expect(Token::RBrace)?;
 
-            Ok(Statement::While { condition, body })
+            Ok(Statement::While {
+                condition,
+                body,
+                location: None,
+            })
         }
     }
 }
