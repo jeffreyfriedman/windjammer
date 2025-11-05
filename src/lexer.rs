@@ -151,6 +151,14 @@ impl std::hash::Hash for Token {
     }
 }
 
+/// Token with source location information for error reporting
+#[derive(Debug, Clone)]
+pub struct TokenWithLocation {
+    pub token: Token,
+    pub line: usize,
+    pub column: usize,
+}
+
 pub struct Lexer {
     input: Vec<char>,
     position: usize,
@@ -681,6 +689,14 @@ impl Lexer {
         token
     }
 
+    /// Get next token with its source location
+    pub fn next_token_with_location(&mut self) -> TokenWithLocation {
+        let line = self.line;
+        let column = self.column;
+        let token = self.next_token();
+        TokenWithLocation { token, line, column }
+    }
+
     pub fn tokenize(&mut self) -> Vec<Token> {
         let mut tokens = Vec::new();
 
@@ -693,6 +709,28 @@ impl Lexer {
             // Skip newlines for now
             if token != Token::Newline {
                 tokens.push(token);
+            }
+        }
+
+        tokens
+    }
+
+    /// Tokenize the entire input with source locations
+    pub fn tokenize_with_locations(&mut self) -> Vec<TokenWithLocation> {
+        let mut tokens = Vec::new();
+
+        loop {
+            let token_with_loc = self.next_token_with_location();
+            let is_eof = token_with_loc.token == Token::Eof;
+            let is_newline = token_with_loc.token == Token::Newline;
+            
+            if is_eof {
+                tokens.push(token_with_loc);
+                break;
+            }
+            // Skip newlines for now
+            if !is_newline {
+                tokens.push(token_with_loc);
             }
         }
 
