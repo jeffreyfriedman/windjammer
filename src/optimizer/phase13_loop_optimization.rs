@@ -103,6 +103,7 @@ fn optimize_loops_in_item(
                 parameters: func.parameters.clone(),
                 return_type: func.return_type.clone(),
                 body: new_body,
+                parent_type: func.parent_type.clone(),
             })
         }
         Item::Impl(impl_block) => {
@@ -118,6 +119,7 @@ fn optimize_loops_in_item(
                     parameters: func.parameters.clone(),
                     return_type: func.return_type.clone(),
                     body: optimize_loops_in_statements(&func.body, config, stats),
+                    parent_type: func.parent_type.clone(),
                 })
                 .collect();
 

@@ -61,6 +61,7 @@ pub fn eliminate_dead_code(program: &Program) -> (Program, DeadCodeStats) {
                     parameters: func.parameters.clone(),
                     return_type: func.return_type.clone(),
                     body: new_body,
+                    parent_type: func.parent_type.clone(),
                 };
                 new_items.push(Item::Function(new_func));
             }
@@ -301,6 +302,7 @@ fn eliminate_dead_code_in_impl(impl_block: &ImplBlock, stats: &mut DeadCodeStats
             parameters: func.parameters.clone(),
             return_type: func.return_type.clone(),
             body: new_body,
+            parent_type: func.parent_type.clone(),
         };
         new_functions.push(new_func);
     }
@@ -611,6 +613,7 @@ mod tests {
             parameters: vec![],
             return_type: Some(Type::Custom("i32".to_string())),
             body,
+            parent_type: None,
         }
     }
 
@@ -624,6 +627,7 @@ mod tests {
             parameters: vec![],
             return_type: None,
             body,
+            parent_type: None,
         }
     }
 
