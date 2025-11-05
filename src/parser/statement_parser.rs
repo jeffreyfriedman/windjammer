@@ -40,7 +40,10 @@ impl Parser {
                     if self.current_token() == &Token::Semicolon {
                         self.advance();
                     }
-                    Ok(Statement::Expression(expr))
+                    Ok(Statement::Expression {
+                        expr,
+                        location: None,
+                    })
                 }
             }
             Token::Async => {
@@ -53,22 +56,33 @@ impl Parser {
                     if self.current_token() == &Token::Semicolon {
                         self.advance();
                     }
-                    Ok(Statement::Expression(expr))
+                    Ok(Statement::Expression {
+                        expr,
+                        location: None,
+                    })
                 }
             }
             Token::Defer => self.parse_defer(),
             Token::Break => {
                 self.advance();
-                Ok(Statement::Break)
+                Ok(Statement::Break {
+                    location: None,
+                })
             }
             Token::Continue => {
                 self.advance();
-                Ok(Statement::Continue)
+                Ok(Statement::Continue {
+                    location: None,
+                })
             }
             Token::Use => {
                 self.advance(); // consume 'use'
                 let (path, alias) = self.parse_use()?;
-                Ok(Statement::Use { path, alias })
+                Ok(Statement::Use {
+                    path,
+                    alias,
+                    location: None,
+                })
             }
             _ => {
                 // Try to parse as expression first
@@ -88,6 +102,7 @@ impl Parser {
                         Ok(Statement::Assignment {
                             target: expr,
                             value,
+                            location: None,
                         })
                     }
                     Token::PlusAssign
@@ -114,6 +129,7 @@ impl Parser {
                             left: Box::new(expr.clone()),
                             op,
                             right: Box::new(rhs),
+                            location: None,
                         };
 
                         // Optionally consume semicolon
@@ -124,6 +140,7 @@ impl Parser {
                         Ok(Statement::Assignment {
                             target: expr,
                             value,
+                            location: None,
                         })
                     }
                     _ => {
@@ -131,7 +148,10 @@ impl Parser {
                         if self.current_token() == &Token::Semicolon {
                             self.advance();
                         }
-                        Ok(Statement::Expression(expr))
+                        Ok(Statement::Expression {
+                            expr,
+                            location: None,
+                        })
                     }
                 }
             }
@@ -141,7 +161,12 @@ impl Parser {
     fn parse_const_statement(&mut self) -> Result<Statement, String> {
         self.advance(); // consume 'const'
         let (name, type_, value) = self.parse_const_or_static()?;
-        Ok(Statement::Const { name, type_, value })
+        Ok(Statement::Const {
+            name,
+            type_,
+            value,
+            location: None,
+        })
     }
 
     fn parse_static_statement(&mut self) -> Result<Statement, String> {
@@ -158,6 +183,7 @@ impl Parser {
             mutable,
             type_,
             value,
+            location: None,
         })
     }
 
@@ -230,6 +256,7 @@ impl Parser {
             pattern,
             iterable,
             body,
+            location: None,
         })
     }
 
@@ -239,7 +266,10 @@ impl Parser {
         let body = self.parse_block_statements()?;
         self.expect(Token::RBrace)?;
 
-        Ok(Statement::Thread { body })
+        Ok(Statement::Thread {
+            body,
+            location: None,
+        })
     }
 
     fn parse_async(&mut self) -> Result<Statement, String> {
@@ -248,14 +278,20 @@ impl Parser {
         let body = self.parse_block_statements()?;
         self.expect(Token::RBrace)?;
 
-        Ok(Statement::Async { body })
+        Ok(Statement::Async {
+            body,
+            location: None,
+        })
     }
 
     fn parse_defer(&mut self) -> Result<Statement, String> {
         self.expect(Token::Defer)?;
         let stmt = self.parse_statement()?;
 
-        Ok(Statement::Defer(Box::new(stmt)))
+        Ok(Statement::Defer {
+            statement: Box::new(stmt),
+            location: None,
+        })
     }
 
     fn parse_let(&mut self) -> Result<Statement, String> {
@@ -308,6 +344,7 @@ impl Parser {
             mutable,
             type_,
             value,
+            location: None,
         })
     }
 
@@ -315,9 +352,15 @@ impl Parser {
         self.advance();
 
         if matches!(self.current_token(), Token::RBrace | Token::Semicolon) {
-            Ok(Statement::Return(None))
+            Ok(Statement::Return {
+                value: None,
+                location: None,
+            })
         } else {
-            Ok(Statement::Return(Some(self.parse_expression()?)))
+            Ok(Statement::Return {
+                value: Some(self.parse_expression()?),
+                location: None,
+            })
         }
     }
 
@@ -364,15 +407,24 @@ impl Parser {
             let mut arms = vec![MatchArm {
                 pattern,
                 guard: None,
-                body: Expression::Block(then_block),
+                body: Expression::Block {
+                    statements: then_block,
+                    location: None,
+                },
             }];
 
             // Add wildcard arm for else block (or empty block if no else)
             // This ensures exhaustive pattern matching in Rust
             let else_body = if let Some(else_stmts) = else_block {
-                Expression::Block(else_stmts)
+                Expression::Block {
+                    statements: else_stmts,
+                    location: None,
+                }
             } else {
-                Expression::Block(vec![]) // Empty block if no else clause
+                Expression::Block {
+                    statements: vec![],
+                    location: None,
+                } // Empty block if no else clause
             };
             
             arms.push(MatchArm {
@@ -381,7 +433,11 @@ impl Parser {
                 body: else_body,
             });
 
-            Ok(Statement::Match { value, arms })
+            Ok(Statement::Match {
+                value,
+                arms,
+                location: None,
+            })
         } else {
             // Regular if statement
             let condition = self.parse_expression()?;
