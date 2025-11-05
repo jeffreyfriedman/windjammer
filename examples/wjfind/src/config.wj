@@ -36,7 +36,8 @@ pub fn from_args(args: Args) -> Result<Config, string> {
     }
     
     let pattern = if args.case_insensitive {
-        regex::compile_with_flags(&pattern_str, "i")?
+        let flags = "i"
+        regex::compile_with_flags(&pattern_str, flags)?
     } else {
         regex::compile(&pattern_str)?
     }
