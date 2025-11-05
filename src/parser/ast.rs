@@ -3,6 +3,16 @@
 // This module contains all AST (Abstract Syntax Tree) type definitions for Windjammer.
 // These types represent the parsed structure of Windjammer source code.
 
+use crate::source_map::Location;
+
+// ============================================================================
+// SOURCE LOCATION
+// ============================================================================
+
+/// Optional source location for error reporting
+/// None means location information is not available
+pub type SourceLocation = Option<Location>;
+
 // ============================================================================
 // TYPE SYSTEM
 // ============================================================================
@@ -144,58 +154,108 @@ pub enum Statement {
         mutable: bool,
         type_: Option<Type>,
         value: Expression,
+        location: SourceLocation,
     },
     Const {
         name: String,
         type_: Type,
         value: Expression,
+        location: SourceLocation,
     },
     Static {
         name: String,
         mutable: bool,
         type_: Type,
         value: Expression,
+        location: SourceLocation,
     },
     Assignment {
         target: Expression,
         value: Expression,
+        location: SourceLocation,
     },
-    Return(Option<Expression>),
-    Expression(Expression),
+    Return {
+        value: Option<Expression>,
+        location: SourceLocation,
+    },
+    Expression {
+        expr: Expression,
+        location: SourceLocation,
+    },
     If {
         condition: Expression,
         then_block: Vec<Statement>,
         else_block: Option<Vec<Statement>>,
+        location: SourceLocation,
     },
     Match {
         value: Expression,
         arms: Vec<MatchArm>,
+        location: SourceLocation,
     },
     For {
         pattern: Pattern,
         iterable: Expression,
         body: Vec<Statement>,
+        location: SourceLocation,
     },
     Loop {
         body: Vec<Statement>,
+        location: SourceLocation,
     },
     While {
         condition: Expression,
         body: Vec<Statement>,
+        location: SourceLocation,
     },
     Thread {
         body: Vec<Statement>,
+        location: SourceLocation,
     },
     Async {
         body: Vec<Statement>,
+        location: SourceLocation,
     },
-    Defer(Box<Statement>),
-    Break,
-    Continue,
+    Defer {
+        statement: Box<Statement>,
+        location: SourceLocation,
+    },
+    Break {
+        location: SourceLocation,
+    },
+    Continue {
+        location: SourceLocation,
+    },
     Use {
         path: Vec<String>,
         alias: Option<String>,
+        location: SourceLocation,
     },
+}
+
+impl Statement {
+    /// Get the source location of this statement (if available)
+    pub fn location(&self) -> SourceLocation {
+        match self {
+            Statement::Let { location, .. } => location.clone(),
+            Statement::Const { location, .. } => location.clone(),
+            Statement::Static { location, .. } => location.clone(),
+            Statement::Assignment { location, .. } => location.clone(),
+            Statement::Return { location, .. } => location.clone(),
+            Statement::Expression { location, .. } => location.clone(),
+            Statement::If { location, .. } => location.clone(),
+            Statement::Match { location, .. } => location.clone(),
+            Statement::For { location, .. } => location.clone(),
+            Statement::Loop { location, .. } => location.clone(),
+            Statement::While { location, .. } => location.clone(),
+            Statement::Thread { location, .. } => location.clone(),
+            Statement::Async { location, .. } => location.clone(),
+            Statement::Defer { location, .. } => location.clone(),
+            Statement::Break { location, .. } => location.clone(),
+            Statement::Continue { location, .. } => location.clone(),
+            Statement::Use { location, .. } => location.clone(),
+        }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
@@ -233,68 +293,136 @@ pub enum Pattern {
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum Expression {
-    Literal(Literal),
-    Identifier(String),
+    Literal {
+        value: Literal,
+        location: SourceLocation,
+    },
+    Identifier {
+        name: String,
+        location: SourceLocation,
+    },
     Binary {
         left: Box<Expression>,
         op: BinaryOp,
         right: Box<Expression>,
+        location: SourceLocation,
     },
     Unary {
         op: UnaryOp,
         operand: Box<Expression>,
+        location: SourceLocation,
     },
     Call {
         function: Box<Expression>,
         arguments: Vec<(Option<String>, Expression)>, // (label, expr)
+        location: SourceLocation,
     },
     MethodCall {
         object: Box<Expression>,
         method: String,
         type_args: Option<Vec<Type>>, // Turbofish: Vec::<int>::new()
         arguments: Vec<(Option<String>, Expression)>, // (label, expr)
+        location: SourceLocation,
     },
     FieldAccess {
         object: Box<Expression>,
         field: String,
+        location: SourceLocation,
     },
     StructLiteral {
         name: String,
         fields: Vec<(String, Expression)>,
+        location: SourceLocation,
     },
-    MapLiteral(Vec<(Expression, Expression)>), // {key: value, ...}
+    MapLiteral {
+        pairs: Vec<(Expression, Expression)>, // {key: value, ...}
+        location: SourceLocation,
+    },
     Range {
         start: Box<Expression>,
         end: Box<Expression>,
         inclusive: bool,
+        location: SourceLocation,
     },
     Closure {
         parameters: Vec<String>,
         body: Box<Expression>,
+        location: SourceLocation,
     },
     Cast {
         expr: Box<Expression>,
         type_: Type,
+        location: SourceLocation,
     },
     Index {
         object: Box<Expression>,
         index: Box<Expression>,
+        location: SourceLocation,
     },
-    Tuple(Vec<Expression>), // Tuple expression: (a, b, c)
-    Array(Vec<Expression>), // Array expression: [a, b, c]
+    Tuple {
+        elements: Vec<Expression>, // Tuple expression: (a, b, c)
+        location: SourceLocation,
+    },
+    Array {
+        elements: Vec<Expression>, // Array expression: [a, b, c]
+        location: SourceLocation,
+    },
     MacroInvocation {
         name: String,
         args: Vec<Expression>,
         delimiter: MacroDelimiter, // (), [], or {}
+        location: SourceLocation,
     },
-    TryOp(Box<Expression>), // The ? operator
-    Await(Box<Expression>), // The .await
+    TryOp {
+        expr: Box<Expression>, // The ? operator
+        location: SourceLocation,
+    },
+    Await {
+        expr: Box<Expression>, // The .await
+        location: SourceLocation,
+    },
     ChannelSend {
         channel: Box<Expression>,
         value: Box<Expression>,
+        location: SourceLocation,
     },
-    ChannelRecv(Box<Expression>),
-    Block(Vec<Statement>),
+    ChannelRecv {
+        channel: Box<Expression>,
+        location: SourceLocation,
+    },
+    Block {
+        statements: Vec<Statement>,
+        location: SourceLocation,
+    },
+}
+
+impl Expression {
+    /// Get the source location of this expression (if available)
+    pub fn location(&self) -> SourceLocation {
+        match self {
+            Expression::Literal { location, .. } => location.clone(),
+            Expression::Identifier { location, .. } => location.clone(),
+            Expression::Binary { location, .. } => location.clone(),
+            Expression::Unary { location, .. } => location.clone(),
+            Expression::Call { location, .. } => location.clone(),
+            Expression::MethodCall { location, .. } => location.clone(),
+            Expression::FieldAccess { location, .. } => location.clone(),
+            Expression::StructLiteral { location, .. } => location.clone(),
+            Expression::MapLiteral { location, .. } => location.clone(),
+            Expression::Range { location, .. } => location.clone(),
+            Expression::Closure { location, .. } => location.clone(),
+            Expression::Cast { location, .. } => location.clone(),
+            Expression::Index { location, .. } => location.clone(),
+            Expression::Tuple { location, .. } => location.clone(),
+            Expression::Array { location, .. } => location.clone(),
+            Expression::MacroInvocation { location, .. } => location.clone(),
+            Expression::TryOp { location, .. } => location.clone(),
+            Expression::Await { location, .. } => location.clone(),
+            Expression::ChannelSend { location, .. } => location.clone(),
+            Expression::ChannelRecv { location, .. } => location.clone(),
+            Expression::Block { location, .. } => location.clone(),
+        }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
@@ -423,30 +551,66 @@ pub struct ImplBlock {
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum Item {
-    Function(FunctionDecl),
-    Struct(StructDecl),
-    Enum(EnumDecl),
-    Trait(TraitDecl),
-    Impl(ImplBlock),
+    Function {
+        decl: FunctionDecl,
+        location: SourceLocation,
+    },
+    Struct {
+        decl: StructDecl,
+        location: SourceLocation,
+    },
+    Enum {
+        decl: EnumDecl,
+        location: SourceLocation,
+    },
+    Trait {
+        decl: TraitDecl,
+        location: SourceLocation,
+    },
+    Impl {
+        block: ImplBlock,
+        location: SourceLocation,
+    },
     Const {
         name: String,
         type_: Type,
         value: Expression,
+        location: SourceLocation,
     },
     Static {
         name: String,
         mutable: bool,
         type_: Type,
         value: Expression,
+        location: SourceLocation,
     },
     Use {
         path: Vec<String>,
         alias: Option<String>,
+        location: SourceLocation,
     }, // use std::fs as fs -> path=["std", "fs"], alias=Some("fs")
     BoundAlias {
         name: String,
         traits: Vec<String>,
+        location: SourceLocation,
     }, // bound Printable = Display + Debug
+}
+
+impl Item {
+    /// Get the source location of this item (if available)
+    pub fn location(&self) -> SourceLocation {
+        match self {
+            Item::Function { location, .. } => location.clone(),
+            Item::Struct { location, .. } => location.clone(),
+            Item::Enum { location, .. } => location.clone(),
+            Item::Trait { location, .. } => location.clone(),
+            Item::Impl { location, .. } => location.clone(),
+            Item::Const { location, .. } => location.clone(),
+            Item::Static { location, .. } => location.clone(),
+            Item::Use { location, .. } => location.clone(),
+            Item::BoundAlias { location, .. } => location.clone(),
+        }
+    }
 }
 
 // ============================================================================
