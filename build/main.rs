@@ -1,95 +1,3 @@
-
-pub mod main {
-use windjammer_runtime::cli;
-
-use windjammer_runtime::fs;
-
-use windjammer_runtime::io;
-
-use windjammer_runtime::env;
-
-use windjammer_runtime::time;
-
-use windjammer_runtime::log_mod as log;
-
-use crate::config;
-
-use crate::search;
-
-use crate::output;
-
-use crate::gitignore;
-
-
-#[derive(Debug)]
-pub struct Args {
-    pub pattern: String,
-    pub paths: Vec<String>,
-    pub case_insensitive: bool,
-    pub whole_word: bool,
-    pub line_numbers: bool,
-    pub count_only: bool,
-    pub files_with_matches: bool,
-    pub context_before: i64,
-    pub context_after: i64,
-    pub file_types: Vec<String>,
-    pub exclude: Vec<String>,
-    pub max_count: Option<i64>,
-    pub threads: i64,
-    pub json: bool,
-    pub color: String,
-    pub hidden: bool,
-    pub no_ignore: bool,
-}
-
-#[inline]
-pub fn parse_args() -> Args {
-    let mut app = cli::new("wjfind".to_string()).version("0.1.0").author("Windjammer Team").about("Fast file search utility - like ripgrep, but in Windjammer!").arg(cli::arg("pattern".to_string()).help("Pattern to search for (regex)").required(true)).arg(cli::arg("paths".to_string()).help("Paths to search (default: current directory)").multiple(true).default_value(".")).arg(cli::flag("case-insensitive".to_string()).short("i").help("Case-insensitive search")).arg(cli::flag("whole-word".to_string()).short("w").help("Match whole words only")).arg(cli::flag("line-numbers".to_string()).short("n").help("Show line numbers")).arg(cli::flag("count".to_string()).short("c").help("Only show count of matches")).arg(cli::flag("files-with-matches".to_string()).short("l").help("Only show files with matches")).arg(cli::option("context-before".to_string()).short("B").help("Lines of context before match").default_value("0")).arg(cli::option("context-after".to_string()).short("A").help("Lines of context after match").default_value("0")).arg(cli::option("context".to_string()).short("C").help("Lines of context before and after match").default_value("0")).arg(cli::option("type".to_string()).short("t").help("Filter by file type (rust, js, py, etc.)").multiple(true)).arg(cli::option("exclude".to_string()).help("Exclude directories or files").multiple(true)).arg(cli::option("max-count".to_string()).short("m").help("Maximum number of matches")).arg(cli::option("threads".to_string()).short("j").help("Number of threads").default_value("0")).arg(cli::flag("json".to_string()).help("Output results as JSON")).arg(cli::option("color".to_string()).help("When to use colors (auto, always, never)").default_value("auto")).arg(cli::flag("hidden".to_string()).help("Search hidden files and directories")).arg(cli::flag("no-ignore".to_string()).help("Don't respect .gitignore files"));
-    let matches = app.get_matches();
-    let pattern = matches.value_of("pattern").unwrap();
-    let paths = matches.values_of("paths").unwrap_or(vec![".".to_string()]);
-    let case_insensitive = matches.is_present("case-insensitive");
-    let whole_word = matches.is_present("whole-word");
-    let line_numbers = matches.is_present("line-numbers");
-    let count_only = matches.is_present("count");
-    let files_with_matches = matches.is_present("files-with-matches");
-    let context = matches.value_of("context").unwrap().parse::<i64>().unwrap_or(0);
-    let context_before = {
-        if context > 0 {
-            context
-        } else {
-            matches.value_of("context-before").unwrap().parse::<i64>().unwrap_or(0)
-        }
-    };
-    let context_after = {
-        if context > 0 {
-            context
-        } else {
-            matches.value_of("context-after").unwrap().parse::<i64>().unwrap_or(0)
-        }
-    };
-    let file_types = matches.values_of("type").unwrap_or(vec![]);
-    let exclude = matches.values_of("exclude").unwrap_or(vec![]);
-    let max_count = matches.value_of("max-count").map(move |s| s.parse::<i64>().unwrap());
-    let threads = matches.value_of("threads").unwrap().parse::<i64>().unwrap_or(0);
-    let threads = {
-        if threads == 0 {
-            std.thread::available_parallelism().unwrap_or(4)
-        } else {
-            threads
-        }
-    };
-    let json = matches.is_present("json");
-    let color = matches.value_of("color").unwrap();
-    let hidden = matches.is_present("hidden");
-    let no_ignore = matches.is_present("no-ignore");
-    Args { pattern, paths, case_insensitive, whole_word, line_numbers, count_only, files_with_matches, context_before, context_after, file_types, exclude, max_count, threads, json, color, hidden, no_ignore }
-}
-
-
-}
-
-
 pub mod walker {
 use windjammer_runtime::fs;
 
@@ -207,176 +115,95 @@ pub fn is_likely_binary(mut path: &str) -> bool {
 
 }
 
+pub mod main {
+use windjammer_runtime::cli;
 
-pub mod search {
 use windjammer_runtime::fs;
 
 use windjammer_runtime::io;
 
-use windjammer_runtime::path;
+use windjammer_runtime::env;
 
-use windjammer_runtime::sync;
+use windjammer_runtime::time;
 
-use windjammer_runtime::thread;
+use windjammer_runtime::log_mod as log;
 
-use crate::config::Config;
+use crate::config;
 
-use crate::walker;
+use crate::search;
 
-use crate::matcher;
+use crate::output;
+
+use crate::gitignore;
 
 
 #[derive(Debug)]
-pub struct SearchResults {
-    pub matches: Vec<Match>,
-    pub files_searched: i64,
-    pub total_matches: i64,
-}
-
-#[derive(Debug, Clone)]
-pub struct Match {
-    pub file: String,
-    pub line_number: i64,
-    pub column: i64,
-    pub line_text: String,
-    pub match_text: String,
-    pub context_before: Vec<String>,
-    pub context_after: Vec<String>,
-}
-
-#[inline]
-pub fn run(mut config: Config) -> Result<SearchResults, String> {
-    let files = walker::collect_files(config.paths.clone(), &config)?;
-    let matches = search_files_parallel(files.clone(), &config)?;
-    let matches = match config.max_count {
-        Some(max) => {
-            matches.into_iter().take(max as usize).collect()
-        },
-        _ => {
-            matches
-        },
-    };
-    Ok(SearchResults { total_matches: matches.len() as i64, files_searched: files.len() as i64, matches })
+pub struct Args {
+    pub pattern: String,
+    pub paths: Vec<String>,
+    pub case_insensitive: bool,
+    pub whole_word: bool,
+    pub line_numbers: bool,
+    pub count_only: bool,
+    pub files_with_matches: bool,
+    pub context_before: i64,
+    pub context_after: i64,
+    pub file_types: Vec<String>,
+    pub exclude: Vec<String>,
+    pub max_count: Option<i64>,
+    pub threads: i64,
+    pub json: bool,
+    pub color: String,
+    pub hidden: bool,
+    pub no_ignore: bool,
 }
 
 #[inline]
-pub fn search_files_parallel(mut files: Vec<String>, mut config: &Config) -> Result<Vec<Match>, String> {
-    let num_threads = config.threads as usize;
-    let chunk_size = (files.len() + num_threads - 1) / num_threads;
-    let mut chunks = vec![];
-    for i in 0..num_threads {
-        let start = i * chunk_size;
-        let end = std::cmp::min(start + chunk_size, files.len());
-        if start < files.len() {
-            chunks.push(&files[start..end].to_vec())
-        }
-    }
-    let (tx, rx) = sync::channel();
-    let mut handles = vec![];
-    for chunk in chunks {
-        let tx = tx.clone();
-        let config = config.clone();
-        let handle = {
-            std::thread::spawn(move || {
-                for file in chunk {
-                    match search_file(file.clone(), &config.clone()) {
-                        Ok(matches) => {
-                            for m in matches {
-                                tx.send(m).unwrap();
-                            }
-                        },
-                        Err(_) => {
-                        },
-                    }
-                }
-            })
-        };
-        handles.push(handle);
-    }
-    drop(tx);
-    let mut all_matches = vec![];
-    loop {
-        match rx.recv() {
-            Ok(m) => {
-                all_matches.push(m);
-                match config.max_count {
-                    Some(max) => {
-                        if all_matches.len() >= max as usize {
-                            break;
-                        }
-                    },
-                    _ => {
-                    },
-                }
-            },
-            _ => {
-                break;
-            },
-        }
-    }
-    for handle in handles {
-        handle.join().unwrap();
-    }
-    Ok(all_matches)
-}
-
-#[inline]
-pub fn search_file(mut path: String, mut config: &Config) -> Result<Vec<Match>, String> {
-    let contents = fs::read_to_string(&path)?;
-    let all_lines: Vec<String> = contents.lines().map(move |s| s.to_string()).collect();
-    let mut matches = vec![];
-    for (line_num, line) in all_lines.iter().enumerate() {
-        match matcher::find_match(line, (line_num + 1) as i64, &path, config) {
-            Some(mut m) => {
-                if config.context_before > 0 || config.context_after > 0 {
-                    m = add_context(m, &all_lines, config.context_before, config.context_after);
-                }
-                matches.push(m);
-                match config.max_count {
-                    Some(max) => {
-                        if matches.len() >= max as usize {
-                            break;
-                        }
-                    },
-                    None => {
-                    },
-                }
-            },
-            None => {
-            },
-        }
-    }
-    Ok(matches)
-}
-
-#[inline]
-pub fn add_context(mut match_obj: Match, mut all_lines: &[String], mut lines_before: i64, mut lines_after: i64) -> Match {
-    let line_idx = (match_obj.line_number - 1) as usize;
-    let start_before = {
-        if line_idx >= lines_before as usize {
-            line_idx - lines_before as usize
+pub fn parse_args() -> Args {
+    let mut app = cli::new("wjfind".to_string()).version("0.1.0").author("Windjammer Team").about("Fast file search utility - like ripgrep, but in Windjammer!").arg(cli::arg("pattern".to_string()).help("Pattern to search for (regex)").required(true)).arg(cli::arg("paths".to_string()).help("Paths to search (default: current directory)").multiple(true).default_value(".")).arg(cli::flag("case-insensitive".to_string()).short("i").help("Case-insensitive search")).arg(cli::flag("whole-word".to_string()).short("w").help("Match whole words only")).arg(cli::flag("line-numbers".to_string()).short("n").help("Show line numbers")).arg(cli::flag("count".to_string()).short("c").help("Only show count of matches")).arg(cli::flag("files-with-matches".to_string()).short("l").help("Only show files with matches")).arg(cli::option("context-before".to_string()).short("B").help("Lines of context before match").default_value("0")).arg(cli::option("context-after".to_string()).short("A").help("Lines of context after match").default_value("0")).arg(cli::option("context".to_string()).short("C").help("Lines of context before and after match").default_value("0")).arg(cli::option("type".to_string()).short("t").help("Filter by file type (rust, js, py, etc.)").multiple(true)).arg(cli::option("exclude".to_string()).help("Exclude directories or files").multiple(true)).arg(cli::option("max-count".to_string()).short("m").help("Maximum number of matches")).arg(cli::option("threads".to_string()).short("j").help("Number of threads").default_value("0")).arg(cli::flag("json".to_string()).help("Output results as JSON")).arg(cli::option("color".to_string()).help("When to use colors (auto, always, never)").default_value("auto")).arg(cli::flag("hidden".to_string()).help("Search hidden files and directories")).arg(cli::flag("no-ignore".to_string()).help("Don't respect .gitignore files"));
+    let matches = app.get_matches();
+    let pattern = matches.value_of("pattern").unwrap();
+    let paths = matches.values_of("paths").unwrap_or(vec![".".to_string()]);
+    let case_insensitive = matches.is_present("case-insensitive");
+    let whole_word = matches.is_present("whole-word");
+    let line_numbers = matches.is_present("line-numbers");
+    let count_only = matches.is_present("count");
+    let files_with_matches = matches.is_present("files-with-matches");
+    let context = matches.value_of("context").unwrap().parse::<i64>().unwrap_or(0);
+    let context_before = {
+        if context > 0 {
+            context
         } else {
-            0
+            matches.value_of("context-before").unwrap().parse::<i64>().unwrap_or(0)
         }
     };
-    let before_lines: Vec<String> = match all_lines.get(start_before..line_idx) {
-        Some(slice) => slice.iter().map(move |s| s.clone()).collect(),
-        None => vec![],
+    let context_after = {
+        if context > 0 {
+            context
+        } else {
+            matches.value_of("context-after").unwrap().parse::<i64>().unwrap_or(0)
+        }
     };
-    match_obj.context_before = before_lines;
-    let start_after = line_idx + 1;
-    let end_after = std::cmp::min(start_after + lines_after as usize, all_lines.len());
-    let after_lines: Vec<String> = match all_lines.get(start_after..end_after) {
-        Some(slice) => slice.iter().map(move |s| s.clone()).collect(),
-        None => vec![],
+    let file_types = matches.values_of("type").unwrap_or(vec![]);
+    let exclude = matches.values_of("exclude").unwrap_or(vec![]);
+    let max_count = matches.value_of("max-count").map(move |s| s.parse::<i64>().unwrap());
+    let threads = matches.value_of("threads").unwrap().parse::<i64>().unwrap_or(0);
+    let threads = {
+        if threads == 0 {
+            std.thread::available_parallelism().unwrap_or(4)
+        } else {
+            threads
+        }
     };
-    match_obj.context_after = after_lines;
-    match_obj
+    let json = matches.is_present("json");
+    let color = matches.value_of("color").unwrap();
+    let hidden = matches.is_present("hidden");
+    let no_ignore = matches.is_present("no-ignore");
+    Args { pattern, paths, case_insensitive, whole_word, line_numbers, count_only, files_with_matches, context_before, context_after, file_types, exclude, max_count, threads, json, color, hidden, no_ignore }
 }
 
 
 }
-
 
 
 pub mod config {
@@ -631,45 +458,6 @@ pub fn get_rules(&mut self, mut dir: &str) -> GitignoreRules {
 
 }
 
-pub mod matcher {
-use windjammer_runtime::regex_mod as regex;
-use windjammer_runtime::regex_mod::Regex;
-
-use crate::config::Config;
-
-use crate::search::Match;
-
-
-#[inline]
-pub fn find_match(mut line: &str, mut line_num: i64, mut file: &str, mut config: &Config) -> Option<Match> {
-    let captures = config.pattern.captures(line)?;
-    let match_obj = captures.get(0)?;
-    let match_text = match_obj.as_str();
-    let column = (match_obj.start() + 1) as i64;
-    Some(Match { file: file.to_string(), line_number: line_num, column, line_text: line.to_string(), match_text: match_text.to_string(), context_before: Vec::new(), context_after: Vec::new() })
-}
-
-#[inline]
-pub fn find_all_matches(mut line: &str, mut line_num: i64, mut file: &str, mut config: &Config) -> Vec<Match> {
-    let mut matches = vec![];
-    for capture in config.pattern.captures_iter(line) {
-        match capture.get(0) {
-            Some(match_obj) => {
-                let match_text = match_obj.as_str();
-                let column = (match_obj.start() + 1) as i64;
-                matches.push(Match { file: file.to_string(), line_number: line_num, column, line_text: line.to_string(), match_text: match_text.to_string(), context_before: Vec::new(), context_after: Vec::new() })
-            },
-            None => {
-            },
-        }
-    }
-    matches
-}
-
-
-}
-
-
 pub mod output {
 use serde::{Serialize, Deserialize};
 
@@ -818,9 +606,222 @@ pub fn print_context_line(mut line_num: i64, mut line: &str, mut config: &Config
 
 #[inline]
 pub fn highlight_match(mut line: &str, mut match_text: &str, mut column: i64) -> String {
-    let before = &&line[0..(column - 1) as usize];
+    let before = &line[0..(column - 1) as usize];
     let after = &&line[(column - 1 + match_text.len() as i64) as usize..line.len()];
     format!("{}{}{}{}{}{}", before, COLOR_BOLD, COLOR_RED, match_text, COLOR_RESET, after)
+}
+
+
+}
+
+
+
+
+
+pub mod matcher {
+use windjammer_runtime::regex_mod as regex;
+use windjammer_runtime::regex_mod::Regex;
+
+use crate::config::Config;
+
+use crate::search::Match;
+
+
+#[inline]
+pub fn find_match(mut line: &str, mut line_num: i64, mut file: &str, mut config: &Config) -> Option<Match> {
+    let captures = config.pattern.captures(line)?;
+    let match_obj = captures.get(0)?;
+    let match_text = match_obj.as_str();
+    let column = (match_obj.start() + 1) as i64;
+    Some(Match { file: file.to_string(), line_number: line_num, column, line_text: line.to_string(), match_text: match_text.to_string(), context_before: Vec::new(), context_after: Vec::new() })
+}
+
+#[inline]
+pub fn find_all_matches(mut line: &str, mut line_num: i64, mut file: &str, mut config: &Config) -> Vec<Match> {
+    let mut matches = vec![];
+    for capture in config.pattern.captures_iter(line) {
+        match capture.get(0) {
+            Some(match_obj) => {
+                let match_text = match_obj.as_str();
+                let column = (match_obj.start() + 1) as i64;
+                matches.push(Match { file: file.to_string(), line_number: line_num, column, line_text: line.to_string(), match_text: match_text.to_string(), context_before: Vec::new(), context_after: Vec::new() })
+            },
+            None => {
+            },
+        }
+    }
+    matches
+}
+
+
+}
+
+
+pub mod search {
+use windjammer_runtime::fs;
+
+use windjammer_runtime::io;
+
+use windjammer_runtime::path;
+
+use windjammer_runtime::sync;
+
+use windjammer_runtime::thread;
+
+use crate::config::Config;
+
+use crate::walker;
+
+use crate::matcher;
+
+
+#[derive(Debug)]
+pub struct SearchResults {
+    pub matches: Vec<Match>,
+    pub files_searched: i64,
+    pub total_matches: i64,
+}
+
+#[derive(Debug, Clone)]
+pub struct Match {
+    pub file: String,
+    pub line_number: i64,
+    pub column: i64,
+    pub line_text: String,
+    pub match_text: String,
+    pub context_before: Vec<String>,
+    pub context_after: Vec<String>,
+}
+
+#[inline]
+pub fn run(mut config: Config) -> Result<SearchResults, String> {
+    let files = walker::collect_files(config.paths.clone(), &config)?;
+    let matches = search_files_parallel(files.clone(), &config)?;
+    let matches = match config.max_count {
+        Some(max) => {
+            matches.into_iter().take(max as usize).collect()
+        },
+        _ => {
+            matches
+        },
+    };
+    Ok(SearchResults { total_matches: matches.len() as i64, files_searched: files.len() as i64, matches })
+}
+
+#[inline]
+pub fn search_files_parallel(mut files: Vec<String>, mut config: &Config) -> Result<Vec<Match>, String> {
+    let num_threads = config.threads as usize;
+    let chunk_size = (files.len() + num_threads - 1) / num_threads;
+    let mut chunks = vec![];
+    for i in 0..num_threads {
+        let start = i * chunk_size;
+        let end = std::cmp::min(start + chunk_size, files.len());
+        if start < files.len() {
+            let chunk: Vec<String> = files[start..end].to_vec();
+            chunks.push(chunk)
+        }
+    }
+    let (tx, rx) = sync::channel();
+    let mut handles = vec![];
+    for chunk in chunks {
+        let tx = tx.clone();
+        let config = config.clone();
+        let handle = {
+            std::thread::spawn(move || {
+                for file in chunk {
+                    match search_file(file.clone(), &config.clone()) {
+                        Ok(matches) => {
+                            for m in matches {
+                                tx.send(m).unwrap();
+                            }
+                        },
+                        Err(_) => {
+                        },
+                    }
+                }
+            })
+        };
+        handles.push(handle);
+    }
+    drop(tx);
+    let mut all_matches = vec![];
+    loop {
+        match rx.recv() {
+            Ok(m) => {
+                all_matches.push(m);
+                match config.max_count {
+                    Some(max) => {
+                        if all_matches.len() >= max as usize {
+                            break;
+                        }
+                    },
+                    _ => {
+                    },
+                }
+            },
+            _ => {
+                break;
+            },
+        }
+    }
+    for handle in handles {
+        handle.join().unwrap();
+    }
+    Ok(all_matches)
+}
+
+#[inline]
+pub fn search_file(mut path: String, mut config: &Config) -> Result<Vec<Match>, String> {
+    let contents = fs::read_to_string(&path)?;
+    let all_lines: Vec<String> = contents.lines().map(move |s| s.to_string()).collect();
+    let mut matches = vec![];
+    for (line_num, line) in all_lines.iter().enumerate() {
+        match matcher::find_match(line, (line_num + 1) as i64, &path, config) {
+            Some(mut m) => {
+                if config.context_before > 0 || config.context_after > 0 {
+                    m = add_context(m, &all_lines, config.context_before, config.context_after);
+                }
+                matches.push(m);
+                match config.max_count {
+                    Some(max) => {
+                        if matches.len() >= max as usize {
+                            break;
+                        }
+                    },
+                    None => {
+                    },
+                }
+            },
+            None => {
+            },
+        }
+    }
+    Ok(matches)
+}
+
+#[inline]
+pub fn add_context(mut match_obj: Match, mut all_lines: &[String], mut lines_before: i64, mut lines_after: i64) -> Match {
+    let line_idx = (match_obj.line_number - 1) as usize;
+    let start_before = {
+        if line_idx >= lines_before as usize {
+            line_idx - lines_before as usize
+        } else {
+            0
+        }
+    };
+    let before_lines: Vec<String> = match all_lines.get(start_before..line_idx) {
+        Some(slice) => slice.iter().map(move |s| s.clone()).collect(),
+        None => vec![],
+    };
+    match_obj.context_before = before_lines;
+    let start_after = line_idx + 1;
+    let end_after = std::cmp::min(start_after + lines_after as usize, all_lines.len());
+    let after_lines: Vec<String> = match all_lines.get(start_after..end_after) {
+        Some(slice) => slice.iter().map(move |s| s.clone()).collect(),
+        None => vec![],
+    };
+    match_obj.context_after = after_lines;
+    match_obj
 }
 
 
