@@ -46,7 +46,7 @@ fn print_json(results: &SearchResults, duration: time::Duration) {
         }
     })
     
-    println!("{}", json::stringify_pretty(output))
+    println!("{}", json::stringify_pretty(output).unwrap_or_else(|e| e))
 }
 
 fn print_count(results: &SearchResults) {

@@ -2,6 +2,7 @@
 
 use std::fs
 use std::path
+use std::path::Path
 
 use ./config::Config
 use ./config
@@ -102,8 +103,11 @@ fn should_include_file(path: &string, config: &Config, gitignore_cache: &mut Git
     
     // Check .gitignore for this file if respecting ignore
     if config.respect_ignore {
-        let dir = path::parent(path).unwrap_or(".")
-        let gitignore_rules = gitignore_cache.get_rules(&dir.to_string())
+        let dir = path::parent(Path::new(path))
+            .and_then(|p| p.to_str())
+            .unwrap_or(".")
+            .to_string()
+        let gitignore_rules = gitignore_cache.get_rules(&dir)
         if gitignore_rules.is_ignored(path) {
             return false
         }
@@ -133,7 +137,7 @@ fn is_ignored(name: &string) -> bool {
         "venv",
     ]
     
-    ignored_dirs.contains(&name.as_str())
+    ignored_dirs.contains(&name.as_ref())
 }
 
 fn is_likely_binary(path: &string) -> bool {
@@ -147,6 +151,6 @@ fn is_likely_binary(path: &string) -> bool {
     ]
     
     let ext = path::extension(path).unwrap_or("".to_string())
-    binary_extensions.contains(&ext)
+    binary_extensions.contains(&ext.as_ref())
 }
 
