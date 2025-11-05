@@ -194,7 +194,10 @@ impl Parser {
 
                 // Don't check for { here - just create the identifier
                 // and continue to postfix operators
-                Expression::Identifier(qualified_name)
+                Expression::Identifier {
+                    name: qualified_name,
+                    location: None,
+                }
             }
             _ => self.parse_primary_expression()?,
         };
@@ -207,7 +210,10 @@ impl Parser {
                     if self.peek(1) == Some(&Token::Await) {
                         self.advance(); // consume '.'
                         self.advance(); // consume 'await'
-                        left = Expression::Await(Box::new(left));
+                        left = Expression::Await {
+                            expr: Box::new(left),
+                            location: None,
+                        };
                     } else {
                         self.advance();
                         let field = if let Token::Ident(name) = self.current_token() {
@@ -220,6 +226,7 @@ impl Parser {
                         left = Expression::FieldAccess {
                             object: Box::new(left),
                             field,
+                            location: None,
                         };
                     }
                 }
@@ -244,6 +251,7 @@ impl Parser {
                                 method: "len".to_string(),
                                 type_args: None,
                                 arguments: vec![],
+                                location: None,
                             })
                         });
 
@@ -252,9 +260,13 @@ impl Parser {
                             method: "slice".to_string(),
                             type_args: None,
                             arguments: vec![
-                                (None, Expression::Literal(Literal::Int(0))),
+                                (None, Expression::Literal {
+                                    value: Literal::Int(0),
+                                    location: None,
+                                }),
                                 (None, *end_expr),
                             ],
+                            location: None,
                         };
                     } else {
                         let start_or_index = Box::new(self.parse_expression()?);
@@ -277,6 +289,7 @@ impl Parser {
                                     method: "len".to_string(),
                                     type_args: None,
                                     arguments: vec![],
+                                    location: None,
                                 })
                             });
 
@@ -285,6 +298,7 @@ impl Parser {
                                 method: "slice".to_string(),
                                 type_args: None,
                                 arguments: vec![(None, *start_or_index), (None, *end_expr)],
+                                location: None,
                             };
                         } else {
                             // Regular index: [i]
@@ -292,6 +306,7 @@ impl Parser {
                             left = Expression::Index {
                                 object: Box::new(left),
                                 index: start_or_index,
+                                location: None,
                             };
                         }
                     }
@@ -322,6 +337,7 @@ impl Parser {
                                 method: String::new(), // Empty method name signals turbofish call
                                 type_args: Some(types),
                                 arguments,
+                                location: None,
                             };
                         } else {
                             return Err("Expected '(' after turbofish".to_string());
@@ -364,12 +380,14 @@ impl Parser {
                                 method,
                                 type_args,
                                 arguments,
+                                location: None,
                             };
                         } else {
                             // Just a path, treat as field access
                             left = Expression::FieldAccess {
                                 object: Box::new(left),
                                 field: method,
+                                location: None,
                             };
                         }
                     } else {
@@ -391,6 +409,7 @@ impl Parser {
                     left = Expression::Call {
                         function: Box::new(left),
                         arguments,
+                        location: None,
                     };
                 }
                 _ => break,
@@ -405,6 +424,7 @@ impl Parser {
                 left: Box::new(left),
                 op,
                 right: Box::new(right),
+                location: None,
             };
         }
 
@@ -426,6 +446,7 @@ impl Parser {
                 left = Expression::Call {
                     function: Box::new(func),
                     arguments: vec![(None, left)], // No label for piped argument
+                    location: None,
                 };
                 continue;
             }
@@ -437,6 +458,7 @@ impl Parser {
                 left = Expression::ChannelSend {
                     channel: Box::new(left),
                     value: Box::new(value),
+                    location: None,
                 };
                 continue;
             }
@@ -453,6 +475,7 @@ impl Parser {
                     left: Box::new(left),
                     op,
                     right: Box::new(right),
+                    location: None,
                 };
             } else {
                 break;
@@ -682,7 +705,10 @@ impl Parser {
             Token::BoolLiteral(b) => {
                 let b = *b;
                 self.advance();
-                Expression::Literal(Literal::Bool(b))
+                Expression::Literal {
+                    value: Literal::Bool(b),
+                    location: None,
+                }
             }
             Token::Ident(name) => {
                 let mut qualified_name = name.clone();
@@ -770,7 +796,10 @@ impl Parser {
                             self.parse_expression()?
                         } else {
                             // Shorthand syntax: field (implicitly field: field)
-                            Expression::Identifier(field_name.clone())
+                            Expression::Identifier {
+                                name: field_name.clone(),
+                                location: None,
+                            }
                         };
 
                         fields.push((field_name, field_value));
@@ -792,9 +821,13 @@ impl Parser {
                     Expression::StructLiteral {
                         name: qualified_name,
                         fields,
+                        location: None,
                     }
                 } else {
-                    Expression::Identifier(qualified_name)
+                    Expression::Identifier {
+                        name: qualified_name,
+                        location: None,
+                    }
                 }
             }
             Token::LParen => {
@@ -803,7 +836,10 @@ impl Parser {
                 // Check for empty tuple ()
                 if self.current_token() == &Token::RParen {
                     self.advance();
-                    Expression::Tuple(vec![])
+                    Expression::Tuple {
+                        elements: vec![],
+                        location: None,
+                    }
                 } else {
                     let first_expr = self.parse_expression()?;
 
@@ -822,7 +858,10 @@ impl Parser {
                         }
 
                         self.expect(Token::RParen)?;
-                        Expression::Tuple(exprs)
+                        Expression::Tuple {
+                            elements: exprs,
+                            location: None,
+                        }
                     } else {
                         // Just a parenthesized expression
                         self.expect(Token::RParen)?;
@@ -837,7 +876,10 @@ impl Parser {
                 // Check for empty array []
                 if self.current_token() == &Token::RBracket {
                     self.advance();
-                    Expression::Array(vec![])
+                    Expression::Array {
+                        elements: vec![],
+                        location: None,
+                    }
                 } else {
                     let first_element = self.parse_expression()?;
 
@@ -852,6 +894,7 @@ impl Parser {
                             name: "vec".to_string(),
                             args: vec![first_element, count],
                             delimiter: MacroDelimiter::Brackets,
+                            location: None,
                         }
                     } else {
                         // Regular array literal
@@ -869,7 +912,10 @@ impl Parser {
                         }
 
                         self.expect(Token::RBracket)?;
-                        Expression::Array(elements)
+                        Expression::Array {
+                            elements,
+                            location: None,
+                        }
                     }
                 }
             }
@@ -915,8 +961,12 @@ impl Parser {
                 let match_stmt = Statement::Match {
                     value: *value,
                     arms,
+                    location: None,
                 };
-                Expression::Block(vec![match_stmt])
+                Expression::Block {
+                    statements: vec![match_stmt],
+                    location: None,
+                }
             }
             Token::Pipe => {
                 // Closure: |params| body
@@ -1006,7 +1056,10 @@ impl Parser {
                     self.advance();
                     let statements = self.parse_block_statements()?;
                     self.expect(Token::RBrace)?;
-                    Box::new(Expression::Block(statements))
+                    Box::new(Expression::Block {
+                        statements,
+                        location: None,
+                    })
                 } else {
                     // Expression closure: |x| expr
                     // Check if this looks like a compound assignment (e.g., *c += 1)
@@ -1030,7 +1083,10 @@ impl Parser {
                         // Reset and parse as a statement
                         self.position = checkpoint;
                         let stmt = self.parse_statement()?;
-                        Box::new(Expression::Block(vec![stmt]))
+                        Box::new(Expression::Block {
+                            statements: vec![stmt],
+                            location: None,
+                        })
                     } else {
                         // Reset and parse as a normal expression
                         self.position = checkpoint;
@@ -1038,7 +1094,11 @@ impl Parser {
                     }
                 };
 
-                Expression::Closure { parameters, body }
+                Expression::Closure {
+                    parameters,
+                    body,
+                    location: None,
+                }
             }
             Token::Or => {
                 // Closure with no parameters: || body
@@ -1050,7 +1110,10 @@ impl Parser {
                     self.advance();
                     let statements = self.parse_block_statements()?;
                     self.expect(Token::RBrace)?;
-                    Box::new(Expression::Block(statements))
+                    Box::new(Expression::Block {
+                        statements,
+                        location: None,
+                    })
                 } else {
                     // Expression closure: || expr
                     Box::new(self.parse_expression()?)
@@ -1059,6 +1122,7 @@ impl Parser {
                 Expression::Closure {
                     parameters: Vec::new(), // No parameters
                     body,
+                    location: None,
                 }
             }
             Token::If => {
