@@ -2,6 +2,7 @@
 
 use std::fs
 use std::path
+use std::path::Path
 use std::collections::HashSet
 
 @derive(Clone)
@@ -17,7 +18,7 @@ impl GitignoreRules {
     }
     
     pub fn load_from_directory(dir: string) -> Result<Self, string> {
-        let gitignore_path = path::join(&dir, ".gitignore")
+        let gitignore_path = path::join(Path::new(&dir), ".gitignore")
         
         if !fs::exists(&gitignore_path) {
             return Ok(GitignoreRules::new())
@@ -44,12 +45,13 @@ impl GitignoreRules {
     
     pub fn is_ignored(&self, path: &string) -> bool {
         // Get the file/dir name from the path
-        let name = path::file_name(path).unwrap_or(path)
-        let path_str = path.clone()
+        let name = path::file_name(Path::new(path))
+            .unwrap_or(path.as_ref())
+            .to_string()
         
         for pattern in self.patterns.iter() {
-            if self.matches_pattern(name.clone(), pattern.clone()) 
-                || self.matches_pattern(path_str.clone(), pattern.clone()) {
+            if self.matches_pattern(&name, pattern) 
+                || self.matches_pattern(path, pattern) {
                 return true
             }
         }
@@ -57,7 +59,7 @@ impl GitignoreRules {
         false
     }
     
-    fn matches_pattern(&self, name: string, pattern: &string) -> bool {
+    fn matches_pattern(&self, name: &string, pattern: &string) -> bool {
         // Simple matching (not full gitignore spec, but good enough)
         
         // Exact match
@@ -94,9 +96,9 @@ impl GitignoreRules {
         false
     }
     
-    fn wildcard_match(&self, name: string, pattern: &string) -> bool {
+    fn wildcard_match(&self, name: &string, pattern: &string) -> bool {
         // Simple wildcard matching (* matches any characters)
-        let parts: Vec<string> = pattern.split('*').collect()
+        let parts: Vec<&str> = pattern.split('*').collect()
         
         if parts.is_empty() {
             return false
@@ -151,14 +153,14 @@ impl GitignoreCache {
     }
     
     pub fn get_rules(&mut self, dir: &string) -> GitignoreRules {
-        if let Some(rules) = self.cache.get(&dir) {
+        if let Some(rules) = self.cache.get(dir) {
             return rules.clone()
         }
         
         let rules = GitignoreRules::load_from_directory(dir.clone())
             .unwrap_or_else(|_| GitignoreRules::new())
         
-        self.cache.insert(dir, rules.clone())
+        self.cache.insert(dir.clone(), rules.clone())
         rules
     }
 }
