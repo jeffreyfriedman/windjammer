@@ -165,20 +165,16 @@ fn add_context(
         0
     }
     
-    let before_lines: Vec<string> = all_lines[start_before..line_idx]
-        .iter()
-        .map(|s| s.clone())
-        .collect()
+    let before_slice = all_lines.get(start_before..line_idx).unwrap_or(&[])
+    let before_lines: Vec<string> = before_slice.iter().map(|s| s.clone()).collect()
     match_obj.context_before = before_lines
     
     // Collect context after
     let start_after = line_idx + 1
     let end_after = std::cmp::min(start_after + lines_after as usize, all_lines.len())
     
-    let after_lines: Vec<string> = all_lines[start_after..end_after]
-        .iter()
-        .map(|s| s.clone())
-        .collect()
+    let after_slice = all_lines.get(start_after..end_after).unwrap_or(&[])
+    let after_lines: Vec<string> = after_slice.iter().map(|s| s.clone()).collect()
     match_obj.context_after = after_lines
     
     match_obj
