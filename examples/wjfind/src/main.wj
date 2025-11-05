@@ -40,7 +40,7 @@ fn main() {
     
     // Initialize logging (only if verbose)
     if env::var("WJFIND_LOG").is_ok() {
-        log::init("debug")
+        log::init()
     }
     
     // Create search configuration
