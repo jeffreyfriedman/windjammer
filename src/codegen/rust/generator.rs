@@ -969,7 +969,10 @@ impl CodeGenerator {
 
         for func in &impl_block.functions {
             // Find the analyzed version of this function
-            if let Some(analyzed_func) = analyzed.iter().find(|af| af.decl.name == func.name) {
+            // Match on both function name AND parent type to handle multiple impl blocks with same method names
+            if let Some(analyzed_func) = analyzed.iter().find(|af| {
+                af.decl.name == func.name && af.decl.parent_type == func.parent_type
+            }) {
                 output.push_str(&self.generate_function(analyzed_func));
                 output.push('\n');
             }

@@ -92,6 +92,7 @@ pub struct FunctionDecl {
     pub parameters: Vec<Parameter>,
     pub return_type: Option<Type>,
     pub body: Vec<Statement>,
+    pub parent_type: Option<String>, // The type name if this function is in an impl block
 }
 
 // ============================================================================
