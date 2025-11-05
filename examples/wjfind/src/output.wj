@@ -57,8 +57,8 @@ fn print_files_only(results: &SearchResults, config: &Config) {
     // Group matches by file
     let mut files = std::collections::HashSet::new()
     
-    for m in results.matches {
-        files.insert(m.file)
+    for m in &results.matches {
+        files.insert(m.file.clone())
     }
     
     // Print unique files
@@ -80,6 +80,9 @@ fn print_default(results: &SearchResults, config: &Config) {
             .or_insert(vec![])
             .push(m.clone())
     }
+    
+    // Save count before moving by_file
+    let file_count = by_file.len()
     
     // Print results grouped by file
     for (file, matches) in by_file {
@@ -103,13 +106,13 @@ fn print_default(results: &SearchResults, config: &Config) {
         println!("{}Found {} matches in {} files (searched {} files){}", 
             COLOR_CYAN,
             results.total_matches,
-            by_file.len(),
+            file_count,
             results.files_searched,
             COLOR_RESET)
     } else {
         println!("Found {} matches in {} files (searched {} files)", 
             results.total_matches,
-            by_file.len(),
+            file_count,
             results.files_searched)
     }
 }
