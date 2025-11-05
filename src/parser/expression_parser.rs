@@ -29,7 +29,10 @@ impl Parser {
                 // Check for empty tuple ()
                 if self.current_token() == &Token::RParen {
                     self.advance();
-                    return Ok(Expression::Tuple(vec![]));
+                    return Ok(Expression::Tuple {
+                        elements: vec![],
+                        location: None,
+                    });
                 }
 
                 // Parse the first expression inside parentheses
@@ -52,7 +55,10 @@ impl Parser {
                     }
 
                     self.expect(Token::RParen)?;
-                    Expression::Tuple(elements)
+                    Expression::Tuple {
+                        elements,
+                        location: None,
+                    }
                 } else {
                     // Just a parenthesized expression
                     self.expect(Token::RParen)?;
@@ -66,7 +72,10 @@ impl Parser {
                 // Check for empty array []
                 if self.current_token() == &Token::RBracket {
                     self.advance();
-                    return Ok(Expression::Array(vec![]));
+                    return Ok(Expression::Array {
+                        elements: vec![],
+                        location: None,
+                    });
                 }
 
                 let first_element = self.parse_expression()?;
@@ -82,6 +91,7 @@ impl Parser {
                         name: "vec".to_string(),
                         args: vec![first_element, count],
                         delimiter: MacroDelimiter::Brackets,
+                        location: None,
                     });
                 }
 
@@ -100,7 +110,10 @@ impl Parser {
                 }
 
                 self.expect(Token::RBracket)?;
-                Expression::Array(elements)
+                Expression::Array {
+                    elements,
+                    location: None,
+                }
             }
             Token::Ampersand => {
                 // Handle & and &mut unary operators
@@ -119,6 +132,7 @@ impl Parser {
                         UnaryOp::Ref
                     },
                     operand: Box::new(inner),
+                    location: None,
                 }
             }
             Token::Star => {
@@ -128,6 +142,7 @@ impl Parser {
                 Expression::Unary {
                     op: UnaryOp::Deref,
                     operand: Box::new(inner),
+                    location: None,
                 }
             }
             Token::Minus => {
@@ -137,6 +152,7 @@ impl Parser {
                 Expression::Unary {
                     op: UnaryOp::Neg,
                     operand: Box::new(inner),
+                    location: None,
                 }
             }
             Token::Bang => {
@@ -146,6 +162,7 @@ impl Parser {
                 Expression::Unary {
                     op: UnaryOp::Not,
                     operand: Box::new(inner),
+                    location: None,
                 }
             }
             Token::Ident(name) => {
@@ -475,13 +492,19 @@ impl Parser {
                     let body = self.parse_block_statements()?;
                     self.expect(Token::RBrace)?;
                     // Wrap in a statement expression
-                    Expression::Block(vec![Statement::Thread { body }])
+                    Expression::Block {
+                        statements: vec![Statement::Thread { body, location: None }],
+                        location: None,
+                    }
                 } else {
                     // Module path like thread::sleep_seconds
                     // Parse as identifier and let postfix operators handle ::
                     let name = "thread".to_string();
                     self.advance();
-                    Expression::Identifier(name)
+                    Expression::Identifier {
+                        name,
+                        location: None,
+                    }
                 }
             }
             Token::Async => {
@@ -493,19 +516,28 @@ impl Parser {
                     let body = self.parse_block_statements()?;
                     self.expect(Token::RBrace)?;
                     // Wrap in a statement expression
-                    Expression::Block(vec![Statement::Async { body }])
+                    Expression::Block {
+                        statements: vec![Statement::Async { body, location: None }],
+                        location: None,
+                    }
                 } else {
                     // Module path like async::something
                     let name = "async".to_string();
                     self.advance();
-                    Expression::Identifier(name)
+                    Expression::Identifier {
+                        name,
+                        location: None,
+                    }
                 }
             }
             Token::LeftArrow => {
                 // Channel receive: <-ch
                 self.advance();
                 let channel = self.parse_primary_expression()?;
-                Expression::ChannelRecv(Box::new(channel))
+                Expression::ChannelRecv {
+                    channel: Box::new(channel),
+                    location: None,
+                }
             }
             Token::Ampersand => {
                 // Reference: &expr or &mut expr
@@ -524,6 +556,7 @@ impl Parser {
                         UnaryOp::Ref
                     },
                     operand: Box::new(operand),
+                    location: None,
                 }
             }
             Token::Star => {
@@ -533,6 +566,7 @@ impl Parser {
                 Expression::Unary {
                     op: UnaryOp::Deref,
                     operand: Box::new(operand),
+                    location: None,
                 }
             }
             Token::Minus => {
@@ -542,6 +576,7 @@ impl Parser {
                 Expression::Unary {
                     op: UnaryOp::Neg,
                     operand: Box::new(operand),
+                    location: None,
                 }
             }
             Token::Bang => {
@@ -551,32 +586,48 @@ impl Parser {
                 Expression::Unary {
                     op: UnaryOp::Not,
                     operand: Box::new(operand),
+                    location: None,
                 }
             }
             Token::Self_ => {
                 // self keyword used in expressions
                 self.advance();
-                Expression::Identifier("self".to_string())
+                Expression::Identifier {
+                    name: "self".to_string(),
+                    location: None,
+                }
             }
             Token::IntLiteral(n) => {
                 let n = *n;
                 self.advance();
-                Expression::Literal(Literal::Int(n))
+                Expression::Literal {
+                    value: Literal::Int(n),
+                    location: None,
+                }
             }
             Token::FloatLiteral(f) => {
                 let f = *f;
                 self.advance();
-                Expression::Literal(Literal::Float(f))
+                Expression::Literal {
+                    value: Literal::Float(f),
+                    location: None,
+                }
             }
             Token::StringLiteral(s) => {
                 let s = s.clone();
                 self.advance();
-                Expression::Literal(Literal::String(s))
+                Expression::Literal {
+                    value: Literal::String(s),
+                    location: None,
+                }
             }
             Token::CharLiteral(c) => {
                 let c = *c;
                 self.advance();
-                Expression::Literal(Literal::Char(c))
+                Expression::Literal {
+                    value: Literal::Char(c),
+                    location: None,
+                }
             }
             Token::InterpolatedString(parts) => {
                 // Convert interpolated string to format! macro call
@@ -615,13 +666,17 @@ impl Parser {
                 }
 
                 // Create format! macro invocation
-                let mut macro_args = vec![Expression::Literal(Literal::String(format_string))];
+                let mut macro_args = vec![Expression::Literal {
+                    value: Literal::String(format_string),
+                    location: None,
+                }];
                 macro_args.extend(args);
 
                 Expression::MacroInvocation {
                     name: "format".to_string(),
                     args: macro_args,
                     delimiter: MacroDelimiter::Parens,
+                    location: None,
                 }
             }
             Token::BoolLiteral(b) => {
