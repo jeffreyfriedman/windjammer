@@ -99,7 +99,7 @@ fn search_files_parallel(files: Vec<string>, config: &Config) -> Result<Vec<Matc
         
         // Early termination if max count reached
         if let Some(max) = config.max_count {
-            if all_matches.len() >= max {
+            if all_matches.len() >= max as usize {
                 break
             }
         }
@@ -165,16 +165,20 @@ fn add_context(
         0
     }
     
-    let before_slice = all_lines.get(start_before..line_idx).unwrap_or(&[])
-    let before_lines: Vec<string> = before_slice.iter().map(|s| s.clone()).collect()
+    let before_lines: Vec<string> = match all_lines.get(start_before..line_idx) {
+        Some(slice) => slice.iter().map(|s| s.clone()).collect(),
+        None => vec![],
+    }
     match_obj.context_before = before_lines
     
     // Collect context after
     let start_after = line_idx + 1
     let end_after = std::cmp::min(start_after + lines_after as usize, all_lines.len())
     
-    let after_slice = all_lines.get(start_after..end_after).unwrap_or(&[])
-    let after_lines: Vec<string> = after_slice.iter().map(|s| s.clone()).collect()
+    let after_lines: Vec<string> = match all_lines.get(start_after..end_after) {
+        Some(slice) => slice.iter().map(|s| s.clone()).collect(),
+        None => vec![],
+    }
     match_obj.context_after = after_lines
     
     match_obj
