@@ -162,7 +162,10 @@ impl Parser {
                 if decorators.iter().any(|d| d.name == "async") {
                     func.is_async = true;
                 }
-                Ok(Item::Function(func))
+                Ok(Item::Function {
+                    decl: func,
+                    location: None,
+                })
             }
             Token::Async => {
                 self.advance();
@@ -170,27 +173,42 @@ impl Parser {
                 let mut func = self.parse_function()?;
                 func.is_async = true;
                 func.decorators = decorators;
-                Ok(Item::Function(func))
+                Ok(Item::Function {
+                    decl: func,
+                    location: None,
+                })
             }
             Token::Struct => {
                 self.advance();
                 let mut struct_decl = self.parse_struct()?;
                 struct_decl.decorators = decorators;
-                Ok(Item::Struct(struct_decl))
+                Ok(Item::Struct {
+                    decl: struct_decl,
+                    location: None,
+                })
             }
             Token::Enum => {
                 self.advance();
-                Ok(Item::Enum(self.parse_enum()?))
+                Ok(Item::Enum {
+                    decl: self.parse_enum()?,
+                    location: None,
+                })
             }
             Token::Trait => {
                 self.advance();
-                Ok(Item::Trait(self.parse_trait()?))
+                Ok(Item::Trait {
+                    decl: self.parse_trait()?,
+                    location: None,
+                })
             }
             Token::Impl => {
                 self.advance();
                 let mut impl_block = self.parse_impl()?;
                 impl_block.decorators = decorators;
-                Ok(Item::Impl(impl_block))
+                Ok(Item::Impl {
+                    block: impl_block,
+                    location: None,
+                })
             }
             Token::Const => {
                 self.advance();
@@ -198,7 +216,12 @@ impl Parser {
                 // For now, we don't store is_pub in the AST (future enhancement)
                 // But at least we parse it correctly
                 let _ = is_pub; // Suppress unused warning
-                Ok(Item::Const { name, type_, value })
+                Ok(Item::Const {
+                    name,
+                    type_,
+                    value,
+                    location: None,
+                })
             }
             Token::Static => {
                 self.advance();
@@ -214,12 +237,17 @@ impl Parser {
                     mutable,
                     type_,
                     value,
+                    location: None,
                 })
             }
             Token::Use => {
                 self.advance(); // consume 'use'
                 let (path, alias) = self.parse_use()?;
-                Ok(Item::Use { path, alias })
+                Ok(Item::Use {
+                    path,
+                    alias,
+                    location: None,
+                })
             }
             Token::Bound => {
                 self.advance(); // consume 'bound'
@@ -262,7 +290,11 @@ impl Parser {
             }
         }
 
-        Ok(Item::BoundAlias { name, traits })
+        Ok(Item::BoundAlias {
+            name,
+            traits,
+            location: None,
+        })
     }
 
     pub(crate) fn parse_const_or_static(&mut self) -> Result<(String, Type, Expression), String> {
