@@ -384,7 +384,10 @@ impl Parser {
                 } else {
                     // Positional argument (just a string or expression)
                     // Reparse as expression
-                    let expr = Expression::Identifier(key);
+                    let expr = Expression::Identifier {
+                        name: key,
+                        location: None,
+                    };
                     args.push((String::new(), expr));
                 }
             } else {
