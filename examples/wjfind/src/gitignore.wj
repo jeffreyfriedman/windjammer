@@ -157,7 +157,7 @@ impl GitignoreCache {
             return rules.clone()
         }
         
-        let rules = GitignoreRules::load_from_directory(dir.clone())
+        let rules = GitignoreRules::load_from_directory(dir.to_string())
             .unwrap_or_else(|_| GitignoreRules::new())
         
         self.cache.insert(dir.to_string(), rules.clone())
