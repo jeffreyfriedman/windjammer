@@ -135,7 +135,7 @@ fn parse_args() -> Args {
     
     // Extract arguments
     let pattern = matches.value_of("pattern").unwrap()
-    let paths = matches.values_of("paths").unwrap_or(vec!["."])
+    let paths = matches.values_of("paths").unwrap_or(vec![".".to_string()])
     let case_insensitive = matches.is_present("case-insensitive")
     let whole_word = matches.is_present("whole-word")
     let line_numbers = matches.is_present("line-numbers")
