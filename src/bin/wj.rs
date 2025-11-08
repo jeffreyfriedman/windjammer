@@ -223,6 +223,16 @@ enum Commands {
         verbose: bool,
     },
 
+    /// Interactive error navigator (TUI)
+    Errors {
+        /// File to check
+        file: PathBuf,
+
+        /// Output directory
+        #[arg(short, long, default_value = "./build")]
+        output: PathBuf,
+    },
+
     /// Generate error documentation
     Docs {
         /// Output directory for generated docs
@@ -429,6 +439,41 @@ fn main() -> anyhow::Result<()> {
                 println!("  wj explain WJ0001");
                 println!("  wj explain E0425  (Rust error code)");
             }
+        }
+        Commands::Errors { file, output } => {
+            use windjammer::error_tui::{ErrorTui, TuiAction};
+            use colored::*;
+            
+            println!("Building and checking {}...", file.display());
+            
+            // Build the project first (without checking)
+            let build_options = windjammer::cli::build::BuildOptions {
+                minify: false,
+                tree_shake: false,
+                source_maps: true,
+                polyfills: false,
+                v8_optimize: false,
+            };
+            
+            windjammer::cli::build::execute(
+                file.as_path(),
+                Some(output.as_path()),
+                false, // release
+                "rust",
+                build_options,
+                true,  // check - run cargo check
+                false, // raw_errors
+                false, // fix
+                false, // verbose
+                true,  // quiet - suppress normal output
+                None,  // filter_file
+                None,  // filter_type
+            ).ok(); // Ignore errors, we'll get them from the TUI
+            
+            // TODO: Add a public API to get diagnostics from build module
+            // For now, show a message
+            println!("{}", "✓ TUI mode coming soon! Use 'wj build --check' for now.".yellow());
+            println!("{}", "  The TUI infrastructure is ready, just needs diagnostics API.".dimmed());
         }
     }
 
