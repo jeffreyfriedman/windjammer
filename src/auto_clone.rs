@@ -150,7 +150,7 @@ impl AutoCloneAnalysis {
         }
     }
 
-    /// Extract a path string from an expression (e.g., "config.paths", "obj.method()")
+    /// Extract a path string from an expression (e.g., "config.paths", "obj.method()", "items[0]")
     fn extract_expression_path(expr: &Expression) -> Option<String> {
         match expr {
             Expression::Identifier { name, .. } => Some(name.clone()),
@@ -166,6 +166,25 @@ impl AutoCloneAnalysis {
                 // Build path for method calls: object.method()
                 if let Some(base_path) = Self::extract_expression_path(object) {
                     Some(format!("{}.{}()", base_path, method))
+                } else {
+                    None
+                }
+            }
+            Expression::Index { object, index, .. } => {
+                // Build path for index expressions: object[index]
+                // For simplicity, we use [*] as a placeholder since the actual index
+                // might vary (e.g., items[0], items[i])
+                if let Some(base_path) = Self::extract_expression_path(object) {
+                    // Try to get a more specific index if it's a literal
+                    let index_str = match index.as_ref() {
+                        Expression::Literal {
+                            value: crate::parser::Literal::Int(n),
+                            ..
+                        } => n.to_string(),
+                        Expression::Identifier { name, .. } => name.clone(),
+                        _ => "*".to_string(), // Generic placeholder
+                    };
+                    Some(format!("{}[{}]", base_path, index_str))
                 } else {
                     None
                 }
@@ -241,6 +260,15 @@ impl AutoCloneAnalysis {
                 Self::collect_usages_from_expression(operand, idx, UsageKind::Read, map);
             }
             Expression::Index { object, index, .. } => {
+                // Track the full index expression path (e.g., "items[0]", "arr[i]")
+                if let Some(path) = Self::extract_expression_path(expr) {
+                    map.entry(path).or_insert_with(Vec::new).push(Usage {
+                        statement_idx: idx,
+                        kind,
+                        is_move: kind == UsageKind::Move,
+                    });
+                }
+                // Also track the base object and index as reads
                 Self::collect_usages_from_expression(object, idx, UsageKind::Read, map);
                 Self::collect_usages_from_expression(index, idx, UsageKind::Read, map);
             }
@@ -309,12 +337,14 @@ impl AutoCloneAnalysis {
             .find(|u| u.kind == UsageKind::Definition)
             .map(|u| u.statement_idx);
 
-        // Field accesses (e.g., "config.paths") and method calls (e.g., "source.get_items()")
-        // don't have definitions. They're valid if they contain a dot or parentheses.
-        let is_field_or_method = var_name.contains('.') || var_name.contains('(');
+        // Field accesses (e.g., "config.paths"), method calls (e.g., "source.get_items()"),
+        // and index expressions (e.g., "items[0]") don't have definitions.
+        // They're valid if they contain a dot, parentheses, or square brackets.
+        let is_complex_expr =
+            var_name.contains('.') || var_name.contains('(') || var_name.contains('[');
 
-        if definition_idx.is_none() && !is_field_or_method {
-            // Variable not defined in this scope (parameter, etc.) and not a field/method access
+        if definition_idx.is_none() && !is_complex_expr {
+            // Variable not defined in this scope (parameter, etc.) and not a complex expression
             return;
         }
 

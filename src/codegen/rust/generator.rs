@@ -2169,8 +2169,8 @@ impl CodeGenerator {
         }
     }
 
-    /// Extract a field access or method call path from an expression
-    /// (e.g., "config.paths", "source.get_items()")
+    /// Extract a field access, method call, or index expression path from an expression
+    /// (e.g., "config.paths", "source.get_items()", "items[0]")
     /// This matches the logic in auto_clone.rs
     fn extract_field_access_path(&self, expr: &Expression) -> Option<String> {
         match expr {
@@ -2187,6 +2187,23 @@ impl CodeGenerator {
                 // Build path for method calls: object.method()
                 if let Some(base_path) = self.extract_field_access_path(object) {
                     Some(format!("{}.{}()", base_path, method))
+                } else {
+                    None
+                }
+            }
+            Expression::Index { object, index, .. } => {
+                // Build path for index expressions: object[index]
+                if let Some(base_path) = self.extract_field_access_path(object) {
+                    // Try to get a more specific index if it's a literal
+                    let index_str = match index.as_ref() {
+                        Expression::Literal {
+                            value: Literal::Int(n),
+                            ..
+                        } => n.to_string(),
+                        Expression::Identifier { name, .. } => name.clone(),
+                        _ => "*".to_string(), // Generic placeholder
+                    };
+                    Some(format!("{}[{}]", base_path, index_str))
                 } else {
                     None
                 }
@@ -2799,7 +2816,21 @@ impl CodeGenerator {
                 }
 
                 let idx_str = self.generate_expression(index);
-                format!("{}[{}]", obj_str, idx_str)
+                let base_expr = format!("{}[{}]", obj_str, idx_str);
+
+                // AUTO-CLONE: Check if this index expression needs to be cloned
+                if let Some(path) = self.extract_field_access_path(expr) {
+                    if let Some(ref analysis) = self.auto_clone_analysis {
+                        if analysis
+                            .needs_clone(&path, self.current_statement_idx)
+                            .is_some()
+                        {
+                            // Automatically insert .clone() for index expression!
+                            return format!("{}.clone()", base_expr);
+                        }
+                    }
+                }
+                base_expr
             }
             Expression::Tuple {
                 elements: exprs, ..
