@@ -1,0 +1,43 @@
+// Renderer - Pure Windjammer API
+// Abstracts away wgpu/OpenGL/DirectX/Metal
+
+pub struct Renderer {
+    // Internal state hidden from user
+    width: int,
+    height: int,
+}
+
+impl Renderer {
+    pub fn new(width: int, height: int) -> Renderer {
+        Renderer {
+            width: width,
+            height: height,
+        }
+    }
+    
+    pub fn clear(&mut self, color: Color) {
+        // Clear screen with color
+        // Backend implementation hidden
+    }
+    
+    pub fn draw_sprite(&mut self, sprite: &Sprite) {
+        // Draw a sprite
+        // Backend implementation hidden
+    }
+    
+    pub fn draw_rect(&mut self, x: float, y: float, width: float, height: float, color: Color) {
+        // Draw a rectangle
+        // Backend implementation hidden
+    }
+    
+    pub fn draw_circle(&mut self, x: float, y: float, radius: float, color: Color) {
+        // Draw a circle
+        // Backend implementation hidden
+    }
+    
+    pub fn draw_text(&mut self, text: string, x: float, y: float, size: float, color: Color) {
+        // Draw text
+        // Backend implementation hidden
+    }
+}
+
