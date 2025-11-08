@@ -227,11 +227,183 @@ impl ErrorMapper {
 
     /// Translate Rust error messages to Windjammer terminology
     fn translate_message(&self, rust_msg: &str) -> String {
-        // TODO: Implement comprehensive message translation
-        // For now, just return the original message
-        // Phase 3 will add sophisticated translation patterns
+        // Pattern matching for common Rust error patterns
+        // Translate to Windjammer-friendly terminology
 
+        // Type errors
+        if rust_msg.contains("mismatched types") {
+            return self.translate_type_mismatch(rust_msg);
+        }
+
+        if rust_msg.contains("cannot find type") {
+            return self.translate_type_not_found(rust_msg);
+        }
+
+        if rust_msg.contains("cannot find value") || rust_msg.contains("cannot find function") {
+            return self.translate_value_not_found(rust_msg);
+        }
+
+        // Ownership errors
+        if rust_msg.contains("cannot move out of") {
+            return "Ownership error: This value was already moved".to_string();
+        }
+
+        if rust_msg.contains("cannot borrow") && rust_msg.contains("as mutable") {
+            return "Cannot modify: This value is not declared as mutable".to_string();
+        }
+
+        if rust_msg.contains("use of moved value") {
+            return "Ownership error: This value was already used and cannot be used again"
+                .to_string();
+        }
+
+        // Trait errors
+        if rust_msg.contains("trait bounds were not satisfied") {
+            return self.translate_trait_bounds(rust_msg);
+        }
+
+        if rust_msg.contains("the trait") && rust_msg.contains("is not implemented") {
+            return self.translate_trait_not_implemented(rust_msg);
+        }
+
+        // Lifetime errors
+        if rust_msg.contains("lifetime") {
+            return self.translate_lifetime_error(rust_msg);
+        }
+
+        // Syntax errors
+        if rust_msg.contains("expected") && rust_msg.contains("found") {
+            return self.translate_syntax_error(rust_msg);
+        }
+
+        // Module/import errors
+        if rust_msg.contains("unresolved import") {
+            return "Import error: Module or item not found".to_string();
+        }
+
+        // Default: return original message
         rust_msg.to_string()
+    }
+
+    /// Translate type mismatch errors
+    fn translate_type_mismatch(&self, rust_msg: &str) -> String {
+        // Extract expected and found types
+        if let (Some(expected), Some(found)) = (
+            self.extract_between(rust_msg, "expected `", "`"),
+            self.extract_between(rust_msg, "found `", "`"),
+        ) {
+            let expected_wj = self.rust_type_to_windjammer(&expected);
+            let found_wj = self.rust_type_to_windjammer(&found);
+            return format!(
+                "Type mismatch: expected {}, found {}",
+                expected_wj, found_wj
+            );
+        }
+
+        "Type mismatch: The types don't match".to_string()
+    }
+
+    /// Translate type not found errors
+    fn translate_type_not_found(&self, rust_msg: &str) -> String {
+        if let Some(type_name) = self.extract_between(rust_msg, "cannot find type `", "`") {
+            let wj_type = self.rust_type_to_windjammer(&type_name);
+            return format!("Type not found: {}", wj_type);
+        }
+
+        "Type not found".to_string()
+    }
+
+    /// Translate value/function not found errors
+    fn translate_value_not_found(&self, rust_msg: &str) -> String {
+        if rust_msg.contains("cannot find function") {
+            if let Some(func_name) = self.extract_between(rust_msg, "function `", "`") {
+                return format!("Function not found: {}", func_name);
+            }
+            return "Function not found".to_string();
+        }
+
+        if let Some(value_name) = self.extract_between(rust_msg, "value `", "`") {
+            return format!("Variable not found: {}", value_name);
+        }
+
+        "Value not found".to_string()
+    }
+
+    /// Translate trait bounds errors
+    fn translate_trait_bounds(&self, _rust_msg: &str) -> String {
+        "Trait constraint not satisfied: This type doesn't implement the required trait".to_string()
+    }
+
+    /// Translate trait not implemented errors
+    fn translate_trait_not_implemented(&self, rust_msg: &str) -> String {
+        if let Some(trait_name) = self.extract_between(rust_msg, "trait `", "`") {
+            return format!("Missing trait implementation: {}", trait_name);
+        }
+
+        "Missing trait implementation".to_string()
+    }
+
+    /// Translate lifetime errors
+    fn translate_lifetime_error(&self, _rust_msg: &str) -> String {
+        "Lifetime error: The value doesn't live long enough".to_string()
+    }
+
+    /// Translate syntax errors
+    fn translate_syntax_error(&self, rust_msg: &str) -> String {
+        if let (Some(expected), Some(found)) = (
+            self.extract_between(rust_msg, "expected ", ","),
+            self.extract_between(rust_msg, "found ", "\n"),
+        ) {
+            return format!(
+                "Syntax error: expected {}, found {}",
+                expected.trim(),
+                found.trim()
+            );
+        }
+
+        "Syntax error".to_string()
+    }
+
+    /// Convert Rust type names to Windjammer type names
+    fn rust_type_to_windjammer(&self, rust_type: &str) -> String {
+        match rust_type {
+            "i32" | "i64" | "isize" => "int",
+            "u32" | "u64" | "usize" => "uint",
+            "f32" | "f64" => "float",
+            "&str" => "string",
+            "String" => "string",
+            "bool" => "bool",
+            "()" => "void",
+            _ => {
+                // Handle references
+                if rust_type.starts_with('&') {
+                    return format!("&{}", self.rust_type_to_windjammer(&rust_type[1..]));
+                }
+                // Handle Option
+                if rust_type.starts_with("Option<") {
+                    if let Some(inner) = self.extract_between(rust_type, "Option<", ">") {
+                        return format!("{}?", self.rust_type_to_windjammer(&inner));
+                    }
+                }
+                // Handle Vec
+                if rust_type.starts_with("Vec<") {
+                    if let Some(inner) = self.extract_between(rust_type, "Vec<", ">") {
+                        return format!("[{}]", self.rust_type_to_windjammer(&inner));
+                    }
+                }
+                // Default: return as-is
+                rust_type
+            }
+        }
+        .to_string()
+    }
+
+    /// Extract text between two delimiters
+    fn extract_between<'a>(&self, text: &'a str, start: &str, end: &str) -> Option<String> {
+        let start_idx = text.find(start)? + start.len();
+        let remaining = &text[start_idx..];
+        let end_idx = remaining.find(end)?;
+        Some(remaining[..end_idx].to_string())
     }
 }
 
@@ -266,7 +438,10 @@ impl WindjammerDiagnostic {
             self.location.column
         ));
 
-        // TODO: Add source code snippet display (Phase 3)
+        // Source code snippet
+        if let Ok(snippet) = self.read_source_snippet() {
+            output.push_str(&snippet);
+        }
 
         // Help messages
         for help_msg in &self.help {
@@ -278,7 +453,105 @@ impl WindjammerDiagnostic {
             output.push_str(&format!("  = note: {}\n", note));
         }
 
+        // Contextual help (Windjammer-specific suggestions)
+        if let Some(contextual_help) = self.get_contextual_help() {
+            output.push_str(&format!("  = suggestion: {}\n", contextual_help));
+        }
+
         output
+    }
+
+    /// Read and format the source code snippet for this error
+    fn read_source_snippet(&self) -> Result<String, std::io::Error> {
+        use std::fs;
+
+        let source = fs::read_to_string(&self.location.file)?;
+        let lines: Vec<&str> = source.lines().collect();
+
+        let mut output = String::new();
+        output.push_str("   |\n");
+
+        // Show context: 2 lines before, the error line, and 2 lines after
+        let start_line = self.location.line.saturating_sub(2);
+        let end_line = (self.location.line + 2).min(lines.len());
+
+        for line_num in start_line..=end_line {
+            if line_num == 0 || line_num > lines.len() {
+                continue;
+            }
+
+            let line = lines[line_num - 1];
+            let is_error_line = line_num == self.location.line;
+
+            if is_error_line {
+                // Error line with pointer
+                output.push_str(&format!("{:>4} | {}\n", line_num, line));
+                output.push_str("   | ");
+                output.push_str(&" ".repeat(self.location.column.saturating_sub(1)));
+                output.push_str("^\n");
+            } else {
+                // Context line
+                output.push_str(&format!("{:>4} | {}\n", line_num, line));
+            }
+        }
+
+        output.push_str("   |\n");
+        Ok(output)
+    }
+
+    /// Get Windjammer-specific contextual help based on the error message
+    fn get_contextual_help(&self) -> Option<String> {
+        let msg = &self.message.to_lowercase();
+
+        // Type mismatch suggestions
+        if msg.contains("type mismatch") {
+            if msg.contains("expected int") && msg.contains("found string") {
+                return Some(
+                    "Use .parse() to convert a string to an integer, e.g., \"42\".parse()"
+                        .to_string(),
+                );
+            }
+            if msg.contains("expected string") && msg.contains("found int") {
+                return Some(
+                    "Use .to_string() to convert an integer to a string, e.g., 42.to_string()"
+                        .to_string(),
+                );
+            }
+            if msg.contains("expected &") {
+                return Some("Add & before the value to create a reference".to_string());
+            }
+        }
+
+        // Function not found
+        if msg.contains("function not found") {
+            return Some(
+                "Check the function name spelling and ensure the module is imported".to_string(),
+            );
+        }
+
+        // Variable not found
+        if msg.contains("variable not found") {
+            return Some(
+                "Check the variable name spelling and ensure it's declared before use".to_string(),
+            );
+        }
+
+        // Ownership errors
+        if msg.contains("ownership error") {
+            return Some("In Windjammer, values can only be used once unless they implement Copy. Consider using references (&) or cloning (.clone())".to_string());
+        }
+
+        // Mutability errors
+        if msg.contains("cannot modify") {
+            return Some("Declare the variable as mutable: let mut x = ...".to_string());
+        }
+
+        // Import errors
+        if msg.contains("import error") {
+            return Some("Use 'use module::item' to import, or check if the module exists in your project or stdlib".to_string());
+        }
+
+        None
     }
 }
 
@@ -288,7 +561,7 @@ mod tests {
 
     #[test]
     fn test_parse_rustc_json() {
-        let json = r#"{"message":"mismatched types","level":"error","spans":[{"file_name":"test.rs","line_start":10,"line_end":10,"column_start":5,"column_end":10,"is_primary":true,"label":"expected i32, found &str"}],"code":{"code":"E0308"},"children":[],"rendered":null}"#;
+        let json = r#"{"message":"mismatched types","level":"error","spans":[{"file_name":"test.rs","line_start":10,"line_end":10,"column_start":5,"column_end":10,"is_primary":true,"label":"expected i32, found &str","text":null}],"code":{"code":"E0308"},"children":[],"rendered":null}"#;
 
         let diag: RustcDiagnostic = serde_json::from_str(json).unwrap();
         assert_eq!(diag.message, "mismatched types");
@@ -317,5 +590,111 @@ mod tests {
         assert!(formatted.contains("error[E0308]"));
         assert!(formatted.contains("test.wj:10:5"));
         assert!(formatted.contains("help: Try using .parse()"));
+    }
+
+    #[test]
+    fn test_rust_type_to_windjammer() {
+        let mapper = ErrorMapper::new(SourceMap::new());
+
+        assert_eq!(mapper.rust_type_to_windjammer("i32"), "int");
+        assert_eq!(mapper.rust_type_to_windjammer("i64"), "int");
+        assert_eq!(mapper.rust_type_to_windjammer("&str"), "string");
+        assert_eq!(mapper.rust_type_to_windjammer("String"), "string");
+        assert_eq!(mapper.rust_type_to_windjammer("bool"), "bool");
+        assert_eq!(mapper.rust_type_to_windjammer("f64"), "float");
+        assert_eq!(mapper.rust_type_to_windjammer("()"), "void");
+    }
+
+    #[test]
+    fn test_rust_type_to_windjammer_complex() {
+        let mapper = ErrorMapper::new(SourceMap::new());
+
+        assert_eq!(mapper.rust_type_to_windjammer("&i32"), "&int");
+        assert_eq!(mapper.rust_type_to_windjammer("Vec<i32>"), "[int]");
+        assert_eq!(mapper.rust_type_to_windjammer("Option<String>"), "string?");
+    }
+
+    #[test]
+    fn test_translate_type_mismatch() {
+        let mapper = ErrorMapper::new(SourceMap::new());
+
+        let rust_msg = "mismatched types: expected `i32`, found `&str`";
+        let translated = mapper.translate_message(rust_msg);
+        assert!(translated.contains("Type mismatch"));
+        assert!(translated.contains("int"));
+        assert!(translated.contains("string"));
+    }
+
+    #[test]
+    fn test_translate_function_not_found() {
+        let mapper = ErrorMapper::new(SourceMap::new());
+
+        let rust_msg = "cannot find function `foo` in this scope";
+        let translated = mapper.translate_message(rust_msg);
+        assert!(translated.contains("Function not found"));
+        assert!(translated.contains("foo"));
+    }
+
+    #[test]
+    fn test_translate_ownership_error() {
+        let mapper = ErrorMapper::new(SourceMap::new());
+
+        let rust_msg = "use of moved value: `x`";
+        let translated = mapper.translate_message(rust_msg);
+        assert!(translated.contains("Ownership error"));
+    }
+
+    #[test]
+    fn test_contextual_help_type_mismatch() {
+        let diag = WindjammerDiagnostic {
+            message: "Type mismatch: expected int, found string".to_string(),
+            level: DiagnosticLevel::Error,
+            location: Location {
+                file: PathBuf::from("test.wj"),
+                line: 10,
+                column: 5,
+            },
+            spans: vec![],
+            code: None,
+            help: vec![],
+            notes: vec![],
+        };
+
+        let help = diag.get_contextual_help();
+        assert!(help.is_some());
+        assert!(help.unwrap().contains(".parse()"));
+    }
+
+    #[test]
+    fn test_contextual_help_mutability() {
+        let diag = WindjammerDiagnostic {
+            message: "Cannot modify: This value is not declared as mutable".to_string(),
+            level: DiagnosticLevel::Error,
+            location: Location {
+                file: PathBuf::from("test.wj"),
+                line: 10,
+                column: 5,
+            },
+            spans: vec![],
+            code: None,
+            help: vec![],
+            notes: vec![],
+        };
+
+        let help = diag.get_contextual_help();
+        assert!(help.is_some());
+        assert!(help.unwrap().contains("let mut"));
+    }
+
+    #[test]
+    fn test_extract_between() {
+        let mapper = ErrorMapper::new(SourceMap::new());
+
+        let text = "expected `i32`, found `&str`";
+        let expected = mapper.extract_between(text, "expected `", "`");
+        assert_eq!(expected, Some("i32".to_string()));
+
+        let found = mapper.extract_between(text, "found `", "`");
+        assert_eq!(found, Some("&str".to_string()));
     }
 }
