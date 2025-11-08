@@ -150,7 +150,7 @@ impl AutoCloneAnalysis {
         }
     }
 
-    /// Extract a path string from an expression (e.g., "config.paths", "obj.field")
+    /// Extract a path string from an expression (e.g., "config.paths", "obj.method()")
     fn extract_expression_path(expr: &Expression) -> Option<String> {
         match expr {
             Expression::Identifier { name, .. } => Some(name.clone()),
@@ -158,6 +158,14 @@ impl AutoCloneAnalysis {
                 // Recursively build the path: object.field
                 if let Some(base_path) = Self::extract_expression_path(object) {
                     Some(format!("{}.{}", base_path, field))
+                } else {
+                    None
+                }
+            }
+            Expression::MethodCall { object, method, .. } => {
+                // Build path for method calls: object.method()
+                if let Some(base_path) = Self::extract_expression_path(object) {
+                    Some(format!("{}.{}()", base_path, method))
                 } else {
                     None
                 }
@@ -211,6 +219,15 @@ impl AutoCloneAnalysis {
             Expression::MethodCall {
                 object, arguments, ..
             } => {
+                // Track the full method call path (e.g., "source.get_items()")
+                if let Some(path) = Self::extract_expression_path(expr) {
+                    map.entry(path).or_insert_with(Vec::new).push(Usage {
+                        statement_idx: idx,
+                        kind,
+                        is_move: kind == UsageKind::Move,
+                    });
+                }
+                // Also track the base object as a read
                 Self::collect_usages_from_expression(object, idx, UsageKind::Read, map);
                 for (_label, arg_expr) in arguments {
                     Self::collect_usages_from_expression(arg_expr, idx, UsageKind::Move, map);
@@ -292,12 +309,12 @@ impl AutoCloneAnalysis {
             .find(|u| u.kind == UsageKind::Definition)
             .map(|u| u.statement_idx);
 
-        // Field accesses (e.g., "config.paths") don't have definitions
-        // They're valid if they contain a dot
-        let is_field_access = var_name.contains('.');
+        // Field accesses (e.g., "config.paths") and method calls (e.g., "source.get_items()")
+        // don't have definitions. They're valid if they contain a dot or parentheses.
+        let is_field_or_method = var_name.contains('.') || var_name.contains('(');
 
-        if definition_idx.is_none() && !is_field_access {
-            // Variable not defined in this scope (parameter, etc.) and not a field access
+        if definition_idx.is_none() && !is_field_or_method {
+            // Variable not defined in this scope (parameter, etc.) and not a field/method access
             return;
         }
 
