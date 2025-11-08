@@ -185,7 +185,7 @@ impl ErrorTui {
             .diagnostics
             .iter()
             .enumerate()
-            .map(|(i, diag)| {
+            .map(|(_i, diag)| {
                 let (icon, color) = match diag.level {
                     DiagnosticLevel::Error => ("✗", Color::Red),
                     DiagnosticLevel::Warning => ("⚠", Color::Yellow),
