@@ -74,7 +74,7 @@ pub async fn handle(
 
     // Parse the source code
     let mut lexer = Lexer::new(&request.code);
-    let tokens = lexer.tokenize();
+    let tokens = lexer.tokenize_with_locations();
     let mut parser = Parser::new(tokens);
     let parse_result = parser.parse();
 
