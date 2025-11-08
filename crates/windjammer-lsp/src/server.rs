@@ -798,7 +798,7 @@ impl LanguageServer for WindjammerLanguageServer {
         // Collect symbols from all items
         for item in &program.items {
             match item {
-                windjammer::parser::Item::Function(func) => {
+                windjammer::parser::Item::Function { decl: func, location: _ } => {
                     symbols.push(SymbolInformation {
                         name: func.name.clone(),
                         kind: SymbolKind::FUNCTION,
@@ -820,7 +820,7 @@ impl LanguageServer for WindjammerLanguageServer {
                         container_name: None,
                     });
                 }
-                windjammer::parser::Item::Struct(s) => {
+                windjammer::parser::Item::Struct { decl: s, location: _ } => {
                     symbols.push(SymbolInformation {
                         name: s.name.clone(),
                         kind: SymbolKind::STRUCT,
@@ -866,7 +866,7 @@ impl LanguageServer for WindjammerLanguageServer {
                         });
                     }
                 }
-                windjammer::parser::Item::Enum(e) => {
+                windjammer::parser::Item::Enum { decl: e, location: _ } => {
                     symbols.push(SymbolInformation {
                         name: e.name.clone(),
                         kind: SymbolKind::ENUM,
@@ -912,7 +912,7 @@ impl LanguageServer for WindjammerLanguageServer {
                         });
                     }
                 }
-                windjammer::parser::Item::Trait(t) => {
+                windjammer::parser::Item::Trait { decl: t, location: _ } => {
                     symbols.push(SymbolInformation {
                         name: t.name.clone(),
                         kind: SymbolKind::INTERFACE,
@@ -934,7 +934,7 @@ impl LanguageServer for WindjammerLanguageServer {
                         container_name: None,
                     });
                 }
-                windjammer::parser::Item::Impl(impl_block) => {
+                windjammer::parser::Item::Impl { block: impl_block, location: _ } => {
                     // Add impl block methods
                     for method in &impl_block.functions {
                         symbols.push(SymbolInformation {
@@ -1010,7 +1010,7 @@ impl LanguageServer for WindjammerLanguageServer {
                 // Search through all items
                 for item in &program.items {
                     match item {
-                        windjammer::parser::Item::Function(func) => {
+                        windjammer::parser::Item::Function { decl: func, location: _ } => {
                             if func.name.to_lowercase().contains(&query) {
                                 results.push(SymbolInformation {
                                     name: func.name.clone(),
@@ -1034,7 +1034,7 @@ impl LanguageServer for WindjammerLanguageServer {
                                 });
                             }
                         }
-                        windjammer::parser::Item::Struct(s) => {
+                        windjammer::parser::Item::Struct { decl: s, location: _ } => {
                             if s.name.to_lowercase().contains(&query) {
                                 results.push(SymbolInformation {
                                     name: s.name.clone(),
@@ -1058,7 +1058,7 @@ impl LanguageServer for WindjammerLanguageServer {
                                 });
                             }
                         }
-                        windjammer::parser::Item::Enum(e) => {
+                        windjammer::parser::Item::Enum { decl: e, location: _ } => {
                             if e.name.to_lowercase().contains(&query) {
                                 results.push(SymbolInformation {
                                     name: e.name.clone(),
@@ -1082,7 +1082,7 @@ impl LanguageServer for WindjammerLanguageServer {
                                 });
                             }
                         }
-                        windjammer::parser::Item::Trait(t) => {
+                        windjammer::parser::Item::Trait { decl: t, location: _ } => {
                             if t.name.to_lowercase().contains(&query) {
                                 results.push(SymbolInformation {
                                     name: t.name.clone(),
@@ -1244,7 +1244,7 @@ impl LanguageServer for WindjammerLanguageServer {
             if !func_name.is_empty() {
                 // Find this function in the program
                 for item in &program.items {
-                    if let windjammer::parser::Item::Function(_func_decl) = item {
+                    if let windjammer::parser::Item::Function { decl: _func_decl, location: _ } = item {
                         // Get analyzed function for this declaration
                         let analyzed_funcs = self.analysis_db.get_analyzed_functions(&uri);
                         let func = analyzed_funcs.iter().find(|f| f.decl.name == func_name);

@@ -1,6 +1,5 @@
 use tower_lsp::lsp_types::{Diagnostic, DiagnosticRelatedInformation, DiagnosticSeverity, Location, NumberOrString, Position, Range, Url};
 use tower_lsp::Client;
-use windjammer::error_codes;
 use windjammer::error_mapper::{DiagnosticLevel, WindjammerDiagnostic};
 
 /// Diagnostics engine for publishing errors and warnings to the client
