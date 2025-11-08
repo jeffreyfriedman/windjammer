@@ -46,6 +46,7 @@ pub mod input; // Input handling
 pub mod math; // Math types (Vec2, Vec3, Mat4, etc.)
 pub mod physics; // Physics integration
 pub mod rendering; // Graphics rendering
+pub mod renderer; // High-level 2D renderer (for Windjammer games)
 pub mod texture; // Texture loading and management
 pub mod time; // Time and delta time management
 pub mod transform; // 2D and 3D transform components
@@ -75,6 +76,7 @@ pub mod prelude {
     pub use crate::math::{Mat4, Quat, Vec2, Vec3, Vec4};
     pub use crate::physics::{Collider, PhysicsWorld, RigidBody};
     pub use crate::rendering::{Camera, Material, Mesh, RenderContext, Sprite, SpriteBatch};
+    pub use crate::renderer::{Color, Renderer}; // High-level renderer for Windjammer games
     pub use crate::time::Time;
     pub use crate::transform::{Transform2D, Transform3D};
 
