@@ -2169,6 +2169,23 @@ impl CodeGenerator {
         }
     }
 
+    /// Extract a field access path from an expression (e.g., "config.paths")
+    /// This matches the logic in auto_clone.rs
+    fn extract_field_access_path(&self, expr: &Expression) -> Option<String> {
+        match expr {
+            Expression::Identifier { name, .. } => Some(name.clone()),
+            Expression::FieldAccess { object, field, .. } => {
+                // Recursively build the path: object.field
+                if let Some(base_path) = self.extract_field_access_path(object) {
+                    Some(format!("{}.{}", base_path, field))
+                } else {
+                    None
+                }
+            }
+            _ => None,
+        }
+    }
+
     fn generate_expression(&mut self, expr: &Expression) -> String {
         // PHASE 7: Try constant folding first
         let folded_expr = self.try_fold_constant(expr);
@@ -2636,7 +2653,23 @@ impl CodeGenerator {
                     _ => ".", // Actual field access (e.g., config.field)
                 };
 
-                format!("{}{}{}", obj_str, separator, field)
+                let base_expr = format!("{}{}{}", obj_str, separator, field);
+
+                // AUTO-CLONE: Check if this field access needs to be cloned
+                // Extract the full path (e.g., "config.paths")
+                if let Some(path) = self.extract_field_access_path(expr) {
+                    if let Some(ref analysis) = self.auto_clone_analysis {
+                        if analysis
+                            .needs_clone(&path, self.current_statement_idx)
+                            .is_some()
+                        {
+                            // Automatically insert .clone() for field access!
+                            return format!("{}.clone()", base_expr);
+                        }
+                    }
+                }
+
+                base_expr
             }
             Expression::StructLiteral { name, fields, .. } => {
                 // PHASE 3 OPTIMIZATION: Check if we have optimization hints for this struct

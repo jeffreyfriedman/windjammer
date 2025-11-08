@@ -150,6 +150,22 @@ impl AutoCloneAnalysis {
         }
     }
 
+    /// Extract a path string from an expression (e.g., "config.paths", "obj.field")
+    fn extract_expression_path(expr: &Expression) -> Option<String> {
+        match expr {
+            Expression::Identifier { name, .. } => Some(name.clone()),
+            Expression::FieldAccess { object, field, .. } => {
+                // Recursively build the path: object.field
+                if let Some(base_path) = Self::extract_expression_path(object) {
+                    Some(format!("{}.{}", base_path, field))
+                } else {
+                    None
+                }
+            }
+            _ => None,
+        }
+    }
+
     /// Collect usages from an expression
     fn collect_usages_from_expression(
         expr: &Expression,
@@ -166,6 +182,18 @@ impl AutoCloneAnalysis {
                         kind,
                         is_move: kind == UsageKind::Move,
                     });
+            }
+            Expression::FieldAccess { object, .. } => {
+                // Track the full field access path (e.g., "config.paths")
+                if let Some(path) = Self::extract_expression_path(expr) {
+                    map.entry(path).or_insert_with(Vec::new).push(Usage {
+                        statement_idx: idx,
+                        kind,
+                        is_move: kind == UsageKind::Move,
+                    });
+                }
+                // Also track the base object as a read
+                Self::collect_usages_from_expression(object, idx, UsageKind::Read, map);
             }
             Expression::Call {
                 function,
@@ -194,9 +222,6 @@ impl AutoCloneAnalysis {
             }
             Expression::Unary { operand, .. } => {
                 Self::collect_usages_from_expression(operand, idx, UsageKind::Read, map);
-            }
-            Expression::FieldAccess { object, .. } => {
-                Self::collect_usages_from_expression(object, idx, UsageKind::Read, map);
             }
             Expression::Index { object, index, .. } => {
                 Self::collect_usages_from_expression(object, idx, UsageKind::Read, map);
