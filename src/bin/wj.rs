@@ -211,6 +211,17 @@ enum Commands {
         #[arg(long)]
         force: bool,
     },
+
+    /// Show error statistics
+    Stats {
+        /// Clear statistics
+        #[arg(long)]
+        clear: bool,
+
+        /// Show detailed statistics
+        #[arg(short, long)]
+        verbose: bool,
+    },
 }
 
 fn main() -> anyhow::Result<()> {
@@ -320,6 +331,21 @@ fn main() -> anyhow::Result<()> {
 
         Commands::Update { check, force } => {
             windjammer::cli::update::execute(check, force)?;
+        }
+        Commands::Stats { clear, verbose } => {
+            if clear {
+                let mut stats = windjammer::error_statistics::load_or_create_stats();
+                stats.clear();
+                windjammer::error_statistics::save_stats(&stats)?;
+                println!("Statistics cleared!");
+            } else {
+                let stats = windjammer::error_statistics::load_or_create_stats();
+                if verbose {
+                    println!("{}", stats.format());
+                } else {
+                    println!("{}", stats.format());
+                }
+            }
         }
     }
 
