@@ -23,6 +23,7 @@ pub fn execute(
     options: BuildOptions,
     check: bool,
     raw_errors: bool,
+    fix: bool,
 ) -> Result<()> {
     let output_dir = output.unwrap_or_else(|| Path::new("./build"));
 
@@ -67,7 +68,7 @@ pub fn execute(
     
     // Run cargo check if requested
     if check {
-        check_with_cargo(output_dir, raw_errors)?;
+        check_with_cargo(output_dir, raw_errors, fix)?;
     } else {
         if target_str == "javascript" || target_str == "js" {
             println!("Run your JavaScript project with:");
@@ -127,7 +128,7 @@ fn build_javascript(path: &Path, config: &crate::codegen::backend::CodegenConfig
 }
 
 /// Run cargo build on the generated Rust code and display errors with source mapping
-fn check_with_cargo(output_dir: &Path, show_raw_errors: bool) -> Result<()> {
+fn check_with_cargo(output_dir: &Path, show_raw_errors: bool, apply_fixes: bool) -> Result<()> {
     use std::process::Command;
 
     println!("\n{} Rust compilation...", "Checking".cyan().bold());
@@ -191,6 +192,33 @@ fn check_with_cargo(output_dir: &Path, show_raw_errors: bool) -> Result<()> {
         let colorized = colorize_diagnostic(&formatted, &diagnostic.level);
         println!("{}", colorized);
         println!(); // Blank line between errors
+    }
+
+    // Apply fixes if requested
+    if apply_fixes {
+        println!("\n{} Applying automatic fixes...", "Fixing".green().bold());
+        
+        let fixes: Vec<_> = wj_diagnostics
+            .iter()
+            .filter_map(|d| d.get_fix())
+            .collect();
+        
+        if fixes.is_empty() {
+            println!("{} No automatic fixes available", "Info:".cyan());
+        } else {
+            println!("{} Found {} fixable error(s)", "Info:".cyan(), fixes.len());
+            
+            let applicator = crate::auto_fix::FixApplicator::new();
+            match applicator.apply_fixes(&fixes) {
+                Ok(_) => {
+                    println!("\n{} Applied {} fix(es)!", "Success!".green().bold(), fixes.len());
+                    println!("Run the build again to verify the fixes.");
+                }
+                Err(e) => {
+                    println!("{} Failed to apply some fixes: {}", "Warning:".yellow().bold(), e);
+                }
+            }
+        }
     }
 
     Err(anyhow::anyhow!(
