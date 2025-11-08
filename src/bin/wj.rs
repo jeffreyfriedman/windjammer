@@ -82,6 +82,14 @@ enum Commands {
         /// Apply V8 optimizations (JS target only)
         #[arg(long)]
         v8_optimize: bool,
+
+        /// Run cargo build after transpilation and show errors
+        #[arg(long)]
+        check: bool,
+
+        /// Show raw Rust errors instead of translated Windjammer errors
+        #[arg(long)]
+        raw_errors: bool,
     },
 
     /// Compile and run a Windjammer file
@@ -205,6 +213,8 @@ fn main() -> anyhow::Result<()> {
             source_maps,
             polyfills,
             v8_optimize,
+            check,
+            raw_errors,
         } => {
             // TODO: Pass defer_drop config to compiler
             // For now, just ignore these flags - defer drop is always auto
@@ -221,6 +231,8 @@ fn main() -> anyhow::Result<()> {
                     polyfills,
                     v8_optimize,
                 },
+                check,
+                raw_errors,
             )?;
         }
         Commands::Run {
