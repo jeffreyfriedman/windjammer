@@ -131,18 +131,31 @@ fn build_javascript(path: &Path, config: &crate::codegen::backend::CodegenConfig
 fn check_with_cargo(output_dir: &Path, show_raw_errors: bool, apply_fixes: bool) -> Result<()> {
     use std::process::Command;
 
-    println!("\n{} Rust compilation...", "Checking".cyan().bold());
+    // Error recovery loop: try up to 3 times if auto-fix is enabled
+    let max_attempts = if apply_fixes { 3 } else { 1 };
+    let mut last_error_count = 0;
+    
+    for attempt in 1..=max_attempts {
+        if attempt > 1 {
+            println!("\n{} Retry {} of {}...", "Retrying".yellow().bold(), attempt, max_attempts);
+        } else {
+            println!("\n{} Rust compilation...", "Checking".cyan().bold());
+        }
 
-    let output = Command::new("cargo")
-        .arg("build")
-        .arg("--message-format=json")
-        .current_dir(output_dir)
-        .output()?;
+        let output = Command::new("cargo")
+            .arg("build")
+            .arg("--message-format=json")
+            .current_dir(output_dir)
+            .output()?;
 
-    if output.status.success() {
-        println!("{} No Rust compilation errors!", "Success!".green().bold());
-        return Ok(());
-    }
+        if output.status.success() {
+            if attempt > 1 {
+                println!("{} All errors fixed after {} attempt(s)!", "Success!".green().bold(), attempt);
+            } else {
+                println!("{} No Rust compilation errors!", "Success!".green().bold());
+            }
+            return Ok(());
+        }
 
     // Combine stderr and stdout (cargo outputs to both)
     let stderr = String::from_utf8_lossy(&output.stderr);
@@ -176,7 +189,7 @@ fn check_with_cargo(output_dir: &Path, show_raw_errors: bool, apply_fixes: bool)
     }
 
     // Display Windjammer diagnostics with beautiful formatting
-    let error_count = wj_diagnostics
+    last_error_count = wj_diagnostics
         .iter()
         .filter(|d| matches!(d.level, crate::error_mapper::DiagnosticLevel::Error))
         .count();
@@ -184,7 +197,7 @@ fn check_with_cargo(output_dir: &Path, show_raw_errors: bool, apply_fixes: bool)
     println!(
         "\n{} {} error(s) found:\n",
         "Compilation failed:".red().bold(),
-        error_count
+        last_error_count
     );
 
     for diagnostic in &wj_diagnostics {
@@ -194,36 +207,46 @@ fn check_with_cargo(output_dir: &Path, show_raw_errors: bool, apply_fixes: bool)
         println!(); // Blank line between errors
     }
 
-    // Apply fixes if requested
-    if apply_fixes {
-        println!("\n{} Applying automatic fixes...", "Fixing".green().bold());
-        
-        let fixes: Vec<_> = wj_diagnostics
-            .iter()
-            .filter_map(|d| d.get_fix())
-            .collect();
-        
-        if fixes.is_empty() {
-            println!("{} No automatic fixes available", "Info:".cyan());
-        } else {
-            println!("{} Found {} fixable error(s)", "Info:".cyan(), fixes.len());
+        // Apply fixes if requested and not on last attempt
+        if apply_fixes && attempt < max_attempts {
+            println!("\n{} Applying automatic fixes...", "Fixing".green().bold());
             
-            let applicator = crate::auto_fix::FixApplicator::new();
-            match applicator.apply_fixes(&fixes) {
-                Ok(_) => {
-                    println!("\n{} Applied {} fix(es)!", "Success!".green().bold(), fixes.len());
-                    println!("Run the build again to verify the fixes.");
-                }
-                Err(e) => {
-                    println!("{} Failed to apply some fixes: {}", "Warning:".yellow().bold(), e);
+            let fixes: Vec<_> = wj_diagnostics
+                .iter()
+                .filter_map(|d| d.get_fix())
+                .collect();
+            
+            if fixes.is_empty() {
+                println!("{} No automatic fixes available", "Info:".cyan());
+                // No fixes available, no point in retrying
+                break;
+            } else {
+                println!("{} Found {} fixable error(s)", "Info:".cyan(), fixes.len());
+                
+                let applicator = crate::auto_fix::FixApplicator::new();
+                match applicator.apply_fixes(&fixes) {
+                    Ok(_) => {
+                        println!("\n{} Applied {} fix(es)!", "Success!".green().bold(), fixes.len());
+                        // Continue to next iteration to retry compilation
+                        continue;
+                    }
+                    Err(e) => {
+                        println!("{} Failed to apply some fixes: {}", "Warning:".yellow().bold(), e);
+                        // Failed to apply fixes, no point in retrying
+                        break;
+                    }
                 }
             }
+        } else {
+            // No auto-fix or last attempt, break out of loop
+            break;
         }
     }
 
+    // If we get here, compilation failed
     Err(anyhow::anyhow!(
         "Rust compilation failed with {} error(s)",
-        error_count
+        last_error_count
     ))
 }
 
