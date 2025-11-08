@@ -222,6 +222,17 @@ enum Commands {
         #[arg(short, long)]
         verbose: bool,
     },
+
+    /// Generate error documentation
+    Docs {
+        /// Output directory for generated docs
+        #[arg(short, long, default_value = "./docs/errors")]
+        output: PathBuf,
+
+        /// Format (html, markdown, json)
+        #[arg(short, long, default_value = "html")]
+        format: String,
+    },
 }
 
 fn main() -> anyhow::Result<()> {
@@ -346,6 +357,43 @@ fn main() -> anyhow::Result<()> {
                     println!("{}", stats.format());
                 }
             }
+        }
+        Commands::Docs { output, format } => {
+            use std::fs;
+            
+            println!("Generating error documentation...");
+            
+            let catalog = windjammer::error_catalog::ErrorCatalog::new();
+            
+            // Create output directory
+            fs::create_dir_all(&output)?;
+            
+            match format.as_str() {
+                "html" => {
+                    let html = catalog.generate_html();
+                    let path = output.join("index.html");
+                    fs::write(&path, html)?;
+                    println!("✓ Generated HTML documentation: {}", path.display());
+                }
+                "markdown" | "md" => {
+                    let md = catalog.generate_markdown();
+                    let path = output.join("errors.md");
+                    fs::write(&path, md)?;
+                    println!("✓ Generated Markdown documentation: {}", path.display());
+                }
+                "json" => {
+                    let path = output.join("errors.json");
+                    catalog.save_json(&path)?;
+                    println!("✓ Generated JSON catalog: {}", path.display());
+                }
+                _ => {
+                    anyhow::bail!("Unknown format: {}. Use 'html', 'markdown', or 'json'", format);
+                }
+            }
+            
+            println!("\n📚 Error documentation generated successfully!");
+            println!("   {} errors documented", catalog.errors.len());
+            println!("   {} categories", catalog.categories.len());
         }
     }
 
