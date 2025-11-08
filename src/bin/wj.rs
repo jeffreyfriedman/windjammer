@@ -94,6 +94,22 @@ enum Commands {
         /// Automatically apply fixes for fixable errors
         #[arg(long)]
         fix: bool,
+
+        /// Show verbose error output (includes all notes and suggestions)
+        #[arg(short, long)]
+        verbose: bool,
+
+        /// Show only error count (suppress detailed output)
+        #[arg(short, long)]
+        quiet: bool,
+
+        /// Filter errors by file path
+        #[arg(long, value_name = "PATH")]
+        filter_file: Option<PathBuf>,
+
+        /// Filter errors by type (error, warning)
+        #[arg(long, value_name = "TYPE")]
+        filter_type: Option<String>,
     },
 
     /// Compile and run a Windjammer file
@@ -220,6 +236,10 @@ fn main() -> anyhow::Result<()> {
             check,
             raw_errors,
             fix,
+            verbose,
+            quiet,
+            filter_file,
+            filter_type,
         } => {
             // TODO: Pass defer_drop config to compiler
             // For now, just ignore these flags - defer drop is always auto
@@ -239,6 +259,10 @@ fn main() -> anyhow::Result<()> {
                 check,
                 raw_errors,
                 fix,
+                verbose,
+                quiet,
+                filter_file.as_deref(),
+                filter_type.as_deref(),
             )?;
         }
         Commands::Run {
