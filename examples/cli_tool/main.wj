@@ -71,7 +71,7 @@ fn process_file(path: string, args: &Args) -> Result<ProcessResult, string> {
     fs.write(&output_path, processed)?
     
     Ok(ProcessResult {
-        input_file: path.clone(),
+        input_file: path,
         output_file: output_path,
         lines_processed: lines.len() as int,
     })
