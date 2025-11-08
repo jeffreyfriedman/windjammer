@@ -141,12 +141,17 @@ impl ErrorMapper {
                 continue;
             }
 
-            // Parse JSON diagnostic
-            if let Ok(rustc_diag) = serde_json::from_str::<RustcDiagnostic>(line) {
-                // Only process errors and warnings (skip compiler messages)
-                if rustc_diag.level == "error" || rustc_diag.level == "warning" {
-                    if let Some(wj_diag) = self.map_diagnostic(&rustc_diag) {
-                        diagnostics.push(wj_diag);
+            // Parse CargoMessage first
+            if let Ok(cargo_msg) = serde_json::from_str::<CargoMessage>(line) {
+                // Only process compiler messages
+                if cargo_msg.reason == "compiler-message" {
+                    if let Some(rustc_diag) = cargo_msg.message {
+                        // Only process errors and warnings
+                        if rustc_diag.level == "error" || rustc_diag.level == "warning" {
+                            if let Some(wj_diag) = self.map_diagnostic(&rustc_diag) {
+                                diagnostics.push(wj_diag);
+                            }
+                        }
                     }
                 }
             }
@@ -167,7 +172,31 @@ impl ErrorMapper {
             column: primary_span.column_start,
         };
 
-        let wj_location = self.source_map.map_rust_to_windjammer(&rust_location)?;
+        // Try to map to Windjammer location, fallback to Rust location if no mapping exists
+        let wj_location = self
+            .source_map
+            .map_rust_to_windjammer(&rust_location)
+            .unwrap_or_else(|| {
+                // No mapping found - use Rust location but try to infer Windjammer file
+                // by looking for any mapping from this Rust file
+                let wj_file = self
+                    .source_map
+                    .mappings_for_rust_file(&rust_location.file)
+                    .first()
+                    .map(|m| m.wj_file.clone())
+                    .unwrap_or_else(|| {
+                        // Last resort: convert .rs to .wj
+                        let mut wj_path = rust_location.file.clone();
+                        wj_path.set_extension("wj");
+                        wj_path
+                    });
+
+                Location {
+                    file: wj_file,
+                    line: rust_location.line,
+                    column: rust_location.column,
+                }
+            });
 
         // Translate error message
         let message = self.translate_message(&rustc_diag.message);
