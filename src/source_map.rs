@@ -193,6 +193,32 @@ impl SourceMap {
                 column: m.wj_column,
             })
     }
+
+    /// Map a Rust location to a Windjammer location
+    ///
+    /// This is the primary method used by error_mapper.rs to translate
+    /// Rust compiler errors back to Windjammer source locations.
+    pub fn map_rust_to_windjammer(&self, rust_location: &Location) -> Option<Location> {
+        // Try exact match first
+        if let Some(mapping) = self.lookup(&rust_location.file, rust_location.line) {
+            return Some(Location {
+                file: mapping.wj_file.clone(),
+                line: mapping.wj_line,
+                column: mapping.wj_column,
+            });
+        }
+
+        // Try fuzzy match (nearby lines)
+        if let Some(mapping) = self.lookup_fuzzy(&rust_location.file, rust_location.line) {
+            return Some(Location {
+                file: mapping.wj_file.clone(),
+                line: mapping.wj_line,
+                column: mapping.wj_column,
+            });
+        }
+
+        None
+    }
 }
 
 impl Default for SourceMap {
