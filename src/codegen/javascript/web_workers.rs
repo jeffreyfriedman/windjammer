@@ -182,7 +182,7 @@ pub fn transform_spawn_to_workers(statements: &[Statement]) -> String {
 
     for stmt in statements {
         match stmt {
-            Statement::Thread { body } | Statement::Async { body } => {
+            Statement::Thread { body, .. } | Statement::Async { body, .. } => {
                 output.push_str(&generator.generate_worker(body));
             }
             _ => {}
@@ -217,14 +217,25 @@ mod tests {
 
     #[test]
     fn test_contains_spawn() {
-        let thread_stmt = Statement::Thread { body: vec![] };
-        let async_stmt = Statement::Async { body: vec![] };
+        let thread_stmt = Statement::Thread {
+            body: vec![],
+            location: None,
+        };
+        let async_stmt = Statement::Async {
+            body: vec![],
+            location: None,
+        };
 
         assert!(WebWorkerGenerator::contains_spawn(&thread_stmt));
         assert!(WebWorkerGenerator::contains_spawn(&async_stmt));
 
-        let regular_stmt =
-            Statement::Expression(Expression::Literal(crate::parser::Literal::Int(42)));
+        let regular_stmt = Statement::Expression {
+            expr: Expression::Literal {
+                value: crate::parser::Literal::Int(42),
+                location: None,
+            },
+            location: None,
+        };
 
         assert!(!WebWorkerGenerator::contains_spawn(&regular_stmt));
     }

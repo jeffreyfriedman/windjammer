@@ -50,7 +50,10 @@ impl ComponentAnalyzer {
     pub fn analyze(&mut self, items: &[Item]) -> Result<(), String> {
         // First pass: Find all @component structs
         for item in items {
-            if let Item::Struct(struct_decl) = item {
+            if let Item::Struct {
+                decl: struct_decl, ..
+            } = item
+            {
                 if self.has_component_decorator(&struct_decl.decorators) {
                     self.analyze_component_struct(struct_decl)?;
                 }
@@ -59,7 +62,10 @@ impl ComponentAnalyzer {
 
         // Second pass: Find impl blocks for components
         for item in items {
-            if let Item::Impl(impl_block) = item {
+            if let Item::Impl {
+                block: impl_block, ..
+            } = item
+            {
                 let type_name = &impl_block.type_name;
                 if self.components.contains_key(type_name) {
                     self.analyze_component_impl(type_name, impl_block)?;
@@ -168,7 +174,7 @@ impl ComponentAnalyzer {
         match stmt {
             Statement::Assignment { target, .. } => {
                 // Check if target is a field name
-                if let crate::parser::Expression::Identifier(name) = target {
+                if let crate::parser::Expression::Identifier { name, .. } = target {
                     return field_names.contains(name.as_str());
                 }
                 false

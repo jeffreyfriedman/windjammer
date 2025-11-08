@@ -101,15 +101,23 @@ pub fn optimize_simd_vectorization(program: &Program) -> (Program, SimdStats) {
 
     for item in &program.items {
         let new_item = match item {
-            Item::Function(func) => {
+            Item::Function { decl: func, .. } => {
                 let (new_func, func_stats) = optimize_function_simd(func);
                 stats.add(&func_stats);
-                Item::Function(new_func)
+                Item::Function {
+                    decl: new_func,
+                    location: None,
+                }
             }
-            Item::Impl(impl_block) => {
+            Item::Impl {
+                block: impl_block, ..
+            } => {
                 let (new_impl, impl_stats) = optimize_impl_simd(impl_block);
                 stats.add(&impl_stats);
-                Item::Impl(new_impl)
+                Item::Impl {
+                    block: new_impl,
+                    location: None,
+                }
             }
             _ => item.clone(),
         };
@@ -196,6 +204,7 @@ fn optimize_statement_simd(stmt: &Statement, stats: &mut SimdStats) -> Statement
             pattern,
             iterable,
             body,
+            ..
         } => {
             // Only vectorize simple loops with identifier patterns
             if let Pattern::Identifier(variable) = pattern {
@@ -225,22 +234,28 @@ fn optimize_statement_simd(stmt: &Statement, stats: &mut SimdStats) -> Statement
                 pattern: pattern.clone(),
                 iterable: iterable.clone(),
                 body: optimize_statements_simd(body, stats),
+                location: None,
             }
         }
         Statement::If {
             condition,
             then_block,
             else_block,
+            ..
         } => Statement::If {
             condition: condition.clone(),
             then_block: optimize_statements_simd(then_block, stats),
             else_block: else_block
                 .as_ref()
                 .map(|stmts| optimize_statements_simd(stmts, stats)),
+            location: None,
         },
-        Statement::While { condition, body } => Statement::While {
+        Statement::While {
+            condition, body, ..
+        } => Statement::While {
             condition: condition.clone(),
             body: optimize_statements_simd(body, stats),
+            location: None,
         },
         _ => stmt.clone(),
     }
@@ -255,7 +270,7 @@ fn analyze_loop_vectorizability(
     // Check if we're iterating over a range or array
     let is_range_or_array = matches!(
         iterable,
-        Expression::Range { .. } | Expression::Identifier(_) | Expression::MethodCall { .. }
+        Expression::Range { .. } | Expression::Identifier { .. } | Expression::MethodCall { .. }
     );
 
     if !is_range_or_array {
@@ -286,7 +301,7 @@ fn classify_loop_operation(variable: &str, body: &[Statement]) -> VectorOperatio
                     return VectorOperation::Reduction;
                 }
             }
-            Statement::Expression(expr) => {
+            Statement::Expression { expr, .. } => {
                 // Check for array assignment (a[i] = ...)
                 if is_array_assignment(expr, variable) {
                     return VectorOperation::Map;
@@ -305,9 +320,11 @@ fn check_vectorization_safety(body: &[Statement]) -> bool {
     // No function calls, no control flow, no early returns
     for stmt in body {
         match stmt {
-            Statement::Return(_) | Statement::Break | Statement::Continue => return false,
+            Statement::Return { .. } | Statement::Break { .. } | Statement::Continue { .. } => {
+                return false
+            }
             Statement::If { .. } | Statement::While { .. } | Statement::For { .. } => return false,
-            Statement::Expression(expr) => {
+            Statement::Expression { expr, .. } => {
                 if contains_function_call(expr) {
                     return false;
                 }
@@ -363,6 +380,7 @@ fn create_vectorized_loop(
         pattern: Pattern::Identifier(variable.to_string()),
         iterable: iterable.clone(),
         body: body.to_vec(),
+        location: None,
     }
 }
 

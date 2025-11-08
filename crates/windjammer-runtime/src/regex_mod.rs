@@ -22,16 +22,22 @@ pub fn compile(pattern: &str) -> Result<Regex, String> {
 /// Flags: "i" = case insensitive, "m" = multiline, "s" = dot matches newline
 pub fn compile_with_flags(pattern: &str, flags: &str) -> Result<Regex, String> {
     let mut builder = RegexBuilder::new(pattern);
-    
+
     for flag in flags.chars() {
         match flag {
-            'i' => { builder.case_insensitive(true); },
-            'm' => { builder.multi_line(true); },
-            's' => { builder.dot_matches_new_line(true); },
+            'i' => {
+                builder.case_insensitive(true);
+            }
+            'm' => {
+                builder.multi_line(true);
+            }
+            's' => {
+                builder.dot_matches_new_line(true);
+            }
             _ => return Err(format!("Unknown regex flag: {}", flag)),
         }
     }
-    
+
     builder.build().map_err(|e| e.to_string())
 }
 
