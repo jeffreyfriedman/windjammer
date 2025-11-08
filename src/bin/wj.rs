@@ -233,6 +233,12 @@ enum Commands {
         #[arg(short, long, default_value = "html")]
         format: String,
     },
+
+    /// Explain an error code
+    Explain {
+        /// Error code to explain (e.g., WJ0001, E0425)
+        code: String,
+    },
 }
 
 fn main() -> anyhow::Result<()> {
@@ -394,6 +400,35 @@ fn main() -> anyhow::Result<()> {
             println!("\n📚 Error documentation generated successfully!");
             println!("   {} errors documented", catalog.errors.len());
             println!("   {} categories", catalog.categories.len());
+        }
+        Commands::Explain { code } => {
+            let registry = windjammer::error_codes::get_registry();
+            
+            // Try as Windjammer code first
+            if let Some(wj_code) = registry.get(&code) {
+                println!("{}", registry.format_explanation(&wj_code.code));
+            }
+            // Try as Rust code
+            else if let Some(wj_code) = registry.map_rust_code(&code) {
+                println!("{}", registry.format_explanation(&wj_code.code));
+            }
+            // Not found
+            else {
+                use colored::*;
+                println!("{}", format!("Error code '{}' not found", code).red());
+                println!("\n{}", "Available Windjammer error codes:".yellow());
+                
+                let mut codes: Vec<_> = registry.all_codes();
+                codes.sort_by_key(|c| c.code.as_str());
+                
+                for error_code in codes {
+                    println!("  {} - {}", error_code.code.cyan(), error_code.title);
+                }
+                
+                println!("\n{}", "Usage:".yellow());
+                println!("  wj explain WJ0001");
+                println!("  wj explain E0425  (Rust error code)");
+            }
         }
     }
 
