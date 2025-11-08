@@ -1,0 +1,112 @@
+// Simple File Server for serving UI examples
+use std::fs
+use std::path
+use axum::Router
+use axum::response::Html
+use axum::response::Response
+use axum::extract::Path as UrlPath
+use axum::http::StatusCode
+use axum::http::header
+use tokio
+
+@get("/")
+async fn index() -> Html<string> {
+    let html = r#"
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Windjammer UI Examples</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            max-width: 800px;
+            margin: 50px auto;
+            padding: 20px;
+            background: #f5f5f5;
+        }
+        h1 {
+            color: #667eea;
+        }
+        .examples {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        }
+        a {
+            display: block;
+            padding: 15px;
+            margin: 10px 0;
+            background: #667eea;
+            color: white;
+            text-decoration: none;
+            border-radius: 4px;
+            transition: background 0.2s;
+        }
+        a:hover {
+            background: #5568d3;
+        }
+    </style>
+</head>
+<body>
+    <h1>🚀 Windjammer UI Examples</h1>
+    <div class="examples">
+        <h2>Available Examples:</h2>
+        <a href="/counter_wasm.html">Interactive Counter (WASM)</a>
+        <a href="/minimal_working.html">Minimal Working Example</a>
+        <a href="/todo_simple.html">Todo App</a>
+        <a href="/form_validation.html">Form Validation</a>
+    </div>
+    <p><em>Served by Windjammer HTTP Server! 🎉</em></p>
+</body>
+</html>
+    "#
+    Html(html.to_string())
+}
+
+@get("/:filename")
+async fn serve_file(filename: UrlPath<string>) -> Result<Response, StatusCode> {
+    let base_path = "../../crates/windjammer-ui/examples"
+    let file_path = format!("{}/{}", base_path, filename.0)
+    
+    match fs::read_to_string(&file_path) {
+        Ok(content) => {
+            let content_type = if file_path.ends_with(".html") {
+                "text/html"
+            } else if file_path.ends_with(".js") {
+                "application/javascript"
+            } else if file_path.ends_with(".wasm") {
+                "application/wasm"
+            } else {
+                "text/plain"
+            }
+            
+            Ok(Response::builder()
+                .status(200)
+                .header(header::CONTENT_TYPE, content_type)
+                .body(content)
+                .unwrap())
+        },
+        Err(_) => Err(StatusCode::NOT_FOUND),
+    }
+}
+
+async fn main() {
+    let app = Router::new()
+        .route("/", get(index))
+        .route("/:filename", get(serve_file))
+    
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:8080").await.unwrap()
+    
+    println!("🚀 Windjammer File Server running on http://127.0.0.1:8080")
+    println!("📁 Serving UI examples")
+    println!("")
+    println!("Try these examples:")
+    println!("  - http://127.0.0.1:8080/counter_wasm.html")
+    println!("  - http://127.0.0.1:8080/minimal_working.html")
+    println!("  - http://127.0.0.1:8080/todo_simple.html")
+    println!("")
+    println!("Press Ctrl+C to stop")
+    
+    axum::serve(listener, app).await.unwrap()
+}
