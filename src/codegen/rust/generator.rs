@@ -38,6 +38,8 @@ pub struct CodeGenerator {
         std::collections::HashMap<String, crate::analyzer::SmallVecOptimization>, // Variable -> SmallVec config
     // PHASE 9 OPTIMIZATION: Track Cow optimizations
     cow_optimizations: std::collections::HashSet<String>, // Variables that can use Cow
+    // AUTO-CLONE: Track where to automatically insert clones
+    auto_clone_analysis: Option<crate::auto_clone::AutoCloneAnalysis>,
     // Track current statement index for optimization hints
     current_statement_idx: usize,
     // IMPLICIT SELF SUPPORT: Track struct fields for implicit self references
@@ -76,6 +78,7 @@ impl CodeGenerator {
             defer_drop_optimizations: Vec::new(),
             smallvec_optimizations: std::collections::HashMap::new(),
             cow_optimizations: std::collections::HashSet::new(),
+            auto_clone_analysis: None,
             current_statement_idx: 0,
             current_struct_fields: std::collections::HashSet::new(),
             in_impl_block: false,
@@ -1305,6 +1308,9 @@ impl CodeGenerator {
         let func = &analyzed.decl;
         let mut output = String::new();
 
+        // AUTO-CLONE: Load auto-clone analysis for this function
+        self.auto_clone_analysis = Some(analyzed.auto_clone_analysis.clone());
+
         // PHASE 2 OPTIMIZATION: Load clone optimizations for this function
         // Variables in this set can safely avoid .clone() calls
         self.clone_optimizations.clear();
@@ -2174,11 +2180,24 @@ impl CodeGenerator {
                 // Qualified paths use :: from parser (e.g., std::fs::read)
                 // Simple identifiers: variable_name -> variable_name
                 // Check if this is a struct field and we're in an impl block
-                if self.in_impl_block && self.current_struct_fields.contains(name) {
+                let base_name = if self.in_impl_block && self.current_struct_fields.contains(name) {
                     format!("self.{}", name)
                 } else {
                     name.clone()
+                };
+
+                // AUTO-CLONE: Check if this variable needs to be cloned at this point
+                if let Some(ref analysis) = self.auto_clone_analysis {
+                    if analysis
+                        .needs_clone(name, self.current_statement_idx)
+                        .is_some()
+                    {
+                        // Automatically insert .clone() - this is the magic!
+                        return format!("{}.clone()", base_name);
+                    }
                 }
+
+                base_name
             }
             Expression::Binary {
                 left, op, right, ..
