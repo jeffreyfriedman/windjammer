@@ -24,6 +24,10 @@ pub fn execute(
     check: bool,
     raw_errors: bool,
     fix: bool,
+    verbose: bool,
+    quiet: bool,
+    filter_file: Option<&Path>,
+    filter_type: Option<&str>,
 ) -> Result<()> {
     let output_dir = output.unwrap_or_else(|| Path::new("./build"));
 
@@ -68,7 +72,7 @@ pub fn execute(
     
     // Run cargo check if requested
     if check {
-        check_with_cargo(output_dir, raw_errors, fix)?;
+        check_with_cargo(output_dir, raw_errors, fix, verbose, quiet, filter_file, filter_type)?;
     } else {
         if target_str == "javascript" || target_str == "js" {
             println!("Run your JavaScript project with:");
@@ -128,7 +132,15 @@ fn build_javascript(path: &Path, config: &crate::codegen::backend::CodegenConfig
 }
 
 /// Run cargo build on the generated Rust code and display errors with source mapping
-fn check_with_cargo(output_dir: &Path, show_raw_errors: bool, apply_fixes: bool) -> Result<()> {
+fn check_with_cargo(
+    output_dir: &Path,
+    show_raw_errors: bool,
+    apply_fixes: bool,
+    verbose: bool,
+    quiet: bool,
+    filter_file: Option<&Path>,
+    filter_type: Option<&str>,
+) -> Result<()> {
     use std::process::Command;
 
     // Error recovery loop: try up to 3 times if auto-fix is enabled
@@ -176,7 +188,7 @@ fn check_with_cargo(output_dir: &Path, show_raw_errors: bool, apply_fixes: bool)
     let error_mapper = crate::error_mapper::ErrorMapper::new(source_maps);
 
     // Map rustc output to Windjammer diagnostics
-    let wj_diagnostics = error_mapper.map_rustc_output(&combined_output);
+    let mut wj_diagnostics = error_mapper.map_rustc_output(&combined_output);
 
     if wj_diagnostics.is_empty() {
         // Fallback: show raw output if we couldn't parse any diagnostics
@@ -188,23 +200,86 @@ fn check_with_cargo(output_dir: &Path, show_raw_errors: bool, apply_fixes: bool)
         return Err(anyhow::anyhow!("Rust compilation failed"));
     }
 
-    // Display Windjammer diagnostics with beautiful formatting
+    // Apply filters
+    if let Some(file_filter) = filter_file {
+        wj_diagnostics.retain(|d| d.location.file == file_filter);
+    }
+
+    if let Some(type_filter) = filter_type {
+        let filter_lower = type_filter.to_lowercase();
+        wj_diagnostics.retain(|d| {
+            match (&d.level, filter_lower.as_str()) {
+                (crate::error_mapper::DiagnosticLevel::Error, "error") => true,
+                (crate::error_mapper::DiagnosticLevel::Warning, "warning") => true,
+                _ => false,
+            }
+        });
+    }
+
+    // Group diagnostics by file
+    let mut diagnostics_by_file: std::collections::HashMap<_, Vec<_>> = std::collections::HashMap::new();
+    for diagnostic in &wj_diagnostics {
+        diagnostics_by_file
+            .entry(diagnostic.location.file.clone())
+            .or_insert_with(Vec::new)
+            .push(diagnostic);
+    }
+
+    // Count errors and warnings
     last_error_count = wj_diagnostics
         .iter()
         .filter(|d| matches!(d.level, crate::error_mapper::DiagnosticLevel::Error))
         .count();
 
-    println!(
-        "\n{} {} error(s) found:\n",
-        "Compilation failed:".red().bold(),
-        last_error_count
-    );
+    let warning_count = wj_diagnostics
+        .iter()
+        .filter(|d| matches!(d.level, crate::error_mapper::DiagnosticLevel::Warning))
+        .count();
 
-    for diagnostic in &wj_diagnostics {
-        let formatted = diagnostic.format();
-        let colorized = colorize_diagnostic(&formatted, &diagnostic.level);
-        println!("{}", colorized);
-        println!(); // Blank line between errors
+    // Display summary
+    if quiet {
+        // Quiet mode: only show counts
+        if last_error_count > 0 {
+            println!(
+                "\n{} {} error(s), {} warning(s)",
+                "Compilation failed:".red().bold(),
+                last_error_count,
+                warning_count
+            );
+        } else {
+            println!(
+                "\n{} {} warning(s)",
+                "Compilation succeeded with warnings:".yellow().bold(),
+                warning_count
+            );
+        }
+    } else {
+        // Normal or verbose mode: show detailed output
+        println!(
+            "\n{} {} error(s), {} warning(s) found:\n",
+            "Compilation failed:".red().bold(),
+            last_error_count,
+            warning_count
+        );
+
+        // Display diagnostics grouped by file
+        for (file, file_diagnostics) in &diagnostics_by_file {
+            println!("{} {}:", "In file".cyan().bold(), file.display());
+            println!();
+
+            for diagnostic in file_diagnostics {
+                let formatted = if verbose {
+                    // Verbose mode: include all details
+                    diagnostic.format()
+                } else {
+                    // Normal mode: format as usual
+                    diagnostic.format()
+                };
+                let colorized = colorize_diagnostic(&formatted, &diagnostic.level);
+                println!("{}", colorized);
+                println!(); // Blank line between errors
+            }
+        }
     }
 
         // Apply fixes if requested and not on last attempt
