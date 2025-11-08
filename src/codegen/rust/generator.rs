@@ -2169,7 +2169,8 @@ impl CodeGenerator {
         }
     }
 
-    /// Extract a field access path from an expression (e.g., "config.paths")
+    /// Extract a field access or method call path from an expression
+    /// (e.g., "config.paths", "source.get_items()")
     /// This matches the logic in auto_clone.rs
     fn extract_field_access_path(&self, expr: &Expression) -> Option<String> {
         match expr {
@@ -2178,6 +2179,14 @@ impl CodeGenerator {
                 // Recursively build the path: object.field
                 if let Some(base_path) = self.extract_field_access_path(object) {
                     Some(format!("{}.{}", base_path, field))
+                } else {
+                    None
+                }
+            }
+            Expression::MethodCall { object, method, .. } => {
+                // Build path for method calls: object.method()
+                if let Some(base_path) = self.extract_field_access_path(object) {
+                    Some(format!("{}.{}()", base_path, method))
                 } else {
                     None
                 }
@@ -2619,14 +2628,28 @@ impl CodeGenerator {
                 //     }
                 // }
 
-                format!(
+                let base_expr = format!(
                     "{}{}{}{}({})",
                     obj_str,
                     separator,
                     method,
                     turbofish,
                     args.join(", ")
-                )
+                );
+
+                // AUTO-CLONE: Check if this method call needs to be cloned
+                if let Some(path) = self.extract_field_access_path(expr) {
+                    if let Some(ref analysis) = self.auto_clone_analysis {
+                        if analysis
+                            .needs_clone(&path, self.current_statement_idx)
+                            .is_some()
+                        {
+                            // Automatically insert .clone() for method call result!
+                            return format!("{}.clone()", base_expr);
+                        }
+                    }
+                }
+                base_expr
             }
             Expression::FieldAccess { object, field, .. } => {
                 let obj_str = self.generate_expression_with_precedence(object);
