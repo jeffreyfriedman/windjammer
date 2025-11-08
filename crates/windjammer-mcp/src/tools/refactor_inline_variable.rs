@@ -54,7 +54,7 @@ pub async fn handle(
 
     // Parse the source code
     let mut lexer = Lexer::new(&request.code);
-    let tokens = lexer.tokenize();
+    let tokens = lexer.tokenize_with_locations();
     let mut parser = Parser::new(tokens);
     let parse_result = parser.parse();
 
@@ -135,7 +135,7 @@ fn find_variable_at_position(
 fn is_safe_to_inline(expr: &Expression) -> bool {
     match expr {
         // Simple literals and identifiers are always safe
-        Expression::Literal(_) | Expression::Identifier(_) => true,
+        Expression::Literal { value: _, location: _ } | Expression::Identifier { name: _, location: _ } => true,
 
         // Binary operations on safe expressions are safe
         Expression::Binary { left, right, .. } => {
@@ -152,13 +152,13 @@ fn is_safe_to_inline(expr: &Expression) -> bool {
         Expression::Call { .. } | Expression::MethodCall { .. } => false,
 
         // Async/await, channel operations have side effects - not safe
-        Expression::Await(_) | Expression::ChannelSend { .. } | Expression::ChannelRecv(_) => false,
+        Expression::Await { expr: _, location: _ } | Expression::ChannelSend { .. } | Expression::ChannelRecv { channel: _, location: _ } => false,
 
         // Macro invocations might have side effects - not safe
         Expression::MacroInvocation { .. } => false,
 
         // Blocks might have side effects - not safe (could be refined)
-        Expression::Block(_) => false,
+        Expression::Block { statements: _, location: _ } => false,
 
         // Other cases: be conservative
         _ => false,
@@ -191,14 +191,14 @@ mod tests {
     #[test]
     fn test_is_safe_to_inline() {
         // Literal is safe
-        assert!(is_safe_to_inline(&Expression::Literal(Literal::Int(42))));
+        assert!(is_safe_to_inline(&Expression::Literal { value: Literal::Int(42), location: None }));
 
         // Identifier is safe
-        assert!(is_safe_to_inline(&Expression::Identifier("x".to_string())));
+        assert!(is_safe_to_inline(&Expression::Identifier { name: "x".to_string(), location: None }));
 
         // Function call is not safe
         assert!(!is_safe_to_inline(&Expression::Call {
-            function: Box::new(Expression::Identifier("foo".to_string())),
+            function: Box::new(Expression::Identifier { name: "foo".to_string(), location: None }),
             arguments: vec![],
         }));
 
