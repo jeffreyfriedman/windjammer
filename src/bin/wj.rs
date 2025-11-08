@@ -90,6 +90,10 @@ enum Commands {
         /// Show raw Rust errors instead of translated Windjammer errors
         #[arg(long)]
         raw_errors: bool,
+
+        /// Automatically apply fixes for fixable errors
+        #[arg(long)]
+        fix: bool,
     },
 
     /// Compile and run a Windjammer file
@@ -215,6 +219,7 @@ fn main() -> anyhow::Result<()> {
             v8_optimize,
             check,
             raw_errors,
+            fix,
         } => {
             // TODO: Pass defer_drop config to compiler
             // For now, just ignore these flags - defer drop is always auto
@@ -233,6 +238,7 @@ fn main() -> anyhow::Result<()> {
                 },
                 check,
                 raw_errors,
+                fix,
             )?;
         }
         Commands::Run {

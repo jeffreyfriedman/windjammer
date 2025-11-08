@@ -37,6 +37,7 @@ pub fn execute(path: &Path, args: &[String], target_str: &str) -> Result<()> {
             },
             false, // check
             false, // raw_errors
+            false, // fix
         )?;
 
         // Run with Node.js
