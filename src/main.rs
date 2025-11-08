@@ -1366,10 +1366,9 @@ fn check_with_cargo(output_dir: &Path) -> Result<()> {
             _ => "note".cyan().bold(),
         };
 
-        // Translate the error message - pass spans for context
-        let translated = translate_error_message_with_spans(&diag.message, &diag.spans);
-
-        println!("{}: {}", level_str, translated);
+        // Display the error message
+        // TODO: Implement message translation in Phase 3
+        println!("{}: {}", level_str, diag.message);
 
         if let Some(span) = diag.spans.iter().find(|s| s.is_primary) {
             println!(
@@ -1380,10 +1379,12 @@ fn check_with_cargo(output_dir: &Path) -> Result<()> {
                 span.column_start
             );
 
-            if let Some(text) = span.text.first() {
-                println!("   |");
-                println!("{:>4} | {}", span.line_start, text.text.trim());
-                println!("   |");
+            if let Some(text_vec) = &span.text {
+                if let Some(text) = text_vec.first() {
+                    println!("   |");
+                    println!("{:>4} | {}", span.line_start, text.text.trim());
+                    println!("   |");
+                }
             }
         }
 
