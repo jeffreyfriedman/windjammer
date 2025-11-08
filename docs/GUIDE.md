@@ -30,8 +30,9 @@ Welcome to Windjammer! This guide will take you from zero to hero, teaching you 
 15. [Enhanced JavaScript Features](#enhanced-javascript-features-v0330-) 🆕
 16. [Testing](#testing-v0340-) 🆕
 17. [Error Handling](#error-handling)
-18. [Decorators and Auto-Derive](#decorators-and-auto-derive)
-19. [Advanced Topics](#advanced-topics)
+18. [World-Class Error Messages](#world-class-error-messages-v0350-) 🆕
+19. [Decorators and Auto-Derive](#decorators-and-auto-derive)
+20. [Advanced Topics](#advanced-topics)
 
 ---
 
@@ -1437,6 +1438,324 @@ fn main() {
         println!("${ch} is a vowel")
     }
 }
+```
+
+---
+
+## World-Class Error Messages (v0.35.0+) 🆕
+
+Windjammer provides **Rust-level error quality** with Windjammer-friendly context, making it easier to understand and fix errors.
+
+### Error Translation
+
+Rust compiler errors are automatically translated to Windjammer terminology:
+
+**Rust Error:**
+```
+error[E0425]: cannot find value `missing_variable` in this scope
+```
+
+**Windjammer Error:**
+```
+error[WJ0002]: Variable not found: missing_variable
+  --> main.wj:5:12
+   |
+ 5 |     println!("{}", missing_variable)
+   |                    ^^^^^^^^^^^^^^^^ not found in this scope
+   |
+   = help: Did you mean `my_variable`?
+   = note: Variables must be declared before use
+   💡 wj explain WJ0002
+```
+
+### Error Codes
+
+Every error has a unique `WJxxxx` code:
+
+| Code | Error | Description |
+|------|-------|-------------|
+| `WJ0001` | Variable not found | Variable hasn't been declared |
+| `WJ0002` | Type mismatch | Expected one type, found another |
+| `WJ0003` | Function not found | Function hasn't been defined |
+| `WJ0004` | Mutability error | Trying to modify immutable variable |
+| `WJ0005` | Ownership error | Value moved or borrowed incorrectly |
+| `WJ0006` | Pattern match error | Missing match arms |
+| `WJ0007` | Trait not implemented | Type doesn't implement required trait |
+| `WJ0008` | Lifetime error | Reference outlives its data |
+| `WJ0009` | Import error | Module or item not found |
+| `WJ0010` | Syntax error | Invalid syntax |
+
+### Explain Command
+
+Get detailed explanations for any error:
+
+```bash
+$ wj explain WJ0002
+
+╭────────────────────────────────────────────────╮
+│  Error Code: WJ0002                           │
+│  Variable not found                           │
+╰────────────────────────────────────────────────╯
+
+What This Means:
+  The compiler cannot find a variable with this name in the
+  current scope. This usually means the variable hasn't been
+  declared yet, or it's out of scope.
+
+Common Causes:
+  • Typo in the variable name
+  • Variable not declared before use
+  • Variable is out of scope (declared in a different block)
+
+Solutions:
+  1. Check the spelling of the variable name
+  2. Declare the variable before using it: let x = 42
+  3. Make sure the variable is in scope
+
+Example:
+  // Wrong:
+  println!("{}", total)  // 'total' not declared
+
+  // Right:
+  let total = 42
+  println!("{}", total)
+```
+
+### Auto-Fix System
+
+Common errors can be fixed automatically:
+
+```bash
+# Check for errors
+$ wj build main.wj --check
+
+error[WJ0004]: Cannot assign to immutable variable
+  --> main.wj:3:5
+   |
+ 3 |     count = count + 1
+   |     ^^^^^ cannot assign twice to immutable variable
+   |
+   = help: Make the variable mutable: let mut count = 0
+
+# Auto-fix the error
+$ wj build main.wj --check --fix
+
+✓ Fixed: Made variable 'count' mutable
+✓ Compilation successful!
+```
+
+**Fixable Errors:**
+- Immutability errors → Add `mut` keyword
+- Type mismatches → Add type conversions (`.parse()`, `.to_string()`)
+- Missing imports → Add `use` statements
+- Naming conventions → Fix PascalCase/snake_case
+- Unused code → Add `#[allow(dead_code)]`
+
+### Interactive Error Navigator
+
+Navigate and fix errors interactively:
+
+```bash
+$ wj errors main.wj
+```
+
+**Features:**
+- ✅ Keyboard navigation (↑/↓ arrows)
+- ✅ View error details (Enter)
+- ✅ Apply fixes (F)
+- ✅ Explain errors (E)
+- ✅ Filter by severity (W for warnings, E for errors)
+- ✅ Jump to source (J)
+- ✅ Help screen (?)
+
+**Screenshot:**
+```
+╭─────────────────────────────────────────────────╮
+│  Windjammer Error Navigator                    │
+│  3 errors, 1 warning                           │
+╰─────────────────────────────────────────────────╯
+
+┌─ Error List ─────────────────────────────────────┐
+│ ✗ WJ0002: Variable not found: missing_variable  │
+│ ✗ WJ0004: Cannot assign to immutable variable   │
+│ ✗ WJ0003: Function not found: process_data      │
+│ ⚠ WJ0011: Unused variable: temp                 │
+└──────────────────────────────────────────────────┘
+
+┌─ Details ────────────────────────────────────────┐
+│ error[WJ0002]: Variable not found               │
+│   --> main.wj:5:12                              │
+│    |                                             │
+│  5 |     println!("{}", missing_variable)        │
+│    |                    ^^^^^^^^^^^^^^^^         │
+│    |                                             │
+│    = help: Did you mean `my_variable`?          │
+│    = note: Variables must be declared before use│
+│    💡 wj explain WJ0002                         │
+└──────────────────────────────────────────────────┘
+
+[F] Fix  [E] Explain  [J] Jump  [Q] Quit  [?] Help
+```
+
+### Error Statistics
+
+Track error patterns over time:
+
+```bash
+$ wj stats
+
+╭────────────────────────────────────────────────╮
+│  Windjammer Error Statistics                  │
+╰────────────────────────────────────────────────╯
+
+Total Compilations: 127
+Total Errors: 342
+Error Rate: 2.69 errors/compilation
+
+Most Common Errors:
+  1. WJ0002 (Variable not found): 89 occurrences
+  2. WJ0004 (Mutability error): 67 occurrences
+  3. WJ0001 (Type mismatch): 54 occurrences
+
+Error-Prone Files:
+  1. src/parser.wj: 45 errors
+  2. src/analyzer.wj: 32 errors
+  3. src/codegen.wj: 28 errors
+
+Recent Errors (last 10):
+  • WJ0002 in main.wj (2 minutes ago)
+  • WJ0004 in lib.wj (5 minutes ago)
+  • WJ0003 in utils.wj (10 minutes ago)
+
+# Clear statistics
+$ wj stats --clear
+```
+
+### Error Catalog
+
+Generate searchable documentation for all errors:
+
+```bash
+# Generate HTML catalog
+$ wj docs --format html
+
+# Generate Markdown
+$ wj docs --format markdown
+
+# Generate JSON (for tooling)
+$ wj docs --format json
+```
+
+**Output:**
+- `docs/errors/index.html` - Searchable HTML catalog
+- `docs/errors/errors.md` - Markdown documentation
+- `docs/errors/errors.json` - Machine-readable JSON
+
+### Error Filtering
+
+Filter errors by type or file:
+
+```bash
+# Show only errors (no warnings)
+$ wj build main.wj --check --quiet
+
+# Show all diagnostics (verbose)
+$ wj build main.wj --check --verbose
+
+# Filter by file
+$ wj build main.wj --check --filter-file main.wj
+
+# Filter by error type
+$ wj build main.wj --check --filter-type WJ0002
+```
+
+### Contextual Help
+
+Errors include actionable suggestions:
+
+```windjammer
+// Error: Type mismatch
+let age: int = "25"
+
+error[WJ0001]: Type mismatch
+  --> main.wj:2:16
+   |
+ 2 |     let age: int = "25"
+   |                    ^^^^ expected int, found string
+   |
+   = help: Use .parse() to convert string to int
+   = suggestion: let age: int = "25".parse().unwrap()
+```
+
+```windjammer
+// Error: Immutability
+let count = 0
+count = count + 1
+
+error[WJ0004]: Cannot assign to immutable variable
+  --> main.wj:3:1
+   |
+ 3 |     count = count + 1
+   |     ^^^^^ cannot assign twice to immutable variable
+   |
+   = help: Make the variable mutable
+   = suggestion: let mut count = 0
+```
+
+### Fuzzy Matching
+
+Get "Did you mean?" suggestions for typos:
+
+```windjammer
+fn calculate_total() -> int {
+    42
+}
+
+fn main() {
+    let result = calcuate_total()  // Typo!
+}
+
+error[WJ0003]: Function not found: calcuate_total
+  --> main.wj:6:18
+   |
+ 6 |     let result = calcuate_total()
+   |                  ^^^^^^^^^^^^^^^ not found in this scope
+   |
+   = help: Did you mean `calculate_total`?
+```
+
+### Best Practices
+
+**1. Read error messages carefully:**
+```bash
+# Windjammer errors are designed to be helpful
+# The help text often contains the exact fix you need
+```
+
+**2. Use `wj explain` for learning:**
+```bash
+# When you see an unfamiliar error code
+$ wj explain WJ0005
+
+# Learn about ownership, borrowing, etc.
+```
+
+**3. Enable auto-fix for quick iterations:**
+```bash
+# Let the compiler fix simple issues
+$ wj build main.wj --check --fix
+```
+
+**4. Use the interactive TUI for complex errors:**
+```bash
+# Navigate multiple errors efficiently
+$ wj errors main.wj
+```
+
+**5. Track your error patterns:**
+```bash
+# Identify areas that need improvement
+$ wj stats
 ```
 
 ---
