@@ -292,8 +292,12 @@ impl AutoCloneAnalysis {
             .find(|u| u.kind == UsageKind::Definition)
             .map(|u| u.statement_idx);
 
-        if definition_idx.is_none() {
-            // Variable not defined in this scope (parameter, etc.)
+        // Field accesses (e.g., "config.paths") don't have definitions
+        // They're valid if they contain a dot
+        let is_field_access = var_name.contains('.');
+
+        if definition_idx.is_none() && !is_field_access {
+            // Variable not defined in this scope (parameter, etc.) and not a field access
             return;
         }
 
