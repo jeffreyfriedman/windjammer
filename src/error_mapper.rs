@@ -2,6 +2,7 @@
 ///
 /// This module intercepts rustc JSON output, maps errors using source maps,
 /// and provides a world-class error experience for Windjammer developers.
+use crate::error_codes;
 use crate::source_map::{Location, SourceMap};
 use crate::syntax_highlighter::SyntaxHighlighter;
 use serde::{Deserialize, Serialize};
@@ -221,6 +222,15 @@ impl ErrorMapper {
             }
         }
 
+        // Map Rust error code to Windjammer error code
+        let wj_code = rustc_diag
+            .code
+            .as_ref()
+            .and_then(|c| {
+                let registry = error_codes::get_registry();
+                registry.map_rust_code(&c.code).map(|wj| wj.code.clone())
+            });
+
         Some(WindjammerDiagnostic {
             message,
             level: match rustc_diag.level.as_str() {
@@ -232,7 +242,7 @@ impl ErrorMapper {
             },
             location: wj_location,
             spans,
-            code: rustc_diag.code.as_ref().map(|c| c.code.clone()),
+            code: wj_code.or_else(|| rustc_diag.code.as_ref().map(|c| c.code.clone())),
             help,
             notes,
         })
@@ -511,7 +521,13 @@ impl WindjammerDiagnostic {
         };
 
         if let Some(code) = &self.code {
-            output.push_str(&format!("{}[{}]: {}\n", level_str, code, self.message));
+            // Show Windjammer code prominently if it starts with WJ
+            if code.starts_with("WJ") {
+                output.push_str(&format!("{}[{}]: {}\n", level_str, code.cyan().bold(), self.message));
+                output.push_str(&format!("  {} wj explain {}\n", "💡".yellow(), code));
+            } else {
+                output.push_str(&format!("{}[{}]: {}\n", level_str, code, self.message));
+            }
         } else {
             output.push_str(&format!("{}: {}\n", level_str, self.message));
         }
