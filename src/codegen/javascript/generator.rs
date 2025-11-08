@@ -47,7 +47,7 @@ impl JavaScriptGenerator {
 
     fn detect_async_functions(&mut self, program: &Program) {
         for item in &program.items {
-            if let Item::Function(func) = item {
+            if let Item::Function { decl: func, .. } = item {
                 let is_async = func.is_async || self.contains_await_in_body(&func.body);
                 self.async_functions.insert(func.name.clone(), is_async);
             }
@@ -60,13 +60,16 @@ impl JavaScriptGenerator {
 
     fn contains_await_stmt(stmt: &Statement) -> bool {
         match stmt {
-            Statement::Expression(expr) => Self::contains_await_expr(expr),
+            Statement::Expression { expr, .. } => Self::contains_await_expr(expr),
             Statement::Let { value, .. } => Self::contains_await_expr(value),
-            Statement::Return(Some(expr)) => Self::contains_await_expr(expr),
+            Statement::Return {
+                value: Some(expr), ..
+            } => Self::contains_await_expr(expr),
             Statement::If {
                 condition,
                 then_block,
                 else_block,
+                ..
             } => {
                 Self::contains_await_expr(condition)
                     || then_block.iter().any(Self::contains_await_stmt)
@@ -80,13 +83,14 @@ impl JavaScriptGenerator {
 
     fn contains_await_expr(expr: &Expression) -> bool {
         match expr {
-            Expression::Await(_) => true,
+            Expression::Await { .. } => true,
             Expression::Binary { left, right, .. } => {
                 Self::contains_await_expr(left) || Self::contains_await_expr(right)
             }
             Expression::Call {
                 function,
                 arguments,
+                ..
             } => {
                 Self::contains_await_expr(function)
                     || arguments
@@ -109,7 +113,7 @@ impl JavaScriptGenerator {
         program
             .items
             .iter()
-            .any(|item| matches!(item, Item::Function(func) if func.name == "main"))
+            .any(|item| matches!(item, Item::Function { decl: func, .. } if func.name == "main"))
     }
 
     fn generate_auto_run_main(&self) -> String {
@@ -134,12 +138,16 @@ if (import.meta.url === `file://${process.argv[1]}`) {
 
     fn generate_item(&mut self, item: &Item) -> String {
         match item {
-            Item::Function(func) => self.generate_function(func),
-            Item::Struct(struct_decl) => self.generate_struct(struct_decl),
-            Item::Enum(enum_decl) => self.generate_enum(enum_decl),
-            Item::Trait(_) => String::from("// Trait (use duck typing in JavaScript)"),
-            Item::Impl(_) => String::new(), // Impl blocks are merged into classes
-            Item::Use { .. } => String::new(), // Imports handled separately
+            Item::Function { decl: func, .. } => self.generate_function(func),
+            Item::Struct {
+                decl: struct_decl, ..
+            } => self.generate_struct(struct_decl),
+            Item::Enum {
+                decl: enum_decl, ..
+            } => self.generate_enum(enum_decl),
+            Item::Trait { .. } => String::from("// Trait (use duck typing in JavaScript)"),
+            Item::Impl { .. } => String::new(), // Impl blocks are merged into classes
+            Item::Use { .. } => String::new(),  // Imports handled separately
             Item::Const { name, value, .. } => {
                 format!(
                     "export const {} = {};\n",
@@ -328,7 +336,7 @@ if (import.meta.url === `file://${process.argv[1]}`) {
                 ));
             }
 
-            Statement::Assignment { target, value } => {
+            Statement::Assignment { target, value, .. } => {
                 output.push_str(&self.indent());
                 output.push_str(&format!(
                     "{} = {};\n",
@@ -337,7 +345,7 @@ if (import.meta.url === `file://${process.argv[1]}`) {
                 ));
             }
 
-            Statement::Return(expr) => {
+            Statement::Return { value: expr, .. } => {
                 output.push_str(&self.indent());
                 output.push_str("return");
                 if let Some(e) = expr {
@@ -347,7 +355,7 @@ if (import.meta.url === `file://${process.argv[1]}`) {
                 output.push_str(";\n");
             }
 
-            Statement::Expression(expr) => {
+            Statement::Expression { expr, .. } => {
                 output.push_str(&self.indent());
                 output.push_str(&self.generate_expression(expr));
                 output.push_str(";\n");
@@ -357,6 +365,7 @@ if (import.meta.url === `file://${process.argv[1]}`) {
                 condition,
                 then_block,
                 else_block,
+                ..
             } => {
                 output.push_str(&self.indent());
                 output.push_str("if (");
@@ -385,7 +394,9 @@ if (import.meta.url === `file://${process.argv[1]}`) {
                 output.push('\n');
             }
 
-            Statement::While { condition, body } => {
+            Statement::While {
+                condition, body, ..
+            } => {
                 output.push_str(&self.indent());
                 output.push_str("while (");
                 output.push_str(&self.generate_expression(condition));
@@ -405,6 +416,7 @@ if (import.meta.url === `file://${process.argv[1]}`) {
                 pattern,
                 iterable,
                 body,
+                ..
             } => {
                 output.push_str(&self.indent());
                 output.push_str(&format!(
@@ -423,7 +435,7 @@ if (import.meta.url === `file://${process.argv[1]}`) {
                 output.push_str("}\n");
             }
 
-            Statement::Loop { body } => {
+            Statement::Loop { body, .. } => {
                 output.push_str(&self.indent());
                 output.push_str("while (true) {\n");
 
@@ -437,7 +449,7 @@ if (import.meta.url === `file://${process.argv[1]}`) {
                 output.push_str("}\n");
             }
 
-            Statement::Match { value, arms } => {
+            Statement::Match { value, arms, .. } => {
                 // Translate match to if-else chain (simplified)
                 output.push_str(&self.indent());
                 output.push_str(&format!(
@@ -485,7 +497,7 @@ if (import.meta.url === `file://${process.argv[1]}`) {
                 output.push_str("}\n");
             }
 
-            Statement::Thread { body } => {
+            Statement::Thread { body, .. } => {
                 // Thread in JS = Web Worker or setTimeout (for demo)
                 output.push_str(&self.indent());
                 output.push_str("// Note: true threading requires Web Workers\n");
@@ -502,7 +514,7 @@ if (import.meta.url === `file://${process.argv[1]}`) {
                 output.push_str("}, 0);\n");
             }
 
-            Statement::Async { body } => {
+            Statement::Async { body, .. } => {
                 // Async in JS = Promise
                 output.push_str(&self.indent());
                 output.push_str("Promise.resolve().then(async () => {\n");
@@ -517,17 +529,17 @@ if (import.meta.url === `file://${process.argv[1]}`) {
                 output.push_str("});\n");
             }
 
-            Statement::Break => {
+            Statement::Break { .. } => {
                 output.push_str(&self.indent());
                 output.push_str("break;\n");
             }
 
-            Statement::Continue => {
+            Statement::Continue { .. } => {
                 output.push_str(&self.indent());
                 output.push_str("continue;\n");
             }
 
-            Statement::Use { path, alias } => {
+            Statement::Use { path, alias, .. } => {
                 output.push_str(&self.indent());
                 // In JavaScript, we use import or require, but for local scope we can just skip it
                 // since JavaScript modules work differently. For now, add a comment.
@@ -540,7 +552,7 @@ if (import.meta.url === `file://${process.argv[1]}`) {
                 ));
             }
 
-            Statement::Defer(_) => {
+            Statement::Defer { .. } => {
                 output.push_str(&self.indent());
                 output.push_str("// TODO: Defer not yet supported in JavaScript\n");
             }
@@ -555,11 +567,13 @@ if (import.meta.url === `file://${process.argv[1]}`) {
 
     fn generate_expression(&mut self, expr: &Expression) -> String {
         match expr {
-            Expression::Literal(lit) => self.generate_literal(lit),
+            Expression::Literal { value: lit, .. } => self.generate_literal(lit),
 
-            Expression::Identifier(id) => id.clone(),
+            Expression::Identifier { name: id, .. } => id.clone(),
 
-            Expression::Binary { left, op, right } => {
+            Expression::Binary {
+                left, op, right, ..
+            } => {
                 format!(
                     "({} {} {})",
                     self.generate_expression(left),
@@ -568,7 +582,7 @@ if (import.meta.url === `file://${process.argv[1]}`) {
                 )
             }
 
-            Expression::Unary { op, operand } => {
+            Expression::Unary { op, operand, .. } => {
                 format!(
                     "({}{})",
                     self.unary_op_to_js(op),
@@ -579,6 +593,7 @@ if (import.meta.url === `file://${process.argv[1]}`) {
             Expression::Call {
                 function,
                 arguments,
+                ..
             } => {
                 let func_expr = self.generate_expression(function);
 
@@ -612,11 +627,11 @@ if (import.meta.url === `file://${process.argv[1]}`) {
                 format!("{}.{}({})", obj, method, args.join(", "))
             }
 
-            Expression::FieldAccess { object, field } => {
+            Expression::FieldAccess { object, field, .. } => {
                 format!("{}.{}", self.generate_expression(object), field)
             }
 
-            Expression::StructLiteral { name, fields } => {
+            Expression::StructLiteral { name, fields, .. } => {
                 let field_strs: Vec<String> = fields
                     .iter()
                     .map(|(field_name, expr)| {
@@ -634,12 +649,12 @@ if (import.meta.url === `file://${process.argv[1]}`) {
                 )
             }
 
-            Expression::MapLiteral(entries) => {
+            Expression::MapLiteral { pairs, .. } => {
                 // Generate JavaScript object literal: {key: value, ...}
-                if entries.is_empty() {
+                if pairs.is_empty() {
                     "{}".to_string()
                 } else {
-                    let entries_str: Vec<String> = entries
+                    let entries_str: Vec<String> = pairs
                         .iter()
                         .map(|(k, v)| {
                             let key_str = self.generate_expression(k);
@@ -648,7 +663,10 @@ if (import.meta.url === `file://${process.argv[1]}`) {
                             // Otherwise, use computed property: [key]: value
                             if matches!(
                                 k,
-                                Expression::Literal(Literal::String(_)) | Expression::Identifier(_)
+                                Expression::Literal {
+                                    value: Literal::String(_),
+                                    ..
+                                } | Expression::Identifier { .. }
                             ) {
                                 format!("{}: {}", key_str, val_str)
                             } else {
@@ -660,7 +678,7 @@ if (import.meta.url === `file://${process.argv[1]}`) {
                 }
             }
 
-            Expression::Index { object, index } => {
+            Expression::Index { object, index, .. } => {
                 format!(
                     "{}[{}]",
                     self.generate_expression(object),
@@ -668,7 +686,7 @@ if (import.meta.url === `file://${process.argv[1]}`) {
                 )
             }
 
-            Expression::Tuple(elements) => {
+            Expression::Tuple { elements, .. } => {
                 let elems: Vec<String> = elements
                     .iter()
                     .map(|e| self.generate_expression(e))
@@ -676,7 +694,7 @@ if (import.meta.url === `file://${process.argv[1]}`) {
                 format!("[{}]", elems.join(", "))
             }
 
-            Expression::Array(elements) => {
+            Expression::Array { elements, .. } => {
                 let elems: Vec<String> = elements
                     .iter()
                     .map(|e| self.generate_expression(e))
@@ -711,11 +729,11 @@ if (import.meta.url === `file://${process.argv[1]}`) {
                 }
             }
 
-            Expression::Await(expr) => {
+            Expression::Await { expr, .. } => {
                 format!("await {}", self.generate_expression(expr))
             }
 
-            Expression::TryOp(expr) => {
+            Expression::TryOp { expr, .. } => {
                 // Simplify: just return the expression (proper error handling needs runtime support)
                 self.generate_expression(expr)
             }
@@ -724,6 +742,7 @@ if (import.meta.url === `file://${process.argv[1]}`) {
                 start,
                 end,
                 inclusive,
+                ..
             } => {
                 // Generate array from range
                 if *inclusive {
@@ -743,7 +762,9 @@ if (import.meta.url === `file://${process.argv[1]}`) {
                 }
             }
 
-            Expression::Closure { parameters, body } => {
+            Expression::Closure {
+                parameters, body, ..
+            } => {
                 format!(
                     "({}) => {}",
                     parameters.join(", "),
@@ -756,7 +777,7 @@ if (import.meta.url === `file://${process.argv[1]}`) {
                 self.generate_expression(expr)
             }
 
-            Expression::ChannelSend { channel, value } => {
+            Expression::ChannelSend { channel, value, .. } => {
                 // Simplified: treat as method call
                 format!(
                     "{}.send({})",
@@ -765,11 +786,11 @@ if (import.meta.url === `file://${process.argv[1]}`) {
                 )
             }
 
-            Expression::ChannelRecv(channel) => {
+            Expression::ChannelRecv { channel, .. } => {
                 format!("{}.receive()", self.generate_expression(channel))
             }
 
-            Expression::Block(statements) => {
+            Expression::Block { statements, .. } => {
                 let mut output = String::from("(() => {\n");
                 self.indent_level += 1;
                 for stmt in statements {
@@ -918,16 +939,20 @@ mod tests {
     fn test_generate_simple_function() {
         let mut gen = JavaScriptGenerator::new();
         let program = Program {
-            items: vec![Item::Function(FunctionDecl {
-                name: "greet".to_string(),
-                parameters: vec![],
-                return_type: None,
-                body: vec![],
-                decorators: vec![],
-                is_async: false,
-                type_params: vec![],
-                where_clause: vec![],
-            })],
+            items: vec![Item::Function {
+                decl: FunctionDecl {
+                    name: "greet".to_string(),
+                    parameters: vec![],
+                    return_type: None,
+                    body: vec![],
+                    decorators: vec![],
+                    is_async: false,
+                    type_params: vec![],
+                    where_clause: vec![],
+                    parent_type: None,
+                },
+                location: None,
+            }],
         };
 
         let code = gen.generate(&program);

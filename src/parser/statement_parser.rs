@@ -42,7 +42,7 @@ impl Parser {
                     }
                     Ok(Statement::Expression {
                         expr,
-                        location: None,
+                        location: self.current_location(),
                     })
                 }
             }
@@ -58,7 +58,7 @@ impl Parser {
                     }
                     Ok(Statement::Expression {
                         expr,
-                        location: None,
+                        location: self.current_location(),
                     })
                 }
             }
@@ -66,13 +66,13 @@ impl Parser {
             Token::Break => {
                 self.advance();
                 Ok(Statement::Break {
-                    location: None,
+                    location: self.current_location(),
                 })
             }
             Token::Continue => {
                 self.advance();
                 Ok(Statement::Continue {
-                    location: None,
+                    location: self.current_location(),
                 })
             }
             Token::Use => {
@@ -81,7 +81,7 @@ impl Parser {
                 Ok(Statement::Use {
                     path,
                     alias,
-                    location: None,
+                    location: self.current_location(),
                 })
             }
             _ => {
@@ -102,7 +102,7 @@ impl Parser {
                         Ok(Statement::Assignment {
                             target: expr,
                             value,
-                            location: None,
+                            location: self.current_location(),
                         })
                     }
                     Token::PlusAssign
@@ -129,7 +129,7 @@ impl Parser {
                             left: Box::new(expr.clone()),
                             op,
                             right: Box::new(rhs),
-                            location: None,
+                            location: self.current_location(),
                         };
 
                         // Optionally consume semicolon
@@ -140,7 +140,7 @@ impl Parser {
                         Ok(Statement::Assignment {
                             target: expr,
                             value,
-                            location: None,
+                            location: self.current_location(),
                         })
                     }
                     _ => {
@@ -150,7 +150,7 @@ impl Parser {
                         }
                         Ok(Statement::Expression {
                             expr,
-                            location: None,
+                            location: self.current_location(),
                         })
                     }
                 }
@@ -165,7 +165,7 @@ impl Parser {
             name,
             type_,
             value,
-            location: None,
+            location: self.current_location(),
         })
     }
 
@@ -183,7 +183,7 @@ impl Parser {
             mutable,
             type_,
             value,
-            location: None,
+            location: self.current_location(),
         })
     }
 
@@ -256,7 +256,7 @@ impl Parser {
             pattern,
             iterable,
             body,
-            location: None,
+            location: self.current_location(),
         })
     }
 
@@ -268,7 +268,7 @@ impl Parser {
 
         Ok(Statement::Thread {
             body,
-            location: None,
+            location: self.current_location(),
         })
     }
 
@@ -280,7 +280,7 @@ impl Parser {
 
         Ok(Statement::Async {
             body,
-            location: None,
+            location: self.current_location(),
         })
     }
 
@@ -290,7 +290,7 @@ impl Parser {
 
         Ok(Statement::Defer {
             statement: Box::new(stmt),
-            location: None,
+            location: self.current_location(),
         })
     }
 
@@ -344,7 +344,7 @@ impl Parser {
             mutable,
             type_,
             value,
-            location: None,
+            location: self.current_location(),
         })
     }
 
@@ -354,12 +354,12 @@ impl Parser {
         if matches!(self.current_token(), Token::RBrace | Token::Semicolon) {
             Ok(Statement::Return {
                 value: None,
-                location: None,
+                location: self.current_location(),
             })
         } else {
             Ok(Statement::Return {
                 value: Some(self.parse_expression()?),
-                location: None,
+                location: self.current_location(),
             })
         }
     }
@@ -409,7 +409,7 @@ impl Parser {
                 guard: None,
                 body: Expression::Block {
                     statements: then_block,
-                    location: None,
+                    location: self.current_location(),
                 },
             }];
 
@@ -418,15 +418,15 @@ impl Parser {
             let else_body = if let Some(else_stmts) = else_block {
                 Expression::Block {
                     statements: else_stmts,
-                    location: None,
+                    location: self.current_location(),
                 }
             } else {
                 Expression::Block {
                     statements: vec![],
-                    location: None,
+                    location: self.current_location(),
                 } // Empty block if no else clause
             };
-            
+
             arms.push(MatchArm {
                 pattern: Pattern::Wildcard,
                 guard: None,
@@ -436,7 +436,7 @@ impl Parser {
             Ok(Statement::Match {
                 value,
                 arms,
-                location: None,
+                location: self.current_location(),
             })
         } else {
             // Regular if statement
@@ -468,7 +468,7 @@ impl Parser {
                 condition,
                 then_block,
                 else_block,
-                location: None,
+                location: self.current_location(),
             })
         }
     }
@@ -511,7 +511,7 @@ impl Parser {
         Ok(Statement::Match {
             value,
             arms,
-            location: None,
+            location: self.current_location(),
         })
     }
 
@@ -527,7 +527,7 @@ impl Parser {
 
         Ok(Statement::Loop {
             body,
-            location: None,
+            location: self.current_location(),
         })
     }
 
@@ -567,7 +567,7 @@ impl Parser {
                         guard: None,
                         body: Expression::Block {
                             statements: body.clone(),
-                            location: None,
+                            location: self.current_location(),
                         },
                     },
                     MatchArm {
@@ -575,18 +575,18 @@ impl Parser {
                         guard: None,
                         body: Expression::Block {
                             statements: vec![Statement::Break {
-                                location: None,
+                                location: self.current_location(),
                             }],
-                            location: None,
+                            location: self.current_location(),
                         },
                     },
                 ],
-                location: None,
+                location: self.current_location(),
             };
 
             Ok(Statement::Loop {
                 body: vec![match_stmt],
-                location: None,
+                location: self.current_location(),
             })
         } else {
             // Regular while loop
@@ -599,7 +599,7 @@ impl Parser {
             Ok(Statement::While {
                 condition,
                 body,
-                location: None,
+                location: self.current_location(),
             })
         }
     }

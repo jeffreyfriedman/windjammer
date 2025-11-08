@@ -39,7 +39,10 @@ pub fn eliminate_dead_code(program: &Program) -> (Program, DeadCodeStats) {
     let mut new_items = Vec::new();
     for item in &program.items {
         match item {
-            Item::Function(func) => {
+            Item::Function {
+                decl: func,
+                location,
+            } => {
                 // Check if function is unused (private and never called)
                 if is_unused_function(func, &called_functions) {
                     stats.unused_functions_removed += 1;
@@ -63,18 +66,28 @@ pub fn eliminate_dead_code(program: &Program) -> (Program, DeadCodeStats) {
                     body: new_body,
                     parent_type: func.parent_type.clone(),
                 };
-                new_items.push(Item::Function(new_func));
+                new_items.push(Item::Function {
+                    decl: new_func,
+                    location: location.clone(),
+                });
             }
-            Item::Impl(impl_block) => {
+            Item::Impl {
+                block: impl_block,
+                location,
+            } => {
                 // Process impl block methods
                 let new_impl = eliminate_dead_code_in_impl(impl_block, &mut stats);
-                new_items.push(Item::Impl(new_impl));
+                new_items.push(Item::Impl {
+                    block: new_impl,
+                    location: location.clone(),
+                });
             }
             Item::Static {
                 name,
                 mutable,
                 type_,
                 value,
+                location,
             } => {
                 // Process static initializers
                 let new_value = eliminate_dead_code_in_expression(value);
@@ -83,15 +96,22 @@ pub fn eliminate_dead_code(program: &Program) -> (Program, DeadCodeStats) {
                     mutable: *mutable,
                     type_: type_.clone(),
                     value: new_value,
+                    location: location.clone(),
                 });
             }
-            Item::Const { name, type_, value } => {
+            Item::Const {
+                name,
+                type_,
+                value,
+                location,
+            } => {
                 // Process const initializers
                 let new_value = eliminate_dead_code_in_expression(value);
                 new_items.push(Item::Const {
                     name: name.clone(),
                     type_: type_.clone(),
                     value: new_value,
+                    location: location.clone(),
                 });
             }
             // Other items pass through unchanged
@@ -113,10 +133,12 @@ fn find_called_functions(program: &Program) -> HashSet<String> {
     // Scan all items for function calls
     for item in &program.items {
         match item {
-            Item::Function(func) => {
+            Item::Function { decl: func, .. } => {
                 find_calls_in_statements(&func.body, &mut called);
             }
-            Item::Impl(impl_block) => {
+            Item::Impl {
+                block: impl_block, ..
+            } => {
                 for func in &impl_block.functions {
                     find_calls_in_statements(&func.body, &mut called);
                 }
@@ -141,13 +163,15 @@ fn find_calls_in_statements(statements: &[Statement], called: &mut HashSet<Strin
 /// Find function calls in a statement
 fn find_calls_in_statement(stmt: &Statement, called: &mut HashSet<String>) {
     match stmt {
-        Statement::Expression(expr) => {
+        Statement::Expression { expr, .. } => {
             find_calls_in_expression(expr, called);
         }
-        Statement::Return(Some(expr)) => {
+        Statement::Return {
+            value: Some(expr), ..
+        } => {
             find_calls_in_expression(expr, called);
         }
-        Statement::Return(None) => {}
+        Statement::Return { value: None, .. } => {}
         Statement::Let { value, .. } => {
             find_calls_in_expression(value, called);
         }
@@ -158,6 +182,7 @@ fn find_calls_in_statement(stmt: &Statement, called: &mut HashSet<String>) {
             condition,
             then_block,
             else_block,
+            ..
         } => {
             find_calls_in_expression(condition, called);
             find_calls_in_statements(then_block, called);
@@ -165,7 +190,9 @@ fn find_calls_in_statement(stmt: &Statement, called: &mut HashSet<String>) {
                 find_calls_in_statements(else_stmts, called);
             }
         }
-        Statement::While { condition, body } => {
+        Statement::While {
+            condition, body, ..
+        } => {
             find_calls_in_expression(condition, called);
             find_calls_in_statements(body, called);
         }
@@ -173,7 +200,7 @@ fn find_calls_in_statement(stmt: &Statement, called: &mut HashSet<String>) {
             find_calls_in_expression(iterable, called);
             find_calls_in_statements(body, called);
         }
-        Statement::Match { value, arms } => {
+        Statement::Match { value, arms, .. } => {
             find_calls_in_expression(value, called);
             for arm in arms {
                 find_calls_in_expression(&arm.body, called);
@@ -195,9 +222,10 @@ fn find_calls_in_expression(expr: &Expression, called: &mut HashSet<String>) {
         Expression::Call {
             function,
             arguments,
+            ..
         } => {
             // Track direct function calls
-            if let Expression::Identifier(name) = &**function {
+            if let Expression::Identifier { name, .. } = &**function {
                 called.insert(name.clone());
             }
             find_calls_in_expression(function, called);
@@ -220,12 +248,12 @@ fn find_calls_in_expression(expr: &Expression, called: &mut HashSet<String>) {
         Expression::Unary { operand, .. } => {
             find_calls_in_expression(operand, called);
         }
-        Expression::Tuple(elements) => {
+        Expression::Tuple { elements, .. } => {
             for elem in elements {
                 find_calls_in_expression(elem, called);
             }
         }
-        Expression::Index { object, index } => {
+        Expression::Index { object, index, .. } => {
             find_calls_in_expression(object, called);
             find_calls_in_expression(index, called);
         }
@@ -235,7 +263,7 @@ fn find_calls_in_expression(expr: &Expression, called: &mut HashSet<String>) {
         Expression::Cast { expr, .. } => {
             find_calls_in_expression(expr, called);
         }
-        Expression::Block(statements) => {
+        Expression::Block { statements, .. } => {
             find_calls_in_statements(statements, called);
         }
         Expression::Closure { body, .. } => {
@@ -250,17 +278,17 @@ fn find_calls_in_expression(expr: &Expression, called: &mut HashSet<String>) {
             find_calls_in_expression(start, called);
             find_calls_in_expression(end, called);
         }
-        Expression::ChannelSend { channel, value } => {
+        Expression::ChannelSend { channel, value, .. } => {
             find_calls_in_expression(channel, called);
             find_calls_in_expression(value, called);
         }
-        Expression::ChannelRecv(channel) => {
+        Expression::ChannelRecv { channel, .. } => {
             find_calls_in_expression(channel, called);
         }
-        Expression::Await(expr) => {
+        Expression::Await { expr, .. } => {
             find_calls_in_expression(expr, called);
         }
-        Expression::TryOp(expr) => {
+        Expression::TryOp { expr, .. } => {
             find_calls_in_expression(expr, called);
         }
         Expression::MacroInvocation { args, .. } => {
@@ -355,32 +383,51 @@ fn eliminate_dead_code_in_statements(statements: &[Statement]) -> (Vec<Statement
 /// Eliminate dead code in a single statement
 fn eliminate_dead_code_in_statement(stmt: &Statement, stats: &mut DeadCodeStats) -> Statement {
     match stmt {
-        Statement::Expression(expr) => {
-            Statement::Expression(eliminate_dead_code_in_expression(expr))
-        }
-        Statement::Return(Some(expr)) => {
-            Statement::Return(Some(eliminate_dead_code_in_expression(expr)))
-        }
-        Statement::Return(None) => Statement::Return(None),
+        Statement::Expression { expr, location } => Statement::Expression {
+            expr: eliminate_dead_code_in_expression(expr),
+            location: location.clone(),
+        },
+        Statement::Return {
+            value: Some(expr),
+            location,
+        } => Statement::Return {
+            value: Some(eliminate_dead_code_in_expression(expr)),
+            location: location.clone(),
+        },
+        Statement::Return {
+            value: None,
+            location,
+        } => Statement::Return {
+            value: None,
+            location: location.clone(),
+        },
         Statement::Let {
             pattern,
             mutable,
             type_,
             value,
+            location,
         } => Statement::Let {
             pattern: pattern.clone(),
             mutable: *mutable,
             type_: type_.clone(),
             value: eliminate_dead_code_in_expression(value),
+            location: location.clone(),
         },
-        Statement::Assignment { target, value } => Statement::Assignment {
+        Statement::Assignment {
+            target,
+            value,
+            location,
+        } => Statement::Assignment {
             target: target.clone(),
             value: eliminate_dead_code_in_expression(value),
+            location: location.clone(),
         },
         Statement::If {
             condition,
             then_block,
             else_block,
+            location,
         } => {
             let new_condition = eliminate_dead_code_in_expression(condition);
             let (new_then, then_stats) = eliminate_dead_code_in_statements(then_block);
@@ -400,9 +447,14 @@ fn eliminate_dead_code_in_statement(stmt: &Statement, stats: &mut DeadCodeStats)
                 condition: new_condition,
                 then_block: new_then,
                 else_block: new_else,
+                location: location.clone(),
             }
         }
-        Statement::While { condition, body } => {
+        Statement::While {
+            condition,
+            body,
+            location,
+        } => {
             let new_condition = eliminate_dead_code_in_expression(condition);
             let (new_body, body_stats) = eliminate_dead_code_in_statements(body);
             stats.unreachable_statements_removed += body_stats.unreachable_statements_removed;
@@ -411,12 +463,14 @@ fn eliminate_dead_code_in_statement(stmt: &Statement, stats: &mut DeadCodeStats)
             Statement::While {
                 condition: new_condition,
                 body: new_body,
+                location: location.clone(),
             }
         }
         Statement::For {
             pattern,
             iterable,
             body,
+            location,
         } => {
             let new_iterable = eliminate_dead_code_in_expression(iterable);
             let (new_body, body_stats) = eliminate_dead_code_in_statements(body);
@@ -427,9 +481,14 @@ fn eliminate_dead_code_in_statement(stmt: &Statement, stats: &mut DeadCodeStats)
                 pattern: pattern.clone(),
                 iterable: new_iterable,
                 body: new_body,
+                location: location.clone(),
             }
         }
-        Statement::Match { value, arms } => {
+        Statement::Match {
+            value,
+            arms,
+            location,
+        } => {
             let new_value = eliminate_dead_code_in_expression(value);
             let mut new_arms = Vec::new();
 
@@ -447,23 +506,32 @@ fn eliminate_dead_code_in_statement(stmt: &Statement, stats: &mut DeadCodeStats)
             Statement::Match {
                 value: new_value,
                 arms: new_arms,
+                location: location.clone(),
             }
         }
-        Statement::Const { name, type_, value } => Statement::Const {
+        Statement::Const {
+            name,
+            type_,
+            value,
+            location,
+        } => Statement::Const {
             name: name.clone(),
             type_: type_.clone(),
             value: eliminate_dead_code_in_expression(value),
+            location: location.clone(),
         },
         Statement::Static {
             name,
             mutable,
             type_,
             value,
+            location,
         } => Statement::Static {
             name: name.clone(),
             mutable: *mutable,
             type_: type_.clone(),
             value: eliminate_dead_code_in_expression(value),
+            location: location.clone(),
         },
         _ => stmt.clone(),
     }
@@ -475,18 +543,21 @@ fn eliminate_dead_code_in_expression(expr: &Expression) -> Expression {
         Expression::Call {
             function,
             arguments,
+            location,
         } => Expression::Call {
             function: Box::new(eliminate_dead_code_in_expression(function)),
             arguments: arguments
                 .iter()
                 .map(|(label, arg)| (label.clone(), eliminate_dead_code_in_expression(arg)))
                 .collect(),
+            location: location.clone(),
         },
         Expression::MethodCall {
             object,
             method,
             type_args,
             arguments,
+            location,
         } => Expression::MethodCall {
             object: Box::new(eliminate_dead_code_in_expression(object)),
             method: method.clone(),
@@ -495,79 +566,135 @@ fn eliminate_dead_code_in_expression(expr: &Expression) -> Expression {
                 .iter()
                 .map(|(label, arg)| (label.clone(), eliminate_dead_code_in_expression(arg)))
                 .collect(),
+            location: location.clone(),
         },
-        Expression::Binary { left, op, right } => Expression::Binary {
+        Expression::Binary {
+            left,
+            op,
+            right,
+            location,
+        } => Expression::Binary {
             left: Box::new(eliminate_dead_code_in_expression(left)),
             op: *op,
             right: Box::new(eliminate_dead_code_in_expression(right)),
+            location: location.clone(),
         },
-        Expression::Unary { op, operand } => Expression::Unary {
+        Expression::Unary {
+            op,
+            operand,
+            location,
+        } => Expression::Unary {
             op: *op,
             operand: Box::new(eliminate_dead_code_in_expression(operand)),
+            location: location.clone(),
         },
-        Expression::Tuple(elements) => Expression::Tuple(
-            elements
+        Expression::Tuple { elements, location } => Expression::Tuple {
+            elements: elements
                 .iter()
                 .map(eliminate_dead_code_in_expression)
                 .collect(),
-        ),
-        Expression::Index { object, index } => Expression::Index {
+            location: location.clone(),
+        },
+        Expression::Index {
+            object,
+            index,
+            location,
+        } => Expression::Index {
             object: Box::new(eliminate_dead_code_in_expression(object)),
             index: Box::new(eliminate_dead_code_in_expression(index)),
+            location: location.clone(),
         },
-        Expression::FieldAccess { object, field } => Expression::FieldAccess {
+        Expression::FieldAccess {
+            object,
+            field,
+            location,
+        } => Expression::FieldAccess {
             object: Box::new(eliminate_dead_code_in_expression(object)),
             field: field.clone(),
+            location: location.clone(),
         },
-        Expression::Cast { expr, type_ } => Expression::Cast {
+        Expression::Cast {
+            expr,
+            type_,
+            location,
+        } => Expression::Cast {
             expr: Box::new(eliminate_dead_code_in_expression(expr)),
             type_: type_.clone(),
+            location: location.clone(),
         },
-        Expression::Block(statements) => {
+        Expression::Block {
+            statements,
+            location,
+        } => {
             let (new_statements, _) = eliminate_dead_code_in_statements(statements);
-            Expression::Block(new_statements)
+            Expression::Block {
+                statements: new_statements,
+                location: location.clone(),
+            }
         }
-        Expression::Closure { parameters, body } => Expression::Closure {
+        Expression::Closure {
+            parameters,
+            body,
+            location,
+        } => Expression::Closure {
             parameters: parameters.clone(),
             body: Box::new(eliminate_dead_code_in_expression(body)),
+            location: location.clone(),
         },
-        Expression::StructLiteral { name, fields } => Expression::StructLiteral {
+        Expression::StructLiteral {
+            name,
+            fields,
+            location,
+        } => Expression::StructLiteral {
             name: name.clone(),
             fields: fields
                 .iter()
                 .map(|(k, v)| (k.clone(), eliminate_dead_code_in_expression(v)))
                 .collect(),
+            location: location.clone(),
         },
         Expression::Range {
             start,
             end,
             inclusive,
+            location,
         } => Expression::Range {
             start: Box::new(eliminate_dead_code_in_expression(start)),
             end: Box::new(eliminate_dead_code_in_expression(end)),
             inclusive: *inclusive,
+            location: location.clone(),
         },
-        Expression::ChannelSend { channel, value } => Expression::ChannelSend {
+        Expression::ChannelSend {
+            channel,
+            value,
+            location,
+        } => Expression::ChannelSend {
             channel: Box::new(eliminate_dead_code_in_expression(channel)),
             value: Box::new(eliminate_dead_code_in_expression(value)),
+            location: location.clone(),
         },
-        Expression::ChannelRecv(channel) => {
-            Expression::ChannelRecv(Box::new(eliminate_dead_code_in_expression(channel)))
-        }
-        Expression::Await(expr) => {
-            Expression::Await(Box::new(eliminate_dead_code_in_expression(expr)))
-        }
-        Expression::TryOp(expr) => {
-            Expression::TryOp(Box::new(eliminate_dead_code_in_expression(expr)))
-        }
+        Expression::ChannelRecv { channel, location } => Expression::ChannelRecv {
+            channel: Box::new(eliminate_dead_code_in_expression(channel)),
+            location: location.clone(),
+        },
+        Expression::Await { expr, location } => Expression::Await {
+            expr: Box::new(eliminate_dead_code_in_expression(expr)),
+            location: location.clone(),
+        },
+        Expression::TryOp { expr, location } => Expression::TryOp {
+            expr: Box::new(eliminate_dead_code_in_expression(expr)),
+            location: location.clone(),
+        },
         Expression::MacroInvocation {
             name,
             args,
             delimiter,
+            location,
         } => Expression::MacroInvocation {
             name: name.clone(),
             args: args.iter().map(eliminate_dead_code_in_expression).collect(),
             delimiter: delimiter.clone(),
+            location: location.clone(),
         },
         _ => expr.clone(),
     }
@@ -577,7 +704,7 @@ fn eliminate_dead_code_in_expression(expr: &Expression) -> Expression {
 fn is_terminator(stmt: &Statement) -> bool {
     matches!(
         stmt,
-        Statement::Return(_) | Statement::Break | Statement::Continue
+        Statement::Return { .. } | Statement::Break { .. } | Statement::Continue { .. }
     )
 }
 
@@ -634,26 +761,40 @@ mod tests {
     #[test]
     fn test_removes_unreachable_after_return() {
         let program = Program {
-            items: vec![Item::Function(make_pub_func(
-                "test",
-                vec![
-                    Statement::Return(Some(Expression::Literal(Literal::Int(42)))),
-                    Statement::Expression(Expression::MacroInvocation {
-                        name: "println".to_string(),
-                        args: vec![Expression::Literal(Literal::String(
-                            "unreachable".to_string(),
-                        ))],
-                        delimiter: crate::parser::MacroDelimiter::Parens,
-                    }),
-                ],
-            ))],
+            items: vec![Item::Function {
+                decl: make_pub_func(
+                    "test",
+                    vec![
+                        Statement::Return {
+                            value: Some(Expression::Literal {
+                                value: Literal::Int(42),
+                                location: None,
+                            }),
+                            location: None,
+                        },
+                        Statement::Expression {
+                            expr: Expression::MacroInvocation {
+                                name: "println".to_string(),
+                                args: vec![Expression::Literal {
+                                    value: Literal::String("unreachable".to_string()),
+                                    location: None,
+                                }],
+                                delimiter: crate::parser::MacroDelimiter::Parens,
+                                location: None,
+                            },
+                            location: None,
+                        },
+                    ],
+                ),
+                location: None,
+            }],
         };
 
         let (optimized, stats) = eliminate_dead_code(&program);
         assert_eq!(stats.unreachable_statements_removed, 1);
 
         let func = match &optimized.items[0] {
-            Item::Function(f) => f,
+            Item::Function { decl: f, .. } => f,
             _ => panic!("Expected function"),
         };
         assert_eq!(func.body.len(), 1);
@@ -663,11 +804,26 @@ mod tests {
     fn test_removes_unused_private_function() {
         let program = Program {
             items: vec![
-                Item::Function(make_pub_func("main", vec![Statement::Return(None)])),
-                Item::Function(make_private_func(
-                    "unused_helper",
-                    vec![Statement::Return(None)],
-                )),
+                Item::Function {
+                    decl: make_pub_func(
+                        "main",
+                        vec![Statement::Return {
+                            value: None,
+                            location: None,
+                        }],
+                    ),
+                    location: None,
+                },
+                Item::Function {
+                    decl: make_private_func(
+                        "unused_helper",
+                        vec![Statement::Return {
+                            value: None,
+                            location: None,
+                        }],
+                    ),
+                    location: None,
+                },
             ],
         };
 
@@ -680,14 +836,33 @@ mod tests {
     fn test_keeps_called_private_function() {
         let program = Program {
             items: vec![
-                Item::Function(make_pub_func(
-                    "main",
-                    vec![Statement::Expression(Expression::Call {
-                        function: Box::new(Expression::Identifier("helper".to_string())),
-                        arguments: vec![],
-                    })],
-                )),
-                Item::Function(make_private_func("helper", vec![Statement::Return(None)])),
+                Item::Function {
+                    decl: make_pub_func(
+                        "main",
+                        vec![Statement::Expression {
+                            expr: Expression::Call {
+                                function: Box::new(Expression::Identifier {
+                                    name: "helper".to_string(),
+                                    location: None,
+                                }),
+                                arguments: vec![],
+                                location: None,
+                            },
+                            location: None,
+                        }],
+                    ),
+                    location: None,
+                },
+                Item::Function {
+                    decl: make_private_func(
+                        "helper",
+                        vec![Statement::Return {
+                            value: None,
+                            location: None,
+                        }],
+                    ),
+                    location: None,
+                },
             ],
         };
 
@@ -699,24 +874,34 @@ mod tests {
     #[test]
     fn test_removes_empty_if_blocks() {
         let program = Program {
-            items: vec![Item::Function(make_pub_func(
-                "test",
-                vec![
-                    Statement::If {
-                        condition: Expression::Literal(Literal::Bool(true)),
-                        then_block: vec![],
-                        else_block: Some(vec![]),
-                    },
-                    Statement::Return(None),
-                ],
-            ))],
+            items: vec![Item::Function {
+                decl: make_pub_func(
+                    "test",
+                    vec![
+                        Statement::If {
+                            condition: Expression::Literal {
+                                value: Literal::Bool(true),
+                                location: None,
+                            },
+                            then_block: vec![],
+                            else_block: Some(vec![]),
+                            location: None,
+                        },
+                        Statement::Return {
+                            value: None,
+                            location: None,
+                        },
+                    ],
+                ),
+                location: None,
+            }],
         };
 
         let (optimized, stats) = eliminate_dead_code(&program);
         assert_eq!(stats.empty_blocks_removed, 1);
 
         let func = match &optimized.items[0] {
-            Item::Function(f) => f,
+            Item::Function { decl: f, .. } => f,
             _ => panic!("Expected function"),
         };
         assert_eq!(func.body.len(), 1); // Only return remains
@@ -725,20 +910,51 @@ mod tests {
     #[test]
     fn test_nested_unreachable_code() {
         let program = Program {
-            items: vec![Item::Function(make_pub_func(
-                "test",
-                vec![Statement::If {
-                    condition: Expression::Literal(Literal::Bool(true)),
-                    then_block: vec![
-                        Statement::Return(Some(Expression::Literal(Literal::Int(1)))),
-                        Statement::Expression(Expression::Literal(Literal::Int(2))),
-                    ],
-                    else_block: Some(vec![
-                        Statement::Return(Some(Expression::Literal(Literal::Int(3)))),
-                        Statement::Expression(Expression::Literal(Literal::Int(4))),
-                    ]),
-                }],
-            ))],
+            items: vec![Item::Function {
+                decl: make_pub_func(
+                    "test",
+                    vec![Statement::If {
+                        condition: Expression::Literal {
+                            value: Literal::Bool(true),
+                            location: None,
+                        },
+                        then_block: vec![
+                            Statement::Return {
+                                value: Some(Expression::Literal {
+                                    value: Literal::Int(1),
+                                    location: None,
+                                }),
+                                location: None,
+                            },
+                            Statement::Expression {
+                                expr: Expression::Literal {
+                                    value: Literal::Int(2),
+                                    location: None,
+                                },
+                                location: None,
+                            },
+                        ],
+                        else_block: Some(vec![
+                            Statement::Return {
+                                value: Some(Expression::Literal {
+                                    value: Literal::Int(3),
+                                    location: None,
+                                }),
+                                location: None,
+                            },
+                            Statement::Expression {
+                                expr: Expression::Literal {
+                                    value: Literal::Int(4),
+                                    location: None,
+                                },
+                                location: None,
+                            },
+                        ]),
+                        location: None,
+                    }],
+                ),
+                location: None,
+            }],
         };
 
         let (optimized, stats) = eliminate_dead_code(&program);

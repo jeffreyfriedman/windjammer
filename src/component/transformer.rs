@@ -246,7 +246,7 @@ impl SignalTransformer {
                 Attribute::Event { name, handler } => {
                     if let Some(event_name) = name.strip_prefix("on_") {
                         let handler_name = match handler {
-                            crate::parser::Expression::Identifier(name) => name.clone(),
+                            crate::parser::Expression::Identifier { name, .. } => name.clone(),
                             _ => self.expression_to_rust(handler),
                         };
 
@@ -512,7 +512,7 @@ impl SignalTransformer {
                     // For now, we'll generate a placeholder that needs to be fixed
                     // The proper solution requires capturing self in the closure
                     let handler_name = match handler {
-                        crate::parser::Expression::Identifier(name) => name.clone(),
+                        crate::parser::Expression::Identifier { name, .. } => name.clone(),
                         _ => self.expression_to_rust(handler),
                     };
                     // Generate: Rc::new(RefCell::new(move || self.method_name()))
@@ -691,9 +691,9 @@ impl SignalTransformer {
                 let value_rust = self.expression_to_rust(value);
                 format!("let {}{} = {};", pattern_str, type_str, value_rust)
             }
-            Statement::Assignment { target, value } => {
+            Statement::Assignment { target, value, .. } => {
                 // Check if target is a signal variable
-                if let Expression::Identifier(name) = target {
+                if let Expression::Identifier { name, .. } = target {
                     if self.signal_vars.contains_key(name) {
                         let value_rust = self.expression_to_rust(value);
                         return format!("self.{}.set({});", name, value_rust);
@@ -703,17 +703,20 @@ impl SignalTransformer {
                 let value_rust = self.expression_to_rust(value);
                 format!("{} = {};", target_rust, value_rust)
             }
-            Statement::Return(Some(expr)) => {
+            Statement::Return {
+                value: Some(expr), ..
+            } => {
                 format!("return {};", self.expression_to_rust(expr))
             }
-            Statement::Return(None) => "return;".to_string(),
-            Statement::Expression(expr) => {
+            Statement::Return { value: None, .. } => "return;".to_string(),
+            Statement::Expression { expr, .. } => {
                 format!("{};", self.expression_to_rust(expr))
             }
             Statement::If {
                 condition,
                 then_block,
                 else_block,
+                ..
             } => {
                 let condition_rust = self.expression_to_rust(condition);
                 let then_rust = self.transform_statements(then_block);
@@ -739,7 +742,7 @@ impl SignalTransformer {
 
     fn expression_to_rust(&self, expr: &Expression) -> String {
         match expr {
-            Expression::Identifier(name) => {
+            Expression::Identifier { name, .. } => {
                 // Check if it's a signal variable
                 if self.signal_vars.contains_key(name) {
                     format!("self.{}.get()", name)
@@ -747,14 +750,16 @@ impl SignalTransformer {
                     name.clone()
                 }
             }
-            Expression::Literal(lit) => self.literal_to_rust(lit),
-            Expression::Binary { left, right, op } => {
+            Expression::Literal { value: lit, .. } => self.literal_to_rust(lit),
+            Expression::Binary {
+                left, right, op, ..
+            } => {
                 let left_rust = self.expression_to_rust(left);
                 let right_rust = self.expression_to_rust(right);
                 let op_str = self.binary_op_to_rust(op);
                 format!("({} {} {})", left_rust, op_str, right_rust)
             }
-            Expression::Unary { operand, op } => {
+            Expression::Unary { operand, op, .. } => {
                 let operand_rust = self.expression_to_rust(operand);
                 let op_str = self.unary_op_to_rust(op);
                 format!("({}{})", op_str, operand_rust)
@@ -762,6 +767,7 @@ impl SignalTransformer {
             Expression::Call {
                 function,
                 arguments,
+                ..
             } => {
                 let func_rust = self.expression_to_rust(function);
                 let args_rust: Vec<String> = arguments
@@ -783,7 +789,7 @@ impl SignalTransformer {
                     .collect();
                 format!("{}.{}({})", obj_rust, method, args_rust.join(", "))
             }
-            Expression::FieldAccess { object, field } => {
+            Expression::FieldAccess { object, field, .. } => {
                 let obj_rust = self.expression_to_rust(object);
                 format!("{}.{}", obj_rust, field)
             }

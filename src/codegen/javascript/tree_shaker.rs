@@ -64,7 +64,7 @@ impl TreeShaker {
             let current_used = self.used_functions.clone();
 
             for item in &program.items {
-                if let Item::Function(func) = item {
+                if let Item::Function { decl: func, .. } = item {
                     if current_used.contains(&func.name) {
                         // Mark all functions called from this function
                         for call in self.find_function_calls(&func.body) {
@@ -94,19 +94,22 @@ impl TreeShaker {
         let mut calls = Vec::new();
 
         match stmt {
-            Statement::Expression(expr) => {
+            Statement::Expression { expr, .. } => {
                 calls.extend(self.find_calls_in_expression(expr));
             }
             Statement::Let { value, .. } => {
                 calls.extend(self.find_calls_in_expression(value));
             }
-            Statement::Return(Some(expr)) => {
+            Statement::Return {
+                value: Some(expr), ..
+            } => {
                 calls.extend(self.find_calls_in_expression(expr));
             }
             Statement::If {
                 condition,
                 then_block,
                 else_block,
+                ..
             } => {
                 calls.extend(self.find_calls_in_expression(condition));
                 calls.extend(self.find_function_calls(then_block));
@@ -118,11 +121,13 @@ impl TreeShaker {
                 calls.extend(self.find_calls_in_expression(iterable));
                 calls.extend(self.find_function_calls(body));
             }
-            Statement::While { condition, body } => {
+            Statement::While {
+                condition, body, ..
+            } => {
                 calls.extend(self.find_calls_in_expression(condition));
                 calls.extend(self.find_function_calls(body));
             }
-            Statement::Loop { body } => {
+            Statement::Loop { body, .. } => {
                 calls.extend(self.find_function_calls(body));
             }
             _ => {}
@@ -139,9 +144,10 @@ impl TreeShaker {
             Expression::Call {
                 function,
                 arguments,
+                ..
             } => {
                 // Check if it's a direct function call
-                if let Expression::Identifier(name) = function.as_ref() {
+                if let Expression::Identifier { name, .. } = function.as_ref() {
                     calls.push(name.clone());
                 }
                 calls.extend(self.find_calls_in_expression(function));
@@ -167,11 +173,13 @@ impl TreeShaker {
             Expression::FieldAccess { object, .. } => {
                 calls.extend(self.find_calls_in_expression(object));
             }
-            Expression::Index { object, index } => {
+            Expression::Index { object, index, .. } => {
                 calls.extend(self.find_calls_in_expression(object));
                 calls.extend(self.find_calls_in_expression(index));
             }
-            Expression::Block(stmts) => {
+            Expression::Block {
+                statements: stmts, ..
+            } => {
                 calls.extend(self.find_function_calls(stmts));
             }
             _ => {}
@@ -183,18 +191,18 @@ impl TreeShaker {
     /// Check if an item should be kept
     fn should_keep_item(&self, item: &Item) -> bool {
         match item {
-            Item::Function(func) => {
+            Item::Function { decl: func, .. } => {
                 // Keep if it's used or exported
                 self.used_functions.contains(&func.name)
                     || func.decorators.iter().any(|d| d.name == "export")
             }
-            Item::Struct(_) => true, // Keep all structs for now (may be used in types)
-            Item::Enum(_) => true,   // Keep all enums for now
-            Item::Const { .. } => true, // Keep all constants
+            Item::Struct { .. } => true, // Keep all structs for now (may be used in types)
+            Item::Enum { .. } => true,   // Keep all enums for now
+            Item::Const { .. } => true,  // Keep all constants
             Item::Static { .. } => true, // Keep all statics
-            Item::Trait(_) => true,  // Keep all traits
-            Item::Impl(_) => true,   // Keep all impls
-            Item::Use { .. } => true, // Keep all imports (could be smarter here)
+            Item::Trait { .. } => true,  // Keep all traits
+            Item::Impl { .. } => true,   // Keep all impls
+            Item::Use { .. } => true,    // Keep all imports (could be smarter here)
             Item::BoundAlias { .. } => true, // Keep all bound aliases
         }
     }
@@ -227,7 +235,7 @@ pub fn analyze_usage(program: &Program) -> UsageAnalysis {
     let mut unused_functions = Vec::new();
 
     for item in &program.items {
-        if let Item::Function(func) = item {
+        if let Item::Function { decl: func, .. } = item {
             total_functions += 1;
             if !shaker.used_functions.contains(&func.name) {
                 unused_functions.push(func.name.clone());
@@ -251,39 +259,58 @@ mod tests {
     fn test_tree_shaker_basic() {
         let program = Program {
             items: vec![
-                Item::Function(FunctionDecl {
-                    name: "main".to_string(),
-                    type_params: vec![],
-                    where_clause: vec![],
-                    decorators: vec![],
-                    is_async: false,
-                    parameters: vec![],
-                    return_type: None,
-                    body: vec![Statement::Expression(Expression::Call {
-                        function: Box::new(Expression::Identifier("used".to_string())),
-                        arguments: vec![],
-                    })],
-                }),
-                Item::Function(FunctionDecl {
-                    name: "used".to_string(),
-                    type_params: vec![],
-                    where_clause: vec![],
-                    decorators: vec![],
-                    is_async: false,
-                    parameters: vec![],
-                    return_type: None,
-                    body: vec![],
-                }),
-                Item::Function(FunctionDecl {
-                    name: "unused".to_string(),
-                    type_params: vec![],
-                    where_clause: vec![],
-                    decorators: vec![],
-                    is_async: false,
-                    parameters: vec![],
-                    return_type: None,
-                    body: vec![],
-                }),
+                Item::Function {
+                    decl: FunctionDecl {
+                        name: "main".to_string(),
+                        type_params: vec![],
+                        where_clause: vec![],
+                        decorators: vec![],
+                        is_async: false,
+                        parameters: vec![],
+                        return_type: None,
+                        body: vec![Statement::Expression {
+                            expr: Expression::Call {
+                                function: Box::new(Expression::Identifier {
+                                    name: "used".to_string(),
+                                    location: None,
+                                }),
+                                arguments: vec![],
+                                location: None,
+                            },
+                            location: None,
+                        }],
+                        parent_type: None,
+                    },
+                    location: None,
+                },
+                Item::Function {
+                    decl: FunctionDecl {
+                        name: "used".to_string(),
+                        type_params: vec![],
+                        where_clause: vec![],
+                        decorators: vec![],
+                        is_async: false,
+                        parameters: vec![],
+                        return_type: None,
+                        body: vec![],
+                        parent_type: None,
+                    },
+                    location: None,
+                },
+                Item::Function {
+                    decl: FunctionDecl {
+                        name: "unused".to_string(),
+                        type_params: vec![],
+                        where_clause: vec![],
+                        decorators: vec![],
+                        is_async: false,
+                        parameters: vec![],
+                        return_type: None,
+                        body: vec![],
+                        parent_type: None,
+                    },
+                    location: None,
+                },
             ],
         };
 
@@ -298,26 +325,34 @@ mod tests {
     fn test_analyze_usage() {
         let program = Program {
             items: vec![
-                Item::Function(FunctionDecl {
-                    name: "main".to_string(),
-                    type_params: vec![],
-                    where_clause: vec![],
-                    decorators: vec![],
-                    is_async: false,
-                    parameters: vec![],
-                    return_type: None,
-                    body: vec![],
-                }),
-                Item::Function(FunctionDecl {
-                    name: "unused".to_string(),
-                    type_params: vec![],
-                    where_clause: vec![],
-                    decorators: vec![],
-                    is_async: false,
-                    parameters: vec![],
-                    return_type: None,
-                    body: vec![],
-                }),
+                Item::Function {
+                    decl: FunctionDecl {
+                        name: "main".to_string(),
+                        type_params: vec![],
+                        where_clause: vec![],
+                        decorators: vec![],
+                        is_async: false,
+                        parameters: vec![],
+                        return_type: None,
+                        body: vec![],
+                        parent_type: None,
+                    },
+                    location: None,
+                },
+                Item::Function {
+                    decl: FunctionDecl {
+                        name: "unused".to_string(),
+                        type_params: vec![],
+                        where_clause: vec![],
+                        decorators: vec![],
+                        is_async: false,
+                        parameters: vec![],
+                        return_type: None,
+                        body: vec![],
+                        parent_type: None,
+                    },
+                    location: None,
+                },
             ],
         };
 

@@ -10,12 +10,12 @@ use crate::parser::{Expression, FunctionDecl, Item, Parser as WindjammerParser, 
 use anyhow::{bail, Result};
 
 pub struct ComponentParser {
-    tokens: Vec<Token>,
+    tokens: Vec<crate::lexer::TokenWithLocation>,
     pos: usize,
 }
 
 impl ComponentParser {
-    pub fn new(tokens: Vec<Token>) -> Self {
+    pub fn new(tokens: Vec<crate::lexer::TokenWithLocation>) -> Self {
         Self { tokens, pos: 0 }
     }
 
@@ -23,14 +23,17 @@ impl ComponentParser {
     pub fn parse(source: &str) -> Result<ComponentFile> {
         // Lex the source
         let mut lexer = Lexer::new(source);
-        let tokens = lexer.tokenize();
+        let tokens = lexer.tokenize_with_locations();
 
         let mut parser = Self::new(tokens);
         parser.parse_component()
     }
 
     fn current_token(&self) -> &Token {
-        self.tokens.get(self.pos).unwrap_or(&Token::Eof)
+        self.tokens
+            .get(self.pos)
+            .map(|t| &t.token)
+            .unwrap_or(&Token::Eof)
     }
 
     fn advance(&mut self) {
@@ -40,7 +43,10 @@ impl ComponentParser {
     }
 
     fn peek(&self, offset: usize) -> &Token {
-        self.tokens.get(self.pos + offset).unwrap_or(&Token::Eof)
+        self.tokens
+            .get(self.pos + offset)
+            .map(|t| &t.token)
+            .unwrap_or(&Token::Eof)
     }
 
     fn expect(&mut self, expected: Token) -> Result<()> {
@@ -64,8 +70,8 @@ impl ComponentParser {
     /// Detect if this is minimal style (no @component decorator)
     fn is_minimal_style(&self) -> Result<bool> {
         // Look for @component decorator
-        for token in &self.tokens {
-            if let Token::Decorator(name) = token {
+        for token_with_loc in &self.tokens {
+            if let Token::Decorator(name) = &token_with_loc.token {
                 if name == "component" {
                     return Ok(false);
                 }
@@ -137,7 +143,7 @@ impl ComponentParser {
 
     fn check_lifecycle_decorator(&self) -> Option<LifecycleKind> {
         if self.pos > 0 {
-            if let Token::Decorator(name) = &self.tokens[self.pos - 1] {
+            if let Token::Decorator(name) = &self.tokens[self.pos - 1].token {
                 return self.parse_lifecycle_kind(name).ok();
             }
         }
@@ -367,7 +373,7 @@ impl ComponentParser {
                         crate::lexer::StringPart::Expression(expr) => {
                             // Parse the expression
                             let mut lexer = Lexer::new(&expr);
-                            let tokens = lexer.tokenize();
+                            let tokens = lexer.tokenize_with_locations();
                             let mut parser = WindjammerParser::new(tokens);
                             let expr = parser
                                 .parse_expression_public()
@@ -452,7 +458,7 @@ impl ComponentParser {
             .items
             .iter()
             .find_map(|item| {
-                if let Item::Struct(s) = item {
+                if let Item::Struct { decl: s, .. } = item {
                     if s.decorators.iter().any(|d| d.name == "component") {
                         return Some(s.clone());
                     }
@@ -466,7 +472,7 @@ impl ComponentParser {
             .items
             .iter()
             .find_map(|item| {
-                if let Item::Impl(i) = item {
+                if let Item::Impl { block: i, .. } = item {
                     if i.type_name == struct_decl.name {
                         return Some(i.clone());
                     }
@@ -555,7 +561,7 @@ impl ComponentParser {
                         // by scanning backwards for control flow keywords
                         let mut found_control_flow = false;
                         for i in (start..self.pos).rev() {
-                            match &self.tokens[i] {
+                            match &self.tokens[i].token {
                                 Token::If
                                 | Token::Else
                                 | Token::Match

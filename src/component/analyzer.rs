@@ -164,7 +164,7 @@ impl DependencyAnalyzer {
     #[allow(clippy::only_used_in_recursion)]
     fn extract_dependencies_recursive(&self, expr: &Expression, deps: &mut HashSet<String>) {
         match expr {
-            Expression::Identifier(name) => {
+            Expression::Identifier { name, .. } => {
                 deps.insert(name.clone());
             }
             Expression::Binary { left, right, .. } => {
@@ -177,6 +177,7 @@ impl DependencyAnalyzer {
             Expression::Call {
                 function,
                 arguments,
+                ..
             } => {
                 self.extract_dependencies_recursive(function, deps);
                 for (_, arg) in arguments {
@@ -194,16 +195,16 @@ impl DependencyAnalyzer {
             Expression::FieldAccess { object, .. } => {
                 self.extract_dependencies_recursive(object, deps);
             }
-            Expression::Index { object, index } => {
+            Expression::Index { object, index, .. } => {
                 self.extract_dependencies_recursive(object, deps);
                 self.extract_dependencies_recursive(index, deps);
             }
-            Expression::Array(elements) => {
+            Expression::Array { elements, .. } => {
                 for elem in elements {
                     self.extract_dependencies_recursive(elem, deps);
                 }
             }
-            Expression::Tuple(elements) => {
+            Expression::Tuple { elements, .. } => {
                 for elem in elements {
                     self.extract_dependencies_recursive(elem, deps);
                 }
@@ -238,23 +239,26 @@ impl DependencyAnalyzer {
             Statement::Let { value, .. } => {
                 self.extract_dependencies_recursive(value, reads);
             }
-            Statement::Assignment { target, value } => {
+            Statement::Assignment { target, value, .. } => {
                 self.extract_dependencies_recursive(value, reads);
                 // Also read the target if it's a field access or index
-                if !matches!(target, Expression::Identifier(_)) {
+                if !matches!(target, Expression::Identifier { .. }) {
                     self.extract_dependencies_recursive(target, reads);
                 }
             }
-            Statement::Return(Some(expr)) => {
+            Statement::Return {
+                value: Some(expr), ..
+            } => {
                 self.extract_dependencies_recursive(expr, reads);
             }
-            Statement::Expression(expr) => {
+            Statement::Expression { expr, .. } => {
                 self.extract_dependencies_recursive(expr, reads);
             }
             Statement::If {
                 condition,
                 then_block,
                 else_block,
+                ..
             } => {
                 self.extract_dependencies_recursive(condition, reads);
                 for stmt in then_block {
@@ -272,18 +276,20 @@ impl DependencyAnalyzer {
                     self.extract_reads_from_statement(stmt, reads);
                 }
             }
-            Statement::While { condition, body } => {
+            Statement::While {
+                condition, body, ..
+            } => {
                 self.extract_dependencies_recursive(condition, reads);
                 for stmt in body {
                     self.extract_reads_from_statement(stmt, reads);
                 }
             }
-            Statement::Loop { body } => {
+            Statement::Loop { body, .. } => {
                 for stmt in body {
                     self.extract_reads_from_statement(stmt, reads);
                 }
             }
-            Statement::Match { value, arms } => {
+            Statement::Match { value, arms, .. } => {
                 self.extract_dependencies_recursive(value, reads);
                 for arm in arms {
                     self.extract_dependencies_recursive(&arm.body, reads);
@@ -318,7 +324,7 @@ impl DependencyAnalyzer {
                 // Non-identifier patterns (tuple, wildcard, etc.) don't count as simple writes
             }
             Statement::Assignment {
-                target: Expression::Identifier(name),
+                target: Expression::Identifier { name, .. },
                 ..
             } => {
                 writes.insert(name.clone());
@@ -342,7 +348,7 @@ impl DependencyAnalyzer {
             }
             Statement::For { body, .. }
             | Statement::While { body, .. }
-            | Statement::Loop { body } => {
+            | Statement::Loop { body, .. } => {
                 for stmt in body {
                     self.extract_writes_from_statement(stmt, writes);
                 }
