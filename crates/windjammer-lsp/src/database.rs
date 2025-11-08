@@ -144,7 +144,7 @@ pub fn parse<'db>(db: &'db dyn salsa::Database, file: SourceFile) -> ParsedProgr
 
     // Lex and parse
     let mut lexer = lexer::Lexer::new(text);
-    let tokens = lexer.tokenize();
+    let tokens = lexer.tokenize_with_locations();
     let mut parser = parser::Parser::new(tokens);
 
     let program = match parser.parse() {
