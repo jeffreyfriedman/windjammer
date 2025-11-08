@@ -15,7 +15,6 @@ struct PongGame {
 // Game trait implementation for PongGame
 // TODO: Implement Game trait
 
-#[init]
 fn init(mut game: PongGame) {
     game.left_paddle_y = 250.0;
     game.right_paddle_y = 250.0;
@@ -31,7 +30,6 @@ fn init(mut game: PongGame) {
     println!("Controls: W/S for left paddle, Up/Down for right paddle")
 }
 
-#[update]
 fn update(mut game: PongGame, mut delta: f64) {
     game.ball_x = game.ball_x + game.ball_vx * delta;
     game.ball_y = game.ball_y + game.ball_vy * delta;
@@ -74,7 +72,6 @@ fn update(mut game: PongGame, mut delta: f64) {
 }
 
 #[inline]
-#[render]
 fn render(mut game: PongGame, mut renderer: Renderer) {
     renderer.clear(Color::black());
     renderer.draw_rect(10.0, game.left_paddle_y, 10.0, 100.0, Color::white());
@@ -87,7 +84,6 @@ fn render(mut game: PongGame, mut renderer: Renderer) {
     }
 }
 
-#[input]
 fn handle_input(mut game: PongGame, mut input: Input) {
     if input.key_pressed(Key::W) {
         game.left_paddle_y = game.left_paddle_y - 5.0;
@@ -116,7 +112,6 @@ fn handle_input(mut game: PongGame, mut input: Input) {
 }
 
 #[inline]
-#[cleanup]
 fn cleanup(mut game: PongGame) {
     println!("Final Score: {} - {}", game.score_left, game.score_right);
     println!("Thanks for playing PONG!")
