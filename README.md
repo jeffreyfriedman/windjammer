@@ -23,6 +23,7 @@ Windjammer is a pragmatic systems programming language that compiles to **Rust, 
 ✅ **Modern syntax** - string interpolation, pipe operator, pattern matching  
 ✅ **100% Rust compatibility** - use any Rust crate  
 ✅ **World-class IDE support** - LSP, debugging, refactoring in VSCode/Vim/IntelliJ  
+✅ **World-class error messages** - Rust-level quality with Windjammer context 🆕  
 ✅ **AI-powered development** - MCP server for Claude, ChatGPT code assistance  
 ✅ **UI Framework** - Build web, desktop, and mobile apps with `windjammer-ui` 🆕  
 ✅ **Production-ready** - comprehensive testing, fuzzing, security audit (A+ rating)  
@@ -31,6 +32,8 @@ Windjammer is a pragmatic systems programming language that compiles to **Rust, 
 **Perfect for:** Web APIs, CLI tools, microservices, data processing, UI apps, game development, learning systems programming
 
 **Philosophy:** Provide 80% of developers with 80% of Rust's power while eliminating 80% of its complexity.
+
+**Error Experience:** Rust-level error quality with Windjammer-friendly messages, auto-fix suggestions, and interactive debugging.
 
 ---
 
@@ -227,7 +230,48 @@ Complete Language Server Protocol (LSP) implementation with advanced linting and
 **✨ Preview Mode** 🆕 - See changes before applying refactorings  
 **✨ Batch Refactorings** 🆕 - Apply multiple refactorings atomically  
 **✨ World-Class Linting** - 16 rules across 6 categories (matches golangci-lint!)  
-**✨ Auto-Fix** - 3 auto-fixable rules via `wj lint --fix`  
+**✨ Auto-Fix** - 3 auto-fixable rules via `wj lint --fix`
+
+### 🎯 World-Class Error Messages 🆕
+
+**Rust-level error quality with Windjammer-friendly context!**
+
+**✨ Smart Error Translation** - Rust errors automatically translated to Windjammer terminology  
+**✨ Error Codes** - Unique `WJxxxx` codes for every error type  
+**✨ Contextual Help** - Actionable suggestions for every error  
+**✨ Syntax Highlighting** - Beautiful, colorized error messages  
+**✨ Auto-Fix System** - Automatic fixes for common issues (`--fix` flag)  
+**✨ Error Recovery** - Retries compilation after applying fixes  
+**✨ Interactive TUI** - Navigate and fix errors interactively (`wj errors`)  
+**✨ Error Statistics** - Track error patterns and trends (`wj stats`)  
+**✨ Error Catalog** - Searchable documentation for all errors (`wj docs`)  
+**✨ Explain Command** - Detailed explanations for any error (`wj explain WJ0001`)  
+**✨ Fuzzy Matching** - "Did you mean?" suggestions for typos
+
+**Example**:
+```bash
+# Beautiful error messages with context
+$ wj build main.wj --check
+
+error[WJ0002]: Variable not found: missing_variable
+  --> main.wj:5:12
+   |
+ 5 |     println!("{}", missing_variable)
+   |                    ^^^^^^^^^^^^^^^^ not found in this scope
+   |
+   = help: Did you mean `my_variable`?
+   = note: Variables must be declared before use
+   💡 wj explain WJ0002
+
+# Auto-fix common issues
+$ wj build main.wj --check --fix
+
+# Interactive error navigation
+$ wj errors main.wj
+
+# Explain any error code
+$ wj explain WJ0002
+```  
 
 **🐛 Full Debugging Support** - Debug Adapter Protocol (DAP):
 
@@ -351,6 +395,10 @@ wj test --filter http           # Run specific tests 🆕
 wj fmt                          # Format code
 wj lint                         # World-class linting (16 rules!)
 wj lint --fix                   # Auto-fix issues
+wj errors main.wj               # Interactive error navigator 🆕
+wj explain WJ0001               # Explain error codes 🆕
+wj docs                         # Generate error catalog 🆕
+wj stats                        # Error statistics 🆕
 wj add serde --features derive  # Manage dependencies
 wj eject --output rust-project  # Convert to pure Rust (no lock-in!)
 ```
