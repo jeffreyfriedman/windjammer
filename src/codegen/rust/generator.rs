@@ -318,7 +318,8 @@ impl CodeGenerator {
         }
 
         output.push_str("    // Initialize renderer\n");
-        output.push_str("    let mut renderer = pollster::block_on(rendering::Renderer::new(&window))?;\n");
+        output.push_str("    let window_ref: &'static winit::window::Window = unsafe { std::mem::transmute(&window) };\n");
+        output.push_str("    let mut renderer = pollster::block_on(renderer::Renderer::new(window_ref))?;\n");
         output.push_str("\n");
         output.push_str("    // Game loop\n");
         output.push_str("    let mut last_time = std::time::Instant::now();\n");
@@ -629,9 +630,9 @@ impl CodeGenerator {
             }
         }
 
-        // Generate top-level functions (skip impl methods and game-decorated functions)
+        // Generate top-level functions (skip impl methods, but include game-decorated functions)
         for analyzed_func in analyzed {
-            if !impl_methods.contains(&analyzed_func.decl.name) && !game_functions.contains(&analyzed_func.decl.name) {
+            if !impl_methods.contains(&analyzed_func.decl.name) {
                 // Skip main() function in modules - it should only be in the entry point
                 if self.is_module && analyzed_func.decl.name == "main" {
                     continue;
@@ -640,6 +641,7 @@ impl CodeGenerator {
                 if game_framework_info.is_some() && analyzed_func.decl.name == "main" {
                     continue;
                 }
+                // Generate the function (including game-decorated functions)
                 body.push_str(&self.generate_function(analyzed_func));
                 body.push_str("\n\n");
             }
@@ -1575,6 +1577,11 @@ impl CodeGenerator {
         for decorator in &func.decorators {
             // Skip @async, it's handled specially
             if decorator.name == "async" {
+                continue;
+            }
+
+            // Skip game framework decorators - they're handled by the game loop
+            if matches!(decorator.name.as_str(), "game" | "init" | "update" | "render" | "render3d" | "input" | "cleanup") {
                 continue;
             }
 
