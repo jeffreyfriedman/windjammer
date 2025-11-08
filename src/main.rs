@@ -18,6 +18,7 @@ pub mod parser_impl; // Parser implementation (being migrated to parser/)
 pub mod parser_recovery;
 pub mod source_map; // Source map for error message translation
 pub mod stdlib_scanner;
+pub mod syntax_highlighter; // Syntax highlighting for error snippets
 
 // UI component compilation
 pub mod component;
