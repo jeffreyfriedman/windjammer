@@ -152,7 +152,7 @@ impl std::hash::Hash for Token {
 }
 
 /// Token with source location information for error reporting
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct TokenWithLocation {
     pub token: Token,
     pub line: usize,
@@ -694,7 +694,11 @@ impl Lexer {
         let line = self.line;
         let column = self.column;
         let token = self.next_token();
-        TokenWithLocation { token, line, column }
+        TokenWithLocation {
+            token,
+            line,
+            column,
+        }
     }
 
     pub fn tokenize(&mut self) -> Vec<Token> {
@@ -723,7 +727,7 @@ impl Lexer {
             let token_with_loc = self.next_token_with_location();
             let is_eof = token_with_loc.token == Token::Eof;
             let is_newline = token_with_loc.token == Token::Newline;
-            
+
             if is_eof {
                 tokens.push(token_with_loc);
                 break;

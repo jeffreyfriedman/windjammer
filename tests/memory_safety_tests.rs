@@ -32,7 +32,7 @@ fn main() {
 "#;
 
     let mut lexer = Lexer::new(source);
-    let tokens = lexer.tokenize();
+    let tokens = lexer.tokenize_with_locations();
     let mut parser = Parser::new(tokens);
     let program = parser.parse().expect("Parse should succeed");
 
@@ -68,7 +68,7 @@ fn main() {
 "#;
 
     let mut lexer = Lexer::new(source);
-    let tokens = lexer.tokenize();
+    let tokens = lexer.tokenize_with_locations();
     let mut parser = Parser::new(tokens);
     let program = parser.parse().expect("Parse should succeed");
 
@@ -100,7 +100,7 @@ fn main() {
 "#;
 
     let mut lexer = Lexer::new(source);
-    let tokens = lexer.tokenize();
+    let tokens = lexer.tokenize_with_locations();
     let mut parser = Parser::new(tokens);
     let program = parser.parse().expect("Parse should succeed");
 
@@ -132,7 +132,7 @@ fn main() {
 "#;
 
     let mut lexer = Lexer::new(source);
-    let tokens = lexer.tokenize();
+    let tokens = lexer.tokenize_with_locations();
     let mut parser = Parser::new(tokens);
 
     // Test robustness even if parsing fails
@@ -158,7 +158,7 @@ fn main() {
 "#;
 
     let mut lexer = Lexer::new(source);
-    let tokens = lexer.tokenize();
+    let tokens = lexer.tokenize_with_locations();
     let mut parser = Parser::new(tokens);
 
     // Test robustness - closures are complex
@@ -183,7 +183,7 @@ fn with_defer() {
 "#;
 
     let mut lexer = Lexer::new(source);
-    let tokens = lexer.tokenize();
+    let tokens = lexer.tokenize_with_locations();
     let mut parser = Parser::new(tokens);
 
     // Even if parse fails, the test passes - we're checking robustness
@@ -208,7 +208,7 @@ fn stress_test() {
 "#;
 
     let mut lexer = Lexer::new(source);
-    let tokens = lexer.tokenize();
+    let tokens = lexer.tokenize_with_locations();
     let mut parser = Parser::new(tokens);
 
     if let Ok(program) = parser.parse() {
@@ -234,7 +234,7 @@ fn factorial(n: int) -> int {
 "#;
 
     let mut lexer = Lexer::new(source);
-    let tokens = lexer.tokenize();
+    let tokens = lexer.tokenize_with_locations();
     let mut parser = Parser::new(tokens);
 
     if let Ok(program) = parser.parse() {

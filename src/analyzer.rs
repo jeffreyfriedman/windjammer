@@ -249,7 +249,7 @@ impl Analyzer {
 
         for item in &program.items {
             match item {
-                Item::Function(func) => {
+                Item::Function { decl: func, .. } => {
                     let mut analyzed_func = self.analyze_function(func)?;
 
                     // PHASE 7: Detect const/static optimizations
@@ -266,7 +266,9 @@ impl Analyzer {
                     registry.add_function(func.name.clone(), signature);
                     analyzed.push(analyzed_func);
                 }
-                Item::Impl(impl_block) => {
+                Item::Impl {
+                    block: impl_block, ..
+                } => {
                     // Analyze methods in impl blocks
                     for func in &impl_block.functions {
                         let mut analyzed_func = self.analyze_function(func)?;
@@ -382,14 +384,14 @@ impl Analyzer {
         for stmt in statements {
             match stmt {
                 Statement::Assignment {
-                    target: Expression::Identifier(id),
+                    target: Expression::Identifier { name: id, .. },
                     ..
                 } => {
                     if id == name {
                         return true;
                     }
                 }
-                Statement::Expression(expr) => {
+                Statement::Expression { expr, .. } => {
                     // Check for method calls that might mutate
                     if self.has_mutable_method_call(name, expr) {
                         return true;
@@ -409,7 +411,7 @@ impl Analyzer {
                         }
                     }
                 }
-                Statement::Loop { body }
+                Statement::Loop { body, .. }
                 | Statement::While { body, .. }
                 | Statement::For { body, .. } => {
                     if self.is_mutated(name, body) {
@@ -425,7 +427,7 @@ impl Analyzer {
     fn has_mutable_method_call(&self, name: &str, expr: &Expression) -> bool {
         match expr {
             Expression::MethodCall { object, method, .. } => {
-                if let Expression::Identifier(id) = &**object {
+                if let Expression::Identifier { name: id, .. } = &**object {
                     if id == name {
                         // Heuristic: methods like push, insert, etc. are mutating
                         return method.starts_with("push")
@@ -444,7 +446,9 @@ impl Analyzer {
     fn is_returned(&self, name: &str, statements: &[Statement]) -> bool {
         for stmt in statements {
             match stmt {
-                Statement::Return(Some(expr)) => {
+                Statement::Return {
+                    value: Some(expr), ..
+                } => {
                     if self.expression_uses_identifier(name, expr) {
                         return true;
                     }
@@ -490,7 +494,7 @@ impl Analyzer {
     #[allow(clippy::only_used_in_recursion)]
     fn expression_uses_identifier(&self, name: &str, expr: &Expression) -> bool {
         match expr {
-            Expression::Identifier(id) => id == name,
+            Expression::Identifier { name: id, .. } => id == name,
             Expression::Binary { left, right, .. } => {
                 self.expression_uses_identifier(name, left)
                     || self.expression_uses_identifier(name, right)
@@ -508,7 +512,7 @@ impl Analyzer {
                         .any(|(_label, arg)| self.expression_uses_identifier(name, arg))
             }
             Expression::FieldAccess { object, .. } => self.expression_uses_identifier(name, object),
-            Expression::TryOp(inner) => self.expression_uses_identifier(name, inner),
+            Expression::TryOp { expr: inner, .. } => self.expression_uses_identifier(name, inner),
             _ => false,
         }
     }
@@ -660,10 +664,13 @@ impl Analyzer {
         optimizations: &mut Vec<StructMappingOptimization>,
     ) {
         match stmt {
-            Statement::Let { value, .. } | Statement::Return(Some(value)) => {
+            Statement::Let { value, .. }
+            | Statement::Return {
+                value: Some(value), ..
+            } => {
                 self.analyze_expression_for_struct_mappings(value, optimizations);
             }
-            Statement::Expression(expr) => {
+            Statement::Expression { expr, .. } => {
                 self.analyze_expression_for_struct_mappings(expr, optimizations);
             }
             Statement::If {
@@ -691,7 +698,7 @@ impl Analyzer {
         optimizations: &mut Vec<StructMappingOptimization>,
     ) {
         match expr {
-            Expression::StructLiteral { name, fields } => {
+            Expression::StructLiteral { name, fields, .. } => {
                 // Detect patterns:
                 // 1. All fields come from a single source (direct mapping)
                 // 2. Fields extracted from database row (FromRow pattern)
@@ -759,17 +766,17 @@ impl Analyzer {
     /// Extract the source variable/expression from a field expression
     fn extract_field_source(&self, expr: &Expression) -> Option<String> {
         match expr {
-            Expression::Identifier(name) => Some(name.clone()),
+            Expression::Identifier { name, .. } => Some(name.clone()),
             Expression::FieldAccess { object, .. } => {
                 // Extract base object
-                if let Expression::Identifier(name) = &**object {
+                if let Expression::Identifier { name, .. } = &**object {
                     Some(name.clone())
                 } else {
                     None
                 }
             }
             Expression::MethodCall { object, .. } => {
-                if let Expression::Identifier(name) = &**object {
+                if let Expression::Identifier { name, .. } = &**object {
                     Some(name.clone())
                 } else {
                     None
@@ -783,14 +790,14 @@ impl Analyzer {
     #[allow(clippy::only_used_in_recursion)]
     fn expression_to_string(&self, expr: &Expression) -> String {
         match expr {
-            Expression::Identifier(name) => name.clone(),
-            Expression::FieldAccess { object, field } => {
+            Expression::Identifier { name, .. } => name.clone(),
+            Expression::FieldAccess { object, field, .. } => {
                 format!("{}.{}", self.expression_to_string(object), field)
             }
             Expression::MethodCall { object, method, .. } => {
                 format!("{}.{}()", self.expression_to_string(object), method)
             }
-            Expression::Literal(lit) => format!("{:?}", lit),
+            Expression::Literal { value: lit, .. } => format!("{:?}", lit),
             _ => "expr".to_string(),
         }
     }
@@ -815,12 +822,15 @@ impl Analyzer {
     ) {
         match stmt {
             Statement::Assignment {
-                target: Expression::Identifier(var_name),
-                value: Expression::Binary { left, right: _, op },
+                target: Expression::Identifier { name: var_name, .. },
+                value:
+                    Expression::Binary {
+                        left, right: _, op, ..
+                    },
                 ..
             } => {
                 // Check if it's pattern: x = x op y
-                if let Expression::Identifier(left_var) = &**left {
+                if let Expression::Identifier { name: left_var, .. } = &**left {
                     if left_var == var_name {
                         // Pattern matched: x = x op y
                         let compound_op = match op {
@@ -855,7 +865,7 @@ impl Analyzer {
                     }
                 }
             }
-            Statement::While { body, .. } | Statement::Loop { body } => {
+            Statement::While { body, .. } | Statement::Loop { body, .. } => {
                 for stmt in body {
                     self.analyze_statement_for_assignments(stmt, optimizations, idx);
                 }
@@ -890,7 +900,10 @@ impl Analyzer {
         idx: usize,
     ) {
         match stmt {
-            Statement::Let { value, .. } | Statement::Return(Some(value)) => {
+            Statement::Let { value, .. }
+            | Statement::Return {
+                value: Some(value), ..
+            } => {
                 // Check for format! macro calls (string interpolation is converted to format!)
                 if let Expression::MacroInvocation { name, .. } = value {
                     if name == "format" {
@@ -920,7 +933,7 @@ impl Analyzer {
             }
             Statement::For { body, .. }
             | Statement::While { body, .. }
-            | Statement::Loop { body } => {
+            | Statement::Loop { body, .. } => {
                 for nested_stmt in body {
                     self.analyze_statement_for_string_ops(nested_stmt, optimizations, idx);
                 }
@@ -954,7 +967,10 @@ impl Analyzer {
     #[allow(dead_code)] // TODO: Implement concatenation optimization in future version
     #[allow(clippy::only_used_in_recursion)]
     fn count_concatenations(&self, expr: &Expression, count: &mut usize) {
-        if let Expression::Binary { op, left, right } = expr {
+        if let Expression::Binary {
+            op, left, right, ..
+        } = expr
+        {
             if matches!(op, BinaryOp::Add) {
                 *count += 1;
                 self.count_concatenations(left, count);
@@ -969,7 +985,7 @@ impl Analyzer {
         matches!(
             stmt,
             Statement::Assignment {
-                target: Expression::Identifier(_),
+                target: Expression::Identifier { .. },
                 ..
             }
         )
@@ -988,21 +1004,23 @@ impl Analyzer {
             }
             Statement::Assignment { target, value, .. } => {
                 // Track writes
-                if let Expression::Identifier(name) = target {
+                if let Expression::Identifier { name, .. } = target {
                     let entry = usage.entry(name.clone()).or_insert((0, 0, false, false));
                     entry.1 += 1; // increment write count
                 }
                 self.analyze_expression_for_clones(value, usage);
             }
-            Statement::Return(Some(expr)) => {
+            Statement::Return {
+                value: Some(expr), ..
+            } => {
                 // Returned values escape the function
-                if let Expression::Identifier(name) = expr {
+                if let Expression::Identifier { name, .. } = expr {
                     let entry = usage.entry(name.clone()).or_insert((0, 0, false, false));
                     entry.2 = true; // mark as escapes
                 }
                 self.analyze_expression_for_clones(expr, usage);
             }
-            Statement::Expression(expr) => {
+            Statement::Expression { expr, .. } => {
                 self.analyze_expression_for_clones(expr, usage);
             }
             Statement::If {
@@ -1037,7 +1055,7 @@ impl Analyzer {
                     self.analyze_statement_for_clones_in_loop(stmt, usage, _idx);
                 }
             }
-            Statement::Loop { body } => {
+            Statement::Loop { body, .. } => {
                 // Mark all variables used in loop body as in_loop
                 for stmt in body {
                     self.analyze_statement_for_clones_in_loop(stmt, usage, _idx);
@@ -1059,22 +1077,24 @@ impl Analyzer {
                 self.analyze_expression_for_clones_in_loop(value, usage);
             }
             Statement::Assignment { target, value, .. } => {
-                if let Expression::Identifier(name) = target {
+                if let Expression::Identifier { name, .. } = target {
                     let entry = usage.entry(name.clone()).or_insert((0, 0, false, false));
                     entry.1 += 1; // increment write count
                     entry.3 = true; // mark as in_loop
                 }
                 self.analyze_expression_for_clones_in_loop(value, usage);
             }
-            Statement::Return(Some(expr)) => {
-                if let Expression::Identifier(name) = expr {
+            Statement::Return {
+                value: Some(expr), ..
+            } => {
+                if let Expression::Identifier { name, .. } = expr {
                     let entry = usage.entry(name.clone()).or_insert((0, 0, false, false));
                     entry.2 = true; // mark as escapes
                     entry.3 = true; // mark as in_loop
                 }
                 self.analyze_expression_for_clones_in_loop(expr, usage);
             }
-            Statement::Expression(expr) => {
+            Statement::Expression { expr, .. } => {
                 self.analyze_expression_for_clones_in_loop(expr, usage);
             }
             Statement::If {
@@ -1107,7 +1127,7 @@ impl Analyzer {
                     self.analyze_statement_for_clones_in_loop(stmt, usage, _idx);
                 }
             }
-            Statement::Loop { body } => {
+            Statement::Loop { body, .. } => {
                 for stmt in body {
                     self.analyze_statement_for_clones_in_loop(stmt, usage, _idx);
                 }
@@ -1124,7 +1144,7 @@ impl Analyzer {
         usage: &mut HashMap<String, (usize, usize, bool, bool)>,
     ) {
         match expr {
-            Expression::Identifier(name) => {
+            Expression::Identifier { name, .. } => {
                 let entry = usage.entry(name.clone()).or_insert((0, 0, false, false));
                 entry.0 += 1; // increment read count
                 entry.3 = true; // mark as in_loop
@@ -1164,7 +1184,7 @@ impl Analyzer {
         usage: &mut HashMap<String, (usize, usize, bool, bool)>,
     ) {
         match expr {
-            Expression::Identifier(name) => {
+            Expression::Identifier { name, .. } => {
                 // Track reads
                 let entry = usage.entry(name.clone()).or_insert((0, 0, false, false));
                 entry.0 += 1; // increment read count
@@ -1364,7 +1384,7 @@ impl Analyzer {
     fn is_const_evaluable(&self, expr: &Expression) -> bool {
         match expr {
             // Literals are always const
-            Expression::Literal(_) => true,
+            Expression::Literal { .. } => true,
 
             // Binary operations on const values are const
             Expression::Binary { left, right, .. } => {
@@ -1381,7 +1401,7 @@ impl Analyzer {
 
             // References to other const values would be const (requires symbol table)
             // For now, we're conservative and don't allow this
-            Expression::Identifier(_) => false,
+            Expression::Identifier { .. } => false,
 
             // Function calls are generally not const (unless const fn, which we don't track yet)
             Expression::Call { .. } => false,
@@ -1450,6 +1470,7 @@ impl Analyzer {
                 name,
                 args,
                 delimiter,
+                ..
             } if name == "vec" && *delimiter == MacroDelimiter::Brackets => Some(args.len()),
 
             // Vec::new() - starts empty
@@ -1461,7 +1482,7 @@ impl Analyzer {
                 ..
             } if method == "new" && arguments.is_empty() => {
                 // Check if the object is an identifier named "Vec"
-                if let Expression::Identifier(name) = object.as_ref() {
+                if let Expression::Identifier { name, .. } = object.as_ref() {
                     if name == "Vec" {
                         return Some(0);
                     }
@@ -1473,11 +1494,12 @@ impl Analyzer {
             Expression::Call {
                 function,
                 arguments,
+                ..
             } => {
                 // Check if it's Vec::with_capacity or similar
-                if let Expression::FieldAccess { object, field } = function.as_ref() {
+                if let Expression::FieldAccess { object, field, .. } = function.as_ref() {
                     // Ensure the object is "Vec"
-                    if let Expression::Identifier(name) = object.as_ref() {
+                    if let Expression::Identifier { name, .. } = object.as_ref() {
                         if name == "Vec" && field == "with_capacity" {
                             // Try to extract capacity from first argument
                             if let Some((_, arg)) = arguments.first() {
@@ -1508,7 +1530,10 @@ impl Analyzer {
     /// Extract an integer literal value from an expression
     fn extract_literal_int(&self, expr: &Expression) -> Option<usize> {
         match expr {
-            Expression::Literal(Literal::Int(n)) if *n >= 0 => Some(*n as usize),
+            Expression::Literal {
+                value: Literal::Int(n),
+                ..
+            } if *n >= 0 => Some(*n as usize),
             _ => None,
         }
     }
@@ -1556,6 +1581,7 @@ impl Analyzer {
                     condition: _,
                     then_block,
                     else_block,
+                    ..
                 } => {
                     // Check if variable is modified in then block
                     let modified_in_then = self.is_variable_modified(var_name, then_block);
@@ -1578,7 +1604,7 @@ impl Analyzer {
                 }
 
                 // Check match statements
-                Statement::Match { value: _, arms } => {
+                Statement::Match { value: _, arms, .. } => {
                     // For match expressions, check if the variable is referenced in any arm
                     // Full analysis would require checking if arms modify vs just read
                     // For now, consider it a potential read-only use
@@ -1590,7 +1616,10 @@ impl Analyzer {
                 }
 
                 // Check if variable is used in a read-only way
-                Statement::Expression(expr) | Statement::Return(Some(expr)) => {
+                Statement::Expression { expr, .. }
+                | Statement::Return {
+                    value: Some(expr), ..
+                } => {
                     if self.expression_references_variable(var_name, expr) {
                         // Simple use - consider it read-only unless it's being modified
                         has_read_only_path = true;
@@ -1615,15 +1644,18 @@ impl Analyzer {
             match stmt {
                 // Assignment to the variable
                 Statement::Assignment {
-                    target: Expression::Identifier(name),
+                    target: Expression::Identifier { name, .. },
                     ..
                 } if name == var_name => {
                     return true;
                 }
 
                 // Method calls that might modify (e.g., push_str, clear)
-                Statement::Expression(Expression::MethodCall { object, method, .. }) => {
-                    if let Expression::Identifier(name) = object.as_ref() {
+                Statement::Expression {
+                    expr: Expression::MethodCall { object, method, .. },
+                    ..
+                } => {
+                    if let Expression::Identifier { name, .. } = object.as_ref() {
                         if name == var_name && self.is_mutating_method(method) {
                             return true;
                         }
@@ -1648,7 +1680,7 @@ impl Analyzer {
     #[allow(clippy::only_used_in_recursion)]
     fn expression_references_variable(&self, var_name: &str, expr: &Expression) -> bool {
         match expr {
-            Expression::Identifier(name) => name == var_name,
+            Expression::Identifier { name, .. } => name == var_name,
             Expression::Binary { left, right, .. } => {
                 self.expression_references_variable(var_name, left)
                     || self.expression_references_variable(var_name, right)
@@ -1659,6 +1691,7 @@ impl Analyzer {
             Expression::Call {
                 function,
                 arguments,
+                ..
             } => {
                 self.expression_references_variable(var_name, function)
                     || arguments
@@ -1680,10 +1713,23 @@ mod tests {
 
         // fn print(s: string) { println(s) }
         // Should infer borrowed
-        let body = vec![Statement::Expression(Expression::Call {
-            function: Box::new(Expression::Identifier("println".to_string())),
-            arguments: vec![(None, Expression::Identifier("s".to_string()))],
-        })];
+        let body = vec![Statement::Expression {
+            expr: Expression::Call {
+                function: Box::new(Expression::Identifier {
+                    name: "println".to_string(),
+                    location: None,
+                }),
+                arguments: vec![(
+                    None,
+                    Expression::Identifier {
+                        name: "s".to_string(),
+                        location: None,
+                    },
+                )],
+                location: None,
+            },
+            location: None,
+        }];
 
         let mode = analyzer
             .infer_parameter_ownership("s", &body, &None)

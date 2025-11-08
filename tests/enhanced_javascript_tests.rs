@@ -13,7 +13,7 @@ use windjammer::parser::Parser;
 /// Helper to compile Windjammer code to JavaScript
 fn compile_to_js(source: &str, config: &CodegenConfig) -> Result<String, String> {
     let mut lexer = Lexer::new(source);
-    let tokens = lexer.tokenize();
+    let tokens = lexer.tokenize_with_locations();
 
     let mut parser = Parser::new(tokens);
     let program = parser
@@ -78,7 +78,7 @@ fn main() {
 "#;
 
     let mut lexer = Lexer::new(source);
-    let tokens = lexer.tokenize();
+    let tokens = lexer.tokenize_with_locations();
     let mut parser = Parser::new(tokens);
     let program = parser.parse().unwrap();
 
@@ -88,7 +88,7 @@ fn main() {
     let function_count = shaken
         .items
         .iter()
-        .filter(|item| matches!(item, windjammer::parser::Item::Function(_)))
+        .filter(|item| matches!(item, windjammer::parser::Item::Function { .. }))
         .count();
 
     assert_eq!(function_count, 2);
@@ -111,7 +111,7 @@ fn main() {
 "#;
 
     let mut lexer = Lexer::new(source);
-    let tokens = lexer.tokenize();
+    let tokens = lexer.tokenize_with_locations();
     let mut parser = Parser::new(tokens);
     let program = parser.parse().unwrap();
 

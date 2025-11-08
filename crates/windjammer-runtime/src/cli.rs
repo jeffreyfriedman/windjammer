@@ -135,7 +135,7 @@ impl AppBuilder {
         for arg_builder in self.args {
             // Use Box::leak to get 'static strings (acceptable for CLI parsing which happens once)
             let name: &'static str = Box::leak(arg_builder.name.into_boxed_str());
-            
+
             let mut arg = Arg::new(name);
 
             if let Some(help_str) = arg_builder.help {
@@ -265,7 +265,8 @@ impl CliMatches {
 
     /// Get all values for an argument (returns Option for unwrap/unwrap_or chaining)
     pub fn values_of(&self, name: &str) -> Option<Vec<String>> {
-        let vals = self.matches
+        let vals = self
+            .matches
             .get_many::<String>(name)
             .map(|vals| vals.map(|s| s.to_string()).collect::<Vec<String>>());
         vals

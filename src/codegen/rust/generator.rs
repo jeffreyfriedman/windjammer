@@ -16,8 +16,10 @@ pub struct CodeGenerator {
     needs_cow_import: bool,      // For Phase 9 Cow optimization
     target: CompilationTarget,
     is_module: bool, // true if generating code for a reusable module (not main file)
-    #[allow(dead_code)] // TODO: Use for error mapping Phase 3
     source_map: crate::source_map::SourceMap,
+    current_output_file: std::path::PathBuf, // Path to the Rust file being generated
+    current_rust_line: usize, // Current line number in generated Rust code (1-indexed)
+    current_wj_file: std::path::PathBuf, // Path to the Windjammer file being compiled
     inferred_bounds: std::collections::HashMap<String, crate::inference::InferredBounds>,
     needs_trait_imports: std::collections::HashSet<String>, // Tracks which traits need imports
     bound_aliases: std::collections::HashMap<String, Vec<String>>, // bound Name = Trait + Trait
@@ -61,6 +63,9 @@ impl CodeGenerator {
             target,
             is_module: false,
             source_map: crate::source_map::SourceMap::new(),
+            current_output_file: std::path::PathBuf::new(),
+            current_rust_line: 1,
+            current_wj_file: std::path::PathBuf::new(),
             inferred_bounds: std::collections::HashMap::new(),
             needs_trait_imports: std::collections::HashSet::new(),
             bound_aliases: std::collections::HashMap::new(),
@@ -94,6 +99,91 @@ impl CodeGenerator {
 
     fn indent(&self) -> String {
         "    ".repeat(self.indent_level)
+    }
+
+    // ============================================================================
+    // SOURCE MAP TRACKING
+    // ============================================================================
+
+    /// Set the output file path for source mapping
+    pub fn set_output_file(&mut self, path: impl Into<std::path::PathBuf>) {
+        self.current_output_file = path.into();
+    }
+
+    /// Set the Windjammer source file path for source mapping
+    pub fn set_source_file(&mut self, path: impl Into<std::path::PathBuf>) {
+        self.current_wj_file = path.into();
+    }
+
+    /// Get the current line number in the generated Rust code
+    #[allow(dead_code)]
+    fn current_rust_line(&self) -> usize {
+        self.current_rust_line
+    }
+
+    /// Increment the Rust line counter (call after generating each line)
+    #[allow(dead_code)]
+    fn increment_rust_line(&mut self) {
+        self.current_rust_line += 1;
+    }
+
+    /// Increment the Rust line counter by N lines
+    #[allow(dead_code)]
+    fn increment_rust_lines(&mut self, count: usize) {
+        self.current_rust_line += count;
+    }
+
+    /// Record a mapping from current Rust location to Windjammer location
+    fn record_mapping(&mut self, wj_location: &crate::source_map::Location) {
+        if !self.current_output_file.as_os_str().is_empty() {
+            self.source_map.add_mapping(
+                self.current_output_file.clone(),
+                self.current_rust_line,
+                0, // column (simplified for now)
+                wj_location.file.clone(),
+                wj_location.line,
+                wj_location.column,
+            );
+        }
+    }
+
+    /// Extract location from an Expression
+    #[allow(dead_code)]
+    fn get_expression_location(&self, expr: &Expression) -> Option<crate::source_map::Location> {
+        expr.location().clone()
+    }
+
+    /// Extract location from a Statement
+    fn get_statement_location(&self, stmt: &Statement) -> Option<crate::source_map::Location> {
+        stmt.location().clone()
+    }
+
+    /// Extract location from an Item
+    #[allow(dead_code)]
+    fn get_item_location(&self, item: &Item) -> Option<crate::source_map::Location> {
+        item.location().clone()
+    }
+
+    /// Get the source map (for saving after code generation)
+    pub fn get_source_map(&self) -> &crate::source_map::SourceMap {
+        &self.source_map
+    }
+
+    /// Count newlines in a string and increment the Rust line counter
+    #[allow(dead_code)]
+    fn track_generated_lines(&mut self, code: &str) {
+        let newline_count = code.matches('\n').count();
+        if newline_count > 0 {
+            self.increment_rust_lines(newline_count);
+        }
+    }
+
+    /// Generate a statement with automatic source tracking
+    #[allow(dead_code)]
+    fn generate_statement_tracked(&mut self, stmt: &Statement) -> String {
+        let code = self.generate_statement(stmt);
+        self.track_generated_lines(&code);
+        code
     }
 
     /// Map Windjammer decorators to Rust attributes
@@ -138,15 +228,22 @@ impl CodeGenerator {
             self.current_statement_idx = i;
 
             let is_last = i == len - 1;
-            if is_last && matches!(stmt, Statement::Expression(_) | Statement::Thread { .. } | Statement::Async { .. }) {
+            if is_last
+                && matches!(
+                    stmt,
+                    Statement::Expression { .. }
+                        | Statement::Thread { .. }
+                        | Statement::Async { .. }
+                )
+            {
                 // Last statement is an expression or thread/async block - generate without discard (it's the return value)
                 match stmt {
-                    Statement::Expression(expr) => {
+                    Statement::Expression { expr, .. } => {
                         output.push_str(&self.indent());
                         output.push_str(&self.generate_expression(expr));
                         output.push('\n');
                     }
-                    Statement::Thread { body } => {
+                    Statement::Thread { body, .. } => {
                         // Generate as expression (returns JoinHandle)
                         output.push_str(&self.indent());
                         output.push_str("std::thread::spawn(move || {\n");
@@ -158,7 +255,7 @@ impl CodeGenerator {
                         output.push_str(&self.indent());
                         output.push_str("})\n");
                     }
-                    Statement::Async { body } => {
+                    Statement::Async { body, .. } => {
                         // Generate as expression (returns JoinHandle)
                         output.push_str(&self.indent());
                         output.push_str("tokio::spawn(async move {\n");
@@ -170,7 +267,7 @@ impl CodeGenerator {
                         output.push_str(&self.indent());
                         output.push_str("})\n");
                     }
-                    _ => unreachable!()
+                    _ => unreachable!(),
                 }
             } else {
                 output.push_str(&self.generate_statement(stmt));
@@ -185,7 +282,7 @@ impl CodeGenerator {
 
         // Collect bound aliases first (bound Name = Trait + Trait)
         for item in &program.items {
-            if let Item::BoundAlias { name, traits } = item {
+            if let Item::BoundAlias { name, traits, .. } = item {
                 self.bound_aliases.insert(name.clone(), traits.clone());
             }
         }
@@ -194,7 +291,7 @@ impl CodeGenerator {
         let mut struct_fields: std::collections::HashMap<String, Vec<String>> =
             std::collections::HashMap::new();
         for item in &program.items {
-            if let Item::Struct(s) = item {
+            if let Item::Struct { decl: s, .. } = item {
                 let field_names: Vec<String> = s.fields.iter().map(|f| f.name.clone()).collect();
                 struct_fields.insert(s.name.clone(), field_names);
             }
@@ -215,7 +312,7 @@ impl CodeGenerator {
 
         // Generate explicit use statements
         for item in &program.items {
-            if let Item::Use { path, alias } = item {
+            if let Item::Use { path, alias, .. } = item {
                 imports.push_str(&self.generate_use(path, alias.as_deref()));
                 imports.push('\n');
             }
@@ -224,13 +321,20 @@ impl CodeGenerator {
         // Generate const and static declarations
         for item in &program.items {
             match item {
-                Item::Const { name, type_, value } => {
+                Item::Const {
+                    name, type_, value, ..
+                } => {
                     let pub_prefix = if self.is_module { "pub " } else { "" };
 
                     // Special case: string constants should use &'static str, not String
                     let rust_type = if matches!(type_, Type::String)
-                        && matches!(value, Expression::Literal(Literal::String(_)))
-                    {
+                        && matches!(
+                            value,
+                            Expression::Literal {
+                                value: Literal::String(_),
+                                ..
+                            }
+                        ) {
                         "&'static str".to_string()
                     } else {
                         self.type_to_rust(type_)
@@ -249,6 +353,7 @@ impl CodeGenerator {
                     mutable,
                     type_,
                     value,
+                    ..
                 } => {
                     if *mutable {
                         body.push_str(&format!(
@@ -285,7 +390,10 @@ impl CodeGenerator {
         // Collect names of functions in impl blocks to avoid generating them twice
         let mut impl_methods = std::collections::HashSet::new();
         for item in &program.items {
-            if let Item::Impl(impl_block) = item {
+            if let Item::Impl {
+                block: impl_block, ..
+            } = item
+            {
                 for func in &impl_block.functions {
                     impl_methods.insert(func.name.clone());
                 }
@@ -295,7 +403,7 @@ impl CodeGenerator {
         // Generate structs, enums, and traits
         for item in &program.items {
             match item {
-                Item::Struct(s) => {
+                Item::Struct { decl: s, .. } => {
                     body.push_str(&self.generate_struct(s));
                     body.push_str("\n\n");
 
@@ -309,15 +417,17 @@ impl CodeGenerator {
                         body.push_str("\n\n");
                     }
                 }
-                Item::Enum(e) => {
+                Item::Enum { decl: e, .. } => {
                     body.push_str(&self.generate_enum(e));
                     body.push_str("\n\n");
                 }
-                Item::Trait(t) => {
+                Item::Trait { decl: t, .. } => {
                     body.push_str(&self.generate_trait(t));
                     body.push_str("\n\n");
                 }
-                Item::Impl(impl_block) => {
+                Item::Impl {
+                    block: impl_block, ..
+                } => {
                     // Set the struct fields for implicit self support
                     if let Some(fields) = struct_fields.get(&impl_block.type_name) {
                         self.current_struct_fields = fields.iter().cloned().collect();
@@ -504,23 +614,27 @@ impl CodeGenerator {
                 // For _mod suffixed modules (log_mod, regex_mod), alias back to the original name
                 // AND import any public types they export
                 if rust_import.ends_with("_mod") {
-                    let original_name = rust_import.strip_suffix("_mod")
+                    let original_name = rust_import
+                        .strip_suffix("_mod")
                         .and_then(|s| s.split("::").last())
-                        .unwrap_or(&rust_import);
-                    
+                        .unwrap_or(rust_import);
+
                     let mut result = format!("use {} as {};\n", rust_import, original_name);
-                    
+
                     // Import types for modules that export them
                     match original_name {
                         "regex" => {
                             result.push_str(&format!("use {}::Regex;\n", rust_import));
                         }
                         "time" => {
-                            result.push_str(&format!("use {}::{{Duration, Instant}};\n", rust_import));
+                            result.push_str(&format!(
+                                "use {}::{{Duration, Instant}};\n",
+                                rust_import
+                            ));
                         }
                         _ => {}
                     }
-                    
+
                     return result;
                 }
                 // Import the module itself (not glob) to keep module-qualified paths
@@ -633,7 +747,10 @@ impl CodeGenerator {
                     // Explicit: extract trait names from decorator arguments
                     let mut explicit_traits = Vec::new();
                     for (_key, expr) in &decorator.arguments {
-                        if let Expression::Identifier(trait_name) = expr {
+                        if let Expression::Identifier {
+                            name: trait_name, ..
+                        } = expr
+                        {
                             explicit_traits.push(trait_name.clone());
                         }
                     }
@@ -647,7 +764,10 @@ impl CodeGenerator {
                 // Special handling for @derive decorator - generates #[derive(Trait1, Trait2)]
                 let mut traits = Vec::new();
                 for (_key, expr) in &decorator.arguments {
-                    if let Expression::Identifier(trait_name) = expr {
+                    if let Expression::Identifier {
+                        name: trait_name, ..
+                    } = expr
+                    {
                         traits.push(trait_name.clone());
                     }
                 }
@@ -739,7 +859,11 @@ impl CodeGenerator {
                 }
             }
             // In modules, all fields should be pub for cross-module access
-            let pub_keyword = if self.is_module || field.is_pub { "pub " } else { "" };
+            let pub_keyword = if self.is_module || field.is_pub {
+                "pub "
+            } else {
+                ""
+            };
             output.push_str(&format!(
                 "    {}{}: {},\n",
                 pub_keyword,
@@ -970,9 +1094,10 @@ impl CodeGenerator {
         for func in &impl_block.functions {
             // Find the analyzed version of this function
             // Match on both function name AND parent type to handle multiple impl blocks with same method names
-            if let Some(analyzed_func) = analyzed.iter().find(|af| {
-                af.decl.name == func.name && af.decl.parent_type == func.parent_type
-            }) {
+            if let Some(analyzed_func) = analyzed
+                .iter()
+                .find(|af| af.decl.name == func.name && af.decl.parent_type == func.parent_type)
+            {
                 output.push_str(&self.generate_function(analyzed_func));
                 output.push('\n');
             }
@@ -988,8 +1113,8 @@ impl CodeGenerator {
     // Helper method for expressions that need to be evaluated without &mut self
     fn generate_expression_immut(&self, expr: &Expression) -> String {
         match expr {
-            Expression::Literal(lit) => self.generate_literal(lit),
-            Expression::Identifier(name) => name.clone(),
+            Expression::Literal { value: lit, .. } => self.generate_literal(lit),
+            Expression::Identifier { name, .. } => name.clone(),
             _ => "/* expression */".to_string(),
         }
     }
@@ -1019,17 +1144,19 @@ impl CodeGenerator {
 
     fn statement_accesses_fields(&self, stmt: &Statement) -> bool {
         match stmt {
-            Statement::Expression(expr) | Statement::Return(Some(expr)) => {
-                self.expression_accesses_fields(expr)
-            }
+            Statement::Expression { expr, .. }
+            | Statement::Return {
+                value: Some(expr), ..
+            } => self.expression_accesses_fields(expr),
             Statement::Let { value, .. } => self.expression_accesses_fields(value),
-            Statement::Assignment { target, value } => {
+            Statement::Assignment { target, value, .. } => {
                 self.expression_accesses_fields(target) || self.expression_accesses_fields(value)
             }
             Statement::If {
                 condition,
                 then_block,
                 else_block,
+                ..
             } => {
                 self.expression_accesses_fields(condition)
                     || then_block.iter().any(|s| self.statement_accesses_fields(s))
@@ -1037,7 +1164,9 @@ impl CodeGenerator {
                         block.iter().any(|s| self.statement_accesses_fields(s))
                     })
             }
-            Statement::While { condition, body } => {
+            Statement::While {
+                condition, body, ..
+            } => {
                 self.expression_accesses_fields(condition)
                     || body.iter().any(|s| self.statement_accesses_fields(s))
             }
@@ -1045,7 +1174,7 @@ impl CodeGenerator {
                 self.expression_accesses_fields(iterable)
                     || body.iter().any(|s| self.statement_accesses_fields(s))
             }
-            Statement::Match { value, arms } => {
+            Statement::Match { value, arms, .. } => {
                 self.expression_accesses_fields(value)
                     || arms
                         .iter()
@@ -1086,10 +1215,10 @@ impl CodeGenerator {
 
     fn expression_accesses_fields(&self, expr: &Expression) -> bool {
         match expr {
-            Expression::Identifier(name) => self.current_struct_fields.contains(name),
+            Expression::Identifier { name, .. } => self.current_struct_fields.contains(name),
             Expression::FieldAccess { object, .. } => {
                 // Check for self.field or nested field access
-                if let Expression::Identifier(obj_name) = &**object {
+                if let Expression::Identifier { name: obj_name, .. } = &**object {
                     obj_name == "self"
                 } else {
                     self.expression_accesses_fields(object)
@@ -1110,25 +1239,25 @@ impl CodeGenerator {
                 self.expression_accesses_fields(left) || self.expression_accesses_fields(right)
             }
             Expression::Unary { operand, .. } => self.expression_accesses_fields(operand),
-            Expression::Index { object, index } => {
+            Expression::Index { object, index, .. } => {
                 self.expression_accesses_fields(object) || self.expression_accesses_fields(index)
             }
             Expression::StructLiteral { fields, .. } => fields
                 .iter()
                 .any(|(_, expr)| self.expression_accesses_fields(expr)),
-            Expression::MapLiteral(entries) => entries.iter().any(|(k, v)| {
+            Expression::MapLiteral { pairs, .. } => pairs.iter().any(|(k, v)| {
                 self.expression_accesses_fields(k) || self.expression_accesses_fields(v)
             }),
-            Expression::Array(elements) => {
+            Expression::Array { elements, .. } => {
                 elements.iter().any(|e| self.expression_accesses_fields(e))
             }
-            Expression::Tuple(elements) => {
+            Expression::Tuple { elements, .. } => {
                 elements.iter().any(|e| self.expression_accesses_fields(e))
             }
             Expression::Closure { body, .. } => self.expression_accesses_fields(body),
-            Expression::TryOp(expr) | Expression::Await(expr) | Expression::Cast { expr, .. } => {
-                self.expression_accesses_fields(expr)
-            }
+            Expression::TryOp { expr, .. }
+            | Expression::Await { expr, .. }
+            | Expression::Cast { expr, .. } => self.expression_accesses_fields(expr),
             Expression::MacroInvocation { args, .. } => {
                 // Check if any macro arguments access fields
                 args.iter().any(|arg| self.expression_accesses_fields(arg))
@@ -1136,11 +1265,11 @@ impl CodeGenerator {
             Expression::Range { start, end, .. } => {
                 self.expression_accesses_fields(start) || self.expression_accesses_fields(end)
             }
-            Expression::ChannelSend { channel, value } => {
+            Expression::ChannelSend { channel, value, .. } => {
                 self.expression_accesses_fields(channel) || self.expression_accesses_fields(value)
             }
-            Expression::ChannelRecv(expr) => self.expression_accesses_fields(expr),
-            Expression::Block(statements) => {
+            Expression::ChannelRecv { channel, .. } => self.expression_accesses_fields(channel),
+            Expression::Block { statements, .. } => {
                 // Check if any statement in the block accesses fields
                 statements.iter().any(|s| self.statement_accesses_fields(s))
             }
@@ -1150,9 +1279,9 @@ impl CodeGenerator {
 
     fn expression_is_field_access(&self, expr: &Expression) -> bool {
         match expr {
-            Expression::Identifier(name) => self.current_struct_fields.contains(name),
+            Expression::Identifier { name, .. } => self.current_struct_fields.contains(name),
             Expression::FieldAccess { object, .. } => {
-                if let Expression::Identifier(obj_name) = &**object {
+                if let Expression::Identifier { name: obj_name, .. } = &**object {
                     obj_name == "self"
                 } else {
                     false
@@ -1164,7 +1293,7 @@ impl CodeGenerator {
 
     fn expression_mutates_fields(&self, expr: &Expression) -> bool {
         match expr {
-            Expression::Block(statements) => {
+            Expression::Block { statements, .. } => {
                 // Check if any statement in the block mutates fields
                 statements.iter().any(|s| self.statement_mutates_fields(s))
             }
@@ -1470,12 +1599,18 @@ impl CodeGenerator {
     }
 
     fn generate_statement(&mut self, stmt: &Statement) -> String {
+        // Record source mapping if location info is available
+        if let Some(location) = self.get_statement_location(stmt) {
+            self.record_mapping(&location);
+        }
+
         match stmt {
             Statement::Let {
                 pattern,
                 mutable,
                 type_,
                 value,
+                ..
             } => {
                 let mut output = self.indent();
                 output.push_str("let ");
@@ -1534,7 +1669,10 @@ impl CodeGenerator {
                         if is_string_type {
                             let should_convert = matches!(
                                 value,
-                                Expression::Literal(Literal::String(_)) | Expression::Identifier(_)
+                                Expression::Literal {
+                                    value: Literal::String(_),
+                                    ..
+                                } | Expression::Identifier { .. }
                             );
                             if should_convert {
                                 value_str = format!("{}.to_string()", value_str);
@@ -1561,7 +1699,10 @@ impl CodeGenerator {
                         if is_string_type {
                             let should_convert = matches!(
                                 value,
-                                Expression::Literal(Literal::String(_)) | Expression::Identifier(_)
+                                Expression::Literal {
+                                    value: Literal::String(_),
+                                    ..
+                                } | Expression::Identifier { .. }
                             );
                             if should_convert {
                                 value_str = format!("{}.to_string()", value_str);
@@ -1577,13 +1718,20 @@ impl CodeGenerator {
                 output.push_str(";\n");
                 output
             }
-            Statement::Const { name, type_, value } => {
+            Statement::Const {
+                name, type_, value, ..
+            } => {
                 let mut output = self.indent();
 
                 // Special case: string constants should use &'static str, not String
                 let rust_type = if matches!(type_, Type::String)
-                    && matches!(value, Expression::Literal(Literal::String(_)))
-                {
+                    && matches!(
+                        value,
+                        Expression::Literal {
+                            value: Literal::String(_),
+                            ..
+                        }
+                    ) {
                     "&'static str".to_string()
                 } else {
                     self.type_to_rust(type_)
@@ -1602,6 +1750,7 @@ impl CodeGenerator {
                 mutable,
                 type_,
                 value,
+                ..
             } => {
                 let mut output = self.indent();
                 if *mutable {
@@ -1621,7 +1770,7 @@ impl CodeGenerator {
                 }
                 output
             }
-            Statement::Return(expr) => {
+            Statement::Return { value: expr, .. } => {
                 let mut output = self.indent();
                 output.push_str("return");
                 if let Some(e) = expr {
@@ -1631,7 +1780,7 @@ impl CodeGenerator {
                 output.push_str(";\n");
                 output
             }
-            Statement::Expression(expr) => {
+            Statement::Expression { expr, .. } => {
                 let mut output = self.indent();
                 output.push_str(&self.generate_expression(expr));
                 output.push_str(";\n");
@@ -1641,6 +1790,7 @@ impl CodeGenerator {
                 condition,
                 then_block,
                 else_block,
+                ..
             } => {
                 let mut output = self.indent();
                 output.push_str("if ");
@@ -1666,7 +1816,7 @@ impl CodeGenerator {
                 output.push('\n');
                 output
             }
-            Statement::Match { value, arms } => {
+            Statement::Match { value, arms, .. } => {
                 let mut output = self.indent();
                 output.push_str("match ");
 
@@ -1711,7 +1861,7 @@ impl CodeGenerator {
                 output.push_str("}\n");
                 output
             }
-            Statement::Loop { body } => {
+            Statement::Loop { body, .. } => {
                 let mut output = self.indent();
                 output.push_str("loop {\n");
 
@@ -1725,7 +1875,9 @@ impl CodeGenerator {
                 output.push_str("}\n");
                 output
             }
-            Statement::While { condition, body } => {
+            Statement::While {
+                condition, body, ..
+            } => {
                 let mut output = self.indent();
                 output.push_str("while ");
                 output.push_str(&self.generate_expression(condition));
@@ -1745,6 +1897,7 @@ impl CodeGenerator {
                 pattern,
                 iterable,
                 body,
+                ..
             } => {
                 let mut output = self.indent();
                 output.push_str("for ");
@@ -1763,17 +1916,17 @@ impl CodeGenerator {
                 output.push_str("}\n");
                 output
             }
-            Statement::Break => {
+            Statement::Break { .. } => {
                 let mut output = self.indent();
                 output.push_str("break;\n");
                 output
             }
-            Statement::Continue => {
+            Statement::Continue { .. } => {
                 let mut output = self.indent();
                 output.push_str("continue;\n");
                 output
             }
-            Statement::Use { path, alias } => {
+            Statement::Use { path, alias, .. } => {
                 let mut output = self.indent();
                 output.push_str("use ");
                 output.push_str(&path.join("::"));
@@ -1784,13 +1937,16 @@ impl CodeGenerator {
                 output.push_str(";\n");
                 output
             }
-            Statement::Assignment { target, value } => {
+            Statement::Assignment { target, value, .. } => {
                 let mut output = self.indent();
 
                 // PHASE 5 OPTIMIZATION: Check if this can use a compound operator
-                if let Expression::Identifier(var_name) = target {
-                    if let Expression::Binary { left, right, op } = value {
-                        if let Expression::Identifier(left_var) = &**left {
+                if let Expression::Identifier { name: var_name, .. } = target {
+                    if let Expression::Binary {
+                        left, right, op, ..
+                    } = value
+                    {
+                        if let Expression::Identifier { name: left_var, .. } = &**left {
                             if left_var == var_name {
                                 // Check if we have this optimization hint
                                 if self.assignment_optimizations.contains_key(var_name) {
@@ -1830,7 +1986,7 @@ impl CodeGenerator {
                 output.push_str(";\n");
                 output
             }
-            Statement::Thread { body } => {
+            Statement::Thread { body, .. } => {
                 // Transpile to std::thread::spawn for parallelism
                 // When used as a statement, discard the JoinHandle
                 let mut output = self.indent();
@@ -1846,7 +2002,7 @@ impl CodeGenerator {
                 output.push_str("});\n");
                 output
             }
-            Statement::Async { body } => {
+            Statement::Async { body, .. } => {
                 // Transpile to tokio::spawn for async concurrency
                 // When used as a statement, discard the JoinHandle
                 let mut output = self.indent();
@@ -1862,7 +2018,7 @@ impl CodeGenerator {
                 output.push_str("});\n");
                 output
             }
-            Statement::Defer(stmt) => {
+            Statement::Defer { statement: _, .. } => {
                 // Defer is not directly supported in Rust
                 // We'll generate a comment for now
                 let mut output = self.indent();
@@ -1921,7 +2077,9 @@ impl CodeGenerator {
     #[allow(clippy::only_used_in_recursion)]
     fn try_fold_constant(&self, expr: &Expression) -> Option<Expression> {
         match expr {
-            Expression::Binary { left, op, right } => {
+            Expression::Binary {
+                left, op, right, ..
+            } => {
                 // Try to fold both sides first
                 let left_folded = self
                     .try_fold_constant(left)
@@ -1931,8 +2089,10 @@ impl CodeGenerator {
                     .unwrap_or_else(|| (**right).clone());
 
                 // If both sides are literals, try to evaluate
-                if let (Expression::Literal(l), Expression::Literal(r)) =
-                    (&left_folded, &right_folded)
+                if let (
+                    Expression::Literal { value: l, .. },
+                    Expression::Literal { value: r, .. },
+                ) = (&left_folded, &right_folded)
                 {
                     use BinaryOp::*;
                     use Literal::*;
@@ -1966,16 +2126,19 @@ impl CodeGenerator {
                         _ => None,
                     };
 
-                    return result.map(Expression::Literal);
+                    return result.map(|value| Expression::Literal {
+                        value,
+                        location: None,
+                    });
                 }
                 None
             }
-            Expression::Unary { op, operand } => {
+            Expression::Unary { op, operand, .. } => {
                 let operand_folded = self
                     .try_fold_constant(operand)
                     .unwrap_or_else(|| (**operand).clone());
 
-                if let Expression::Literal(lit) = &operand_folded {
+                if let Expression::Literal { value: lit, .. } = &operand_folded {
                     use Literal::*;
                     use UnaryOp::*;
 
@@ -1986,12 +2149,15 @@ impl CodeGenerator {
                         _ => None,
                     };
 
-                    return result.map(Expression::Literal);
+                    return result.map(|value| Expression::Literal {
+                        value,
+                        location: None,
+                    });
                 }
                 None
             }
             // Already a literal - can't fold further
-            Expression::Literal(_) => None,
+            Expression::Literal { .. } => None,
             // Can't fold non-constant expressions
             _ => None,
         }
@@ -2003,8 +2169,8 @@ impl CodeGenerator {
         let expr_to_generate = folded_expr.as_ref().unwrap_or(expr);
 
         match expr_to_generate {
-            Expression::Literal(lit) => self.generate_literal(lit),
-            Expression::Identifier(name) => {
+            Expression::Literal { value: lit, .. } => self.generate_literal(lit),
+            Expression::Identifier { name, .. } => {
                 // Qualified paths use :: from parser (e.g., std::fs::read)
                 // Simple identifiers: variable_name -> variable_name
                 // Check if this is a struct field and we're in an impl block
@@ -2014,15 +2180,26 @@ impl CodeGenerator {
                     name.clone()
                 }
             }
-            Expression::Binary { left, op, right } => {
+            Expression::Binary {
+                left, op, right, ..
+            } => {
                 // Special handling for string concatenation
                 if matches!(op, BinaryOp::Add) {
                     // Only treat as string concat if at least one operand is definitely a string literal
-                    let has_string_literal =
-                        matches!(left.as_ref(), Expression::Literal(Literal::String(_)))
-                            || matches!(right.as_ref(), Expression::Literal(Literal::String(_)))
-                            || Self::contains_string_literal(left)
-                            || Self::contains_string_literal(right);
+                    let has_string_literal = matches!(
+                        left.as_ref(),
+                        Expression::Literal {
+                            value: Literal::String(_),
+                            ..
+                        }
+                    ) || matches!(
+                        right.as_ref(),
+                        Expression::Literal {
+                            value: Literal::String(_),
+                            ..
+                        }
+                    ) || Self::contains_string_literal(left)
+                        || Self::contains_string_literal(right);
 
                     if has_string_literal {
                         // For string concatenation, use format! macro for clean, efficient code
@@ -2054,7 +2231,7 @@ impl CodeGenerator {
                 let op_str = self.binary_op_to_rust(op);
                 format!("{} {} {}", left_str, op_str, right_str)
             }
-            Expression::Unary { op, operand } => {
+            Expression::Unary { op, operand, .. } => {
                 let operand_str = self.generate_expression(operand);
                 let op_str = self.unary_op_to_rust(op);
                 format!("{}{}", op_str, operand_str)
@@ -2062,6 +2239,7 @@ impl CodeGenerator {
             Expression::Call {
                 function,
                 arguments,
+                ..
             } => {
                 // Extract function name for signature lookup
                 let func_name = self.extract_function_name(function);
@@ -2108,7 +2286,11 @@ impl CodeGenerator {
                         }
 
                         // Check if the first argument is a string literal with ${} (old-style, shouldn't happen but keep for safety)
-                        if let Expression::Literal(Literal::String(s)) = first_arg {
+                        if let Expression::Literal {
+                            value: Literal::String(s),
+                            ..
+                        } = first_arg
+                        {
                             if s.contains("${") {
                                 // Handle string interpolation directly in println!
                                 // Convert "${var}" to "{}" and extract variables
@@ -2192,7 +2374,13 @@ impl CodeGenerator {
                         let mut arg_str = self.generate_expression(arg);
 
                         // Auto-convert string literals to String for functions expecting owned String
-                        if matches!(arg, Expression::Literal(Literal::String(_))) {
+                        if matches!(
+                            arg,
+                            Expression::Literal {
+                                value: Literal::String(_),
+                                ..
+                            }
+                        ) {
                             // Check if the parameter expects an owned String
                             let should_convert = if let Some(ref sig) = signature {
                                 if let Some(&ownership) = sig.param_ownership.get(i) {
@@ -2246,6 +2434,7 @@ impl CodeGenerator {
                 method,
                 type_args,
                 arguments,
+                ..
             } => {
                 let obj_str = self.generate_expression_with_precedence(object);
 
@@ -2261,7 +2450,13 @@ impl CodeGenerator {
 
                         // Auto-convert string literals to String for methods that need it
                         if needs_string_conversion
-                            && matches!(arg, Expression::Literal(Literal::String(_)))
+                            && matches!(
+                                arg,
+                                Expression::Literal {
+                                    value: Literal::String(_),
+                                    ..
+                                }
+                            )
                         {
                             arg_str = format!("{}.to_string()", arg_str);
                         }
@@ -2292,9 +2487,9 @@ impl CodeGenerator {
                 // Determine separator: :: for static calls, . for instance methods
                 // - Type/Module (starts with uppercase): use ::
                 // - Variable (starts with lowercase): use .
-                let separator = match **object {
+                let separator = match &**object {
                     Expression::Call { .. } | Expression::MethodCall { .. } => ".", // Instance method on return value
-                    Expression::Identifier(ref name) => {
+                    Expression::Identifier { name, .. } => {
                         // Check for known module/crate names that should use ::
                         // Note: Avoid common variable names like "path", "config" which are used as variables
                         let known_modules = [
@@ -2353,7 +2548,7 @@ impl CodeGenerator {
                         // If the object is an identifier that looks like a module, use ::
                         // Otherwise, use . for instance methods on fields
                         match object.as_ref() {
-                            Expression::Identifier(name) => {
+                            Expression::Identifier { name, .. } => {
                                 if name.chars().next().is_some_and(|c| c.is_uppercase())
                                     || name == "std"
                                 {
@@ -2397,13 +2592,13 @@ impl CodeGenerator {
                     args.join(", ")
                 )
             }
-            Expression::FieldAccess { object, field } => {
+            Expression::FieldAccess { object, field, .. } => {
                 let obj_str = self.generate_expression_with_precedence(object);
 
                 // Determine if this is a module/type path (::) or field access (.)
                 // Check the object to decide:
-                let separator = match **object {
-                    Expression::Identifier(ref name)
+                let separator = match &**object {
+                    Expression::Identifier { name, .. }
                         if name.contains("::")
                             || (!name.is_empty()
                                 && name.chars().next().unwrap().is_uppercase()) =>
@@ -2424,7 +2619,7 @@ impl CodeGenerator {
 
                 format!("{}{}{}", obj_str, separator, field)
             }
-            Expression::StructLiteral { name, fields } => {
+            Expression::StructLiteral { name, fields, .. } => {
                 // PHASE 3 OPTIMIZATION: Check if we have optimization hints for this struct
                 let _has_optimization_hint = self.struct_mapping_hints.get(name);
 
@@ -2437,7 +2632,7 @@ impl CodeGenerator {
                         let expr_str = self.generate_expression(expr);
 
                         // Check for field shorthand: if expr is just the field name, use shorthand
-                        if let Expression::Identifier(id) = expr {
+                        if let Expression::Identifier { name: id, .. } = expr {
                             if id == field_name {
                                 // Shorthand: User { name } instead of User { name: name }
                                 return field_name.clone();
@@ -2450,12 +2645,12 @@ impl CodeGenerator {
 
                 format!("{} {{ {} }}", name, field_str.join(", "))
             }
-            Expression::MapLiteral(entries) => {
+            Expression::MapLiteral { pairs, .. } => {
                 // Generate HashMap literal: HashMap::from([(key, value), ...])
-                if entries.is_empty() {
+                if pairs.is_empty() {
                     "std::collections::HashMap::new()".to_string()
                 } else {
-                    let entries_str: Vec<String> = entries
+                    let entries_str: Vec<String> = pairs
                         .iter()
                         .map(|(k, v)| {
                             let key_str = self.generate_expression(k);
@@ -2469,18 +2664,18 @@ impl CodeGenerator {
                     )
                 }
             }
-            Expression::TryOp(inner) => {
+            Expression::TryOp { expr: inner, .. } => {
                 format!("{}?", self.generate_expression(inner))
             }
-            Expression::Await(inner) => {
+            Expression::Await { expr: inner, .. } => {
                 format!("{}.await", self.generate_expression(inner))
             }
-            Expression::ChannelSend { channel, value } => {
+            Expression::ChannelSend { channel, value, .. } => {
                 let ch_str = self.generate_expression(channel);
                 let val_str = self.generate_expression(value);
                 format!("{}.send({})", ch_str, val_str)
             }
-            Expression::ChannelRecv(channel) => {
+            Expression::ChannelRecv { channel, .. } => {
                 let ch_str = self.generate_expression(channel);
                 format!("{}.recv()", ch_str)
             }
@@ -2488,6 +2683,7 @@ impl CodeGenerator {
                 start,
                 end,
                 inclusive,
+                ..
             } => {
                 let start_str = self.generate_expression(start);
                 let end_str = self.generate_expression(end);
@@ -2497,7 +2693,9 @@ impl CodeGenerator {
                     format!("{}..{}", start_str, end_str)
                 }
             }
-            Expression::Closure { parameters, body } => {
+            Expression::Closure {
+                parameters, body, ..
+            } => {
                 let params = parameters.join(", ");
                 let body_str = self.generate_expression(body);
 
@@ -2506,7 +2704,7 @@ impl CodeGenerator {
                 // We always generate 'move' for safety in concurrent contexts
                 format!("move |{}| {}", params, body_str)
             }
-            Expression::Index { object, index } => {
+            Expression::Index { object, index, .. } => {
                 let obj_str = self.generate_expression(object);
 
                 // Special case: if index is a Range, this is slice syntax
@@ -2516,6 +2714,7 @@ impl CodeGenerator {
                     start,
                     end,
                     inclusive,
+                    ..
                 } = &**index
                 {
                     let start_str = self.generate_expression(start);
@@ -2527,12 +2726,16 @@ impl CodeGenerator {
                 let idx_str = self.generate_expression(index);
                 format!("{}[{}]", obj_str, idx_str)
             }
-            Expression::Tuple(exprs) => {
+            Expression::Tuple {
+                elements: exprs, ..
+            } => {
                 let expr_strs: Vec<String> =
                     exprs.iter().map(|e| self.generate_expression(e)).collect();
                 format!("({})", expr_strs.join(", "))
             }
-            Expression::Array(exprs) => {
+            Expression::Array {
+                elements: exprs, ..
+            } => {
                 let expr_strs: Vec<String> =
                     exprs.iter().map(|e| self.generate_expression(e)).collect();
                 format!("vec![{}]", expr_strs.join(", "))
@@ -2541,6 +2744,7 @@ impl CodeGenerator {
                 name,
                 args,
                 delimiter,
+                ..
             } => {
                 use crate::parser::MacroDelimiter;
 
@@ -2597,7 +2801,13 @@ impl CodeGenerator {
                         || name == "print"
                         || name == "eprint")
                         && args.len() == 1
-                        && !matches!(&args[0], Expression::Literal(Literal::String(_)))
+                        && !matches!(
+                            &args[0],
+                            Expression::Literal {
+                                value: Literal::String(_),
+                                ..
+                            }
+                        )
                     {
                         vec!["\"{}\"".to_string(), self.generate_expression(&args[0])]
                     } else {
@@ -2612,7 +2822,7 @@ impl CodeGenerator {
                 };
                 format!("{}!{}{}{}", name, open, arg_strs.join(", "), close)
             }
-            Expression::Cast { expr, type_ } => {
+            Expression::Cast { expr, type_, .. } => {
                 // Add parentheses around binary expressions for correct precedence
                 let expr_str = match &**expr {
                     Expression::Binary { .. } => {
@@ -2623,10 +2833,12 @@ impl CodeGenerator {
                 let type_str = self.type_to_rust(type_);
                 format!("{} as {}", expr_str, type_str)
             }
-            Expression::Block(stmts) => {
+            Expression::Block {
+                statements: stmts, ..
+            } => {
                 // Special case: if the block contains only a match statement, generate it as a match expression
                 if stmts.len() == 1 {
-                    if let Statement::Match { value, arms } = &stmts[0] {
+                    if let Statement::Match { value, arms, .. } = &stmts[0] {
                         let mut output = String::from("match ");
 
                         // Check if any arm has a string literal pattern
@@ -2678,15 +2890,22 @@ impl CodeGenerator {
                 let len = stmts.len();
                 for (i, stmt) in stmts.iter().enumerate() {
                     let is_last = i == len - 1;
-                    if is_last && matches!(stmt, Statement::Expression(_) | Statement::Thread { .. } | Statement::Async { .. }) {
+                    if is_last
+                        && matches!(
+                            stmt,
+                            Statement::Expression { .. }
+                                | Statement::Thread { .. }
+                                | Statement::Async { .. }
+                        )
+                    {
                         // Last statement is an expression or thread/async block - generate without discard (it's the return value)
                         match stmt {
-                            Statement::Expression(expr) => {
+                            Statement::Expression { expr, .. } => {
                                 output.push_str(&self.indent());
                                 output.push_str(&self.generate_expression(expr));
                                 output.push('\n');
                             }
-                            Statement::Thread { body } => {
+                            Statement::Thread { body, .. } => {
                                 // Generate as expression (returns JoinHandle)
                                 output.push_str(&self.indent());
                                 output.push_str("std::thread::spawn(move || {\n");
@@ -2698,7 +2917,7 @@ impl CodeGenerator {
                                 output.push_str(&self.indent());
                                 output.push_str("})\n");
                             }
-                            Statement::Async { body } => {
+                            Statement::Async { body, .. } => {
                                 // Generate as expression (returns JoinHandle)
                                 output.push_str(&self.indent());
                                 output.push_str("tokio::spawn(async move {\n");
@@ -2710,7 +2929,7 @@ impl CodeGenerator {
                                 output.push_str(&self.indent());
                                 output.push_str("})\n");
                             }
-                            _ => unreachable!()
+                            _ => unreachable!(),
                         }
                     } else {
                         output.push_str(&self.generate_statement(stmt));
@@ -2867,6 +3086,7 @@ impl CodeGenerator {
                 left,
                 op: BinaryOp::Add,
                 right,
+                ..
             } => {
                 Self::collect_concat_parts_static(left, parts);
                 Self::collect_concat_parts_static(right, parts);
@@ -2878,7 +3098,10 @@ impl CodeGenerator {
     /// Check if an expression contains a string literal (recursively for binary expressions)
     fn contains_string_literal(expr: &Expression) -> bool {
         match expr {
-            Expression::Literal(Literal::String(_)) => true,
+            Expression::Literal {
+                value: Literal::String(_),
+                ..
+            } => true,
             Expression::Binary { left, right, .. } => {
                 Self::contains_string_literal(left) || Self::contains_string_literal(right)
             }
@@ -2909,7 +3132,7 @@ impl CodeGenerator {
 
     fn extract_function_name(&self, expr: &Expression) -> String {
         match expr {
-            Expression::Identifier(name) => name.clone(),
+            Expression::Identifier { name, .. } => name.clone(),
             Expression::FieldAccess { field, .. } => field.clone(),
             _ => String::new(), // Can't determine function name
         }
@@ -3089,10 +3312,10 @@ impl CodeGenerator {
 
         // Inline trivial single-expression functions
         if statement_count == 1 {
-            if let Statement::Return(Some(_)) = &func.body[0] {
+            if let Statement::Return { value: Some(_), .. } = &func.body[0] {
                 return true;
             }
-            if let Statement::Expression(_) = &func.body[0] {
+            if let Statement::Expression { .. } = &func.body[0] {
                 return true;
             }
         }
@@ -3109,8 +3332,8 @@ impl CodeGenerator {
                 Statement::Let { .. } => 1,
                 Statement::Const { .. } => 1,
                 Statement::Static { .. } => 1,
-                Statement::Return(_) => 1,
-                Statement::Expression(_) => 1,
+                Statement::Return { .. } => 1,
+                Statement::Expression { .. } => 1,
                 Statement::If { .. } => 3, // Weighted more heavily
                 Statement::While { .. } => 3,
                 Statement::Loop { .. } => 3,
@@ -3119,9 +3342,9 @@ impl CodeGenerator {
                 Statement::Assignment { .. } => 1,
                 Statement::Thread { .. } => 2, // Thread spawn
                 Statement::Async { .. } => 2,  // Async spawn
-                Statement::Defer(_) => 1,
-                Statement::Break => 1,
-                Statement::Continue => 1,
+                Statement::Defer { .. } => 1,
+                Statement::Break { .. } => 1,
+                Statement::Continue { .. } => 1,
                 Statement::Use { .. } => 0, // Use statements don't affect complexity
             };
         }
@@ -3250,7 +3473,7 @@ impl CodeGenerator {
     fn is_const_evaluable(&self, expr: &Expression) -> bool {
         match expr {
             // Literals are always const
-            Expression::Literal(_) => true,
+            Expression::Literal { .. } => true,
 
             // Binary operations on const values are const
             Expression::Binary { left, right, .. } => {
@@ -3266,7 +3489,7 @@ impl CodeGenerator {
             }
 
             // Map literals with const entries might be const
-            Expression::MapLiteral(entries) => entries
+            Expression::MapLiteral { pairs, .. } => pairs
                 .iter()
                 .all(|(k, v)| self.is_const_evaluable(k) && self.is_const_evaluable(v)),
 

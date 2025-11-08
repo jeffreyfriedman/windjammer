@@ -316,7 +316,7 @@ impl Parser {
                         // Look ahead to check if this is an associated type or path segment
                         if self.position + 1 < self.tokens.len() {
                             // Allow keywords as identifiers in type paths (e.g., std::thread::JoinHandle)
-                            let next_segment_opt = match &self.tokens[self.position + 1] {
+                            let next_segment_opt = match &self.tokens[self.position + 1].token {
                                 Token::Ident(n) => Some(n.clone()),
                                 Token::Thread => Some("thread".to_string()),
                                 Token::Async => Some("async".to_string()),
@@ -332,7 +332,7 @@ impl Parser {
                                 // to determine if this is the final segment (associated type)
                                 if self.position + 2 < self.tokens.len() {
                                     let after_next = &self.tokens[self.position + 2];
-                                    match after_next {
+                                    match &after_next.token {
                                         Token::Lt => {
                                             // This is a parameterized type (e.g., HashMap<K, V>)
                                             // Add to path and break to let generic parsing handle it

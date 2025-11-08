@@ -71,7 +71,7 @@ fn test_compile_1000_functions() {
     let start = Instant::now();
 
     let mut lexer = Lexer::new(&source);
-    let tokens = lexer.tokenize();
+    let tokens = lexer.tokenize_with_locations();
     println!("Lexing took: {:?}", start.elapsed());
 
     let parse_start = Instant::now();
@@ -102,7 +102,7 @@ fn test_compile_large_function() {
     let start = Instant::now();
 
     let mut lexer = Lexer::new(&source);
-    let tokens = lexer.tokenize();
+    let tokens = lexer.tokenize_with_locations();
 
     let mut parser = Parser::new(tokens);
     let result = parser.parse();
@@ -131,7 +131,7 @@ fn test_compile_deeply_nested() {
     let start = Instant::now();
 
     let mut lexer = Lexer::new(&source);
-    let tokens = lexer.tokenize();
+    let tokens = lexer.tokenize_with_locations();
 
     let mut parser = Parser::new(tokens);
     let result = parser.parse();
@@ -168,7 +168,7 @@ fn test_compile_10k_lines() {
     let start = Instant::now();
 
     let mut lexer = Lexer::new(&source);
-    let tokens = lexer.tokenize();
+    let tokens = lexer.tokenize_with_locations();
     println!("Lexing took: {:?}", start.elapsed());
     println!("Token count: {}", tokens.len());
 
@@ -209,7 +209,7 @@ fn test_memory_usage_scaling() {
         let source = generate_many_functions(size);
 
         let mut lexer = Lexer::new(&source);
-        let tokens = lexer.tokenize();
+        let tokens = lexer.tokenize_with_locations();
 
         let mut parser = Parser::new(tokens);
         if let Ok(program) = parser.parse() {

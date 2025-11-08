@@ -87,7 +87,7 @@ impl CodeSplitter {
         let mut graph = HashMap::new();
 
         for item in &program.items {
-            if let Item::Function(func) = item {
+            if let Item::Function { decl: func, .. } = item {
                 let deps = HashSet::new();
                 // In a real implementation, we'd analyze function calls
                 // For now, just track the function
@@ -108,7 +108,7 @@ impl CodeSplitter {
         let mut current_size = 0;
 
         for item in &program.items {
-            if let Item::Function(func) = item {
+            if let Item::Function { decl: func, .. } = item {
                 // Estimate size (rough approximation)
                 let func_code = format!("function {}() {{}}\n", func.name);
                 let func_size = func_code.len();

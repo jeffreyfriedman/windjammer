@@ -70,12 +70,14 @@ fn analyze_string_literals(program: &Program) -> HashMap<String, usize> {
 /// Collect strings from an item
 fn collect_strings_from_item(item: &Item, frequency: &mut HashMap<String, usize>) {
     match item {
-        Item::Function(func) => {
+        Item::Function { decl: func, .. } => {
             for stmt in &func.body {
                 collect_strings_from_statement(stmt, frequency);
             }
         }
-        Item::Impl(impl_block) => {
+        Item::Impl {
+            block: impl_block, ..
+        } => {
             for func in &impl_block.functions {
                 for stmt in &func.body {
                     collect_strings_from_statement(stmt, frequency);
@@ -95,7 +97,10 @@ fn collect_strings_from_item(item: &Item, frequency: &mut HashMap<String, usize>
 /// Collect strings from an expression recursively
 fn collect_strings_from_expression(expr: &Expression, frequency: &mut HashMap<String, usize>) {
     match expr {
-        Expression::Literal(Literal::String(s)) => {
+        Expression::Literal {
+            value: Literal::String(s),
+            ..
+        } => {
             // Only intern strings >= 10 characters
             if s.len() >= 10 {
                 *frequency.entry(s.clone()).or_insert(0) += 1;
@@ -111,6 +116,7 @@ fn collect_strings_from_expression(expr: &Expression, frequency: &mut HashMap<St
         Expression::Call {
             function,
             arguments,
+            ..
         } => {
             collect_strings_from_expression(function, frequency);
             for (_, arg) in arguments {
@@ -143,11 +149,11 @@ fn collect_strings_from_expression(expr: &Expression, frequency: &mut HashMap<St
         Expression::Cast { expr, .. } => {
             collect_strings_from_expression(expr, frequency);
         }
-        Expression::Index { object, index } => {
+        Expression::Index { object, index, .. } => {
             collect_strings_from_expression(object, frequency);
             collect_strings_from_expression(index, frequency);
         }
-        Expression::Tuple(elements) => {
+        Expression::Tuple { elements, .. } => {
             for elem in elements {
                 collect_strings_from_expression(elem, frequency);
             }
@@ -157,17 +163,17 @@ fn collect_strings_from_expression(expr: &Expression, frequency: &mut HashMap<St
                 collect_strings_from_expression(arg, frequency);
             }
         }
-        Expression::TryOp(expr) | Expression::Await(expr) => {
+        Expression::TryOp { expr, .. } | Expression::Await { expr, .. } => {
             collect_strings_from_expression(expr, frequency);
         }
-        Expression::ChannelSend { channel, value } => {
+        Expression::ChannelSend { channel, value, .. } => {
             collect_strings_from_expression(channel, frequency);
             collect_strings_from_expression(value, frequency);
         }
-        Expression::ChannelRecv(channel) => {
+        Expression::ChannelRecv { channel, .. } => {
             collect_strings_from_expression(channel, frequency);
         }
-        Expression::Block(statements) => {
+        Expression::Block { statements, .. } => {
             for stmt in statements {
                 collect_strings_from_statement(stmt, frequency);
             }
@@ -184,13 +190,15 @@ fn collect_strings_from_statement(stmt: &Statement, frequency: &mut HashMap<Stri
         | Statement::Static { value, .. } => {
             collect_strings_from_expression(value, frequency);
         }
-        Statement::Expression(expr) => {
+        Statement::Expression { expr, .. } => {
             collect_strings_from_expression(expr, frequency);
         }
-        Statement::Return(Some(expr)) => {
+        Statement::Return {
+            value: Some(expr), ..
+        } => {
             collect_strings_from_expression(expr, frequency);
         }
-        Statement::Assignment { target, value } => {
+        Statement::Assignment { target, value, .. } => {
             collect_strings_from_expression(target, frequency);
             collect_strings_from_expression(value, frequency);
         }
@@ -198,6 +206,7 @@ fn collect_strings_from_statement(stmt: &Statement, frequency: &mut HashMap<Stri
             condition,
             then_block,
             else_block,
+            ..
         } => {
             collect_strings_from_expression(condition, frequency);
             for stmt in then_block {
@@ -209,7 +218,9 @@ fn collect_strings_from_statement(stmt: &Statement, frequency: &mut HashMap<Stri
                 }
             }
         }
-        Statement::While { condition, body } => {
+        Statement::While {
+            condition, body, ..
+        } => {
             collect_strings_from_expression(condition, frequency);
             for stmt in body {
                 collect_strings_from_statement(stmt, frequency);
@@ -221,7 +232,7 @@ fn collect_strings_from_statement(stmt: &Statement, frequency: &mut HashMap<Stri
                 collect_strings_from_statement(stmt, frequency);
             }
         }
-        Statement::Match { value, arms } => {
+        Statement::Match { value, arms, .. } => {
             collect_strings_from_expression(value, frequency);
             for arm in arms {
                 collect_strings_from_expression(&arm.body, frequency);
@@ -267,38 +278,61 @@ fn replace_strings_in_expression(
     pool_map: &HashMap<String, String>,
 ) -> Expression {
     match expr {
-        Expression::Literal(Literal::String(s)) => {
+        Expression::Literal {
+            value: Literal::String(s),
+            location,
+        } => {
             // Replace with pool reference if interned
             if let Some(pool_name) = pool_map.get(&s) {
-                Expression::Identifier(pool_name.clone())
+                Expression::Identifier {
+                    name: pool_name.clone(),
+                    location,
+                }
             } else {
-                Expression::Literal(Literal::String(s))
+                Expression::Literal {
+                    value: Literal::String(s),
+                    location,
+                }
             }
         }
-        Expression::Binary { left, right, op } => Expression::Binary {
+        Expression::Binary {
+            left,
+            right,
+            op,
+            location,
+        } => Expression::Binary {
             left: Box::new(replace_strings_in_expression(*left, pool_map)),
             right: Box::new(replace_strings_in_expression(*right, pool_map)),
             op,
+            location,
         },
-        Expression::Unary { op, operand } => Expression::Unary {
+        Expression::Unary {
+            op,
+            operand,
+            location,
+        } => Expression::Unary {
             op,
             operand: Box::new(replace_strings_in_expression(*operand, pool_map)),
+            location,
         },
         Expression::Call {
             function,
             arguments,
+            location,
         } => Expression::Call {
             function: Box::new(replace_strings_in_expression(*function, pool_map)),
             arguments: arguments
                 .into_iter()
                 .map(|(label, arg)| (label, replace_strings_in_expression(arg, pool_map)))
                 .collect(),
+            location,
         },
         Expression::MethodCall {
             object,
             method,
             type_args,
             arguments,
+            location,
         } => Expression::MethodCall {
             object: Box::new(replace_strings_in_expression(*object, pool_map)),
             method,
@@ -307,49 +341,79 @@ fn replace_strings_in_expression(
                 .into_iter()
                 .map(|(label, arg)| (label, replace_strings_in_expression(arg, pool_map)))
                 .collect(),
+            location,
         },
-        Expression::FieldAccess { object, field } => Expression::FieldAccess {
+        Expression::FieldAccess {
+            object,
+            field,
+            location,
+        } => Expression::FieldAccess {
             object: Box::new(replace_strings_in_expression(*object, pool_map)),
             field,
+            location,
         },
-        Expression::StructLiteral { name, fields } => Expression::StructLiteral {
+        Expression::StructLiteral {
+            name,
+            fields,
+            location,
+        } => Expression::StructLiteral {
             name,
             fields: fields
                 .into_iter()
                 .map(|(name, value)| (name, replace_strings_in_expression(value, pool_map)))
                 .collect(),
+            location,
         },
         Expression::Range {
             start,
             end,
             inclusive,
+            location,
         } => Expression::Range {
             start: Box::new(replace_strings_in_expression(*start, pool_map)),
             end: Box::new(replace_strings_in_expression(*end, pool_map)),
             inclusive,
+            location,
         },
-        Expression::Closure { parameters, body } => Expression::Closure {
+        Expression::Closure {
+            parameters,
+            body,
+            location,
+        } => Expression::Closure {
             parameters,
             body: Box::new(replace_strings_in_expression(*body, pool_map)),
+            location,
         },
-        Expression::Cast { expr, type_ } => Expression::Cast {
+        Expression::Cast {
+            expr,
+            type_,
+            location,
+        } => Expression::Cast {
             expr: Box::new(replace_strings_in_expression(*expr, pool_map)),
             type_,
+            location,
         },
-        Expression::Index { object, index } => Expression::Index {
+        Expression::Index {
+            object,
+            index,
+            location,
+        } => Expression::Index {
             object: Box::new(replace_strings_in_expression(*object, pool_map)),
             index: Box::new(replace_strings_in_expression(*index, pool_map)),
+            location,
         },
-        Expression::Tuple(elements) => Expression::Tuple(
-            elements
+        Expression::Tuple { elements, location } => Expression::Tuple {
+            elements: elements
                 .into_iter()
                 .map(|e| replace_strings_in_expression(e, pool_map))
                 .collect(),
-        ),
+            location,
+        },
         Expression::MacroInvocation {
             name,
             args,
             delimiter,
+            location,
         } => Expression::MacroInvocation {
             name,
             args: args
@@ -357,26 +421,39 @@ fn replace_strings_in_expression(
                 .map(|arg| replace_strings_in_expression(arg, pool_map))
                 .collect(),
             delimiter,
+            location,
         },
-        Expression::TryOp(expr) => {
-            Expression::TryOp(Box::new(replace_strings_in_expression(*expr, pool_map)))
-        }
-        Expression::Await(expr) => {
-            Expression::Await(Box::new(replace_strings_in_expression(*expr, pool_map)))
-        }
-        Expression::ChannelSend { channel, value } => Expression::ChannelSend {
+        Expression::TryOp { expr, location } => Expression::TryOp {
+            expr: Box::new(replace_strings_in_expression(*expr, pool_map)),
+            location,
+        },
+        Expression::Await { expr, location } => Expression::Await {
+            expr: Box::new(replace_strings_in_expression(*expr, pool_map)),
+            location,
+        },
+        Expression::ChannelSend {
+            channel,
+            value,
+            location,
+        } => Expression::ChannelSend {
             channel: Box::new(replace_strings_in_expression(*channel, pool_map)),
             value: Box::new(replace_strings_in_expression(*value, pool_map)),
+            location,
         },
-        Expression::ChannelRecv(channel) => {
-            Expression::ChannelRecv(Box::new(replace_strings_in_expression(*channel, pool_map)))
-        }
-        Expression::Block(statements) => Expression::Block(
-            statements
+        Expression::ChannelRecv { channel, location } => Expression::ChannelRecv {
+            channel: Box::new(replace_strings_in_expression(*channel, pool_map)),
+            location,
+        },
+        Expression::Block {
+            statements,
+            location,
+        } => Expression::Block {
+            statements: statements
                 .into_iter()
                 .map(|stmt| replace_strings_in_statement(stmt, pool_map))
                 .collect(),
-        ),
+            location,
+        },
         other => other,
     }
 }
@@ -389,42 +466,63 @@ fn replace_strings_in_statement(stmt: Statement, pool_map: &HashMap<String, Stri
             mutable,
             type_,
             value,
+            location,
         } => Statement::Let {
             pattern,
             mutable,
             type_,
             value: replace_strings_in_expression(value, pool_map),
+            location,
         },
-        Statement::Const { name, type_, value } => Statement::Const {
+        Statement::Const {
+            name,
+            type_,
+            value,
+            location,
+        } => Statement::Const {
             name,
             type_,
             value: replace_strings_in_expression(value, pool_map),
+            location,
         },
         Statement::Static {
             name,
             mutable,
             type_,
             value,
+            location,
         } => Statement::Static {
             name,
             mutable,
             type_,
             value: replace_strings_in_expression(value, pool_map),
+            location,
         },
-        Statement::Expression(expr) => {
-            Statement::Expression(replace_strings_in_expression(expr, pool_map))
-        }
-        Statement::Return(Some(expr)) => {
-            Statement::Return(Some(replace_strings_in_expression(expr, pool_map)))
-        }
-        Statement::Assignment { target, value } => Statement::Assignment {
+        Statement::Expression { expr, location } => Statement::Expression {
+            expr: replace_strings_in_expression(expr, pool_map),
+            location,
+        },
+        Statement::Return {
+            value: Some(expr),
+            location,
+        } => Statement::Return {
+            value: Some(replace_strings_in_expression(expr, pool_map)),
+            location,
+        },
+        Statement::Assignment {
+            target,
+            value,
+            location,
+        } => Statement::Assignment {
             target: replace_strings_in_expression(target, pool_map),
             value: replace_strings_in_expression(value, pool_map),
+            location,
         },
         Statement::If {
             condition,
             then_block,
             else_block,
+            location,
         } => Statement::If {
             condition: replace_strings_in_expression(condition, pool_map),
             then_block: then_block
@@ -437,18 +535,25 @@ fn replace_strings_in_statement(stmt: Statement, pool_map: &HashMap<String, Stri
                     .map(|stmt| replace_strings_in_statement(stmt, pool_map))
                     .collect()
             }),
+            location,
         },
-        Statement::While { condition, body } => Statement::While {
+        Statement::While {
+            condition,
+            body,
+            location,
+        } => Statement::While {
             condition: replace_strings_in_expression(condition, pool_map),
             body: body
                 .into_iter()
                 .map(|stmt| replace_strings_in_statement(stmt, pool_map))
                 .collect(),
+            location,
         },
         Statement::For {
             pattern,
             iterable,
             body,
+            location,
         } => Statement::For {
             pattern,
             iterable: replace_strings_in_expression(iterable, pool_map),
@@ -456,8 +561,13 @@ fn replace_strings_in_statement(stmt: Statement, pool_map: &HashMap<String, Stri
                 .into_iter()
                 .map(|stmt| replace_strings_in_statement(stmt, pool_map))
                 .collect(),
+            location,
         },
-        Statement::Match { value, arms } => Statement::Match {
+        Statement::Match {
+            value,
+            arms,
+            location,
+        } => Statement::Match {
             value: replace_strings_in_expression(value, pool_map),
             arms: arms
                 .into_iter()
@@ -469,6 +579,7 @@ fn replace_strings_in_statement(stmt: Statement, pool_map: &HashMap<String, Stri
                     body: replace_strings_in_expression(arm.body, pool_map),
                 })
                 .collect(),
+            location,
         },
         other => other,
     }
@@ -477,15 +588,24 @@ fn replace_strings_in_statement(stmt: Statement, pool_map: &HashMap<String, Stri
 /// Replace string literals in an item with pool references
 fn replace_strings_in_item(item: Item, pool_map: &HashMap<String, String>) -> Item {
     match item {
-        Item::Function(mut func) => {
+        Item::Function {
+            decl: mut func,
+            location,
+        } => {
             func.body = func
                 .body
                 .into_iter()
                 .map(|stmt| replace_strings_in_statement(stmt, pool_map))
                 .collect();
-            Item::Function(func)
+            Item::Function {
+                decl: func,
+                location,
+            }
         }
-        Item::Impl(mut impl_block) => {
+        Item::Impl {
+            block: mut impl_block,
+            location,
+        } => {
             impl_block.functions = impl_block
                 .functions
                 .into_iter()
@@ -498,23 +618,34 @@ fn replace_strings_in_item(item: Item, pool_map: &HashMap<String, String>) -> It
                     func
                 })
                 .collect();
-            Item::Impl(impl_block)
+            Item::Impl {
+                block: impl_block,
+                location,
+            }
         }
         Item::Static {
             name,
             mutable,
             type_,
             value,
+            location,
         } => Item::Static {
             name,
             mutable,
             type_,
             value: replace_strings_in_expression(value, pool_map),
+            location,
         },
-        Item::Const { name, type_, value } => Item::Const {
+        Item::Const {
+            name,
+            type_,
+            value,
+            location,
+        } => Item::Const {
             name,
             type_,
             value: replace_strings_in_expression(value, pool_map),
+            location,
         },
         other => other,
     }
@@ -527,7 +658,11 @@ fn create_pool_statics(pool: &[StringPoolEntry]) -> Vec<Item> {
             name: entry.pool_name.clone(),
             mutable: false,
             type_: Type::Reference(Box::new(Type::Custom("str".to_string()))),
-            value: Expression::Literal(Literal::String(entry.value.clone())),
+            value: Expression::Literal {
+                value: Literal::String(entry.value.clone()),
+                location: None,
+            },
+            location: None,
         })
         .collect()
 }
@@ -577,16 +712,20 @@ mod tests {
     use crate::parser::*;
 
     fn create_test_function(name: &str, body_stmts: Vec<Statement>) -> Item {
-        Item::Function(FunctionDecl {
-            name: name.to_string(),
-            type_params: vec![],
-            where_clause: vec![],
-            decorators: vec![],
-            is_async: false,
-            parameters: vec![],
-            return_type: None,
-            body: body_stmts,
-        })
+        Item::Function {
+            decl: FunctionDecl {
+                name: name.to_string(),
+                type_params: vec![],
+                where_clause: vec![],
+                decorators: vec![],
+                is_async: false,
+                parameters: vec![],
+                return_type: None,
+                body: body_stmts,
+                parent_type: None,
+            },
+            location: None,
+        }
     }
 
     #[test]
@@ -595,15 +734,23 @@ mod tests {
             items: vec![
                 create_test_function(
                     "test1",
-                    vec![Statement::Expression(Expression::Literal(Literal::String(
-                        "Hello World".to_string(),
-                    )))],
+                    vec![Statement::Expression {
+                        expr: Expression::Literal {
+                            value: Literal::String("Hello World".to_string()),
+                            location: None,
+                        },
+                        location: None,
+                    }],
                 ),
                 create_test_function(
                     "test2",
-                    vec![Statement::Expression(Expression::Literal(Literal::String(
-                        "Hello World".to_string(),
-                    )))],
+                    vec![Statement::Expression {
+                        expr: Expression::Literal {
+                            value: Literal::String("Hello World".to_string()),
+                            location: None,
+                        },
+                        location: None,
+                    }],
                 ),
             ],
         };
@@ -618,15 +765,23 @@ mod tests {
             items: vec![
                 create_test_function(
                     "test1",
-                    vec![Statement::Expression(Expression::Literal(Literal::String(
-                        "Hello World".to_string(),
-                    )))],
+                    vec![Statement::Expression {
+                        expr: Expression::Literal {
+                            value: Literal::String("Hello World".to_string()),
+                            location: None,
+                        },
+                        location: None,
+                    }],
                 ),
                 create_test_function(
                     "test2",
-                    vec![Statement::Expression(Expression::Literal(Literal::String(
-                        "Hello World".to_string(),
-                    )))],
+                    vec![Statement::Expression {
+                        expr: Expression::Literal {
+                            value: Literal::String("Hello World".to_string()),
+                            location: None,
+                        },
+                        location: None,
+                    }],
                 ),
             ],
         };
@@ -642,7 +797,10 @@ mod tests {
                 assert_eq!(name, "__STRING_POOL_0");
                 assert_eq!(
                     value,
-                    &Expression::Literal(Literal::String("Hello World".to_string()))
+                    &Expression::Literal {
+                        value: Literal::String("Hello World".to_string()),
+                        location: None,
+                    }
                 );
             }
             _ => panic!("Expected static declaration"),
@@ -650,8 +808,12 @@ mod tests {
 
         // Functions should reference the pool
         match &result.program.items[1] {
-            Item::Function(f) => {
-                if let Some(Statement::Expression(Expression::Identifier(name))) = f.body.first() {
+            Item::Function { decl: f, .. } => {
+                if let Some(Statement::Expression {
+                    expr: Expression::Identifier { name, .. },
+                    ..
+                }) = f.body.first()
+                {
                     assert_eq!(name, "__STRING_POOL_0");
                 } else {
                     panic!("Expected identifier reference to pool");
@@ -667,15 +829,27 @@ mod tests {
             items: vec![create_test_function(
                 "test1",
                 vec![
-                    Statement::Expression(Expression::Literal(Literal::String(
-                        "Hello World".to_string(),
-                    ))),
-                    Statement::Expression(Expression::Literal(Literal::String(
-                        "Hello World".to_string(),
-                    ))),
-                    Statement::Expression(Expression::Literal(Literal::String(
-                        "Hello World".to_string(),
-                    ))),
+                    Statement::Expression {
+                        expr: Expression::Literal {
+                            value: Literal::String("Hello World".to_string()),
+                            location: None,
+                        },
+                        location: None,
+                    },
+                    Statement::Expression {
+                        expr: Expression::Literal {
+                            value: Literal::String("Hello World".to_string()),
+                            location: None,
+                        },
+                        location: None,
+                    },
+                    Statement::Expression {
+                        expr: Expression::Literal {
+                            value: Literal::String("Hello World".to_string()),
+                            location: None,
+                        },
+                        location: None,
+                    },
                 ],
             )],
         };
@@ -693,9 +867,27 @@ mod tests {
             items: vec![create_test_function(
                 "test",
                 vec![
-                    Statement::Expression(Expression::Literal(Literal::String("Hi".to_string()))),
-                    Statement::Expression(Expression::Literal(Literal::String("Hi".to_string()))),
-                    Statement::Expression(Expression::Literal(Literal::String("Hi".to_string()))),
+                    Statement::Expression {
+                        expr: Expression::Literal {
+                            value: Literal::String("Hi".to_string()),
+                            location: None,
+                        },
+                        location: None,
+                    },
+                    Statement::Expression {
+                        expr: Expression::Literal {
+                            value: Literal::String("Hi".to_string()),
+                            location: None,
+                        },
+                        location: None,
+                    },
+                    Statement::Expression {
+                        expr: Expression::Literal {
+                            value: Literal::String("Hi".to_string()),
+                            location: None,
+                        },
+                        location: None,
+                    },
                 ],
             )],
         };
@@ -712,15 +904,21 @@ mod tests {
         let program = Program {
             items: vec![create_test_function(
                 "test",
-                vec![Statement::Expression(Expression::Binary {
-                    left: Box::new(Expression::Literal(Literal::String(
-                        "Long String Value".to_string(),
-                    ))),
-                    op: BinaryOp::Add,
-                    right: Box::new(Expression::Literal(Literal::String(
-                        "Long String Value".to_string(),
-                    ))),
-                })],
+                vec![Statement::Expression {
+                    expr: Expression::Binary {
+                        left: Box::new(Expression::Literal {
+                            value: Literal::String("Long String Value".to_string()),
+                            location: None,
+                        }),
+                        op: BinaryOp::Add,
+                        right: Box::new(Expression::Literal {
+                            value: Literal::String("Long String Value".to_string()),
+                            location: None,
+                        }),
+                        location: None,
+                    },
+                    location: None,
+                }],
             )],
         };
 
@@ -730,13 +928,15 @@ mod tests {
 
         // Check transformation
         match &result.program.items[1] {
-            Item::Function(f) => {
-                if let Some(Statement::Expression(Expression::Binary { left, right, .. })) =
-                    f.body.first()
+            Item::Function { decl: f, .. } => {
+                if let Some(Statement::Expression {
+                    expr: Expression::Binary { left, right, .. },
+                    ..
+                }) = f.body.first()
                 {
                     // Both sides should reference the pool
-                    assert!(matches!(**left, Expression::Identifier(_)));
-                    assert!(matches!(**right, Expression::Identifier(_)));
+                    assert!(matches!(&**left, Expression::Identifier { .. }));
+                    assert!(matches!(&**right, Expression::Identifier { .. }));
                 } else {
                     panic!("Expected binary expression");
                 }
@@ -751,18 +951,34 @@ mod tests {
             items: vec![create_test_function(
                 "test",
                 vec![
-                    Statement::Expression(Expression::Literal(Literal::String(
-                        "First String".to_string(),
-                    ))),
-                    Statement::Expression(Expression::Literal(Literal::String(
-                        "First String".to_string(),
-                    ))),
-                    Statement::Expression(Expression::Literal(Literal::String(
-                        "Second String".to_string(),
-                    ))),
-                    Statement::Expression(Expression::Literal(Literal::String(
-                        "Second String".to_string(),
-                    ))),
+                    Statement::Expression {
+                        expr: Expression::Literal {
+                            value: Literal::String("First String".to_string()),
+                            location: None,
+                        },
+                        location: None,
+                    },
+                    Statement::Expression {
+                        expr: Expression::Literal {
+                            value: Literal::String("First String".to_string()),
+                            location: None,
+                        },
+                        location: None,
+                    },
+                    Statement::Expression {
+                        expr: Expression::Literal {
+                            value: Literal::String("Second String".to_string()),
+                            location: None,
+                        },
+                        location: None,
+                    },
+                    Statement::Expression {
+                        expr: Expression::Literal {
+                            value: Literal::String("Second String".to_string()),
+                            location: None,
+                        },
+                        location: None,
+                    },
                 ],
             )],
         };

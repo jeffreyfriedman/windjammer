@@ -243,20 +243,22 @@ impl WasmComponentGenerator {
     ) -> String {
         let indent = "    ".repeat(indent_level);
         match stmt {
-            Statement::Assignment { target, value } => {
+            Statement::Assignment { target, value, .. } => {
                 let rust_target = self.expression_to_rust(target, component_info);
                 let rust_value = self.expression_to_rust(value, component_info);
                 format!("{}{} = {};\n", indent, rust_target, rust_value)
             }
-            Statement::Expression(expr) => {
+            Statement::Expression { expr, .. } => {
                 let rust_expr = self.expression_to_rust(expr, component_info);
                 format!("{}{};\n", indent, rust_expr)
             }
-            Statement::Return(Some(expr)) => {
+            Statement::Return {
+                value: Some(expr), ..
+            } => {
                 let rust_expr = self.expression_to_rust(expr, component_info);
                 format!("{}return {};\n", indent, rust_expr)
             }
-            Statement::Return(None) => {
+            Statement::Return { value: None, .. } => {
                 format!("{}return;\n", indent)
             }
             _ => format!("{}/* TODO: statement {:?} */\n", indent, stmt),
@@ -265,15 +267,17 @@ impl WasmComponentGenerator {
 
     fn expression_to_rust(&self, expr: &Expression, component_info: &ComponentInfo) -> String {
         match expr {
-            Expression::Identifier(name) => {
+            Expression::Identifier { name, .. } => {
                 if component_info.state_fields.iter().any(|f| f.name == *name) {
                     format!("self.{}", name)
                 } else {
                     name.clone()
                 }
             }
-            Expression::Literal(lit) => self.literal_to_rust(lit),
-            Expression::Binary { left, op, right } => {
+            Expression::Literal { value: lit, .. } => self.literal_to_rust(lit),
+            Expression::Binary {
+                left, op, right, ..
+            } => {
                 let left_rust = self.expression_to_rust(left, component_info);
                 let right_rust = self.expression_to_rust(right, component_info);
                 let op_str = match op {

@@ -73,16 +73,15 @@ pub use crate::parser::ast::*;
 // ============================================================================
 
 pub struct Parser {
-    pub(crate) tokens: Vec<Token>,
+    pub(crate) tokens: Vec<crate::lexer::TokenWithLocation>,
     pub(crate) position: usize,
-    #[allow(dead_code)]
     pub(crate) filename: String,
     #[allow(dead_code)]
     pub(crate) source: String,
 }
 
 impl Parser {
-    pub fn new(tokens: Vec<Token>) -> Self {
+    pub fn new(tokens: Vec<crate::lexer::TokenWithLocation>) -> Self {
         Parser {
             tokens,
             position: 0,
@@ -91,7 +90,11 @@ impl Parser {
         }
     }
 
-    pub fn new_with_source(tokens: Vec<Token>, filename: String, source: String) -> Self {
+    pub fn new_with_source(
+        tokens: Vec<crate::lexer::TokenWithLocation>,
+        filename: String,
+        source: String,
+    ) -> Self {
         Parser {
             tokens,
             position: 0,
@@ -101,7 +104,21 @@ impl Parser {
     }
 
     pub(crate) fn current_token(&self) -> &Token {
-        self.tokens.get(self.position).unwrap_or(&Token::Eof)
+        self.tokens
+            .get(self.position)
+            .map(|t| &t.token)
+            .unwrap_or(&Token::Eof)
+    }
+
+    /// Get the current token's location for source mapping
+    pub(crate) fn current_location(&self) -> Option<crate::source_map::Location> {
+        self.tokens
+            .get(self.position)
+            .map(|t| crate::source_map::Location {
+                file: std::path::PathBuf::from(&self.filename),
+                line: t.line,
+                column: t.column,
+            })
     }
 
     pub(crate) fn advance(&mut self) {
@@ -164,7 +181,7 @@ impl Parser {
                 }
                 Ok(Item::Function {
                     decl: func,
-                    location: None,
+                    location: self.current_location(),
                 })
             }
             Token::Async => {
@@ -175,7 +192,7 @@ impl Parser {
                 func.decorators = decorators;
                 Ok(Item::Function {
                     decl: func,
-                    location: None,
+                    location: self.current_location(),
                 })
             }
             Token::Struct => {
@@ -184,21 +201,21 @@ impl Parser {
                 struct_decl.decorators = decorators;
                 Ok(Item::Struct {
                     decl: struct_decl,
-                    location: None,
+                    location: self.current_location(),
                 })
             }
             Token::Enum => {
                 self.advance();
                 Ok(Item::Enum {
                     decl: self.parse_enum()?,
-                    location: None,
+                    location: self.current_location(),
                 })
             }
             Token::Trait => {
                 self.advance();
                 Ok(Item::Trait {
                     decl: self.parse_trait()?,
-                    location: None,
+                    location: self.current_location(),
                 })
             }
             Token::Impl => {
@@ -207,7 +224,7 @@ impl Parser {
                 impl_block.decorators = decorators;
                 Ok(Item::Impl {
                     block: impl_block,
-                    location: None,
+                    location: self.current_location(),
                 })
             }
             Token::Const => {
@@ -220,7 +237,7 @@ impl Parser {
                     name,
                     type_,
                     value,
-                    location: None,
+                    location: self.current_location(),
                 })
             }
             Token::Static => {
@@ -237,7 +254,7 @@ impl Parser {
                     mutable,
                     type_,
                     value,
-                    location: None,
+                    location: self.current_location(),
                 })
             }
             Token::Use => {
@@ -246,7 +263,7 @@ impl Parser {
                 Ok(Item::Use {
                     path,
                     alias,
-                    location: None,
+                    location: self.current_location(),
                 })
             }
             Token::Bound => {
@@ -293,7 +310,7 @@ impl Parser {
         Ok(Item::BoundAlias {
             name,
             traits,
-            location: None,
+            location: self.current_location(),
         })
     }
 

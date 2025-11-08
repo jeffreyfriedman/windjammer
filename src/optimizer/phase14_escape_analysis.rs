@@ -85,15 +85,23 @@ pub fn optimize_escape_analysis(program: &Program) -> (Program, EscapeAnalysisSt
 
     for item in &program.items {
         let new_item = match item {
-            Item::Function(func) => {
+            Item::Function { decl: func, .. } => {
                 let (new_func, func_stats) = optimize_function_escape_analysis(func);
                 stats.add(&func_stats);
-                Item::Function(new_func)
+                Item::Function {
+                    decl: new_func,
+                    location: None,
+                }
             }
-            Item::Impl(impl_block) => {
+            Item::Impl {
+                block: impl_block, ..
+            } => {
                 let (new_impl, impl_stats) = optimize_impl_escape_analysis(impl_block);
                 stats.add(&impl_stats);
-                Item::Impl(new_impl)
+                Item::Impl {
+                    block: new_impl,
+                    location: None,
+                }
             }
             _ => item.clone(),
         };
@@ -184,16 +192,18 @@ fn analyze_escapes(body: &[Statement], parameters: &[Parameter]) -> EscapeInfo {
 fn analyze_statements_for_escapes(stmts: &[Statement], info: &mut EscapeInfo) {
     for stmt in stmts {
         match stmt {
-            Statement::Return(Some(expr)) => {
+            Statement::Return {
+                value: Some(expr), ..
+            } => {
                 collect_variables_in_expression(expr, &mut info.returned_vars);
             }
             Statement::Let { value, .. } | Statement::Const { value, .. } => {
                 // Check if value uses any variables (they might escape)
-                if let Expression::Identifier(name) = value {
+                if let Expression::Identifier { name, .. } = value {
                     info.escaped_vars.insert(name.clone());
                 }
             }
-            Statement::Expression(expr) => {
+            Statement::Expression { expr, .. } => {
                 // Field assignments might store variables
                 if let Expression::FieldAccess { .. } = expr {
                     collect_variables_in_expression(expr, &mut info.stored_vars);
@@ -225,7 +235,7 @@ fn analyze_statements_for_escapes(stmts: &[Statement], info: &mut EscapeInfo) {
 /// Collect all variable identifiers in an expression
 fn collect_variables_in_expression(expr: &Expression, vars: &mut HashSet<String>) {
     match expr {
-        Expression::Identifier(name) => {
+        Expression::Identifier { name, .. } => {
             vars.insert(name.clone());
         }
         Expression::Binary { left, right, .. } => {
@@ -246,7 +256,7 @@ fn collect_variables_in_expression(expr: &Expression, vars: &mut HashSet<String>
         Expression::FieldAccess { object, .. } => {
             collect_variables_in_expression(object, vars);
         }
-        Expression::Index { object, index } => {
+        Expression::Index { object, index, .. } => {
             collect_variables_in_expression(object, vars);
             collect_variables_in_expression(index, vars);
         }
@@ -287,6 +297,7 @@ fn optimize_statement_escape_analysis(
             mutable,
             type_,
             value,
+            ..
         } => {
             // Check if this is a vec! macro that doesn't escape (only for simple identifiers)
             let var_name = match pattern {
@@ -303,6 +314,7 @@ fn optimize_statement_escape_analysis(
                             mutable: *mutable,
                             type_: type_.clone(),
                             value: new_value,
+                            location: None,
                         };
                     }
                 }
@@ -313,31 +325,39 @@ fn optimize_statement_escape_analysis(
                 mutable: *mutable,
                 type_: type_.clone(),
                 value: optimize_expression_escape_analysis(value, escape_info, stats),
+                location: None,
             }
         }
         Statement::If {
             condition,
             then_block,
             else_block,
+            ..
         } => Statement::If {
             condition: optimize_expression_escape_analysis(condition, escape_info, stats),
             then_block: optimize_statements_escape_analysis(then_block, escape_info, stats),
             else_block: else_block
                 .as_ref()
                 .map(|stmts| optimize_statements_escape_analysis(stmts, escape_info, stats)),
+            location: None,
         },
-        Statement::While { condition, body } => Statement::While {
+        Statement::While {
+            condition, body, ..
+        } => Statement::While {
             condition: optimize_expression_escape_analysis(condition, escape_info, stats),
             body: optimize_statements_escape_analysis(body, escape_info, stats),
+            location: None,
         },
         Statement::For {
             pattern,
             iterable,
             body,
+            ..
         } => Statement::For {
             pattern: pattern.clone(),
             iterable: optimize_expression_escape_analysis(iterable, escape_info, stats),
             body: optimize_statements_escape_analysis(body, escape_info, stats),
+            location: None,
         },
         _ => stmt.clone(),
     }
@@ -351,7 +371,9 @@ fn optimize_expression_escape_analysis(
     stats: &mut EscapeAnalysisStats,
 ) -> Expression {
     match expr {
-        Expression::Binary { left, op, right } => Expression::Binary {
+        Expression::Binary {
+            left, op, right, ..
+        } => Expression::Binary {
             left: Box::new(optimize_expression_escape_analysis(
                 left,
                 escape_info,
@@ -363,14 +385,16 @@ fn optimize_expression_escape_analysis(
                 escape_info,
                 stats,
             )),
+            location: None,
         },
-        Expression::Unary { op, operand } => Expression::Unary {
+        Expression::Unary { op, operand, .. } => Expression::Unary {
             op: *op,
             operand: Box::new(optimize_expression_escape_analysis(
                 operand,
                 escape_info,
                 stats,
             )),
+            location: None,
         },
         _ => expr.clone(),
     }
@@ -388,6 +412,7 @@ fn try_optimize_vec_to_smallvec(expr: &Expression) -> Option<Expression> {
                     name: "smallvec".to_string(),
                     args: args.clone(),
                     delimiter: MacroDelimiter::Brackets,
+                    location: None,
                 });
             }
         }

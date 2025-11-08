@@ -13,15 +13,17 @@ pub fn generate_type_definitions(program: &Program) -> Option<String> {
 
     for item in &program.items {
         match item {
-            Item::Function(func) => {
+            Item::Function { decl: func, .. } => {
                 output.push_str(&generate_function_declaration(func));
                 output.push('\n');
             }
-            Item::Struct(struct_def) => {
+            Item::Struct {
+                decl: struct_def, ..
+            } => {
                 output.push_str(&generate_interface(struct_def));
                 output.push('\n');
             }
-            Item::Enum(enum_def) => {
+            Item::Enum { decl: enum_def, .. } => {
                 output.push_str(&generate_enum_declaration(enum_def));
                 output.push('\n');
             }
@@ -165,6 +167,7 @@ mod tests {
             is_async: false,
             type_params: vec![],
             where_clause: vec![],
+            parent_type: None,
         };
 
         let decl = generate_function_declaration(&func);
