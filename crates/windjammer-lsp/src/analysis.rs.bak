@@ -112,7 +112,7 @@ impl AnalysisDatabase {
 
         // Lex the file
         let mut lexer = Lexer::new(content);
-        let tokens = lexer.tokenize_with_locations();
+        let tokens = lexer.tokenize();
 
         // Parse the file
         let mut parser = Parser::new(tokens);
