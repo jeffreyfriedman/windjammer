@@ -1,0 +1,122 @@
+// Entity-Component-System - Pure Windjammer API
+// Hides all Rust implementation details
+
+use std::collections::HashMap
+
+// Entity ID - just a number
+pub struct Entity {
+    id: int,
+}
+
+impl Entity {
+    pub fn null() -> Entity {
+        Entity { id: 0 }
+    }
+    
+    pub fn is_null(&self) -> bool {
+        self.id == 0
+    }
+}
+
+// World - manages all entities and components
+pub struct World {
+    next_id: int,
+    entities: Vec<Entity>,
+    // Components stored by type (simplified - real impl uses type erasure)
+    sprites: HashMap<int, Sprite>,
+    transforms: HashMap<int, Transform>,
+}
+
+impl World {
+    pub fn new() -> World {
+        World {
+            next_id: 1,
+            entities: Vec::new(),
+            sprites: HashMap::new(),
+            transforms: HashMap::new(),
+        }
+    }
+    
+    pub fn spawn(&mut self) -> EntityBuilder {
+        let id = self.next_id
+        self.next_id += 1
+        
+        let entity = Entity { id: id }
+        self.entities.push(entity)
+        
+        EntityBuilder {
+            world: self,
+            entity: entity,
+        }
+    }
+    
+    pub fn get<T>(&self, entity: Entity) -> Option<&T> {
+        // Simplified - real impl uses type registry
+        nil
+    }
+    
+    pub fn get_mut<T>(&mut self, entity: Entity) -> Option<&mut T> {
+        // Simplified - real impl uses type registry
+        nil
+    }
+    
+    pub fn render(&self, renderer: &mut Renderer) {
+        // Render all sprites
+        for (id, sprite) in &self.sprites {
+            renderer.draw_sprite(sprite)
+        }
+    }
+}
+
+// Entity builder for fluent API
+pub struct EntityBuilder<'a> {
+    world: &'a mut World,
+    entity: Entity,
+}
+
+impl<'a> EntityBuilder<'a> {
+    pub fn with<T>(self, component: T) -> EntityBuilder<'a> {
+        // Add component to world
+        // Simplified - real impl uses type registry
+        self
+    }
+    
+    pub fn build(self) -> Entity {
+        self.entity
+    }
+}
+
+// Sprite component
+pub struct Sprite {
+    pub position: Vec2,
+    pub size: Vec2,
+    pub color: Color,
+}
+
+impl Sprite {
+    pub fn rect(width: float, height: float, color: Color) -> Sprite {
+        Sprite {
+            position: Vec2::zero(),
+            size: Vec2::new(width, height),
+            color: color,
+        }
+    }
+}
+
+// Transform component
+pub struct Transform {
+    pub position: Vec2,
+    pub rotation: float,
+    pub scale: Vec2,
+}
+
+impl Transform {
+    pub fn new() -> Transform {
+        Transform {
+            position: Vec2::zero(),
+            rotation: 0.0,
+            scale: Vec2::new(1.0, 1.0),
+        }
+    }
+}
+
