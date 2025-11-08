@@ -441,16 +441,18 @@ impl ErrorMapper {
 // ============================================================================
 
 impl WindjammerDiagnostic {
-    /// Format this diagnostic for display (Rust-style pretty printing)
+    /// Format this diagnostic for display (Rust-style pretty printing with colors)
     pub fn format(&self) -> String {
+        use colored::*;
+        
         let mut output = String::new();
 
-        // Level and message
+        // Level and message (with colors!)
         let level_str = match self.level {
-            DiagnosticLevel::Error => "error",
-            DiagnosticLevel::Warning => "warning",
-            DiagnosticLevel::Note => "note",
-            DiagnosticLevel::Help => "help",
+            DiagnosticLevel::Error => "error".red().bold(),
+            DiagnosticLevel::Warning => "warning".yellow().bold(),
+            DiagnosticLevel::Note => "note".blue().bold(),
+            DiagnosticLevel::Help => "help".cyan().bold(),
         };
 
         if let Some(code) = &self.code {
@@ -459,9 +461,10 @@ impl WindjammerDiagnostic {
             output.push_str(&format!("{}: {}\n", level_str, self.message));
         }
 
-        // Location
+        // Location (cyan for visibility)
         output.push_str(&format!(
-            "  --> {}:{}:{}\n",
+            "  {} {}:{}:{}\n",
+            "-->".cyan(),
             self.location.file.display(),
             self.location.line,
             self.location.column
@@ -472,19 +475,19 @@ impl WindjammerDiagnostic {
             output.push_str(&snippet);
         }
 
-        // Help messages
+        // Help messages (cyan)
         for help_msg in &self.help {
-            output.push_str(&format!("  = help: {}\n", help_msg));
+            output.push_str(&format!("  = {}: {}\n", "help".cyan(), help_msg));
         }
 
-        // Notes
+        // Notes (blue)
         for note in &self.notes {
-            output.push_str(&format!("  = note: {}\n", note));
+            output.push_str(&format!("  = {}: {}\n", "note".blue(), note));
         }
 
-        // Contextual help (Windjammer-specific suggestions)
+        // Contextual help (green for suggestions)
         if let Some(contextual_help) = self.get_contextual_help() {
-            output.push_str(&format!("  = suggestion: {}\n", contextual_help));
+            output.push_str(&format!("  = {}: {}\n", "suggestion".green().bold(), contextual_help));
         }
 
         output
@@ -492,13 +495,14 @@ impl WindjammerDiagnostic {
 
     /// Read and format the source code snippet for this error
     fn read_source_snippet(&self) -> Result<String, std::io::Error> {
+        use colored::*;
         use std::fs;
 
         let source = fs::read_to_string(&self.location.file)?;
         let lines: Vec<&str> = source.lines().collect();
 
         let mut output = String::new();
-        output.push_str("   |\n");
+        output.push_str(&format!("   {}\n", "|".cyan()));
 
         // Show context: 2 lines before, the error line, and 2 lines after
         let start_line = self.location.line.saturating_sub(2);
@@ -513,18 +517,34 @@ impl WindjammerDiagnostic {
             let is_error_line = line_num == self.location.line;
 
             if is_error_line {
-                // Error line with pointer
-                output.push_str(&format!("{:>4} | {}\n", line_num, line));
-                output.push_str("   | ");
-                output.push_str(&" ".repeat(self.location.column.saturating_sub(1)));
-                output.push_str("^\n");
+                // Error line with pointer (red for errors, yellow for warnings)
+                let pointer_color = match self.level {
+                    DiagnosticLevel::Error => "^".red().bold(),
+                    DiagnosticLevel::Warning => "^".yellow().bold(),
+                    _ => "^".cyan(),
+                };
+                
+                output.push_str(&format!("{:>4} {} {}\n", 
+                    line_num.to_string().cyan(), 
+                    "|".cyan(), 
+                    line
+                ));
+                output.push_str(&format!("   {} {}{}\n", 
+                    "|".cyan(),
+                    " ".repeat(self.location.column.saturating_sub(1)),
+                    pointer_color
+                ));
             } else {
                 // Context line
-                output.push_str(&format!("{:>4} | {}\n", line_num, line));
+                output.push_str(&format!("{:>4} {} {}\n", 
+                    line_num.to_string().cyan(), 
+                    "|".cyan(), 
+                    line
+                ));
             }
         }
 
-        output.push_str("   |\n");
+        output.push_str(&format!("   {}\n", "|".cyan()));
         Ok(output)
     }
 
