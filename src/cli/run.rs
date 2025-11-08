@@ -35,6 +35,8 @@ pub fn execute(path: &Path, args: &[String], target_str: &str) -> Result<()> {
                 polyfills: false,
                 v8_optimize: false,
             },
+            false, // check
+            false, // raw_errors
         )?;
 
         // Run with Node.js

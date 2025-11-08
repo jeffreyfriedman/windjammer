@@ -21,6 +21,8 @@ pub fn execute(
     _release: bool,
     target_str: &str,
     options: BuildOptions,
+    check: bool,
+    raw_errors: bool,
 ) -> Result<()> {
     let output_dir = output.unwrap_or_else(|| Path::new("./build"));
 
@@ -62,12 +64,18 @@ pub fn execute(
     crate::build_project(path, output_dir, target)?;
 
     println!("\n{} Build complete!", "Success!".green().bold());
-    if target_str == "javascript" || target_str == "js" {
-        println!("Run your JavaScript project with:");
-        println!("  node {:?}/output.js", output_dir);
+    
+    // Run cargo check if requested
+    if check {
+        check_with_cargo(output_dir, raw_errors)?;
     } else {
-        println!("Run your project with:");
-        println!("  cd {:?} && cargo run", output_dir);
+        if target_str == "javascript" || target_str == "js" {
+            println!("Run your JavaScript project with:");
+            println!("  node {:?}/output.js", output_dir);
+        } else {
+            println!("Run your project with:");
+            println!("  cd {:?} && cargo run", output_dir);
+        }
     }
 
     Ok(())
@@ -116,4 +124,174 @@ fn build_javascript(path: &Path, config: &crate::codegen::backend::CodegenConfig
     }
 
     Ok(())
+}
+
+/// Run cargo build on the generated Rust code and display errors with source mapping
+fn check_with_cargo(output_dir: &Path, show_raw_errors: bool) -> Result<()> {
+    use std::process::Command;
+
+    println!("\n{} Rust compilation...", "Checking".cyan().bold());
+
+    let output = Command::new("cargo")
+        .arg("build")
+        .arg("--message-format=json")
+        .current_dir(output_dir)
+        .output()?;
+
+    if output.status.success() {
+        println!("{} No Rust compilation errors!", "Success!".green().bold());
+        return Ok(());
+    }
+
+    // Combine stderr and stdout (cargo outputs to both)
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let combined_output = format!("{}{}", stderr, stdout);
+
+    // If raw errors requested, show them and exit
+    if show_raw_errors {
+        println!("{} Rust compilation errors (raw):", "Error:".red().bold());
+        println!("{}", combined_output);
+        return Err(anyhow::anyhow!("Rust compilation failed"));
+    }
+
+    // Load all source maps from the output directory
+    let source_maps = load_source_maps(output_dir)?;
+
+    // Create error mapper with merged source maps
+    let error_mapper = crate::error_mapper::ErrorMapper::new(source_maps);
+
+    // Map rustc output to Windjammer diagnostics
+    let wj_diagnostics = error_mapper.map_rustc_output(&combined_output);
+
+    if wj_diagnostics.is_empty() {
+        // Fallback: show raw output if we couldn't parse any diagnostics
+        println!(
+            "{} Could not parse Rust compilation errors. Showing raw output:",
+            "Warning:".yellow().bold()
+        );
+        println!("{}", combined_output);
+        return Err(anyhow::anyhow!("Rust compilation failed"));
+    }
+
+    // Display Windjammer diagnostics with beautiful formatting
+    let error_count = wj_diagnostics
+        .iter()
+        .filter(|d| matches!(d.level, crate::error_mapper::DiagnosticLevel::Error))
+        .count();
+
+    println!(
+        "\n{} {} error(s) found:\n",
+        "Compilation failed:".red().bold(),
+        error_count
+    );
+
+    for diagnostic in &wj_diagnostics {
+        let formatted = diagnostic.format();
+        let colorized = colorize_diagnostic(&formatted, &diagnostic.level);
+        println!("{}", colorized);
+        println!(); // Blank line between errors
+    }
+
+    Err(anyhow::anyhow!(
+        "Rust compilation failed with {} error(s)",
+        error_count
+    ))
+}
+
+/// Load and merge all source maps from the output directory
+fn load_source_maps(output_dir: &Path) -> Result<crate::source_map::SourceMap> {
+    use std::fs;
+
+    let mut merged_map = crate::source_map::SourceMap::new();
+    let mut map_count = 0;
+    let mut mapping_count = 0;
+
+    // Find all .rs.map files in the output directory
+    if let Ok(entries) = fs::read_dir(output_dir) {
+        for entry in entries.flatten() {
+            let path = entry.path();
+            if path.extension().and_then(|s| s.to_str()) == Some("map") {
+                // Check if this is a .rs.map file (not just any .map file)
+                if let Some(stem) = path.file_stem() {
+                    if let Some(stem_str) = stem.to_str() {
+                        if !stem_str.ends_with(".rs") {
+                            continue;
+                        }
+                    }
+                }
+
+                // Load this source map
+                if let Ok(map) = crate::source_map::SourceMap::load_from_file(&path) {
+                    // Get the corresponding .rs file path
+                    let rust_file = path.with_extension("").with_extension("rs");
+
+                    // Merge all mappings from this source map
+                    let mappings = map.mappings_for_rust_file(&rust_file);
+                    for mapping in mappings {
+                        merged_map.add_mapping(
+                            mapping.rust_file.clone(),
+                            mapping.rust_line,
+                            mapping.rust_column,
+                            mapping.wj_file.clone(),
+                            mapping.wj_line,
+                            mapping.wj_column,
+                        );
+                        mapping_count += 1;
+                    }
+                    map_count += 1;
+                }
+            }
+        }
+    }
+
+    if map_count == 0 {
+        println!(
+            "{} No source maps found. Error locations may be inaccurate.",
+            "Warning:".yellow().bold()
+        );
+    } else {
+        println!(
+            "{} Loaded {} source map(s) with {} mapping(s)",
+            "Info:".cyan(),
+            map_count,
+            mapping_count
+        );
+    }
+
+    Ok(merged_map)
+}
+
+/// Colorize diagnostic output based on level
+fn colorize_diagnostic(text: &str, _level: &crate::error_mapper::DiagnosticLevel) -> String {
+    use colored::*;
+
+    let mut result = String::new();
+    for line in text.lines() {
+        if line.starts_with("error:") || line.starts_with("Error:") {
+            result.push_str(&line.red().bold().to_string());
+        } else if line.starts_with("warning:") || line.starts_with("Warning:") {
+            result.push_str(&line.yellow().bold().to_string());
+        } else if line.starts_with("help:") || line.starts_with("Help:") {
+            result.push_str(&line.cyan().to_string());
+        } else if line.starts_with("note:") || line.starts_with("Note:") {
+            result.push_str(&line.blue().to_string());
+        } else if line.contains("^") {
+            // Error pointer line
+            result.push_str(&line.red().to_string());
+        } else if line.starts_with("  -->") || line.starts_with(" -->") {
+            // Location line
+            result.push_str(&line.cyan().to_string());
+        } else {
+            result.push_str(line);
+        }
+        result.push('\n');
+    }
+
+    // Remove trailing newline if present
+    if result.ends_with('\n') {
+        result.pop();
+    }
+
+    result
 }
