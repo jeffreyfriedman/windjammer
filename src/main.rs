@@ -10,6 +10,7 @@ pub mod compiler_database;
 pub mod config;
 pub mod ejector;
 pub mod error_catalog; // Error catalog generation and documentation
+pub mod error_codes; // Windjammer error codes (WJ0001, etc.)
 pub mod error_mapper;
 pub mod error_statistics; // Error statistics tracking and analysis
 pub mod fuzzy_matcher; // Fuzzy string matching for typo suggestions
