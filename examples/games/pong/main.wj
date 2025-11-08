@@ -1,162 +1,165 @@
-// PONG - Pure Windjammer Game
-// Demonstrates game framework with ZERO Rust exposure
+// PONG - A classic game in pure Windjammer
+// This validates the game framework with decorators and automatic ownership inference
 
-// Simple PONG without complex ECS for now
-// Just to prove the concept works
-
-struct Paddle {
-    x: float,
-    y: float,
-    width: float,
-    height: float,
-    speed: float,
+@game
+@derive(Clone, Debug)
+struct PongGame {
+    // Paddle positions (Y coordinate)
+    left_paddle_y: float,
+    right_paddle_y: float,
+    
+    // Ball state
+    ball_x: float,
+    ball_y: float,
+    ball_vx: float,
+    ball_vy: float,
+    
+    // Scoring
+    score_left: int,
+    score_right: int,
+    
+    // Constants
+    paddle_speed: float,
+    ball_speed: float,
 }
 
-struct Ball {
-    x: float,
-    y: float,
-    size: float,
-    dx: float,
-    dy: float,
+@init
+fn init(game: PongGame) {
+    // Initialize game state
+    game.left_paddle_y = 250.0
+    game.right_paddle_y = 250.0
+    
+    game.ball_x = 400.0
+    game.ball_y = 300.0
+    game.ball_vx = 200.0
+    game.ball_vy = 150.0
+    
+    game.score_left = 0
+    game.score_right = 0
+    
+    game.paddle_speed = 300.0
+    game.ball_speed = 200.0
+    
+    println("PONG initialized!")
+    println("Controls: W/S for left paddle, Up/Down for right paddle")
 }
 
-struct Game {
-    left_paddle: Paddle,
-    right_paddle: Paddle,
-    ball: Ball,
-    left_score: int,
-    right_score: int,
+@update
+fn update(game: PongGame, delta: float) {
+    // Update ball position
+    game.ball_x += game.ball_vx * delta
+    game.ball_y += game.ball_vy * delta
+    
+    // Ball collision with top/bottom walls
+    if game.ball_y <= 10.0 {
+        game.ball_y = 10.0
+        game.ball_vy = -game.ball_vy
+    }
+    if game.ball_y >= 590.0 {
+        game.ball_y = 590.0
+        game.ball_vy = -game.ball_vy
+    }
+    
+    // Ball collision with left paddle
+    if game.ball_x <= 30.0 && game.ball_x >= 10.0 {
+        if game.ball_y >= game.left_paddle_y && game.ball_y <= game.left_paddle_y + 100.0 {
+            game.ball_x = 30.0
+            game.ball_vx = -game.ball_vx
+        }
+    }
+    
+    // Ball collision with right paddle
+    if game.ball_x >= 770.0 && game.ball_x <= 790.0 {
+        if game.ball_y >= game.right_paddle_y && game.ball_y <= game.right_paddle_y + 100.0 {
+            game.ball_x = 770.0
+            game.ball_vx = -game.ball_vx
+        }
+    }
+    
+    // Scoring - left side
+    if game.ball_x <= 0.0 {
+        game.score_right += 1
+        println("Right scores! Score: {} - {}", game.score_left, game.score_right)
+        
+        // Reset ball
+        game.ball_x = 400.0
+        game.ball_y = 300.0
+        game.ball_vx = 200.0
+        game.ball_vy = 150.0
+    }
+    
+    // Scoring - right side
+    if game.ball_x >= 800.0 {
+        game.score_left += 1
+        println("Left scores! Score: {} - {}", game.score_left, game.score_right)
+        
+        // Reset ball
+        game.ball_x = 400.0
+        game.ball_y = 300.0
+        game.ball_vx = -200.0
+        game.ball_vy = 150.0
+    }
 }
 
-impl Game {
-    fn new() -> Game {
-        Game {
-            left_paddle: Paddle {
-                x: -0.9,
-                y: 0.0,
-                width: 0.05,
-                height: 0.3,
-                speed: 0.02,
-            },
-            right_paddle: Paddle {
-                x: 0.85,
-                y: 0.0,
-                width: 0.05,
-                height: 0.3,
-                speed: 0.02,
-            },
-            ball: Ball {
-                x: 0.0,
-                y: 0.0,
-                size: 0.04,
-                dx: 0.01,
-                dy: 0.008,
-            },
-            left_score: 0,
-            right_score: 0,
+@render
+fn render(game: PongGame, renderer: Renderer) {
+    // Clear screen to black
+    renderer.clear(Color::black())
+    
+    // Draw left paddle (white)
+    renderer.draw_rect(10.0, game.left_paddle_y, 10.0, 100.0, Color::white())
+    
+    // Draw right paddle (white)
+    renderer.draw_rect(780.0, game.right_paddle_y, 10.0, 100.0, Color::white())
+    
+    // Draw ball (yellow)
+    renderer.draw_circle(game.ball_x, game.ball_y, 10.0, Color::yellow())
+    
+    // Draw center line (dashed)
+    let mut y = 0.0
+    while y < 600.0 {
+        renderer.draw_rect(395.0, y, 10.0, 20.0, Color::white())
+        y += 40.0
+    }
+}
+
+@input
+fn handle_input(game: PongGame, input: Input) {
+    // Left paddle controls (W/S)
+    if input.key_pressed(Key::W) {
+        game.left_paddle_y -= 5.0
+        if game.left_paddle_y < 0.0 {
+            game.left_paddle_y = 0.0
+        }
+    }
+    if input.key_pressed(Key::S) {
+        game.left_paddle_y += 5.0
+        if game.left_paddle_y > 500.0 {
+            game.left_paddle_y = 500.0
         }
     }
     
-    fn update_paddle(&mut self, paddle: &mut Paddle, up: bool, down: bool) {
-        if up {
-            paddle.y += paddle.speed
-        }
-        if down {
-            paddle.y -= paddle.speed
-        }
-        
-        // Clamp to screen
-        if paddle.y > 1.0 {
-            paddle.y = 1.0
-        }
-        if paddle.y < -1.0 + paddle.height {
-            paddle.y = -1.0 + paddle.height
+    // Right paddle controls (Up/Down)
+    if input.key_pressed(Key::Up) {
+        game.right_paddle_y -= 5.0
+        if game.right_paddle_y < 0.0 {
+            game.right_paddle_y = 0.0
         }
     }
-    
-    fn update_ball(&mut self) {
-        self.ball.x += self.ball.dx
-        self.ball.y += self.ball.dy
-        
-        // Bounce off top/bottom
-        if self.ball.y > 1.0 || self.ball.y < -1.0 {
-            self.ball.dy = -self.ball.dy
+    if input.key_pressed(Key::Down) {
+        game.right_paddle_y += 5.0
+        if game.right_paddle_y > 500.0 {
+            game.right_paddle_y = 500.0
         }
     }
-    
-    fn check_collision(&self, paddle: &Paddle) -> bool {
-        self.ball.x < paddle.x + paddle.width &&
-        self.ball.x + self.ball.size > paddle.x &&
-        self.ball.y < paddle.y &&
-        self.ball.y - self.ball.size > paddle.y - paddle.height
-    }
-    
-    fn check_collisions(&mut self) {
-        if self.check_collision(&self.left_paddle) {
-            self.ball.dx = self.ball.dx.abs()
-        }
-        
-        if self.check_collision(&self.right_paddle) {
-            self.ball.dx = -self.ball.dx.abs()
-        }
-    }
-    
-    fn check_scoring(&mut self) -> bool {
-        if self.ball.x < -1.0 {
-            self.right_score += 1
-            println!("Right scores! {} - {}", self.left_score, self.right_score)
-            self.ball.x = 0.0
-            self.ball.y = 0.0
-            self.ball.dx = -self.ball.dx
-            return true
-        }
-        
-        if self.ball.x > 1.0 {
-            self.left_score += 1
-            println!("Left scores! {} - {}", self.left_score, self.right_score)
-            self.ball.x = 0.0
-            self.ball.y = 0.0
-            self.ball.dx = -self.ball.dx
-            return true
-        }
-        
-        false
-    }
+}
+
+@cleanup
+fn cleanup(game: PongGame) {
+    println("Final Score: {} - {}", game.score_left, game.score_right)
+    println("Thanks for playing PONG!")
 }
 
 fn main() {
-    println!("🎮 PONG - Pure Windjammer")
-    println!("=========================")
-    println!("This is a PURE WINDJAMMER game!")
-    println!("No Rust syntax, no wgpu, no winit exposed!")
-    println!("")
-    println!("Game logic works - rendering would be added via")
-    println!("the game framework once we have proper backend support.")
-    println!("")
-    
-    let mut game = Game::new()
-    
-    println!("Initial state:")
-    println!("  Left paddle: ({}, {})", game.left_paddle.x, game.left_paddle.y)
-    println!("  Right paddle: ({}, {})", game.right_paddle.x, game.right_paddle.y)
-    println!("  Ball: ({}, {})", game.ball.x, game.ball.y)
-    println!("")
-    
-    // Simulate some game updates
-    println!("Simulating game...")
-    for i in 0..100 {
-        game.update_ball()
-        game.check_collisions()
-        
-        if game.check_scoring() {
-            println!("  Frame {}: Score changed!", i)
-        }
-    }
-    
-    println!("")
-    println!("Final score: {} - {}", game.left_score, game.right_score)
-    println!("")
-    println!("✅ This proves Windjammer can handle game logic!")
-    println!("✅ Zero Rust exposure in game code!")
-    println!("✅ Clean, simple syntax!")
+    println("Starting PONG...")
 }
