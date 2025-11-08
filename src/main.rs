@@ -10,6 +10,7 @@ pub mod compiler_database;
 pub mod config;
 pub mod ejector;
 pub mod error_mapper;
+pub mod fuzzy_matcher; // Fuzzy string matching for typo suggestions
 pub mod inference;
 pub mod lexer;
 pub mod optimizer;
