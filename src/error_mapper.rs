@@ -3,6 +3,7 @@
 /// This module intercepts rustc JSON output, maps errors using source maps,
 /// and provides a world-class error experience for Windjammer developers.
 use crate::source_map::{Location, SourceMap};
+use crate::syntax_highlighter::SyntaxHighlighter;
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 
@@ -558,6 +559,9 @@ impl WindjammerDiagnostic {
         let mut output = String::new();
         output.push_str(&format!("   {}\n", "|".cyan()));
 
+        // Create syntax highlighter
+        let highlighter = SyntaxHighlighter::new();
+
         // Show context: 2 lines before, the error line, and 2 lines after
         let start_line = self.location.line.saturating_sub(2);
         let end_line = (self.location.line + 2).min(lines.len());
@@ -570,6 +574,9 @@ impl WindjammerDiagnostic {
             let line = lines[line_num - 1];
             let is_error_line = line_num == self.location.line;
 
+            // Apply syntax highlighting to the line
+            let highlighted_line = highlighter.highlight_line(line);
+
             if is_error_line {
                 // Error line with pointer (red for errors, yellow for warnings)
                 let pointer_color = match self.level {
@@ -581,7 +588,7 @@ impl WindjammerDiagnostic {
                 output.push_str(&format!("{:>4} {} {}\n", 
                     line_num.to_string().cyan(), 
                     "|".cyan(), 
-                    line
+                    highlighted_line
                 ));
                 output.push_str(&format!("   {} {}{}\n", 
                     "|".cyan(),
@@ -589,11 +596,11 @@ impl WindjammerDiagnostic {
                     pointer_color
                 ));
             } else {
-                // Context line
+                // Context line with syntax highlighting
                 output.push_str(&format!("{:>4} {} {}\n", 
                     line_num.to_string().cyan(), 
                     "|".cyan(), 
-                    line
+                    highlighted_line
                 ));
             }
         }
