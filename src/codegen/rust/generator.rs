@@ -3,6 +3,17 @@ use crate::analyzer::*;
 use crate::parser::*;
 use crate::CompilationTarget;
 
+/// Information about game framework decorators
+#[derive(Debug, Clone)]
+struct GameFrameworkInfo {
+    game_struct: String,
+    init_fn: Option<String>,
+    update_fn: Option<String>,
+    render_fn: Option<String>,
+    input_fn: Option<String>,
+    cleanup_fn: Option<String>,
+}
+
 pub struct CodeGenerator {
     indent_level: usize,
     signature_registry: SignatureRegistry,
@@ -223,6 +234,152 @@ impl CodeGenerator {
         }
     }
 
+    // ============================================================================
+    // GAME FRAMEWORK SUPPORT
+    // ============================================================================
+
+    /// Detect if this program uses game framework decorators
+    fn detect_game_framework(&self, program: &Program) -> Option<GameFrameworkInfo> {
+        let mut game_struct = None;
+        let mut init_fn = None;
+        let mut update_fn = None;
+        let mut render_fn = None;
+        let mut input_fn = None;
+        let mut cleanup_fn = None;
+
+        // Find @game struct
+        for item in &program.items {
+            if let Item::Struct { decl: s, .. } = item {
+                if s.decorators.iter().any(|d| d.name == "game") {
+                    game_struct = Some(s.name.clone());
+                    break;
+                }
+            }
+        }
+
+        // If no @game struct, this isn't a game
+        if game_struct.is_none() {
+            return None;
+        }
+
+        // Find decorated functions
+        for item in &program.items {
+            if let Item::Function { decl: func, .. } = item {
+                for decorator in &func.decorators {
+                    match decorator.name.as_str() {
+                        "init" => init_fn = Some(func.name.clone()),
+                        "update" => update_fn = Some(func.name.clone()),
+                        "render" => render_fn = Some(func.name.clone()),
+                        "render3d" => render_fn = Some(func.name.clone()), // 3D rendering
+                        "input" => input_fn = Some(func.name.clone()),
+                        "cleanup" => cleanup_fn = Some(func.name.clone()),
+                        _ => {}
+                    }
+                }
+            }
+        }
+
+        Some(GameFrameworkInfo {
+            game_struct: game_struct.unwrap(),
+            init_fn,
+            update_fn,
+            render_fn,
+            input_fn,
+            cleanup_fn,
+        })
+    }
+
+    /// Generate game loop main function
+    fn generate_game_main(&mut self, info: &GameFrameworkInfo) -> String {
+        let mut output = String::new();
+
+        output.push_str("fn main() -> Result<(), Box<dyn std::error::Error>> {\n");
+        output.push_str("    use windjammer_game_framework::*;\n");
+        output.push_str("    use winit::event::{Event, WindowEvent};\n");
+        output.push_str("    use winit::event_loop::{ControlFlow, EventLoop};\n");
+        output.push_str("    use winit::window::WindowBuilder;\n");
+        output.push_str("\n");
+        output.push_str("    // Create event loop and window\n");
+        output.push_str("    let event_loop = EventLoop::new()?;\n");
+        output.push_str("    let window = WindowBuilder::new()\n");
+        output.push_str("        .with_title(\"Windjammer Game\")\n");
+        output.push_str("        .with_inner_size(winit::dpi::LogicalSize::new(800, 600))\n");
+        output.push_str("        .build(&event_loop)?;\n");
+        output.push_str("\n");
+        output.push_str("    // Initialize game state\n");
+        output.push_str(&format!("    let mut game = {}::default();\n", info.game_struct));
+        output.push_str("\n");
+
+        // Call init function if present
+        if let Some(init_fn) = &info.init_fn {
+            output.push_str("    // Call init function\n");
+            output.push_str(&format!("    {}(&mut game);\n", init_fn));
+            output.push_str("\n");
+        }
+
+        output.push_str("    // Initialize renderer\n");
+        output.push_str("    let mut renderer = pollster::block_on(rendering::Renderer::new(&window))?;\n");
+        output.push_str("\n");
+        output.push_str("    // Game loop\n");
+        output.push_str("    let mut last_time = std::time::Instant::now();\n");
+        output.push_str("\n");
+        output.push_str("    event_loop.run(move |event, elwt| {\n");
+        output.push_str("        match event {\n");
+        output.push_str("            Event::WindowEvent { event, .. } => match event {\n");
+        output.push_str("                WindowEvent::CloseRequested => {\n");
+
+        // Call cleanup function if present
+        if let Some(cleanup_fn) = &info.cleanup_fn {
+            output.push_str(&format!("                    {}(&mut game);\n", cleanup_fn));
+        }
+
+        output.push_str("                    elwt.exit();\n");
+        output.push_str("                }\n");
+        output.push_str("                WindowEvent::RedrawRequested => {\n");
+        output.push_str("                    // Calculate delta time\n");
+        output.push_str("                    let now = std::time::Instant::now();\n");
+        output.push_str("                    let delta = (now - last_time).as_secs_f32();\n");
+        output.push_str("                    last_time = now;\n");
+        output.push_str("\n");
+
+        // Call update function if present
+        if let Some(update_fn) = &info.update_fn {
+            output.push_str("                    // Update game logic\n");
+            output.push_str(&format!("                    {}(&mut game, delta);\n", update_fn));
+            output.push_str("\n");
+        }
+
+        // Call render function if present
+        if let Some(render_fn) = &info.render_fn {
+            output.push_str("                    // Render\n");
+            output.push_str(&format!("                    {}(&mut game, &mut renderer);\n", render_fn));
+        }
+
+        output.push_str("                    renderer.present();\n");
+        output.push_str("                }\n");
+
+        // Handle input if input function present
+        if info.input_fn.is_some() {
+            output.push_str("                WindowEvent::KeyboardInput { event, .. } => {\n");
+            output.push_str("                    // TODO: Call input function\n");
+            output.push_str("                }\n");
+        }
+
+        output.push_str("                _ => {}\n");
+        output.push_str("            },\n");
+        output.push_str("            Event::AboutToWait => {\n");
+        output.push_str("                window.request_redraw();\n");
+        output.push_str("            }\n");
+        output.push_str("            _ => {}\n");
+        output.push_str("        }\n");
+        output.push_str("    })?;\n");
+        output.push_str("\n");
+        output.push_str("    Ok(())\n");
+        output.push_str("}\n");
+
+        output
+    }
+
     fn generate_block(&mut self, stmts: &[Statement]) -> String {
         let mut output = String::new();
         let len = stmts.len();
@@ -282,6 +439,9 @@ impl CodeGenerator {
     pub fn generate_program(&mut self, program: &Program, analyzed: &[AnalyzedFunction]) -> String {
         let mut imports = String::new();
         let mut body = String::new();
+
+        // Detect game framework decorators
+        let game_framework_info = self.detect_game_framework(program);
 
         // Collect bound aliases first (bound Name = Trait + Trait)
         for item in &program.items {
@@ -449,16 +609,46 @@ impl CodeGenerator {
             }
         }
 
-        // Generate top-level functions (skip impl methods)
+        // Collect game-decorated function names to skip them
+        let mut game_functions = std::collections::HashSet::new();
+        if let Some(ref info) = game_framework_info {
+            if let Some(ref fn_name) = info.init_fn {
+                game_functions.insert(fn_name.clone());
+            }
+            if let Some(ref fn_name) = info.update_fn {
+                game_functions.insert(fn_name.clone());
+            }
+            if let Some(ref fn_name) = info.render_fn {
+                game_functions.insert(fn_name.clone());
+            }
+            if let Some(ref fn_name) = info.input_fn {
+                game_functions.insert(fn_name.clone());
+            }
+            if let Some(ref fn_name) = info.cleanup_fn {
+                game_functions.insert(fn_name.clone());
+            }
+        }
+
+        // Generate top-level functions (skip impl methods and game-decorated functions)
         for analyzed_func in analyzed {
-            if !impl_methods.contains(&analyzed_func.decl.name) {
+            if !impl_methods.contains(&analyzed_func.decl.name) && !game_functions.contains(&analyzed_func.decl.name) {
                 // Skip main() function in modules - it should only be in the entry point
                 if self.is_module && analyzed_func.decl.name == "main" {
+                    continue;
+                }
+                // Skip main() if this is a game (we'll generate our own)
+                if game_framework_info.is_some() && analyzed_func.decl.name == "main" {
                     continue;
                 }
                 body.push_str(&self.generate_function(analyzed_func));
                 body.push_str("\n\n");
             }
+        }
+
+        // Generate game main function if this is a game
+        if let Some(ref info) = game_framework_info {
+            body.push_str(&self.generate_game_main(info));
+            body.push_str("\n\n");
         }
 
         // Inject implicit imports if needed
