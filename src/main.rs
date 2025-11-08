@@ -1,4 +1,5 @@
 pub mod analyzer;
+pub mod auto_clone; // Automatic clone insertion for ergonomics
 pub mod cli;
 pub mod codegen;
 pub mod component_analyzer;
