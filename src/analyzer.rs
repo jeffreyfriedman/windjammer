@@ -309,15 +309,25 @@ impl Analyzer {
     fn analyze_function(&mut self, func: &FunctionDecl) -> Result<AnalyzedFunction, String> {
         let mut inferred_ownership = HashMap::new();
 
+        // Check if this is a game decorator function
+        let is_game_decorator = func.decorators.iter().any(|d| {
+            matches!(d.name.as_str(), "init" | "update" | "render" | "render3d" | "input" | "cleanup")
+        });
+
         // Analyze each parameter to infer ownership mode
-        for param in &func.parameters {
+        for (i, param) in func.parameters.iter().enumerate() {
             let mode = match param.ownership {
                 OwnershipHint::Owned => OwnershipMode::Owned,
                 OwnershipHint::Mut => OwnershipMode::MutBorrowed,
                 OwnershipHint::Ref => OwnershipMode::Borrowed,
                 OwnershipHint::Inferred => {
-                    // Perform inference based on usage in function body
-                    self.infer_parameter_ownership(&param.name, &func.body, &func.return_type)?
+                    // Special case: Game decorator functions always take &mut for first parameter (game state)
+                    if is_game_decorator && i == 0 {
+                        OwnershipMode::MutBorrowed
+                    } else {
+                        // Perform inference based on usage in function body
+                        self.infer_parameter_ownership(&param.name, &func.body, &func.return_type)?
+                    }
                 }
             };
 
