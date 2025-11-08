@@ -1,0 +1,87 @@
+// Game runner - Pure Windjammer API
+// Abstracts away event loop, window creation, etc.
+
+// Run a game with update and render callbacks
+pub fn run_game<U, R>(
+    title: string,
+    width: int,
+    height: int,
+    mut update: U,
+    mut render: R
+) where
+    U: FnMut(&Input, float) -> bool,
+    R: FnMut(&mut Renderer)
+{
+    // Create window (backend hidden)
+    let window = create_window(title, width, height)
+    
+    // Create renderer (backend hidden)
+    let mut renderer = Renderer::new(width, height)
+    
+    // Create input handler
+    let mut input = Input::new()
+    
+    // Game loop
+    let mut last_time = get_time()
+    let mut running = true
+    
+    while running {
+        // Calculate delta time
+        let current_time = get_time()
+        let delta = current_time - last_time
+        last_time = current_time
+        
+        // Process events (backend hidden)
+        process_events(&mut input, &mut running)
+        
+        // Update game
+        running = update(&input, delta)
+        
+        // Clear screen
+        renderer.clear(Color::black())
+        
+        // Render game
+        render(&mut renderer)
+        
+        // Present frame (backend hidden)
+        present_frame()
+        
+        // Update input for next frame
+        input.update()
+    }
+}
+
+// Internal functions (hidden from user)
+fn create_window(title: string, width: int, height: int) -> Window {
+    // Backend-specific window creation
+    // Could be winit, SDL, glfw, etc.
+    Window::new()
+}
+
+fn get_time() -> float {
+    // Get current time in seconds
+    0.0
+}
+
+fn process_events(input: &mut Input, running: &mut bool) {
+    // Process window events
+    // Update input state
+    // Backend hidden
+}
+
+fn present_frame() {
+    // Swap buffers / present frame
+    // Backend hidden
+}
+
+// Window handle (opaque to user)
+struct Window {
+    // Internal state
+}
+
+impl Window {
+    fn new() -> Window {
+        Window {}
+    }
+}
+
