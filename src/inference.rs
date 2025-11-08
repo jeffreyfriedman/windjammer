@@ -164,22 +164,25 @@ impl InferenceEngine {
     /// Collect constraints from a single statement
     fn collect_constraints_from_statement(&self, stmt: &Statement, bounds: &mut InferredBounds) {
         match stmt {
-            Statement::Expression(expr) => {
+            Statement::Expression { expr, .. } => {
                 self.collect_constraints_from_expression(expr, bounds);
             }
             Statement::Let { value, .. } => {
                 self.collect_constraints_from_expression(value, bounds);
             }
-            Statement::Return(Some(expr)) => {
+            Statement::Return {
+                value: Some(expr), ..
+            } => {
                 self.collect_constraints_from_expression(expr, bounds);
             }
-            Statement::Return(None) => {
+            Statement::Return { value: None, .. } => {
                 // No constraints from bare return
             }
             Statement::If {
                 condition,
                 then_block,
                 else_block,
+                ..
             } => {
                 self.collect_constraints_from_expression(condition, bounds);
                 self.collect_constraints_from_statements(then_block, bounds);
@@ -187,7 +190,7 @@ impl InferenceEngine {
                     self.collect_constraints_from_statements(else_block, bounds);
                 }
             }
-            Statement::Match { value, arms } => {
+            Statement::Match { value, arms, .. } => {
                 self.collect_constraints_from_expression(value, bounds);
                 for arm in arms {
                     self.collect_constraints_from_expression(&arm.body, bounds);
@@ -201,14 +204,16 @@ impl InferenceEngine {
                 self.infer_trait_for_expression(iterable, "IntoIterator", bounds);
                 self.collect_constraints_from_statements(body, bounds);
             }
-            Statement::While { condition, body } => {
+            Statement::While {
+                condition, body, ..
+            } => {
                 self.collect_constraints_from_expression(condition, bounds);
                 self.collect_constraints_from_statements(body, bounds);
             }
-            Statement::Loop { body } => {
+            Statement::Loop { body, .. } => {
                 self.collect_constraints_from_statements(body, bounds);
             }
-            Statement::Thread { body } | Statement::Async { body } => {
+            Statement::Thread { body, .. } | Statement::Async { body, .. } => {
                 self.collect_constraints_from_statements(body, bounds);
             }
             _ => {
@@ -221,7 +226,9 @@ impl InferenceEngine {
     fn collect_constraints_from_expression(&self, expr: &Expression, bounds: &mut InferredBounds) {
         match expr {
             // Binary operators
-            Expression::Binary { op, left, right } => {
+            Expression::Binary {
+                op, left, right, ..
+            } => {
                 match op {
                     BinaryOp::Add => {
                         self.infer_trait_for_expression(left, "Add", bounds);
@@ -288,8 +295,10 @@ impl InferenceEngine {
             Expression::MacroInvocation { name, args, .. } => {
                 if name == "println" || name == "format" {
                     // Analyze format string for Display vs Debug
-                    if let Some(Expression::Literal(crate::parser::Literal::String(fmt))) =
-                        args.first()
+                    if let Some(Expression::Literal {
+                        value: crate::parser::Literal::String(fmt),
+                        ..
+                    }) = args.first()
                     {
                         // Convert Vec<Expression> to Vec<(Option<String>, Expression)>
                         let labeled_args: Vec<(Option<String>, Expression)> =
@@ -308,6 +317,7 @@ impl InferenceEngine {
             Expression::Call {
                 function,
                 arguments,
+                ..
             } => {
                 // Recurse
                 self.collect_constraints_from_expression(function, bounds);
@@ -319,7 +329,7 @@ impl InferenceEngine {
             // Ternary operator
 
             // Block expression
-            Expression::Block(statements) => {
+            Expression::Block { statements, .. } => {
                 self.collect_constraints_from_statements(statements, bounds);
             }
 
@@ -380,7 +390,7 @@ impl InferenceEngine {
     /// Extract type parameter name from an expression
     fn extract_type_param(&self, expr: &Expression) -> Option<String> {
         match expr {
-            Expression::Identifier(name) => {
+            Expression::Identifier { name, .. } => {
                 // Look up the type parameter for this variable
                 self.var_to_type_param.get(name).cloned()
             }
@@ -419,15 +429,26 @@ mod tests {
             }],
             return_type: None,
             is_async: false,
-            body: vec![Statement::Expression(Expression::MacroInvocation {
-                name: "println".to_string(),
-                args: vec![
-                    Expression::Literal(Literal::String("{}".to_string())),
-                    Expression::Identifier("x".to_string()),
-                ],
-                delimiter: crate::parser::MacroDelimiter::Parens,
-            })],
+            body: vec![Statement::Expression {
+                expr: Expression::MacroInvocation {
+                    name: "println".to_string(),
+                    args: vec![
+                        Expression::Literal {
+                            value: Literal::String("{}".to_string()),
+                            location: None,
+                        },
+                        Expression::Identifier {
+                            name: "x".to_string(),
+                            location: None,
+                        },
+                    ],
+                    delimiter: crate::parser::MacroDelimiter::Parens,
+                    location: None,
+                },
+                location: None,
+            }],
             where_clause: vec![],
+            parent_type: None,
         };
 
         let bounds = engine.infer_function_bounds(&func);
@@ -456,13 +477,21 @@ mod tests {
             }],
             return_type: Some(Type::Generic("T".to_string())),
             is_async: false,
-            body: vec![Statement::Expression(Expression::MethodCall {
-                object: Box::new(Expression::Identifier("x".to_string())),
-                method: "clone".to_string(),
-                type_args: None,
-                arguments: vec![],
-            })],
+            body: vec![Statement::Expression {
+                expr: Expression::MethodCall {
+                    object: Box::new(Expression::Identifier {
+                        name: "x".to_string(),
+                        location: None,
+                    }),
+                    method: "clone".to_string(),
+                    type_args: None,
+                    arguments: vec![],
+                    location: None,
+                },
+                location: None,
+            }],
             where_clause: vec![],
+            parent_type: None,
         };
 
         let bounds = engine.infer_function_bounds(&func);
@@ -499,12 +528,23 @@ mod tests {
             ],
             return_type: Some(Type::Generic("T".to_string())),
             is_async: false,
-            body: vec![Statement::Expression(Expression::Binary {
-                op: BinaryOp::Add,
-                left: Box::new(Expression::Identifier("x".to_string())),
-                right: Box::new(Expression::Identifier("y".to_string())),
-            })],
+            body: vec![Statement::Expression {
+                expr: Expression::Binary {
+                    op: BinaryOp::Add,
+                    left: Box::new(Expression::Identifier {
+                        name: "x".to_string(),
+                        location: None,
+                    }),
+                    right: Box::new(Expression::Identifier {
+                        name: "y".to_string(),
+                        location: None,
+                    }),
+                    location: None,
+                },
+                location: None,
+            }],
             where_clause: vec![],
+            parent_type: None,
         };
 
         let bounds = engine.infer_function_bounds(&func);

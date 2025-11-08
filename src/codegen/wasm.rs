@@ -131,12 +131,16 @@ impl WasmBackend {
         // Generate code for each item
         for item in &program.items {
             match item {
-                Item::Struct(struct_decl) => {
+                Item::Struct {
+                    decl: struct_decl, ..
+                } => {
                     if analyzer.is_component(&struct_decl.name) {
                         code.push_str(&component_gen.generate_component_struct(struct_decl));
                     }
                 }
-                Item::Impl(impl_block) => {
+                Item::Impl {
+                    block: impl_block, ..
+                } => {
                     if let Some(type_name) = self.extract_impl_type_name(impl_block) {
                         if let Some(component_info) = analyzer.get_component(&type_name) {
                             code.push_str(

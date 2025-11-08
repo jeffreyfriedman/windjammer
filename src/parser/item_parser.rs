@@ -185,7 +185,7 @@ impl Parser {
             let mut func = self.parse_function()?;
             func.is_async = is_async;
             func.decorators = decorators;
-            func.parent_type = Some(type_name.clone());  // Track which impl block this function belongs to
+            func.parent_type = Some(type_name.clone()); // Track which impl block this function belongs to
             functions.push(func);
         }
 
@@ -386,7 +386,7 @@ impl Parser {
                     // Reparse as expression
                     let expr = Expression::Identifier {
                         name: key,
-                        location: None,
+                        location: self.current_location(),
                     };
                     args.push((String::new(), expr));
                 }
@@ -582,7 +582,7 @@ impl Parser {
             parameters,
             return_type,
             body,
-            parent_type: None,      // Set by parse_impl for methods
+            parent_type: None, // Set by parse_impl for methods
         })
     }
 

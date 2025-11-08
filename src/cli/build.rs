@@ -84,7 +84,7 @@ fn build_javascript(path: &Path, config: &crate::codegen::backend::CodegenConfig
 
     // Lex and parse
     let mut lexer = Lexer::new(&source);
-    let tokens = lexer.tokenize();
+    let tokens = lexer.tokenize_with_locations();
     let mut parser = Parser::new(tokens);
     let program = parser
         .parse()

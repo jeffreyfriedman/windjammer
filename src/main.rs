@@ -364,7 +364,7 @@ fn check_project(path: &Path) -> Result<()> {
 
         let source = std::fs::read_to_string(file)?;
         let mut lexer = lexer::Lexer::new(&source);
-        let tokens = lexer.tokenize();
+        let tokens = lexer.tokenize_with_locations();
         let mut parser = parser::Parser::new(tokens);
 
         match parser.parse() {
@@ -499,7 +499,7 @@ impl ModuleCompiler {
             .map_err(|e| anyhow::anyhow!("Failed to read module {}: {}", module_path, e))?;
 
         let mut lexer = lexer::Lexer::new(&source);
-        let tokens = lexer.tokenize();
+        let tokens = lexer.tokenize_with_locations();
         let mut parser = parser::Parser::new(tokens);
         let program = parser
             .parse()
@@ -512,7 +512,7 @@ impl ModuleCompiler {
 
         // Recursively compile dependencies
         for item in &program.items {
-            if let parser::Item::Use { path, alias: _ } = item {
+            if let parser::Item::Use { path, alias: _, .. } = item {
                 let dep_path = path.join("::");
 
                 // Handle item imports: ./main::Args -> compile ./main, not ./main::Args
@@ -812,17 +812,21 @@ fn compile_file(
     // Regular Windjammer file - use standard parser
     // Lex
     let mut lexer = lexer::Lexer::new(&source);
-    let tokens = lexer.tokenize();
+    let tokens = lexer.tokenize_with_locations();
 
     // Parse
-    let mut parser = parser::Parser::new(tokens);
+    let mut parser = parser::Parser::new_with_source(
+        tokens,
+        input_path.to_string_lossy().to_string(),
+        source.clone(),
+    );
     let program = parser
         .parse()
         .map_err(|e| anyhow::anyhow!("Parse error: {}", e))?;
 
     // Compile dependencies first
     for item in &program.items {
-        if let parser::Item::Use { path, alias: _ } = item {
+        if let parser::Item::Use { path, alias: _, .. } = item {
             let module_path = path.join("::");
 
             // Handle item imports: ./main::Args -> compile ./main, not ./main::Args
@@ -869,7 +873,7 @@ fn compile_file(
     let mut inference_engine = inference::InferenceEngine::new();
     let mut inferred_bounds_map = std::collections::HashMap::new();
     for item in &program.items {
-        if let parser::Item::Function(func) = item {
+        if let parser::Item::Function { decl: func, .. } = item {
             let bounds = inference_engine.infer_function_bounds(func);
             if !bounds.is_empty() {
                 inferred_bounds_map.insert(func.name.clone(), bounds);
@@ -913,13 +917,55 @@ fn compile_file(
             // Use old generator for non-component WASM
             let mut generator = codegen::CodeGenerator::new(signatures, target);
             generator.set_inferred_bounds(inferred_bounds_map);
-            generator.generate_program(&program, &analyzed)
+
+            // Set source file for error mapping
+            generator.set_source_file(input_path);
+            let output_file_path = output_dir.join(
+                input_path
+                    .file_name()
+                    .unwrap()
+                    .to_str()
+                    .unwrap()
+                    .replace(".wj", ".rs"),
+            );
+            generator.set_output_file(&output_file_path);
+
+            let code = generator.generate_program(&program, &analyzed);
+
+            // Save source map for error mapping
+            let source_map_path = output_file_path.with_extension("rs.map");
+            if let Err(e) = generator.get_source_map().save_to_file(&source_map_path) {
+                eprintln!("Warning: Failed to save source map: {}", e);
+            }
+
+            code
         }
     } else {
         // Use old generator for Rust target
         let mut generator = codegen::CodeGenerator::new(signatures, target);
         generator.set_inferred_bounds(inferred_bounds_map);
-        generator.generate_program(&program, &analyzed)
+
+        // Set source file for error mapping
+        generator.set_source_file(input_path);
+        let output_file_path = output_dir.join(
+            input_path
+                .file_name()
+                .unwrap()
+                .to_str()
+                .unwrap()
+                .replace(".wj", ".rs"),
+        );
+        generator.set_output_file(&output_file_path);
+
+        let code = generator.generate_program(&program, &analyzed);
+
+        // Save source map for error mapping
+        let source_map_path = output_file_path.with_extension("rs.map");
+        if let Err(e) = generator.get_source_map().save_to_file(&source_map_path) {
+            eprintln!("Warning: Failed to save source map: {}", e);
+        }
+
+        code
     };
 
     // Combine module code with main code
@@ -954,7 +1000,7 @@ fn check_file(file_path: &Path) -> Result<()> {
     let source = std::fs::read_to_string(file_path)?;
 
     let mut lexer = lexer::Lexer::new(&source);
-    let tokens = lexer.tokenize();
+    let tokens = lexer.tokenize_with_locations();
 
     let mut parser = parser::Parser::new(tokens);
     let _program = parser
@@ -1176,7 +1222,7 @@ fn create_cargo_toml_with_deps(
     // Smart deduplication: extract package names and keep more specific versions
     let mut seen_packages = std::collections::HashSet::new();
     let mut deduplicated_deps = Vec::new();
-    
+
     // Sort so that more specific versions (with braces) come after simple ones
     deps.sort_by(|a, b| {
         let a_has_braces = a.contains('{');
@@ -1187,7 +1233,7 @@ fn create_cargo_toml_with_deps(
             _ => a.cmp(b),
         }
     });
-    
+
     for dep in deps {
         // Extract package name (everything before '=')
         if let Some(pkg_name) = dep.split('=').next() {
@@ -1205,7 +1251,7 @@ fn create_cargo_toml_with_deps(
             }
         }
     }
-    
+
     deps = deduplicated_deps;
 
     let deps_section = if deps.is_empty() {
@@ -2131,14 +2177,14 @@ fn compile_test_file(test_file: &Path, _output_dir: &Path) -> Result<Vec<TestFun
 
     // Lex and parse
     let mut lexer = Lexer::new(&source);
-    let tokens = lexer.tokenize();
+    let tokens = lexer.tokenize_with_locations();
     let mut parser = Parser::new(tokens);
     let program = parser.parse().map_err(|e| anyhow::anyhow!("{}", e))?;
 
     // Find test functions
     let mut tests = Vec::new();
     for item in &program.items {
-        if let crate::parser::Item::Function(func) = item {
+        if let crate::parser::Item::Function { decl: func, .. } = item {
             if func.name.starts_with("test_") {
                 tests.push(TestFunction {
                     name: func.name.clone(),
