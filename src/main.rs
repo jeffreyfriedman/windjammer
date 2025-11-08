@@ -66,6 +66,10 @@ enum Commands {
         /// Run cargo build after transpilation and show errors
         #[arg(long)]
         check: bool,
+
+        /// Show raw Rust errors instead of translated Windjammer errors
+        #[arg(long)]
+        raw_errors: bool,
     },
     /// Check a Windjammer project for errors (transpile + cargo check)
     Check {
@@ -80,6 +84,10 @@ enum Commands {
         /// Compilation target
         #[arg(short, long, value_enum, default_value = "wasm")]
         target: CompilationTarget,
+
+        /// Show raw Rust errors instead of translated Windjammer errors
+        #[arg(long)]
+        raw_errors: bool,
     },
     /// Lint a Windjammer project (code quality, style, performance, security)
     Lint {
@@ -193,19 +201,21 @@ fn main() -> Result<()> {
             output,
             target,
             check,
+            raw_errors,
         } => {
             build_project(&path, &output, target)?;
             if check {
-                check_with_cargo(&output)?;
+                check_with_cargo(&output, raw_errors)?;
             }
         }
         Commands::Check {
             path,
             output,
             target,
+            raw_errors,
         } => {
             build_project(&path, &output, target)?;
-            check_with_cargo(&output)?;
+            check_with_cargo(&output, raw_errors)?;
         }
         Commands::Lint {
             path,
@@ -1303,9 +1313,8 @@ opt-level = 3
     Ok(())
 }
 
-/// Run cargo build on the generated Rust code and display errors
-#[allow(dead_code)]
-fn check_with_cargo(output_dir: &Path) -> Result<()> {
+/// Run cargo build on the generated Rust code and display errors with source mapping
+fn check_with_cargo(output_dir: &Path, show_raw_errors: bool) -> Result<()> {
     use colored::*;
     use std::process::Command;
 
@@ -1322,79 +1331,175 @@ fn check_with_cargo(output_dir: &Path) -> Result<()> {
         return Ok(());
     }
 
-    // Parse JSON diagnostics
+    // Combine stderr and stdout (cargo outputs to both)
     let stderr = String::from_utf8_lossy(&output.stderr);
     let stdout = String::from_utf8_lossy(&output.stdout);
-
-    // Combine stderr and stdout (cargo outputs to both)
     let combined_output = format!("{}{}", stderr, stdout);
 
-    let mut diagnostics = Vec::new();
-    for line in combined_output.lines() {
-        if line.trim().is_empty() {
-            continue;
-        }
-
-        // Try to parse as cargo message
-        if let Ok(cargo_msg) = serde_json::from_str::<error_mapper::CargoMessage>(line) {
-            if cargo_msg.reason == "compiler-message" {
-                if let Some(diag) = cargo_msg.message {
-                    if diag.level == "error" || diag.level == "warning" {
-                        diagnostics.push(diag);
-                    }
-                }
-            }
-        }
-    }
-
-    if diagnostics.is_empty() {
-        // Fallback: show raw output if we couldn't parse JSON
+    // If raw errors requested, show them and exit
+    if show_raw_errors {
         println!("{} Rust compilation errors (raw):", "Error:".red().bold());
         println!("{}", combined_output);
         return Err(anyhow::anyhow!("Rust compilation failed"));
     }
 
-    // For now, show translated errors without source mapping
-    // (Full source mapping requires line tracking through the entire pipeline)
-    let error_count = diagnostics.len();
-    println!("\n{} errors detected:\n", error_count);
+    // Load all source maps from the output directory
+    let source_maps = load_source_maps(output_dir)?;
 
-    for diag in &diagnostics {
-        let level_str = match diag.level.as_str() {
-            "error" => "error".red().bold(),
-            "warning" => "warning".yellow().bold(),
-            _ => "note".cyan().bold(),
-        };
+    // Create error mapper with merged source maps
+    let error_mapper = error_mapper::ErrorMapper::new(source_maps);
 
-        // Display the error message
-        // TODO: Implement message translation in Phase 3
-        println!("{}: {}", level_str, diag.message);
+    // Map rustc output to Windjammer diagnostics
+    let wj_diagnostics = error_mapper.map_rustc_output(&combined_output);
 
-        if let Some(span) = diag.spans.iter().find(|s| s.is_primary) {
-            println!(
-                "  {} {}:{}:{}",
-                "-->".blue().bold(),
-                span.file_name,
-                span.line_start,
-                span.column_start
-            );
+    if wj_diagnostics.is_empty() {
+        // Fallback: show raw output if we couldn't parse any diagnostics
+        println!(
+            "{} Could not parse Rust compilation errors. Showing raw output:",
+            "Warning:".yellow().bold()
+        );
+        println!("{}", combined_output);
+        return Err(anyhow::anyhow!("Rust compilation failed"));
+    }
 
-            if let Some(text_vec) = &span.text {
-                if let Some(text) = text_vec.first() {
-                    println!("   |");
-                    println!("{:>4} | {}", span.line_start, text.text.trim());
-                    println!("   |");
+    // Display Windjammer diagnostics with beautiful formatting
+    let error_count = wj_diagnostics
+        .iter()
+        .filter(|d| matches!(d.level, error_mapper::DiagnosticLevel::Error))
+        .count();
+    let warning_count = wj_diagnostics
+        .iter()
+        .filter(|d| matches!(d.level, error_mapper::DiagnosticLevel::Warning))
+        .count();
+
+    if error_count > 0 {
+        println!(
+            "\n{} {} error{} detected:\n",
+            "Error:".red().bold(),
+            error_count,
+            if error_count == 1 { "" } else { "s" }
+        );
+    }
+    if warning_count > 0 {
+        println!(
+            "{} {} warning{}\n",
+            "Warning:".yellow().bold(),
+            warning_count,
+            if warning_count == 1 { "" } else { "s" }
+        );
+    }
+
+    for diag in &wj_diagnostics {
+        // Use the beautiful formatted output from WindjammerDiagnostic
+        let formatted = diag.format();
+
+        // Add colors
+        let colored_output = colorize_diagnostic(&formatted, &diag.level);
+        println!("{}", colored_output);
+    }
+
+    if error_count > 0 {
+        Err(anyhow::anyhow!(
+            "Compilation failed with {} error{}",
+            error_count,
+            if error_count == 1 { "" } else { "s" }
+        ))
+    } else {
+        Ok(())
+    }
+}
+
+/// Load and merge all source maps from the output directory
+fn load_source_maps(output_dir: &Path) -> Result<source_map::SourceMap> {
+    use colored::*;
+    use std::fs;
+
+    let mut merged_map = source_map::SourceMap::new();
+    let mut map_count = 0;
+    let mut mapping_count = 0;
+
+    // Find all .rs.map files in the output directory
+    if let Ok(entries) = fs::read_dir(output_dir) {
+        for entry in entries.flatten() {
+            let path = entry.path();
+            if path.extension().and_then(|s| s.to_str()) == Some("map") {
+                // Check if this is a .rs.map file (not just any .map file)
+                if let Some(stem) = path.file_stem() {
+                    if let Some(stem_str) = stem.to_str() {
+                        if !stem_str.ends_with(".rs") {
+                            continue;
+                        }
+                    }
+                }
+
+                // Load this source map
+                if let Ok(map) = source_map::SourceMap::load_from_file(&path) {
+                    // Get the corresponding .rs file path
+                    let rust_file = path.with_extension("").with_extension("rs");
+
+                    // Merge all mappings from this source map
+                    let mappings = map.mappings_for_rust_file(&rust_file);
+                    for mapping in mappings {
+                        merged_map.add_mapping(
+                            &mapping.rust_file,
+                            mapping.rust_line,
+                            mapping.rust_column,
+                            &mapping.wj_file,
+                            mapping.wj_line,
+                            mapping.wj_column,
+                        );
+                        mapping_count += 1;
+                    }
+                    map_count += 1;
                 }
             }
         }
-
-        println!();
     }
 
-    Err(anyhow::anyhow!(
-        "Rust compilation failed with {} errors",
-        error_count
-    ))
+    if map_count == 0 {
+        eprintln!(
+            "{} No source maps found in {}. Errors will reference Rust code.",
+            "Warning:".yellow().bold(),
+            output_dir.display()
+        );
+    } else {
+        eprintln!(
+            "{} Loaded {} source map{} with {} mapping{}",
+            "Info:".cyan(),
+            map_count,
+            if map_count == 1 { "" } else { "s" },
+            mapping_count,
+            if mapping_count == 1 { "" } else { "s" }
+        );
+    }
+
+    Ok(merged_map)
+}
+
+/// Colorize diagnostic output based on level
+fn colorize_diagnostic(text: &str, _level: &error_mapper::DiagnosticLevel) -> String {
+    use colored::*;
+
+    let mut result = String::new();
+    for line in text.lines() {
+        if line.starts_with("error") {
+            result.push_str(&line.red().bold().to_string());
+        } else if line.starts_with("warning") {
+            result.push_str(&line.yellow().bold().to_string());
+        } else if line.contains("-->") {
+            result.push_str(&line.blue().bold().to_string());
+        } else if line.starts_with("  = help:") {
+            result.push_str(&line.cyan().to_string());
+        } else if line.starts_with("  = suggestion:") {
+            result.push_str(&line.green().bold().to_string());
+        } else if line.starts_with("  = note:") {
+            result.push_str(&line.white().dimmed().to_string());
+        } else {
+            result.push_str(line);
+        }
+        result.push('\n');
+    }
+    result
 }
 
 /// Lint a Windjammer project using the LSP diagnostics engine
