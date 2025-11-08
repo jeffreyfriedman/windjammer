@@ -1,4 +1,5 @@
 // Ownership and borrow checking analyzer
+use crate::auto_clone::AutoCloneAnalysis;
 use crate::parser::*;
 use std::collections::HashMap;
 
@@ -6,6 +7,8 @@ use std::collections::HashMap;
 pub struct AnalyzedFunction {
     pub decl: FunctionDecl,
     pub inferred_ownership: HashMap<String, OwnershipMode>,
+    // AUTO-CLONE: Track where clones should be automatically inserted
+    pub auto_clone_analysis: AutoCloneAnalysis,
     // PHASE 2 OPTIMIZATION: Track unnecessary clones that can be eliminated
     pub clone_optimizations: Vec<CloneOptimization>,
     // PHASE 3 OPTIMIZATION: Track struct mapping opportunities
@@ -334,6 +337,9 @@ impl Analyzer {
         let assignment_optimizations = self.detect_assignment_optimizations(func);
         let defer_drop_optimizations = self.detect_defer_drop_opportunities(func);
 
+        // AUTO-CLONE: Analyze where clones should be automatically inserted
+        let auto_clone_analysis = AutoCloneAnalysis::analyze_function(func);
+
         // PHASE 7-9: Additional optimizations (future implementation)
         let const_static_optimizations = Vec::new(); // TODO: Implement detection
         let smallvec_optimizations = Vec::new(); // TODO: Implement detection
@@ -342,6 +348,7 @@ impl Analyzer {
         Ok(AnalyzedFunction {
             decl: func.clone(),
             inferred_ownership,
+            auto_clone_analysis,
             clone_optimizations,
             struct_mapping_optimizations,
             string_optimizations,
