@@ -441,6 +441,60 @@ impl ErrorMapper {
 // ============================================================================
 
 impl WindjammerDiagnostic {
+    /// Check if this error is automatically fixable
+    pub fn is_fixable(&self) -> bool {
+        if let Some(code) = &self.code {
+            matches!(code.as_str(), "E0384" | "E0308" | "E0425" | "E0596")
+        } else {
+            false
+        }
+    }
+    
+    /// Get the fix type for this error (if fixable)
+    pub fn get_fix(&self) -> Option<crate::auto_fix::FixType> {
+        use crate::auto_fix::FixType;
+        
+        if !self.is_fixable() {
+            return None;
+        }
+        
+        match self.code.as_ref()?.as_str() {
+            "E0384" | "E0596" => {
+                // Immutability error - suggest adding mut
+                if let Some(var_name) = extract_variable_from_message(&self.message) {
+                    Some(FixType::AddMut {
+                        file: self.location.file.clone(),
+                        line: self.location.line,
+                        variable_name: var_name,
+                    })
+                } else {
+                    None
+                }
+            }
+            "E0308" => {
+                // Type mismatch - suggest conversion
+                if self.message.contains("expected int") && self.message.contains("found string") {
+                    Some(FixType::AddParse {
+                        file: self.location.file.clone(),
+                        line: self.location.line,
+                        column: self.location.column,
+                        expression: "value".to_string(),
+                    })
+                } else if self.message.contains("expected String") && self.message.contains("found &str") {
+                    Some(FixType::AddToString {
+                        file: self.location.file.clone(),
+                        line: self.location.line,
+                        column: self.location.column,
+                        expression: "value".to_string(),
+                    })
+                } else {
+                    None
+                }
+            }
+            _ => None,
+        }
+    }
+    
     /// Format this diagnostic for display (Rust-style pretty printing with colors)
     pub fn format(&self) -> String {
         use colored::*;
@@ -746,4 +800,16 @@ mod tests {
         let found = mapper.extract_between(text, "found `", "`");
         assert_eq!(found, Some("&str".to_string()));
     }
+}
+
+
+/// Extract variable name from error message
+fn extract_variable_from_message(msg: &str) -> Option<String> {
+    // Look for patterns like "cannot assign twice to immutable variable `x`"
+    if let Some(start) = msg.find("`") {
+        if let Some(end) = msg[start + 1..].find("`") {
+            return Some(msg[start + 1..start + 1 + end].to_string());
+        }
+    }
+    None
 }
