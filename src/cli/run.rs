@@ -38,6 +38,10 @@ pub fn execute(path: &Path, args: &[String], target_str: &str) -> Result<()> {
             false, // check
             false, // raw_errors
             false, // fix
+            false, // verbose
+            false, // quiet
+            None,  // filter_file
+            None,  // filter_type
         )?;
 
         // Run with Node.js
