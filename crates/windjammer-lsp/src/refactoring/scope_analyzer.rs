@@ -152,13 +152,13 @@ impl ScopeAnalyzer {
                 }
             }
 
-            Statement::Expression(expr) => {
+            Statement::Expression { expr, location: _ } => {
                 self.analyze_expression(expr);
             }
 
-            Statement::Assignment { target, value } => {
+            Statement::Assignment { target, value, location: _ } => {
                 // Record write to target
-                if let Expression::Identifier(name) = target {
+                if let Expression::Identifier { name, location: _ } = target {
                     self.writes.insert(
                         name.clone(),
                         Variable {
@@ -174,15 +174,16 @@ impl ScopeAnalyzer {
                 self.analyze_expression(value);
             }
 
-            Statement::Return(Some(expr)) => {
+            Statement::Return { value: Some(expr), location: _ } => {
                 self.analyze_expression(expr);
             }
-            Statement::Return(None) => {}
+            Statement::Return { value: None, location: _ } => {}
 
             Statement::If {
                 condition,
                 then_block,
                 else_block,
+                location: _,
             } => {
                 self.analyze_expression(condition);
                 self.analyze_statements(then_block);
@@ -191,7 +192,7 @@ impl ScopeAnalyzer {
                 }
             }
 
-            Statement::While { condition, body } => {
+            Statement::While { condition, body, location: _ } => {
                 self.analyze_expression(condition);
                 self.analyze_statements(body);
             }
@@ -209,7 +210,7 @@ impl ScopeAnalyzer {
     /// Analyze an expression for variable usage
     fn analyze_expression(&mut self, expr: &Expression) {
         match expr {
-            Expression::Identifier(name) => {
+            Expression::Identifier { name, location: _ } => {
                 // Is this a read from outer scope?
                 if !self.inner_scope.contains(name) {
                     self.reads.insert(
@@ -236,6 +237,7 @@ impl ScopeAnalyzer {
             Expression::Call {
                 function,
                 arguments,
+                location: _,
             } => {
                 self.analyze_expression(function);
                 for (_, arg) in arguments {
@@ -293,10 +295,10 @@ impl ScopeAnalyzer {
     /// Collect variable usages in a statement
     fn collect_usages_in_statement(stmt: &Statement, usages: &mut HashSet<String>) {
         match stmt {
-            Statement::Expression(expr) => {
+            Statement::Expression { expr, location: _ } => {
                 Self::collect_usages_in_expression(expr, usages);
             }
-            Statement::Return(Some(expr)) => {
+            Statement::Return { value: Some(expr), location: _ } => {
                 Self::collect_usages_in_expression(expr, usages);
             }
             Statement::Assignment { value, .. } => {
@@ -306,6 +308,7 @@ impl ScopeAnalyzer {
                 condition,
                 then_block,
                 else_block,
+                location: _,
             } => {
                 Self::collect_usages_in_expression(condition, usages);
                 for stmt in then_block {
@@ -324,7 +327,7 @@ impl ScopeAnalyzer {
     /// Collect variable usages in an expression
     fn collect_usages_in_expression(expr: &Expression, usages: &mut HashSet<String>) {
         match expr {
-            Expression::Identifier(name) => {
+            Expression::Identifier { name, location: _ } => {
                 usages.insert(name.clone());
             }
             Expression::Binary { left, right, .. } => {
@@ -337,6 +340,7 @@ impl ScopeAnalyzer {
             Expression::Call {
                 function,
                 arguments,
+                location: _,
             } => {
                 Self::collect_usages_in_expression(function, usages);
                 for (_, arg) in arguments {
@@ -410,7 +414,7 @@ mod tests {
             mutable: false,
             type_: None,
             value: Expression::Binary {
-                left: Box::new(Expression::Identifier("x".to_string())),
+                left: Box::new(Expression::Identifier { name: "x".to_string(), location: None }),
                 op: BinaryOp::Add,
                 right: Box::new(Expression::Literal(windjammer::parser::Literal::Int(5))),
             },
@@ -445,8 +449,8 @@ mod tests {
 
         // After: println(result);
         let after = vec![Statement::Expression(Expression::Call {
-            function: Box::new(Expression::Identifier("println".to_string())),
-            arguments: vec![(None, Expression::Identifier("result".to_string()))],
+            function: Box::new(Expression::Identifier { name: "println".to_string(), location: None }),
+            arguments: vec![(None, Expression::Identifier { name: "result".to_string(), location: None })],
         })];
 
         let analysis = analyzer.analyze(&before, &selected, &after);
@@ -474,7 +478,7 @@ mod tests {
             mutable: false,
             type_: None,
             value: Expression::Binary {
-                left: Box::new(Expression::Identifier("x".to_string())),
+                left: Box::new(Expression::Identifier { name: "x".to_string(), location: None }),
                 op: BinaryOp::Mul,
                 right: Box::new(Expression::Literal(windjammer::parser::Literal::Int(2))),
             },
@@ -482,8 +486,8 @@ mod tests {
 
         // After: use(y);
         let after = vec![Statement::Expression(Expression::Call {
-            function: Box::new(Expression::Identifier("use".to_string())),
-            arguments: vec![(None, Expression::Identifier("y".to_string()))],
+            function: Box::new(Expression::Identifier { name: "use".to_string(), location: None }),
+            arguments: vec![(None, Expression::Identifier { name: "y".to_string(), location: None })],
         })];
 
         let analysis = analyzer.analyze(&before, &selected, &after);

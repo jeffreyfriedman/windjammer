@@ -51,7 +51,7 @@ impl SymbolTable {
 
         for (idx, item) in program.items.iter().enumerate() {
             match item {
-                Item::Function(func) => {
+                Item::Function { decl: func, location: _ } => {
                     // TODO: Get actual line number from AST
                     // For now, use item index as a heuristic
                     let location = Location {
@@ -77,7 +77,7 @@ impl SymbolTable {
                         },
                     );
                 }
-                Item::Struct(struct_decl) => {
+                Item::Struct { decl: struct_decl, location: _ } => {
                     let location = Location {
                         uri: uri.clone(),
                         range: Range {
@@ -101,7 +101,7 @@ impl SymbolTable {
                         },
                     );
                 }
-                Item::Enum(enum_decl) => {
+                Item::Enum { decl: enum_decl, location: _ } => {
                     let location = Location {
                         uri: uri.clone(),
                         range: Range {
@@ -151,7 +151,7 @@ impl SymbolTable {
                         );
                     }
                 }
-                Item::Trait(trait_decl) => {
+                Item::Trait { decl: trait_decl, location: _ } => {
                     let location = Location {
                         uri: uri.clone(),
                         range: Range {
@@ -175,7 +175,7 @@ impl SymbolTable {
                         },
                     );
                 }
-                Item::Impl(impl_block) => {
+                Item::Impl { block: impl_block, location: _ } => {
                     // For impl blocks, we could track methods
                     // TODO: Add method tracking
                     let _ = impl_block;

@@ -74,10 +74,10 @@ impl SemanticTokensProvider {
 
     fn collect_item_tokens(&self, item: &Item, tokens: &mut Vec<SemanticToken>) {
         match item {
-            Item::Function(func) => {
+            Item::Function { decl: func, location: _ } => {
                 self.collect_function_tokens(func, tokens);
             }
-            Item::Struct(s) => {
+            Item::Struct { decl: s, location: _ } => {
                 // Add struct name token
                 if let Ok(pos) = self.find_identifier_position(&s.name, 0) {
                     tokens.push(SemanticToken {
@@ -89,7 +89,7 @@ impl SemanticTokensProvider {
                     });
                 }
             }
-            Item::Enum(e) => {
+            Item::Enum { decl: e, location: _ } => {
                 // Add enum name token
                 if let Ok(pos) = self.find_identifier_position(&e.name, 0) {
                     tokens.push(SemanticToken {
