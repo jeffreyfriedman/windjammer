@@ -236,7 +236,7 @@ impl FixApplicator {
             FixType::FixTypo {
                 file,
                 line,
-                column,
+                column: _,
                 wrong_name,
                 correct_name,
             } => {
@@ -267,7 +267,7 @@ impl FixApplicator {
             FixType::AddParse {
                 file,
                 line,
-                column,
+                column: _,
                 expression,
             } => {
                 let content = fs::read_to_string(file)?;
@@ -293,7 +293,7 @@ impl FixApplicator {
             FixType::AddToString {
                 file,
                 line,
-                column,
+                column: _,
                 expression,
             } => {
                 let content = fs::read_to_string(file)?;
