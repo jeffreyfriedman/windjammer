@@ -33,8 +33,8 @@ run_test() {
     echo "  File: $test_file"
     echo "  Expected: $expected_error"
     
-    # Build and capture output
-    local output=$(cargo run -- build "$test_file" -o "$OUTPUT_DIR/$test_name" --check 2>&1 || true)
+    # Build and check, capturing output
+    local output=$(cargo run -- check "$test_file" 2>&1 || true)
     
     # Check if expected error message appears
     if echo "$output" | grep -q "$expected_error"; then
