@@ -656,6 +656,12 @@ impl CodeGenerator {
         // Inject implicit imports if needed
         let mut implicit_imports = String::new();
 
+        // Add game framework imports if this is a game
+        if game_framework_info.is_some() {
+            implicit_imports.push_str("use windjammer_game_framework::renderer::{Renderer, Color};\n");
+            implicit_imports.push_str("use windjammer_game_framework::input::{Input, Key};\n");
+        }
+
         // Add trait imports for inferred bounds
         if !self.needs_trait_imports.is_empty() {
             let mut sorted_traits: Vec<_> = self.needs_trait_imports.iter().collect();
@@ -3819,12 +3825,29 @@ impl CodeGenerator {
     fn generate_game_impl(&mut self, s: &StructDecl) -> String {
         let mut output = String::new();
 
-        // For now, generate a marker comment
-        // In future iterations, we'll generate actual trait implementations
-        output.push_str(&format!(
-            "// Game trait implementation for {}\n// TODO: Implement Game trait",
-            s.name
-        ));
+        // Generate Default implementation for game state
+        // All fields are initialized to their default values (0, 0.0, false, etc.)
+        output.push_str(&format!("impl Default for {} {{\n", s.name));
+        output.push_str("    fn default() -> Self {\n");
+        output.push_str(&format!("        {} {{\n", s.name));
+        
+        for field in &s.fields {
+            let default_value = match &field.field_type {
+                Type::Int | Type::Int32 | Type::Uint => "0",
+                Type::Float => "0.0",
+                Type::Bool => "false",
+                Type::String => "String::new()",
+                Type::Vec(_) => "Vec::new()",
+                Type::Custom(name) if name == "String" => "String::new()",
+                Type::Custom(name) if name.starts_with("Vec") => "Vec::new()",
+                _ => "Default::default()",
+            };
+            output.push_str(&format!("            {}: {},\n", field.name, default_value));
+        }
+        
+        output.push_str("        }\n");
+        output.push_str("    }\n");
+        output.push_str("}");
 
         output
     }
