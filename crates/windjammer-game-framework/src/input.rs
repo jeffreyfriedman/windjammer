@@ -222,6 +222,24 @@ impl Input {
         self.mouse_delta
     }
 
+    /// Get the horizontal mouse movement delta (X axis)
+    ///
+    /// Returns dx in pixels. Positive = right, negative = left.
+    ///
+    /// Example: `let dx = input.mouse_delta_x(); camera.rotate_yaw(dx);`
+    pub fn mouse_delta_x(&self) -> f64 {
+        self.mouse_delta.0
+    }
+
+    /// Get the vertical mouse movement delta (Y axis)
+    ///
+    /// Returns dy in pixels. Positive = down, negative = up.
+    ///
+    /// Example: `let dy = input.mouse_delta_y(); camera.rotate_pitch(dy);`
+    pub fn mouse_delta_y(&self) -> f64 {
+        self.mouse_delta.1
+    }
+
     // ========================================
     // LEGACY API: For compatibility
     // ========================================
@@ -337,6 +355,38 @@ impl Input {
         }
     }
 
+    /// Internal: Update mouse button state from winit event
+    #[doc(hidden)]
+    pub fn update_mouse_button_from_winit(
+        &mut self,
+        state: winit::event::ElementState,
+        button: winit::event::MouseButton,
+    ) {
+        if let Some(mb) = Self::map_mouse_button(button) {
+            if state.is_pressed() {
+                if !self.mouse_buttons_pressed.contains(&mb) {
+                    self.mouse_buttons_just_pressed.insert(mb);
+                }
+                self.mouse_buttons_pressed.insert(mb);
+            } else {
+                self.mouse_buttons_pressed.remove(&mb);
+                self.mouse_buttons_just_released.insert(mb);
+            }
+        }
+    }
+
+    /// Internal: Update mouse position from winit event
+    #[doc(hidden)]
+    pub fn update_mouse_position_from_winit(&mut self, x: f64, y: f64) {
+        if let Some(last_pos) = self.last_mouse_position {
+            self.mouse_delta = (x - last_pos.0, y - last_pos.1);
+        } else {
+            self.mouse_delta = (0.0, 0.0);
+        }
+        self.mouse_position = (x, y);
+        self.last_mouse_position = Some((x, y));
+    }
+
     /// Clear "just pressed" and "just released" states
     /// Should be called at the end of each frame
     pub fn clear_frame_state(&mut self) {
@@ -423,6 +473,16 @@ impl Input {
 
                 _ => None,
             },
+            _ => None,
+        }
+    }
+
+    /// Map winit MouseButton to our MouseButton enum
+    fn map_mouse_button(button: winit::event::MouseButton) -> Option<MouseButton> {
+        match button {
+            winit::event::MouseButton::Left => Some(MouseButton::Left),
+            winit::event::MouseButton::Right => Some(MouseButton::Right),
+            winit::event::MouseButton::Middle => Some(MouseButton::Middle),
             _ => None,
         }
     }
