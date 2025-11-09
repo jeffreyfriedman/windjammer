@@ -406,6 +406,20 @@ impl CodeGenerator {
                 input_fn
             ));
             output.push_str("                }\n");
+            
+            // Handle mouse button input
+            output.push_str("                WindowEvent::MouseInput { state, button, .. } => {\n");
+            output.push_str("                    input.update_mouse_button_from_winit(state, button);\n");
+            output.push_str(&format!(
+                "                    {}(&mut game, &input);\n",
+                input_fn
+            ));
+            output.push_str("                }\n");
+            
+            // Handle mouse movement
+            output.push_str("                WindowEvent::CursorMoved { position, .. } => {\n");
+            output.push_str("                    input.update_mouse_position_from_winit(position.x, position.y);\n");
+            output.push_str("                }\n");
         }
 
         output.push_str("                _ => {}\n");
@@ -708,7 +722,7 @@ impl CodeGenerator {
                 implicit_imports
                     .push_str("use windjammer_game_framework::renderer::{Renderer, Color};\n");
             }
-            implicit_imports.push_str("use windjammer_game_framework::input::{Input, Key};\n");
+            implicit_imports.push_str("use windjammer_game_framework::input::{Input, Key, MouseButton};\n");
             implicit_imports.push_str("use windjammer_game_framework::math::{Vec3, Mat4};\n");
         }
 

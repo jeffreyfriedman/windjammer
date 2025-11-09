@@ -405,6 +405,51 @@ impl ShooterGame {
             i += 1
         }
     }
+
+    fn shoot(self) {
+        // Calculate bullet direction from player yaw and pitch
+        let yaw_rad = self.player_yaw * 3.14159 / 180.0
+        let pitch_rad = self.player_pitch * 3.14159 / 180.0
+        
+        let forward_x = yaw_rad.sin() * pitch_rad.cos()
+        let forward_y = pitch_rad.sin()
+        let forward_z = yaw_rad.cos() * pitch_rad.cos()
+        
+        // Bullet speed depends on weapon
+        let speed = if self.weapon == 0 {
+            30.0  // Pistol
+        } else if self.weapon == 1 {
+            25.0  // Shotgun
+        } else {
+            20.0  // Rocket
+        }
+        
+        // Bullet damage depends on weapon
+        let damage = if self.weapon == 0 {
+            1  // Pistol
+        } else if self.weapon == 1 {
+            2  // Shotgun
+        } else {
+            3  // Rocket
+        }
+        
+        // Spawn bullet slightly in front of player
+        let spawn_offset = 1.5
+        let bullet_pos = Vec3::new(
+            self.player_pos.x + forward_x * spawn_offset,
+            self.player_pos.y + forward_y * spawn_offset,
+            self.player_pos.z + forward_z * spawn_offset
+        )
+        
+        self.bullets.push(Bullet {
+            pos: bullet_pos,
+            velocity: Vec3::new(forward_x * speed, forward_y * speed, forward_z * speed),
+            damage: damage,
+            lifetime: 5.0,
+        })
+        
+        println("BANG! Fired weapon " + self.weapon.to_string())
+    }
 }
 
 // ============================================================================
@@ -426,6 +471,11 @@ fn handle_input(game: ShooterGame, input: Input) {
         game.paused = true
         println("Game paused! Press ESC to resume")
         return
+    }
+    
+    // Shooting
+    if input.mouse_pressed(MouseButton::Left) {
+        game.shoot()
     }
     
     // Weapon switching
@@ -451,6 +501,21 @@ fn handle_input(game: ShooterGame, input: Input) {
 fn update(game: ShooterGame, delta: f32, input: Input) {
     if game.paused {
         return
+    }
+    
+    // Mouse look (camera rotation)
+    let dx = input.mouse_delta_x() as f32
+    let dy = input.mouse_delta_y() as f32
+    
+    game.player_yaw += dx * game.mouse_sensitivity
+    game.player_pitch -= dy * game.mouse_sensitivity
+    
+    // Clamp pitch to prevent camera flipping
+    if game.player_pitch > 89.0 {
+        game.player_pitch = 89.0
+    }
+    if game.player_pitch < -89.0 {
+        game.player_pitch = -89.0
     }
     
     // Player movement
