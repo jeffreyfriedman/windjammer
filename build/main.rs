@@ -6,22 +6,22 @@ use windjammer_game_framework::math::{Vec3, Mat4};
 struct ShooterGame {
     player_pos: Vec3,
     player_velocity: Vec3,
-    player_yaw: f64,
-    player_pitch: f64,
+    player_yaw: f32,
+    player_pitch: f32,
     player_health: i64,
     player_on_ground: bool,
-    move_speed: f64,
-    sprint_speed: f64,
-    jump_velocity: f64,
-    gravity: f64,
-    mouse_sensitivity: f64,
+    move_speed: f32,
+    sprint_speed: f32,
+    jump_velocity: f32,
+    gravity: f32,
+    mouse_sensitivity: f32,
     weapon: i64,
     ammo: i64,
     score: i64,
     enemies: Vec<Enemy>,
     bullets: Vec<Bullet>,
     walls: Vec<Wall>,
-    floor_y: f64,
+    floor_y: f32,
     paused: bool,
 }
 
@@ -30,22 +30,22 @@ impl Default for ShooterGame {
         ShooterGame {
             player_pos: Vec::new(),
             player_velocity: Vec::new(),
-            player_yaw: 0.0,
-            player_pitch: 0.0,
+            player_yaw: Default::default(),
+            player_pitch: Default::default(),
             player_health: 0,
             player_on_ground: false,
-            move_speed: 0.0,
-            sprint_speed: 0.0,
-            jump_velocity: 0.0,
-            gravity: 0.0,
-            mouse_sensitivity: 0.0,
+            move_speed: Default::default(),
+            sprint_speed: Default::default(),
+            jump_velocity: Default::default(),
+            gravity: Default::default(),
+            mouse_sensitivity: Default::default(),
             weapon: 0,
             ammo: 0,
             score: 0,
             enemies: Vec::new(),
             bullets: Vec::new(),
             walls: Vec::new(),
-            floor_y: 0.0,
+            floor_y: Default::default(),
             paused: false,
         }
     }
@@ -63,13 +63,35 @@ struct Bullet {
     pos: Vec3,
     velocity: Vec3,
     damage: i64,
-    lifetime: f64,
+    lifetime: f32,
 }
 
 struct Wall {
     pos: Vec3,
     size: Vec3,
     color: Color,
+}
+
+impl ShooterGame {
+#[inline]
+fn create_level(mut self) {
+        self.walls.push(Wall { pos: Vec3::new(0.0, 2.0, -20.0), size: Vec3::new(40.0, 4.0, 1.0), color: Color::rgb(0.5, 0.5, 0.5) });
+        self.walls.push(Wall { pos: Vec3::new(0.0, 2.0, 20.0), size: Vec3::new(40.0, 4.0, 1.0), color: Color::rgb(0.5, 0.5, 0.5) });
+        self.walls.push(Wall { pos: Vec3::new(-20.0, 2.0, 0.0), size: Vec3::new(1.0, 4.0, 40.0), color: Color::rgb(0.5, 0.5, 0.5) });
+        self.walls.push(Wall { pos: Vec3::new(20.0, 2.0, 0.0), size: Vec3::new(1.0, 4.0, 40.0), color: Color::rgb(0.5, 0.5, 0.5) });
+        self.walls.push(Wall { pos: Vec3::new(-10.0, 2.0, 0.0), size: Vec3::new(1.0, 4.0, 15.0), color: Color::rgb(0.4, 0.4, 0.4) });
+        self.walls.push(Wall { pos: Vec3::new(10.0, 2.0, 5.0), size: Vec3::new(1.0, 4.0, 20.0), color: Color::rgb(0.4, 0.4, 0.4) });
+        self.walls.push(Wall { pos: Vec3::new(0.0, 2.0, -10.0), size: Vec3::new(15.0, 4.0, 1.0), color: Color::rgb(0.4, 0.4, 0.4) });
+        self.walls.push(Wall { pos: Vec3::new(5.0, 2.0, 10.0), size: Vec3::new(20.0, 4.0, 1.0), color: Color::rgb(0.4, 0.4, 0.4) })
+}
+#[inline]
+fn spawn_enemies(mut self) {
+        self.enemies.push(Enemy { pos: Vec3::new(10.0, 1.0, 10.0), velocity: Vec3::new(0.0, 0.0, 0.0), health: 3, state: 1, color: Color::rgb(1.0, 0.0, 0.0) });
+        self.enemies.push(Enemy { pos: Vec3::new(-10.0, 1.0, 10.0), velocity: Vec3::new(0.0, 0.0, 0.0), health: 3, state: 1, color: Color::rgb(1.0, 0.2, 0.0) });
+        self.enemies.push(Enemy { pos: Vec3::new(10.0, 1.0, -10.0), velocity: Vec3::new(0.0, 0.0, 0.0), health: 3, state: 1, color: Color::rgb(0.8, 0.0, 0.0) });
+        self.enemies.push(Enemy { pos: Vec3::new(-10.0, 1.0, -10.0), velocity: Vec3::new(0.0, 0.0, 0.0), health: 3, state: 1, color: Color::rgb(1.0, 0.1, 0.1) });
+        self.enemies.push(Enemy { pos: Vec3::new(0.0, 1.0, 15.0), velocity: Vec3::new(0.0, 0.0, 0.0), health: 3, state: 1, color: Color::rgb(0.9, 0.0, 0.0) })
+}
 }
 
 fn init(game: &mut ShooterGame) {
@@ -89,8 +111,8 @@ fn init(game: &mut ShooterGame) {
     game.score = 0;
     game.floor_y = 0.0;
     game.paused = false;
-    create_level(&game);
-    spawn_enemies(&game);
+    game.create_level();
+    game.spawn_enemies();
     println!("=== GREYBOX SHOOTER ===");
     println!("WASD - Move");
     println!("Space - Jump");
@@ -101,27 +123,6 @@ fn init(game: &mut ShooterGame) {
     println!("ESC - Pause");
     println!("");
     println!("Kill all enemies to win!")
-}
-
-#[inline]
-fn create_level(game: &ShooterGame) {
-    game.walls.push(Wall { pos: Vec3::new(0.0, 2.0, -20.0), size: Vec3::new(40.0, 4.0, 1.0), color: Color::rgb(0.5, 0.5, 0.5) });
-    game.walls.push(Wall { pos: Vec3::new(0.0, 2.0, 20.0), size: Vec3::new(40.0, 4.0, 1.0), color: Color::rgb(0.5, 0.5, 0.5) });
-    game.walls.push(Wall { pos: Vec3::new(-20.0, 2.0, 0.0), size: Vec3::new(1.0, 4.0, 40.0), color: Color::rgb(0.5, 0.5, 0.5) });
-    game.walls.push(Wall { pos: Vec3::new(20.0, 2.0, 0.0), size: Vec3::new(1.0, 4.0, 40.0), color: Color::rgb(0.5, 0.5, 0.5) });
-    game.walls.push(Wall { pos: Vec3::new(-10.0, 2.0, 0.0), size: Vec3::new(1.0, 4.0, 15.0), color: Color::rgb(0.4, 0.4, 0.4) });
-    game.walls.push(Wall { pos: Vec3::new(10.0, 2.0, 5.0), size: Vec3::new(1.0, 4.0, 20.0), color: Color::rgb(0.4, 0.4, 0.4) });
-    game.walls.push(Wall { pos: Vec3::new(0.0, 2.0, -10.0), size: Vec3::new(15.0, 4.0, 1.0), color: Color::rgb(0.4, 0.4, 0.4) });
-    game.walls.push(Wall { pos: Vec3::new(5.0, 2.0, 10.0), size: Vec3::new(20.0, 4.0, 1.0), color: Color::rgb(0.4, 0.4, 0.4) })
-}
-
-#[inline]
-fn spawn_enemies(game: &ShooterGame) {
-    game.enemies.push(Enemy { pos: Vec3::new(10.0, 1.0, 10.0), velocity: Vec3::new(0.0, 0.0, 0.0), health: 3, state: 1, color: Color::rgb(1.0, 0.0, 0.0) });
-    game.enemies.push(Enemy { pos: Vec3::new(-10.0, 1.0, 10.0), velocity: Vec3::new(0.0, 0.0, 0.0), health: 3, state: 1, color: Color::rgb(1.0, 0.2, 0.0) });
-    game.enemies.push(Enemy { pos: Vec3::new(10.0, 1.0, -10.0), velocity: Vec3::new(0.0, 0.0, 0.0), health: 3, state: 1, color: Color::rgb(0.8, 0.0, 0.0) });
-    game.enemies.push(Enemy { pos: Vec3::new(-10.0, 1.0, -10.0), velocity: Vec3::new(0.0, 0.0, 0.0), health: 3, state: 1, color: Color::rgb(1.0, 0.1, 0.1) });
-    game.enemies.push(Enemy { pos: Vec3::new(0.0, 1.0, 15.0), velocity: Vec3::new(0.0, 0.0, 0.0), health: 3, state: 1, color: Color::rgb(0.9, 0.0, 0.0) })
 }
 
 fn handle_input(game: &mut ShooterGame, input: &Input) {
@@ -137,22 +138,22 @@ fn handle_input(game: &mut ShooterGame, input: &Input) {
         println!("Game paused! Press ESC to resume");
         return;
     }
-    if input.pressed(Key::Key1) {
+    if input.pressed(Key::Num1) {
         game.weapon = 0;
         println!("Switched to Pistol")
     }
-    if input.pressed(Key::Key2) {
+    if input.pressed(Key::Num2) {
         game.weapon = 1;
         println!("Switched to Shotgun")
     }
-    if input.pressed(Key::Key3) {
+    if input.pressed(Key::Num3) {
         game.weapon = 2;
         println!("Switched to Rocket Launcher")
     }
 }
 
 #[inline]
-fn update(game: &mut ShooterGame, delta: f64, input: &Input) {
+fn update(game: &mut ShooterGame, delta: f32, input: &Input) {
     if game.paused {
         return;
     }
@@ -165,7 +166,7 @@ fn update(game: &mut ShooterGame, delta: f64, input: &Input) {
     }
 }
 
-fn update_player_movement(game: &ShooterGame, delta: f64, input: &Input) {
+fn update_player_movement(game: &ShooterGame, delta: f32, input: &Input) {
     let yaw_rad = game.player_yaw * 3.14159 / 180.0;
     let forward_x = yaw_rad.sin();
     let forward_z = yaw_rad.cos();
@@ -239,7 +240,7 @@ fn update_player_movement(game: &ShooterGame, delta: f64, input: &Input) {
 }
 
 #[inline]
-fn check_collision(x: f64, z: f64, wall: &Wall) -> bool {
+fn check_collision(x: f32, z: f32, wall: &Wall) -> bool {
     let half_width = wall.size.x / 2.0;
     let half_depth = wall.size.z / 2.0;
     let player_radius = 0.5;
@@ -249,7 +250,7 @@ fn check_collision(x: f64, z: f64, wall: &Wall) -> bool {
 }
 
 #[inline]
-fn update_enemies(game: &ShooterGame, delta: f64) {
+fn update_enemies(game: &ShooterGame, delta: f32) {
     let mut i = 0;
     while i < game.enemies.len() {
         let enemy = game.enemies[i];
@@ -285,7 +286,7 @@ fn update_enemies(game: &ShooterGame, delta: f64) {
 }
 
 #[inline]
-fn update_bullets(game: &ShooterGame, delta: f64) {
+fn update_bullets(game: &ShooterGame, delta: f32) {
     let mut i = 0;
     while i < game.bullets.len() {
         let bullet = game.bullets[i];
@@ -401,7 +402,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 WindowEvent::RedrawRequested => {
                     // Calculate delta time
                     let now = std::time::Instant::now();
-                    let delta = (now - last_time).as_secs_f64();
+                    let delta = (now - last_time).as_secs_f32();
                     last_time = now;
 
                     // Update game logic
