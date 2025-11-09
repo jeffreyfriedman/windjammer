@@ -360,7 +360,7 @@ impl CodeGenerator {
         output.push_str("                WindowEvent::RedrawRequested => {\n");
         output.push_str("                    // Calculate delta time\n");
         output.push_str("                    let now = std::time::Instant::now();\n");
-        output.push_str("                    let delta = (now - last_time).as_secs_f64();\n");
+        output.push_str("                    let delta = (now - last_time).as_secs_f32();\n");
         output.push_str("                    last_time = now;\n");
         output.push_str("\n");
 
