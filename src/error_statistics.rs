@@ -2,7 +2,6 @@
 ///
 /// This module provides error tracking and statistics to help developers
 /// understand common error patterns and improve their code quality.
-
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::fs;
@@ -137,7 +136,10 @@ impl ErrorStatistics {
 
         // Update error by type
         let error_type = if code.is_some() { "error" } else { "warning" };
-        *self.errors_by_type.entry(error_type.to_string()).or_insert(0) += 1;
+        *self
+            .errors_by_type
+            .entry(error_type.to_string())
+            .or_insert(0) += 1;
 
         // Add to recent errors (keep last 100)
         self.recent_errors.push(ErrorRecord {
@@ -235,7 +237,10 @@ impl ErrorStatistics {
         ));
 
         // Top errors
-        output.push_str(&format!("{}\n", "Top 5 Most Common Errors:".yellow().bold()));
+        output.push_str(&format!(
+            "{}\n",
+            "Top 5 Most Common Errors:".yellow().bold()
+        ));
         let top_errors = self.get_top_errors(5);
         if top_errors.is_empty() {
             output.push_str("  No errors recorded yet\n");
@@ -273,10 +278,7 @@ impl ErrorStatistics {
         output.push_str("\n");
 
         // Recent errors
-        output.push_str(&format!(
-            "{}\n",
-            "Recent Errors (last 5):".yellow().bold()
-        ));
+        output.push_str(&format!("{}\n", "Recent Errors (last 5):".yellow().bold()));
         let recent = self.recent_errors.iter().rev().take(5).collect::<Vec<_>>();
         if recent.is_empty() {
             output.push_str("  No recent errors\n");
@@ -449,4 +451,3 @@ mod tests {
         assert_eq!(stats.recent_errors.len(), 100);
     }
 }
-

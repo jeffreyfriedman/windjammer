@@ -1,0 +1,9 @@
+/Users/jeffreyfriedman/src/windjammer/build/target/release/build/clang-sys-43d9f8750fe6b742/build_script_build-43d9f8750fe6b742.d: /Users/jeffreyfriedman/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/clang-sys-1.8.1/build.rs /Users/jeffreyfriedman/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/clang-sys-1.8.1/build/macros.rs /Users/jeffreyfriedman/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/clang-sys-1.8.1/build/common.rs /Users/jeffreyfriedman/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/clang-sys-1.8.1/build/dynamic.rs /Users/jeffreyfriedman/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/clang-sys-1.8.1/build/static.rs
+
+/Users/jeffreyfriedman/src/windjammer/build/target/release/build/clang-sys-43d9f8750fe6b742/build_script_build-43d9f8750fe6b742: /Users/jeffreyfriedman/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/clang-sys-1.8.1/build.rs /Users/jeffreyfriedman/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/clang-sys-1.8.1/build/macros.rs /Users/jeffreyfriedman/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/clang-sys-1.8.1/build/common.rs /Users/jeffreyfriedman/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/clang-sys-1.8.1/build/dynamic.rs /Users/jeffreyfriedman/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/clang-sys-1.8.1/build/static.rs
+
+/Users/jeffreyfriedman/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/clang-sys-1.8.1/build.rs:
+/Users/jeffreyfriedman/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/clang-sys-1.8.1/build/macros.rs:
+/Users/jeffreyfriedman/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/clang-sys-1.8.1/build/common.rs:
+/Users/jeffreyfriedman/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/clang-sys-1.8.1/build/dynamic.rs:
+/Users/jeffreyfriedman/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/clang-sys-1.8.1/build/static.rs:

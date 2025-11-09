@@ -102,29 +102,32 @@ fn render(game: &mut PongGame, renderer: &mut Renderer) {
 }
 
 fn handle_input(game: &mut PongGame, input: &Input) {
-    if input.is_key_pressed(Key::W) {
+    if input.held(Key::W) {
         game.left_paddle_y = game.left_paddle_y - 5.0;
         if game.left_paddle_y < 0.0 {
             game.left_paddle_y = 0.0;
         }
     }
-    if input.is_key_pressed(Key::S) {
+    if input.held(Key::S) {
         game.left_paddle_y = game.left_paddle_y + 5.0;
         if game.left_paddle_y > 500.0 {
             game.left_paddle_y = 500.0;
         }
     }
-    if input.is_key_pressed(Key::Up) {
+    if input.held(Key::Up) {
         game.right_paddle_y = game.right_paddle_y - 5.0;
         if game.right_paddle_y < 0.0 {
             game.right_paddle_y = 0.0;
         }
     }
-    if input.is_key_pressed(Key::Down) {
+    if input.held(Key::Down) {
         game.right_paddle_y = game.right_paddle_y + 5.0;
         if game.right_paddle_y > 500.0 {
             game.right_paddle_y = 500.0;
         }
+    }
+    if input.pressed(Key::Escape) {
+        println!("Game paused! (Press Escape again to resume)")
     }
 }
 

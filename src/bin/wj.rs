@@ -376,14 +376,14 @@ fn main() -> anyhow::Result<()> {
         }
         Commands::Docs { output, format } => {
             use std::fs;
-            
+
             println!("Generating error documentation...");
-            
+
             let catalog = windjammer::error_catalog::ErrorCatalog::new();
-            
+
             // Create output directory
             fs::create_dir_all(&output)?;
-            
+
             match format.as_str() {
                 "html" => {
                     let html = catalog.generate_html();
@@ -403,17 +403,20 @@ fn main() -> anyhow::Result<()> {
                     println!("✓ Generated JSON catalog: {}", path.display());
                 }
                 _ => {
-                    anyhow::bail!("Unknown format: {}. Use 'html', 'markdown', or 'json'", format);
+                    anyhow::bail!(
+                        "Unknown format: {}. Use 'html', 'markdown', or 'json'",
+                        format
+                    );
                 }
             }
-            
+
             println!("\n📚 Error documentation generated successfully!");
             println!("   {} errors documented", catalog.errors.len());
             println!("   {} categories", catalog.categories.len());
         }
         Commands::Explain { code } => {
             let registry = windjammer::error_codes::get_registry();
-            
+
             // Try as Windjammer code first
             if let Some(wj_code) = registry.get(&code) {
                 println!("{}", registry.format_explanation(&wj_code.code));
@@ -427,25 +430,25 @@ fn main() -> anyhow::Result<()> {
                 use colored::*;
                 println!("{}", format!("Error code '{}' not found", code).red());
                 println!("\n{}", "Available Windjammer error codes:".yellow());
-                
+
                 let mut codes: Vec<_> = registry.all_codes();
                 codes.sort_by_key(|c| c.code.as_str());
-                
+
                 for error_code in codes {
                     println!("  {} - {}", error_code.code.cyan(), error_code.title);
                 }
-                
+
                 println!("\n{}", "Usage:".yellow());
                 println!("  wj explain WJ0001");
                 println!("  wj explain E0425  (Rust error code)");
             }
         }
         Commands::Errors { file, output } => {
-            use windjammer::error_tui::{ErrorTui, TuiAction};
             use colored::*;
-            
+            use windjammer::error_tui::{ErrorTui, TuiAction};
+
             println!("Building and checking {}...", file.display());
-            
+
             // Build the project first (without checking)
             let build_options = windjammer::cli::build::BuildOptions {
                 minify: false,
@@ -454,7 +457,7 @@ fn main() -> anyhow::Result<()> {
                 polyfills: false,
                 v8_optimize: false,
             };
-            
+
             windjammer::cli::build::execute(
                 file.as_path(),
                 Some(output.as_path()),
@@ -468,12 +471,19 @@ fn main() -> anyhow::Result<()> {
                 true,  // quiet - suppress normal output
                 None,  // filter_file
                 None,  // filter_type
-            ).ok(); // Ignore errors, we'll get them from the TUI
-            
+            )
+            .ok(); // Ignore errors, we'll get them from the TUI
+
             // TODO: Add a public API to get diagnostics from build module
             // For now, show a message
-            println!("{}", "✓ TUI mode coming soon! Use 'wj build --check' for now.".yellow());
-            println!("{}", "  The TUI infrastructure is ready, just needs diagnostics API.".dimmed());
+            println!(
+                "{}",
+                "✓ TUI mode coming soon! Use 'wj build --check' for now.".yellow()
+            );
+            println!(
+                "{}",
+                "  The TUI infrastructure is ready, just needs diagnostics API.".dimmed()
+            );
         }
     }
 

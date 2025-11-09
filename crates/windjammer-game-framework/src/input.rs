@@ -5,7 +5,7 @@ use std::collections::HashSet;
 use winit::keyboard::{KeyCode, PhysicalKey};
 
 /// Input state manager
-/// 
+///
 /// Tracks which keys are currently pressed and provides a simple API
 /// for querying input state in game code.
 pub struct Input {
@@ -15,26 +15,79 @@ pub struct Input {
 }
 
 /// Key enum representing common keyboard keys
-/// 
+///
 /// Maps to physical keyboard keys (QWERTY layout)
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum Key {
     // Letters
-    A, B, C, D, E, F, G, H, I, J, K, L, M,
-    N, O, P, Q, R, S, T, U, V, W, X, Y, Z,
-    
+    A,
+    B,
+    C,
+    D,
+    E,
+    F,
+    G,
+    H,
+    I,
+    J,
+    K,
+    L,
+    M,
+    N,
+    O,
+    P,
+    Q,
+    R,
+    S,
+    T,
+    U,
+    V,
+    W,
+    X,
+    Y,
+    Z,
+
     // Numbers
-    Num0, Num1, Num2, Num3, Num4, Num5, Num6, Num7, Num8, Num9,
-    
+    Num0,
+    Num1,
+    Num2,
+    Num3,
+    Num4,
+    Num5,
+    Num6,
+    Num7,
+    Num8,
+    Num9,
+
     // Arrow keys
-    Up, Down, Left, Right,
-    
+    Up,
+    Down,
+    Left,
+    Right,
+
     // Special keys
-    Space, Enter, Escape, Tab, Backspace,
-    Shift, Control, Alt,
-    
+    Space,
+    Enter,
+    Escape,
+    Tab,
+    Backspace,
+    Shift,
+    Control,
+    Alt,
+
     // Function keys
-    F1, F2, F3, F4, F5, F6, F7, F8, F9, F10, F11, F12,
+    F1,
+    F2,
+    F3,
+    F4,
+    F5,
+    F6,
+    F7,
+    F8,
+    F9,
+    F10,
+    F11,
+    F12,
 }
 
 impl Input {
@@ -50,32 +103,32 @@ impl Input {
     // ========================================
     // PRIMARY API: Natural, ergonomic methods
     // ========================================
-    
+
     /// Check if a key is currently held down
-    /// 
+    ///
     /// Use this for continuous actions like movement.
     /// Returns true every frame while the key is held.
-    /// 
+    ///
     /// Example: `if input.held(Key::W) { player.move_forward() }`
     pub fn held(&self, key: Key) -> bool {
         self.keys_pressed.contains(&key)
     }
 
     /// Check if a key was pressed this frame
-    /// 
+    ///
     /// Use this for one-shot actions like jumping or shooting.
     /// Returns true only on the frame when the key goes from up to down.
-    /// 
+    ///
     /// Example: `if input.pressed(Key::Space) { player.jump() }`
     pub fn pressed(&self, key: Key) -> bool {
         self.keys_just_pressed.contains(&key)
     }
 
     /// Check if a key was released this frame
-    /// 
+    ///
     /// Use this for actions that trigger on release.
     /// Returns true only on the frame when the key goes from down to up.
-    /// 
+    ///
     /// Example: `if input.released(Key::Space) { player.charge_release() }`
     pub fn released(&self, key: Key) -> bool {
         self.keys_just_released.contains(&key)
@@ -84,23 +137,23 @@ impl Input {
     // ========================================
     // CONVENIENCE API: Common patterns
     // ========================================
-    
+
     /// Check if ANY of the given keys is held
-    /// 
+    ///
     /// Example: `if input.any_held(&[Key::W, Key::Up]) { player.move_forward() }`
     pub fn any_held(&self, keys: &[Key]) -> bool {
         keys.iter().any(|k| self.held(*k))
     }
 
     /// Check if ANY of the given keys was pressed
-    /// 
+    ///
     /// Example: `if input.any_pressed(&[Key::Space, Key::Enter]) { confirm_action() }`
     pub fn any_pressed(&self, keys: &[Key]) -> bool {
         keys.iter().any(|k| self.pressed(*k))
     }
 
     /// Check if ALL of the given keys are held (for combos)
-    /// 
+    ///
     /// Example: `if input.all_held(&[Key::Control, Key::S]) { save_game() }`
     pub fn all_held(&self, keys: &[Key]) -> bool {
         keys.iter().all(|k| self.held(*k))
@@ -109,7 +162,7 @@ impl Input {
     // ========================================
     // LEGACY API: For compatibility
     // ========================================
-    
+
     /// Alias for `held()` - check if a key is currently pressed
     #[deprecated(note = "Use `held()` instead for better readability")]
     pub fn is_key_pressed(&self, key: Key) -> bool {

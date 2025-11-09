@@ -1,0 +1,10 @@
+/Users/jeffreyfriedman/src/windjammer/build/target/release/deps/memoffset-c7e8705d44841203.d: /Users/jeffreyfriedman/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/memoffset-0.9.1/src/lib.rs /Users/jeffreyfriedman/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/memoffset-0.9.1/src/raw_field.rs /Users/jeffreyfriedman/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/memoffset-0.9.1/src/offset_of.rs /Users/jeffreyfriedman/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/memoffset-0.9.1/src/span_of.rs
+
+/Users/jeffreyfriedman/src/windjammer/build/target/release/deps/libmemoffset-c7e8705d44841203.rlib: /Users/jeffreyfriedman/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/memoffset-0.9.1/src/lib.rs /Users/jeffreyfriedman/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/memoffset-0.9.1/src/raw_field.rs /Users/jeffreyfriedman/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/memoffset-0.9.1/src/offset_of.rs /Users/jeffreyfriedman/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/memoffset-0.9.1/src/span_of.rs
+
+/Users/jeffreyfriedman/src/windjammer/build/target/release/deps/libmemoffset-c7e8705d44841203.rmeta: /Users/jeffreyfriedman/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/memoffset-0.9.1/src/lib.rs /Users/jeffreyfriedman/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/memoffset-0.9.1/src/raw_field.rs /Users/jeffreyfriedman/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/memoffset-0.9.1/src/offset_of.rs /Users/jeffreyfriedman/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/memoffset-0.9.1/src/span_of.rs
+
+/Users/jeffreyfriedman/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/memoffset-0.9.1/src/lib.rs:
+/Users/jeffreyfriedman/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/memoffset-0.9.1/src/raw_field.rs:
+/Users/jeffreyfriedman/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/memoffset-0.9.1/src/offset_of.rs:
+/Users/jeffreyfriedman/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/memoffset-0.9.1/src/span_of.rs:

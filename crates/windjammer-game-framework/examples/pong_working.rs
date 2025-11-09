@@ -1,12 +1,12 @@
 // PONG - ACTUALLY VISIBLE VERSION
 // Based on pong_simple.rs which we KNOW works
 
-use winit::event::{Event, WindowEvent, KeyEvent};
+use std::time::{Duration, Instant};
+use wgpu::util::DeviceExt;
+use winit::event::{Event, KeyEvent, WindowEvent};
 use winit::event_loop::{ControlFlow, EventLoop};
 use winit::keyboard::{KeyCode, PhysicalKey};
 use winit::window::WindowBuilder;
-use wgpu::util::DeviceExt;
-use std::time::{Duration, Instant};
 
 const WINDOW_WIDTH: u32 = 800;
 const WINDOW_HEIGHT: u32 = 600;
@@ -19,8 +19,8 @@ struct Vertex {
 }
 
 struct Paddle {
-    x: f32,  // -1.0 to 1.0 (NDC coordinates)
-    y: f32,  // -1.0 to 1.0
+    x: f32, // -1.0 to 1.0 (NDC coordinates)
+    y: f32, // -1.0 to 1.0
     width: f32,
     height: f32,
     dy: f32,
@@ -31,8 +31,8 @@ impl Paddle {
         Self {
             x,
             y,
-            width: 0.05,  // 5% of screen width
-            height: 0.3,  // 30% of screen height
+            width: 0.05, // 5% of screen width
+            height: 0.3, // 30% of screen height
             dy: 0.0,
         }
     }
@@ -56,12 +56,30 @@ impl Paddle {
 
         vec![
             // Two triangles to make a rectangle
-            Vertex { position: [x1, y1], color: [1.0, 1.0, 1.0, 1.0] },
-            Vertex { position: [x2, y1], color: [1.0, 1.0, 1.0, 1.0] },
-            Vertex { position: [x1, y2], color: [1.0, 1.0, 1.0, 1.0] },
-            Vertex { position: [x2, y1], color: [1.0, 1.0, 1.0, 1.0] },
-            Vertex { position: [x2, y2], color: [1.0, 1.0, 1.0, 1.0] },
-            Vertex { position: [x1, y2], color: [1.0, 1.0, 1.0, 1.0] },
+            Vertex {
+                position: [x1, y1],
+                color: [1.0, 1.0, 1.0, 1.0],
+            },
+            Vertex {
+                position: [x2, y1],
+                color: [1.0, 1.0, 1.0, 1.0],
+            },
+            Vertex {
+                position: [x1, y2],
+                color: [1.0, 1.0, 1.0, 1.0],
+            },
+            Vertex {
+                position: [x2, y1],
+                color: [1.0, 1.0, 1.0, 1.0],
+            },
+            Vertex {
+                position: [x2, y2],
+                color: [1.0, 1.0, 1.0, 1.0],
+            },
+            Vertex {
+                position: [x1, y2],
+                color: [1.0, 1.0, 1.0, 1.0],
+            },
         ]
     }
 }
@@ -95,18 +113,20 @@ impl Ball {
         }
 
         // Check left paddle collision
-        if self.x < left_paddle.x + left_paddle.width &&
-           self.x + self.size > left_paddle.x &&
-           self.y < left_paddle.y &&
-           self.y - self.size > left_paddle.y - left_paddle.height {
+        if self.x < left_paddle.x + left_paddle.width
+            && self.x + self.size > left_paddle.x
+            && self.y < left_paddle.y
+            && self.y - self.size > left_paddle.y - left_paddle.height
+        {
             self.dx = self.dx.abs();
         }
 
         // Check right paddle collision
-        if self.x < right_paddle.x + right_paddle.width &&
-           self.x + self.size > right_paddle.x &&
-           self.y < right_paddle.y &&
-           self.y - self.size > right_paddle.y - right_paddle.height {
+        if self.x < right_paddle.x + right_paddle.width
+            && self.x + self.size > right_paddle.x
+            && self.y < right_paddle.y
+            && self.y - self.size > right_paddle.y - right_paddle.height
+        {
             self.dx = -self.dx.abs();
         }
 
@@ -135,12 +155,30 @@ impl Ball {
         let y2 = self.y - self.size;
 
         vec![
-            Vertex { position: [x1, y1], color: [1.0, 1.0, 0.0, 1.0] },
-            Vertex { position: [x2, y1], color: [1.0, 1.0, 0.0, 1.0] },
-            Vertex { position: [x1, y2], color: [1.0, 1.0, 0.0, 1.0] },
-            Vertex { position: [x2, y1], color: [1.0, 1.0, 0.0, 1.0] },
-            Vertex { position: [x2, y2], color: [1.0, 1.0, 0.0, 1.0] },
-            Vertex { position: [x1, y2], color: [1.0, 1.0, 0.0, 1.0] },
+            Vertex {
+                position: [x1, y1],
+                color: [1.0, 1.0, 0.0, 1.0],
+            },
+            Vertex {
+                position: [x2, y1],
+                color: [1.0, 1.0, 0.0, 1.0],
+            },
+            Vertex {
+                position: [x1, y2],
+                color: [1.0, 1.0, 0.0, 1.0],
+            },
+            Vertex {
+                position: [x2, y1],
+                color: [1.0, 1.0, 0.0, 1.0],
+            },
+            Vertex {
+                position: [x2, y2],
+                color: [1.0, 1.0, 0.0, 1.0],
+            },
+            Vertex {
+                position: [x1, y2],
+                color: [1.0, 1.0, 0.0, 1.0],
+            },
         ]
     }
 }
@@ -313,28 +351,33 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
                 Event::WindowEvent {
                     event: WindowEvent::CloseRequested,
                     ..
-                } | Event::WindowEvent {
-                    event: WindowEvent::KeyboardInput {
-                        event: KeyEvent {
-                            physical_key: PhysicalKey::Code(KeyCode::Escape),
+                }
+                | Event::WindowEvent {
+                    event:
+                        WindowEvent::KeyboardInput {
+                            event:
+                                KeyEvent {
+                                    physical_key: PhysicalKey::Code(KeyCode::Escape),
+                                    ..
+                                },
                             ..
                         },
-                        ..
-                    },
                     ..
                 } => {
                     println!("Final Score: {} - {}", left_score, right_score);
                     elwt.exit();
                 }
                 Event::WindowEvent {
-                    event: WindowEvent::KeyboardInput {
-                        event: KeyEvent {
-                            physical_key: PhysicalKey::Code(key_code),
-                            state,
+                    event:
+                        WindowEvent::KeyboardInput {
+                            event:
+                                KeyEvent {
+                                    physical_key: PhysicalKey::Code(key_code),
+                                    state,
+                                    ..
+                                },
                             ..
                         },
-                        ..
-                    },
                     ..
                 } => {
                     let pressed = state.is_pressed();
@@ -361,17 +404,20 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
                     if now.duration_since(last_update) >= Duration::from_millis(16) {
                         left_paddle.update();
                         right_paddle.update();
-                        
+
                         if let Some(left_scored) = ball.update(&left_paddle, &right_paddle) {
                             if left_scored {
                                 left_score += 1;
                                 println!("🎉 Left scores! Score: {} - {}", left_score, right_score);
                             } else {
                                 right_score += 1;
-                                println!("🎉 Right scores! Score: {} - {}", left_score, right_score);
+                                println!(
+                                    "🎉 Right scores! Score: {} - {}",
+                                    left_score, right_score
+                                );
                             }
                         }
-                        
+
                         last_update = now;
                     }
 
@@ -380,9 +426,10 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
                         .texture
                         .create_view(&wgpu::TextureViewDescriptor::default());
 
-                    let mut encoder = device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
-                        label: Some("Render Encoder"),
-                    });
+                    let mut encoder =
+                        device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
+                            label: Some("Render Encoder"),
+                        });
 
                     // Collect all vertices
                     let mut vertices = Vec::new();
@@ -390,32 +437,34 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
                     vertices.extend(right_paddle.to_vertices());
                     vertices.extend(ball.to_vertices());
 
-                    let vertex_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-                        label: Some("Vertex Buffer"),
-                        contents: bytemuck::cast_slice(&vertices),
-                        usage: wgpu::BufferUsages::VERTEX,
-                    });
+                    let vertex_buffer =
+                        device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                            label: Some("Vertex Buffer"),
+                            contents: bytemuck::cast_slice(&vertices),
+                            usage: wgpu::BufferUsages::VERTEX,
+                        });
 
                     {
-                        let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
-                            label: Some("Render Pass"),
-                            color_attachments: &[Some(wgpu::RenderPassColorAttachment {
-                                view: &view,
-                                resolve_target: None,
-                                ops: wgpu::Operations {
-                                    load: wgpu::LoadOp::Clear(wgpu::Color {
-                                        r: 0.1,
-                                        g: 0.1,
-                                        b: 0.1,
-                                        a: 1.0,
-                                    }),
-                                    store: wgpu::StoreOp::Store,
-                                },
-                            })],
-                            depth_stencil_attachment: None,
-                            timestamp_writes: None,
-                            occlusion_query_set: None,
-                        });
+                        let mut render_pass =
+                            encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+                                label: Some("Render Pass"),
+                                color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+                                    view: &view,
+                                    resolve_target: None,
+                                    ops: wgpu::Operations {
+                                        load: wgpu::LoadOp::Clear(wgpu::Color {
+                                            r: 0.1,
+                                            g: 0.1,
+                                            b: 0.1,
+                                            a: 1.0,
+                                        }),
+                                        store: wgpu::StoreOp::Store,
+                                    },
+                                })],
+                                depth_stencil_attachment: None,
+                                timestamp_writes: None,
+                                occlusion_query_set: None,
+                            });
 
                         render_pass.set_pipeline(&render_pipeline);
                         render_pass.set_vertex_buffer(0, vertex_buffer.slice(..));
@@ -430,4 +479,3 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
         })
         .unwrap();
 }
-

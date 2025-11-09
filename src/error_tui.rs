@@ -2,7 +2,6 @@
 ///
 /// This module provides a beautiful terminal UI using ratatui for
 /// navigating through compilation errors and applying fixes interactively.
-
 use crate::error_mapper::{DiagnosticLevel, WindjammerDiagnostic};
 use crossterm::{
     event::{self, DisableMouseCapture, EnableMouseCapture, Event, KeyCode, KeyEventKind},
@@ -72,7 +71,10 @@ impl ErrorTui {
     }
 
     /// Main application loop
-    fn run_app(&mut self, terminal: &mut Terminal<CrosstermBackend<io::Stdout>>) -> io::Result<Option<TuiAction>> {
+    fn run_app(
+        &mut self,
+        terminal: &mut Terminal<CrosstermBackend<io::Stdout>>,
+    ) -> io::Result<Option<TuiAction>> {
         loop {
             terminal.draw(|f| self.ui(f))?;
 
@@ -141,9 +143,9 @@ impl ErrorTui {
         let chunks = Layout::default()
             .direction(Direction::Vertical)
             .constraints([
-                Constraint::Length(3),      // Title
-                Constraint::Min(10),        // Main content
-                Constraint::Length(3),      // Status bar
+                Constraint::Length(3), // Title
+                Constraint::Min(10),   // Main content
+                Constraint::Length(3), // Status bar
             ])
             .split(f.area());
 
@@ -174,7 +176,11 @@ impl ErrorTui {
     /// Render title bar
     fn render_title(&self, f: &mut Frame, area: Rect) {
         let title = Paragraph::new("Windjammer Error Navigator")
-            .style(Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD))
+            .style(
+                Style::default()
+                    .fg(Color::Cyan)
+                    .add_modifier(Modifier::BOLD),
+            )
             .block(Block::default().borders(Borders::ALL));
         f.render_widget(title, area);
     }
@@ -206,7 +212,11 @@ impl ErrorTui {
                     icon,
                     code_str,
                     diag.message.chars().take(40).collect::<String>(),
-                    diag.location.file.file_name().unwrap_or_default().to_string_lossy(),
+                    diag.location
+                        .file
+                        .file_name()
+                        .unwrap_or_default()
+                        .to_string_lossy(),
                     diag.location.line,
                     fixable
                 );
@@ -218,7 +228,11 @@ impl ErrorTui {
         let list = List::new(items)
             .block(
                 Block::default()
-                    .title(format!("Errors ({}/{})", self.selected + 1, self.diagnostics.len()))
+                    .title(format!(
+                        "Errors ({}/{})",
+                        self.selected + 1,
+                        self.diagnostics.len()
+                    ))
                     .borders(Borders::ALL),
             )
             .highlight_style(
@@ -255,7 +269,12 @@ impl ErrorTui {
         };
 
         lines.push(Line::from(vec![
-            Span::styled(level_str, Style::default().fg(level_color).add_modifier(Modifier::BOLD)),
+            Span::styled(
+                level_str,
+                Style::default()
+                    .fg(level_color)
+                    .add_modifier(Modifier::BOLD),
+            ),
             Span::raw(": "),
             Span::raw(&diagnostic.message),
         ]));
@@ -286,7 +305,9 @@ impl ErrorTui {
         if !diagnostic.help.is_empty() {
             lines.push(Line::from(Span::styled(
                 "Help:",
-                Style::default().fg(Color::Green).add_modifier(Modifier::BOLD),
+                Style::default()
+                    .fg(Color::Green)
+                    .add_modifier(Modifier::BOLD),
             )));
             for help in &diagnostic.help {
                 lines.push(Line::from(format!("  • {}", help)));
@@ -298,7 +319,9 @@ impl ErrorTui {
         if !diagnostic.notes.is_empty() {
             lines.push(Line::from(Span::styled(
                 "Notes:",
-                Style::default().fg(Color::Blue).add_modifier(Modifier::BOLD),
+                Style::default()
+                    .fg(Color::Blue)
+                    .add_modifier(Modifier::BOLD),
             )));
             for note in &diagnostic.notes {
                 lines.push(Line::from(format!("  • {}", note)));
@@ -310,7 +333,10 @@ impl ErrorTui {
         if diagnostic.is_fixable() {
             lines.push(Line::from(vec![
                 Span::styled("✓ ", Style::default().fg(Color::Green)),
-                Span::styled("This error can be fixed automatically!", Style::default().fg(Color::Green)),
+                Span::styled(
+                    "This error can be fixed automatically!",
+                    Style::default().fg(Color::Green),
+                ),
             ]));
             lines.push(Line::from(Span::styled(
                 "Press 'f' to apply fix",
@@ -330,7 +356,9 @@ impl ErrorTui {
         let help_text = vec![
             Line::from(Span::styled(
                 "Keyboard Shortcuts",
-                Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD),
+                Style::default()
+                    .fg(Color::Cyan)
+                    .add_modifier(Modifier::BOLD),
             )),
             Line::from(""),
             Line::from(vec![
@@ -368,7 +396,9 @@ impl ErrorTui {
             Line::from(""),
             Line::from(Span::styled(
                 "Legend",
-                Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD),
+                Style::default()
+                    .fg(Color::Cyan)
+                    .add_modifier(Modifier::BOLD),
             )),
             Line::from(""),
             Line::from(vec![
@@ -482,4 +512,3 @@ mod tests {
         assert_eq!(tui.selected, 1);
     }
 }
-
