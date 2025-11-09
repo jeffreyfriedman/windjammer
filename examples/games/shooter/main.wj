@@ -35,10 +35,12 @@ struct ShooterGame {
     
     // Level
     walls: Vec<Wall>,
+    powerups: Vec<PowerUp>,
     floor_y: f32,
     
     // Game state
     paused: bool,
+    speed_boost_timer: f32,
 }
 
 struct Enemy {
@@ -60,6 +62,13 @@ struct Bullet {
 struct Wall {
     pos: Vec3,
     size: Vec3,
+    color: Color,
+}
+
+struct PowerUp {
+    pos: Vec3,
+    powerup_type: int,  // 0=health, 1=ammo, 2=speed
+    active: bool,
     color: Color,
 }
 
@@ -98,6 +107,9 @@ fn init(game: ShooterGame) {
     
     // Spawn enemies
     game.spawn_enemies()
+    
+    // Spawn power-ups
+    game.spawn_powerups()
     
     println("=== GREYBOX SHOOTER ===")
     println("WASD - Move")
@@ -210,6 +222,42 @@ impl ShooterGame {
         })
     }
 
+    fn spawn_powerups(self) {
+        // Spawn power-ups around the level
+        
+        // Health pack (green)
+        self.powerups.push(PowerUp {
+            pos: Vec3::new(5.0, 0.5, 5.0),
+            powerup_type: 0,  // health
+            active: true,
+            color: Color::rgb(0.0, 1.0, 0.0),
+        })
+        
+        // Ammo pack (yellow)
+        self.powerups.push(PowerUp {
+            pos: Vec3::new(-5.0, 0.5, 5.0),
+            powerup_type: 1,  // ammo
+            active: true,
+            color: Color::rgb(1.0, 1.0, 0.0),
+        })
+        
+        // Speed boost (cyan)
+        self.powerups.push(PowerUp {
+            pos: Vec3::new(0.0, 0.5, -10.0),
+            powerup_type: 2,  // speed
+            active: true,
+            color: Color::rgb(0.0, 1.0, 1.0),
+        })
+        
+        // Extra health (green)
+        self.powerups.push(PowerUp {
+            pos: Vec3::new(8.0, 0.5, -8.0),
+            powerup_type: 0,  // health
+            active: true,
+            color: Color::rgb(0.0, 1.0, 0.0),
+        })
+    }
+
     fn update_player_movement(self, delta: f32, input: Input) {
         // Calculate forward and right vectors from yaw
         let yaw_rad = self.player_yaw * 3.14159 / 180.0
@@ -247,10 +295,15 @@ impl ShooterGame {
         }
         
         // Apply speed (sprint if shift is held)
-        let speed = if input.held(Key::Shift) {
+        let mut speed = if input.held(Key::Shift) {
             self.sprint_speed
         } else {
             self.move_speed
+        }
+        
+        // Apply speed boost if active
+        if self.speed_boost_timer > 0.0 {
+            speed *= 1.5
         }
         
         self.player_velocity.x = move_x * speed
@@ -299,6 +352,48 @@ impl ShooterGame {
             self.player_on_ground = true
         } else {
             self.player_pos.y = new_y
+        }
+    }
+
+    fn collect_powerups(self) {
+        // Check for power-up collection
+        let mut i = 0
+        while i < self.powerups.len() {
+            let powerup = self.powerups[i]
+            
+            if !powerup.active {
+                i += 1
+                continue
+            }
+            
+            // Check distance to player
+            let dx = self.player_pos.x - powerup.pos.x
+            let dz = self.player_pos.z - powerup.pos.z
+            let dist = (dx * dx + dz * dz).sqrt()
+            
+            if dist < 1.5 {
+                // Collect power-up
+                if powerup.powerup_type == 0 {
+                    // Health
+                    self.player_health += 25
+                    if self.player_health > 100 {
+                        self.player_health = 100
+                    }
+                    println("+ Health! (" + self.player_health.to_string() + "/100)")
+                } else if powerup.powerup_type == 1 {
+                    // Ammo
+                    self.ammo += 10
+                    println("+ Ammo! (" + self.ammo.to_string() + ")")
+                } else if powerup.powerup_type == 2 {
+                    // Speed boost
+                    self.speed_boost_timer = 5.0
+                    println("+ Speed Boost! (5 seconds)")
+                }
+                
+                powerup.active = false
+            }
+            
+            i += 1
         }
     }
 
@@ -549,6 +644,18 @@ fn update(game: ShooterGame, delta: f32, input: Input) {
     // Player movement
     game.update_player_movement(delta, input)
     
+    // Power-up collection
+    game.collect_powerups()
+    
+    // Update speed boost timer
+    if game.speed_boost_timer > 0.0 {
+        game.speed_boost_timer -= delta
+        if game.speed_boost_timer < 0.0 {
+            game.speed_boost_timer = 0.0
+            println("Speed boost ended!")
+        }
+    }
+    
     // Enemy AI
     game.update_enemies(delta)
     
@@ -621,6 +728,17 @@ fn render(game: ShooterGame, renderer: Renderer3D, camera: Camera3D) {
             Vec3::new(0.2, 0.2, 0.2),
             Color::rgb(1.0, 1.0, 0.0)
         )
+    }
+    
+    // Draw power-ups
+    for powerup in game.powerups {
+        if powerup.active {
+            renderer.draw_cube(
+                powerup.pos,
+                Vec3::new(0.5, 0.5, 0.5),
+                powerup.color
+            )
+        }
     }
     
     // Draw HUD (simple 3D indicators)
