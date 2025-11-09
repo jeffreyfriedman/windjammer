@@ -47,19 +47,85 @@ impl Input {
         }
     }
 
-    /// Check if a key is currently pressed
-    pub fn is_key_pressed(&self, key: Key) -> bool {
+    // ========================================
+    // PRIMARY API: Natural, ergonomic methods
+    // ========================================
+    
+    /// Check if a key is currently held down
+    /// 
+    /// Use this for continuous actions like movement.
+    /// Returns true every frame while the key is held.
+    /// 
+    /// Example: `if input.held(Key::W) { player.move_forward() }`
+    pub fn held(&self, key: Key) -> bool {
         self.keys_pressed.contains(&key)
     }
 
-    /// Check if a key was just pressed this frame
-    pub fn is_key_just_pressed(&self, key: Key) -> bool {
+    /// Check if a key was pressed this frame
+    /// 
+    /// Use this for one-shot actions like jumping or shooting.
+    /// Returns true only on the frame when the key goes from up to down.
+    /// 
+    /// Example: `if input.pressed(Key::Space) { player.jump() }`
+    pub fn pressed(&self, key: Key) -> bool {
         self.keys_just_pressed.contains(&key)
     }
 
-    /// Check if a key was just released this frame
-    pub fn is_key_just_released(&self, key: Key) -> bool {
+    /// Check if a key was released this frame
+    /// 
+    /// Use this for actions that trigger on release.
+    /// Returns true only on the frame when the key goes from down to up.
+    /// 
+    /// Example: `if input.released(Key::Space) { player.charge_release() }`
+    pub fn released(&self, key: Key) -> bool {
         self.keys_just_released.contains(&key)
+    }
+
+    // ========================================
+    // CONVENIENCE API: Common patterns
+    // ========================================
+    
+    /// Check if ANY of the given keys is held
+    /// 
+    /// Example: `if input.any_held(&[Key::W, Key::Up]) { player.move_forward() }`
+    pub fn any_held(&self, keys: &[Key]) -> bool {
+        keys.iter().any(|k| self.held(*k))
+    }
+
+    /// Check if ANY of the given keys was pressed
+    /// 
+    /// Example: `if input.any_pressed(&[Key::Space, Key::Enter]) { confirm_action() }`
+    pub fn any_pressed(&self, keys: &[Key]) -> bool {
+        keys.iter().any(|k| self.pressed(*k))
+    }
+
+    /// Check if ALL of the given keys are held (for combos)
+    /// 
+    /// Example: `if input.all_held(&[Key::Control, Key::S]) { save_game() }`
+    pub fn all_held(&self, keys: &[Key]) -> bool {
+        keys.iter().all(|k| self.held(*k))
+    }
+
+    // ========================================
+    // LEGACY API: For compatibility
+    // ========================================
+    
+    /// Alias for `held()` - check if a key is currently pressed
+    #[deprecated(note = "Use `held()` instead for better readability")]
+    pub fn is_key_pressed(&self, key: Key) -> bool {
+        self.held(key)
+    }
+
+    /// Alias for `pressed()` - check if a key was just pressed
+    #[deprecated(note = "Use `pressed()` instead for better readability")]
+    pub fn is_key_just_pressed(&self, key: Key) -> bool {
+        self.pressed(key)
+    }
+
+    /// Alias for `released()` - check if a key was just released
+    #[deprecated(note = "Use `released()` instead for better readability")]
+    pub fn is_key_just_released(&self, key: Key) -> bool {
+        self.released(key)
     }
 
     /// Update input state from a winit keyboard event
