@@ -56,6 +56,7 @@ struct Enemy {
     velocity: Vec3,
     health: i64,
     state: i64,
+    enemy_type: i64,
     color: Color,
 }
 
@@ -86,11 +87,11 @@ fn create_level(&mut self) {
 }
 #[inline]
 fn spawn_enemies(&mut self) {
-        self.enemies.push(Enemy { pos: Vec3::new(10.0, 1.0, 10.0), velocity: Vec3::new(0.0, 0.0, 0.0), health: 3, state: 1, color: Color::rgb(1.0, 0.0, 0.0) });
-        self.enemies.push(Enemy { pos: Vec3::new(-10.0, 1.0, 10.0), velocity: Vec3::new(0.0, 0.0, 0.0), health: 3, state: 1, color: Color::rgb(1.0, 0.2, 0.0) });
-        self.enemies.push(Enemy { pos: Vec3::new(10.0, 1.0, -10.0), velocity: Vec3::new(0.0, 0.0, 0.0), health: 3, state: 1, color: Color::rgb(0.8, 0.0, 0.0) });
-        self.enemies.push(Enemy { pos: Vec3::new(-10.0, 1.0, -10.0), velocity: Vec3::new(0.0, 0.0, 0.0), health: 3, state: 1, color: Color::rgb(1.0, 0.1, 0.1) });
-        self.enemies.push(Enemy { pos: Vec3::new(0.0, 1.0, 15.0), velocity: Vec3::new(0.0, 0.0, 0.0), health: 3, state: 1, color: Color::rgb(0.9, 0.0, 0.0) })
+        self.enemies.push(Enemy { pos: Vec3::new(10.0, 1.0, 10.0), velocity: Vec3::new(0.0, 0.0, 0.0), health: 2, state: 1, enemy_type: 0, color: Color::rgb(0.6, 0.4, 0.2) });
+        self.enemies.push(Enemy { pos: Vec3::new(-10.0, 1.0, 10.0), velocity: Vec3::new(0.0, 0.0, 0.0), health: 2, state: 1, enemy_type: 0, color: Color::rgb(0.6, 0.4, 0.2) });
+        self.enemies.push(Enemy { pos: Vec3::new(10.0, 1.0, -10.0), velocity: Vec3::new(0.0, 0.0, 0.0), health: 3, state: 1, enemy_type: 1, color: Color::rgb(1.0, 0.0, 0.0) });
+        self.enemies.push(Enemy { pos: Vec3::new(-10.0, 1.0, -10.0), velocity: Vec3::new(0.0, 0.0, 0.0), health: 3, state: 1, enemy_type: 1, color: Color::rgb(1.0, 0.0, 0.0) });
+        self.enemies.push(Enemy { pos: Vec3::new(0.0, 1.0, 15.0), velocity: Vec3::new(0.0, 0.0, 0.0), health: 5, state: 1, enemy_type: 2, color: Color::rgb(0.8, 0.0, 0.8) })
 }
 fn update_player_movement(&mut self, delta: f32, input: &Input) {
         let yaw_rad = self.player_yaw * 3.14159 / 180.0;
@@ -178,13 +179,34 @@ fn update_enemies(&mut self, delta: f32) {
                 let dz = self.player_pos.z - enemy.pos.z;
                 let dist = (dx * dx + dz * dz).sqrt();
                 if dist > 0.1 {
-                    let speed = 2.0;
+                    let speed = {
+                        if enemy.enemy_type == 0 {
+                            1.5
+                        } else {
+                            if enemy.enemy_type == 1 {
+                                2.0
+                            } else {
+                                3.0
+                            }
+                        }
+                    };
                     enemy.velocity.x = dx / dist * speed;
                     enemy.velocity.z = dz / dist * speed;
                     enemy.pos.x = enemy.pos.x + enemy.velocity.x * delta;
                     enemy.pos.z = enemy.pos.z + enemy.velocity.z * delta;
                 }
-                if dist < 2.0 {
+                let attack_range = {
+                    if enemy.enemy_type == 0 {
+                        1.5
+                    } else {
+                        if enemy.enemy_type == 1 {
+                            2.0
+                        } else {
+                            2.5
+                        }
+                    }
+                };
+                if dist < attack_range {
                     enemy.state = 2;
                 }
             }
