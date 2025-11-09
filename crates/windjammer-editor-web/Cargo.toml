@@ -1,0 +1,47 @@
+[package]
+name = "windjammer-editor-web"
+version = "0.1.0"
+edition = "2021"
+authors = ["Windjammer Team"]
+description = "Web-based editor for Windjammer game engine"
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/windjammer-lang/windjammer"
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+windjammer-ui = { path = "../windjammer-ui" }
+windjammer = { path = "../.." }
+wasm-bindgen = "0.2"
+web-sys = { version = "0.3", features = [
+    "console",
+    "Window",
+    "Document",
+    "Element",
+    "HtmlElement",
+    "HtmlTextAreaElement",
+    "HtmlButtonElement",
+    "HtmlDivElement",
+    "HtmlInputElement",
+    "Node",
+    "Text",
+    "Event",
+    "MouseEvent",
+    "KeyboardEvent",
+    "Storage",
+] }
+js-sys = "0.3"
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+serde-wasm-bindgen = "0.6"
+
+[dev-dependencies]
+wasm-bindgen-test = "0.3"
+
+[profile.release]
+opt-level = "z"     # Optimize for size
+lto = true          # Enable Link Time Optimization
+codegen-units = 1   # Reduce number of codegen units to increase optimizations
+strip = true        # Strip symbols from binary
+
