@@ -28,8 +28,8 @@ struct ShooterGame {
 impl Default for ShooterGame {
     fn default() -> Self {
         ShooterGame {
-            player_pos: Vec::new(),
-            player_velocity: Vec::new(),
+            player_pos: Vec3::new(0.0, 0.0, 0.0),
+            player_velocity: Vec3::new(0.0, 0.0, 0.0),
             player_yaw: Default::default(),
             player_pitch: Default::default(),
             player_health: 0,
@@ -168,7 +168,7 @@ fn update_player_movement(&mut self, delta: f32, input: &Input) {
 fn update_enemies(&mut self, delta: f32) {
         let mut i = 0;
         while i < self.enemies.len() {
-            let enemy = self.enemies[i];
+            let enemy = &mut self.enemies[i];
             if enemy.state == 3 {
                 self.enemies.remove(i);
                 continue;
@@ -203,7 +203,7 @@ fn update_enemies(&mut self, delta: f32) {
 fn update_bullets(&mut self, delta: f32) {
         let mut i = 0;
         while i < self.bullets.len() {
-            let bullet = self.bullets[i];
+            let bullet = &mut self.bullets[i];
             bullet.pos.x = bullet.pos.x + bullet.velocity.x * delta;
             bullet.pos.y = bullet.pos.y + bullet.velocity.y * delta;
             bullet.pos.z = bullet.pos.z + bullet.velocity.z * delta;
@@ -226,7 +226,7 @@ fn update_bullets(&mut self, delta: f32) {
             let mut hit_enemy = false;
             let mut j = 0;
             while j < self.enemies.len() {
-                let enemy = self.enemies[j];
+                let enemy = &mut self.enemies[j];
                 let dx = bullet.pos.x - enemy.pos.x;
                 let dy = bullet.pos.y - enemy.pos.y;
                 let dz = bullet.pos.z - enemy.pos.z;
@@ -236,7 +236,7 @@ fn update_bullets(&mut self, delta: f32) {
                     if enemy.health <= 0 {
                         enemy.state = 3;
                         self.score = self.score + 100;
-                        println!(format!("{}{}", "Enemy killed! Score: ", self.score.to_string()))
+                        println!("{}{}", "Enemy killed! Score: ", self.score.to_string())
                     }
                     hit_enemy = true;
                     break;
@@ -319,7 +319,7 @@ fn update(game: &mut ShooterGame, delta: f32, input: &Input) {
     game.update_enemies(delta);
     game.update_bullets(delta);
     if game.enemies.len() == 0 {
-        println!(format!("{}{}", "YOU WIN! Score: ", game.score.to_string()));
+        println!("{}{}", "YOU WIN! Score: ", game.score.to_string());
         println!("Press ESC to exit")
     }
 }
@@ -355,7 +355,7 @@ fn render(game: &mut ShooterGame, renderer: &mut Renderer3D, camera: &mut Camera
 
 #[inline]
 fn cleanup(game: &mut ShooterGame) {
-    println!(format!("{}{}", "Final Score: ", game.score.to_string()));
+    println!("{}{}", "Final Score: ", game.score.to_string());
     println!("Thanks for playing!")
 }
 
