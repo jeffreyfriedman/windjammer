@@ -1,330 +1,172 @@
-//! Input handling (keyboard, mouse, gamepad)
+// Input handling for Windjammer games
+// Provides a simple, high-level API for keyboard and mouse input
 
 use std::collections::HashSet;
+use winit::keyboard::{KeyCode, PhysicalKey};
 
-/// Input state
+/// Input state manager
+/// 
+/// Tracks which keys are currently pressed and provides a simple API
+/// for querying input state in game code.
 pub struct Input {
-    keys_pressed: HashSet<KeyCode>,
-    keys_just_pressed: HashSet<KeyCode>,
-    keys_just_released: HashSet<KeyCode>,
-    mouse_buttons_pressed: HashSet<MouseButton>,
-    mouse_buttons_just_pressed: HashSet<MouseButton>,
-    mouse_buttons_just_released: HashSet<MouseButton>,
-    mouse_position: (f32, f32),
-    mouse_delta: (f32, f32),
-    mouse_wheel_delta: f32,
+    keys_pressed: HashSet<Key>,
+    keys_just_pressed: HashSet<Key>,
+    keys_just_released: HashSet<Key>,
+}
+
+/// Key enum representing common keyboard keys
+/// 
+/// Maps to physical keyboard keys (QWERTY layout)
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum Key {
+    // Letters
+    A, B, C, D, E, F, G, H, I, J, K, L, M,
+    N, O, P, Q, R, S, T, U, V, W, X, Y, Z,
+    
+    // Numbers
+    Num0, Num1, Num2, Num3, Num4, Num5, Num6, Num7, Num8, Num9,
+    
+    // Arrow keys
+    Up, Down, Left, Right,
+    
+    // Special keys
+    Space, Enter, Escape, Tab, Backspace,
+    Shift, Control, Alt,
+    
+    // Function keys
+    F1, F2, F3, F4, F5, F6, F7, F8, F9, F10, F11, F12,
 }
 
 impl Input {
+    /// Create a new Input state manager
     pub fn new() -> Self {
         Self {
             keys_pressed: HashSet::new(),
             keys_just_pressed: HashSet::new(),
             keys_just_released: HashSet::new(),
-            mouse_buttons_pressed: HashSet::new(),
-            mouse_buttons_just_pressed: HashSet::new(),
-            mouse_buttons_just_released: HashSet::new(),
-            mouse_position: (0.0, 0.0),
-            mouse_delta: (0.0, 0.0),
-            mouse_wheel_delta: 0.0,
         }
     }
 
-    pub fn is_key_pressed(&self, key: KeyCode) -> bool {
+    /// Check if a key is currently pressed
+    pub fn is_key_pressed(&self, key: Key) -> bool {
         self.keys_pressed.contains(&key)
     }
 
-    pub fn is_key_just_pressed(&self, key: KeyCode) -> bool {
+    /// Check if a key was just pressed this frame
+    pub fn is_key_just_pressed(&self, key: Key) -> bool {
         self.keys_just_pressed.contains(&key)
     }
 
-    pub fn is_key_just_released(&self, key: KeyCode) -> bool {
+    /// Check if a key was just released this frame
+    pub fn is_key_just_released(&self, key: Key) -> bool {
         self.keys_just_released.contains(&key)
     }
 
-    pub fn is_mouse_button_pressed(&self, button: MouseButton) -> bool {
-        self.mouse_buttons_pressed.contains(&button)
+    /// Update input state from a winit keyboard event
+    pub fn update_from_winit(&mut self, event: &winit::event::KeyEvent) {
+        if let Some(key) = Self::map_keycode(event.physical_key) {
+            if event.state.is_pressed() {
+                if !self.keys_pressed.contains(&key) {
+                    self.keys_just_pressed.insert(key);
+                }
+                self.keys_pressed.insert(key);
+            } else {
+                self.keys_pressed.remove(&key);
+                self.keys_just_released.insert(key);
+            }
+        }
     }
 
-    pub fn is_mouse_button_just_pressed(&self, button: MouseButton) -> bool {
-        self.mouse_buttons_just_pressed.contains(&button)
-    }
-
-    pub fn is_mouse_button_just_released(&self, button: MouseButton) -> bool {
-        self.mouse_buttons_just_released.contains(&button)
-    }
-
-    pub fn mouse_position(&self) -> (f32, f32) {
-        self.mouse_position
-    }
-
-    pub fn mouse_x(&self) -> f32 {
-        self.mouse_position.0
-    }
-
-    pub fn mouse_y(&self) -> f32 {
-        self.mouse_position.1
-    }
-
-    pub fn mouse_delta(&self) -> (f32, f32) {
-        self.mouse_delta
-    }
-
-    pub fn mouse_wheel_delta(&self) -> f32 {
-        self.mouse_wheel_delta
-    }
-
+    /// Clear "just pressed" and "just released" states
+    /// Should be called at the end of each frame
     pub fn clear_frame_state(&mut self) {
         self.keys_just_pressed.clear();
         self.keys_just_released.clear();
-        self.mouse_buttons_just_pressed.clear();
-        self.mouse_buttons_just_released.clear();
-        self.mouse_delta = (0.0, 0.0);
-        self.mouse_wheel_delta = 0.0;
     }
 
-    /// Press a key (for testing or manual input)
-    pub fn press_key(&mut self, key: KeyCode) {
-        if !self.keys_pressed.contains(&key) {
-            self.keys_just_pressed.insert(key);
+    /// Map winit KeyCode to our Key enum
+    fn map_keycode(physical_key: PhysicalKey) -> Option<Key> {
+        match physical_key {
+            PhysicalKey::Code(code) => match code {
+                // Letters
+                KeyCode::KeyA => Some(Key::A),
+                KeyCode::KeyB => Some(Key::B),
+                KeyCode::KeyC => Some(Key::C),
+                KeyCode::KeyD => Some(Key::D),
+                KeyCode::KeyE => Some(Key::E),
+                KeyCode::KeyF => Some(Key::F),
+                KeyCode::KeyG => Some(Key::G),
+                KeyCode::KeyH => Some(Key::H),
+                KeyCode::KeyI => Some(Key::I),
+                KeyCode::KeyJ => Some(Key::J),
+                KeyCode::KeyK => Some(Key::K),
+                KeyCode::KeyL => Some(Key::L),
+                KeyCode::KeyM => Some(Key::M),
+                KeyCode::KeyN => Some(Key::N),
+                KeyCode::KeyO => Some(Key::O),
+                KeyCode::KeyP => Some(Key::P),
+                KeyCode::KeyQ => Some(Key::Q),
+                KeyCode::KeyR => Some(Key::R),
+                KeyCode::KeyS => Some(Key::S),
+                KeyCode::KeyT => Some(Key::T),
+                KeyCode::KeyU => Some(Key::U),
+                KeyCode::KeyV => Some(Key::V),
+                KeyCode::KeyW => Some(Key::W),
+                KeyCode::KeyX => Some(Key::X),
+                KeyCode::KeyY => Some(Key::Y),
+                KeyCode::KeyZ => Some(Key::Z),
+
+                // Numbers
+                KeyCode::Digit0 => Some(Key::Num0),
+                KeyCode::Digit1 => Some(Key::Num1),
+                KeyCode::Digit2 => Some(Key::Num2),
+                KeyCode::Digit3 => Some(Key::Num3),
+                KeyCode::Digit4 => Some(Key::Num4),
+                KeyCode::Digit5 => Some(Key::Num5),
+                KeyCode::Digit6 => Some(Key::Num6),
+                KeyCode::Digit7 => Some(Key::Num7),
+                KeyCode::Digit8 => Some(Key::Num8),
+                KeyCode::Digit9 => Some(Key::Num9),
+
+                // Arrow keys
+                KeyCode::ArrowUp => Some(Key::Up),
+                KeyCode::ArrowDown => Some(Key::Down),
+                KeyCode::ArrowLeft => Some(Key::Left),
+                KeyCode::ArrowRight => Some(Key::Right),
+
+                // Special keys
+                KeyCode::Space => Some(Key::Space),
+                KeyCode::Enter => Some(Key::Enter),
+                KeyCode::Escape => Some(Key::Escape),
+                KeyCode::Tab => Some(Key::Tab),
+                KeyCode::Backspace => Some(Key::Backspace),
+                KeyCode::ShiftLeft | KeyCode::ShiftRight => Some(Key::Shift),
+                KeyCode::ControlLeft | KeyCode::ControlRight => Some(Key::Control),
+                KeyCode::AltLeft | KeyCode::AltRight => Some(Key::Alt),
+
+                // Function keys
+                KeyCode::F1 => Some(Key::F1),
+                KeyCode::F2 => Some(Key::F2),
+                KeyCode::F3 => Some(Key::F3),
+                KeyCode::F4 => Some(Key::F4),
+                KeyCode::F5 => Some(Key::F5),
+                KeyCode::F6 => Some(Key::F6),
+                KeyCode::F7 => Some(Key::F7),
+                KeyCode::F8 => Some(Key::F8),
+                KeyCode::F9 => Some(Key::F9),
+                KeyCode::F10 => Some(Key::F10),
+                KeyCode::F11 => Some(Key::F11),
+                KeyCode::F12 => Some(Key::F12),
+
+                _ => None,
+            },
+            _ => None,
         }
-        self.keys_pressed.insert(key);
-    }
-
-    /// Release a key (for testing or manual input)
-    pub fn release_key(&mut self, key: KeyCode) {
-        if self.keys_pressed.contains(&key) {
-            self.keys_just_released.insert(key);
-        }
-        self.keys_pressed.remove(&key);
-    }
-
-    /// Press a mouse button
-    pub fn press_mouse_button(&mut self, button: MouseButton) {
-        if !self.mouse_buttons_pressed.contains(&button) {
-            self.mouse_buttons_just_pressed.insert(button);
-        }
-        self.mouse_buttons_pressed.insert(button);
-    }
-
-    /// Release a mouse button
-    pub fn release_mouse_button(&mut self, button: MouseButton) {
-        if self.mouse_buttons_pressed.contains(&button) {
-            self.mouse_buttons_just_released.insert(button);
-        }
-        self.mouse_buttons_pressed.remove(&button);
-    }
-
-    /// Set mouse position
-    pub fn set_mouse_position(&mut self, x: f32, y: f32) {
-        let old_pos = self.mouse_position;
-        self.mouse_position = (x, y);
-        self.mouse_delta = (x - old_pos.0, y - old_pos.1);
-    }
-
-    /// Set mouse delta (for manual control)
-    pub fn set_mouse_delta(&mut self, dx: f32, dy: f32) {
-        self.mouse_delta = (dx, dy);
-    }
-
-    /// Set mouse wheel delta
-    pub fn set_mouse_wheel_delta(&mut self, delta: f32) {
-        self.mouse_wheel_delta = delta;
     }
 }
 
 impl Default for Input {
     fn default() -> Self {
         Self::new()
-    }
-}
-
-/// Keyboard key codes
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub enum KeyCode {
-    // Letters
-    A,
-    B,
-    C,
-    D,
-    E,
-    F,
-    G,
-    H,
-    I,
-    J,
-    K,
-    L,
-    M,
-    N,
-    O,
-    P,
-    Q,
-    R,
-    S,
-    T,
-    U,
-    V,
-    W,
-    X,
-    Y,
-    Z,
-
-    // Numbers
-    Key0,
-    Key1,
-    Key2,
-    Key3,
-    Key4,
-    Key5,
-    Key6,
-    Key7,
-    Key8,
-    Key9,
-
-    // Function keys
-    F1,
-    F2,
-    F3,
-    F4,
-    F5,
-    F6,
-    F7,
-    F8,
-    F9,
-    F10,
-    F11,
-    F12,
-
-    // Arrow keys
-    Up,
-    Down,
-    Left,
-    Right,
-
-    // Special keys
-    Space,
-    Enter,
-    Escape,
-    Tab,
-    Backspace,
-    Delete,
-    Shift,
-    Control,
-    Alt,
-}
-
-/// Mouse buttons
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub enum MouseButton {
-    Left,
-    Right,
-    Middle,
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn test_input_creation() {
-        let input = Input::new();
-        assert!(!input.is_key_pressed(KeyCode::Space));
-        assert_eq!(input.mouse_position(), (0.0, 0.0));
-    }
-
-    #[test]
-    fn test_key_press() {
-        let mut input = Input::new();
-
-        input.press_key(KeyCode::W);
-        assert!(input.is_key_pressed(KeyCode::W));
-        assert!(input.is_key_just_pressed(KeyCode::W));
-
-        // After clearing frame state, just_pressed should be false
-        input.clear_frame_state();
-        assert!(input.is_key_pressed(KeyCode::W));
-        assert!(!input.is_key_just_pressed(KeyCode::W));
-    }
-
-    #[test]
-    fn test_key_release() {
-        let mut input = Input::new();
-
-        input.press_key(KeyCode::Space);
-        input.clear_frame_state();
-
-        input.release_key(KeyCode::Space);
-        assert!(!input.is_key_pressed(KeyCode::Space));
-        assert!(input.is_key_just_released(KeyCode::Space));
-
-        input.clear_frame_state();
-        assert!(!input.is_key_just_released(KeyCode::Space));
-    }
-
-    #[test]
-    fn test_mouse_button() {
-        let mut input = Input::new();
-
-        input.press_mouse_button(MouseButton::Left);
-        assert!(input.is_mouse_button_pressed(MouseButton::Left));
-        assert!(input.is_mouse_button_just_pressed(MouseButton::Left));
-
-        input.clear_frame_state();
-        assert!(input.is_mouse_button_pressed(MouseButton::Left));
-        assert!(!input.is_mouse_button_just_pressed(MouseButton::Left));
-
-        input.release_mouse_button(MouseButton::Left);
-        assert!(!input.is_mouse_button_pressed(MouseButton::Left));
-        assert!(input.is_mouse_button_just_released(MouseButton::Left));
-    }
-
-    #[test]
-    fn test_mouse_position() {
-        let mut input = Input::new();
-
-        input.set_mouse_position(100.0, 200.0);
-        assert_eq!(input.mouse_position(), (100.0, 200.0));
-        assert_eq!(input.mouse_x(), 100.0);
-        assert_eq!(input.mouse_y(), 200.0);
-    }
-
-    #[test]
-    fn test_mouse_delta() {
-        let mut input = Input::new();
-
-        input.set_mouse_position(100.0, 100.0);
-        input.clear_frame_state(); // Reset delta
-
-        input.set_mouse_position(150.0, 120.0);
-        assert_eq!(input.mouse_delta(), (50.0, 20.0));
-
-        input.clear_frame_state();
-        assert_eq!(input.mouse_delta(), (0.0, 0.0));
-    }
-
-    #[test]
-    fn test_mouse_wheel() {
-        let mut input = Input::new();
-
-        input.set_mouse_wheel_delta(1.5);
-        assert_eq!(input.mouse_wheel_delta(), 1.5);
-
-        input.clear_frame_state();
-        assert_eq!(input.mouse_wheel_delta(), 0.0);
-    }
-
-    #[test]
-    fn test_multiple_keys() {
-        let mut input = Input::new();
-
-        input.press_key(KeyCode::W);
-        input.press_key(KeyCode::A);
-        input.press_key(KeyCode::S);
-
-        assert!(input.is_key_pressed(KeyCode::W));
-        assert!(input.is_key_pressed(KeyCode::A));
-        assert!(input.is_key_pressed(KeyCode::S));
-        assert!(!input.is_key_pressed(KeyCode::D));
     }
 }
