@@ -1,6 +1,6 @@
 use windjammer_game_framework::renderer3d::{Renderer3D, Camera3D};
 use windjammer_game_framework::renderer::Color;
-use windjammer_game_framework::input::{Input, Key};
+use windjammer_game_framework::input::{Input, Key, MouseButton};
 use windjammer_game_framework::math::{Vec3, Mat4};
 
 struct ShooterGame {
@@ -250,6 +250,39 @@ fn update_bullets(&mut self, delta: f32) {
             i += 1;
         }
 }
+fn shoot(&mut self) {
+        let yaw_rad = self.player_yaw * 3.14159 / 180.0;
+        let pitch_rad = self.player_pitch * 3.14159 / 180.0;
+        let forward_x = yaw_rad.sin() * pitch_rad.cos();
+        let forward_y = pitch_rad.sin();
+        let forward_z = yaw_rad.cos() * pitch_rad.cos();
+        let speed = {
+            if self.weapon == 0 {
+                30.0
+            } else {
+                if self.weapon == 1 {
+                    25.0
+                } else {
+                    20.0
+                }
+            }
+        };
+        let damage = {
+            if self.weapon == 0 {
+                1
+            } else {
+                if self.weapon == 1 {
+                    2
+                } else {
+                    3
+                }
+            }
+        };
+        let spawn_offset = 1.5;
+        let bullet_pos = Vec3::new(self.player_pos.x + forward_x * spawn_offset, self.player_pos.y + forward_y * spawn_offset, self.player_pos.z + forward_z * spawn_offset);
+        self.bullets.push(Bullet { pos: bullet_pos, velocity: Vec3::new(forward_x * speed, forward_y * speed, forward_z * speed), damage, lifetime: 5.0 });
+        println!("{}{}", "BANG! Fired weapon ", self.weapon.to_string())
+}
 }
 
 fn init(game: &mut ShooterGame) {
@@ -296,6 +329,9 @@ fn handle_input(game: &mut ShooterGame, input: &Input) {
         println!("Game paused! Press ESC to resume");
         return;
     }
+    if input.mouse_pressed(MouseButton::Left) {
+        game.shoot()
+    }
     if input.pressed(Key::Num1) {
         game.weapon = 0;
         println!("Switched to Pistol")
@@ -310,10 +346,19 @@ fn handle_input(game: &mut ShooterGame, input: &Input) {
     }
 }
 
-#[inline]
 fn update(game: &mut ShooterGame, delta: f32, input: &Input) {
     if game.paused {
         return;
+    }
+    let dx = input.mouse_delta_x() as f32;
+    let dy = input.mouse_delta_y() as f32;
+    game.player_yaw = game.player_yaw + dx * game.mouse_sensitivity;
+    game.player_pitch = game.player_pitch - dy * game.mouse_sensitivity;
+    if game.player_pitch > 89.0 {
+        game.player_pitch = 89.0;
+    }
+    if game.player_pitch < -89.0 {
+        game.player_pitch = -89.0;
     }
     game.update_player_movement(delta, input);
     game.update_enemies(delta);
@@ -416,6 +461,13 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 WindowEvent::KeyboardInput { event, .. } => {
                     input.update_from_winit(&event);
                     handle_input(&mut game, &input);
+                }
+                WindowEvent::MouseInput { state, button, .. } => {
+                    input.update_mouse_button_from_winit(state, button);
+                    handle_input(&mut game, &input);
+                }
+                WindowEvent::CursorMoved { position, .. } => {
+                    input.update_mouse_position_from_winit(position.x, position.y);
                 }
                 _ => {}
             },
