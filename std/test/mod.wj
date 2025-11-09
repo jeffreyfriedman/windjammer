@@ -1,0 +1,103 @@
+// Windjammer Testing Framework
+// Standard library for writing tests in pure Windjammer
+
+// Assertion functions
+
+/// Assert that a condition is true
+pub fn assert(condition: bool) {
+    if !condition {
+        panic("Assertion failed: condition is false")
+    }
+}
+
+/// Assert that a condition is true with a custom message
+pub fn assert_msg(condition: bool, message: string) {
+    if !condition {
+        panic("Assertion failed: " + message)
+    }
+}
+
+/// Assert that two values are equal
+pub fn assert_eq<T>(actual: T, expected: T) {
+    if actual != expected {
+        panic("Assertion failed: expected " + expected.to_string() + ", got " + actual.to_string())
+    }
+}
+
+/// Assert that two values are not equal
+pub fn assert_ne<T>(actual: T, expected: T) {
+    if actual == expected {
+        panic("Assertion failed: values should not be equal: " + actual.to_string())
+    }
+}
+
+/// Assert that actual > expected
+pub fn assert_gt<T>(actual: T, expected: T) {
+    if actual <= expected {
+        panic("Assertion failed: " + actual.to_string() + " is not greater than " + expected.to_string())
+    }
+}
+
+/// Assert that actual < expected
+pub fn assert_lt<T>(actual: T, expected: T) {
+    if actual >= expected {
+        panic("Assertion failed: " + actual.to_string() + " is not less than " + expected.to_string())
+    }
+}
+
+/// Assert that actual >= expected
+pub fn assert_gte<T>(actual: T, expected: T) {
+    if actual < expected {
+        panic("Assertion failed: " + actual.to_string() + " is not greater than or equal to " + expected.to_string())
+    }
+}
+
+/// Assert that actual <= expected
+pub fn assert_lte<T>(actual: T, expected: T) {
+    if actual > expected {
+        panic("Assertion failed: " + actual.to_string() + " is not less than or equal to " + expected.to_string())
+    }
+}
+
+/// Assert that a string contains a substring
+pub fn assert_contains(string: string, substring: string) {
+    if !string.contains(substring) {
+        panic("Assertion failed: \"" + string + "\" does not contain \"" + substring + "\"")
+    }
+}
+
+/// Assert that a string starts with a prefix
+pub fn assert_starts_with(string: string, prefix: string) {
+    if !string.starts_with(prefix) {
+        panic("Assertion failed: \"" + string + "\" does not start with \"" + prefix + "\"")
+    }
+}
+
+/// Assert that a string ends with a suffix
+pub fn assert_ends_with(string: string, suffix: string) {
+    if !string.ends_with(suffix) {
+        panic("Assertion failed: \"" + string + "\" does not end with \"" + suffix + "\"")
+    }
+}
+
+/// Assert that a collection is empty
+pub fn assert_empty<T>(collection: Vec<T>) {
+    if collection.len() > 0 {
+        panic("Assertion failed: collection is not empty (length: " + collection.len().to_string() + ")")
+    }
+}
+
+/// Assert that a collection is not empty
+pub fn assert_not_empty<T>(collection: Vec<T>) {
+    if collection.len() == 0 {
+        panic("Assertion failed: collection is empty")
+    }
+}
+
+/// Assert that a collection has a specific length
+pub fn assert_length<T>(collection: Vec<T>, expected: int) {
+    if collection.len() != expected {
+        panic("Assertion failed: expected length " + expected.to_string() + ", got " + collection.len().to_string())
+    }
+}
+
