@@ -1,0 +1,24 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Windjammer Web Editor</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div id="editor-container"></div>
+    
+    <script type="module">
+        import init, { mount_editor } from './pkg/windjammer_editor_web.js';
+        
+        async function run() {
+            await init();
+            mount_editor('editor-container');
+        }
+        
+        run();
+    </script>
+</body>
+</html>
+
