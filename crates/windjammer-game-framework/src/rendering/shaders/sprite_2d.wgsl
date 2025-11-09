@@ -20,17 +20,9 @@ struct VertexOutput {
 fn vs_main(input: VertexInput) -> VertexOutput {
     var output: VertexOutput;
     
-    // Simple orthographic projection for 2D
-    // Assuming screen space coordinates (0,0) to (width, height)
-    // Convert to clip space (-1, -1) to (1, 1)
-    let screen_size = vec2<f32>(800.0, 600.0); // TODO: Pass as uniform
-    let normalized = input.position / screen_size;
-    let clip_pos = vec2<f32>(
-        normalized.x * 2.0 - 1.0,
-        1.0 - normalized.y * 2.0
-    );
-    
-    output.clip_position = vec4<f32>(clip_pos, 0.0, 1.0);
+    // Position is already in NDC (Normalized Device Coordinates) from the Rust code
+    // Just pass it through to the clip position
+    output.clip_position = vec4<f32>(input.position, 0.0, 1.0);
     output.tex_coords = input.tex_coords;
     output.color = input.color;
     
