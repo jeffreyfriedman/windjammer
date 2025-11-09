@@ -102,25 +102,25 @@ fn render(game: &mut PongGame, renderer: &mut Renderer) {
 }
 
 fn handle_input(game: &mut PongGame, input: &Input) {
-    if input.key_pressed(Key::W) {
+    if input.is_key_pressed(Key::W) {
         game.left_paddle_y = game.left_paddle_y - 5.0;
         if game.left_paddle_y < 0.0 {
             game.left_paddle_y = 0.0;
         }
     }
-    if input.key_pressed(Key::S) {
+    if input.is_key_pressed(Key::S) {
         game.left_paddle_y = game.left_paddle_y + 5.0;
         if game.left_paddle_y > 500.0 {
             game.left_paddle_y = 500.0;
         }
     }
-    if input.key_pressed(Key::Up) {
+    if input.is_key_pressed(Key::Up) {
         game.right_paddle_y = game.right_paddle_y - 5.0;
         if game.right_paddle_y < 0.0 {
             game.right_paddle_y = 0.0;
         }
     }
-    if input.key_pressed(Key::Down) {
+    if input.is_key_pressed(Key::Down) {
         game.right_paddle_y = game.right_paddle_y + 5.0;
         if game.right_paddle_y > 500.0 {
             game.right_paddle_y = 500.0;
@@ -157,6 +157,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let window_ref: &'static winit::window::Window = unsafe { std::mem::transmute(&window) };
     let mut renderer = pollster::block_on(renderer::Renderer::new(window_ref))?;
 
+    // Initialize input
+    let mut input = input::Input::new();
+
     // Game loop
     let mut last_time = std::time::Instant::now();
 
@@ -179,9 +182,13 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                     // Render
                     render(&mut game, &mut renderer);
                     renderer.present();
+
+                    // Clear input frame state
+                    input.clear_frame_state();
                 }
                 WindowEvent::KeyboardInput { event, .. } => {
-                    // TODO: Call input function
+                    input.update_from_winit(&event);
+                    handle_input(&mut game, &input);
                 }
                 _ => {}
             },
