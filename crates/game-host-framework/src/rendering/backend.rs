@@ -91,6 +91,7 @@ pub struct Vertex3D {
     pub position: [f32; 3],
     pub normal: [f32; 3],
     pub tex_coords: [f32; 2],
+    pub color: [f32; 4],
 }
 
 // Safety: Vertex3D is repr(C) with only f32 fields
@@ -120,6 +121,12 @@ impl Vertex3D {
                     offset: (std::mem::size_of::<[f32; 3]>() * 2) as wgpu::BufferAddress,
                     shader_location: 2,
                     format: wgpu::VertexFormat::Float32x2,
+                },
+                // Color
+                wgpu::VertexAttribute {
+                    offset: (std::mem::size_of::<[f32; 3]>() * 2 + std::mem::size_of::<[f32; 2]>()) as wgpu::BufferAddress,
+                    shader_location: 3,
+                    format: wgpu::VertexFormat::Float32x4,
                 },
             ],
         }
