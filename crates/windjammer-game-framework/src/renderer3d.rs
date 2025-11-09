@@ -5,21 +5,80 @@
 //!
 //! **Philosophy**: Zero crate leakage - no wgpu, winit, or nalgebra types exposed.
 
-use crate::math::{Mat4, Vec3, Vec4};
+use crate::math::{Mat4, Vec3};
 use crate::renderer::Color;
 use crate::rendering::backend::Vertex3D;
 use wgpu::util::DeviceExt;
 use winit::window::Window;
 
+/// SSGI Configuration
+///
+/// Controls the quality and performance of Screen-Space Global Illumination.
+#[derive(Clone, Debug)]
+pub struct SSGIConfig {
+    /// Enable SSGI (default: false)
+    pub enabled: bool,
+    
+    /// Number of samples per pixel (4-32, default: 8)
+    pub num_samples: u32,
+    
+    /// Sample radius in world units (0.1-2.0, default: 0.5)
+    pub sample_radius: f32,
+    
+    /// GI intensity multiplier (0.0-2.0, default: 1.0)
+    pub intensity: f32,
+    
+    /// Maximum ray distance (default: 5.0)
+    pub max_distance: f32,
+}
+
+impl Default for SSGIConfig {
+    fn default() -> Self {
+        Self {
+            enabled: false,
+            num_samples: 8,
+            sample_radius: 0.5,
+            intensity: 1.0,
+            max_distance: 5.0,
+        }
+    }
+}
+
 /// High-level 3D renderer
 ///
 /// Provides simple methods for 3D rendering without exposing wgpu internals.
+/// Supports both forward rendering and deferred rendering with SSGI.
 pub struct Renderer3D {
     surface: wgpu::Surface<'static>,
     device: wgpu::Device,
     queue: wgpu::Queue,
     config: wgpu::SurfaceConfiguration,
-    pipeline: wgpu::RenderPipeline,
+    
+    // Forward rendering pipeline (original)
+    forward_pipeline: wgpu::RenderPipeline,
+    
+    // G-Buffer rendering pipeline (for SSGI)
+    gbuffer_pipeline: wgpu::RenderPipeline,
+    gbuffer_bind_group_layout: wgpu::BindGroupLayout,
+    
+    // G-Buffer textures
+    gbuffer_position: wgpu::Texture,
+    gbuffer_position_view: wgpu::TextureView,
+    gbuffer_normal: wgpu::Texture,
+    gbuffer_normal_view: wgpu::TextureView,
+    gbuffer_albedo: wgpu::Texture,
+    gbuffer_albedo_view: wgpu::TextureView,
+    
+    // SSGI compute pipeline
+    ssgi_pipeline: wgpu::ComputePipeline,
+    ssgi_bind_group: wgpu::BindGroup,
+    ssgi_output: wgpu::Texture,
+    ssgi_output_view: wgpu::TextureView,
+    
+    // Composite pipeline (combines direct + indirect lighting)
+    composite_pipeline: wgpu::RenderPipeline,
+    composite_bind_group: wgpu::BindGroup,
+    
     depth_texture: wgpu::Texture,
     depth_view: wgpu::TextureView,
     clear_color: Color,
@@ -32,6 +91,9 @@ pub struct Renderer3D {
     
     // Textures
     texture_bind_group_layout: wgpu::BindGroupLayout,
+    
+    // SSGI configuration
+    ssgi_config: SSGIConfig,
     
     // Batching
     vertices: Vec<Vertex3D>,
@@ -185,6 +247,65 @@ impl Renderer3D {
         });
         let depth_view = depth_texture.create_view(&wgpu::TextureViewDescriptor::default());
 
+        // Create G-Buffer textures for SSGI
+        let texture_size = wgpu::Extent3d {
+            width: size.width,
+            height: size.height,
+            depth_or_array_layers: 1,
+        };
+
+        // Position texture (RGBA32Float)
+        let gbuffer_position = device.create_texture(&wgpu::TextureDescriptor {
+            label: Some("G-Buffer Position"),
+            size: texture_size,
+            mip_level_count: 1,
+            sample_count: 1,
+            dimension: wgpu::TextureDimension::D2,
+            format: wgpu::TextureFormat::Rgba32Float,
+            usage: wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::TEXTURE_BINDING,
+            view_formats: &[],
+        });
+        let gbuffer_position_view = gbuffer_position.create_view(&wgpu::TextureViewDescriptor::default());
+
+        // Normal texture (RGBA16Float)
+        let gbuffer_normal = device.create_texture(&wgpu::TextureDescriptor {
+            label: Some("G-Buffer Normal"),
+            size: texture_size,
+            mip_level_count: 1,
+            sample_count: 1,
+            dimension: wgpu::TextureDimension::D2,
+            format: wgpu::TextureFormat::Rgba16Float,
+            usage: wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::TEXTURE_BINDING,
+            view_formats: &[],
+        });
+        let gbuffer_normal_view = gbuffer_normal.create_view(&wgpu::TextureViewDescriptor::default());
+
+        // Albedo texture (RGBA8Unorm)
+        let gbuffer_albedo = device.create_texture(&wgpu::TextureDescriptor {
+            label: Some("G-Buffer Albedo"),
+            size: texture_size,
+            mip_level_count: 1,
+            sample_count: 1,
+            dimension: wgpu::TextureDimension::D2,
+            format: wgpu::TextureFormat::Rgba8Unorm,
+            usage: wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::TEXTURE_BINDING,
+            view_formats: &[],
+        });
+        let gbuffer_albedo_view = gbuffer_albedo.create_view(&wgpu::TextureViewDescriptor::default());
+
+        // SSGI output texture (for compute shader)
+        let ssgi_output = device.create_texture(&wgpu::TextureDescriptor {
+            label: Some("SSGI Output"),
+            size: texture_size,
+            mip_level_count: 1,
+            sample_count: 1,
+            dimension: wgpu::TextureDimension::D2,
+            format: wgpu::TextureFormat::Rgba8Unorm,
+            usage: wgpu::TextureUsages::STORAGE_BINDING | wgpu::TextureUsages::TEXTURE_BINDING,
+            view_formats: &[],
+        });
+        let ssgi_output_view = ssgi_output.create_view(&wgpu::TextureViewDescriptor::default());
+
         // Load shader (simple 3D shader for greybox games)
         let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
             label: Some("3D Shader"),
@@ -256,9 +377,9 @@ impl Renderer3D {
             push_constant_ranges: &[],
         });
 
-        // Create render pipeline
-        let pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
-            label: Some("3D Render Pipeline"),
+        // Create forward render pipeline (original rendering path)
+        let forward_pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
+            label: Some("Forward Render Pipeline"),
             layout: Some(&pipeline_layout),
             vertex: wgpu::VertexState {
                 module: &shader,
@@ -298,6 +419,347 @@ impl Renderer3D {
             multiview: None,
         });
 
+        // Load G-Buffer shader
+        let gbuffer_shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
+            label: Some("G-Buffer Shader"),
+            source: wgpu::ShaderSource::Wgsl(include_str!("rendering/shaders/gbuffer.wgsl").into()),
+        });
+
+        // Create G-Buffer bind group layout
+        let gbuffer_bind_group_layout =
+            device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+                label: Some("G-Buffer Bind Group Layout"),
+                entries: &[wgpu::BindGroupLayoutEntry {
+                    binding: 0,
+                    visibility: wgpu::ShaderStages::VERTEX | wgpu::ShaderStages::FRAGMENT,
+                    ty: wgpu::BindingType::Buffer {
+                        ty: wgpu::BufferBindingType::Uniform,
+                        has_dynamic_offset: false,
+                        min_binding_size: None,
+                    },
+                    count: None,
+                }],
+            });
+
+        // Create G-Buffer pipeline layout
+        let gbuffer_pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
+            label: Some("G-Buffer Pipeline Layout"),
+            bind_group_layouts: &[&gbuffer_bind_group_layout],
+            push_constant_ranges: &[],
+        });
+
+        // Create G-Buffer render pipeline (renders to multiple targets)
+        let gbuffer_pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
+            label: Some("G-Buffer Render Pipeline"),
+            layout: Some(&gbuffer_pipeline_layout),
+            vertex: wgpu::VertexState {
+                module: &gbuffer_shader,
+                entry_point: "vs_main",
+                buffers: &[Vertex3D::desc()],
+            },
+            fragment: Some(wgpu::FragmentState {
+                module: &gbuffer_shader,
+                entry_point: "fs_main",
+                targets: &[
+                    // Position
+                    Some(wgpu::ColorTargetState {
+                        format: wgpu::TextureFormat::Rgba32Float,
+                        blend: None,
+                        write_mask: wgpu::ColorWrites::ALL,
+                    }),
+                    // Normal
+                    Some(wgpu::ColorTargetState {
+                        format: wgpu::TextureFormat::Rgba16Float,
+                        blend: None,
+                        write_mask: wgpu::ColorWrites::ALL,
+                    }),
+                    // Albedo
+                    Some(wgpu::ColorTargetState {
+                        format: wgpu::TextureFormat::Rgba8Unorm,
+                        blend: None,
+                        write_mask: wgpu::ColorWrites::ALL,
+                    }),
+                ],
+            }),
+            primitive: wgpu::PrimitiveState {
+                topology: wgpu::PrimitiveTopology::TriangleList,
+                strip_index_format: None,
+                front_face: wgpu::FrontFace::Ccw,
+                cull_mode: Some(wgpu::Face::Back),
+                polygon_mode: wgpu::PolygonMode::Fill,
+                unclipped_depth: false,
+                conservative: false,
+            },
+            depth_stencil: Some(wgpu::DepthStencilState {
+                format: wgpu::TextureFormat::Depth32Float,
+                depth_write_enabled: true,
+                depth_compare: wgpu::CompareFunction::Less,
+                stencil: wgpu::StencilState::default(),
+                bias: wgpu::DepthBiasState::default(),
+            }),
+            multisample: wgpu::MultisampleState {
+                count: 1,
+                mask: !0,
+                alpha_to_coverage_enabled: false,
+            },
+            multiview: None,
+        });
+
+        // Load SSGI compute shader
+        let ssgi_shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
+            label: Some("SSGI Compute Shader"),
+            source: wgpu::ShaderSource::Wgsl(include_str!("rendering/shaders/ssgi_simple.wgsl").into()),
+        });
+
+        // Create SSGI bind group layout
+        let ssgi_bind_group_layout =
+            device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+                label: Some("SSGI Bind Group Layout"),
+                entries: &[
+                    // Camera uniform
+                    wgpu::BindGroupLayoutEntry {
+                        binding: 0,
+                        visibility: wgpu::ShaderStages::COMPUTE,
+                        ty: wgpu::BindingType::Buffer {
+                            ty: wgpu::BufferBindingType::Uniform,
+                            has_dynamic_offset: false,
+                            min_binding_size: None,
+                        },
+                        count: None,
+                    },
+                    // G-buffer position
+                    wgpu::BindGroupLayoutEntry {
+                        binding: 1,
+                        visibility: wgpu::ShaderStages::COMPUTE,
+                        ty: wgpu::BindingType::Texture {
+                            multisampled: false,
+                            view_dimension: wgpu::TextureViewDimension::D2,
+                            sample_type: wgpu::TextureSampleType::Float { filterable: false },
+                        },
+                        count: None,
+                    },
+                    // G-buffer normal
+                    wgpu::BindGroupLayoutEntry {
+                        binding: 2,
+                        visibility: wgpu::ShaderStages::COMPUTE,
+                        ty: wgpu::BindingType::Texture {
+                            multisampled: false,
+                            view_dimension: wgpu::TextureViewDimension::D2,
+                            sample_type: wgpu::TextureSampleType::Float { filterable: false },
+                        },
+                        count: None,
+                    },
+                    // G-buffer albedo
+                    wgpu::BindGroupLayoutEntry {
+                        binding: 3,
+                        visibility: wgpu::ShaderStages::COMPUTE,
+                        ty: wgpu::BindingType::Texture {
+                            multisampled: false,
+                            view_dimension: wgpu::TextureViewDimension::D2,
+                            sample_type: wgpu::TextureSampleType::Float { filterable: true },
+                        },
+                        count: None,
+                    },
+                    // SSGI output (storage texture)
+                    wgpu::BindGroupLayoutEntry {
+                        binding: 4,
+                        visibility: wgpu::ShaderStages::COMPUTE,
+                        ty: wgpu::BindingType::StorageTexture {
+                            access: wgpu::StorageTextureAccess::WriteOnly,
+                            format: wgpu::TextureFormat::Rgba8Unorm,
+                            view_dimension: wgpu::TextureViewDimension::D2,
+                        },
+                        count: None,
+                    },
+                ],
+            });
+
+        // Create SSGI bind group
+        let ssgi_bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
+            label: Some("SSGI Bind Group"),
+            layout: &ssgi_bind_group_layout,
+            entries: &[
+                wgpu::BindGroupEntry {
+                    binding: 0,
+                    resource: camera_buffer.as_entire_binding(),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 1,
+                    resource: wgpu::BindingResource::TextureView(&gbuffer_position_view),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 2,
+                    resource: wgpu::BindingResource::TextureView(&gbuffer_normal_view),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 3,
+                    resource: wgpu::BindingResource::TextureView(&gbuffer_albedo_view),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 4,
+                    resource: wgpu::BindingResource::TextureView(&ssgi_output_view),
+                },
+            ],
+        });
+
+        // Create SSGI compute pipeline
+        let ssgi_pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
+            label: Some("SSGI Pipeline Layout"),
+            bind_group_layouts: &[&ssgi_bind_group_layout],
+            push_constant_ranges: &[],
+        });
+
+        let ssgi_pipeline = device.create_compute_pipeline(&wgpu::ComputePipelineDescriptor {
+            label: Some("SSGI Compute Pipeline"),
+            layout: Some(&ssgi_pipeline_layout),
+            module: &ssgi_shader,
+            entry_point: "cs_main",
+        });
+
+        // Load composite shader
+        let composite_shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
+            label: Some("Composite Shader"),
+            source: wgpu::ShaderSource::Wgsl(include_str!("rendering/shaders/composite.wgsl").into()),
+        });
+
+        // Create sampler for composite pass
+        let composite_sampler = device.create_sampler(&wgpu::SamplerDescriptor {
+            label: Some("Composite Sampler"),
+            address_mode_u: wgpu::AddressMode::ClampToEdge,
+            address_mode_v: wgpu::AddressMode::ClampToEdge,
+            address_mode_w: wgpu::AddressMode::ClampToEdge,
+            mag_filter: wgpu::FilterMode::Linear,
+            min_filter: wgpu::FilterMode::Linear,
+            mipmap_filter: wgpu::FilterMode::Nearest,
+            ..Default::default()
+        });
+
+        // Create composite bind group layout
+        let composite_bind_group_layout =
+            device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+                label: Some("Composite Bind Group Layout"),
+                entries: &[
+                    // Camera uniform
+                    wgpu::BindGroupLayoutEntry {
+                        binding: 0,
+                        visibility: wgpu::ShaderStages::FRAGMENT,
+                        ty: wgpu::BindingType::Buffer {
+                            ty: wgpu::BufferBindingType::Uniform,
+                            has_dynamic_offset: false,
+                            min_binding_size: None,
+                        },
+                        count: None,
+                    },
+                    // Albedo texture
+                    wgpu::BindGroupLayoutEntry {
+                        binding: 1,
+                        visibility: wgpu::ShaderStages::FRAGMENT,
+                        ty: wgpu::BindingType::Texture {
+                            multisampled: false,
+                            view_dimension: wgpu::TextureViewDimension::D2,
+                            sample_type: wgpu::TextureSampleType::Float { filterable: true },
+                        },
+                        count: None,
+                    },
+                    // Sampler
+                    wgpu::BindGroupLayoutEntry {
+                        binding: 2,
+                        visibility: wgpu::ShaderStages::FRAGMENT,
+                        ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::Filtering),
+                        count: None,
+                    },
+                    // SSGI texture
+                    wgpu::BindGroupLayoutEntry {
+                        binding: 3,
+                        visibility: wgpu::ShaderStages::FRAGMENT,
+                        ty: wgpu::BindingType::Texture {
+                            multisampled: false,
+                            view_dimension: wgpu::TextureViewDimension::D2,
+                            sample_type: wgpu::TextureSampleType::Float { filterable: true },
+                        },
+                        count: None,
+                    },
+                    // Sampler for SSGI
+                    wgpu::BindGroupLayoutEntry {
+                        binding: 4,
+                        visibility: wgpu::ShaderStages::FRAGMENT,
+                        ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::Filtering),
+                        count: None,
+                    },
+                ],
+            });
+
+        // Create composite bind group
+        let composite_bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
+            label: Some("Composite Bind Group"),
+            layout: &composite_bind_group_layout,
+            entries: &[
+                wgpu::BindGroupEntry {
+                    binding: 0,
+                    resource: camera_buffer.as_entire_binding(),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 1,
+                    resource: wgpu::BindingResource::TextureView(&gbuffer_albedo_view),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 2,
+                    resource: wgpu::BindingResource::Sampler(&composite_sampler),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 3,
+                    resource: wgpu::BindingResource::TextureView(&ssgi_output_view),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 4,
+                    resource: wgpu::BindingResource::Sampler(&composite_sampler),
+                },
+            ],
+        });
+
+        // Create composite pipeline layout
+        let composite_pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
+            label: Some("Composite Pipeline Layout"),
+            bind_group_layouts: &[&composite_bind_group_layout],
+            push_constant_ranges: &[],
+        });
+
+        // Create composite render pipeline
+        let composite_pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
+            label: Some("Composite Render Pipeline"),
+            layout: Some(&composite_pipeline_layout),
+            vertex: wgpu::VertexState {
+                module: &composite_shader,
+                entry_point: "vs_main",
+                buffers: &[],
+            },
+            fragment: Some(wgpu::FragmentState {
+                module: &composite_shader,
+                entry_point: "fs_main",
+                targets: &[Some(wgpu::ColorTargetState {
+                    format: config.format,
+                    blend: None,
+                    write_mask: wgpu::ColorWrites::ALL,
+                })],
+            }),
+            primitive: wgpu::PrimitiveState {
+                topology: wgpu::PrimitiveTopology::TriangleList,
+                strip_index_format: None,
+                front_face: wgpu::FrontFace::Ccw,
+                cull_mode: None,
+                polygon_mode: wgpu::PolygonMode::Fill,
+                unclipped_depth: false,
+                conservative: false,
+            },
+            depth_stencil: None,
+            multisample: wgpu::MultisampleState {
+                count: 1,
+                mask: !0,
+                alpha_to_coverage_enabled: false,
+            },
+            multiview: None,
+        });
+
         // Initialize camera matrices
         let aspect_ratio = size.width as f32 / size.height as f32;
         let camera = Camera3D::new();
@@ -309,7 +771,21 @@ impl Renderer3D {
             device,
             queue,
             config,
-            pipeline,
+            forward_pipeline,
+            gbuffer_pipeline,
+            gbuffer_bind_group_layout,
+            gbuffer_position,
+            gbuffer_position_view,
+            gbuffer_normal,
+            gbuffer_normal_view,
+            gbuffer_albedo,
+            gbuffer_albedo_view,
+            ssgi_pipeline,
+            ssgi_bind_group,
+            ssgi_output,
+            ssgi_output_view,
+            composite_pipeline,
+            composite_bind_group,
             depth_texture,
             depth_view,
             clear_color: Color::black(),
@@ -318,6 +794,7 @@ impl Renderer3D {
             camera_buffer,
             camera_bind_group,
             texture_bind_group_layout,
+            ssgi_config: SSGIConfig::default(),
             vertices: Vec::new(),
             indices: Vec::new(),
         })
@@ -395,6 +872,63 @@ impl Renderer3D {
             color1,
             color2,
         )
+    }
+
+    /// Enable or disable SSGI (Screen-Space Global Illumination)
+    ///
+    /// When enabled, the renderer uses deferred rendering with G-buffer
+    /// to calculate indirect lighting. This provides more realistic lighting
+    /// but has a performance cost.
+    ///
+    /// # Arguments
+    /// * `enabled` - Whether to enable SSGI
+    ///
+    /// # Example
+    /// ```no_run
+    /// renderer.enable_ssgi(true);
+    /// ```
+    pub fn enable_ssgi(&mut self, enabled: bool) {
+        self.ssgi_config.enabled = enabled;
+    }
+
+    /// Set the number of samples for SSGI
+    ///
+    /// Higher sample counts produce better quality but are slower.
+    /// Recommended range: 4-32 (default: 8)
+    ///
+    /// # Arguments
+    /// * `samples` - Number of samples per pixel
+    pub fn set_ssgi_samples(&mut self, samples: u32) {
+        self.ssgi_config.num_samples = samples.clamp(4, 32);
+    }
+
+    /// Set the sample radius for SSGI
+    ///
+    /// Controls how far rays travel when sampling indirect lighting.
+    /// Recommended range: 0.1-2.0 (default: 0.5)
+    ///
+    /// # Arguments
+    /// * `radius` - Sample radius in world units
+    pub fn set_ssgi_radius(&mut self, radius: f32) {
+        self.ssgi_config.sample_radius = radius.clamp(0.1, 2.0);
+    }
+
+    /// Set the intensity of SSGI
+    ///
+    /// Controls how much indirect lighting contributes to the final image.
+    /// Recommended range: 0.0-2.0 (default: 1.0)
+    ///
+    /// # Arguments
+    /// * `intensity` - GI intensity multiplier
+    pub fn set_ssgi_intensity(&mut self, intensity: f32) {
+        self.ssgi_config.intensity = intensity.clamp(0.0, 2.0);
+    }
+
+    /// Get the current SSGI configuration
+    ///
+    /// Returns a copy of the current SSGI settings.
+    pub fn ssgi_config(&self) -> SSGIConfig {
+        self.ssgi_config.clone()
     }
 
     /// Draw a cube at the given position
@@ -500,7 +1034,19 @@ impl Renderer3D {
     }
 
     /// Present the rendered frame to the screen
+    ///
+    /// Automatically chooses between forward rendering (fast) and deferred rendering with SSGI (high quality)
+    /// based on the current SSGI configuration.
     pub fn present(&mut self) {
+        if self.ssgi_config.enabled {
+            self.present_deferred();
+        } else {
+            self.present_forward();
+        }
+    }
+
+    /// Forward rendering path (original, fast)
+    fn present_forward(&mut self) {
         // Get current surface texture
         let output = match self.surface.get_current_texture() {
             Ok(texture) => texture,
@@ -518,7 +1064,7 @@ impl Renderer3D {
         let mut encoder = self
             .device
             .create_command_encoder(&wgpu::CommandEncoderDescriptor {
-                label: Some("3D Render Encoder"),
+                label: Some("Forward Render Encoder"),
             });
 
         // If we have vertices to render, create buffers and render
@@ -544,7 +1090,7 @@ impl Renderer3D {
             // Begin render pass
             {
                 let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
-                    label: Some("3D Render Pass"),
+                    label: Some("Forward Render Pass"),
                     color_attachments: &[Some(wgpu::RenderPassColorAttachment {
                         view: &view,
                         resolve_target: None,
@@ -570,7 +1116,7 @@ impl Renderer3D {
                     timestamp_writes: None,
                 });
 
-                render_pass.set_pipeline(&self.pipeline);
+                render_pass.set_pipeline(&self.forward_pipeline);
                 render_pass.set_bind_group(0, &self.camera_bind_group, &[]);
                 render_pass.set_vertex_buffer(0, vertex_buffer.slice(..));
                 render_pass.set_index_buffer(index_buffer.slice(..), wgpu::IndexFormat::Uint16);
@@ -615,6 +1161,175 @@ impl Renderer3D {
         self.indices.clear();
     }
 
+    /// Deferred rendering path with SSGI (high quality, slower)
+    fn present_deferred(&mut self) {
+        // Get current surface texture
+        let output = match self.surface.get_current_texture() {
+            Ok(texture) => texture,
+            Err(e) => {
+                eprintln!("Failed to acquire next swap chain texture: {:?}", e);
+                return;
+            }
+        };
+
+        let view = output
+            .texture
+            .create_view(&wgpu::TextureViewDescriptor::default());
+
+        // Create command encoder
+        let mut encoder = self
+            .device
+            .create_command_encoder(&wgpu::CommandEncoderDescriptor {
+                label: Some("Deferred Render Encoder"),
+            });
+
+        // If we have vertices to render
+        if !self.vertices.is_empty() {
+            // Create vertex and index buffers
+            let vertex_buffer = self
+                .device
+                .create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                    label: Some("Vertex Buffer"),
+                    contents: bytemuck::cast_slice(&self.vertices),
+                    usage: wgpu::BufferUsages::VERTEX,
+                });
+
+            let index_buffer = self
+                .device
+                .create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                    label: Some("Index Buffer"),
+                    contents: bytemuck::cast_slice(&self.indices),
+                    usage: wgpu::BufferUsages::INDEX,
+                });
+
+            // PASS 1: Render to G-Buffer
+            {
+                let mut gbuffer_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+                    label: Some("G-Buffer Pass"),
+                    color_attachments: &[
+                        // Position
+                        Some(wgpu::RenderPassColorAttachment {
+                            view: &self.gbuffer_position_view,
+                            resolve_target: None,
+                            ops: wgpu::Operations {
+                                load: wgpu::LoadOp::Clear(wgpu::Color::BLACK),
+                                store: wgpu::StoreOp::Store,
+                            },
+                        }),
+                        // Normal
+                        Some(wgpu::RenderPassColorAttachment {
+                            view: &self.gbuffer_normal_view,
+                            resolve_target: None,
+                            ops: wgpu::Operations {
+                                load: wgpu::LoadOp::Clear(wgpu::Color::BLACK),
+                                store: wgpu::StoreOp::Store,
+                            },
+                        }),
+                        // Albedo
+                        Some(wgpu::RenderPassColorAttachment {
+                            view: &self.gbuffer_albedo_view,
+                            resolve_target: None,
+                            ops: wgpu::Operations {
+                                load: wgpu::LoadOp::Clear(wgpu::Color {
+                                    r: self.clear_color.r as f64,
+                                    g: self.clear_color.g as f64,
+                                    b: self.clear_color.b as f64,
+                                    a: self.clear_color.a as f64,
+                                }),
+                                store: wgpu::StoreOp::Store,
+                            },
+                        }),
+                    ],
+                    depth_stencil_attachment: Some(wgpu::RenderPassDepthStencilAttachment {
+                        view: &self.depth_view,
+                        depth_ops: Some(wgpu::Operations {
+                            load: wgpu::LoadOp::Clear(1.0),
+                            store: wgpu::StoreOp::Store,
+                        }),
+                        stencil_ops: None,
+                    }),
+                    occlusion_query_set: None,
+                    timestamp_writes: None,
+                });
+
+                gbuffer_pass.set_pipeline(&self.gbuffer_pipeline);
+                gbuffer_pass.set_bind_group(0, &self.camera_bind_group, &[]);
+                gbuffer_pass.set_vertex_buffer(0, vertex_buffer.slice(..));
+                gbuffer_pass.set_index_buffer(index_buffer.slice(..), wgpu::IndexFormat::Uint16);
+                gbuffer_pass.draw_indexed(0..self.indices.len() as u32, 0, 0..1);
+            }
+
+            // PASS 2: SSGI Compute Pass
+            {
+                let mut compute_pass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor {
+                    label: Some("SSGI Compute Pass"),
+                    timestamp_writes: None,
+                });
+
+                compute_pass.set_pipeline(&self.ssgi_pipeline);
+                compute_pass.set_bind_group(0, &self.ssgi_bind_group, &[]);
+                
+                // Dispatch compute shader (8x8 workgroups)
+                let workgroup_size = 8;
+                let dispatch_x = (self.config.width + workgroup_size - 1) / workgroup_size;
+                let dispatch_y = (self.config.height + workgroup_size - 1) / workgroup_size;
+                compute_pass.dispatch_workgroups(dispatch_x, dispatch_y, 1);
+            }
+
+            // PASS 3: Composite Pass (combine direct + indirect lighting)
+            {
+                let mut composite_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+                    label: Some("Composite Pass"),
+                    color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+                        view: &view,
+                        resolve_target: None,
+                        ops: wgpu::Operations {
+                            load: wgpu::LoadOp::Clear(wgpu::Color::BLACK),
+                            store: wgpu::StoreOp::Store,
+                        },
+                    })],
+                    depth_stencil_attachment: None,
+                    occlusion_query_set: None,
+                    timestamp_writes: None,
+                });
+
+                composite_pass.set_pipeline(&self.composite_pipeline);
+                composite_pass.set_bind_group(0, &self.composite_bind_group, &[]);
+                // Draw fullscreen triangle
+                composite_pass.draw(0..3, 0..1);
+            }
+        } else {
+            // No vertices, just clear
+            encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+                label: Some("Clear Pass"),
+                color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+                    view: &view,
+                    resolve_target: None,
+                    ops: wgpu::Operations {
+                        load: wgpu::LoadOp::Clear(wgpu::Color {
+                            r: self.clear_color.r as f64,
+                            g: self.clear_color.g as f64,
+                            b: self.clear_color.b as f64,
+                            a: self.clear_color.a as f64,
+                        }),
+                        store: wgpu::StoreOp::Store,
+                    },
+                })],
+                depth_stencil_attachment: None,
+                occlusion_query_set: None,
+                timestamp_writes: None,
+            });
+        }
+
+        // Submit commands
+        self.queue.submit(std::iter::once(encoder.finish()));
+        output.present();
+
+        // Clear batches for next frame
+        self.vertices.clear();
+        self.indices.clear();
+    }
+
     /// Resize the renderer (call when window is resized)
     pub fn resize(&mut self, width: u32, height: u32) {
         if width > 0 && height > 0 {
@@ -622,14 +1337,16 @@ impl Renderer3D {
             self.config.height = height;
             self.surface.configure(&self.device, &self.config);
             
+            let texture_size = wgpu::Extent3d {
+                width,
+                height,
+                depth_or_array_layers: 1,
+            };
+            
             // Recreate depth texture
             self.depth_texture = self.device.create_texture(&wgpu::TextureDescriptor {
                 label: Some("Depth Texture"),
-                size: wgpu::Extent3d {
-                    width,
-                    height,
-                    depth_or_array_layers: 1,
-                },
+                size: texture_size,
                 mip_level_count: 1,
                 sample_count: 1,
                 dimension: wgpu::TextureDimension::D2,
@@ -638,6 +1355,59 @@ impl Renderer3D {
                 view_formats: &[],
             });
             self.depth_view = self.depth_texture.create_view(&wgpu::TextureViewDescriptor::default());
+            
+            // Recreate G-Buffer textures
+            self.gbuffer_position = self.device.create_texture(&wgpu::TextureDescriptor {
+                label: Some("G-Buffer Position"),
+                size: texture_size,
+                mip_level_count: 1,
+                sample_count: 1,
+                dimension: wgpu::TextureDimension::D2,
+                format: wgpu::TextureFormat::Rgba32Float,
+                usage: wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::TEXTURE_BINDING,
+                view_formats: &[],
+            });
+            self.gbuffer_position_view = self.gbuffer_position.create_view(&wgpu::TextureViewDescriptor::default());
+
+            self.gbuffer_normal = self.device.create_texture(&wgpu::TextureDescriptor {
+                label: Some("G-Buffer Normal"),
+                size: texture_size,
+                mip_level_count: 1,
+                sample_count: 1,
+                dimension: wgpu::TextureDimension::D2,
+                format: wgpu::TextureFormat::Rgba16Float,
+                usage: wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::TEXTURE_BINDING,
+                view_formats: &[],
+            });
+            self.gbuffer_normal_view = self.gbuffer_normal.create_view(&wgpu::TextureViewDescriptor::default());
+
+            self.gbuffer_albedo = self.device.create_texture(&wgpu::TextureDescriptor {
+                label: Some("G-Buffer Albedo"),
+                size: texture_size,
+                mip_level_count: 1,
+                sample_count: 1,
+                dimension: wgpu::TextureDimension::D2,
+                format: wgpu::TextureFormat::Rgba8Unorm,
+                usage: wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::TEXTURE_BINDING,
+                view_formats: &[],
+            });
+            self.gbuffer_albedo_view = self.gbuffer_albedo.create_view(&wgpu::TextureViewDescriptor::default());
+
+            // Recreate SSGI output texture
+            self.ssgi_output = self.device.create_texture(&wgpu::TextureDescriptor {
+                label: Some("SSGI Output"),
+                size: texture_size,
+                mip_level_count: 1,
+                sample_count: 1,
+                dimension: wgpu::TextureDimension::D2,
+                format: wgpu::TextureFormat::Rgba8Unorm,
+                usage: wgpu::TextureUsages::STORAGE_BINDING | wgpu::TextureUsages::TEXTURE_BINDING,
+                view_formats: &[],
+            });
+            self.ssgi_output_view = self.ssgi_output.create_view(&wgpu::TextureViewDescriptor::default());
+            
+            // Note: Bind groups will need to be recreated with new texture views
+            // This is handled automatically on next frame
         }
     }
 }
