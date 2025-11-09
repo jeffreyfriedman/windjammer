@@ -34,6 +34,7 @@
 //! }
 //! ```
 
+pub mod animation; // Animation system (skeletal, blending, IK)
 pub mod assets; // Asset loading and management
 pub mod audio; // Audio playback
 pub mod camera2d; // 2D camera system
@@ -67,6 +68,7 @@ pub mod window; // Window creation and management (native only)
 /// use windjammer_game_framework::ecs::{World as RustWorld, ...};
 /// ```
 pub mod prelude {
+    pub use crate::animation::{Animation, AnimationBlender, AnimationPlayer, Bone, IKChain, Skeleton, Transform};
     pub use crate::assets::{AssetManager, Handle};
     pub use crate::audio::{AudioSystem, SpatialAudioSource};
     pub use crate::camera2d::Camera2D;
