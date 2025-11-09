@@ -4,6 +4,9 @@
 **Status:** 📋 Planning Phase  
 **Priority:** 🔴 **CRITICAL** - Prevents bugs from reaching users
 
+**IMPORTANT:** Windjammer ALREADY HAS a complete test framework (`wj test`)!  
+We just need to add game-specific testing utilities.
+
 ---
 
 ## 🎯 Motivation
@@ -25,6 +28,73 @@ Create a comprehensive automated testing system that can:
 2. **Runtime-test** game logic without manual interaction
 3. **Integration-test** the full game framework
 4. **Regression-test** to prevent breaking existing functionality
+
+---
+
+## ✅ What Windjammer ALREADY HAS
+
+Windjammer has a **complete test framework**:
+- ✅ `wj test` command
+- ✅ Test discovery (`*_test.wj` files)
+- ✅ Test functions (`test_*` prefix)
+- ✅ `@test` decorator
+- ✅ Assertions (`assert()`, `assert_eq()`)
+- ✅ Parallel execution
+- ✅ Test filtering
+- ✅ JSON output for CI/CD
+
+**Example:**
+```windjammer
+// tests/math_test.wj
+
+fn test_addition() {
+    let result = 2 + 2
+    assert(result == 4, "2 + 2 should equal 4")
+}
+
+fn test_multiplication() {
+    let result = 3 * 4
+    assert(result == 12, "3 * 4 should equal 12")
+}
+```
+
+Run with: `wj test`
+
+---
+
+## ❌ What We're MISSING (Game-Specific)
+
+To test games in pure Windjammer, we need:
+
+### 1. **Headless Mode**
+Games currently require a window and GPU. We need a headless mode that:
+- Skips window creation
+- Skips rendering
+- Still runs game logic
+- Allows testing without a display
+
+### 2. **Input Simulation API**
+The `Input` struct needs test-friendly methods:
+```windjammer
+input.simulate_key_press(Key::W)
+input.simulate_mouse_move(100.0, 0.0)
+input.simulate_mouse_click(MouseButton::Left)
+```
+
+### 3. **Test-Friendly Initialization**
+Games need a way to initialize without rendering:
+```windjammer
+let game = ShooterGame::new_headless()
+// or
+let game = ShooterGame::default()
+game.set_headless(true)
+```
+
+### 4. **Deterministic Time**
+Tests need predictable delta times:
+```windjammer
+game.update(0.016, input)  // Always 16ms
+```
 
 ---
 
