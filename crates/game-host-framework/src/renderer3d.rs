@@ -363,6 +363,39 @@ impl Renderer3D {
     pub fn load_texture(&self, path: impl AsRef<std::path::Path>) -> Result<crate::texture::Texture, Box<dyn std::error::Error>> {
         crate::texture::Texture::from_file(&self.device, &self.queue, &self.texture_bind_group_layout, path)
     }
+    
+    /// Create a checkerboard texture
+    ///
+    /// Creates a procedural checkerboard pattern - useful for testing or placeholder textures.
+    ///
+    /// # Arguments
+    /// * `size` - Size of the texture (width and height in pixels)
+    /// * `checker_size` - Size of each checker square in pixels
+    /// * `color1` - First color (RGBA, 0-255)
+    /// * `color2` - Second color (RGBA, 0-255)
+    ///
+    /// # Example
+    /// ```no_run
+    /// // Create a black and white checkerboard
+    /// let texture = renderer.create_checkerboard_texture(256, 32, [0, 0, 0, 255], [255, 255, 255, 255])?;
+    /// ```
+    pub fn create_checkerboard_texture(
+        &self,
+        size: u32,
+        checker_size: u32,
+        color1: [u8; 4],
+        color2: [u8; 4],
+    ) -> Result<crate::texture::Texture, Box<dyn std::error::Error>> {
+        crate::texture::Texture::checkerboard(
+            &self.device,
+            &self.queue,
+            &self.texture_bind_group_layout,
+            size,
+            checker_size,
+            color1,
+            color2,
+        )
+    }
 
     /// Draw a cube at the given position
     pub fn draw_cube(&mut self, position: Vec3, size: Vec3, color: Color) {
