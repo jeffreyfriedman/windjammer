@@ -309,6 +309,11 @@ impl Renderer {
 
     /// Present the rendered frame to the screen
     pub fn present(&mut self) {
+        // Debug: Log vertex count
+        if self.vertices.len() > 0 {
+            eprintln!("DEBUG: Rendering {} vertices, {} indices", self.vertices.len(), self.indices.len());
+        }
+        
         // Get current surface texture
         let output = match self.surface.get_current_texture() {
             Ok(texture) => texture,
