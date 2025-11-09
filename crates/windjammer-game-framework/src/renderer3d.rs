@@ -30,6 +30,9 @@ pub struct Renderer3D {
     camera_buffer: wgpu::Buffer,
     camera_bind_group: wgpu::BindGroup,
     
+    // Textures
+    texture_bind_group_layout: wgpu::BindGroupLayout,
+    
     // Batching
     vertices: Vec<Vertex3D>,
     indices: Vec<u16>,
@@ -222,6 +225,30 @@ impl Renderer3D {
             }],
         });
 
+        // Create texture bind group layout
+        let texture_bind_group_layout =
+            device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+                label: Some("Texture Bind Group Layout"),
+                entries: &[
+                    wgpu::BindGroupLayoutEntry {
+                        binding: 0,
+                        visibility: wgpu::ShaderStages::FRAGMENT,
+                        ty: wgpu::BindingType::Texture {
+                            multisampled: false,
+                            view_dimension: wgpu::TextureViewDimension::D2,
+                            sample_type: wgpu::TextureSampleType::Float { filterable: true },
+                        },
+                        count: None,
+                    },
+                    wgpu::BindGroupLayoutEntry {
+                        binding: 1,
+                        visibility: wgpu::ShaderStages::FRAGMENT,
+                        ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::Filtering),
+                        count: None,
+                    },
+                ],
+            });
+
         // Pipeline layout
         let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
             label: Some("3D Pipeline Layout"),
@@ -290,6 +317,7 @@ impl Renderer3D {
             projection_matrix,
             camera_buffer,
             camera_bind_group,
+            texture_bind_group_layout,
             vertices: Vec::new(),
             indices: Vec::new(),
         })
@@ -312,6 +340,28 @@ impl Renderer3D {
     /// Clear the screen with the given color
     pub fn clear(&mut self, color: Color) {
         self.clear_color = color;
+    }
+
+    /// Load a texture from a file
+    ///
+    /// Supports PNG, JPEG, and other common image formats.
+    ///
+    /// # Arguments
+    /// * `path` - Path to the image file
+    ///
+    /// # Returns
+    /// A `Texture` that can be used with `draw_textured_cube()` and other textured drawing methods.
+    ///
+    /// # Errors
+    /// Returns an error if the file cannot be read or is not a valid image.
+    ///
+    /// # Example
+    /// ```no_run
+    /// let texture = renderer.load_texture("assets/wall.png")?;
+    /// renderer.draw_textured_cube(pos, size, &texture);
+    /// ```
+    pub fn load_texture(&self, path: impl AsRef<std::path::Path>) -> Result<crate::texture::Texture, Box<dyn std::error::Error>> {
+        crate::texture::Texture::from_file(&self.device, &self.queue, &self.texture_bind_group_layout, path)
     }
 
     /// Draw a cube at the given position
