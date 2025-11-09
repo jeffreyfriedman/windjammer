@@ -122,6 +122,44 @@ impl AudioSystem {
             }
         }
     }
+    
+    /// Play a procedural beep sound (useful for testing without audio files)
+    ///
+    /// # Arguments
+    /// * `frequency` - Frequency in Hz (e.g., 440.0 for A4)
+    /// * `duration` - Duration in seconds
+    pub fn play_beep(&mut self, frequency: f32, duration: f32) -> Result<(), String> {
+        #[cfg(feature = "audio")]
+        {
+            use rodio::buffer::SamplesBuffer;
+            
+            let sample_rate = 44100;
+            let samples = (sample_rate as f32 * duration) as usize;
+            let mut data = Vec::with_capacity(samples);
+            
+            for i in 0..samples {
+                let t = i as f32 / sample_rate as f32;
+                let sample = (t * frequency * 2.0 * std::f32::consts::PI).sin();
+                data.push(sample * 0.3); // 30% volume to avoid clipping
+            }
+            
+            let source = SamplesBuffer::new(1, sample_rate, data);
+            let sink = Sink::try_new(&self.stream_handle)
+                .map_err(|e| format!("Failed to create sink: {}", e))?;
+            
+            sink.set_volume(self.master_volume);
+            sink.append(source);
+            sink.detach();
+            
+            Ok(())
+        }
+        
+        #[cfg(not(feature = "audio"))]
+        {
+            let _ = (frequency, duration);
+            Err("Audio feature not enabled".to_string())
+        }
+    }
 }
 
 impl Default for AudioSystem {
