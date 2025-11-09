@@ -1724,7 +1724,15 @@ impl CodeGenerator {
                 let type_str = match &param.ownership {
                     OwnershipHint::Owned => {
                         if param.name == "self" {
-                            // Owned self is always mutable in Windjammer
+                            // Check if analyzer inferred a different ownership for self
+                            if let Some(ownership_mode) = analyzed.inferred_ownership.get(&param.name) {
+                                match ownership_mode {
+                                    OwnershipMode::MutBorrowed => return "&mut self".to_string(),
+                                    OwnershipMode::Borrowed => return "&self".to_string(),
+                                    OwnershipMode::Owned => return "mut self".to_string(),
+                                }
+                            }
+                            // Default: owned self is mutable
                             return "mut self".to_string();
                         }
                         // Owned parameters are always mutable in Windjammer
