@@ -45,7 +45,36 @@ fn init(game: PongGame) {
 }
 
 @update
-fn update(game: PongGame, delta: float) {
+fn update(game: PongGame, delta: float, input: Input) {
+    // Update paddle positions based on input
+    // Left paddle (W/S keys)
+    if input.held(Key::W) {
+        game.left_paddle_y -= game.paddle_speed * delta
+        if game.left_paddle_y < 0.0 {
+            game.left_paddle_y = 0.0
+        }
+    }
+    if input.held(Key::S) {
+        game.left_paddle_y += game.paddle_speed * delta
+        if game.left_paddle_y > 500.0 {
+            game.left_paddle_y = 500.0
+        }
+    }
+    
+    // Right paddle (Up/Down keys)
+    if input.held(Key::Up) {
+        game.right_paddle_y -= game.paddle_speed * delta
+        if game.right_paddle_y < 0.0 {
+            game.right_paddle_y = 0.0
+        }
+    }
+    if input.held(Key::Down) {
+        game.right_paddle_y += game.paddle_speed * delta
+        if game.right_paddle_y > 500.0 {
+            game.right_paddle_y = 500.0
+        }
+    }
+    
     // Update ball position
     game.ball_x += game.ball_vx * delta
     game.ball_y += game.ball_vy * delta
@@ -125,36 +154,8 @@ fn render(game: PongGame, renderer: Renderer) {
 
 @input
 fn handle_input(game: PongGame, input: Input) {
-    // Left paddle controls (W/S)
-    // Using `held()` for smooth continuous movement
-    if input.held(Key::W) {
-        game.left_paddle_y -= 5.0
-        if game.left_paddle_y < 0.0 {
-            game.left_paddle_y = 0.0
-        }
-    }
-    if input.held(Key::S) {
-        game.left_paddle_y += 5.0
-        if game.left_paddle_y > 500.0 {
-            game.left_paddle_y = 500.0
-        }
-    }
-    
-    // Right paddle controls (Up/Down)
-    if input.held(Key::Up) {
-        game.right_paddle_y -= 5.0
-        if game.right_paddle_y < 0.0 {
-            game.right_paddle_y = 0.0
-        }
-    }
-    if input.held(Key::Down) {
-        game.right_paddle_y += 5.0
-        if game.right_paddle_y > 500.0 {
-            game.right_paddle_y = 500.0
-        }
-    }
-    
-    // Pause on Escape (example of `pressed()` for one-shot action)
+    // Example of one-shot input handling
+    // (Paddle movement is now in @update where we have delta time)
     if input.pressed(Key::Escape) {
         println("Game paused! (Press Escape again to resume)")
     }

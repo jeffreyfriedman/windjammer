@@ -355,7 +355,7 @@ impl CodeGenerator {
         if let Some(update_fn) = &info.update_fn {
             output.push_str("                    // Update game logic\n");
             output.push_str(&format!(
-                "                    {}(&mut game, delta);\n",
+                "                    {}(&mut game, delta, &input);\n",
                 update_fn
             ));
             output.push_str("\n");
