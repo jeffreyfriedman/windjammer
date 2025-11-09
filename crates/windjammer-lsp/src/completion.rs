@@ -569,7 +569,10 @@ impl CompletionProvider {
 
         for item in &program.items {
             match item {
-                Item::Function { decl: func, location: _ } => {
+                Item::Function {
+                    decl: func,
+                    location: _,
+                } => {
                     items.push(CompletionItem {
                         label: func.name.clone(),
                         kind: Some(CompletionItemKind::FUNCTION),
@@ -580,7 +583,10 @@ impl CompletionProvider {
                         ..Default::default()
                     });
                 }
-                Item::Struct { decl: struct_decl, location: _ } => {
+                Item::Struct {
+                    decl: struct_decl,
+                    location: _,
+                } => {
                     items.push(CompletionItem {
                         label: struct_decl.name.clone(),
                         kind: Some(CompletionItemKind::STRUCT),
@@ -591,7 +597,10 @@ impl CompletionProvider {
                         ..Default::default()
                     });
                 }
-                Item::Enum { decl: enum_decl, location: _ } => {
+                Item::Enum {
+                    decl: enum_decl,
+                    location: _,
+                } => {
                     items.push(CompletionItem {
                         label: enum_decl.name.clone(),
                         kind: Some(CompletionItemKind::ENUM),
@@ -616,7 +625,10 @@ impl CompletionProvider {
                         });
                     }
                 }
-                Item::Trait { decl: trait_decl, location: _ } => {
+                Item::Trait {
+                    decl: trait_decl,
+                    location: _,
+                } => {
                     items.push(CompletionItem {
                         label: trait_decl.name.clone(),
                         kind: Some(CompletionItemKind::INTERFACE),

@@ -69,10 +69,18 @@ pub fn execute(
     crate::build_project(path, output_dir, target)?;
 
     println!("\n{} Build complete!", "Success!".green().bold());
-    
+
     // Run cargo check if requested
     if check {
-        check_with_cargo(output_dir, raw_errors, fix, verbose, quiet, filter_file, filter_type)?;
+        check_with_cargo(
+            output_dir,
+            raw_errors,
+            fix,
+            verbose,
+            quiet,
+            filter_file,
+            filter_type,
+        )?;
     } else {
         if target_str == "javascript" || target_str == "js" {
             println!("Run your JavaScript project with:");
@@ -146,10 +154,15 @@ fn check_with_cargo(
     // Error recovery loop: try up to 3 times if auto-fix is enabled
     let max_attempts = if apply_fixes { 3 } else { 1 };
     let mut last_error_count = 0;
-    
+
     for attempt in 1..=max_attempts {
         if attempt > 1 {
-            println!("\n{} Retry {} of {}...", "Retrying".yellow().bold(), attempt, max_attempts);
+            println!(
+                "\n{} Retry {} of {}...",
+                "Retrying".yellow().bold(),
+                attempt,
+                max_attempts
+            );
         } else {
             println!("\n{} Rust compilation...", "Checking".cyan().bold());
         }
@@ -162,151 +175,159 @@ fn check_with_cargo(
 
         if output.status.success() {
             if attempt > 1 {
-                println!("{} All errors fixed after {} attempt(s)!", "Success!".green().bold(), attempt);
+                println!(
+                    "{} All errors fixed after {} attempt(s)!",
+                    "Success!".green().bold(),
+                    attempt
+                );
             } else {
                 println!("{} No Rust compilation errors!", "Success!".green().bold());
             }
             return Ok(());
         }
 
-    // Combine stderr and stdout (cargo outputs to both)
-    let stderr = String::from_utf8_lossy(&output.stderr);
-    let stdout = String::from_utf8_lossy(&output.stdout);
-    let combined_output = format!("{}{}", stderr, stdout);
+        // Combine stderr and stdout (cargo outputs to both)
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        let stdout = String::from_utf8_lossy(&output.stdout);
+        let combined_output = format!("{}{}", stderr, stdout);
 
-    // If raw errors requested, show them and exit
-    if show_raw_errors {
-        println!("{} Rust compilation errors (raw):", "Error:".red().bold());
-        println!("{}", combined_output);
-        return Err(anyhow::anyhow!("Rust compilation failed"));
-    }
+        // If raw errors requested, show them and exit
+        if show_raw_errors {
+            println!("{} Rust compilation errors (raw):", "Error:".red().bold());
+            println!("{}", combined_output);
+            return Err(anyhow::anyhow!("Rust compilation failed"));
+        }
 
-    // Load all source maps from the output directory
-    let source_maps = load_source_maps(output_dir)?;
+        // Load all source maps from the output directory
+        let source_maps = load_source_maps(output_dir)?;
 
-    // Create error mapper with merged source maps
-    let error_mapper = crate::error_mapper::ErrorMapper::new(source_maps);
+        // Create error mapper with merged source maps
+        let error_mapper = crate::error_mapper::ErrorMapper::new(source_maps);
 
-    // Map rustc output to Windjammer diagnostics
-    let mut wj_diagnostics = error_mapper.map_rustc_output(&combined_output);
+        // Map rustc output to Windjammer diagnostics
+        let mut wj_diagnostics = error_mapper.map_rustc_output(&combined_output);
 
-    if wj_diagnostics.is_empty() {
-        // Fallback: show raw output if we couldn't parse any diagnostics
-        println!(
-            "{} Could not parse Rust compilation errors. Showing raw output:",
-            "Warning:".yellow().bold()
-        );
-        println!("{}", combined_output);
-        return Err(anyhow::anyhow!("Rust compilation failed"));
-    }
+        if wj_diagnostics.is_empty() {
+            // Fallback: show raw output if we couldn't parse any diagnostics
+            println!(
+                "{} Could not parse Rust compilation errors. Showing raw output:",
+                "Warning:".yellow().bold()
+            );
+            println!("{}", combined_output);
+            return Err(anyhow::anyhow!("Rust compilation failed"));
+        }
 
-    // Apply filters
-    if let Some(file_filter) = filter_file {
-        wj_diagnostics.retain(|d| d.location.file == file_filter);
-    }
+        // Apply filters
+        if let Some(file_filter) = filter_file {
+            wj_diagnostics.retain(|d| d.location.file == file_filter);
+        }
 
-    if let Some(type_filter) = filter_type {
-        let filter_lower = type_filter.to_lowercase();
-        wj_diagnostics.retain(|d| {
-            match (&d.level, filter_lower.as_str()) {
+        if let Some(type_filter) = filter_type {
+            let filter_lower = type_filter.to_lowercase();
+            wj_diagnostics.retain(|d| match (&d.level, filter_lower.as_str()) {
                 (crate::error_mapper::DiagnosticLevel::Error, "error") => true,
                 (crate::error_mapper::DiagnosticLevel::Warning, "warning") => true,
                 _ => false,
+            });
+        }
+
+        // Group diagnostics by file
+        let mut diagnostics_by_file: std::collections::HashMap<_, Vec<_>> =
+            std::collections::HashMap::new();
+        for diagnostic in &wj_diagnostics {
+            diagnostics_by_file
+                .entry(diagnostic.location.file.clone())
+                .or_insert_with(Vec::new)
+                .push(diagnostic);
+        }
+
+        // Count errors and warnings
+        last_error_count = wj_diagnostics
+            .iter()
+            .filter(|d| matches!(d.level, crate::error_mapper::DiagnosticLevel::Error))
+            .count();
+
+        let warning_count = wj_diagnostics
+            .iter()
+            .filter(|d| matches!(d.level, crate::error_mapper::DiagnosticLevel::Warning))
+            .count();
+
+        // Display summary
+        if quiet {
+            // Quiet mode: only show counts
+            if last_error_count > 0 {
+                println!(
+                    "\n{} {} error(s), {} warning(s)",
+                    "Compilation failed:".red().bold(),
+                    last_error_count,
+                    warning_count
+                );
+            } else {
+                println!(
+                    "\n{} {} warning(s)",
+                    "Compilation succeeded with warnings:".yellow().bold(),
+                    warning_count
+                );
             }
-        });
-    }
-
-    // Group diagnostics by file
-    let mut diagnostics_by_file: std::collections::HashMap<_, Vec<_>> = std::collections::HashMap::new();
-    for diagnostic in &wj_diagnostics {
-        diagnostics_by_file
-            .entry(diagnostic.location.file.clone())
-            .or_insert_with(Vec::new)
-            .push(diagnostic);
-    }
-
-    // Count errors and warnings
-    last_error_count = wj_diagnostics
-        .iter()
-        .filter(|d| matches!(d.level, crate::error_mapper::DiagnosticLevel::Error))
-        .count();
-
-    let warning_count = wj_diagnostics
-        .iter()
-        .filter(|d| matches!(d.level, crate::error_mapper::DiagnosticLevel::Warning))
-        .count();
-
-    // Display summary
-    if quiet {
-        // Quiet mode: only show counts
-        if last_error_count > 0 {
+        } else {
+            // Normal or verbose mode: show detailed output
             println!(
-                "\n{} {} error(s), {} warning(s)",
+                "\n{} {} error(s), {} warning(s) found:\n",
                 "Compilation failed:".red().bold(),
                 last_error_count,
                 warning_count
             );
-        } else {
-            println!(
-                "\n{} {} warning(s)",
-                "Compilation succeeded with warnings:".yellow().bold(),
-                warning_count
-            );
-        }
-    } else {
-        // Normal or verbose mode: show detailed output
-        println!(
-            "\n{} {} error(s), {} warning(s) found:\n",
-            "Compilation failed:".red().bold(),
-            last_error_count,
-            warning_count
-        );
 
-        // Display diagnostics grouped by file
-        for (file, file_diagnostics) in &diagnostics_by_file {
-            println!("{} {}:", "In file".cyan().bold(), file.display());
-            println!();
+            // Display diagnostics grouped by file
+            for (file, file_diagnostics) in &diagnostics_by_file {
+                println!("{} {}:", "In file".cyan().bold(), file.display());
+                println!();
 
-            for diagnostic in file_diagnostics {
-                let formatted = if verbose {
-                    // Verbose mode: include all details
-                    diagnostic.format()
-                } else {
-                    // Normal mode: format as usual
-                    diagnostic.format()
-                };
-                let colorized = colorize_diagnostic(&formatted, &diagnostic.level);
-                println!("{}", colorized);
-                println!(); // Blank line between errors
+                for diagnostic in file_diagnostics {
+                    let formatted = if verbose {
+                        // Verbose mode: include all details
+                        diagnostic.format()
+                    } else {
+                        // Normal mode: format as usual
+                        diagnostic.format()
+                    };
+                    let colorized = colorize_diagnostic(&formatted, &diagnostic.level);
+                    println!("{}", colorized);
+                    println!(); // Blank line between errors
+                }
             }
         }
-    }
 
         // Apply fixes if requested and not on last attempt
         if apply_fixes && attempt < max_attempts {
             println!("\n{} Applying automatic fixes...", "Fixing".green().bold());
-            
-            let fixes: Vec<_> = wj_diagnostics
-                .iter()
-                .filter_map(|d| d.get_fix())
-                .collect();
-            
+
+            let fixes: Vec<_> = wj_diagnostics.iter().filter_map(|d| d.get_fix()).collect();
+
             if fixes.is_empty() {
                 println!("{} No automatic fixes available", "Info:".cyan());
                 // No fixes available, no point in retrying
                 break;
             } else {
                 println!("{} Found {} fixable error(s)", "Info:".cyan(), fixes.len());
-                
+
                 let applicator = crate::auto_fix::FixApplicator::new();
                 match applicator.apply_fixes(&fixes) {
                     Ok(_) => {
-                        println!("\n{} Applied {} fix(es)!", "Success!".green().bold(), fixes.len());
+                        println!(
+                            "\n{} Applied {} fix(es)!",
+                            "Success!".green().bold(),
+                            fixes.len()
+                        );
                         // Continue to next iteration to retry compilation
                         continue;
                     }
                     Err(e) => {
-                        println!("{} Failed to apply some fixes: {}", "Warning:".yellow().bold(), e);
+                        println!(
+                            "{} Failed to apply some fixes: {}",
+                            "Warning:".yellow().bold(),
+                            e
+                        );
                         // Failed to apply fixes, no point in retrying
                         break;
                     }

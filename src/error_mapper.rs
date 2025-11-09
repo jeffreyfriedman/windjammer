@@ -223,13 +223,10 @@ impl ErrorMapper {
         }
 
         // Map Rust error code to Windjammer error code
-        let wj_code = rustc_diag
-            .code
-            .as_ref()
-            .and_then(|c| {
-                let registry = error_codes::get_registry();
-                registry.map_rust_code(&c.code).map(|wj| wj.code.clone())
-            });
+        let wj_code = rustc_diag.code.as_ref().and_then(|c| {
+            let registry = error_codes::get_registry();
+            registry.map_rust_code(&c.code).map(|wj| wj.code.clone())
+        });
 
         Some(WindjammerDiagnostic {
             message,
@@ -460,15 +457,15 @@ impl WindjammerDiagnostic {
             false
         }
     }
-    
+
     /// Get the fix type for this error (if fixable)
     pub fn get_fix(&self) -> Option<crate::auto_fix::FixType> {
         use crate::auto_fix::FixType;
-        
+
         if !self.is_fixable() {
             return None;
         }
-        
+
         match self.code.as_ref()?.as_str() {
             "E0384" | "E0596" => {
                 // Immutability error - suggest adding mut
@@ -491,7 +488,9 @@ impl WindjammerDiagnostic {
                         column: self.location.column,
                         expression: "value".to_string(),
                     })
-                } else if self.message.contains("expected String") && self.message.contains("found &str") {
+                } else if self.message.contains("expected String")
+                    && self.message.contains("found &str")
+                {
                     Some(FixType::AddToString {
                         file: self.location.file.clone(),
                         line: self.location.line,
@@ -505,11 +504,11 @@ impl WindjammerDiagnostic {
             _ => None,
         }
     }
-    
+
     /// Format this diagnostic for display (Rust-style pretty printing with colors)
     pub fn format(&self) -> String {
         use colored::*;
-        
+
         let mut output = String::new();
 
         // Level and message (with colors!)
@@ -523,7 +522,12 @@ impl WindjammerDiagnostic {
         if let Some(code) = &self.code {
             // Show Windjammer code prominently if it starts with WJ
             if code.starts_with("WJ") {
-                output.push_str(&format!("{}[{}]: {}\n", level_str, code.cyan().bold(), self.message));
+                output.push_str(&format!(
+                    "{}[{}]: {}\n",
+                    level_str,
+                    code.cyan().bold(),
+                    self.message
+                ));
                 output.push_str(&format!("  {} wj explain {}\n", "💡".yellow(), code));
             } else {
                 output.push_str(&format!("{}[{}]: {}\n", level_str, code, self.message));
@@ -558,7 +562,11 @@ impl WindjammerDiagnostic {
 
         // Contextual help (green for suggestions)
         if let Some(contextual_help) = self.get_contextual_help() {
-            output.push_str(&format!("  = {}: {}\n", "suggestion".green().bold(), contextual_help));
+            output.push_str(&format!(
+                "  = {}: {}\n",
+                "suggestion".green().bold(),
+                contextual_help
+            ));
         }
 
         output
@@ -600,22 +608,25 @@ impl WindjammerDiagnostic {
                     DiagnosticLevel::Warning => "^".yellow().bold(),
                     _ => "^".cyan(),
                 };
-                
-                output.push_str(&format!("{:>4} {} {}\n", 
-                    line_num.to_string().cyan(), 
-                    "|".cyan(), 
+
+                output.push_str(&format!(
+                    "{:>4} {} {}\n",
+                    line_num.to_string().cyan(),
+                    "|".cyan(),
                     highlighted_line
                 ));
-                output.push_str(&format!("   {} {}{}\n", 
+                output.push_str(&format!(
+                    "   {} {}{}\n",
                     "|".cyan(),
                     " ".repeat(self.location.column.saturating_sub(1)),
                     pointer_color
                 ));
             } else {
                 // Context line with syntax highlighting
-                output.push_str(&format!("{:>4} {} {}\n", 
-                    line_num.to_string().cyan(), 
-                    "|".cyan(), 
+                output.push_str(&format!(
+                    "{:>4} {} {}\n",
+                    line_num.to_string().cyan(),
+                    "|".cyan(),
                     highlighted_line
                 ));
             }
@@ -824,7 +835,6 @@ mod tests {
         assert_eq!(found, Some("&str".to_string()));
     }
 }
-
 
 /// Extract variable name from error message
 fn extract_variable_from_message(msg: &str) -> Option<String> {

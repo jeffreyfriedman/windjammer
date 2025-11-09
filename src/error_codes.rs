@@ -2,7 +2,6 @@
 ///
 /// This module defines Windjammer error codes (WJ0001, etc.) and provides
 /// detailed explanations for each error.
-
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
@@ -235,7 +234,8 @@ let z = &mut x"#.to_string()),
         self.register(WjErrorCode {
             code: "WJ0009".to_string(),
             title: "Missing field in struct".to_string(),
-            explanation: "When creating a struct, you must provide values for all fields.".to_string(),
+            explanation: "When creating a struct, you must provide values for all fields."
+                .to_string(),
             causes: vec![
                 "Forgot to initialize a field".to_string(),
                 "Typo in field name".to_string(),
@@ -244,7 +244,8 @@ let z = &mut x"#.to_string()),
                 "Add the missing field".to_string(),
                 "Check field names match struct definition".to_string(),
             ],
-            example: Some(r#"// Wrong:
+            example: Some(
+                r#"// Wrong:
 let user = User {
     name: "Alice"
     // Missing 'age' field
@@ -254,7 +255,9 @@ let user = User {
 let user = User {
     name: "Alice",
     age: 30
-}"#.to_string()),
+}"#
+                .to_string(),
+            ),
             rust_codes: vec!["E0063".to_string()],
         });
 
@@ -315,7 +318,11 @@ match value {
         if let Some(error) = self.get(code) {
             let mut output = String::new();
 
-            output.push_str(&format!("\n{} {}\n", error.code.red().bold(), error.title.bold()));
+            output.push_str(&format!(
+                "\n{} {}\n",
+                error.code.red().bold(),
+                error.title.bold()
+            ));
             output.push_str(&format!("{}\n\n", "=".repeat(60)));
 
             output.push_str(&format!("{}\n", "Explanation:".yellow().bold()));
@@ -408,4 +415,3 @@ mod tests {
         assert!(codes.len() >= 10);
     }
 }
-
