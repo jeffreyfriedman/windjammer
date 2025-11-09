@@ -9,6 +9,9 @@ edition = "2021"
 [dependencies]
 smallvec = "1.13"
 serde = { version = "1.0", features = ["derive"] }
+windjammer-game-framework = { path = "../crates/windjammer-game-framework" }
+winit = "0.29"
+pollster = "0.3"
 
 [[bin]]
 name = "main"

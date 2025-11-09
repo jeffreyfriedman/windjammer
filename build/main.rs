@@ -170,7 +170,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 WindowEvent::RedrawRequested => {
                     // Calculate delta time
                     let now = std::time::Instant::now();
-                    let delta = (now - last_time).as_secs_f32();
+                    let delta = (now - last_time).as_secs_f64();
                     last_time = now;
 
                     // Update game logic
