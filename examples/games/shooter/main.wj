@@ -595,7 +595,103 @@ fn render(game: ShooterGame, renderer: Renderer3D, camera: Camera3D) {
         )
     }
     
-    // TODO: Draw UI (health, ammo, weapon, score)
+    // Draw HUD (simple 3D indicators)
+    // Note: Using 3D cubes positioned relative to camera as a simple HUD
+    // A proper implementation would use 2D overlay rendering with text
+    
+    // HUD positioning
+    let hud_distance = 2.0
+    let hud_offset_x = -1.5
+    let hud_offset_y = 1.0
+    
+    // Calculate HUD position relative to camera
+    let yaw_rad = camera.yaw * 3.14159 / 180.0
+    let pitch_rad = camera.pitch * 3.14159 / 180.0
+    
+    let forward_x = yaw_rad.sin() * pitch_rad.cos()
+    let forward_y = pitch_rad.sin()
+    let forward_z = yaw_rad.cos() * pitch_rad.cos()
+    
+    let right_x = (yaw_rad + 1.5708).sin()
+    let right_z = (yaw_rad + 1.5708).cos()
+    
+    let hud_base_x = camera.position.x + forward_x * hud_distance
+    let hud_base_y = camera.position.y + forward_y * hud_distance + hud_offset_y
+    let hud_base_z = camera.position.z + forward_z * hud_distance
+    
+    // Health bar (red)
+    let health_ratio = game.player_health as f32 / 100.0
+    let health_width = 0.5 * health_ratio
+    
+    renderer.draw_cube(
+        Vec3::new(
+            hud_base_x + right_x * hud_offset_x,
+            hud_base_y,
+            hud_base_z + right_z * hud_offset_x
+        ),
+        Vec3::new(health_width, 0.05, 0.01),
+        Color::rgb(1.0, 0.0, 0.0)
+    )
+    
+    // Ammo indicator (yellow cubes)
+    let ammo_display = if game.ammo > 10 { 10 } else { game.ammo }
+    let mut ammo_x = hud_offset_x
+    let ammo_y = hud_offset_y - 0.15
+    
+    let mut i = 0
+    while i < ammo_display {
+        renderer.draw_cube(
+            Vec3::new(
+                hud_base_x + right_x * ammo_x,
+                hud_base_y + ammo_y,
+                hud_base_z + right_z * ammo_x
+            ),
+            Vec3::new(0.04, 0.04, 0.01),
+            Color::rgb(1.0, 0.8, 0.0)
+        )
+        ammo_x += 0.05
+        i += 1
+    }
+    
+    // Score indicator (green cubes, one per 100 points)
+    let score_display = game.score / 100
+    let score_cubes = if score_display > 10 { 10 } else { score_display }
+    let mut score_x = hud_offset_x
+    let score_y = hud_offset_y - 0.30
+    
+    let mut j = 0
+    while j < score_cubes {
+        renderer.draw_cube(
+            Vec3::new(
+                hud_base_x + right_x * score_x,
+                hud_base_y + score_y,
+                hud_base_z + right_z * score_x
+            ),
+            Vec3::new(0.04, 0.04, 0.01),
+            Color::rgb(0.0, 1.0, 0.0)
+        )
+        score_x += 0.05
+        j += 1
+    }
+    
+    // Weapon indicator (colored cube)
+    let weapon_color = if game.weapon == 0 {
+        Color::rgb(0.7, 0.7, 0.7)  // Gray for pistol
+    } else if game.weapon == 1 {
+        Color::rgb(0.8, 0.4, 0.0)  // Orange for shotgun
+    } else {
+        Color::rgb(1.0, 0.0, 0.0)  // Red for rocket
+    }
+    
+    renderer.draw_cube(
+        Vec3::new(
+            hud_base_x + right_x * hud_offset_x,
+            hud_base_y - 0.45,
+            hud_base_z + right_z * hud_offset_x
+        ),
+        Vec3::new(0.1, 0.1, 0.01),
+        weapon_color
+    )
 }
 
 // ============================================================================

@@ -307,6 +307,37 @@ impl Renderer {
         }
     }
 
+    /// Draw a progress bar (useful for health, ammo, etc.)
+    ///
+    /// # Arguments
+    /// * `x`, `y` - Top-left corner position
+    /// * `width`, `height` - Bar dimensions
+    /// * `fill_ratio` - How full the bar is (0.0 to 1.0)
+    /// * `fill_color` - Color of the filled portion
+    /// * `bg_color` - Color of the background/empty portion
+    pub fn draw_bar(
+        &mut self,
+        x: f64,
+        y: f64,
+        width: f64,
+        height: f64,
+        fill_ratio: f64,
+        fill_color: Color,
+        bg_color: Color,
+    ) {
+        // Clamp fill_ratio to 0.0-1.0
+        let fill_ratio = fill_ratio.max(0.0).min(1.0);
+        
+        // Draw background
+        self.draw_rect(x, y, width, height, bg_color);
+        
+        // Draw filled portion
+        if fill_ratio > 0.0 {
+            let fill_width = width * fill_ratio;
+            self.draw_rect(x, y, fill_width, height, fill_color);
+        }
+    }
+
     /// Present the rendered frame to the screen
     pub fn present(&mut self) {
         // Get current surface texture
