@@ -123,7 +123,7 @@ impl Default for UIStyle {
             button_color: Color::rgb(0.2, 0.4, 0.8),
             button_hover_color: Color::rgb(0.3, 0.5, 0.9),
             button_active_color: Color::rgb(0.1, 0.3, 0.7),
-            window_bg_color: Color::rgba(0.1, 0.1, 0.1, 0.9),
+            window_bg_color: Color::new(0.1, 0.1, 0.1, 0.9),
             padding: 8.0,
             spacing: 4.0,
             rounding: 4.0,
@@ -294,7 +294,7 @@ impl UI {
         self.draw_list.push(DrawCommand::Rect {
             pos,
             size,
-            color: Color::rgba(0.2, 0.2, 0.2, 0.8),
+            color: Color::new(0.2, 0.2, 0.2, 0.8),
             rounding: self.style.rounding,
         });
         
@@ -345,7 +345,7 @@ impl UI {
         self.draw_list.push(DrawCommand::Rect {
             pos,
             size,
-            color: Color::rgba(0.3, 0.3, 0.3, 0.8),
+            color: Color::new(0.3, 0.3, 0.3, 0.8),
             rounding: self.style.rounding,
         });
         
@@ -394,7 +394,7 @@ impl UI {
         let box_color = if is_hot {
             self.style.button_hover_color
         } else {
-            Color::rgba(0.3, 0.3, 0.3, 0.8)
+            Color::new(0.3, 0.3, 0.3, 0.8)
         };
         
         self.draw_list.push(DrawCommand::Rect {
@@ -442,7 +442,7 @@ impl UI {
         self.draw_list.push(DrawCommand::Rect {
             pos,
             size: Vec2::new(size.x, title_height),
-            color: Color::rgba(0.2, 0.2, 0.2, 1.0),
+            color: Color::new(0.2, 0.2, 0.2, 1.0),
             rounding: self.style.rounding,
         });
         
@@ -479,7 +479,7 @@ impl UI {
         self.draw_list.push(DrawCommand::Line {
             start: pos,
             end: Vec2::new(pos.x + size.x, pos.y),
-            color: Color::rgba(0.5, 0.5, 0.5, 0.5),
+            color: Color::new(0.5, 0.5, 0.5, 0.5),
             thickness: 1.0,
         });
         
