@@ -15,6 +15,12 @@ struct GameFrameworkInfo {
     is_3d: bool, // True if using @render3d
 }
 
+/// Information about UI framework usage
+#[derive(Debug, Clone)]
+struct UIFrameworkInfo {
+    uses_ui: bool, // True if imports std::ui::*
+}
+
 pub struct CodeGenerator {
     indent_level: usize,
     signature_registry: SignatureRegistry,
@@ -295,6 +301,28 @@ impl CodeGenerator {
         })
     }
 
+    // ============================================================================
+    // UI FRAMEWORK SUPPORT
+    // ============================================================================
+
+    /// Detect if this program uses UI framework (std::ui)
+    fn detect_ui_framework(&self, program: &Program) -> UIFrameworkInfo {
+        let mut uses_ui = false;
+
+        // Check for use std::ui::* or use std::ui
+        for item in &program.items {
+            if let Item::Use { path, .. } = item {
+                let path_str = path.join("::");
+                if path_str == "std::ui" || path_str.starts_with("std::ui::") {
+                    uses_ui = true;
+                    break;
+                }
+            }
+        }
+
+        UIFrameworkInfo { uses_ui }
+    }
+
     /// Generate game loop main function
     fn generate_game_main(&mut self, info: &GameFrameworkInfo) -> String {
         let mut output = String::new();
@@ -504,6 +532,9 @@ impl CodeGenerator {
 
         // Detect game framework decorators
         let game_framework_info = self.detect_game_framework(program);
+        
+        // Detect UI framework usage
+        let ui_framework_info = self.detect_ui_framework(program);
 
         // Collect bound aliases first (bound Name = Trait + Trait)
         for item in &program.items {
