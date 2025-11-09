@@ -174,7 +174,12 @@ pub fn imports<'db>(db: &'db dyn salsa::Database, file: SourceFile) -> ImportInf
 
     // Extract and resolve imports from the AST
     for item in &program.items {
-        if let parser::Item::Use { path, alias: _, location: _ } = item {
+        if let parser::Item::Use {
+            path,
+            alias: _,
+            location: _,
+        } = item
+        {
             let import_path = path.join(".");
             tracing::debug!("Found import: {}", import_path);
 
@@ -211,7 +216,10 @@ pub fn extract_symbols<'db>(db: &'db dyn salsa::Database, file: SourceFile) -> S
         let line = idx as u32;
 
         match item {
-            parser::Item::Function { decl: func, location: _ } => {
+            parser::Item::Function {
+                decl: func,
+                location: _,
+            } => {
                 symbols.push(Symbol {
                     name: func.name.clone(),
                     kind: SymbolKind::Function,
@@ -223,7 +231,10 @@ pub fn extract_symbols<'db>(db: &'db dyn salsa::Database, file: SourceFile) -> S
                     doc: None, // TODO: Extract doc comments
                 });
             }
-            parser::Item::Struct { decl: struct_decl, location: _ } => {
+            parser::Item::Struct {
+                decl: struct_decl,
+                location: _,
+            } => {
                 symbols.push(Symbol {
                     name: struct_decl.name.clone(),
                     kind: SymbolKind::Struct,
@@ -235,7 +246,10 @@ pub fn extract_symbols<'db>(db: &'db dyn salsa::Database, file: SourceFile) -> S
                     doc: None,
                 });
             }
-            parser::Item::Enum { decl: enum_decl, location: _ } => {
+            parser::Item::Enum {
+                decl: enum_decl,
+                location: _,
+            } => {
                 symbols.push(Symbol {
                     name: enum_decl.name.clone(),
                     kind: SymbolKind::Enum,
@@ -247,7 +261,10 @@ pub fn extract_symbols<'db>(db: &'db dyn salsa::Database, file: SourceFile) -> S
                     doc: None,
                 });
             }
-            parser::Item::Trait { decl: trait_decl, location: _ } => {
+            parser::Item::Trait {
+                decl: trait_decl,
+                location: _,
+            } => {
                 symbols.push(Symbol {
                     name: trait_decl.name.clone(),
                     kind: SymbolKind::Trait,
@@ -259,7 +276,10 @@ pub fn extract_symbols<'db>(db: &'db dyn salsa::Database, file: SourceFile) -> S
                     doc: None,
                 });
             }
-            parser::Item::Impl { block: impl_block, location: _ } => {
+            parser::Item::Impl {
+                block: impl_block,
+                location: _,
+            } => {
                 // Impl blocks don't have a name, use type name
                 let name = if let Some(trait_name) = &impl_block.trait_name {
                     format!("impl {} for {}", trait_name, impl_block.type_name)
@@ -328,7 +348,11 @@ pub fn extract_references<'db>(
     // Walk the AST to find all identifier references
     // For now, we'll extract function calls as a starting point
     for item in program.items.iter() {
-        if let parser::Item::Function { decl: func, location: _ } = item {
+        if let parser::Item::Function {
+            decl: func,
+            location: _,
+        } = item
+        {
             // Scan function body for references
             // TODO: Implement proper AST walking
             // For now, we'll just note that references exist

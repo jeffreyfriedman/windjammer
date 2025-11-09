@@ -1,11 +1,11 @@
 // PONG - Simplified version with debug output
 // Let's verify EXACTLY what's rendering
 
-use winit::event::{Event, WindowEvent, KeyEvent};
+use wgpu::util::DeviceExt;
+use winit::event::{Event, KeyEvent, WindowEvent};
 use winit::event_loop::{ControlFlow, EventLoop};
 use winit::keyboard::{KeyCode, PhysicalKey};
 use winit::window::WindowBuilder;
-use wgpu::util::DeviceExt;
 
 const WINDOW_WIDTH: u32 = 800;
 const WINDOW_HEIGHT: u32 = 600;
@@ -20,7 +20,7 @@ struct Vertex {
 fn main() {
     println!("🎮 PONG - Simplified Debug Version");
     println!("===================================");
-    
+
     let event_loop = EventLoop::new().unwrap();
     let window = WindowBuilder::new()
         .with_title("PONG - Debug")
@@ -77,13 +77,25 @@ fn main() {
     // Create a simple triangle in the center
     let vertices = vec![
         // Center triangle (RED)
-        Vertex { position: [0.0, 0.5], color: [1.0, 0.0, 0.0, 1.0] },
-        Vertex { position: [-0.5, -0.5], color: [1.0, 0.0, 0.0, 1.0] },
-        Vertex { position: [0.5, -0.5], color: [1.0, 0.0, 0.0, 1.0] },
+        Vertex {
+            position: [0.0, 0.5],
+            color: [1.0, 0.0, 0.0, 1.0],
+        },
+        Vertex {
+            position: [-0.5, -0.5],
+            color: [1.0, 0.0, 0.0, 1.0],
+        },
+        Vertex {
+            position: [0.5, -0.5],
+            color: [1.0, 0.0, 0.0, 1.0],
+        },
     ];
 
     println!("✓ Created {} vertices", vertices.len());
-    println!("  Vertex 0: pos={:?}, color={:?}", vertices[0].position, vertices[0].color);
+    println!(
+        "  Vertex 0: pos={:?}, color={:?}",
+        vertices[0].position, vertices[0].color
+    );
 
     // Inline shader (no file dependency)
     let shader_source = r#"
@@ -199,14 +211,17 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
                 Event::WindowEvent {
                     event: WindowEvent::CloseRequested,
                     ..
-                } | Event::WindowEvent {
-                    event: WindowEvent::KeyboardInput {
-                        event: KeyEvent {
-                            physical_key: PhysicalKey::Code(KeyCode::Escape),
+                }
+                | Event::WindowEvent {
+                    event:
+                        WindowEvent::KeyboardInput {
+                            event:
+                                KeyEvent {
+                                    physical_key: PhysicalKey::Code(KeyCode::Escape),
+                                    ..
+                                },
                             ..
                         },
-                        ..
-                    },
                     ..
                 } => {
                     println!("Rendered {} frames total", frame_count);
@@ -244,30 +259,32 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
                         .texture
                         .create_view(&wgpu::TextureViewDescriptor::default());
 
-                    let mut encoder = device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
-                        label: Some("Render Encoder"),
-                    });
+                    let mut encoder =
+                        device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
+                            label: Some("Render Encoder"),
+                        });
 
                     {
-                        let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
-                            label: Some("Render Pass"),
-                            color_attachments: &[Some(wgpu::RenderPassColorAttachment {
-                                view: &view,
-                                resolve_target: None,
-                                ops: wgpu::Operations {
-                                    load: wgpu::LoadOp::Clear(wgpu::Color {
-                                        r: 0.1,
-                                        g: 0.1,
-                                        b: 0.1,
-                                        a: 1.0,
-                                    }),
-                                    store: wgpu::StoreOp::Store,
-                                },
-                            })],
-                            depth_stencil_attachment: None,
-                            timestamp_writes: None,
-                            occlusion_query_set: None,
-                        });
+                        let mut render_pass =
+                            encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+                                label: Some("Render Pass"),
+                                color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+                                    view: &view,
+                                    resolve_target: None,
+                                    ops: wgpu::Operations {
+                                        load: wgpu::LoadOp::Clear(wgpu::Color {
+                                            r: 0.1,
+                                            g: 0.1,
+                                            b: 0.1,
+                                            a: 1.0,
+                                        }),
+                                        store: wgpu::StoreOp::Store,
+                                    },
+                                })],
+                                depth_stencil_attachment: None,
+                                timestamp_writes: None,
+                                occlusion_query_set: None,
+                            });
 
                         render_pass.set_pipeline(&render_pipeline);
                         render_pass.set_vertex_buffer(0, vertex_buffer.slice(..));
@@ -282,4 +299,3 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
         })
         .unwrap();
 }
-

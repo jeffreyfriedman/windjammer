@@ -2,7 +2,6 @@
 ///
 /// This module provides a simple in-memory cache for source maps to improve
 /// performance when checking errors multiple times.
-
 use crate::source_map::SourceMap;
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
@@ -176,4 +175,3 @@ mod tests {
         assert_eq!(stats.expired_entries, 0);
     }
 }
-

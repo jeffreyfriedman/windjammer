@@ -2,7 +2,6 @@
 ///
 /// This module provides fuzzy string matching to suggest corrections for
 /// undefined variables, functions, types, etc.
-
 use std::collections::HashMap;
 
 /// Fuzzy matcher for suggesting similar names
@@ -48,11 +47,7 @@ impl FuzzyMatcher {
     ///
     /// Returns the best matching symbol and its distance score.
     /// Lower distance = better match.
-    pub fn find_best_match(
-        &self,
-        symbol_type: SymbolType,
-        typo: &str,
-    ) -> Option<(String, usize)> {
+    pub fn find_best_match(&self, symbol_type: SymbolType, typo: &str) -> Option<(String, usize)> {
         let symbols = self.symbols.get(&symbol_type)?;
 
         let mut best_match: Option<(String, usize)> = None;
@@ -121,10 +116,7 @@ impl FuzzyMatcher {
 
     /// Get all symbols of a given type
     pub fn get_symbols(&self, symbol_type: SymbolType) -> Vec<String> {
-        self.symbols
-            .get(&symbol_type)
-            .cloned()
-            .unwrap_or_default()
+        self.symbols.get(&symbol_type).cloned().unwrap_or_default()
     }
 
     /// Clear all symbols
@@ -211,10 +203,10 @@ pub fn levenshtein_distance(s1: &str, s2: &str) -> usize {
 
             curr_row[j] = std::cmp::min(
                 std::cmp::min(
-                    curr_row[j - 1] + 1,      // insertion
-                    prev_row[j] + 1,          // deletion
+                    curr_row[j - 1] + 1, // insertion
+                    prev_row[j] + 1,     // deletion
                 ),
-                prev_row[j - 1] + cost,       // substitution
+                prev_row[j - 1] + cost, // substitution
             );
         }
 
@@ -313,4 +305,3 @@ mod tests {
         assert_eq!(*stats.by_type.get(&SymbolType::Function).unwrap(), 1);
     }
 }
-

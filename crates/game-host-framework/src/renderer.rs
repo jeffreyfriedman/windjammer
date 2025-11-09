@@ -173,7 +173,7 @@ impl Renderer {
                 topology: wgpu::PrimitiveTopology::TriangleList,
                 strip_index_format: None,
                 front_face: wgpu::FrontFace::Ccw,
-                cull_mode: Some(wgpu::Face::Back),
+                cull_mode: None, // Disable backface culling for 2D rendering
                 polygon_mode: wgpu::PolygonMode::Fill,
                 unclipped_depth: false,
                 conservative: false,
@@ -309,11 +309,6 @@ impl Renderer {
 
     /// Present the rendered frame to the screen
     pub fn present(&mut self) {
-        // Debug: Log vertex count
-        if self.vertices.len() > 0 {
-            eprintln!("DEBUG: Rendering {} vertices, {} indices", self.vertices.len(), self.indices.len());
-        }
-        
         // Get current surface texture
         let output = match self.surface.get_current_texture() {
             Ok(texture) => texture,
