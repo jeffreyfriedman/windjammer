@@ -21,8 +21,10 @@ struct ShooterGame {
     enemies: Vec<Enemy>,
     bullets: Vec<Bullet>,
     walls: Vec<Wall>,
+    powerups: Vec<PowerUp>,
     floor_y: f32,
     paused: bool,
+    speed_boost_timer: f32,
 }
 
 impl Default for ShooterGame {
@@ -45,8 +47,10 @@ impl Default for ShooterGame {
             enemies: Vec::new(),
             bullets: Vec::new(),
             walls: Vec::new(),
+            powerups: Vec::new(),
             floor_y: Default::default(),
             paused: false,
+            speed_boost_timer: Default::default(),
         }
     }
 }
@@ -73,6 +77,13 @@ struct Wall {
     color: Color,
 }
 
+struct PowerUp {
+    pos: Vec3,
+    powerup_type: i64,
+    active: bool,
+    color: Color,
+}
+
 impl ShooterGame {
 #[inline]
 fn create_level(&mut self) {
@@ -92,6 +103,13 @@ fn spawn_enemies(&mut self) {
         self.enemies.push(Enemy { pos: Vec3::new(10.0, 1.0, -10.0), velocity: Vec3::new(0.0, 0.0, 0.0), health: 3, state: 1, enemy_type: 1, color: Color::rgb(1.0, 0.0, 0.0) });
         self.enemies.push(Enemy { pos: Vec3::new(-10.0, 1.0, -10.0), velocity: Vec3::new(0.0, 0.0, 0.0), health: 3, state: 1, enemy_type: 1, color: Color::rgb(1.0, 0.0, 0.0) });
         self.enemies.push(Enemy { pos: Vec3::new(0.0, 1.0, 15.0), velocity: Vec3::new(0.0, 0.0, 0.0), health: 5, state: 1, enemy_type: 2, color: Color::rgb(0.8, 0.0, 0.8) })
+}
+#[inline]
+fn spawn_powerups(&mut self) {
+        self.powerups.push(PowerUp { pos: Vec3::new(5.0, 0.5, 5.0), powerup_type: 0, active: true, color: Color::rgb(0.0, 1.0, 0.0) });
+        self.powerups.push(PowerUp { pos: Vec3::new(-5.0, 0.5, 5.0), powerup_type: 1, active: true, color: Color::rgb(1.0, 1.0, 0.0) });
+        self.powerups.push(PowerUp { pos: Vec3::new(0.0, 0.5, -10.0), powerup_type: 2, active: true, color: Color::rgb(0.0, 1.0, 1.0) });
+        self.powerups.push(PowerUp { pos: Vec3::new(8.0, 0.5, -8.0), powerup_type: 0, active: true, color: Color::rgb(0.0, 1.0, 0.0) })
 }
 fn update_player_movement(&mut self, delta: f32, input: &Input) {
         let yaw_rad = self.player_yaw * 3.14159 / 180.0;
@@ -122,13 +140,16 @@ fn update_player_movement(&mut self, delta: f32, input: &Input) {
             move_x /= move_length;
             move_z /= move_length;
         }
-        let speed = {
+        let mut speed = {
             if input.held(Key::Shift) {
                 self.sprint_speed
             } else {
                 self.move_speed
             }
         };
+        if self.speed_boost_timer > 0.0 {
+            speed *= 1.5;
+        }
         self.player_velocity.x = move_x * speed;
         self.player_velocity.z = move_z * speed;
         if input.pressed(Key::Space) && self.player_on_ground {
@@ -163,6 +184,41 @@ fn update_player_movement(&mut self, delta: f32, input: &Input) {
             self.player_on_ground = true;
         } else {
             self.player_pos.y = new_y;
+        }
+}
+#[inline]
+fn collect_powerups(&mut self) {
+        let mut i = 0;
+        while i < self.powerups.len() {
+            let powerup = &mut self.powerups[i];
+            if !powerup.active {
+                i += 1;
+                continue;
+            }
+            let dx = self.player_pos.x - powerup.pos.x;
+            let dz = self.player_pos.z - powerup.pos.z;
+            let dist = (dx * dx + dz * dz).sqrt();
+            if dist < 1.5 {
+                if powerup.powerup_type == 0 {
+                    self.player_health = self.player_health + 25;
+                    if self.player_health > 100 {
+                        self.player_health = 100;
+                    }
+                    println!("{}{}{}", "+ Health! (", self.player_health.to_string(), "/100)")
+                } else {
+                    if powerup.powerup_type == 1 {
+                        self.ammo = self.ammo + 10;
+                        println!("{}{}{}", "+ Ammo! (", self.ammo.to_string(), ")")
+                    } else {
+                        if powerup.powerup_type == 2 {
+                            self.speed_boost_timer = 5.0;
+                            println!("+ Speed Boost! (5 seconds)")
+                        }
+                    }
+                }
+                powerup.active = false;
+            }
+            i += 1;
         }
 }
 #[inline]
@@ -326,6 +382,7 @@ fn init(game: &mut ShooterGame) {
     game.paused = false;
     game.create_level();
     game.spawn_enemies();
+    game.spawn_powerups();
     println!("=== GREYBOX SHOOTER ===");
     println!("WASD - Move");
     println!("Space - Jump");
@@ -383,6 +440,14 @@ fn update(game: &mut ShooterGame, delta: f32, input: &Input) {
         game.player_pitch = -89.0;
     }
     game.update_player_movement(delta, input);
+    game.collect_powerups();
+    if game.speed_boost_timer > 0.0 {
+        game.speed_boost_timer = game.speed_boost_timer - delta;
+        if game.speed_boost_timer < 0.0 {
+            game.speed_boost_timer = 0.0;
+            println!("Speed boost ended!")
+        }
+    }
     game.update_enemies(delta);
     game.update_bullets(delta);
     if game.enemies.len() == 0 {
@@ -417,6 +482,11 @@ fn render(game: &mut ShooterGame, renderer: &mut Renderer3D, camera: &mut Camera
     }
     for bullet in &game.bullets {
         renderer.draw_cube(bullet.pos, Vec3::new(0.2, 0.2, 0.2), Color::rgb(1.0, 1.0, 0.0));
+    }
+    for powerup in &game.powerups {
+        if powerup.active {
+            renderer.draw_cube(powerup.pos, Vec3::new(0.5, 0.5, 0.5), powerup.color)
+        }
     }
     let hud_distance = 2.0;
     let hud_offset_x = -1.5;
