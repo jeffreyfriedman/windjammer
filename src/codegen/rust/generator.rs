@@ -312,6 +312,11 @@ impl CodeGenerator {
         output.push_str("        .with_inner_size(winit::dpi::LogicalSize::new(800, 600))\n");
         output.push_str("        .build(&event_loop)?;\n");
         output.push_str("\n");
+        output.push_str("    // Lock cursor to window for FPS controls\n");
+        output.push_str("    window.set_cursor_visible(false);\n");
+        output.push_str("    let _ = window.set_cursor_grab(winit::window::CursorGrabMode::Confined)\n");
+        output.push_str("        .or_else(|_| window.set_cursor_grab(winit::window::CursorGrabMode::Locked));\n");
+        output.push_str("\n");
         output.push_str("    // Initialize game state\n");
         output.push_str(&format!(
             "    let mut game = {}::default();\n",
