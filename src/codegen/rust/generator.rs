@@ -12,6 +12,7 @@ struct GameFrameworkInfo {
     render_fn: Option<String>,
     input_fn: Option<String>,
     cleanup_fn: Option<String>,
+    is_3d: bool, // True if using @render3d
 }
 
 pub struct CodeGenerator {
@@ -263,6 +264,7 @@ impl CodeGenerator {
         }
 
         // Find decorated functions
+        let mut is_3d = false;
         for item in &program.items {
             if let Item::Function { decl: func, .. } = item {
                 for decorator in &func.decorators {
@@ -270,7 +272,10 @@ impl CodeGenerator {
                         "init" => init_fn = Some(func.name.clone()),
                         "update" => update_fn = Some(func.name.clone()),
                         "render" => render_fn = Some(func.name.clone()),
-                        "render3d" => render_fn = Some(func.name.clone()), // 3D rendering
+                        "render3d" => {
+                            render_fn = Some(func.name.clone());
+                            is_3d = true; // Mark as 3D rendering
+                        }
                         "input" => input_fn = Some(func.name.clone()),
                         "cleanup" => cleanup_fn = Some(func.name.clone()),
                         _ => {}
@@ -286,6 +291,7 @@ impl CodeGenerator {
             render_fn,
             input_fn,
             cleanup_fn,
+            is_3d,
         })
     }
 
@@ -322,9 +328,16 @@ impl CodeGenerator {
 
         output.push_str("    // Initialize renderer\n");
         output.push_str("    let window_ref: &'static winit::window::Window = unsafe { std::mem::transmute(&window) };\n");
-        output.push_str(
-            "    let mut renderer = pollster::block_on(renderer::Renderer::new(window_ref))?;\n",
-        );
+        if info.is_3d {
+            output.push_str(
+                "    let mut renderer = pollster::block_on(renderer3d::Renderer3D::new(window_ref))?;\n",
+            );
+            output.push_str("    let mut camera = renderer3d::Camera3D::new();\n");
+        } else {
+            output.push_str(
+                "    let mut renderer = pollster::block_on(renderer::Renderer::new(window_ref))?;\n",
+            );
+        }
         output.push_str("\n");
         output.push_str("    // Initialize input\n");
         output.push_str("    let mut input = input::Input::new();\n");
@@ -364,10 +377,18 @@ impl CodeGenerator {
         // Call render function if present
         if let Some(render_fn) = &info.render_fn {
             output.push_str("                    // Render\n");
-            output.push_str(&format!(
-                "                    {}(&mut game, &mut renderer);\n",
-                render_fn
-            ));
+            if info.is_3d {
+                output.push_str("                    renderer.set_camera(&camera);\n");
+                output.push_str(&format!(
+                    "                    {}(&mut game, &mut renderer, &mut camera);\n",
+                    render_fn
+                ));
+            } else {
+                output.push_str(&format!(
+                    "                    {}(&mut game, &mut renderer);\n",
+                    render_fn
+                ));
+            }
         }
 
         output.push_str("                    renderer.present();\n");
@@ -678,10 +699,17 @@ impl CodeGenerator {
         let mut implicit_imports = String::new();
 
         // Add game framework imports if this is a game
-        if game_framework_info.is_some() {
-            implicit_imports
-                .push_str("use windjammer_game_framework::renderer::{Renderer, Color};\n");
+        if let Some(ref info) = game_framework_info {
+            if info.is_3d {
+                implicit_imports
+                    .push_str("use windjammer_game_framework::renderer3d::{Renderer3D, Camera3D};\n");
+                implicit_imports.push_str("use windjammer_game_framework::renderer::Color;\n");
+            } else {
+                implicit_imports
+                    .push_str("use windjammer_game_framework::renderer::{Renderer, Color};\n");
+            }
             implicit_imports.push_str("use windjammer_game_framework::input::{Input, Key};\n");
+            implicit_imports.push_str("use windjammer_game_framework::math::{Vec3, Mat4};\n");
         }
 
         // Add trait imports for inferred bounds
