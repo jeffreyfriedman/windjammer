@@ -182,6 +182,47 @@ impl Input {
     }
 
     // ========================================
+    // MOUSE API: Mouse button and position
+    // ========================================
+
+    /// Check if a mouse button is currently held down
+    ///
+    /// Example: `if input.mouse_held(MouseButton::Left) { drag_object() }`
+    pub fn mouse_held(&self, button: MouseButton) -> bool {
+        self.mouse_buttons_pressed.contains(&button)
+    }
+
+    /// Check if a mouse button was pressed this frame
+    ///
+    /// Example: `if input.mouse_pressed(MouseButton::Left) { shoot() }`
+    pub fn mouse_pressed(&self, button: MouseButton) -> bool {
+        self.mouse_buttons_just_pressed.contains(&button)
+    }
+
+    /// Check if a mouse button was released this frame
+    ///
+    /// Example: `if input.mouse_released(MouseButton::Left) { release_object() }`
+    pub fn mouse_released(&self, button: MouseButton) -> bool {
+        self.mouse_buttons_just_released.contains(&button)
+    }
+
+    /// Get the current mouse position (in pixels)
+    ///
+    /// Returns (x, y) where (0, 0) is top-left corner
+    pub fn mouse_position(&self) -> (f64, f64) {
+        self.mouse_position
+    }
+
+    /// Get the mouse movement delta since last frame
+    ///
+    /// Returns (dx, dy) in pixels. Useful for camera controls.
+    ///
+    /// Example: `let (dx, dy) = input.mouse_delta(); camera.rotate(dx, dy);`
+    pub fn mouse_delta(&self) -> (f64, f64) {
+        self.mouse_delta
+    }
+
+    // ========================================
     // LEGACY API: For compatibility
     // ========================================
 
@@ -202,6 +243,80 @@ impl Input {
     pub fn is_key_just_released(&self, key: Key) -> bool {
         self.released(key)
     }
+
+    // ========================================
+    // TESTING API: For automated tests
+    // ========================================
+
+    /// Simulate a key press (for testing)
+    ///
+    /// This marks the key as pressed this frame and held.
+    /// Use in tests to simulate user input.
+    ///
+    /// Example: `input.simulate_key_press(Key::W)`
+    pub fn simulate_key_press(&mut self, key: Key) {
+        if !self.keys_pressed.contains(&key) {
+            self.keys_just_pressed.insert(key);
+        }
+        self.keys_pressed.insert(key);
+    }
+
+    /// Simulate a key release (for testing)
+    ///
+    /// This marks the key as released this frame.
+    ///
+    /// Example: `input.simulate_key_release(Key::W)`
+    pub fn simulate_key_release(&mut self, key: Key) {
+        self.keys_pressed.remove(&key);
+        self.keys_just_released.insert(key);
+    }
+
+    /// Simulate a mouse button press (for testing)
+    ///
+    /// Example: `input.simulate_mouse_press(MouseButton::Left)`
+    pub fn simulate_mouse_press(&mut self, button: MouseButton) {
+        if !self.mouse_buttons_pressed.contains(&button) {
+            self.mouse_buttons_just_pressed.insert(button);
+        }
+        self.mouse_buttons_pressed.insert(button);
+    }
+
+    /// Simulate a mouse button release (for testing)
+    ///
+    /// Example: `input.simulate_mouse_release(MouseButton::Left)`
+    pub fn simulate_mouse_release(&mut self, button: MouseButton) {
+        self.mouse_buttons_pressed.remove(&button);
+        self.mouse_buttons_just_released.insert(button);
+    }
+
+    /// Simulate mouse movement (for testing)
+    ///
+    /// Sets the mouse position and calculates delta.
+    ///
+    /// Example: `input.simulate_mouse_move(100.0, 200.0)`
+    pub fn simulate_mouse_move(&mut self, x: f64, y: f64) {
+        if let Some(last_pos) = self.last_mouse_position {
+            self.mouse_delta = (x - last_pos.0, y - last_pos.1);
+        } else {
+            self.mouse_delta = (0.0, 0.0);
+        }
+        self.mouse_position = (x, y);
+        self.last_mouse_position = Some((x, y));
+    }
+
+    /// Simulate mouse delta movement (for testing camera controls)
+    ///
+    /// Directly sets the mouse delta without changing position.
+    /// Useful for testing first-person camera controls.
+    ///
+    /// Example: `input.simulate_mouse_delta(10.0, -5.0)`
+    pub fn simulate_mouse_delta(&mut self, dx: f64, dy: f64) {
+        self.mouse_delta = (dx, dy);
+    }
+
+    // ========================================
+    // INTERNAL API: Hidden from Windjammer users
+    // ========================================
 
     /// Internal: Update input state from a winit keyboard event
     /// 
@@ -227,6 +342,9 @@ impl Input {
     pub fn clear_frame_state(&mut self) {
         self.keys_just_pressed.clear();
         self.keys_just_released.clear();
+        self.mouse_buttons_just_pressed.clear();
+        self.mouse_buttons_just_released.clear();
+        self.mouse_delta = (0.0, 0.0);
     }
 
     /// Map winit KeyCode to our Key enum
