@@ -1,0 +1,67 @@
+// Example: Testing math operations in Windjammer
+
+@test
+fn test_addition() {
+    let result = 2 + 2
+    assert_eq(result, 4)
+}
+
+@test
+fn test_subtraction() {
+    let result = 5 - 3
+    assert_eq(result, 2)
+}
+
+@test
+fn test_multiplication() {
+    let result = 3 * 4
+    assert_eq(result, 12)
+}
+
+@test
+fn test_division() {
+    let result = 10 / 2
+    assert_eq(result, 5)
+}
+
+@test
+fn test_string_concat() {
+    let greeting = "Hello, " + "World!"
+    assert_eq(greeting, "Hello, World!")
+}
+
+@test
+fn test_string_length() {
+    let s = "hello"
+    assert_eq(s.len(), 5)
+}
+
+@test
+fn test_vec_operations() {
+    let mut v = Vec::new()
+    v.push(1)
+    v.push(2)
+    v.push(3)
+    
+    assert_eq(v.len(), 3)
+    assert_eq(v[0], 1)
+    assert_eq(v[1], 2)
+    assert_eq(v[2], 3)
+}
+
+// Helper function (not a test)
+fn factorial(n: int) -> int {
+    if n <= 1 {
+        return 1
+    }
+    return n * factorial(n - 1)
+}
+
+@test
+fn test_factorial() {
+    assert_eq(factorial(0), 1)
+    assert_eq(factorial(1), 1)
+    assert_eq(factorial(5), 120)
+    assert_eq(factorial(10), 3628800)
+}
+
