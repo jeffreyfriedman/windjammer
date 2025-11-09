@@ -1,8 +1,3 @@
-use windjammer_game_framework::renderer3d::{Renderer3D, Camera3D};
-use windjammer_game_framework::renderer::Color;
-use windjammer_game_framework::input::{Input, Key, MouseButton};
-use windjammer_game_framework::math::{Vec3, Mat4};
-
 struct ShooterGame {
     player_pos: Vec3,
     player_velocity: Vec3,
@@ -27,33 +22,8 @@ struct ShooterGame {
     speed_boost_timer: f32,
 }
 
-impl Default for ShooterGame {
-    fn default() -> Self {
-        ShooterGame {
-            player_pos: Vec3::new(0.0, 0.0, 0.0),
-            player_velocity: Vec3::new(0.0, 0.0, 0.0),
-            player_yaw: Default::default(),
-            player_pitch: Default::default(),
-            player_health: 0,
-            player_on_ground: false,
-            move_speed: Default::default(),
-            sprint_speed: Default::default(),
-            jump_velocity: Default::default(),
-            gravity: Default::default(),
-            mouse_sensitivity: Default::default(),
-            weapon: 0,
-            ammo: 0,
-            score: 0,
-            enemies: Vec::new(),
-            bullets: Vec::new(),
-            walls: Vec::new(),
-            powerups: Vec::new(),
-            floor_y: Default::default(),
-            paused: false,
-            speed_boost_timer: Default::default(),
-        }
-    }
-}
+// Game trait implementation for ShooterGame
+// TODO: Implement Game trait
 
 struct Enemy {
     pos: Vec3,
@@ -86,7 +56,7 @@ struct PowerUp {
 
 impl ShooterGame {
 #[inline]
-fn create_level(&mut self) {
+fn create_level(mut self) {
         self.walls.push(Wall { pos: Vec3::new(0.0, 2.0, -20.0), size: Vec3::new(40.0, 4.0, 1.0), color: Color::rgb(0.5, 0.5, 0.5) });
         self.walls.push(Wall { pos: Vec3::new(0.0, 2.0, 20.0), size: Vec3::new(40.0, 4.0, 1.0), color: Color::rgb(0.5, 0.5, 0.5) });
         self.walls.push(Wall { pos: Vec3::new(-20.0, 2.0, 0.0), size: Vec3::new(1.0, 4.0, 40.0), color: Color::rgb(0.5, 0.5, 0.5) });
@@ -97,7 +67,7 @@ fn create_level(&mut self) {
         self.walls.push(Wall { pos: Vec3::new(5.0, 2.0, 10.0), size: Vec3::new(20.0, 4.0, 1.0), color: Color::rgb(0.4, 0.4, 0.4) })
 }
 #[inline]
-fn spawn_enemies(&mut self) {
+fn spawn_enemies(mut self) {
         self.enemies.push(Enemy { pos: Vec3::new(10.0, 1.0, 10.0), velocity: Vec3::new(0.0, 0.0, 0.0), health: 2, state: 1, enemy_type: 0, color: Color::rgb(0.6, 0.4, 0.2) });
         self.enemies.push(Enemy { pos: Vec3::new(-10.0, 1.0, 10.0), velocity: Vec3::new(0.0, 0.0, 0.0), health: 2, state: 1, enemy_type: 0, color: Color::rgb(0.6, 0.4, 0.2) });
         self.enemies.push(Enemy { pos: Vec3::new(10.0, 1.0, -10.0), velocity: Vec3::new(0.0, 0.0, 0.0), health: 3, state: 1, enemy_type: 1, color: Color::rgb(1.0, 0.0, 0.0) });
@@ -105,13 +75,13 @@ fn spawn_enemies(&mut self) {
         self.enemies.push(Enemy { pos: Vec3::new(0.0, 1.0, 15.0), velocity: Vec3::new(0.0, 0.0, 0.0), health: 5, state: 1, enemy_type: 2, color: Color::rgb(0.8, 0.0, 0.8) })
 }
 #[inline]
-fn spawn_powerups(&mut self) {
+fn spawn_powerups(mut self) {
         self.powerups.push(PowerUp { pos: Vec3::new(5.0, 0.5, 5.0), powerup_type: 0, active: true, color: Color::rgb(0.0, 1.0, 0.0) });
         self.powerups.push(PowerUp { pos: Vec3::new(-5.0, 0.5, 5.0), powerup_type: 1, active: true, color: Color::rgb(1.0, 1.0, 0.0) });
         self.powerups.push(PowerUp { pos: Vec3::new(0.0, 0.5, -10.0), powerup_type: 2, active: true, color: Color::rgb(0.0, 1.0, 1.0) });
         self.powerups.push(PowerUp { pos: Vec3::new(8.0, 0.5, -8.0), powerup_type: 0, active: true, color: Color::rgb(0.0, 1.0, 0.0) })
 }
-fn update_player_movement(&mut self, delta: f32, input: &Input) {
+fn update_player_movement(mut self, mut delta: f32, mut input: Input) {
         let yaw_rad = self.player_yaw * 3.14159 / 180.0;
         let forward_x = yaw_rad.sin();
         let forward_z = yaw_rad.cos();
@@ -164,11 +134,11 @@ fn update_player_movement(&mut self, delta: f32, input: &Input) {
         let new_z = self.player_pos.z + self.player_velocity.z * delta;
         let mut can_move_x = true;
         let mut can_move_z = true;
-        for wall in &self.walls {
-            if check_collision(new_x.clone(), self.player_pos.z.clone(), &wall) {
+        for wall in self.walls {
+            if check_collision(new_x, self.player_pos.z, wall) {
                 can_move_x = false;
             }
-            if check_collision(self.player_pos.x, new_z, &wall) {
+            if check_collision(self.player_pos.x, new_z, wall) {
                 can_move_z = false;
             }
         }
@@ -187,10 +157,10 @@ fn update_player_movement(&mut self, delta: f32, input: &Input) {
         }
 }
 #[inline]
-fn collect_powerups(&mut self) {
+fn collect_powerups(mut self) {
         let mut i = 0;
         while i < self.powerups.len() {
-            let powerup = &mut self.powerups[i];
+            let powerup = self.powerups[i];
             if !powerup.active {
                 i += 1;
                 continue;
@@ -204,15 +174,15 @@ fn collect_powerups(&mut self) {
                     if self.player_health > 100 {
                         self.player_health = 100;
                     }
-                    println!("{}{}{}", "+ Health! (", self.player_health.to_string(), "/100)")
+                    println(format!("{}{}{}", "+ Health! (", self.player_health.to_string(), "/100)"))
                 } else {
                     if powerup.powerup_type == 1 {
                         self.ammo = self.ammo + 10;
-                        println!("{}{}{}", "+ Ammo! (", self.ammo.to_string(), ")")
+                        println(format!("{}{}{}", "+ Ammo! (", self.ammo.to_string(), ")"))
                     } else {
                         if powerup.powerup_type == 2 {
                             self.speed_boost_timer = 5.0;
-                            println!("+ Speed Boost! (5 seconds)")
+                            println("+ Speed Boost! (5 seconds)")
                         }
                     }
                 }
@@ -222,10 +192,10 @@ fn collect_powerups(&mut self) {
         }
 }
 #[inline]
-fn update_enemies(&mut self, delta: f32) {
+fn update_enemies(mut self, mut delta: f32) {
         let mut i = 0;
         while i < self.enemies.len() {
-            let enemy = &mut self.enemies[i];
+            let enemy = self.enemies[i];
             if enemy.state == 3 {
                 self.enemies.remove(i);
                 continue;
@@ -278,10 +248,10 @@ fn update_enemies(&mut self, delta: f32) {
         }
 }
 #[inline]
-fn update_bullets(&mut self, delta: f32) {
+fn update_bullets(mut self, mut delta: f32) {
         let mut i = 0;
         while i < self.bullets.len() {
-            let bullet = &mut self.bullets[i];
+            let bullet = self.bullets[i];
             bullet.pos.x = bullet.pos.x + bullet.velocity.x * delta;
             bullet.pos.y = bullet.pos.y + bullet.velocity.y * delta;
             bullet.pos.z = bullet.pos.z + bullet.velocity.z * delta;
@@ -291,8 +261,8 @@ fn update_bullets(&mut self, delta: f32) {
                 continue;
             }
             let mut hit_wall = false;
-            for wall in &self.walls {
-                if check_collision(bullet.pos.x, bullet.pos.z, &wall) {
+            for wall in self.walls {
+                if check_collision(bullet.pos.x, bullet.pos.z, wall) {
                     hit_wall = true;
                     break;
                 }
@@ -304,7 +274,7 @@ fn update_bullets(&mut self, delta: f32) {
             let mut hit_enemy = false;
             let mut j = 0;
             while j < self.enemies.len() {
-                let enemy = &mut self.enemies[j];
+                let enemy = self.enemies[j];
                 let dx = bullet.pos.x - enemy.pos.x;
                 let dy = bullet.pos.y - enemy.pos.y;
                 let dz = bullet.pos.z - enemy.pos.z;
@@ -314,7 +284,7 @@ fn update_bullets(&mut self, delta: f32) {
                     if enemy.health <= 0 {
                         enemy.state = 3;
                         self.score = self.score + 100;
-                        println!("{}{}", "Enemy killed! Score: ", self.score.to_string())
+                        println(format!("{}{}", "Enemy killed! Score: ", self.score.to_string()))
                     }
                     hit_enemy = true;
                     break;
@@ -328,7 +298,7 @@ fn update_bullets(&mut self, delta: f32) {
             i += 1;
         }
 }
-fn shoot(&mut self) {
+fn shoot(mut self) {
         let yaw_rad = self.player_yaw * 3.14159 / 180.0;
         let pitch_rad = self.player_pitch * 3.14159 / 180.0;
         let forward_x = yaw_rad.sin() * pitch_rad.cos();
@@ -359,11 +329,12 @@ fn shoot(&mut self) {
         let spawn_offset = 1.5;
         let bullet_pos = Vec3::new(self.player_pos.x + forward_x * spawn_offset, self.player_pos.y + forward_y * spawn_offset, self.player_pos.z + forward_z * spawn_offset);
         self.bullets.push(Bullet { pos: bullet_pos, velocity: Vec3::new(forward_x * speed, forward_y * speed, forward_z * speed), damage, lifetime: 5.0 });
-        println!("{}{}", "BANG! Fired weapon ", self.weapon.to_string())
+        println(format!("{}{}", "BANG! Fired weapon ", self.weapon.to_string()))
 }
 }
 
-fn init(game: &mut ShooterGame) {
+#[init]
+fn init(mut game: ShooterGame) {
     game.player_pos = Vec3::new(0.0, 2.0, 0.0);
     game.player_velocity = Vec3::new(0.0, 0.0, 0.0);
     game.player_yaw = 0.0;
@@ -383,29 +354,30 @@ fn init(game: &mut ShooterGame) {
     game.create_level();
     game.spawn_enemies();
     game.spawn_powerups();
-    println!("=== GREYBOX SHOOTER ===");
-    println!("WASD - Move");
-    println!("Space - Jump");
-    println!("Shift - Sprint");
-    println!("Mouse - Look");
-    println!("Left Click - Shoot");
-    println!("1/2/3 - Switch weapon");
-    println!("ESC - Pause");
-    println!("");
-    println!("Kill all enemies to win!")
+    println("=== GREYBOX SHOOTER ===");
+    println("WASD - Move");
+    println("Space - Jump");
+    println("Shift - Sprint");
+    println("Mouse - Look");
+    println("Left Click - Shoot");
+    println("1/2/3 - Switch weapon");
+    println("ESC - Pause");
+    println("");
+    println("Kill all enemies to win!")
 }
 
-fn handle_input(game: &mut ShooterGame, input: &Input) {
+#[input]
+fn handle_input(mut game: ShooterGame, mut input: Input) {
     if game.paused {
         if input.pressed(Key::Escape) {
             game.paused = false;
-            println!("Game resumed!")
+            println("Game resumed!")
         }
         return;
     }
     if input.pressed(Key::Escape) {
         game.paused = true;
-        println!("Game paused! Press ESC to resume");
+        println("Game paused! Press ESC to resume");
         return;
     }
     if input.mouse_pressed(MouseButton::Left) {
@@ -413,19 +385,20 @@ fn handle_input(game: &mut ShooterGame, input: &Input) {
     }
     if input.pressed(Key::Num1) {
         game.weapon = 0;
-        println!("Switched to Pistol")
+        println("Switched to Pistol")
     }
     if input.pressed(Key::Num2) {
         game.weapon = 1;
-        println!("Switched to Shotgun")
+        println("Switched to Shotgun")
     }
     if input.pressed(Key::Num3) {
         game.weapon = 2;
-        println!("Switched to Rocket Launcher")
+        println("Switched to Rocket Launcher")
     }
 }
 
-fn update(game: &mut ShooterGame, delta: f32, input: &Input) {
+#[update]
+fn update(mut game: ShooterGame, mut delta: f32, mut input: Input) {
     if game.paused {
         return;
     }
@@ -445,19 +418,19 @@ fn update(game: &mut ShooterGame, delta: f32, input: &Input) {
         game.speed_boost_timer = game.speed_boost_timer - delta;
         if game.speed_boost_timer < 0.0 {
             game.speed_boost_timer = 0.0;
-            println!("Speed boost ended!")
+            println("Speed boost ended!")
         }
     }
     game.update_enemies(delta);
     game.update_bullets(delta);
     if game.enemies.len() == 0 {
-        println!("{}{}", "YOU WIN! Score: ", game.score.to_string());
-        println!("Press ESC to exit")
+        println(format!("{}{}", "YOU WIN! Score: ", game.score.to_string()));
+        println("Press ESC to exit")
     }
 }
 
 #[inline]
-fn check_collision(x: f32, z: f32, wall: &Wall) -> bool {
+fn check_collision(mut x: f32, mut z: f32, mut wall: Wall) -> bool {
     let half_width = wall.size.x / 2.0;
     let half_depth = wall.size.z / 2.0;
     let player_radius = 0.5;
@@ -466,24 +439,25 @@ fn check_collision(x: f32, z: f32, wall: &Wall) -> bool {
     return dx < half_width + player_radius && dz < half_depth + player_radius;
 }
 
-fn render(game: &mut ShooterGame, renderer: &mut Renderer3D, camera: &mut Camera3D) {
+#[render3d]
+fn render(mut game: ShooterGame, mut renderer: Renderer3D, mut camera: Camera3D) {
     camera.position = game.player_pos;
     camera.yaw = game.player_yaw;
     camera.pitch = game.player_pitch;
     renderer.clear(Color::rgb(0.1, 0.1, 0.15));
     renderer.draw_plane(Vec3::new(0.0, game.floor_y, 0.0), Vec3::new(100.0, 0.0, 100.0), Color::rgb(0.2, 0.2, 0.2));
-    for wall in &game.walls {
+    for wall in game.walls {
         renderer.draw_cube(wall.pos, wall.size, wall.color);
     }
-    for enemy in &game.enemies {
+    for enemy in game.enemies {
         if enemy.state != 3 {
             renderer.draw_cube(enemy.pos, Vec3::new(1.0, 2.0, 1.0), enemy.color)
         }
     }
-    for bullet in &game.bullets {
+    for bullet in game.bullets {
         renderer.draw_cube(bullet.pos, Vec3::new(0.2, 0.2, 0.2), Color::rgb(1.0, 1.0, 0.0));
     }
-    for powerup in &game.powerups {
+    for powerup in game.powerups {
         if powerup.active {
             renderer.draw_cube(powerup.pos, Vec3::new(0.5, 0.5, 0.5), powerup.color)
         }
@@ -503,7 +477,7 @@ fn render(game: &mut ShooterGame, renderer: &mut Renderer3D, camera: &mut Camera
     let hud_base_z = camera.position.z + forward_z * hud_distance;
     let health_ratio = game.player_health as f32 / 100.0;
     let health_width = 0.5 * health_ratio;
-    renderer.draw_cube(Vec3::new(hud_base_x + right_x * hud_offset_x, hud_base_y.clone(), hud_base_z + right_z * hud_offset_x), Vec3::new(health_width, 0.05, 0.01), Color::rgb(1.0, 0.0, 0.0));
+    renderer.draw_cube(Vec3::new(hud_base_x + right_x * hud_offset_x, hud_base_y, hud_base_z + right_z * hud_offset_x), Vec3::new(health_width, 0.05, 0.01), Color::rgb(1.0, 0.0, 0.0));
     let ammo_display = {
         if game.ammo > 10 {
             10
@@ -550,91 +524,13 @@ fn render(game: &mut ShooterGame, renderer: &mut Renderer3D, camera: &mut Camera
 }
 
 #[inline]
-fn cleanup(game: &mut ShooterGame) {
-    println!("{}{}", "Final Score: ", game.score.to_string());
-    println!("Thanks for playing!")
+#[cleanup]
+fn cleanup(mut game: ShooterGame) {
+    println(format!("{}{}", "Final Score: ", game.score.to_string()));
+    println("Thanks for playing!")
 }
 
-fn main() -> Result<(), Box<dyn std::error::Error>> {
-    use windjammer_game_framework::*;
-    use winit::event::{Event, WindowEvent};
-    use winit::event_loop::{ControlFlow, EventLoop};
-    use winit::window::WindowBuilder;
-
-    // Create event loop and window
-    let event_loop = EventLoop::new()?;
-    let window = WindowBuilder::new()
-        .with_title("Windjammer Game")
-        .with_inner_size(winit::dpi::LogicalSize::new(800, 600))
-        .build(&event_loop)?;
-
-    // Lock cursor to window for FPS controls
-    window.set_cursor_visible(false);
-    let _ = window.set_cursor_grab(winit::window::CursorGrabMode::Confined)
-        .or_else(|_| window.set_cursor_grab(winit::window::CursorGrabMode::Locked));
-
-    // Initialize game state
-    let mut game = ShooterGame::default();
-
-    // Call init function
-    init(&mut game);
-
-    // Initialize renderer
-    let window_ref: &'static winit::window::Window = unsafe { std::mem::transmute(&window) };
-    let mut renderer = pollster::block_on(renderer3d::Renderer3D::new(window_ref))?;
-    let mut camera = renderer3d::Camera3D::new();
-
-    // Initialize input
-    let mut input = input::Input::new();
-
-    // Game loop
-    let mut last_time = std::time::Instant::now();
-
-    event_loop.run(move |event, elwt| {
-        match event {
-            Event::WindowEvent { event, .. } => match event {
-                WindowEvent::CloseRequested => {
-                    cleanup(&mut game);
-                    elwt.exit();
-                }
-                WindowEvent::RedrawRequested => {
-                    // Calculate delta time
-                    let now = std::time::Instant::now();
-                    let delta = (now - last_time).as_secs_f32();
-                    last_time = now;
-
-                    // Update game logic
-                    update(&mut game, delta, &input);
-
-                    // Render
-                    renderer.set_camera(&camera);
-                    render(&mut game, &mut renderer, &mut camera);
-                    renderer.present();
-
-                    // Clear input frame state
-                    input.clear_frame_state();
-                }
-                WindowEvent::KeyboardInput { event, .. } => {
-                    input.update_from_winit(&event);
-                    handle_input(&mut game, &input);
-                }
-                WindowEvent::MouseInput { state, button, .. } => {
-                    input.update_mouse_button_from_winit(state, button);
-                    handle_input(&mut game, &input);
-                }
-                WindowEvent::CursorMoved { position, .. } => {
-                    input.update_mouse_position_from_winit(position.x, position.y);
-                }
-                _ => {}
-            },
-            Event::AboutToWait => {
-                window.request_redraw();
-            }
-            _ => {}
-        }
-    })?;
-
-    Ok(())
+fn main() {
+    run_game()
 }
-
 
