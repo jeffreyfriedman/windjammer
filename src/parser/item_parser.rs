@@ -641,9 +641,9 @@ impl Parser {
                     // Extract a name from the pattern for backward compatibility
                     let name = Self::pattern_to_name(&pattern);
 
-                    // Owned parameters are the default in Windjammer
+                    // Let the analyzer infer ownership based on usage
                     // (References are already explicit in the type)
-                    let ownership = OwnershipHint::Owned;
+                    let ownership = OwnershipHint::Inferred;
 
                     params.push(Parameter {
                         name,
@@ -673,9 +673,9 @@ impl Parser {
                     self.expect(Token::Colon)?;
                     let type_ = self.parse_type()?;
 
-                    // Owned parameters are the default in Windjammer
+                    // Let the analyzer infer ownership based on usage
                     // (References are already explicit in the type)
-                    let ownership = OwnershipHint::Owned;
+                    let ownership = OwnershipHint::Inferred;
 
                     params.push(Parameter {
                         name,
