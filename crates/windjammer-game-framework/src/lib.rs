@@ -47,7 +47,8 @@ pub mod input; // Input handling
 pub mod lod; // Level of Detail (LOD) system
 pub mod math; // Math types (Vec2, Vec3, Mat4, etc.)
 pub mod mesh_clustering; // Mesh clustering system (Nanite-style)
-pub mod physics; // Physics integration
+pub mod physics; // Physics integration (Rapier - exposes Rapier types)
+pub mod physics_windjammer; // Windjammer-friendly physics API (zero crate leakage)
 pub mod renderer; // High-level 2D renderer (for Windjammer games)
 pub mod renderer3d; // High-level 3D renderer (for Windjammer games)
 pub mod rendering; // Graphics rendering
@@ -81,7 +82,10 @@ pub mod prelude {
     pub use crate::lod::{LODConfig, LODLevel, LODSelector, LODStats}; // Level of Detail system
     pub use crate::math::{Mat4, Quat, Vec2, Vec3, Vec4};
     pub use crate::mesh_clustering::{ClusterConfig, ClusterStats, MeshCluster, MeshClusteringSystem}; // Mesh clustering
-    pub use crate::physics::{Collider, PhysicsWorld, RigidBody};
+    pub use crate::physics_windjammer::{
+        BodyHandle, BodyType, ColliderBuilder, ColliderHandle, CollisionShape, ConstraintHandle,
+        ConstraintType, PhysicsMaterial, PhysicsWorldWj, RaycastHit, RigidBodyBuilder,
+    }; // Windjammer-friendly physics (zero crate leakage)
     pub use crate::renderer::{Color, Renderer}; // High-level 2D renderer (no wgpu types exposed)
     pub use crate::renderer3d::{Camera3D, Renderer3D, SSGIConfig}; // High-level 3D renderer with SSGI (no wgpu types exposed)
     pub use crate::rendering::{Camera, Material, Mesh, RenderContext, Sprite, SpriteBatch};
