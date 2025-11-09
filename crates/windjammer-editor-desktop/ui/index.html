@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Windjammer Editor</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div class="windjammer-editor">
+        <div class="editor-header">
+            <h1>Windjammer Editor</h1>
+            <div class="editor-actions">
+                <button id="new-project">New Project</button>
+                <button id="open-project">Open</button>
+                <button id="save-project">Save</button>
+                <button id="run-project">Run</button>
+            </div>
+        </div>
+        <div class="editor-body">
+            <div class="file-browser" id="file-browser">
+                <h3>Files</h3>
+                <div id="file-list"></div>
+            </div>
+            <div class="code-editor">
+                <textarea id="code-editor" placeholder="Write your Windjammer code here..."></textarea>
+            </div>
+            <div class="error-display" id="error-display">
+                <h3>Errors</h3>
+                <div id="error-list"></div>
+            </div>
+        </div>
+        <div class="editor-footer">
+            <div class="status-bar">
+                <span id="status-text">Ready</span>
+            </div>
+        </div>
+    </div>
+    
+    <script src="app.js"></script>
+</body>
+</html>
+
