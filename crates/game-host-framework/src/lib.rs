@@ -79,6 +79,7 @@ pub mod prelude {
     pub use crate::renderer::{Color, Renderer}; // High-level 2D renderer (no wgpu types exposed)
     pub use crate::renderer3d::{Camera3D, Renderer3D}; // High-level 3D renderer (no wgpu types exposed)
     pub use crate::rendering::{Camera, Material, Mesh, RenderContext, Sprite, SpriteBatch};
+    pub use crate::texture::Texture; // Texture loading (no wgpu or image types exposed)
     pub use crate::time::Time;
     pub use crate::transform::{Transform2D, Transform3D};
 
