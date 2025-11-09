@@ -15,9 +15,9 @@ impl Input {
         VNode::Element {
             tag: "input".to_string(),
             attrs: vec![
-                VAttr { name: "class".to_string(), value: "wj-input".to_string() },
-                VAttr { name: "value".to_string(), value: self.value.clone() },
-                VAttr { name: "placeholder".to_string(), value: self.placeholder.clone() },
+                ("class".to_string(), VAttr::Static("wj-input".to_string())),
+                ("value".to_string(), VAttr::Static(self.value.clone())),
+                ("placeholder".to_string(), VAttr::Static(self.placeholder.clone())),
             ],
             children: vec![],
         }

@@ -2,6 +2,8 @@
 
 use crate::prelude::*;
 use crate::simple_vnode::{VAttr, VNode};
+use std::rc::Rc;
+use std::cell::RefCell;
 
 pub struct CodeEditor {
     pub content: Signal<String>,
@@ -9,7 +11,7 @@ pub struct CodeEditor {
     pub theme: String,
     pub read_only: bool,
     pub line_numbers: bool,
-    pub on_change: Option<Box<dyn Fn(String) + 'static>>,
+    pub on_change: Option<Rc<RefCell<dyn FnMut(String)>>>,
 }
 
 impl CodeEditor {
@@ -44,8 +46,8 @@ impl CodeEditor {
         self
     }
     
-    pub fn on_change<F: Fn(String) + 'static>(mut self, handler: F) -> Self {
-        self.on_change = Some(Box::new(handler));
+    pub fn on_change<F: FnMut(String) + 'static>(mut self, handler: F) -> Self {
+        self.on_change = Some(Rc::new(RefCell::new(handler)));
         self
     }
     
@@ -60,31 +62,16 @@ impl CodeEditor {
         VNode::Element {
             tag: "div".to_string(),
             attrs: vec![
-                VAttr {
-                    name: "class".to_string(),
-                    value: classes.join(" "),
-                },
-                VAttr {
-                    name: "data-language".to_string(),
-                    value: self.language.clone(),
-                },
+                ("class".to_string(), VAttr::Static(classes.join(" "))),
+                ("data-language".to_string(), VAttr::Static(self.language.clone())),
             ],
             children: vec![
                 VNode::Element {
                     tag: "textarea".to_string(),
                     attrs: vec![
-                        VAttr {
-                            name: "class".to_string(),
-                            value: "wj-code-editor-textarea".to_string(),
-                        },
-                        VAttr {
-                            name: "spellcheck".to_string(),
-                            value: "false".to_string(),
-                        },
-                        VAttr {
-                            name: "readonly".to_string(),
-                            value: if self.read_only { "true" } else { "false" }.to_string(),
-                        },
+                        ("class".to_string(), VAttr::Static("wj-code-editor-textarea".to_string())),
+                        ("spellcheck".to_string(), VAttr::Static("false".to_string())),
+                        ("readonly".to_string(), VAttr::Static(if self.read_only { "true" } else { "false" }.to_string())),
                     ],
                     children: vec![VNode::Text(self.content.get())],
                 }
