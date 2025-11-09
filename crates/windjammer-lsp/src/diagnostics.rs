@@ -1,4 +1,7 @@
-use tower_lsp::lsp_types::{Diagnostic, DiagnosticRelatedInformation, DiagnosticSeverity, Location, NumberOrString, Position, Range, Url};
+use tower_lsp::lsp_types::{
+    Diagnostic, DiagnosticRelatedInformation, DiagnosticSeverity, Location, NumberOrString,
+    Position, Range, Url,
+};
 use tower_lsp::Client;
 use windjammer::error_mapper::{DiagnosticLevel, WindjammerDiagnostic};
 
@@ -59,7 +62,7 @@ impl DiagnosticsEngine {
 
         // Build message with help and notes
         let mut message = wj_diag.message.clone();
-        
+
         if !wj_diag.help.is_empty() {
             message.push_str("\n\nHelp:");
             for help in &wj_diag.help {
@@ -82,7 +85,10 @@ impl DiagnosticsEngine {
         // Add "wj explain" hint for Windjammer codes
         if let Some(ref code) = wj_diag.code {
             if code.starts_with("WJ") {
-                message.push_str(&format!("\n\n💡 Run 'wj explain {}' for more details", code));
+                message.push_str(&format!(
+                    "\n\n💡 Run 'wj explain {}' for more details",
+                    code
+                ));
             }
         }
 
@@ -149,7 +155,10 @@ impl DiagnosticsEngine {
 
         // Ownership hints (though auto-clone should handle most cases)
         if msg.contains("moved") || msg.contains("ownership") {
-            return Some("The auto-clone system should handle this. If you see this, please report it!".to_string());
+            return Some(
+                "The auto-clone system should handle this. If you see this, please report it!"
+                    .to_string(),
+            );
         }
 
         None

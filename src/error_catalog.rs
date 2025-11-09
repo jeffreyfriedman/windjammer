@@ -2,7 +2,6 @@
 ///
 /// This module generates a searchable error catalog with examples,
 /// explanations, and solutions for all Windjammer errors.
-
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::fs;
@@ -221,7 +220,9 @@ x = 20  // Works! x is mutable"#.to_string(),
         html.push_str("<html lang=\"en\">\n");
         html.push_str("<head>\n");
         html.push_str("  <meta charset=\"UTF-8\">\n");
-        html.push_str("  <meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\">\n");
+        html.push_str(
+            "  <meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\">\n",
+        );
         html.push_str("  <title>Windjammer Error Catalog</title>\n");
         html.push_str("  <style>\n");
         html.push_str(Self::get_default_css());
@@ -241,7 +242,10 @@ x = 20  // Works! x is mutable"#.to_string(),
         html.push_str("    <ul>\n");
         for category in &self.categories {
             let anchor = category.replace(" ", "-").to_lowercase();
-            html.push_str(&format!("      <li><a href=\"#{}\">{}</a></li>\n", anchor, category));
+            html.push_str(&format!(
+                "      <li><a href=\"#{}\">{}</a></li>\n",
+                anchor, category
+            ));
         }
         html.push_str("    </ul>\n");
         html.push_str("  </nav>\n");
@@ -273,9 +277,18 @@ x = 20  // Works! x is mutable"#.to_string(),
     fn generate_error_html(&self, error: &ErrorEntry) -> String {
         let mut html = String::new();
 
-        html.push_str(&format!("      <article class=\"error\" id=\"{}\">\n", error.code));
-        html.push_str(&format!("        <h3>{} - {}</h3>\n", error.code, error.title));
-        html.push_str(&format!("        <p class=\"explanation\">{}</p>\n", error.explanation));
+        html.push_str(&format!(
+            "      <article class=\"error\" id=\"{}\">\n",
+            error.code
+        ));
+        html.push_str(&format!(
+            "        <h3>{} - {}</h3>\n",
+            error.code, error.title
+        ));
+        html.push_str(&format!(
+            "        <p class=\"explanation\">{}</p>\n",
+            error.explanation
+        ));
 
         // Causes
         if !error.causes.is_empty() {
@@ -306,14 +319,23 @@ x = 20  // Works! x is mutable"#.to_string(),
                 html.push_str("          <div class=\"code-comparison\">\n");
                 html.push_str("            <div class=\"bad-code\">\n");
                 html.push_str("              <h6>❌ Wrong:</h6>\n");
-                html.push_str(&format!("              <pre><code>{}</code></pre>\n", example.bad_code));
+                html.push_str(&format!(
+                    "              <pre><code>{}</code></pre>\n",
+                    example.bad_code
+                ));
                 html.push_str("            </div>\n");
                 html.push_str("            <div class=\"good-code\">\n");
                 html.push_str("              <h6>✅ Correct:</h6>\n");
-                html.push_str(&format!("              <pre><code>{}</code></pre>\n", example.good_code));
+                html.push_str(&format!(
+                    "              <pre><code>{}</code></pre>\n",
+                    example.good_code
+                ));
                 html.push_str("            </div>\n");
                 html.push_str("          </div>\n");
-                html.push_str(&format!("          <p class=\"example-explanation\">{}</p>\n", example.explanation));
+                html.push_str(&format!(
+                    "          <p class=\"example-explanation\">{}</p>\n",
+                    example.explanation
+                ));
                 html.push_str("        </div>\n");
             }
         }
@@ -447,4 +469,3 @@ mod tests {
         assert!(html.contains("Windjammer Error Catalog"));
     }
 }
-

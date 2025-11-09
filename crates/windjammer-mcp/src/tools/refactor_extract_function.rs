@@ -197,11 +197,18 @@ fn collect_variable_usage(
                 defined.insert(name.clone());
             }
         }
-        Statement::Assignment { target, value, location: _ } => {
+        Statement::Assignment {
+            target,
+            value,
+            location: _,
+        } => {
             collect_expr_variables(target, used);
             collect_expr_variables(value, used);
         }
-        Statement::Return { value: Some(expr), location: _ } => {
+        Statement::Return {
+            value: Some(expr),
+            location: _,
+        } => {
             collect_expr_variables(expr, used);
         }
         Statement::Expression { expr, location: _ } => {
@@ -238,7 +245,11 @@ fn collect_variable_usage(
                 collect_variable_usage(s, used, defined);
             }
         }
-        Statement::While { condition, body, location: _ } => {
+        Statement::While {
+            condition,
+            body,
+            location: _,
+        } => {
             collect_expr_variables(condition, used);
             for s in body {
                 collect_variable_usage(s, used, defined);
@@ -287,11 +298,18 @@ fn collect_expr_variables(expr: &Expression, used: &mut HashSet<String>) {
         Expression::FieldAccess { object, .. } => {
             collect_expr_variables(object, used);
         }
-        Expression::Index { object, index, location: _ } => {
+        Expression::Index {
+            object,
+            index,
+            location: _,
+        } => {
             collect_expr_variables(object, used);
             collect_expr_variables(index, used);
         }
-        Expression::Block { statements: stmts, location: _ } => {
+        Expression::Block {
+            statements: stmts,
+            location: _,
+        } => {
             let mut defined = HashSet::new();
             for stmt in stmts {
                 collect_variable_usage(stmt, used, &mut defined);
@@ -305,14 +323,22 @@ fn collect_expr_variables(expr: &Expression, used: &mut HashSet<String>) {
 fn infer_return_type(statements: &[Statement]) -> Option<Type> {
     // Look for explicit return statements
     for stmt in statements {
-        if let Statement::Return { value: Some(_expr), location: _ } = stmt {
+        if let Statement::Return {
+            value: Some(_expr),
+            location: _,
+        } = stmt
+        {
             // TODO: Infer type from expression
             return Some(Type::String); // Placeholder type
         }
     }
 
     // Check if last statement is an expression (implicit return)
-    if let Some(Statement::Expression { expr: _expr, location: _ }) = statements.last() {
+    if let Some(Statement::Expression {
+        expr: _expr,
+        location: _,
+    }) = statements.last()
+    {
         // TODO: Infer type from expression
         return Some(Type::String); // Placeholder type
     }

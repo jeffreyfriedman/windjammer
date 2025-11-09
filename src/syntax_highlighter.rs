@@ -102,4 +102,3 @@ mod tests {
         assert_eq!(highlighted.len(), 3);
     }
 }
-

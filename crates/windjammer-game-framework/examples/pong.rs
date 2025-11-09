@@ -1,10 +1,10 @@
 // PONG - Complete playable game with rendering
-use winit::event::{Event, WindowEvent, KeyEvent};
+use std::time::{Duration, Instant};
+use wgpu::util::DeviceExt;
+use winit::event::{Event, KeyEvent, WindowEvent};
 use winit::event_loop::{ControlFlow, EventLoop};
 use winit::keyboard::{KeyCode, PhysicalKey};
 use winit::window::WindowBuilder;
-use wgpu::util::DeviceExt;
-use std::time::{Duration, Instant};
 
 const WINDOW_WIDTH: u32 = 800;
 const WINDOW_HEIGHT: u32 = 600;
@@ -73,12 +73,30 @@ impl Paddle {
         let y2 = 1.0 - ((self.y + self.height) / WINDOW_HEIGHT as f32) * 2.0;
 
         vec![
-            Vertex { position: [x1, y1], color: [1.0, 1.0, 1.0, 1.0] },
-            Vertex { position: [x2, y1], color: [1.0, 1.0, 1.0, 1.0] },
-            Vertex { position: [x1, y2], color: [1.0, 1.0, 1.0, 1.0] },
-            Vertex { position: [x2, y1], color: [1.0, 1.0, 1.0, 1.0] },
-            Vertex { position: [x2, y2], color: [1.0, 1.0, 1.0, 1.0] },
-            Vertex { position: [x1, y2], color: [1.0, 1.0, 1.0, 1.0] },
+            Vertex {
+                position: [x1, y1],
+                color: [1.0, 1.0, 1.0, 1.0],
+            },
+            Vertex {
+                position: [x2, y1],
+                color: [1.0, 1.0, 1.0, 1.0],
+            },
+            Vertex {
+                position: [x1, y2],
+                color: [1.0, 1.0, 1.0, 1.0],
+            },
+            Vertex {
+                position: [x2, y1],
+                color: [1.0, 1.0, 1.0, 1.0],
+            },
+            Vertex {
+                position: [x2, y2],
+                color: [1.0, 1.0, 1.0, 1.0],
+            },
+            Vertex {
+                position: [x1, y2],
+                color: [1.0, 1.0, 1.0, 1.0],
+            },
         ]
     }
 }
@@ -110,17 +128,19 @@ impl Ball {
             self.dy = -self.dy;
         }
 
-        if self.x < left_paddle.x + left_paddle.width &&
-           self.x + self.size > left_paddle.x &&
-           self.y < left_paddle.y + left_paddle.height &&
-           self.y + self.size > left_paddle.y {
+        if self.x < left_paddle.x + left_paddle.width
+            && self.x + self.size > left_paddle.x
+            && self.y < left_paddle.y + left_paddle.height
+            && self.y + self.size > left_paddle.y
+        {
             self.dx = self.dx.abs();
         }
 
-        if self.x < right_paddle.x + right_paddle.width &&
-           self.x + self.size > right_paddle.x &&
-           self.y < right_paddle.y + right_paddle.height &&
-           self.y + self.size > right_paddle.y {
+        if self.x < right_paddle.x + right_paddle.width
+            && self.x + self.size > right_paddle.x
+            && self.y < right_paddle.y + right_paddle.height
+            && self.y + self.size > right_paddle.y
+        {
             self.dx = -self.dx.abs();
         }
 
@@ -148,12 +168,30 @@ impl Ball {
         let y2 = 1.0 - ((self.y + self.size) / WINDOW_HEIGHT as f32) * 2.0;
 
         vec![
-            Vertex { position: [x1, y1], color: [1.0, 1.0, 0.0, 1.0] },
-            Vertex { position: [x2, y1], color: [1.0, 1.0, 0.0, 1.0] },
-            Vertex { position: [x1, y2], color: [1.0, 1.0, 0.0, 1.0] },
-            Vertex { position: [x2, y1], color: [1.0, 1.0, 0.0, 1.0] },
-            Vertex { position: [x2, y2], color: [1.0, 1.0, 0.0, 1.0] },
-            Vertex { position: [x1, y2], color: [1.0, 1.0, 0.0, 1.0] },
+            Vertex {
+                position: [x1, y1],
+                color: [1.0, 1.0, 0.0, 1.0],
+            },
+            Vertex {
+                position: [x2, y1],
+                color: [1.0, 1.0, 0.0, 1.0],
+            },
+            Vertex {
+                position: [x1, y2],
+                color: [1.0, 1.0, 0.0, 1.0],
+            },
+            Vertex {
+                position: [x2, y1],
+                color: [1.0, 1.0, 0.0, 1.0],
+            },
+            Vertex {
+                position: [x2, y2],
+                color: [1.0, 1.0, 0.0, 1.0],
+            },
+            Vertex {
+                position: [x1, y2],
+                color: [1.0, 1.0, 0.0, 1.0],
+            },
         ]
     }
 }
@@ -265,7 +303,10 @@ fn main() {
     });
 
     let mut left_paddle = Paddle::new(30.0, WINDOW_HEIGHT as f32 / 2.0 - 50.0);
-    let mut right_paddle = Paddle::new(WINDOW_WIDTH as f32 - 50.0, WINDOW_HEIGHT as f32 / 2.0 - 50.0);
+    let mut right_paddle = Paddle::new(
+        WINDOW_WIDTH as f32 - 50.0,
+        WINDOW_HEIGHT as f32 / 2.0 - 50.0,
+    );
     let mut ball = Ball::new();
     let mut left_score = 0;
     let mut right_score = 0;
@@ -287,14 +328,16 @@ fn main() {
                     elwt.exit();
                 }
                 Event::WindowEvent {
-                    event: WindowEvent::KeyboardInput {
-                        event: KeyEvent {
-                            physical_key: PhysicalKey::Code(key_code),
-                            state,
+                    event:
+                        WindowEvent::KeyboardInput {
+                            event:
+                                KeyEvent {
+                                    physical_key: PhysicalKey::Code(key_code),
+                                    state,
+                                    ..
+                                },
                             ..
                         },
-                        ..
-                    },
                     ..
                 } => {
                     let pressed = state.is_pressed();
@@ -325,7 +368,7 @@ fn main() {
                     if now.duration_since(last_update) >= Duration::from_millis(16) {
                         left_paddle.update();
                         right_paddle.update();
-                        
+
                         if let Some(left_scored) = ball.update(&left_paddle, &right_paddle) {
                             if left_scored {
                                 left_score += 1;
@@ -335,7 +378,7 @@ fn main() {
                                 println!("Right scores! Score: {} - {}", left_score, right_score);
                             }
                         }
-                        
+
                         last_update = now;
                     }
 
@@ -345,9 +388,10 @@ fn main() {
                         .texture
                         .create_view(&wgpu::TextureViewDescriptor::default());
 
-                    let mut encoder = device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
-                        label: Some("Render Encoder"),
-                    });
+                    let mut encoder =
+                        device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
+                            label: Some("Render Encoder"),
+                        });
 
                     // Collect all vertices
                     let mut vertices = Vec::new();
@@ -355,32 +399,34 @@ fn main() {
                     vertices.extend(right_paddle.to_vertices());
                     vertices.extend(ball.to_vertices());
 
-                    let vertex_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-                        label: Some("Vertex Buffer"),
-                        contents: bytemuck::cast_slice(&vertices),
-                        usage: wgpu::BufferUsages::VERTEX,
-                    });
+                    let vertex_buffer =
+                        device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                            label: Some("Vertex Buffer"),
+                            contents: bytemuck::cast_slice(&vertices),
+                            usage: wgpu::BufferUsages::VERTEX,
+                        });
 
                     {
-                        let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
-                            label: Some("Render Pass"),
-                            color_attachments: &[Some(wgpu::RenderPassColorAttachment {
-                                view: &view,
-                                resolve_target: None,
-                                ops: wgpu::Operations {
-                                    load: wgpu::LoadOp::Clear(wgpu::Color {
-                                        r: 0.0,
-                                        g: 0.0,
-                                        b: 0.0,
-                                        a: 1.0,
-                                    }),
-                                    store: wgpu::StoreOp::Store,
-                                },
-                            })],
-                            depth_stencil_attachment: None,
-                            timestamp_writes: None,
-                            occlusion_query_set: None,
-                        });
+                        let mut render_pass =
+                            encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+                                label: Some("Render Pass"),
+                                color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+                                    view: &view,
+                                    resolve_target: None,
+                                    ops: wgpu::Operations {
+                                        load: wgpu::LoadOp::Clear(wgpu::Color {
+                                            r: 0.0,
+                                            g: 0.0,
+                                            b: 0.0,
+                                            a: 1.0,
+                                        }),
+                                        store: wgpu::StoreOp::Store,
+                                    },
+                                })],
+                                depth_stencil_attachment: None,
+                                timestamp_writes: None,
+                                occlusion_query_set: None,
+                            });
 
                         render_pass.set_pipeline(&render_pipeline);
                         render_pass.set_vertex_buffer(0, vertex_buffer.slice(..));

@@ -307,7 +307,10 @@ impl CodeGenerator {
         output.push_str("        .build(&event_loop)?;\n");
         output.push_str("\n");
         output.push_str("    // Initialize game state\n");
-        output.push_str(&format!("    let mut game = {}::default();\n", info.game_struct));
+        output.push_str(&format!(
+            "    let mut game = {}::default();\n",
+            info.game_struct
+        ));
         output.push_str("\n");
 
         // Call init function if present
@@ -319,7 +322,9 @@ impl CodeGenerator {
 
         output.push_str("    // Initialize renderer\n");
         output.push_str("    let window_ref: &'static winit::window::Window = unsafe { std::mem::transmute(&window) };\n");
-        output.push_str("    let mut renderer = pollster::block_on(renderer::Renderer::new(window_ref))?;\n");
+        output.push_str(
+            "    let mut renderer = pollster::block_on(renderer::Renderer::new(window_ref))?;\n",
+        );
         output.push_str("\n");
         output.push_str("    // Initialize input\n");
         output.push_str("    let mut input = input::Input::new();\n");
@@ -349,14 +354,20 @@ impl CodeGenerator {
         // Call update function if present
         if let Some(update_fn) = &info.update_fn {
             output.push_str("                    // Update game logic\n");
-            output.push_str(&format!("                    {}(&mut game, delta);\n", update_fn));
+            output.push_str(&format!(
+                "                    {}(&mut game, delta);\n",
+                update_fn
+            ));
             output.push_str("\n");
         }
 
         // Call render function if present
         if let Some(render_fn) = &info.render_fn {
             output.push_str("                    // Render\n");
-            output.push_str(&format!("                    {}(&mut game, &mut renderer);\n", render_fn));
+            output.push_str(&format!(
+                "                    {}(&mut game, &mut renderer);\n",
+                render_fn
+            ));
         }
 
         output.push_str("                    renderer.present();\n");
@@ -369,7 +380,10 @@ impl CodeGenerator {
         if let Some(input_fn) = &info.input_fn {
             output.push_str("                WindowEvent::KeyboardInput { event, .. } => {\n");
             output.push_str("                    input.update_from_winit(&event);\n");
-            output.push_str(&format!("                    {}(&mut game, &input);\n", input_fn));
+            output.push_str(&format!(
+                "                    {}(&mut game, &input);\n",
+                input_fn
+            ));
             output.push_str("                }\n");
         }
 
@@ -665,7 +679,8 @@ impl CodeGenerator {
 
         // Add game framework imports if this is a game
         if game_framework_info.is_some() {
-            implicit_imports.push_str("use windjammer_game_framework::renderer::{Renderer, Color};\n");
+            implicit_imports
+                .push_str("use windjammer_game_framework::renderer::{Renderer, Color};\n");
             implicit_imports.push_str("use windjammer_game_framework::input::{Input, Key};\n");
         }
 
@@ -1594,7 +1609,10 @@ impl CodeGenerator {
             }
 
             // Skip game framework decorators - they're handled by the game loop
-            if matches!(decorator.name.as_str(), "game" | "init" | "update" | "render" | "render3d" | "input" | "cleanup") {
+            if matches!(
+                decorator.name.as_str(),
+                "game" | "init" | "update" | "render" | "render3d" | "input" | "cleanup"
+            ) {
                 continue;
             }
 
@@ -3837,7 +3855,7 @@ impl CodeGenerator {
         output.push_str(&format!("impl Default for {} {{\n", s.name));
         output.push_str("    fn default() -> Self {\n");
         output.push_str(&format!("        {} {{\n", s.name));
-        
+
         for field in &s.fields {
             let default_value = match &field.field_type {
                 Type::Int | Type::Int32 | Type::Uint => "0",
@@ -3851,7 +3869,7 @@ impl CodeGenerator {
             };
             output.push_str(&format!("            {}: {},\n", field.name, default_value));
         }
-        
+
         output.push_str("        }\n");
         output.push_str("    }\n");
         output.push_str("}");

@@ -311,7 +311,10 @@ impl Analyzer {
 
         // Check if this is a game decorator function
         let is_game_decorator = func.decorators.iter().any(|d| {
-            matches!(d.name.as_str(), "init" | "update" | "render" | "render3d" | "input" | "cleanup")
+            matches!(
+                d.name.as_str(),
+                "init" | "update" | "render" | "render3d" | "input" | "cleanup"
+            )
         });
 
         // Analyze each parameter to infer ownership mode

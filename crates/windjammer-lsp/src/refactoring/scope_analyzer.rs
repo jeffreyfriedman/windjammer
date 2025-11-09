@@ -156,7 +156,11 @@ impl ScopeAnalyzer {
                 self.analyze_expression(expr);
             }
 
-            Statement::Assignment { target, value, location: _ } => {
+            Statement::Assignment {
+                target,
+                value,
+                location: _,
+            } => {
                 // Record write to target
                 if let Expression::Identifier { name, location: _ } = target {
                     self.writes.insert(
@@ -174,10 +178,16 @@ impl ScopeAnalyzer {
                 self.analyze_expression(value);
             }
 
-            Statement::Return { value: Some(expr), location: _ } => {
+            Statement::Return {
+                value: Some(expr),
+                location: _,
+            } => {
                 self.analyze_expression(expr);
             }
-            Statement::Return { value: None, location: _ } => {}
+            Statement::Return {
+                value: None,
+                location: _,
+            } => {}
 
             Statement::If {
                 condition,
@@ -192,7 +202,11 @@ impl ScopeAnalyzer {
                 }
             }
 
-            Statement::While { condition, body, location: _ } => {
+            Statement::While {
+                condition,
+                body,
+                location: _,
+            } => {
                 self.analyze_expression(condition);
                 self.analyze_statements(body);
             }
@@ -298,7 +312,10 @@ impl ScopeAnalyzer {
             Statement::Expression { expr, location: _ } => {
                 Self::collect_usages_in_expression(expr, usages);
             }
-            Statement::Return { value: Some(expr), location: _ } => {
+            Statement::Return {
+                value: Some(expr),
+                location: _,
+            } => {
                 Self::collect_usages_in_expression(expr, usages);
             }
             Statement::Assignment { value, .. } => {
@@ -414,7 +431,10 @@ mod tests {
             mutable: false,
             type_: None,
             value: Expression::Binary {
-                left: Box::new(Expression::Identifier { name: "x".to_string(), location: None }),
+                left: Box::new(Expression::Identifier {
+                    name: "x".to_string(),
+                    location: None,
+                }),
                 op: BinaryOp::Add,
                 right: Box::new(Expression::Literal(windjammer::parser::Literal::Int(5))),
             },
@@ -449,8 +469,17 @@ mod tests {
 
         // After: println(result);
         let after = vec![Statement::Expression(Expression::Call {
-            function: Box::new(Expression::Identifier { name: "println".to_string(), location: None }),
-            arguments: vec![(None, Expression::Identifier { name: "result".to_string(), location: None })],
+            function: Box::new(Expression::Identifier {
+                name: "println".to_string(),
+                location: None,
+            }),
+            arguments: vec![(
+                None,
+                Expression::Identifier {
+                    name: "result".to_string(),
+                    location: None,
+                },
+            )],
         })];
 
         let analysis = analyzer.analyze(&before, &selected, &after);
@@ -478,7 +507,10 @@ mod tests {
             mutable: false,
             type_: None,
             value: Expression::Binary {
-                left: Box::new(Expression::Identifier { name: "x".to_string(), location: None }),
+                left: Box::new(Expression::Identifier {
+                    name: "x".to_string(),
+                    location: None,
+                }),
                 op: BinaryOp::Mul,
                 right: Box::new(Expression::Literal(windjammer::parser::Literal::Int(2))),
             },
@@ -486,8 +518,17 @@ mod tests {
 
         // After: use(y);
         let after = vec![Statement::Expression(Expression::Call {
-            function: Box::new(Expression::Identifier { name: "use".to_string(), location: None }),
-            arguments: vec![(None, Expression::Identifier { name: "y".to_string(), location: None })],
+            function: Box::new(Expression::Identifier {
+                name: "use".to_string(),
+                location: None,
+            }),
+            arguments: vec![(
+                None,
+                Expression::Identifier {
+                    name: "y".to_string(),
+                    location: None,
+                },
+            )],
         })];
 
         let analysis = analyzer.analyze(&before, &selected, &after);

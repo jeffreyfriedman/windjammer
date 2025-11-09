@@ -51,7 +51,10 @@ impl SymbolTable {
 
         for (idx, item) in program.items.iter().enumerate() {
             match item {
-                Item::Function { decl: func, location: _ } => {
+                Item::Function {
+                    decl: func,
+                    location: _,
+                } => {
                     // TODO: Get actual line number from AST
                     // For now, use item index as a heuristic
                     let location = Location {
@@ -77,7 +80,10 @@ impl SymbolTable {
                         },
                     );
                 }
-                Item::Struct { decl: struct_decl, location: _ } => {
+                Item::Struct {
+                    decl: struct_decl,
+                    location: _,
+                } => {
                     let location = Location {
                         uri: uri.clone(),
                         range: Range {
@@ -101,7 +107,10 @@ impl SymbolTable {
                         },
                     );
                 }
-                Item::Enum { decl: enum_decl, location: _ } => {
+                Item::Enum {
+                    decl: enum_decl,
+                    location: _,
+                } => {
                     let location = Location {
                         uri: uri.clone(),
                         range: Range {
@@ -151,7 +160,10 @@ impl SymbolTable {
                         );
                     }
                 }
-                Item::Trait { decl: trait_decl, location: _ } => {
+                Item::Trait {
+                    decl: trait_decl,
+                    location: _,
+                } => {
                     let location = Location {
                         uri: uri.clone(),
                         range: Range {
@@ -175,7 +187,10 @@ impl SymbolTable {
                         },
                     );
                 }
-                Item::Impl { block: impl_block, location: _ } => {
+                Item::Impl {
+                    block: impl_block,
+                    location: _,
+                } => {
                     // For impl blocks, we could track methods
                     // TODO: Add method tracking
                     let _ = impl_block;

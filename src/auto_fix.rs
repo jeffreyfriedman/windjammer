@@ -26,10 +26,7 @@ pub enum FixType {
         variable_name: String,
     },
     /// Add missing import statement
-    AddImport {
-        file: PathBuf,
-        module_path: String,
-    },
+    AddImport { file: PathBuf, module_path: String },
     /// Fix typo in identifier (suggest correct spelling)
     FixTypo {
         file: PathBuf,
@@ -143,7 +140,12 @@ impl FixDetector {
     }
 
     /// Detect fixable errors from a Rust error message
-    pub fn detect_fixes(&self, error_code: &str, error_msg: &str, file_content: &str) -> Vec<FixType> {
+    pub fn detect_fixes(
+        &self,
+        error_code: &str,
+        error_msg: &str,
+        file_content: &str,
+    ) -> Vec<FixType> {
         let mut fixes = Vec::new();
 
         if let Some(detector) = self.detectors.get(error_code) {
@@ -367,4 +369,3 @@ mod tests {
         assert_eq!(fix.description(), "Add 'mut' to variable 'x'");
     }
 }
-
