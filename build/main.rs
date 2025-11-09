@@ -92,6 +92,164 @@ fn spawn_enemies(&mut self) {
         self.enemies.push(Enemy { pos: Vec3::new(-10.0, 1.0, -10.0), velocity: Vec3::new(0.0, 0.0, 0.0), health: 3, state: 1, color: Color::rgb(1.0, 0.1, 0.1) });
         self.enemies.push(Enemy { pos: Vec3::new(0.0, 1.0, 15.0), velocity: Vec3::new(0.0, 0.0, 0.0), health: 3, state: 1, color: Color::rgb(0.9, 0.0, 0.0) })
 }
+fn update_player_movement(&mut self, delta: f32, input: &Input) {
+        let yaw_rad = self.player_yaw * 3.14159 / 180.0;
+        let forward_x = yaw_rad.sin();
+        let forward_z = yaw_rad.cos();
+        let right_x = (yaw_rad + 1.5708).sin();
+        let right_z = (yaw_rad + 1.5708).cos();
+        let mut move_x = 0.0;
+        let mut move_z = 0.0;
+        if input.held(Key::W) {
+            move_x += forward_x;
+            move_z += forward_z;
+        }
+        if input.held(Key::S) {
+            move_x -= forward_x;
+            move_z -= forward_z;
+        }
+        if input.held(Key::A) {
+            move_x -= right_x;
+            move_z -= right_z;
+        }
+        if input.held(Key::D) {
+            move_x += right_x;
+            move_z += right_z;
+        }
+        let move_length = (move_x * move_x + move_z * move_z).sqrt();
+        if move_length > 0.0 {
+            move_x /= move_length;
+            move_z /= move_length;
+        }
+        let speed = {
+            if input.held(Key::Shift) {
+                self.sprint_speed
+            } else {
+                self.move_speed
+            }
+        };
+        self.player_velocity.x = move_x * speed;
+        self.player_velocity.z = move_z * speed;
+        if input.pressed(Key::Space) && self.player_on_ground {
+            self.player_velocity.y = self.jump_velocity;
+            self.player_on_ground = false;
+        }
+        if !self.player_on_ground {
+            self.player_velocity.y = self.player_velocity.y + self.gravity * delta;
+        }
+        let new_x = self.player_pos.x + self.player_velocity.x * delta;
+        let new_y = self.player_pos.y + self.player_velocity.y * delta;
+        let new_z = self.player_pos.z + self.player_velocity.z * delta;
+        let mut can_move_x = true;
+        let mut can_move_z = true;
+        for wall in &self.walls {
+            if check_collision(new_x.clone(), self.player_pos.z.clone(), &wall) {
+                can_move_x = false;
+            }
+            if check_collision(self.player_pos.x, new_z, &wall) {
+                can_move_z = false;
+            }
+        }
+        if can_move_x {
+            self.player_pos.x = new_x;
+        }
+        if can_move_z {
+            self.player_pos.z = new_z;
+        }
+        if new_y <= 2.0 {
+            self.player_pos.y = 2.0;
+            self.player_velocity.y = 0.0;
+            self.player_on_ground = true;
+        } else {
+            self.player_pos.y = new_y;
+        }
+}
+#[inline]
+fn update_enemies(&mut self, delta: f32) {
+        let mut i = 0;
+        while i < self.enemies.len() {
+            let enemy = self.enemies[i];
+            if enemy.state == 3 {
+                self.enemies.remove(i);
+                continue;
+            }
+            if enemy.state == 1 {
+                let dx = self.player_pos.x - enemy.pos.x;
+                let dz = self.player_pos.z - enemy.pos.z;
+                let dist = (dx * dx + dz * dz).sqrt();
+                if dist > 0.1 {
+                    let speed = 2.0;
+                    enemy.velocity.x = dx / dist * speed;
+                    enemy.velocity.z = dz / dist * speed;
+                    enemy.pos.x = enemy.pos.x + enemy.velocity.x * delta;
+                    enemy.pos.z = enemy.pos.z + enemy.velocity.z * delta;
+                }
+                if dist < 2.0 {
+                    enemy.state = 2;
+                }
+            }
+            if enemy.state == 2 {
+                let dx = self.player_pos.x - enemy.pos.x;
+                let dz = self.player_pos.z - enemy.pos.z;
+                let dist = (dx * dx + dz * dz).sqrt();
+                if dist > 3.0 {
+                    enemy.state = 1;
+                }
+            }
+            i += 1;
+        }
+}
+#[inline]
+fn update_bullets(&mut self, delta: f32) {
+        let mut i = 0;
+        while i < self.bullets.len() {
+            let bullet = self.bullets[i];
+            bullet.pos.x = bullet.pos.x + bullet.velocity.x * delta;
+            bullet.pos.y = bullet.pos.y + bullet.velocity.y * delta;
+            bullet.pos.z = bullet.pos.z + bullet.velocity.z * delta;
+            bullet.lifetime = bullet.lifetime - delta;
+            if bullet.lifetime <= 0.0 {
+                self.bullets.remove(i);
+                continue;
+            }
+            let mut hit_wall = false;
+            for wall in &self.walls {
+                if check_collision(bullet.pos.x, bullet.pos.z, &wall) {
+                    hit_wall = true;
+                    break;
+                }
+            }
+            if hit_wall {
+                self.bullets.remove(i);
+                continue;
+            }
+            let mut hit_enemy = false;
+            let mut j = 0;
+            while j < self.enemies.len() {
+                let enemy = self.enemies[j];
+                let dx = bullet.pos.x - enemy.pos.x;
+                let dy = bullet.pos.y - enemy.pos.y;
+                let dz = bullet.pos.z - enemy.pos.z;
+                let dist = (dx * dx + dy * dy + dz * dz).sqrt();
+                if dist < 1.0 {
+                    enemy.health = enemy.health - bullet.damage;
+                    if enemy.health <= 0 {
+                        enemy.state = 3;
+                        self.score = self.score + 100;
+                        println!(format!("{}{}", "Enemy killed! Score: ", self.score.to_string()))
+                    }
+                    hit_enemy = true;
+                    break;
+                }
+                j += 1;
+            }
+            if hit_enemy {
+                self.bullets.remove(i);
+                continue;
+            }
+            i += 1;
+        }
+}
 }
 
 fn init(game: &mut ShooterGame) {
@@ -157,85 +315,12 @@ fn update(game: &mut ShooterGame, delta: f32, input: &Input) {
     if game.paused {
         return;
     }
-    update_player_movement(&game, delta, &input);
-    update_enemies(&game, delta);
-    update_bullets(&game, delta);
+    game.update_player_movement(delta, input);
+    game.update_enemies(delta);
+    game.update_bullets(delta);
     if game.enemies.len() == 0 {
         println!(format!("{}{}", "YOU WIN! Score: ", game.score.to_string()));
         println!("Press ESC to exit")
-    }
-}
-
-fn update_player_movement(game: &ShooterGame, delta: f32, input: &Input) {
-    let yaw_rad = game.player_yaw * 3.14159 / 180.0;
-    let forward_x = yaw_rad.sin();
-    let forward_z = yaw_rad.cos();
-    let right_x = (yaw_rad + 1.5708).sin();
-    let right_z = (yaw_rad + 1.5708).cos();
-    let mut move_x = 0.0;
-    let mut move_z = 0.0;
-    if input.held(Key::W) {
-        move_x += forward_x;
-        move_z += forward_z;
-    }
-    if input.held(Key::S) {
-        move_x -= forward_x;
-        move_z -= forward_z;
-    }
-    if input.held(Key::A) {
-        move_x -= right_x;
-        move_z -= right_z;
-    }
-    if input.held(Key::D) {
-        move_x += right_x;
-        move_z += right_z;
-    }
-    let move_length = (move_x * move_x + move_z * move_z).sqrt();
-    if move_length > 0.0 {
-        move_x /= move_length;
-        move_z /= move_length;
-    }
-    let speed = {
-        if input.held(Key::Shift) {
-            game.sprint_speed
-        } else {
-            game.move_speed
-        }
-    };
-    game.player_velocity.x = move_x * speed;
-    game.player_velocity.z = move_z * speed;
-    if input.pressed(Key::Space) && game.player_on_ground {
-        game.player_velocity.y = game.jump_velocity;
-        game.player_on_ground = false;
-    }
-    if !game.player_on_ground {
-        game.player_velocity.y = game.player_velocity.y + game.gravity * delta;
-    }
-    let new_x = game.player_pos.x + game.player_velocity.x * delta;
-    let new_y = game.player_pos.y + game.player_velocity.y * delta;
-    let new_z = game.player_pos.z + game.player_velocity.z * delta;
-    let mut can_move_x = true;
-    let mut can_move_z = true;
-    for wall in &game.walls {
-        if check_collision(new_x.clone(), game.player_pos.z.clone(), &wall) {
-            can_move_x = false;
-        }
-        if check_collision(game.player_pos.x, new_z, &wall) {
-            can_move_z = false;
-        }
-    }
-    if can_move_x {
-        game.player_pos.x = new_x;
-    }
-    if can_move_z {
-        game.player_pos.z = new_z;
-    }
-    if new_y <= 2.0 {
-        game.player_pos.y = 2.0;
-        game.player_velocity.y = 0.0;
-        game.player_on_ground = true;
-    } else {
-        game.player_pos.y = new_y;
     }
 }
 
@@ -247,94 +332,6 @@ fn check_collision(x: f32, z: f32, wall: &Wall) -> bool {
     let dx = (x - wall.pos.x).abs();
     let dz = (z - wall.pos.z).abs();
     return dx < half_width + player_radius && dz < half_depth + player_radius;
-}
-
-#[inline]
-fn update_enemies(game: &ShooterGame, delta: f32) {
-    let mut i = 0;
-    while i < game.enemies.len() {
-        let enemy = game.enemies[i];
-        if enemy.state == 3 {
-            game.enemies.remove(i);
-            continue;
-        }
-        if enemy.state == 1 {
-            let dx = game.player_pos.x - enemy.pos.x;
-            let dz = game.player_pos.z - enemy.pos.z;
-            let dist = (dx * dx + dz * dz).sqrt();
-            if dist > 0.1 {
-                let speed = 2.0;
-                enemy.velocity.x = dx / dist * speed;
-                enemy.velocity.z = dz / dist * speed;
-                enemy.pos.x = enemy.pos.x + enemy.velocity.x * delta;
-                enemy.pos.z = enemy.pos.z + enemy.velocity.z * delta;
-            }
-            if dist < 2.0 {
-                enemy.state = 2;
-            }
-        }
-        if enemy.state == 2 {
-            let dx = game.player_pos.x - enemy.pos.x;
-            let dz = game.player_pos.z - enemy.pos.z;
-            let dist = (dx * dx + dz * dz).sqrt();
-            if dist > 3.0 {
-                enemy.state = 1;
-            }
-        }
-        i += 1;
-    }
-}
-
-#[inline]
-fn update_bullets(game: &ShooterGame, delta: f32) {
-    let mut i = 0;
-    while i < game.bullets.len() {
-        let bullet = game.bullets[i];
-        bullet.pos.x = bullet.pos.x + bullet.velocity.x * delta;
-        bullet.pos.y = bullet.pos.y + bullet.velocity.y * delta;
-        bullet.pos.z = bullet.pos.z + bullet.velocity.z * delta;
-        bullet.lifetime = bullet.lifetime - delta;
-        if bullet.lifetime <= 0.0 {
-            game.bullets.remove(i);
-            continue;
-        }
-        let mut hit_wall = false;
-        for wall in &game.walls {
-            if check_collision(bullet.pos.x, bullet.pos.z, &wall) {
-                hit_wall = true;
-                break;
-            }
-        }
-        if hit_wall {
-            game.bullets.remove(i);
-            continue;
-        }
-        let mut hit_enemy = false;
-        let mut j = 0;
-        while j < game.enemies.len() {
-            let enemy = game.enemies[j];
-            let dx = bullet.pos.x - enemy.pos.x;
-            let dy = bullet.pos.y - enemy.pos.y;
-            let dz = bullet.pos.z - enemy.pos.z;
-            let dist = (dx * dx + dy * dy + dz * dz).sqrt();
-            if dist < 1.0 {
-                enemy.health = enemy.health - bullet.damage;
-                if enemy.health <= 0 {
-                    enemy.state = 3;
-                    game.score = game.score + 100;
-                    println!(format!("{}{}", "Enemy killed! Score: ", game.score.to_string()))
-                }
-                hit_enemy = true;
-                break;
-            }
-            j += 1;
-        }
-        if hit_enemy {
-            game.bullets.remove(i);
-            continue;
-        }
-        i += 1;
-    }
 }
 
 fn render(game: &mut ShooterGame, renderer: &mut Renderer3D, camera: &mut Camera3D) {
