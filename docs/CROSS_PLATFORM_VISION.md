@@ -175,7 +175,7 @@ This puts us **on par with Unity Studio** for web/desktop, with mobile as a futu
 - ✅ Great for artists
 - ✅ Cloud sync (future)
 
-**Note:** Mobile editing is a supplementary feature, not a primary focus. Similar capabilities exist in [Xogot (Godot for iPad)](https://apps.apple.com/us/app/xogot-godot-for-ipad-iphone/id6469385251).
+**Note:** Mobile editing is a supplementary feature for future consideration. Our primary focus is web and desktop editors.
 
 ---
 
@@ -244,16 +244,17 @@ This puts us **on par with Unity Studio** for web/desktop, with mobile as a futu
 
 ### Editor Availability
 
-| Engine | Web Editor | Desktop Editor | Mobile Editor | Bundle Size |
-|--------|------------|----------------|---------------|-------------|
-| **Windjammer** | ✅ | ✅ | ⏳ (future) | 2-10MB |
-| Unity Studio | ✅ | ❌ | ❌ | Browser |
-| Unity Editor | ❌ | ✅ | ❌ | 2GB+ |
-| Unreal | ❌ | ✅ | ❌ | 15GB+ |
-| Godot | ❌ | ✅ | ✅ (via Xogot) | 50MB / 255MB |
-| Bevy | ❌ | ❌ | ❌ | N/A |
+| Engine | Web Editor | Desktop Editor | Bundle Size |
+|--------|------------|----------------|-------------|
+| **Windjammer** | ✅ | ✅ | 2-10MB |
+| Unity Studio | ✅ | ❌ | Browser |
+| Unity Editor | ❌ | ✅ | 2GB+ |
+| Unreal | ❌ | ✅ | 15GB+ |
+| Godot | ❌ | ✅ | 50MB |
+| Bevy | ❌ | ❌ | N/A |
+| Babylon.js | ✅ | ❌ | Browser |
 
-**Verdict**: Windjammer focuses on **web + desktop** with excellent cross-platform support!
+**Verdict**: Windjammer combines **web + desktop** with small bundle sizes and native performance!
 
 ### Feature Comparison
 
