@@ -10,17 +10,17 @@ struct ShooterGame {
     // Player state
     player_pos: Vec3,
     player_velocity: Vec3,
-    player_yaw: float,
-    player_pitch: float,
+    player_yaw: f32,
+    player_pitch: f32,
     player_health: int,
     player_on_ground: bool,
     
     // Movement
-    move_speed: float,
-    sprint_speed: float,
-    jump_velocity: float,
-    gravity: float,
-    mouse_sensitivity: float,
+    move_speed: f32,
+    sprint_speed: f32,
+    jump_velocity: f32,
+    gravity: f32,
+    mouse_sensitivity: f32,
     
     // Combat
     weapon: int,  // 0=pistol, 1=shotgun, 2=rocket
@@ -35,7 +35,7 @@ struct ShooterGame {
     
     // Level
     walls: Vec<Wall>,
-    floor_y: float,
+    floor_y: f32,
     
     // Game state
     paused: bool,
@@ -53,7 +53,7 @@ struct Bullet {
     pos: Vec3,
     velocity: Vec3,
     damage: int,
-    lifetime: float,
+    lifetime: f32,
 }
 
 struct Wall {
@@ -93,10 +93,10 @@ fn init(game: ShooterGame) {
     game.paused = false
     
     // Create level geometry
-    create_level(game)
+    game.create_level()
     
     // Spawn enemies
-    spawn_enemies(game)
+    game.spawn_enemies()
     
     println("=== GREYBOX SHOOTER ===")
     println("WASD - Move")
@@ -110,91 +110,93 @@ fn init(game: ShooterGame) {
     println("Kill all enemies to win!")
 }
 
-fn create_level(game: ShooterGame) {
-    // Create a simple maze-like level with walls
-    
-    // Outer walls
-    game.walls.push(Wall {
-        pos: Vec3::new(0.0, 2.0, -20.0),
-        size: Vec3::new(40.0, 4.0, 1.0),
-        color: Color::rgb(0.5, 0.5, 0.5),
-    })
-    game.walls.push(Wall {
-        pos: Vec3::new(0.0, 2.0, 20.0),
-        size: Vec3::new(40.0, 4.0, 1.0),
-        color: Color::rgb(0.5, 0.5, 0.5),
-    })
-    game.walls.push(Wall {
-        pos: Vec3::new(-20.0, 2.0, 0.0),
-        size: Vec3::new(1.0, 4.0, 40.0),
-        color: Color::rgb(0.5, 0.5, 0.5),
-    })
-    game.walls.push(Wall {
-        pos: Vec3::new(20.0, 2.0, 0.0),
-        size: Vec3::new(1.0, 4.0, 40.0),
-        color: Color::rgb(0.5, 0.5, 0.5),
-    })
-    
-    // Inner walls (maze structure)
-    game.walls.push(Wall {
-        pos: Vec3::new(-10.0, 2.0, 0.0),
-        size: Vec3::new(1.0, 4.0, 15.0),
-        color: Color::rgb(0.4, 0.4, 0.4),
-    })
-    game.walls.push(Wall {
-        pos: Vec3::new(10.0, 2.0, 5.0),
-        size: Vec3::new(1.0, 4.0, 20.0),
-        color: Color::rgb(0.4, 0.4, 0.4),
-    })
-    game.walls.push(Wall {
-        pos: Vec3::new(0.0, 2.0, -10.0),
-        size: Vec3::new(15.0, 4.0, 1.0),
-        color: Color::rgb(0.4, 0.4, 0.4),
-    })
-    game.walls.push(Wall {
-        pos: Vec3::new(5.0, 2.0, 10.0),
-        size: Vec3::new(20.0, 4.0, 1.0),
-        color: Color::rgb(0.4, 0.4, 0.4),
-    })
-}
+impl ShooterGame {
+    fn create_level(self) {
+        // Create a simple maze-like level with walls
+        
+        // Outer walls
+        self.walls.push(Wall {
+            pos: Vec3::new(0.0, 2.0, -20.0),
+            size: Vec3::new(40.0, 4.0, 1.0),
+            color: Color::rgb(0.5, 0.5, 0.5),
+        })
+        self.walls.push(Wall {
+            pos: Vec3::new(0.0, 2.0, 20.0),
+            size: Vec3::new(40.0, 4.0, 1.0),
+            color: Color::rgb(0.5, 0.5, 0.5),
+        })
+        self.walls.push(Wall {
+            pos: Vec3::new(-20.0, 2.0, 0.0),
+            size: Vec3::new(1.0, 4.0, 40.0),
+            color: Color::rgb(0.5, 0.5, 0.5),
+        })
+        self.walls.push(Wall {
+            pos: Vec3::new(20.0, 2.0, 0.0),
+            size: Vec3::new(1.0, 4.0, 40.0),
+            color: Color::rgb(0.5, 0.5, 0.5),
+        })
+        
+        // Inner walls (maze structure)
+        self.walls.push(Wall {
+            pos: Vec3::new(-10.0, 2.0, 0.0),
+            size: Vec3::new(1.0, 4.0, 15.0),
+            color: Color::rgb(0.4, 0.4, 0.4),
+        })
+        self.walls.push(Wall {
+            pos: Vec3::new(10.0, 2.0, 5.0),
+            size: Vec3::new(1.0, 4.0, 20.0),
+            color: Color::rgb(0.4, 0.4, 0.4),
+        })
+        self.walls.push(Wall {
+            pos: Vec3::new(0.0, 2.0, -10.0),
+            size: Vec3::new(15.0, 4.0, 1.0),
+            color: Color::rgb(0.4, 0.4, 0.4),
+        })
+        self.walls.push(Wall {
+            pos: Vec3::new(5.0, 2.0, 10.0),
+            size: Vec3::new(20.0, 4.0, 1.0),
+            color: Color::rgb(0.4, 0.4, 0.4),
+        })
+    }
 
-fn spawn_enemies(game: ShooterGame) {
-    // Spawn 5 enemies at different positions
-    game.enemies.push(Enemy {
-        pos: Vec3::new(10.0, 1.0, 10.0),
-        velocity: Vec3::new(0.0, 0.0, 0.0),
-        health: 3,
-        state: 1,  // chase
-        color: Color::rgb(1.0, 0.0, 0.0),
-    })
-    game.enemies.push(Enemy {
-        pos: Vec3::new(-10.0, 1.0, 10.0),
-        velocity: Vec3::new(0.0, 0.0, 0.0),
-        health: 3,
-        state: 1,
-        color: Color::rgb(1.0, 0.2, 0.0),
-    })
-    game.enemies.push(Enemy {
-        pos: Vec3::new(10.0, 1.0, -10.0),
-        velocity: Vec3::new(0.0, 0.0, 0.0),
-        health: 3,
-        state: 1,
-        color: Color::rgb(0.8, 0.0, 0.0),
-    })
-    game.enemies.push(Enemy {
-        pos: Vec3::new(-10.0, 1.0, -10.0),
-        velocity: Vec3::new(0.0, 0.0, 0.0),
-        health: 3,
-        state: 1,
-        color: Color::rgb(1.0, 0.1, 0.1),
-    })
-    game.enemies.push(Enemy {
-        pos: Vec3::new(0.0, 1.0, 15.0),
-        velocity: Vec3::new(0.0, 0.0, 0.0),
-        health: 3,
-        state: 1,
-        color: Color::rgb(0.9, 0.0, 0.0),
-    })
+    fn spawn_enemies(self) {
+        // Spawn 5 enemies at different positions
+        self.enemies.push(Enemy {
+            pos: Vec3::new(10.0, 1.0, 10.0),
+            velocity: Vec3::new(0.0, 0.0, 0.0),
+            health: 3,
+            state: 1,  // chase
+            color: Color::rgb(1.0, 0.0, 0.0),
+        })
+        self.enemies.push(Enemy {
+            pos: Vec3::new(-10.0, 1.0, 10.0),
+            velocity: Vec3::new(0.0, 0.0, 0.0),
+            health: 3,
+            state: 1,
+            color: Color::rgb(1.0, 0.2, 0.0),
+        })
+        self.enemies.push(Enemy {
+            pos: Vec3::new(10.0, 1.0, -10.0),
+            velocity: Vec3::new(0.0, 0.0, 0.0),
+            health: 3,
+            state: 1,
+            color: Color::rgb(0.8, 0.0, 0.0),
+        })
+        self.enemies.push(Enemy {
+            pos: Vec3::new(-10.0, 1.0, -10.0),
+            velocity: Vec3::new(0.0, 0.0, 0.0),
+            health: 3,
+            state: 1,
+            color: Color::rgb(1.0, 0.1, 0.1),
+        })
+        self.enemies.push(Enemy {
+            pos: Vec3::new(0.0, 1.0, 15.0),
+            velocity: Vec3::new(0.0, 0.0, 0.0),
+            health: 3,
+            state: 1,
+            color: Color::rgb(0.9, 0.0, 0.0),
+        })
+    }
 }
 
 // ============================================================================
@@ -219,15 +221,15 @@ fn handle_input(game: ShooterGame, input: Input) {
     }
     
     // Weapon switching
-    if input.pressed(Key::Key1) {
+    if input.pressed(Key::Num1) {
         game.weapon = 0
         println("Switched to Pistol")
     }
-    if input.pressed(Key::Key2) {
+    if input.pressed(Key::Num2) {
         game.weapon = 1
         println("Switched to Shotgun")
     }
-    if input.pressed(Key::Key3) {
+    if input.pressed(Key::Num3) {
         game.weapon = 2
         println("Switched to Rocket Launcher")
     }
@@ -238,7 +240,7 @@ fn handle_input(game: ShooterGame, input: Input) {
 // ============================================================================
 
 @update
-fn update(game: ShooterGame, delta: float, input: Input) {
+fn update(game: ShooterGame, delta: f32, input: Input) {
     if game.paused {
         return
     }
@@ -259,7 +261,7 @@ fn update(game: ShooterGame, delta: float, input: Input) {
     }
 }
 
-fn update_player_movement(game: ShooterGame, delta: float, input: Input) {
+fn update_player_movement(game: ShooterGame, delta: f32, input: Input) {
     // Calculate forward and right vectors from yaw
     let yaw_rad = game.player_yaw * 3.14159 / 180.0
     let forward_x = yaw_rad.sin()
@@ -351,7 +353,7 @@ fn update_player_movement(game: ShooterGame, delta: float, input: Input) {
     }
 }
 
-fn check_collision(x: float, z: float, wall: Wall) -> bool {
+fn check_collision(x: f32, z: f32, wall: Wall) -> bool {
     let half_width = wall.size.x / 2.0
     let half_depth = wall.size.z / 2.0
     let player_radius = 0.5
@@ -362,7 +364,7 @@ fn check_collision(x: float, z: float, wall: Wall) -> bool {
     return dx < half_width + player_radius && dz < half_depth + player_radius
 }
 
-fn update_enemies(game: ShooterGame, delta: float) {
+fn update_enemies(game: ShooterGame, delta: f32) {
     let mut i = 0
     while i < game.enemies.len() {
         let enemy = game.enemies[i]
@@ -411,7 +413,7 @@ fn update_enemies(game: ShooterGame, delta: float) {
     }
 }
 
-fn update_bullets(game: ShooterGame, delta: float) {
+fn update_bullets(game: ShooterGame, delta: f32) {
     let mut i = 0
     while i < game.bullets.len() {
         let bullet = game.bullets[i]
