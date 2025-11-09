@@ -2,12 +2,12 @@
 
 ## 🎯 Vision Statement
 
-**"The ONLY game engine you can edit on your phone!"**
+**"World-class errors. Zero crate leakage. True cross-platform."**
 
-Windjammer will be the world's first truly cross-platform game engine with:
+Windjammer will be a modern game engine with:
 - 🌐 Web editor (browser-based, no install)
 - 💻 Desktop editor (native, 2-10MB)
-- 📱 Mobile editor (iOS/Android, edit anywhere!)
+- 📱 Mobile editor (optional, future enhancement)
 
 ---
 
@@ -133,88 +133,80 @@ Windjammer will be the world's first truly cross-platform game engine with:
 
 ---
 
-### **Q2 2025: Mobile Editor + Polish** (Apr-Jun)
+### **Q2 2025: Polish + Community** (Apr-Jun)
 
-#### **April: Mobile Editor Foundation**
-**Goal:** Basic mobile editor for iOS/Android
+#### **April: Editor Polish**
+**Goal:** Production-ready web and desktop editors
 
-**Week 1-2: iOS Development**
-- [ ] UIKit integration
-- [ ] Touch gesture support
-- [ ] Mobile-optimized UI
-- [ ] File management (sandboxed)
-- [ ] Cloud sync foundation
+**Week 1-2: Performance Optimization**
+- [ ] Rendering optimization
+- [ ] Memory management
+- [ ] Load time improvements
+- [ ] Responsiveness tuning
 
-**Week 3-4: Android Development**
-- [ ] Android Views integration
-- [ ] Touch gesture support
-- [ ] Mobile-optimized UI
-- [ ] File management
-- [ ] Cloud sync foundation
+**Week 3-4: User Experience**
+- [ ] Keyboard shortcuts
+- [ ] Undo/redo improvements
+- [ ] Better error messages
+- [ ] Onboarding flow
 
 **Features:**
-- Touch-optimized interface
-- Scene viewport (mobile)
-- Entity hierarchy (mobile)
-- Component inspector (mobile)
-- Asset browser (mobile)
-
-**Deliverable:** Mobile editor alpha (iOS/Android)
-
----
-
-#### **May: Mobile Editor Polish**
-**Goal:** Production-ready mobile editor
-
-**Week 1-2: UX Refinement**
-- [ ] Touch gesture refinement
-- [ ] Mobile-specific workflows
-- [ ] Performance optimization
-- [ ] Battery optimization
-- [ ] Offline support
-
-**Week 3-4: Cloud Integration**
-- [ ] Cloud save/sync
-- [ ] Project sharing
-- [ ] Cross-device sync
-- [ ] Collaboration foundation
-
-**Features:**
-- Polished mobile UX
-- Cloud save/sync
-- Cross-device projects
+- Polished UI/UX
 - Better performance
-- App Store ready
+- Comprehensive shortcuts
+- Improved workflows
 
-**Deliverable:** Mobile editor beta (App Store/Play Store)
+**Deliverable:** Production-ready editors
 
 ---
 
-#### **June: Ecosystem Integration**
-**Goal:** Unified cross-platform experience
+#### **May: Documentation + Tutorials**
+**Goal:** Comprehensive learning resources
 
-**Week 1-2: Cross-Platform Sync**
-- [ ] Seamless project sync
-- [ ] Cloud storage integration
-- [ ] Conflict resolution
-- [ ] Version history
-- [ ] Backup/restore
+**Week 1-2: Documentation**
+- [ ] Complete API reference
+- [ ] Best practices guide
+- [ ] Performance guide
+- [ ] Troubleshooting guide
 
-**Week 3-4: Collaboration Features**
-- [ ] Real-time collaboration (foundation)
-- [ ] Project sharing
-- [ ] Team features
-- [ ] Comments/annotations
-- [ ] Activity feed
+**Week 3-4: Video Tutorials**
+- [ ] Getting started series
+- [ ] Feature showcases
+- [ ] Game tutorials
+- [ ] Advanced techniques
 
 **Features:**
-- Seamless sync (web/desktop/mobile)
-- Cloud storage
-- Collaboration foundation
-- Team features
-- Activity tracking
+- Complete documentation
+- Video tutorials
+- Example projects
+- Learning resources
 
-**Deliverable:** Unified cross-platform editor
+**Deliverable:** Comprehensive docs + tutorials
+
+---
+
+#### **June: Community Building**
+**Goal:** Build active community
+
+**Week 1-2: Community Platform**
+- [ ] Forums/discussions
+- [ ] Project showcase
+- [ ] User profiles
+- [ ] Social features
+
+**Week 3-4: Community Content**
+- [ ] Example games
+- [ ] Community tutorials
+- [ ] Asset sharing
+- [ ] Plugin system foundation
+
+**Features:**
+- Active community
+- Project showcase
+- Asset sharing
+- Plugin foundation
+
+**Deliverable:** Thriving community
 
 ---
 
@@ -471,8 +463,8 @@ Windjammer will be the world's first truly cross-platform game engine with:
 ### **Q1 2025: Launch**
 
 **Messaging:**
-- "The ONLY game engine you can edit on your phone!"
-- "Web, Desktop, Mobile - One Editor, Everywhere"
+- "World-class error messages that actually help"
+- "Web + Desktop editors from one codebase"
 - "2MB Editor vs 2GB Editor - You Choose"
 
 **Channels:**
@@ -493,8 +485,8 @@ Windjammer will be the world's first truly cross-platform game engine with:
 ### **Q2 2025: Growth**
 
 **Messaging:**
-- "Edit your game on the bus!"
-- "Unity Studio + Native Performance + Mobile"
+- "Zero crate leakage. Clean APIs."
+- "Unity Studio + Native Performance"
 - "AAA Rendering, Indie Simplicity"
 
 **Channels:**

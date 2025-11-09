@@ -2,12 +2,12 @@
 
 ## Executive Summary
 
-**Windjammer will be the FIRST game engine with a truly cross-platform editor** that runs on:
+**Windjammer will offer a truly cross-platform editor** that runs on:
 - 🌐 **Web** (browser-based, no install)
 - 💻 **Desktop** (native apps via Tauri)
-- 📱 **Mobile** (iOS/Android native apps)
+- 📱 **Mobile** (iOS/Android native apps - optional)
 
-This puts us **on par with Unity Studio** and **ahead of Unreal, Godot, and Bevy**!
+This puts us **on par with Unity Studio** for web/desktop, with mobile as a future enhancement.
 
 ---
 
@@ -33,15 +33,17 @@ This puts us **on par with Unity Studio** and **ahead of Unreal, Godot, and Bevy
 
 **What Windjammer Will Offer:**
 - ✅ Web-based editor (like Unity Studio)
-- ✅ **PLUS** native desktop editor (better performance)
-- ✅ **PLUS** mobile editor (edit on iPad/tablet!)
+- ✅ Native desktop editor (better performance than web-only)
+- ✅ Mobile editor (optional, for iPad/tablet workflows)
 - ✅ Zero runtime fees (100% free)
 - ✅ Rust safety + Windjammer simplicity
 - ✅ World-class error messages
 - ✅ Open source (MIT/Apache)
 
-**Unique Selling Point:**
-> **"The ONLY game engine where you can edit your game on your phone!"**
+**Primary Selling Points:**
+1. **"Web + Desktop + Mobile in one codebase"** - True cross-platform development
+2. **"World-class error messages"** - Best developer experience
+3. **"Zero crate leakage"** - Clean, simple API
 
 ---
 
@@ -156,12 +158,12 @@ This puts us **on par with Unity Studio** and **ahead of Unreal, Godot, and Bevy
 - 🚀 Native file dialogs
 - 🚀 System tray integration
 
-### Scenario 3: Mobile Editor (UNIQUE!)
+### Scenario 3: Mobile Editor (Optional)
 
-**Use Case**: Edit on the go, tablet-based development
+**Use Case**: Tablet-based development for specific workflows
 
 ```bash
-# Download from App Store / Play Store
+# Download from App Store / Play Store (future)
 # Install on iPad / Android tablet
 # Edit game with touch interface
 # Sync with desktop/web
@@ -169,13 +171,11 @@ This puts us **on par with Unity Studio** and **ahead of Unreal, Godot, and Bevy
 
 **Features:**
 - ✅ Touch-optimized UI
-- ✅ Edit anywhere
 - ✅ Perfect for level design
 - ✅ Great for artists
 - ✅ Cloud sync (future)
 
-**Unique Selling Point:**
-> **"Edit your game on the bus!"**
+**Note:** Mobile editing is a supplementary feature, not a primary focus. Similar capabilities exist in [Xogot (Godot for iPad)](https://apps.apple.com/us/app/xogot-godot-for-ipad-iphone/id6469385251).
 
 ---
 
@@ -246,14 +246,14 @@ This puts us **on par with Unity Studio** and **ahead of Unreal, Godot, and Bevy
 
 | Engine | Web Editor | Desktop Editor | Mobile Editor | Bundle Size |
 |--------|------------|----------------|---------------|-------------|
-| **Windjammer** | ✅ | ✅ | ✅ | 2-10MB |
+| **Windjammer** | ✅ | ✅ | ⏳ (future) | 2-10MB |
 | Unity Studio | ✅ | ❌ | ❌ | Browser |
 | Unity Editor | ❌ | ✅ | ❌ | 2GB+ |
 | Unreal | ❌ | ✅ | ❌ | 15GB+ |
-| Godot | ❌ | ✅ | ❌ | 50MB |
+| Godot | ❌ | ✅ | ✅ (via Xogot) | 50MB / 255MB |
 | Bevy | ❌ | ❌ | ❌ | N/A |
 
-**Verdict**: Windjammer is the **ONLY** engine with all three!
+**Verdict**: Windjammer focuses on **web + desktop** with excellent cross-platform support!
 
 ### Feature Comparison
 
