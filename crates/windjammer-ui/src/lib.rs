@@ -41,6 +41,7 @@ pub use windjammer_ui_macro::Props;
 
 pub mod component;
 pub mod component_runtime;
+pub mod components; // Component library
 pub mod events;
 pub mod platform;
 pub mod reactivity;
