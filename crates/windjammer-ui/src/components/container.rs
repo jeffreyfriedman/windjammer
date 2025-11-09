@@ -53,14 +53,8 @@ impl Container {
         VNode::Element {
             tag: "div".to_string(),
             attrs: vec![
-                VAttr {
-                    name: "class".to_string(),
-                    value: "wj-container".to_string(),
-                },
-                VAttr {
-                    name: "style".to_string(),
-                    value: style,
-                },
+                ("class".to_string(), VAttr::Static("wj-container".to_string())),
+                ("style".to_string(), VAttr::Static(style)),
             ],
             children: self.children.clone(),
         }
