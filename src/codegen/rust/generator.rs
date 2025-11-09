@@ -762,6 +762,13 @@ impl CodeGenerator {
             implicit_imports.push_str("use windjammer_game_framework::math::{Vec3, Mat4};\n");
         }
 
+        // Add UI framework imports if using std::ui
+        if ui_framework_info.uses_ui {
+            implicit_imports.push_str("use windjammer_ui::prelude::*;\n");
+            implicit_imports.push_str("use windjammer_ui::components::*;\n");
+            implicit_imports.push_str("use windjammer_ui::simple_vnode::{VNode, VAttr};\n");
+        }
+
         // Add trait imports for inferred bounds
         if !self.needs_trait_imports.is_empty() {
             let mut sorted_traits: Vec<_> = self.needs_trait_imports.iter().collect();
