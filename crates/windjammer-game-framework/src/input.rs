@@ -181,7 +181,11 @@ impl Input {
         self.released(key)
     }
 
-    /// Update input state from a winit keyboard event
+    /// Internal: Update input state from a winit keyboard event
+    /// 
+    /// This method is used by the generated game loop code and should not be called directly.
+    /// It's hidden from the public API to maintain zero-crate-leakage philosophy.
+    #[doc(hidden)]
     pub fn update_from_winit(&mut self, event: &winit::event::KeyEvent) {
         if let Some(key) = Self::map_keycode(event.physical_key) {
             if event.state.is_pressed() {
