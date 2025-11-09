@@ -216,7 +216,7 @@ fn update_player_movement(game: &ShooterGame, delta: f32, input: &Input) {
     let new_z = game.player_pos.z + game.player_velocity.z * delta;
     let mut can_move_x = true;
     let mut can_move_z = true;
-    for wall in game.walls {
+    for wall in &game.walls {
         if check_collision(new_x.clone(), game.player_pos.z.clone(), &wall) {
             can_move_x = false;
         }
@@ -299,7 +299,7 @@ fn update_bullets(game: &ShooterGame, delta: f32) {
             continue;
         }
         let mut hit_wall = false;
-        for wall in game.walls {
+        for wall in &game.walls {
             if check_collision(bullet.pos.x, bullet.pos.z, &wall) {
                 hit_wall = true;
                 break;
@@ -337,21 +337,21 @@ fn update_bullets(game: &ShooterGame, delta: f32) {
     }
 }
 
-fn render(game: &mut ShooterGame, renderer: &mut Renderer3D, camera: &Camera3D) {
+fn render(game: &mut ShooterGame, renderer: &mut Renderer3D, camera: &mut Camera3D) {
     camera.position = game.player_pos;
     camera.yaw = game.player_yaw;
     camera.pitch = game.player_pitch;
     renderer.clear(Color::rgb(0.1, 0.1, 0.15));
     renderer.draw_plane(Vec3::new(0.0, game.floor_y, 0.0), Vec3::new(100.0, 0.0, 100.0), Color::rgb(0.2, 0.2, 0.2));
-    for wall in game.walls {
+    for wall in &game.walls {
         renderer.draw_cube(wall.pos, wall.size, wall.color);
     }
-    for enemy in game.enemies {
+    for enemy in &game.enemies {
         if enemy.state != 3 {
             renderer.draw_cube(enemy.pos, Vec3::new(1.0, 2.0, 1.0), enemy.color)
         }
     }
-    for bullet in game.bullets {
+    for bullet in &game.bullets {
         renderer.draw_cube(bullet.pos, Vec3::new(0.2, 0.2, 0.2), Color::rgb(1.0, 1.0, 0.0));
     }
 }
