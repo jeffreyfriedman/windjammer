@@ -1,7 +1,8 @@
 //! Button component
 
-use crate::prelude::*;
 use crate::simple_vnode::{VAttr, VNode};
+use std::rc::Rc;
+use std::cell::RefCell;
 
 #[derive(Clone, Debug)]
 pub enum ButtonVariant {
@@ -24,7 +25,7 @@ pub struct Button {
     pub variant: ButtonVariant,
     pub size: ButtonSize,
     pub disabled: bool,
-    pub on_click: Option<Box<dyn Fn() + 'static>>,
+    pub on_click: Option<Rc<RefCell<dyn FnMut()>>>,
 }
 
 impl Button {
@@ -53,8 +54,8 @@ impl Button {
         self
     }
     
-    pub fn on_click<F: Fn() + 'static>(mut self, handler: F) -> Self {
-        self.on_click = Some(Box::new(handler));
+    pub fn on_click<F: FnMut() + 'static>(mut self, handler: F) -> Self {
+        self.on_click = Some(Rc::new(RefCell::new(handler)));
         self
     }
     
@@ -84,14 +85,8 @@ impl Button {
         VNode::Element {
             tag: "button".to_string(),
             attrs: vec![
-                VAttr {
-                    name: "class".to_string(),
-                    value: classes.join(" "),
-                },
-                VAttr {
-                    name: "disabled".to_string(),
-                    value: if self.disabled { "true" } else { "false" }.to_string(),
-                },
+                ("class".to_string(), VAttr::Static(classes.join(" "))),
+                ("disabled".to_string(), VAttr::Static(if self.disabled { "true" } else { "false" }.to_string())),
             ],
             children: vec![VNode::Text(self.label.clone())],
         }
