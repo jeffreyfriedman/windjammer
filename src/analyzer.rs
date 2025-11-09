@@ -316,6 +316,7 @@ impl Analyzer {
                 "init" | "update" | "render" | "render3d" | "input" | "cleanup"
             )
         });
+        let is_render3d = func.decorators.iter().any(|d| d.name == "render3d");
 
         // Analyze each parameter to infer ownership mode
         for (i, param) in func.parameters.iter().enumerate() {
@@ -326,6 +327,9 @@ impl Analyzer {
                 OwnershipHint::Inferred => {
                     // Special case: Game decorator functions always take &mut for first parameter (game state)
                     if is_game_decorator && i == 0 {
+                        OwnershipMode::MutBorrowed
+                    } else if is_render3d && i == 2 {
+                        // Special case: @render3d functions take &mut for camera parameter (3rd param)
                         OwnershipMode::MutBorrowed
                     } else {
                         // Perform inference based on usage in function body

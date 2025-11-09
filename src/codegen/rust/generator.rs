@@ -2165,6 +2165,14 @@ impl CodeGenerator {
                 output.push_str("for ");
                 output.push_str(&self.pattern_to_rust(pattern));
                 output.push_str(" in ");
+                
+                // Check if we need to add & for borrowed iteration
+                // This handles the common case of iterating over fields of borrowed structs
+                let needs_borrow = self.should_borrow_for_iteration(iterable);
+                if needs_borrow {
+                    output.push('&');
+                }
+                
                 output.push_str(&self.generate_expression(iterable));
                 output.push_str(" {\n");
 
@@ -3684,6 +3692,26 @@ impl CodeGenerator {
 
         // Default: don't inline large functions
         false
+    }
+
+    /// Check if we should add & for borrowed iteration in a for loop
+    /// Returns true if iterating over a field of a borrowed parameter
+    fn should_borrow_for_iteration(&self, iterable: &Expression) -> bool {
+        match iterable {
+            // Field access on a variable (e.g., game.walls)
+            Expression::FieldAccess { object, .. } => {
+                // Check if the object is a simple identifier
+                if let Expression::Identifier { name, .. } = &**object {
+                    // Check if this is a parameter in the current function
+                    // For game decorator functions, the first parameter is always borrowed
+                    // For impl methods, self is borrowed
+                    // For now, we'll use a simple heuristic: if it's a field access, assume borrowed
+                    return true;
+                }
+                false
+            }
+            _ => false,
+        }
     }
 
     /// Count statements in a function body (for inline heuristics)
