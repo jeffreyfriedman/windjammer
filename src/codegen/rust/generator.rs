@@ -1884,7 +1884,14 @@ impl CodeGenerator {
             } => {
                 let mut output = self.indent();
                 output.push_str("let ");
-                if *mutable {
+                
+                // Check if we need &mut for index access on borrowed fields
+                // e.g., let enemy = self.enemies[i] should be let enemy = &mut self.enemies[i]
+                let needs_mut_ref = self.should_mut_borrow_index_access(value);
+                
+                if needs_mut_ref {
+                    // Don't add mut keyword, but we'll add &mut to the value
+                } else if *mutable {
                     output.push_str("mut ");
                 }
 
@@ -1951,6 +1958,9 @@ impl CodeGenerator {
                         output.push_str(&value_str);
                     } else {
                         output.push_str(" = ");
+                        if needs_mut_ref {
+                            output.push_str("&mut ");
+                        }
                         output.push_str(&self.generate_expression(value));
                     }
                 } else {
@@ -1978,9 +1988,16 @@ impl CodeGenerator {
                                 value_str = format!("{}.to_string()", value_str);
                             }
                         }
+                        
+                        if needs_mut_ref {
+                            value_str = format!("&mut {}", value_str);
+                        }
                         output.push_str(&value_str);
                     } else {
                         output.push_str(" = ");
+                        if needs_mut_ref {
+                            output.push_str("&mut ");
+                        }
                         output.push_str(&self.generate_expression(value));
                     }
                 }
@@ -2171,13 +2188,28 @@ impl CodeGenerator {
             } => {
                 let mut output = self.indent();
                 output.push_str("for ");
-                output.push_str(&self.pattern_to_rust(pattern));
+                
+                // Check if the loop body modifies the loop variable
+                let pattern_str = self.pattern_to_rust(pattern);
+                let loop_var = self.extract_pattern_identifier(pattern);
+                let needs_mut = loop_var.as_ref().map_or(false, |var| {
+                    self.loop_body_modifies_variable(body, var)
+                });
+                
+                if needs_mut {
+                    output.push_str("mut ");
+                }
+                output.push_str(&pattern_str);
                 output.push_str(" in ");
                 
                 // Check if we need to add & for borrowed iteration
                 // This handles the common case of iterating over fields of borrowed structs
                 let needs_borrow = self.should_borrow_for_iteration(iterable);
-                if needs_borrow {
+                let needs_mut_borrow = needs_mut && needs_borrow;
+                
+                if needs_mut_borrow {
+                    output.push_str("&mut ");
+                } else if needs_borrow {
                     output.push('&');
                 }
                 
@@ -2594,6 +2626,7 @@ impl CodeGenerator {
                     };
                     // Check if the first argument is a format! macro (from string interpolation)
                     if let Some((_, first_arg)) = arguments.first() {
+                        // Check for MacroInvocation (explicit format! calls)
                         if let Expression::MacroInvocation {
                             name,
                             args: macro_args,
@@ -2616,6 +2649,40 @@ impl CodeGenerator {
                                 };
 
                                 return format!("{}!({}{})", target_macro, format_str, args_str);
+                            }
+                        }
+                        
+                        // Check for Binary expression with string concatenation (will become format!)
+                        if let Expression::Binary { left, op: BinaryOp::Add, right, .. } = first_arg {
+                            // Check if this is string concatenation
+                            let has_string_literal = matches!(
+                                left.as_ref(),
+                                Expression::Literal {
+                                    value: Literal::String(_),
+                                    ..
+                                }
+                            ) || matches!(
+                                right.as_ref(),
+                                Expression::Literal {
+                                    value: Literal::String(_),
+                                    ..
+                                }
+                            ) || Self::contains_string_literal(left)
+                                || Self::contains_string_literal(right);
+                            
+                            if has_string_literal {
+                                // Collect all parts of the concatenation
+                                let mut parts = Vec::new();
+                                Self::collect_concat_parts_static(left, &mut parts);
+                                Self::collect_concat_parts_static(right, &mut parts);
+                                
+                                // Generate format string and arguments
+                                let format_str = "{}".repeat(parts.len());
+                                let format_args: Vec<String> = parts.iter()
+                                    .map(|expr| self.generate_expression(expr))
+                                    .collect();
+                                
+                                return format!("{}!(\"{}\", {})", target_macro, format_str, format_args.join(", "));
                             }
                         }
 
@@ -3174,6 +3241,7 @@ impl CodeGenerator {
                 } else {
                     // Special case: if this is println!/eprintln!/print!/eprint! with a single non-literal arg,
                     // wrap it with "{}" to make it valid Rust: println!(var) -> println!("{}", var)
+                    // Also wrap format!() calls: println!(format!(...)) -> println!("{}", format!(...))
                     if (name == "println"
                         || name == "eprintln"
                         || name == "print"
@@ -3722,6 +3790,79 @@ impl CodeGenerator {
         }
     }
 
+    /// Extract the identifier from a pattern (for for-loop variable names)
+    fn extract_pattern_identifier(&self, pattern: &Pattern) -> Option<String> {
+        match pattern {
+            Pattern::Identifier(name) => Some(name.clone()),
+            _ => None,
+        }
+    }
+
+    /// Check if a loop body modifies a variable
+    fn loop_body_modifies_variable(&self, body: &[Statement], var_name: &str) -> bool {
+        for stmt in body {
+            if self.statement_modifies_variable(stmt, var_name) {
+                return true;
+            }
+        }
+        false
+    }
+
+    /// Check if a statement modifies a variable
+    fn statement_modifies_variable(&self, stmt: &Statement, var_name: &str) -> bool {
+        match stmt {
+            Statement::Assignment { target, .. } => {
+                // Check if we're assigning to var_name or var_name.field
+                self.expression_references_variable_or_field(target, var_name)
+            }
+            Statement::If { then_block, else_block, .. } => {
+                then_block.iter().any(|s| self.statement_modifies_variable(s, var_name))
+                    || else_block.as_ref().map_or(false, |block| {
+                        block.iter().any(|s| self.statement_modifies_variable(s, var_name))
+                    })
+            }
+            Statement::While { body, .. } | Statement::For { body, .. } => {
+                body.iter().any(|s| self.statement_modifies_variable(s, var_name))
+            }
+            _ => false,
+        }
+    }
+
+    /// Check if an expression references a variable or its fields
+    fn expression_references_variable_or_field(&self, expr: &Expression, var_name: &str) -> bool {
+        match expr {
+            Expression::Identifier { name, .. } => name == var_name,
+            Expression::FieldAccess { object, .. } => {
+                // Check if object is the variable
+                if let Expression::Identifier { name, .. } = &**object {
+                    name == var_name
+                } else {
+                    self.expression_references_variable_or_field(object, var_name)
+                }
+            }
+            _ => false,
+        }
+    }
+
+    /// Check if we should add &mut for index access on borrowed fields
+    /// e.g., self.enemies[i] should become &mut self.enemies[i] in let bindings
+    fn should_mut_borrow_index_access(&self, expr: &Expression) -> bool {
+        match expr {
+            Expression::Index { object, .. } => {
+                // Check if we're indexing into a field access (e.g., self.enemies[i])
+                if let Expression::FieldAccess { object: field_obj, .. } = &**object {
+                    // Check if the field is accessed on self or a borrowed parameter
+                    if let Expression::Identifier { name, .. } = &**field_obj {
+                        // For now, assume self and first parameter are borrowed
+                        return name == "self" || true; // Conservative: always borrow index access
+                    }
+                }
+                false
+            }
+            _ => false,
+        }
+    }
+
     /// Count statements in a function body (for inline heuristics)
     fn count_statements(&self, body: &[Statement]) -> usize {
         let mut count = 0;
@@ -3928,6 +4069,7 @@ impl CodeGenerator {
                 Type::String => "String::new()",
                 Type::Vec(_) => "Vec::new()",
                 Type::Custom(name) if name == "String" => "String::new()",
+                Type::Custom(name) if name == "Vec3" => "Vec3::new(0.0, 0.0, 0.0)",
                 Type::Custom(name) if name.starts_with("Vec") => "Vec::new()",
                 _ => "Default::default()",
             };
