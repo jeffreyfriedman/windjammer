@@ -12,6 +12,14 @@ pub struct Input {
     keys_pressed: HashSet<Key>,
     keys_just_pressed: HashSet<Key>,
     keys_just_released: HashSet<Key>,
+    
+    // Mouse state
+    mouse_buttons_pressed: HashSet<MouseButton>,
+    mouse_buttons_just_pressed: HashSet<MouseButton>,
+    mouse_buttons_just_released: HashSet<MouseButton>,
+    mouse_position: (f64, f64),
+    mouse_delta: (f64, f64),
+    last_mouse_position: Option<(f64, f64)>,
 }
 
 /// Key enum representing common keyboard keys
@@ -90,6 +98,14 @@ pub enum Key {
     F12,
 }
 
+/// Mouse button enum
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum MouseButton {
+    Left,
+    Right,
+    Middle,
+}
+
 impl Input {
     /// Create a new Input state manager
     pub fn new() -> Self {
@@ -97,6 +113,12 @@ impl Input {
             keys_pressed: HashSet::new(),
             keys_just_pressed: HashSet::new(),
             keys_just_released: HashSet::new(),
+            mouse_buttons_pressed: HashSet::new(),
+            mouse_buttons_just_pressed: HashSet::new(),
+            mouse_buttons_just_released: HashSet::new(),
+            mouse_position: (0.0, 0.0),
+            mouse_delta: (0.0, 0.0),
+            last_mouse_position: None,
         }
     }
 
