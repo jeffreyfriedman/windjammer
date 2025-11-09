@@ -630,7 +630,8 @@ fn update(game: ShooterGame, delta: f32, input: Input) {
     let dx = input.mouse_delta_x() as f32
     let dy = input.mouse_delta_y() as f32
     
-    game.player_yaw += dx * game.mouse_sensitivity
+    // Subtract dx so moving mouse left makes player look left
+    game.player_yaw -= dx * game.mouse_sensitivity
     game.player_pitch -= dy * game.mouse_sensitivity
     
     // Clamp pitch to prevent camera flipping
