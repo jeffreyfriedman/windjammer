@@ -43,6 +43,7 @@ pub mod ecs_windjammer; // Windjammer-friendly ECS API (recommended)
 pub mod game_app; // Complete game application with integrated systems
 pub mod game_loop; // Game loop with fixed timestep
 pub mod input; // Input handling
+pub mod lod; // Level of Detail (LOD) system
 pub mod math; // Math types (Vec2, Vec3, Mat4, etc.)
 pub mod physics; // Physics integration
 pub mod renderer; // High-level 2D renderer (for Windjammer games)
@@ -74,6 +75,7 @@ pub mod prelude {
 
     pub use crate::game_loop::{run_game_loop, GameLoopConfig, GameLoopRunner};
     pub use crate::input::{Input, Key, MouseButton}; // Ergonomic input API with held(), pressed(), released()
+    pub use crate::lod::{LODConfig, LODLevel, LODSelector, LODStats}; // Level of Detail system
     pub use crate::math::{Mat4, Quat, Vec2, Vec3, Vec4};
     pub use crate::physics::{Collider, PhysicsWorld, RigidBody};
     pub use crate::renderer::{Color, Renderer}; // High-level 2D renderer (no wgpu types exposed)
