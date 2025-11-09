@@ -321,7 +321,26 @@ impl Analyzer {
         // Analyze each parameter to infer ownership mode
         for (i, param) in func.parameters.iter().enumerate() {
             let mode = match param.ownership {
-                OwnershipHint::Owned => OwnershipMode::Owned,
+                OwnershipHint::Owned => {
+                    // Special case: 'self' parameter in impl methods should be borrowed if it modifies fields
+                    if param.name == "self" {
+                        // Check if this method modifies any fields
+                        let modifies_fields = self.function_modifies_self_fields(func);
+                        if modifies_fields {
+                            OwnershipMode::MutBorrowed
+                        } else {
+                            // Check if it accesses fields (read-only)
+                            let accesses_fields = self.function_accesses_self_fields(func);
+                            if accesses_fields {
+                                OwnershipMode::Borrowed
+                            } else {
+                                OwnershipMode::Owned
+                            }
+                        }
+                    } else {
+                        OwnershipMode::Owned
+                    }
+                }
                 OwnershipHint::Mut => OwnershipMode::MutBorrowed,
                 OwnershipHint::Ref => OwnershipMode::Borrowed,
                 OwnershipHint::Inferred => {
@@ -331,6 +350,19 @@ impl Analyzer {
                     } else if is_render3d && i == 2 {
                         // Special case: @render3d functions take &mut for camera parameter (3rd param)
                         OwnershipMode::MutBorrowed
+                    } else if param.name == "self" {
+                        // Infer ownership for self based on field access
+                        let modifies_fields = self.function_modifies_self_fields(func);
+                        if modifies_fields {
+                            OwnershipMode::MutBorrowed
+                        } else {
+                            let accesses_fields = self.function_accesses_self_fields(func);
+                            if accesses_fields {
+                                OwnershipMode::Borrowed
+                            } else {
+                                OwnershipMode::Owned
+                            }
+                        }
                     } else {
                         // Perform inference based on usage in function body
                         self.infer_parameter_ownership(&param.name, &func.body, &func.return_type)?
@@ -1698,6 +1730,123 @@ impl Analyzer {
             method,
             "push" | "push_str" | "clear" | "pop" | "remove" | "insert" | "append"
         )
+    }
+
+    /// Check if a function modifies self fields (for impl methods)
+    fn function_modifies_self_fields(&self, func: &FunctionDecl) -> bool {
+        for stmt in &func.body {
+            if self.statement_modifies_self_fields(stmt) {
+                return true;
+            }
+        }
+        false
+    }
+
+    /// Check if a statement modifies self fields
+    fn statement_modifies_self_fields(&self, stmt: &Statement) -> bool {
+        match stmt {
+            Statement::Assignment { target, .. } => {
+                // Check if target is self.field
+                self.expression_is_self_field_access(target)
+            }
+            Statement::Expression { expr, .. } => {
+                // Check for mutating method calls on self.field
+                self.expression_mutates_self_fields(expr)
+            }
+            Statement::If { then_block, else_block, .. } => {
+                then_block.iter().any(|s| self.statement_modifies_self_fields(s))
+                    || else_block.as_ref().map_or(false, |block| {
+                        block.iter().any(|s| self.statement_modifies_self_fields(s))
+                    })
+            }
+            Statement::While { body, .. } | Statement::For { body, .. } => {
+                body.iter().any(|s| self.statement_modifies_self_fields(s))
+            }
+            _ => false,
+        }
+    }
+
+    /// Check if expression is a self field access (self.field)
+    fn expression_is_self_field_access(&self, expr: &Expression) -> bool {
+        match expr {
+            Expression::FieldAccess { object, .. } => {
+                matches!(&**object, Expression::Identifier { name, .. } if name == "self")
+            }
+            _ => false,
+        }
+    }
+
+    /// Check if expression mutates self fields
+    fn expression_mutates_self_fields(&self, expr: &Expression) -> bool {
+        match expr {
+            Expression::MethodCall { object, method, .. } => {
+                if self.expression_is_self_field_access(object) && self.is_mutating_method(method) {
+                    return true;
+                }
+                false
+            }
+            _ => false,
+        }
+    }
+
+    /// Check if a function accesses self fields (for impl methods)
+    fn function_accesses_self_fields(&self, func: &FunctionDecl) -> bool {
+        for stmt in &func.body {
+            if self.statement_accesses_self_fields(stmt) {
+                return true;
+            }
+        }
+        false
+    }
+
+    /// Check if a statement accesses self fields
+    fn statement_accesses_self_fields(&self, stmt: &Statement) -> bool {
+        match stmt {
+            Statement::Expression { expr, .. } | Statement::Return { value: Some(expr), .. } => {
+                self.expression_accesses_self_fields(expr)
+            }
+            Statement::Let { value, .. } => self.expression_accesses_self_fields(value),
+            Statement::Assignment { target, value, .. } => {
+                self.expression_accesses_self_fields(target) || self.expression_accesses_self_fields(value)
+            }
+            Statement::If { condition, then_block, else_block, .. } => {
+                self.expression_accesses_self_fields(condition)
+                    || then_block.iter().any(|s| self.statement_accesses_self_fields(s))
+                    || else_block.as_ref().map_or(false, |block| {
+                        block.iter().any(|s| self.statement_accesses_self_fields(s))
+                    })
+            }
+            Statement::While { condition, body, .. } => {
+                self.expression_accesses_self_fields(condition)
+                    || body.iter().any(|s| self.statement_accesses_self_fields(s))
+            }
+            Statement::For { iterable, body, .. } => {
+                self.expression_accesses_self_fields(iterable)
+                    || body.iter().any(|s| self.statement_accesses_self_fields(s))
+            }
+            _ => false,
+        }
+    }
+
+    /// Check if expression accesses self fields
+    fn expression_accesses_self_fields(&self, expr: &Expression) -> bool {
+        match expr {
+            Expression::FieldAccess { object, .. } => {
+                matches!(&**object, Expression::Identifier { name, .. } if name == "self")
+            }
+            Expression::MethodCall { object, arguments, .. } => {
+                self.expression_accesses_self_fields(object)
+                    || arguments.iter().any(|(_, arg)| self.expression_accesses_self_fields(arg))
+            }
+            Expression::Binary { left, right, .. } => {
+                self.expression_accesses_self_fields(left) || self.expression_accesses_self_fields(right)
+            }
+            Expression::Unary { operand, .. } => self.expression_accesses_self_fields(operand),
+            Expression::Call { arguments, .. } => {
+                arguments.iter().any(|(_, arg)| self.expression_accesses_self_fields(arg))
+            }
+            _ => false,
+        }
     }
 
     /// Check if an expression references a variable
