@@ -56,26 +56,26 @@ pub mod window; // Window creation and management (native only)
 
 /// Prelude module with commonly used types and traits
 ///
-/// **Recommended**: Use the Windjammer-friendly API from `ecs_windjammer`
-/// which hides Rust-specific concepts like lifetimes and trait bounds.
+/// **Windjammer Philosophy**: This prelude exports only the Windjammer-friendly APIs
+/// that hide Rust-specific concepts like lifetimes, trait bounds, and external crate types.
+///
+/// For advanced users who need the low-level Rust APIs, import them explicitly:
+/// ```rust
+/// use windjammer_game_framework::ecs::{World as RustWorld, ...};
+/// ```
 pub mod prelude {
     pub use crate::assets::{AssetManager, Handle};
     pub use crate::audio::{AudioSystem, SpatialAudioSource};
     pub use crate::camera2d::Camera2D;
 
-    // Export Windjammer-friendly ECS API (recommended)
+    // Export ONLY Windjammer-friendly ECS API (zero crate leakage)
     pub use crate::ecs_windjammer::{Entity, System, World};
 
-    // Also export Rust ECS for advanced users
-    pub use crate::ecs::{
-        Component, Entity as RustEntity, System as RustSystem, World as RustWorld,
-    };
-
     pub use crate::game_loop::{run_game_loop, GameLoopConfig, GameLoopRunner};
-    pub use crate::input::{Input, Key}; // Simplified input for Windjammer games
+    pub use crate::input::{Input, Key}; // Ergonomic input API with held(), pressed(), released()
     pub use crate::math::{Mat4, Quat, Vec2, Vec3, Vec4};
     pub use crate::physics::{Collider, PhysicsWorld, RigidBody};
-    pub use crate::renderer::{Color, Renderer}; // High-level renderer for Windjammer games
+    pub use crate::renderer::{Color, Renderer}; // High-level 2D renderer (no wgpu types exposed)
     pub use crate::rendering::{Camera, Material, Mesh, RenderContext, Sprite, SpriteBatch};
     pub use crate::time::Time;
     pub use crate::transform::{Transform2D, Transform3D};

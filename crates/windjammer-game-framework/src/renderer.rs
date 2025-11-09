@@ -409,12 +409,20 @@ impl Renderer {
     }
 
     /// Resize the renderer (call when window is resized)
-    pub fn resize(&mut self, new_size: winit::dpi::PhysicalSize<u32>) {
-        if new_size.width > 0 && new_size.height > 0 {
-            self.config.width = new_size.width;
-            self.config.height = new_size.height;
+    /// 
+    /// This is a Windjammer-friendly API that doesn't expose winit types.
+    pub fn resize(&mut self, width: u32, height: u32) {
+        if width > 0 && height > 0 {
+            self.config.width = width;
+            self.config.height = height;
             self.surface.configure(&self.device, &self.config);
         }
+    }
+    
+    /// Internal: Resize from winit event (used by generated code)
+    #[doc(hidden)]
+    pub fn resize_from_winit(&mut self, new_size: winit::dpi::PhysicalSize<u32>) {
+        self.resize(new_size.width, new_size.height);
     }
 }
 
