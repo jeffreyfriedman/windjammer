@@ -1,5 +1,16 @@
 // Windjammer UI Standard Library
 // Pure Windjammer API for building UIs - no Rust, no JavaScript, no Tauri
+//
+// IMPORTANT: This file contains TYPE DEFINITIONS ONLY.
+// No implementation here - the Windjammer compiler generates Rust code
+// that uses the windjammer-ui crate (which is pre-compiled).
+//
+// This avoids circular dependencies:
+// - Compiler doesn't depend on windjammer-ui
+// - Stdlib doesn't depend on windjammer-ui  
+// - Generated code depends on windjammer-ui (correct!)
+//
+// The compiler knows how to translate these types to windjammer-ui calls.
 
 // Core UI types
 pub struct Button {
