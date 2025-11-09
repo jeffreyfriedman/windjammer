@@ -205,7 +205,13 @@ impl Renderer {
     }
 
     /// Draw a rectangle
-    pub fn draw_rect(&mut self, x: f32, y: f32, width: f32, height: f32, color: Color) {
+    pub fn draw_rect(&mut self, x: f64, y: f64, width: f64, height: f64, color: Color) {
+        // Convert f64 to f32 for GPU
+        let x = x as f32;
+        let y = y as f32;
+        let width = width as f32;
+        let height = height as f32;
+        
         // Convert screen coordinates to NDC (-1 to 1)
         let screen_width = self.config.width as f32;
         let screen_height = self.config.height as f32;
@@ -254,7 +260,12 @@ impl Renderer {
     }
 
     /// Draw a circle (approximated with triangles)
-    pub fn draw_circle(&mut self, x: f32, y: f32, radius: f32, color: Color) {
+    pub fn draw_circle(&mut self, x: f64, y: f64, radius: f64, color: Color) {
+        // Convert f64 to f32 for GPU
+        let x = x as f32;
+        let y = y as f32;
+        let radius = radius as f32;
+        
         let segments = 32;
         let screen_width = self.config.width as f32;
         let screen_height = self.config.height as f32;

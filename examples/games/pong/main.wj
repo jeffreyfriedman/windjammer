@@ -126,13 +126,13 @@ fn render(game: PongGame, renderer: Renderer) {
 @input
 fn handle_input(game: PongGame, input: Input) {
     // Left paddle controls (W/S)
-    if input.key_pressed(Key::W) {
+    if input.is_key_pressed(Key::W) {
         game.left_paddle_y -= 5.0
         if game.left_paddle_y < 0.0 {
             game.left_paddle_y = 0.0
         }
     }
-    if input.key_pressed(Key::S) {
+    if input.is_key_pressed(Key::S) {
         game.left_paddle_y += 5.0
         if game.left_paddle_y > 500.0 {
             game.left_paddle_y = 500.0
@@ -140,13 +140,13 @@ fn handle_input(game: PongGame, input: Input) {
     }
     
     // Right paddle controls (Up/Down)
-    if input.key_pressed(Key::Up) {
+    if input.is_key_pressed(Key::Up) {
         game.right_paddle_y -= 5.0
         if game.right_paddle_y < 0.0 {
             game.right_paddle_y = 0.0
         }
     }
-    if input.key_pressed(Key::Down) {
+    if input.is_key_pressed(Key::Down) {
         game.right_paddle_y += 5.0
         if game.right_paddle_y > 500.0 {
             game.right_paddle_y = 500.0

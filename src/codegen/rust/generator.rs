@@ -321,6 +321,9 @@ impl CodeGenerator {
         output.push_str("    let window_ref: &'static winit::window::Window = unsafe { std::mem::transmute(&window) };\n");
         output.push_str("    let mut renderer = pollster::block_on(renderer::Renderer::new(window_ref))?;\n");
         output.push_str("\n");
+        output.push_str("    // Initialize input\n");
+        output.push_str("    let mut input = input::Input::new();\n");
+        output.push_str("\n");
         output.push_str("    // Game loop\n");
         output.push_str("    let mut last_time = std::time::Instant::now();\n");
         output.push_str("\n");
@@ -357,12 +360,16 @@ impl CodeGenerator {
         }
 
         output.push_str("                    renderer.present();\n");
+        output.push_str("\n");
+        output.push_str("                    // Clear input frame state\n");
+        output.push_str("                    input.clear_frame_state();\n");
         output.push_str("                }\n");
 
         // Handle input if input function present
-        if info.input_fn.is_some() {
+        if let Some(input_fn) = &info.input_fn {
             output.push_str("                WindowEvent::KeyboardInput { event, .. } => {\n");
-            output.push_str("                    // TODO: Call input function\n");
+            output.push_str("                    input.update_from_winit(&event);\n");
+            output.push_str(&format!("                    {}(&mut game, &input);\n", input_fn));
             output.push_str("                }\n");
         }
 
