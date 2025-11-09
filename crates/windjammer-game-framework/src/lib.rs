@@ -72,7 +72,7 @@ pub mod prelude {
     };
 
     pub use crate::game_loop::{run_game_loop, GameLoopConfig, GameLoopRunner};
-    pub use crate::input::{Input, KeyCode, MouseButton};
+    pub use crate::input::{Input, Key}; // Simplified input for Windjammer games
     pub use crate::math::{Mat4, Quat, Vec2, Vec3, Vec4};
     pub use crate::physics::{Collider, PhysicsWorld, RigidBody};
     pub use crate::rendering::{Camera, Material, Mesh, RenderContext, Sprite, SpriteBatch};
