@@ -16,6 +16,10 @@ pub struct GameLoopConfig {
     pub vsync: bool,
     /// Maximum frame time (prevents spiral of death)
     pub max_frame_time: f32,
+    /// Headless mode - no window or rendering (for testing)
+    pub headless: bool,
+    /// Maximum frames to run in headless mode (0 = unlimited)
+    pub max_frames: u32,
 }
 
 impl Default for GameLoopConfig {
@@ -25,6 +29,8 @@ impl Default for GameLoopConfig {
             max_frame_skip: 5,
             vsync: true,
             max_frame_time: 0.25,
+            headless: false,
+            max_frames: 60,
         }
     }
 }
@@ -47,6 +53,18 @@ impl GameLoopConfig {
     /// Set VSync
     pub fn with_vsync(mut self, vsync: bool) -> Self {
         self.vsync = vsync;
+        self
+    }
+
+    /// Enable headless mode (for testing)
+    pub fn headless(mut self) -> Self {
+        self.headless = true;
+        self
+    }
+
+    /// Set maximum frames for headless mode
+    pub fn with_max_frames(mut self, max_frames: u32) -> Self {
+        self.max_frames = max_frames;
         self
     }
 }
@@ -144,14 +162,14 @@ impl GameLoopRunner {
 pub fn run_game_loop<G: GameLoop>(mut game: G, config: GameLoopConfig) -> Result<(), String> {
     game.init();
 
+    let max_frames = config.max_frames;
     let mut runner = GameLoopRunner::new(config);
     runner.running = true;
 
     // Simple loop for now (in production, this would integrate with winit event loop)
     let mut frame_count = 0;
-    let max_frames = 60; // Run for 60 frames in headless mode
 
-    while frame_count < max_frames && runner.is_running() {
+    while (max_frames == 0 || frame_count < max_frames) && runner.is_running() {
         runner.tick(&mut game);
         frame_count += 1;
 

@@ -73,7 +73,7 @@ pub mod prelude {
     pub use crate::ecs_windjammer::{Entity, System, World};
 
     pub use crate::game_loop::{run_game_loop, GameLoopConfig, GameLoopRunner};
-    pub use crate::input::{Input, Key}; // Ergonomic input API with held(), pressed(), released()
+    pub use crate::input::{Input, Key, MouseButton}; // Ergonomic input API with held(), pressed(), released()
     pub use crate::math::{Mat4, Quat, Vec2, Vec3, Vec4};
     pub use crate::physics::{Collider, PhysicsWorld, RigidBody};
     pub use crate::renderer::{Color, Renderer}; // High-level 2D renderer (no wgpu types exposed)
