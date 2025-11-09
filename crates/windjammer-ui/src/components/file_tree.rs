@@ -2,6 +2,8 @@
 
 use crate::prelude::*;
 use crate::simple_vnode::{VAttr, VNode};
+use std::rc::Rc;
+use std::cell::RefCell;
 
 #[derive(Clone, Debug)]
 pub struct FileNode {
@@ -32,7 +34,7 @@ impl FileNode {
 pub struct FileTree {
     pub root: FileNode,
     pub selected_path: Signal<Option<String>>,
-    pub on_select: Option<Box<dyn Fn(String) + 'static>>,
+    pub on_select: Option<Rc<RefCell<dyn FnMut(String)>>>,
 }
 
 impl FileTree {
@@ -44,8 +46,8 @@ impl FileTree {
         }
     }
     
-    pub fn on_select<F: Fn(String) + 'static>(mut self, handler: F) -> Self {
-        self.on_select = Some(Box::new(handler));
+    pub fn on_select<F: FnMut(String) + 'static>(mut self, handler: F) -> Self {
+        self.on_select = Some(Rc::new(RefCell::new(handler)));
         self
     }
     
@@ -53,10 +55,7 @@ impl FileTree {
         VNode::Element {
             tag: "div".to_string(),
             attrs: vec![
-                VAttr {
-                    name: "class".to_string(),
-                    value: "wj-file-tree".to_string(),
-                },
+                ("class".to_string(), VAttr::Static("wj-file-tree".to_string())),
             ],
             children: vec![self.render_node(&self.root, 0)],
         }
@@ -83,18 +82,9 @@ impl FileTree {
         let node_element = VNode::Element {
             tag: "div".to_string(),
             attrs: vec![
-                VAttr {
-                    name: "class".to_string(),
-                    value: node_classes.join(" "),
-                },
-                VAttr {
-                    name: "style".to_string(),
-                    value: format!("padding-left: {}px;", depth * 16),
-                },
-                VAttr {
-                    name: "data-path".to_string(),
-                    value: node.path.clone(),
-                },
+                ("class".to_string(), VAttr::Static(node_classes.join(" "))),
+                ("style".to_string(), VAttr::Static(format!("padding-left: {}px;", depth * 16))),
+                ("data-path".to_string(), VAttr::Static(node.path.clone())),
             ],
             children: vec![
                 VNode::Text(format!("{} {}", icon, node.name)),
