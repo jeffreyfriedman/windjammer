@@ -431,7 +431,7 @@ fn update(game: &mut ShooterGame, delta: f32, input: &Input) {
     }
     let dx = input.mouse_delta_x() as f32;
     let dy = input.mouse_delta_y() as f32;
-    game.player_yaw = game.player_yaw + dx * game.mouse_sensitivity;
+    game.player_yaw = game.player_yaw - dx * game.mouse_sensitivity;
     game.player_pitch = game.player_pitch - dy * game.mouse_sensitivity;
     if game.player_pitch > 89.0 {
         game.player_pitch = 89.0;
@@ -567,6 +567,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         .with_title("Windjammer Game")
         .with_inner_size(winit::dpi::LogicalSize::new(800, 600))
         .build(&event_loop)?;
+
+    // Lock cursor to window for FPS controls
+    window.set_cursor_visible(false);
+    let _ = window.set_cursor_grab(winit::window::CursorGrabMode::Confined)
+        .or_else(|_| window.set_cursor_grab(winit::window::CursorGrabMode::Locked));
 
     // Initialize game state
     let mut game = ShooterGame::default();
