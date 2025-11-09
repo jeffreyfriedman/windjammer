@@ -47,7 +47,31 @@ fn init(game: &mut PongGame) {
     println!("Controls: W/S for left paddle, Up/Down for right paddle")
 }
 
-fn update(game: &mut PongGame, delta: f64) {
+fn update(game: &mut PongGame, delta: f64, input: &Input) {
+    if input.held(Key::W) {
+        game.left_paddle_y = game.left_paddle_y - game.paddle_speed * delta;
+        if game.left_paddle_y < 0.0 {
+            game.left_paddle_y = 0.0;
+        }
+    }
+    if input.held(Key::S) {
+        game.left_paddle_y = game.left_paddle_y + game.paddle_speed * delta;
+        if game.left_paddle_y > 500.0 {
+            game.left_paddle_y = 500.0;
+        }
+    }
+    if input.held(Key::Up) {
+        game.right_paddle_y = game.right_paddle_y - game.paddle_speed * delta;
+        if game.right_paddle_y < 0.0 {
+            game.right_paddle_y = 0.0;
+        }
+    }
+    if input.held(Key::Down) {
+        game.right_paddle_y = game.right_paddle_y + game.paddle_speed * delta;
+        if game.right_paddle_y > 500.0 {
+            game.right_paddle_y = 500.0;
+        }
+    }
     game.ball_x = game.ball_x + game.ball_vx * delta;
     game.ball_y = game.ball_y + game.ball_vy * delta;
     if game.ball_y <= 10.0 {
@@ -101,31 +125,8 @@ fn render(game: &mut PongGame, renderer: &mut Renderer) {
     }
 }
 
+#[inline]
 fn handle_input(game: &mut PongGame, input: &Input) {
-    if input.held(Key::W) {
-        game.left_paddle_y = game.left_paddle_y - 5.0;
-        if game.left_paddle_y < 0.0 {
-            game.left_paddle_y = 0.0;
-        }
-    }
-    if input.held(Key::S) {
-        game.left_paddle_y = game.left_paddle_y + 5.0;
-        if game.left_paddle_y > 500.0 {
-            game.left_paddle_y = 500.0;
-        }
-    }
-    if input.held(Key::Up) {
-        game.right_paddle_y = game.right_paddle_y - 5.0;
-        if game.right_paddle_y < 0.0 {
-            game.right_paddle_y = 0.0;
-        }
-    }
-    if input.held(Key::Down) {
-        game.right_paddle_y = game.right_paddle_y + 5.0;
-        if game.right_paddle_y > 500.0 {
-            game.right_paddle_y = 500.0;
-        }
-    }
     if input.pressed(Key::Escape) {
         println!("Game paused! (Press Escape again to resume)")
     }
@@ -180,7 +181,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                     last_time = now;
 
                     // Update game logic
-                    update(&mut game, delta);
+                    update(&mut game, delta, &input);
 
                     // Render
                     render(&mut game, &mut renderer);
