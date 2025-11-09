@@ -1,3 +1,6 @@
+use windjammer_game_framework::renderer::{Renderer, Color};
+use windjammer_game_framework::input::{Input, Key};
+
 #[derive(Clone, Debug)]
 struct PongGame {
     left_paddle_y: f64,
@@ -12,8 +15,22 @@ struct PongGame {
     ball_speed: f64,
 }
 
-// Game trait implementation for PongGame
-// TODO: Implement Game trait
+impl Default for PongGame {
+    fn default() -> Self {
+        PongGame {
+            left_paddle_y: 0.0,
+            right_paddle_y: 0.0,
+            ball_x: 0.0,
+            ball_y: 0.0,
+            ball_vx: 0.0,
+            ball_vy: 0.0,
+            score_left: 0,
+            score_right: 0,
+            paddle_speed: 0.0,
+            ball_speed: 0.0,
+        }
+    }
+}
 
 fn init(game: &mut PongGame) {
     game.left_paddle_y = 250.0;
