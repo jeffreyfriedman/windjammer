@@ -46,6 +46,7 @@ struct Enemy {
     velocity: Vec3,
     health: int,
     state: int,  // 0=idle, 1=chase, 2=attack, 3=dead
+    enemy_type: int,  // 0=grunt (slow, weak), 1=soldier (normal), 2=elite (fast, strong)
     color: Color,
 }
 
@@ -160,41 +161,52 @@ impl ShooterGame {
     }
 
     fn spawn_enemies(self) {
-        // Spawn 5 enemies at different positions
+        // Spawn different enemy types at various positions
+        
+        // Grunts (slow, weak, brown) - 2 enemies
         self.enemies.push(Enemy {
             pos: Vec3::new(10.0, 1.0, 10.0),
             velocity: Vec3::new(0.0, 0.0, 0.0),
-            health: 3,
-            state: 1,  // chase
-            color: Color::rgb(1.0, 0.0, 0.0),
+            health: 2,
+            state: 1,
+            enemy_type: 0,  // grunt
+            color: Color::rgb(0.6, 0.4, 0.2),  // Brown
         })
         self.enemies.push(Enemy {
             pos: Vec3::new(-10.0, 1.0, 10.0),
             velocity: Vec3::new(0.0, 0.0, 0.0),
-            health: 3,
+            health: 2,
             state: 1,
-            color: Color::rgb(1.0, 0.2, 0.0),
+            enemy_type: 0,  // grunt
+            color: Color::rgb(0.6, 0.4, 0.2),
         })
+        
+        // Soldiers (normal, red) - 2 enemies
         self.enemies.push(Enemy {
             pos: Vec3::new(10.0, 1.0, -10.0),
             velocity: Vec3::new(0.0, 0.0, 0.0),
             health: 3,
             state: 1,
-            color: Color::rgb(0.8, 0.0, 0.0),
+            enemy_type: 1,  // soldier
+            color: Color::rgb(1.0, 0.0, 0.0),  // Red
         })
         self.enemies.push(Enemy {
             pos: Vec3::new(-10.0, 1.0, -10.0),
             velocity: Vec3::new(0.0, 0.0, 0.0),
             health: 3,
             state: 1,
-            color: Color::rgb(1.0, 0.1, 0.1),
+            enemy_type: 1,  // soldier
+            color: Color::rgb(1.0, 0.0, 0.0),
         })
+        
+        // Elite (fast, strong, purple) - 1 enemy
         self.enemies.push(Enemy {
             pos: Vec3::new(0.0, 1.0, 15.0),
             velocity: Vec3::new(0.0, 0.0, 0.0),
-            health: 3,
+            health: 5,
             state: 1,
-            color: Color::rgb(0.9, 0.0, 0.0),
+            enemy_type: 2,  // elite
+            color: Color::rgb(0.8, 0.0, 0.8),  // Purple
         })
     }
 
@@ -308,7 +320,15 @@ impl ShooterGame {
                 let dist = (dx * dx + dz * dz).sqrt()
                 
                 if dist > 0.1 {
-                    let speed = 2.0
+                    // Speed varies by enemy type
+                    let speed = if enemy.enemy_type == 0 {
+                        1.5  // Grunt: slow
+                    } else if enemy.enemy_type == 1 {
+                        2.0  // Soldier: normal
+                    } else {
+                        3.0  // Elite: fast
+                    }
+                    
                     enemy.velocity.x = (dx / dist) * speed
                     enemy.velocity.z = (dz / dist) * speed
                     
@@ -316,8 +336,16 @@ impl ShooterGame {
                     enemy.pos.z += enemy.velocity.z * delta
                 }
                 
-                // Attack if close
-                if dist < 2.0 {
+                // Attack distance varies by type
+                let attack_range = if enemy.enemy_type == 0 {
+                    1.5  // Grunt: close range
+                } else if enemy.enemy_type == 1 {
+                    2.0  // Soldier: normal range
+                } else {
+                    2.5  // Elite: longer range
+                }
+                
+                if dist < attack_range {
                     enemy.state = 2
                 }
             }
