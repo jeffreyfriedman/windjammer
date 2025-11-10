@@ -4,8 +4,8 @@
       "rust_file": "./build/main.rs",
       "rust_line": 1,
       "rust_column": 0,
-      "wj_file": "examples/games/shooter/main.wj",
-      "wj_line": 851,
+      "wj_file": "examples/ui_test/main.wj",
+      "wj_line": 24,
       "wj_column": 1
     }
   ],

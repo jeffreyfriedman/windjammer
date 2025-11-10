@@ -16,17 +16,17 @@ pub mod panel;
 pub mod toolbar;
 pub mod tabs;
 
-// Re-export all components
-pub use button::Button;
+// Re-export all components and their types
+pub use button::{Button, ButtonVariant, ButtonSize};
 pub use container::Container;
 pub use input::Input;
-pub use text::Text;
-pub use flex::Flex;
+pub use text::{Text, TextSize};
+pub use flex::{Flex, FlexDirection};
 pub use grid::Grid;
 pub use card::Card;
-pub use alert::Alert;
+pub use alert::{Alert, AlertVariant};
 pub use code_editor::CodeEditor;
-pub use file_tree::FileTree;
+pub use file_tree::{FileTree, FileNode};
 pub use panel::Panel;
 pub use toolbar::Toolbar;
 pub use tabs::{Tab, Tabs};

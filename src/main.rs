@@ -1088,11 +1088,23 @@ fn create_cargo_toml_with_deps(
         ));
     }
 
+    // Create a mutable copy of external_crates so we can add UI framework if needed
+    let mut external_crates = external_crates.to_vec();
+
+    // Check if UI framework is used
+    let uses_ui = imported_modules.iter().any(|m| m == "ui" || m.starts_with("ui::"));
+    if uses_ui && !external_crates.contains(&"windjammer_ui".to_string()) {
+        external_crates.push("windjammer_ui".to_string());
+    }
+
     // Legacy: Keep old dependencies for modules not yet in runtime
     for module in imported_modules {
         match module.as_str() {
             // These are now in windjammer-runtime, no extra deps needed
             "fs" | "http" | "mime" | "json" => {}
+
+            // UI framework is handled above
+            "ui" => {}
 
             // Legacy modules that still need direct dependencies
             "csv" => {

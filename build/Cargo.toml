@@ -7,11 +7,11 @@ edition = "2021"
 [workspace]
 
 [dependencies]
-windjammer-game-framework = { path = "../crates/windjammer-game-framework" }
-winit = "0.29"
-pollster = "0.3"
 smallvec = "1.13"
 serde = { version = "1.0", features = ["derive"] }
+windjammer-runtime = { path = "/Users/jeffreyfriedman/src/windjammer/crates/windjammer-runtime" }
+windjammer-ui = { path = "/Users/jeffreyfriedman/src/windjammer/crates/windjammer-ui" }
+windjammer-ui-macro = { path = "/Users/jeffreyfriedman/src/windjammer/crates/windjammer-ui-macro" }
 
 [[bin]]
 name = "main"
