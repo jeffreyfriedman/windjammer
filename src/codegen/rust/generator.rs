@@ -883,6 +883,13 @@ impl CodeGenerator {
                 return format!("use std::{};\n", module_name);
             }
 
+            // Handle UI framework - skip explicit import (handled by implicit imports)
+            if module_name == "ui" || module_name.starts_with("ui::") {
+                // UI framework is handled by implicit imports from windjammer-ui crate
+                // Don't generate an explicit import here
+                return String::new();
+            }
+
             // Map to windjammer_runtime (all stdlib modules are now implemented!)
             let rust_import = match module_name {
                 // Core modules
@@ -907,7 +914,7 @@ impl CodeGenerator {
                 "strings" => "windjammer_runtime::strings",
                 "testing" => "windjammer_runtime::testing",
                 "time" => "windjammer_runtime::time",
-                "ui" => "windjammer_runtime::ui",
+                // "ui" is handled by implicit imports (windjammer-ui crate), not runtime
                 "game" => "windjammer_runtime::game",
 
                 _ => {
