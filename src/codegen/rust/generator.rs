@@ -323,6 +323,20 @@ impl CodeGenerator {
         UIFrameworkInfo { uses_ui }
     }
 
+    /// Detect if this program imports std::game (for non-decorator game usage)
+    fn detect_game_import(&self, program: &Program) -> bool {
+        // Check for use std::game::* or use std::game
+        for item in &program.items {
+            if let Item::Use { path, .. } = item {
+                let path_str = path.join("::");
+                if path_str == "std::game" || path_str.starts_with("std::game::") {
+                    return true;
+                }
+            }
+        }
+        false
+    }
+
     /// Generate game loop main function
     fn generate_game_main(&mut self, info: &GameFrameworkInfo) -> String {
         let mut output = String::new();
@@ -748,18 +762,29 @@ impl CodeGenerator {
         // Inject implicit imports if needed
         let mut implicit_imports = String::new();
 
-        // Add game framework imports if this is a game
-        if let Some(ref info) = game_framework_info {
-            if info.is_3d {
-                implicit_imports
-                    .push_str("use windjammer_game_framework::renderer3d::{Renderer3D, Camera3D};\n");
-                implicit_imports.push_str("use windjammer_game_framework::renderer::Color;\n");
+        // Add game framework imports if this is a game (via decorators or std::game import)
+        let uses_game_decorators = game_framework_info.is_some();
+        let uses_game_import = self.detect_game_import(program);
+        
+        if uses_game_decorators || uses_game_import {
+            if let Some(ref info) = game_framework_info {
+                if info.is_3d {
+                    implicit_imports
+                        .push_str("use windjammer_game_framework::renderer3d::{Renderer3D, Camera3D};\n");
+                    implicit_imports.push_str("use windjammer_game_framework::renderer::Color;\n");
+                } else {
+                    implicit_imports
+                        .push_str("use windjammer_game_framework::renderer::{Renderer, Color};\n");
+                }
             } else {
+                // Default to 2D renderer if no decorator info
                 implicit_imports
                     .push_str("use windjammer_game_framework::renderer::{Renderer, Color};\n");
             }
             implicit_imports.push_str("use windjammer_game_framework::input::{Input, Key, MouseButton};\n");
             implicit_imports.push_str("use windjammer_game_framework::math::{Vec3, Mat4};\n");
+            implicit_imports.push_str("use windjammer_game_framework::ecs::*;\n");
+            implicit_imports.push_str("use windjammer_game_framework::game_app::GameApp;\n");
         }
 
         // Add UI framework imports if using std::ui
@@ -886,6 +911,13 @@ impl CodeGenerator {
             // Handle UI framework - skip explicit import (handled by implicit imports)
             if module_name == "ui" || module_name.starts_with("ui::") {
                 // UI framework is handled by implicit imports from windjammer-ui crate
+                // Don't generate an explicit import here
+                return String::new();
+            }
+
+            // Handle Game framework - skip explicit import (handled by implicit imports)
+            if module_name == "game" || module_name.starts_with("game::") {
+                // Game framework is handled by implicit imports from windjammer-game-framework crate
                 // Don't generate an explicit import here
                 return String::new();
             }
