@@ -1097,6 +1097,12 @@ fn create_cargo_toml_with_deps(
         external_crates.push("windjammer_ui".to_string());
     }
 
+    // Check if Game framework is used
+    let uses_game = imported_modules.iter().any(|m| m == "game" || m.starts_with("game::"));
+    if uses_game && !external_crates.contains(&"game_host_framework".to_string()) {
+        external_crates.push("game_host_framework".to_string());
+    }
+
     // Legacy: Keep old dependencies for modules not yet in runtime
     for module in imported_modules {
         match module.as_str() {
@@ -1105,6 +1111,9 @@ fn create_cargo_toml_with_deps(
 
             // UI framework is handled above
             "ui" => {}
+
+            // Game framework is handled above
+            "game" => {}
 
             // Legacy modules that still need direct dependencies
             "csv" => {
@@ -1234,6 +1243,47 @@ fn create_cargo_toml_with_deps(
                 external_deps.push(format!(
                     "windjammer-ui-macro = {{ path = \"{}\" }}",
                     windjammer_ui_macro_path.display()
+                ));
+            }
+            "game_host_framework" => {
+                // Use absolute path to the workspace crate
+                let game_host_framework_path = if let Ok(manifest_dir) = env::var("CARGO_MANIFEST_DIR") {
+                    PathBuf::from(manifest_dir).join("crates/game-host-framework")
+                } else {
+                    // Start from current directory and search upward
+                    let mut current = env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
+                    let mut found = false;
+
+                    // Try current directory first
+                    if current.join("crates/game-host-framework/Cargo.toml").exists() {
+                        current.join("crates/game-host-framework")
+                    } else {
+                        // Search upward (up to 5 levels)
+                        for _ in 0..5 {
+                            if let Some(parent) = current.parent() {
+                                if parent.join("crates/game-host-framework/Cargo.toml").exists() {
+                                    current = parent.to_path_buf();
+                                    found = true;
+                                    break;
+                                }
+                                current = parent.to_path_buf();
+                            } else {
+                                break;
+                            }
+                        }
+
+                        if found {
+                            current.join("crates/game-host-framework")
+                        } else {
+                            // Fallback: assume we're in the root
+                            PathBuf::from("./crates/game-host-framework")
+                        }
+                    }
+                };
+
+                external_deps.push(format!(
+                    "game-host-framework = {{ path = \"{}\" }}",
+                    game_host_framework_path.display()
                 ));
             }
             _ => {
