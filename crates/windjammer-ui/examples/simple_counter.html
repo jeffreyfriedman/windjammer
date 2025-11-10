@@ -1,0 +1,29 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Windjammer UI Counter</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+        }
+    </style>
+</head>
+<body>
+    <div id="app">Loading...</div>
+    
+    <script type="module">
+        import init from './pkg/windjammer_ui.js';
+        
+        async function run() {
+            await init();
+            console.log('Windjammer UI loaded!');
+        }
+        
+        run().catch(console.error);
+    </script>
+</body>
+</html>
+

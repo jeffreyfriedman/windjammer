@@ -1,0 +1,331 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Windjammer UI Showcase</title>
+    <link rel="stylesheet" href="../styles/components.css">
+    <style>
+        body {
+            margin: 0;
+            padding: 20px;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background: var(--bg-primary, #1e1e1e);
+            color: var(--text-primary, #cccccc);
+        }
+        
+        .showcase {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+        
+        .showcase-header {
+            text-align: center;
+            padding: 2rem 0;
+            border-bottom: 1px solid var(--border-color, #3e3e3e);
+            margin-bottom: 2rem;
+        }
+        
+        .showcase-header h1 {
+            font-size: 3rem;
+            margin: 0 0 1rem 0;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+        
+        .showcase-section {
+            margin: 3rem 0;
+            padding: 2rem;
+            background: var(--bg-secondary, #252526);
+            border-radius: 8px;
+            border: 1px solid var(--border-color, #3e3e3e);
+        }
+        
+        .showcase-section h2 {
+            margin-top: 0;
+            color: var(--text-primary, #cccccc);
+            border-bottom: 2px solid var(--accent-primary, #007acc);
+            padding-bottom: 0.5rem;
+        }
+        
+        .component-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 1rem;
+            margin-top: 1.5rem;
+        }
+        
+        .component-demo {
+            padding: 1rem;
+            background: var(--bg-primary, #1e1e1e);
+            border-radius: 4px;
+            border: 1px solid var(--border-color, #3e3e3e);
+        }
+        
+        .component-demo h3 {
+            margin: 0 0 1rem 0;
+            font-size: 1rem;
+            color: var(--text-secondary, #9d9d9d);
+        }
+        
+        .demo-buttons {
+            display: flex;
+            gap: 0.5rem;
+            flex-wrap: wrap;
+        }
+        
+        .demo-inputs {
+            display: flex;
+            flex-direction: column;
+            gap: 1rem;
+        }
+        
+        .counter-display {
+            font-size: 3rem;
+            font-weight: bold;
+            text-align: center;
+            margin: 1rem 0;
+            color: var(--accent-primary, #007acc);
+        }
+        
+        .status-badge {
+            display: inline-block;
+            padding: 0.25rem 0.75rem;
+            border-radius: 12px;
+            font-size: 0.875rem;
+            font-weight: 500;
+        }
+        
+        .status-success {
+            background: rgba(0, 200, 0, 0.2);
+            color: #00ff00;
+        }
+        
+        .status-warning {
+            background: rgba(255, 165, 0, 0.2);
+            color: #ffa500;
+        }
+        
+        .status-error {
+            background: rgba(255, 0, 0, 0.2);
+            color: #ff4444;
+        }
+    </style>
+</head>
+<body>
+    <div class="showcase">
+        <div class="showcase-header">
+            <h1>🚀 Windjammer UI</h1>
+            <p>Cross-platform UI framework for Web, Desktop & Mobile</p>
+            <span class="status-badge status-success">✓ WASM Build Working</span>
+        </div>
+        
+        <div class="showcase-section">
+            <h2>Interactive Counter</h2>
+            <div id="counter-demo">
+                <div class="counter-display" id="counter-value">0</div>
+                <div class="demo-buttons" style="justify-content: center;">
+                    <button class="wj-button wj-button-secondary wj-button-large" id="dec-btn">
+                        <span>−</span>
+                    </button>
+                    <button class="wj-button wj-button-danger wj-button-medium" id="reset-btn">
+                        <span>Reset</span>
+                    </button>
+                    <button class="wj-button wj-button-primary wj-button-large" id="inc-btn">
+                        <span>+</span>
+                    </button>
+                </div>
+            </div>
+        </div>
+        
+        <div class="showcase-section">
+            <h2>Buttons</h2>
+            <div class="component-grid">
+                <div class="component-demo">
+                    <h3>Primary</h3>
+                    <div class="demo-buttons">
+                        <button class="wj-button wj-button-primary wj-button-small">
+                            <span>Small</span>
+                        </button>
+                        <button class="wj-button wj-button-primary wj-button-medium">
+                            <span>Medium</span>
+                        </button>
+                        <button class="wj-button wj-button-primary wj-button-large">
+                            <span>Large</span>
+                        </button>
+                    </div>
+                </div>
+                
+                <div class="component-demo">
+                    <h3>Secondary</h3>
+                    <div class="demo-buttons">
+                        <button class="wj-button wj-button-secondary wj-button-small">
+                            <span>Small</span>
+                        </button>
+                        <button class="wj-button wj-button-secondary wj-button-medium">
+                            <span>Medium</span>
+                        </button>
+                        <button class="wj-button wj-button-secondary wj-button-large">
+                            <span>Large</span>
+                        </button>
+                    </div>
+                </div>
+                
+                <div class="component-demo">
+                    <h3>Danger</h3>
+                    <div class="demo-buttons">
+                        <button class="wj-button wj-button-danger wj-button-small">
+                            <span>Delete</span>
+                        </button>
+                        <button class="wj-button wj-button-danger wj-button-medium">
+                            <span>Remove</span>
+                        </button>
+                        <button class="wj-button wj-button-danger wj-button-large">
+                            <span>Destroy</span>
+                        </button>
+                    </div>
+                </div>
+                
+                <div class="component-demo">
+                    <h3>Disabled</h3>
+                    <div class="demo-buttons">
+                        <button class="wj-button wj-button-primary wj-button-medium" disabled>
+                            <span>Disabled</span>
+                        </button>
+                        <button class="wj-button wj-button-secondary wj-button-medium" disabled>
+                            <span>Disabled</span>
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="showcase-section">
+            <h2>Inputs</h2>
+            <div class="demo-inputs">
+                <input type="text" class="wj-input" placeholder="Enter your name...">
+                <input type="email" class="wj-input" placeholder="Email address">
+                <input type="password" class="wj-input" placeholder="Password">
+                <textarea class="wj-input" rows="4" placeholder="Enter your message..."></textarea>
+            </div>
+        </div>
+        
+        <div class="showcase-section">
+            <h2>Alerts</h2>
+            <div style="display: flex; flex-direction: column; gap: 1rem;">
+                <div class="wj-alert wj-alert-info">
+                    <strong>Info:</strong> This is an informational message.
+                </div>
+                <div class="wj-alert wj-alert-success">
+                    <strong>Success:</strong> Your operation completed successfully!
+                </div>
+                <div class="wj-alert wj-alert-warning">
+                    <strong>Warning:</strong> Please review your changes carefully.
+                </div>
+                <div class="wj-alert wj-alert-error">
+                    <strong>Error:</strong> Something went wrong. Please try again.
+                </div>
+            </div>
+        </div>
+        
+        <div class="showcase-section">
+            <h2>Panels & Cards</h2>
+            <div class="component-grid">
+                <div class="wj-panel">
+                    <div class="wj-panel-header">
+                        <h3>Panel Title</h3>
+                    </div>
+                    <div class="wj-panel-body">
+                        <p>This is a panel with a header and body. Perfect for organizing content.</p>
+                    </div>
+                </div>
+                
+                <div class="wj-card">
+                    <div class="wj-card-header">
+                        <h3>Card Component</h3>
+                    </div>
+                    <div class="wj-card-body">
+                        <p>Cards are great for displaying grouped information with a clean layout.</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="showcase-section">
+            <h2>Framework Status</h2>
+            <div class="component-grid">
+                <div class="component-demo">
+                    <h3>Compiler Integration</h3>
+                    <span class="status-badge status-success">✓ Complete</span>
+                    <p style="margin-top: 0.5rem; font-size: 0.875rem;">
+                        use std::ui::* works!
+                    </p>
+                </div>
+                
+                <div class="component-demo">
+                    <h3>WASM Build</h3>
+                    <span class="status-badge status-success">✓ Working</span>
+                    <p style="margin-top: 0.5rem; font-size: 0.875rem;">
+                        Browser rendering functional
+                    </p>
+                </div>
+                
+                <div class="component-demo">
+                    <h3>Components</h3>
+                    <span class="status-badge status-success">✓ 13 Components</span>
+                    <p style="margin-top: 0.5rem; font-size: 0.875rem;">
+                        Button, Input, Panel, Card, etc.
+                    </p>
+                </div>
+                
+                <div class="component-demo">
+                    <h3>Game Editor</h3>
+                    <span class="status-badge status-warning">⚠ In Progress</span>
+                    <p style="margin-top: 0.5rem; font-size: 0.875rem;">
+                        Building with windjammer-ui
+                    </p>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <script type="module">
+        import init from '../pkg/windjammer_ui.js';
+        
+        // Counter state
+        let count = 0;
+        
+        function updateCounter() {
+            document.getElementById('counter-value').textContent = count;
+        }
+        
+        async function run() {
+            await init();
+            console.log('✅ Windjammer UI loaded!');
+            
+            // Set up counter buttons
+            document.getElementById('inc-btn').addEventListener('click', () => {
+                count++;
+                updateCounter();
+            });
+            
+            document.getElementById('dec-btn').addEventListener('click', () => {
+                count--;
+                updateCounter();
+            });
+            
+            document.getElementById('reset-btn').addEventListener('click', () => {
+                count = 0;
+                updateCounter();
+            });
+            
+            console.log('✅ Event handlers attached!');
+        }
+        
+        run().catch(console.error);
+    </script>
+</body>
+</html>
+
