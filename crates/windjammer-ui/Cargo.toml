@@ -23,9 +23,6 @@ name = "counter_wasm"
 path = "src/bin/counter_wasm.rs"
 
 [dependencies]
-# Core Windjammer dependency
-windjammer = { path = "../..", version = "0.34.0" }
-
 # Proc macro for #[component]
 windjammer-ui-macro = { path = "../windjammer-ui-macro", version = "0.34.0" }
 
