@@ -3,6 +3,7 @@ members = [
     ".",
     "crates/windjammer-editor-desktop",
     "crates/windjammer-editor-web",
+    "crates/windjammer-game-editor",
     "crates/windjammer-game-framework",
     "crates/windjammer-lsp",
     "crates/windjammer-mcp",

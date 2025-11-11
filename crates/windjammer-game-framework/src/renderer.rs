@@ -75,7 +75,7 @@ pub struct Renderer {
     config: wgpu::SurfaceConfiguration,
     pipeline: wgpu::RenderPipeline,
     clear_color: Color,
-    
+
     // Batching
     vertices: Vec<Vertex2D>,
     indices: Vec<u16>,
@@ -142,7 +142,9 @@ impl Renderer {
         // Create shader module
         let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
             label: Some("Sprite Shader"),
-            source: wgpu::ShaderSource::Wgsl(include_str!("rendering/shaders/sprite_2d.wgsl").into()),
+            source: wgpu::ShaderSource::Wgsl(
+                include_str!("rendering/shaders/sprite_2d.wgsl").into(),
+            ),
         });
 
         // Create render pipeline
@@ -211,7 +213,7 @@ impl Renderer {
         let y = y as f32;
         let width = width as f32;
         let height = height as f32;
-        
+
         // Convert screen coordinates to NDC (-1 to 1)
         let screen_width = self.config.width as f32;
         let screen_height = self.config.height as f32;
@@ -265,7 +267,7 @@ impl Renderer {
         let x = x as f32;
         let y = y as f32;
         let radius = radius as f32;
-        
+
         let segments = 32;
         let screen_width = self.config.width as f32;
         let screen_height = self.config.height as f32;
@@ -327,10 +329,10 @@ impl Renderer {
     ) {
         // Clamp fill_ratio to 0.0-1.0
         let fill_ratio = fill_ratio.max(0.0).min(1.0);
-        
+
         // Draw background
         self.draw_rect(x, y, width, height, bg_color);
-        
+
         // Draw filled portion
         if fill_ratio > 0.0 {
             let fill_width = width * fill_ratio;
@@ -440,7 +442,7 @@ impl Renderer {
     }
 
     /// Resize the renderer (call when window is resized)
-    /// 
+    ///
     /// This is a Windjammer-friendly API that doesn't expose winit types.
     pub fn resize(&mut self, width: u32, height: u32) {
         if width > 0 && height > 0 {
@@ -449,11 +451,10 @@ impl Renderer {
             self.surface.configure(&self.device, &self.config);
         }
     }
-    
+
     /// Internal: Resize from winit event (used by generated code)
     #[doc(hidden)]
     pub fn resize_from_winit(&mut self, new_size: winit::dpi::PhysicalSize<u32>) {
         self.resize(new_size.width, new_size.height);
     }
 }
-

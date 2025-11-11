@@ -961,7 +961,7 @@ mod tests {
         assert_eq!(stats.unreachable_statements_removed, 2);
 
         let func = match &optimized.items[0] {
-            Item::Function(f) => f,
+            Item::Function { decl, .. } => decl,
             _ => panic!("Expected function"),
         };
         if let Statement::If {
@@ -980,18 +980,31 @@ mod tests {
     #[test]
     fn test_no_changes_for_clean_code() {
         let program = Program {
-            items: vec![Item::Function(make_pub_func(
-                "test",
-                vec![
-                    Statement::Let {
-                        pattern: Pattern::Identifier("x".to_string()),
-                        mutable: false,
-                        type_: None,
-                        value: Expression::Literal(Literal::Int(42)),
-                    },
-                    Statement::Return(Some(Expression::Identifier("x".to_string()))),
-                ],
-            ))],
+            items: vec![Item::Function {
+                decl: make_pub_func(
+                    "test",
+                    vec![
+                        Statement::Let {
+                            pattern: Pattern::Identifier("x".to_string()),
+                            mutable: false,
+                            type_: None,
+                            value: Expression::Literal {
+                                value: Literal::Int(42),
+                                location: None,
+                            },
+                            location: None,
+                        },
+                        Statement::Return {
+                            value: Some(Expression::Identifier {
+                                name: "x".to_string(),
+                                location: None,
+                            }),
+                            location: None,
+                        },
+                    ],
+                ),
+                location: None,
+            }],
         };
 
         let (_, stats) = eliminate_dead_code(&program);

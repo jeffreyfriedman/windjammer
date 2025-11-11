@@ -126,6 +126,12 @@ impl<T: Clone> Signal<T> {
                 }
             });
         }
+
+        // Trigger UI re-render if we're in a WASM context
+        #[cfg(target_arch = "wasm32")]
+        {
+            crate::app_reactive::trigger_rerender();
+        }
     }
 
     /// Get the signal's unique ID

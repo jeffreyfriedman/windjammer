@@ -1,0 +1,13 @@
+// Test WASM UI compilation
+use std::ui::*
+
+fn main() {
+    // Create a simple UI
+    let ui = Container::new()
+        .child(Text::new("Hello from Windjammer WASM!"))
+        .child(Button::new("Click me!"))
+    
+    // Mount the app
+    App::new("WASM UI Test", ui).run()
+}
+

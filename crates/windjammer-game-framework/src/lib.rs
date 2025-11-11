@@ -48,14 +48,14 @@ pub mod lod; // Level of Detail (LOD) system
 pub mod math; // Math types (Vec2, Vec3, Mat4, etc.)
 pub mod mesh_clustering; // Mesh clustering system (Nanite-style)
 pub mod physics; // Physics integration (Rapier - exposes Rapier types)
-// pub mod physics_windjammer; // Windjammer-friendly physics API (zero crate leakage) - TODO: Fix for v2.0
+                 // pub mod physics_windjammer; // Windjammer-friendly physics API (zero crate leakage) - TODO: Fix for v2.0
 pub mod renderer; // High-level 2D renderer (for Windjammer games)
 pub mod renderer3d; // High-level 3D renderer (for Windjammer games)
 pub mod rendering; // Graphics rendering
 pub mod texture; // Texture loading and management
 pub mod time; // Time and delta time management
-pub mod ui_immediate; // Immediate mode UI system (for games)
-pub mod transform; // 2D and 3D transform components
+pub mod transform;
+pub mod ui_immediate; // Immediate mode UI system (for games) // 2D and 3D transform components
 
 #[cfg(not(target_arch = "wasm32"))]
 pub mod window; // Window creation and management (native only)
@@ -70,7 +70,9 @@ pub mod window; // Window creation and management (native only)
 /// use windjammer_game_framework::ecs::{World as RustWorld, ...};
 /// ```
 pub mod prelude {
-    pub use crate::animation::{Animation, AnimationBlender, AnimationPlayer, Bone, IKChain, Skeleton, Transform};
+    pub use crate::animation::{
+        Animation, AnimationBlender, AnimationPlayer, Bone, IKChain, Skeleton, Transform,
+    };
     pub use crate::assets::{AssetManager, Handle};
     pub use crate::audio::{AudioSystem, SpatialAudioSource};
     pub use crate::camera2d::Camera2D;
@@ -82,19 +84,21 @@ pub mod prelude {
     pub use crate::input::{Input, Key, MouseButton}; // Ergonomic input API with held(), pressed(), released()
     pub use crate::lod::{LODConfig, LODLevel, LODSelector, LODStats}; // Level of Detail system
     pub use crate::math::{Mat4, Quat, Vec2, Vec3, Vec4};
-    pub use crate::mesh_clustering::{ClusterConfig, ClusterStats, MeshCluster, MeshClusteringSystem}; // Mesh clustering
-    // TODO v2.0: Re-enable physics_windjammer once fixed
-    // pub use crate::physics_windjammer::{
-    //     BodyHandle, BodyType, ColliderBuilder, ColliderHandle, CollisionShape, ConstraintHandle,
-    //     ConstraintType, PhysicsMaterial, PhysicsWorldWj, RaycastHit, RigidBodyBuilder,
-    // }; // Windjammer-friendly physics (zero crate leakage)
+    pub use crate::mesh_clustering::{
+        ClusterConfig, ClusterStats, MeshCluster, MeshClusteringSystem,
+    }; // Mesh clustering
+       // TODO v2.0: Re-enable physics_windjammer once fixed
+       // pub use crate::physics_windjammer::{
+       //     BodyHandle, BodyType, ColliderBuilder, ColliderHandle, CollisionShape, ConstraintHandle,
+       //     ConstraintType, PhysicsMaterial, PhysicsWorldWj, RaycastHit, RigidBodyBuilder,
+       // }; // Windjammer-friendly physics (zero crate leakage)
     pub use crate::renderer::{Color, Renderer}; // High-level 2D renderer (no wgpu types exposed)
     pub use crate::renderer3d::{Camera3D, Renderer3D, SSGIConfig}; // High-level 3D renderer with SSGI (no wgpu types exposed)
     pub use crate::rendering::{Camera, Material, Mesh, RenderContext, Sprite, SpriteBatch};
     pub use crate::texture::Texture; // Texture loading (no wgpu or image types exposed)
     pub use crate::time::Time;
-    pub use crate::ui_immediate::{DrawCommand, LayoutDirection, UIStyle, UI}; // Immediate mode UI
     pub use crate::transform::{Transform2D, Transform3D};
+    pub use crate::ui_immediate::{DrawCommand, LayoutDirection, UIStyle, UI}; // Immediate mode UI
 
     #[cfg(not(target_arch = "wasm32"))]
     pub use crate::window::{Window, WindowConfig, WindowRunner};

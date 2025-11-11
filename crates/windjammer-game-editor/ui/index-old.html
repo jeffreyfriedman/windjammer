@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Windjammer Game Editor</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div id="app">
+        <div class="toolbar">
+            <button id="new-project" class="btn btn-primary">New Project</button>
+            <button id="open-project" class="btn btn-secondary">Open</button>
+            <button id="save-file" class="btn btn-secondary">Save</button>
+            <button id="run-game" class="btn btn-primary">Run</button>
+            <button id="stop-game" class="btn btn-danger" disabled>Stop</button>
+        </div>
+        
+        <div class="main-area">
+            <div class="file-tree panel">
+                <h3>Files</h3>
+                <div id="file-list">
+                    <p class="placeholder">No project open</p>
+                </div>
+            </div>
+            
+            <div class="editor panel">
+                <h3 id="editor-title">Editor</h3>
+                <textarea id="code-editor" placeholder="Open a file to start editing..."></textarea>
+            </div>
+            
+            <div class="preview panel">
+                <h3>Preview</h3>
+                <div id="preview-content">
+                    <p class="placeholder">Click 'Run' to start your game</p>
+                </div>
+            </div>
+        </div>
+        
+        <div class="console panel">
+            <h3>Console</h3>
+            <pre id="console-output">Welcome to Windjammer Game Editor!
+Ready to create amazing games with Windjammer.
+
+</pre>
+        </div>
+    </div>
+    
+    <script src="app.js"></script>
+</body>
+</html>
+

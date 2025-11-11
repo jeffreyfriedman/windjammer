@@ -12,6 +12,29 @@
 //
 // The compiler knows how to translate these types to windjammer-ui calls.
 
+// Reactive primitives
+pub struct Signal<T> {
+    value: T,
+}
+
+impl Signal<T> {
+    pub fn new(value: T) -> Signal<T> {
+        Signal { value: value }
+    }
+    
+    pub fn get(self) -> T {
+        self.value
+    }
+    
+    pub fn set(self, value: T) {
+        self.value = value
+    }
+    
+    pub fn update(self, f: fn(T) -> T) {
+        self.value = f(self.value)
+    }
+}
+
 // Core UI types
 pub struct Button {
     label: string,
@@ -324,14 +347,14 @@ pub enum UIElement {
     Alert(Alert),
 }
 
-// App structure
+// App structure for mounting and running UI
 pub struct App {
     title: string,
-    root: UIElement,
+    root: Container,  // Changed from UIElement to Container for simplicity
 }
 
 impl App {
-    pub fn new(title: string, root: UIElement) -> App {
+    pub fn new(title: string, root: Container) -> App {
         App {
             title: title,
             root: root,
@@ -341,7 +364,25 @@ impl App {
     pub fn run(self) {
         // This will be implemented by the Windjammer compiler
         // It will generate the appropriate Rust code to run the app
-        // using windjammer-ui under the hood
+        // using windjammer-ui::app::App under the hood
+    }
+}
+
+// Reactive app for automatic UI updates
+pub struct ReactiveApp {
+    title: string,
+}
+
+impl ReactiveApp {
+    pub fn new(title: string, render_fn: fn() -> VNode) -> ReactiveApp {
+        ReactiveApp {
+            title: title,
+        }
+    }
+    
+    pub fn run(self) {
+        // This will be implemented by the Windjammer compiler
+        // It will generate code using windjammer-ui::app_reactive::ReactiveApp
     }
 }
 

@@ -1,0 +1,220 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Windjammer Game Editor</title>
+    <link rel="stylesheet" href="styles-new.css">
+</head>
+<body>
+    <!-- Main Editor Container -->
+    <div id="editor-root">
+        <!-- Top Menu Bar -->
+        <div class="menu-bar">
+            <div class="menu-section">
+                <div class="menu-item">File</div>
+                <div class="menu-item">Edit</div>
+                <div class="menu-item">Project</div>
+                <div class="menu-item">Build</div>
+                <div class="menu-item">Window</div>
+                <div class="menu-item">Help</div>
+            </div>
+            <div class="menu-section menu-right">
+                <div class="status-indicator">●</div>
+                <div class="menu-item">Account</div>
+            </div>
+        </div>
+
+        <!-- Main Toolbar -->
+        <div class="toolbar">
+            <div class="toolbar-section">
+                <button class="tool-btn" id="new-project" title="New Project">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M13 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"></path>
+                        <polyline points="13 2 13 9 20 9"></polyline>
+                    </svg>
+                </button>
+                <button class="tool-btn" id="open-project" title="Open Project">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path>
+                    </svg>
+                </button>
+                <button class="tool-btn" id="save-file" title="Save">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"></path>
+                        <polyline points="17 21 17 13 7 13 7 21"></polyline>
+                        <polyline points="7 3 7 8 15 8"></polyline>
+                    </svg>
+                </button>
+            </div>
+            
+            <div class="toolbar-section toolbar-center">
+                <button class="tool-btn-large tool-btn-primary" id="run-game">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+                        <polygon points="5 3 19 12 5 21 5 3"></polygon>
+                    </svg>
+                    <span>Play</span>
+                </button>
+                <button class="tool-btn-large" id="stop-game" disabled>
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+                        <rect x="6" y="6" width="12" height="12"></rect>
+                    </svg>
+                    <span>Stop</span>
+                </button>
+                <button class="tool-btn-large" id="build-game">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path>
+                    </svg>
+                    <span>Build</span>
+                </button>
+            </div>
+            
+            <div class="toolbar-section">
+                <div class="search-box">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <circle cx="11" cy="11" r="8"></circle>
+                        <path d="m21 21-4.35-4.35"></path>
+                    </svg>
+                    <input type="text" placeholder="Search..." id="global-search">
+                </div>
+            </div>
+        </div>
+
+        <!-- Main Content Area -->
+        <div class="content-area">
+            <!-- Left Sidebar - Project Browser -->
+            <div class="sidebar sidebar-left" id="project-panel">
+                <div class="panel-header">
+                    <div class="panel-title">Project</div>
+                    <div class="panel-actions">
+                        <button class="icon-btn" title="Refresh">↻</button>
+                        <button class="icon-btn" title="Collapse All">⊟</button>
+                    </div>
+                </div>
+                <div class="panel-tabs">
+                    <div class="tab active">Files</div>
+                    <div class="tab">Assets</div>
+                    <div class="tab">Scenes</div>
+                </div>
+                <div class="panel-content">
+                    <div class="file-tree" id="file-tree">
+                        <div class="tree-item placeholder">
+                            <span class="tree-icon">📁</span>
+                            <span>No project open</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Center Area - Editor and Scene View -->
+            <div class="center-area">
+                <!-- Tab Bar -->
+                <div class="editor-tabs" id="editor-tabs">
+                    <div class="tab-item">
+                        <span>Welcome</span>
+                    </div>
+                </div>
+
+                <!-- Editor Content -->
+                <div class="editor-container">
+                    <div class="welcome-screen" id="welcome-screen">
+                        <div class="welcome-content">
+                            <h1>🎮 Windjammer Game Editor</h1>
+                            <p>Create amazing games with Windjammer</p>
+                            
+                            <div class="welcome-actions">
+                                <button class="welcome-btn" onclick="document.getElementById('new-project').click()">
+                                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                        <path d="M13 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"></path>
+                                        <polyline points="13 2 13 9 20 9"></polyline>
+                                    </svg>
+                                    <div>
+                                        <div class="btn-title">New Project</div>
+                                        <div class="btn-subtitle">Start from scratch</div>
+                                    </div>
+                                </button>
+                                
+                                <button class="welcome-btn" onclick="document.getElementById('open-project').click()">
+                                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                        <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path>
+                                    </svg>
+                                    <div>
+                                        <div class="btn-title">Open Project</div>
+                                        <div class="btn-subtitle">Continue working</div>
+                                    </div>
+                                </button>
+                            </div>
+
+                            <div class="recent-projects">
+                                <h3>Recent Projects</h3>
+                                <div class="recent-list" id="recent-projects">
+                                    <div class="recent-item placeholder">No recent projects</div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <textarea id="code-editor" class="code-editor" style="display: none;" 
+                              placeholder="// Start coding your game..."></textarea>
+                </div>
+
+                <!-- Bottom Panel - Console/Output -->
+                <div class="bottom-panel" id="bottom-panel">
+                    <div class="panel-header">
+                        <div class="panel-tabs">
+                            <div class="tab active">Console</div>
+                            <div class="tab">Output</div>
+                            <div class="tab">Problems</div>
+                            <div class="tab">Terminal</div>
+                        </div>
+                        <div class="panel-actions">
+                            <button class="icon-btn" title="Clear">🗑</button>
+                            <button class="icon-btn" title="Toggle">▼</button>
+                        </div>
+                    </div>
+                    <div class="panel-content">
+                        <pre id="console-output" class="console-output">Welcome to Windjammer Game Editor!
+Ready to create amazing games.
+
+</pre>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Right Sidebar - Inspector/Properties -->
+            <div class="sidebar sidebar-right" id="inspector-panel">
+                <div class="panel-header">
+                    <div class="panel-title">Inspector</div>
+                </div>
+                <div class="panel-content">
+                    <div class="inspector-empty">
+                        <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1">
+                            <circle cx="12" cy="12" r="10"></circle>
+                            <line x1="12" y1="8" x2="12" y2="12"></line>
+                            <line x1="12" y1="16" x2="12.01" y2="16"></line>
+                        </svg>
+                        <p>Select an object to inspect</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Status Bar -->
+        <div class="status-bar">
+            <div class="status-section">
+                <span id="status-text">Ready</span>
+            </div>
+            <div class="status-section status-right">
+                <span id="file-info">No file open</span>
+                <span class="status-separator">|</span>
+                <span id="cursor-position">Ln 1, Col 1</span>
+                <span class="status-separator">|</span>
+                <span id="language">Windjammer</span>
+            </div>
+        </div>
+    </div>
+
+    <script src="app-new.js"></script>
+</body>
+</html>
+

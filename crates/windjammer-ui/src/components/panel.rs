@@ -1,5 +1,6 @@
 //! Panel component for sections
 use crate::simple_vnode::{VAttr, VNode};
+use crate::to_vnode::ToVNode;
 
 pub struct Panel {
     pub title: String,
@@ -13,39 +14,51 @@ impl Panel {
             children: Vec::new(),
         }
     }
-    
+
+<<<<<<< Updated upstream
     pub fn child(mut self, child: VNode) -> Self {
         self.children.push(child);
+=======
+    pub fn child(mut self, child: impl ToVNode) -> Self {
+        self.children.push(child.to_vnode());
+>>>>>>> Stashed changes
         self
     }
-    
+
     pub fn children(mut self, children: Vec<VNode>) -> Self {
         self.children = children;
         self
     }
-    
+
     pub fn render(&self) -> VNode {
         VNode::Element {
             tag: "div".to_string(),
-            attrs: vec![
-                ("class".to_string(), VAttr::Static("wj-panel".to_string())),
-            ],
+            attrs: vec![("class".to_string(), VAttr::Static("wj-panel".to_string()))],
             children: vec![
                 VNode::Element {
                     tag: "div".to_string(),
-                    attrs: vec![
-                        ("class".to_string(), VAttr::Static("wj-panel-header".to_string())),
-                    ],
+                    attrs: vec![(
+                        "class".to_string(),
+                        VAttr::Static("wj-panel-header".to_string()),
+                    )],
                     children: vec![VNode::Text(self.title.clone())],
                 },
                 VNode::Element {
                     tag: "div".to_string(),
-                    attrs: vec![
-                        ("class".to_string(), VAttr::Static("wj-panel-body".to_string())),
-                    ],
+                    attrs: vec![(
+                        "class".to_string(),
+                        VAttr::Static("wj-panel-body".to_string()),
+                    )],
                     children: self.children.clone(),
                 },
             ],
         }
+    }
+}
+
+// Implement ToVNode for Panel
+impl ToVNode for Panel {
+    fn to_vnode(self) -> VNode {
+        self.render()
     }
 }

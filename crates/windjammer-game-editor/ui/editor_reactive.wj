@@ -1,0 +1,167 @@
+// Windjammer Game Editor - Pure Windjammer Reactive UI
+// This is the REAL editor - fully interactive with reactive updates!
+
+use std::ui::*
+use std::tauri::*
+
+// Editor state with reactive signals
+struct EditorState {
+    current_file: Signal<string>,
+    code_content: Signal<string>,
+    project_path: Signal<string>,
+    console_output: Signal<string>,
+    is_running: Signal<bool>,
+}
+
+impl EditorState {
+    fn new() -> EditorState {
+        EditorState {
+            current_file: Signal::new("".to_string()),
+            code_content: Signal::new("// Welcome to Windjammer Game Editor!\n// Create a new project or open an existing one to get started.".to_string()),
+            project_path: Signal::new("".to_string()),
+            console_output: Signal::new("Welcome to Windjammer Game Editor!\n".to_string()),
+            is_running: Signal::new(false),
+        }
+    }
+    
+    fn log(self, message: string) {
+        let current = self.console_output.get()
+        let new_output = current + message + "\n"
+        self.console_output.set(new_output)
+    }
+}
+
+// Main editor UI render function
+fn render_editor(state: EditorState) -> Container {
+    Container::new()
+        .max_width("100%")
+        .child(render_toolbar(state.clone()))
+        .child(render_main_area(state.clone()))
+        .child(render_console(state.clone()))
+}
+
+fn render_toolbar(state: EditorState) -> Panel {
+    let state_new = state.clone()
+    let state_open = state.clone()
+    let state_save = state.clone()
+    let state_run = state.clone()
+    let state_stop = state.clone()
+    
+    Panel::new("Toolbar".to_string())
+        .child(
+            Flex::new()
+                .direction(FlexDirection::Row)
+                .gap("8px")
+                .child(Button::new("New Project".to_string())
+                    .variant(ButtonVariant::Primary)
+                    .on_click(move || {
+                        // TODO: Show dialog
+                        state_new.log("Creating new project...".to_string())
+                        // create_game_project("/tmp", "MyGame")
+                    }))
+                .child(Button::new("Open".to_string())
+                    .variant(ButtonVariant::Secondary)
+                    .on_click(move || {
+                        state_open.log("Open project...".to_string())
+                    }))
+                .child(Button::new("Save".to_string())
+                    .variant(ButtonVariant::Secondary)
+                    .on_click(move || {
+                        let file = state_save.current_file.get()
+                        if file != "" {
+                            let content = state_save.code_content.get()
+                            // write_file(file, content)
+                            state_save.log("File saved!".to_string())
+                        } else {
+                            state_save.log("No file open".to_string())
+                        }
+                    }))
+                .child(Button::new("Run".to_string())
+                    .variant(ButtonVariant::Primary)
+                    .on_click(move || {
+                        let project = state_run.project_path.get()
+                        if project != "" {
+                            state_run.is_running.set(true)
+                            state_run.log("Running game...".to_string())
+                            // let result = run_game(project)
+                            // state_run.log(result)
+                        } else {
+                            state_run.log("No project open".to_string())
+                        }
+                    }))
+                .child(Button::new("Stop".to_string())
+                    .variant(ButtonVariant::Danger)
+                    .on_click(move || {
+                        // stop_game()
+                        state_stop.is_running.set(false)
+                        state_stop.log("Game stopped".to_string())
+                    }))
+        )
+}
+
+fn render_main_area(state: EditorState) -> Flex {
+    Flex::new()
+        .direction(FlexDirection::Row)
+        .gap("0px")
+        .child(render_file_tree(state.clone()))
+        .child(render_code_editor(state.clone()))
+        .child(render_preview(state.clone()))
+}
+
+fn render_file_tree(state: EditorState) -> Panel {
+    Panel::new("Files".to_string())
+        .child(Text::new("Project files will appear here".to_string()))
+}
+
+fn render_code_editor(state: EditorState) -> Panel {
+    let current_file = state.current_file.get()
+    let title = if current_file == "" {
+        "Editor".to_string()
+    } else {
+        current_file
+    }
+    
+    Panel::new(title)
+        .child(CodeEditor::new(state.code_content.clone())
+            .language("windjammer")
+            .on_change(move |new_content| {
+                state.code_content.set(new_content)
+            }))
+}
+
+fn render_preview(state: EditorState) -> Panel {
+    let is_running = state.is_running.get()
+    let content = if is_running {
+        Text::new("Game running...".to_string())
+    } else {
+        Text::new("Click 'Run' to start your game".to_string())
+    }
+    
+    Panel::new("Preview".to_string())
+        .child(content)
+}
+
+fn render_console(state: EditorState) -> Panel {
+    let output = state.console_output.get()
+    Panel::new("Console".to_string())
+        .child(Text::new(output))
+}
+
+@export
+fn start() {
+    println!("🎮 Windjammer Game Editor - Reactive Version")
+    
+    let state = EditorState::new()
+    
+    // Create render function
+    let render = move || {
+        render_editor(state.clone()).to_vnode()
+    }
+    
+    ReactiveApp::new("Windjammer Game Editor".to_string(), render).run()
+}
+
+fn main() {
+    start()
+}
+

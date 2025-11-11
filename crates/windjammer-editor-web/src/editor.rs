@@ -15,11 +15,11 @@ impl Editor {
             language: "windjammer".to_string(),
         }
     }
-    
+
     pub fn set_content(&mut self, content: String) {
         self.content = content;
     }
-    
+
     pub fn get_content(&self) -> &str {
         &self.content
     }
@@ -30,4 +30,3 @@ impl Default for Editor {
         Self::new()
     }
 }
-

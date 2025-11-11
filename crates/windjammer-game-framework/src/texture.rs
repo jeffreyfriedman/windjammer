@@ -40,19 +40,19 @@ impl Texture {
         path: impl AsRef<Path>,
     ) -> Result<Self, Box<dyn std::error::Error>> {
         let path = path.as_ref();
-        
+
         // Load image from file
         let img = image::open(path)?;
         let rgba = img.to_rgba8();
         let dimensions = rgba.dimensions();
-        
+
         // Create wgpu texture
         let size = wgpu::Extent3d {
             width: dimensions.0,
             height: dimensions.1,
             depth_or_array_layers: 1,
         };
-        
+
         let texture = device.create_texture(&wgpu::TextureDescriptor {
             label: Some(&format!("Texture: {}", path.display())),
             size,
@@ -63,7 +63,7 @@ impl Texture {
             usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,
             view_formats: &[],
         });
-        
+
         // Write image data to texture
         queue.write_texture(
             wgpu::ImageCopyTexture {
@@ -80,10 +80,10 @@ impl Texture {
             },
             size,
         );
-        
+
         // Create texture view
         let view = texture.create_view(&wgpu::TextureViewDescriptor::default());
-        
+
         // Create sampler
         let sampler = device.create_sampler(&wgpu::SamplerDescriptor {
             address_mode_u: wgpu::AddressMode::Repeat,
@@ -94,7 +94,7 @@ impl Texture {
             mipmap_filter: wgpu::FilterMode::Nearest,
             ..Default::default()
         });
-        
+
         // Create bind group
         let bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
             label: Some(&format!("Texture Bind Group: {}", path.display())),
@@ -110,7 +110,7 @@ impl Texture {
                 },
             ],
         });
-        
+
         Ok(Self {
             texture,
             view,
@@ -120,7 +120,7 @@ impl Texture {
             height: dimensions.1,
         })
     }
-    
+
     /// Create a checkerboard texture (useful for testing or placeholder textures)
     ///
     /// Creates a procedural checkerboard pattern with alternating colors.
@@ -143,7 +143,7 @@ impl Texture {
         color2: [u8; 4],
     ) -> Result<Self, Box<dyn std::error::Error>> {
         let mut data = vec![0u8; (size * size * 4) as usize];
-        
+
         for y in 0..size {
             for x in 0..size {
                 let checker_x = (x / checker_size) % 2;
@@ -153,18 +153,18 @@ impl Texture {
                 } else {
                     color2
                 };
-                
+
                 let idx = ((y * size + x) * 4) as usize;
                 data[idx..idx + 4].copy_from_slice(&color);
             }
         }
-        
+
         let texture_size = wgpu::Extent3d {
             width: size,
             height: size,
             depth_or_array_layers: 1,
         };
-        
+
         let texture = device.create_texture(&wgpu::TextureDescriptor {
             label: Some("Checkerboard Texture"),
             size: texture_size,
@@ -175,7 +175,7 @@ impl Texture {
             usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,
             view_formats: &[],
         });
-        
+
         queue.write_texture(
             wgpu::ImageCopyTexture {
                 texture: &texture,
@@ -191,9 +191,9 @@ impl Texture {
             },
             texture_size,
         );
-        
+
         let view = texture.create_view(&wgpu::TextureViewDescriptor::default());
-        
+
         let sampler = device.create_sampler(&wgpu::SamplerDescriptor {
             address_mode_u: wgpu::AddressMode::Repeat,
             address_mode_v: wgpu::AddressMode::Repeat,
@@ -203,7 +203,7 @@ impl Texture {
             mipmap_filter: wgpu::FilterMode::Nearest,
             ..Default::default()
         });
-        
+
         let bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
             label: Some("Checkerboard Bind Group"),
             layout: bind_group_layout,
@@ -218,7 +218,7 @@ impl Texture {
                 },
             ],
         });
-        
+
         Ok(Self {
             texture,
             view,
@@ -228,7 +228,7 @@ impl Texture {
             height: size,
         })
     }
-    
+
     /// Create a solid color texture (useful for testing or default textures)
     pub fn from_color(
         device: &wgpu::Device,
@@ -241,7 +241,7 @@ impl Texture {
             height: 1,
             depth_or_array_layers: 1,
         };
-        
+
         let texture = device.create_texture(&wgpu::TextureDescriptor {
             label: Some("Solid Color Texture"),
             size,
@@ -252,7 +252,7 @@ impl Texture {
             usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,
             view_formats: &[],
         });
-        
+
         queue.write_texture(
             wgpu::ImageCopyTexture {
                 texture: &texture,
@@ -268,9 +268,9 @@ impl Texture {
             },
             size,
         );
-        
+
         let view = texture.create_view(&wgpu::TextureViewDescriptor::default());
-        
+
         let sampler = device.create_sampler(&wgpu::SamplerDescriptor {
             address_mode_u: wgpu::AddressMode::Repeat,
             address_mode_v: wgpu::AddressMode::Repeat,
@@ -280,7 +280,7 @@ impl Texture {
             mipmap_filter: wgpu::FilterMode::Nearest,
             ..Default::default()
         });
-        
+
         let bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
             label: Some("Solid Color Bind Group"),
             layout: bind_group_layout,
@@ -295,7 +295,7 @@ impl Texture {
                 },
             ],
         });
-        
+
         Ok(Self {
             texture,
             view,

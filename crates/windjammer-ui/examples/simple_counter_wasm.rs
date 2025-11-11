@@ -4,29 +4,29 @@
 //! Build: wasm-pack build --target web --example simple_counter_wasm
 //! Serve: python3 -m http.server 8080
 
-use wasm_bindgen::prelude::*;
-use windjammer_ui::prelude::*;
-use windjammer_ui::components::*;
 use std::cell::RefCell;
 use std::rc::Rc;
+use wasm_bindgen::prelude::*;
+use windjammer_ui::components::*;
+use windjammer_ui::prelude::*;
 
 #[wasm_bindgen(start)]
 pub fn main() -> Result<(), JsValue> {
     // Set up panic hook for better error messages
     console_error_panic_hook::set_once();
-    
+
     web_sys::console::log_1(&"🚀 Windjammer UI Counter starting...".into());
-    
+
     // Create reactive counter state
     let count = Signal::new(0);
-    
+
     // Get the app div
     let window = web_sys::window().expect("no global `window` exists");
     let document = window.document().expect("should have a document on window");
     let app = document
         .get_element_by_id("app")
         .expect("should have #app element");
-    
+
     // Render function
     let render = {
         let count = count.clone();
@@ -36,15 +36,15 @@ pub fn main() -> Result<(), JsValue> {
             let button_dec = Button::new("-")
                 .variant(ButtonVariant::Secondary)
                 .size(ButtonSize::Large);
-            
+
             let button_inc = Button::new("+")
                 .variant(ButtonVariant::Primary)
                 .size(ButtonSize::Large);
-            
+
             let button_reset = Button::new("Reset")
                 .variant(ButtonVariant::Danger)
                 .size(ButtonSize::Medium);
-            
+
             // Build the UI
             let ui_html = format!(
                 r#"
@@ -84,22 +84,22 @@ pub fn main() -> Result<(), JsValue> {
                 "#,
                 count.get()
             );
-            
+
             app.set_inner_html(&ui_html);
         }
     };
-    
+
     // Initial render
     render();
-    
+
     // Set up event handlers
     let setup_handlers = {
         let count = count.clone();
         let render = Rc::new(RefCell::new(render));
-        
+
         move || -> Result<(), JsValue> {
             let document = web_sys::window().unwrap().document().unwrap();
-            
+
             // Decrement button
             {
                 let count = count.clone();
@@ -109,10 +109,11 @@ pub fn main() -> Result<(), JsValue> {
                     count.update(|c| *c -= 1);
                     render.borrow()();
                 }) as Box<dyn FnMut(_)>);
-                dec_btn.add_event_listener_with_callback("click", closure.as_ref().unchecked_ref())?;
+                dec_btn
+                    .add_event_listener_with_callback("click", closure.as_ref().unchecked_ref())?;
                 closure.forget();
             }
-            
+
             // Increment button
             {
                 let count = count.clone();
@@ -122,10 +123,11 @@ pub fn main() -> Result<(), JsValue> {
                     count.update(|c| *c += 1);
                     render.borrow()();
                 }) as Box<dyn FnMut(_)>);
-                inc_btn.add_event_listener_with_callback("click", closure.as_ref().unchecked_ref())?;
+                inc_btn
+                    .add_event_listener_with_callback("click", closure.as_ref().unchecked_ref())?;
                 closure.forget();
             }
-            
+
             // Reset button
             {
                 let count = count.clone();
@@ -135,18 +137,18 @@ pub fn main() -> Result<(), JsValue> {
                     count.set(0);
                     render.borrow()();
                 }) as Box<dyn FnMut(_)>);
-                reset_btn.add_event_listener_with_callback("click", closure.as_ref().unchecked_ref())?;
+                reset_btn
+                    .add_event_listener_with_callback("click", closure.as_ref().unchecked_ref())?;
                 closure.forget();
             }
-            
+
             Ok(())
         }
     };
-    
+
     setup_handlers()?;
-    
+
     web_sys::console::log_1(&"✅ Counter ready!".into());
-    
+
     Ok(())
 }
-

@@ -50,9 +50,12 @@ fn handle_connection(mut stream: TcpStream) {
 
     // Map URL paths to file paths
     let file_path = match path {
-        "/" => "examples/interactive_counter.html",
+        "/" => "examples/index.html",
         p if p.starts_with("/examples/") => &p[1..], // Remove leading slash
         p if p.starts_with("/pkg/") => &p[1..],      // Remove leading slash
+        p if p.starts_with("/pkg_counter/") => &p[1..], // Remove leading slash
+        p if p.starts_with("/pkg_button_test/") => &p[1..], // Remove leading slash
+        p if p.starts_with("/pkg_editor/") => &p[1..], // Remove leading slash
         _ => {
             send_response(&mut stream, 404, "text/plain", b"Not Found");
             return;

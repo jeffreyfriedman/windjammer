@@ -1,0 +1,173 @@
+// Windjammer Game Editor - Pure Windjammer Implementation
+// This is the REAL editor - written entirely in Windjammer with no HTML/CSS/JS!
+
+use std::ui::*
+use std::tauri::*
+
+// Editor state with reactive signals
+struct EditorState {
+    current_file: Signal<string>,
+    code_content: Signal<string>,
+    project_path: Signal<string>,
+    console_output: Signal<string>,
+    is_running: Signal<bool>,
+}
+
+impl EditorState {
+    fn new() -> EditorState {
+        EditorState {
+            current_file: Signal::new("".to_string()),
+            code_content: Signal::new("".to_string()),
+            project_path: Signal::new("".to_string()),
+            console_output: Signal::new("Welcome to Windjammer Game Editor!\n".to_string()),
+            is_running: Signal::new(false),
+        }
+    }
+    
+    fn log(self, message: string) {
+        let current = self.console_output.get()
+        let new_output = current + "[LOG] " + message + "\n"
+        self.console_output.set(new_output)
+    }
+}
+
+// Main editor UI
+fn render_editor(state: EditorState) -> Container {
+    Container::new()
+        .max_width("100%")
+        .child(render_toolbar(state.clone()))
+        .child(render_main_area(state.clone()))
+        .child(render_console(state.clone()))
+}
+
+fn render_toolbar(state: EditorState) -> Panel {
+    Panel::new("Toolbar".to_string())
+        .child(
+            Flex::new()
+                .direction(FlexDirection::Row)
+                .gap("8px")
+                .child(Button::new("New Project".to_string())
+                    .variant(ButtonVariant::Primary)
+                    .on_click(|| {
+                        handle_new_project(state.clone())
+                    }))
+                .child(Button::new("Open".to_string())
+                    .variant(ButtonVariant::Secondary)
+                    .on_click(|| {
+                        handle_open_project(state.clone())
+                    }))
+                .child(Button::new("Save".to_string())
+                    .variant(ButtonVariant::Secondary)
+                    .on_click(|| {
+                        handle_save_file(state.clone())
+                    }))
+                .child(Button::new("Run".to_string())
+                    .variant(ButtonVariant::Primary)
+                    .on_click(|| {
+                        handle_run_game(state.clone())
+                    }))
+                .child(Button::new("Stop".to_string())
+                    .variant(ButtonVariant::Danger)
+                    .on_click(|| {
+                        handle_stop_game(state.clone())
+                    }))
+        )
+}
+
+fn render_main_area(state: EditorState) -> Flex {
+    Flex::new()
+        .direction(FlexDirection::Row)
+        .gap("0px")
+        .child(render_file_tree(state.clone()))
+        .child(render_code_editor(state.clone()))
+}
+
+fn render_file_tree(state: EditorState) -> Panel {
+    Panel::new("Files".to_string())
+        .child(Text::new("Project files will appear here".to_string()))
+}
+
+fn render_code_editor(state: EditorState) -> Panel {
+    let file = state.current_file.get()
+    let title = if file == "" {
+        "Editor".to_string()
+    } else {
+        file
+    }
+    
+    Panel::new(title)
+        .child(Text::new("Code editor content".to_string()))
+}
+
+fn render_console(state: EditorState) -> Panel {
+    let output = state.console_output.get()
+    Panel::new("Console".to_string())
+        .child(Text::new(output))
+}
+
+// Event handlers using Tauri commands
+fn handle_new_project(state: EditorState) {
+    state.log("Creating new project...".to_string())
+    
+    // For now, use hardcoded values
+    // TODO: Add dialog support
+    let name = "MyGame".to_string()
+    let path = "/tmp".to_string()
+    
+    let result = create_game_project(path, name)
+    
+    state.log("Project created!".to_string())
+}
+
+fn handle_open_project(state: EditorState) {
+    state.log("Opening project...".to_string())
+    
+    // TODO: Add file picker dialog
+    let path = "/tmp/MyGame".to_string()
+    let files = list_directory(path)
+    
+    state.log("Project opened!".to_string())
+}
+
+fn handle_save_file(state: EditorState) {
+    let file = state.current_file.get()
+    let content = state.code_content.get()
+    
+    if file == "" {
+        state.log("No file open".to_string())
+    } else {
+        let result = write_file(file, content)
+        state.log("File saved!".to_string())
+    }
+}
+
+fn handle_run_game(state: EditorState) {
+    let project = state.project_path.get()
+    
+    if project == "" {
+        state.log("No project open".to_string())
+    } else {
+        state.is_running.set(true)
+        state.log("Running game...".to_string())
+        
+        let result = run_game(project)
+        state.log("Game started!".to_string())
+    }
+}
+
+fn handle_stop_game(state: EditorState) {
+    let result = stop_game()
+    state.is_running.set(false)
+    state.log("Game stopped".to_string())
+}
+
+fn main() {
+    println!("🎮 Windjammer Game Editor - Pure Windjammer!")
+    
+    let state = EditorState::new()
+    let ui = render_editor(state)
+    
+    // Mount the UI (will run in WASM/Tauri)
+    App::new("Windjammer Game Editor".to_string(), ui).run()
+}
+

@@ -18,16 +18,16 @@ use winit::window::Window;
 pub struct SSGIConfig {
     /// Enable SSGI (default: false)
     pub enabled: bool,
-    
+
     /// Number of samples per pixel (4-32, default: 8)
     pub num_samples: u32,
-    
+
     /// Sample radius in world units (0.1-2.0, default: 0.5)
     pub sample_radius: f32,
-    
+
     /// GI intensity multiplier (0.0-2.0, default: 1.0)
     pub intensity: f32,
-    
+
     /// Maximum ray distance (default: 5.0)
     pub max_distance: f32,
 }
@@ -53,14 +53,14 @@ pub struct Renderer3D {
     device: wgpu::Device,
     queue: wgpu::Queue,
     config: wgpu::SurfaceConfiguration,
-    
+
     // Forward rendering pipeline (original)
     forward_pipeline: wgpu::RenderPipeline,
-    
+
     // G-Buffer rendering pipeline (for SSGI)
     gbuffer_pipeline: wgpu::RenderPipeline,
     gbuffer_bind_group_layout: wgpu::BindGroupLayout,
-    
+
     // G-Buffer textures
     gbuffer_position: wgpu::Texture,
     gbuffer_position_view: wgpu::TextureView,
@@ -68,33 +68,33 @@ pub struct Renderer3D {
     gbuffer_normal_view: wgpu::TextureView,
     gbuffer_albedo: wgpu::Texture,
     gbuffer_albedo_view: wgpu::TextureView,
-    
+
     // SSGI compute pipeline
     ssgi_pipeline: wgpu::ComputePipeline,
     ssgi_bind_group: wgpu::BindGroup,
     ssgi_output: wgpu::Texture,
     ssgi_output_view: wgpu::TextureView,
-    
+
     // Composite pipeline (combines direct + indirect lighting)
     composite_pipeline: wgpu::RenderPipeline,
     composite_bind_group: wgpu::BindGroup,
-    
+
     depth_texture: wgpu::Texture,
     depth_view: wgpu::TextureView,
     clear_color: Color,
-    
+
     // Camera
     view_matrix: Mat4,
     projection_matrix: Mat4,
     camera_buffer: wgpu::Buffer,
     camera_bind_group: wgpu::BindGroup,
-    
+
     // Textures
     texture_bind_group_layout: wgpu::BindGroupLayout,
-    
+
     // SSGI configuration
     ssgi_config: SSGIConfig,
-    
+
     // Batching
     vertices: Vec<Vertex3D>,
     indices: Vec<u16>,
@@ -122,7 +122,7 @@ impl Camera3D {
             far: 1000.0,
         }
     }
-    
+
     /// Create a camera at a specific position
     pub fn at(position: Vec3) -> Self {
         Self {
@@ -130,37 +130,37 @@ impl Camera3D {
             ..Self::new()
         }
     }
-    
+
     /// Get the forward direction vector
     pub fn forward(&self) -> Vec3 {
         let yaw_rad = self.yaw.to_radians();
         let pitch_rad = self.pitch.to_radians();
-        
+
         Vec3::new(
             yaw_rad.sin() * pitch_rad.cos(),
             pitch_rad.sin(),
             yaw_rad.cos() * pitch_rad.cos(),
         )
     }
-    
+
     /// Get the right direction vector
     pub fn right(&self) -> Vec3 {
         let yaw_rad = self.yaw.to_radians();
         Vec3::new(yaw_rad.cos(), 0.0, -yaw_rad.sin())
     }
-    
+
     /// Get the up direction vector
     pub fn up(&self) -> Vec3 {
         self.right().cross(self.forward())
     }
-    
+
     /// Get the view matrix for this camera
     pub fn view_matrix(&self) -> Mat4 {
         let forward = self.forward();
         let target = self.position + forward;
         Mat4::look_at_rh(self.position, target, Vec3::new(0.0, 1.0, 0.0))
     }
-    
+
     /// Get the projection matrix for this camera
     pub fn projection_matrix(&self, aspect_ratio: f32) -> Mat4 {
         Mat4::perspective_rh_gl(self.fov.to_radians(), aspect_ratio, self.near, self.far)
@@ -265,7 +265,8 @@ impl Renderer3D {
             usage: wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::TEXTURE_BINDING,
             view_formats: &[],
         });
-        let gbuffer_position_view = gbuffer_position.create_view(&wgpu::TextureViewDescriptor::default());
+        let gbuffer_position_view =
+            gbuffer_position.create_view(&wgpu::TextureViewDescriptor::default());
 
         // Normal texture (RGBA16Float)
         let gbuffer_normal = device.create_texture(&wgpu::TextureDescriptor {
@@ -278,7 +279,8 @@ impl Renderer3D {
             usage: wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::TEXTURE_BINDING,
             view_formats: &[],
         });
-        let gbuffer_normal_view = gbuffer_normal.create_view(&wgpu::TextureViewDescriptor::default());
+        let gbuffer_normal_view =
+            gbuffer_normal.create_view(&wgpu::TextureViewDescriptor::default());
 
         // Albedo texture (RGBA8Unorm)
         let gbuffer_albedo = device.create_texture(&wgpu::TextureDescriptor {
@@ -291,7 +293,8 @@ impl Renderer3D {
             usage: wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::TEXTURE_BINDING,
             view_formats: &[],
         });
-        let gbuffer_albedo_view = gbuffer_albedo.create_view(&wgpu::TextureViewDescriptor::default());
+        let gbuffer_albedo_view =
+            gbuffer_albedo.create_view(&wgpu::TextureViewDescriptor::default());
 
         // SSGI output texture (for compute shader)
         let ssgi_output = device.create_texture(&wgpu::TextureDescriptor {
@@ -309,7 +312,9 @@ impl Renderer3D {
         // Load shader (simple 3D shader for greybox games)
         let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
             label: Some("3D Shader"),
-            source: wgpu::ShaderSource::Wgsl(include_str!("rendering/shaders/simple_3d.wgsl").into()),
+            source: wgpu::ShaderSource::Wgsl(
+                include_str!("rendering/shaders/simple_3d.wgsl").into(),
+            ),
         });
 
         // Create camera bind group layout
@@ -442,11 +447,12 @@ impl Renderer3D {
             });
 
         // Create G-Buffer pipeline layout
-        let gbuffer_pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
-            label: Some("G-Buffer Pipeline Layout"),
-            bind_group_layouts: &[&gbuffer_bind_group_layout],
-            push_constant_ranges: &[],
-        });
+        let gbuffer_pipeline_layout =
+            device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
+                label: Some("G-Buffer Pipeline Layout"),
+                bind_group_layouts: &[&gbuffer_bind_group_layout],
+                push_constant_ranges: &[],
+            });
 
         // Create G-Buffer render pipeline (renders to multiple targets)
         let gbuffer_pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
@@ -508,7 +514,9 @@ impl Renderer3D {
         // Load SSGI compute shader
         let ssgi_shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
             label: Some("SSGI Compute Shader"),
-            source: wgpu::ShaderSource::Wgsl(include_str!("rendering/shaders/ssgi_simple.wgsl").into()),
+            source: wgpu::ShaderSource::Wgsl(
+                include_str!("rendering/shaders/ssgi_simple.wgsl").into(),
+            ),
         });
 
         // Create SSGI bind group layout
@@ -619,7 +627,9 @@ impl Renderer3D {
         // Load composite shader
         let composite_shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
             label: Some("Composite Shader"),
-            source: wgpu::ShaderSource::Wgsl(include_str!("rendering/shaders/composite.wgsl").into()),
+            source: wgpu::ShaderSource::Wgsl(
+                include_str!("rendering/shaders/composite.wgsl").into(),
+            ),
         });
 
         // Create sampler for composite pass
@@ -718,11 +728,12 @@ impl Renderer3D {
         });
 
         // Create composite pipeline layout
-        let composite_pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
-            label: Some("Composite Pipeline Layout"),
-            bind_group_layouts: &[&composite_bind_group_layout],
-            push_constant_ranges: &[],
-        });
+        let composite_pipeline_layout =
+            device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
+                label: Some("Composite Pipeline Layout"),
+                bind_group_layouts: &[&composite_bind_group_layout],
+                push_constant_ranges: &[],
+            });
 
         // Create composite render pipeline
         let composite_pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
@@ -805,13 +816,14 @@ impl Renderer3D {
         let aspect_ratio = self.config.width as f32 / self.config.height as f32;
         self.view_matrix = camera.view_matrix();
         self.projection_matrix = camera.projection_matrix(aspect_ratio);
-        
+
         // Update camera buffer
         let mut camera_data = Vec::new();
         camera_data.extend_from_slice(&self.view_matrix.to_cols_array());
         camera_data.extend_from_slice(&self.projection_matrix.to_cols_array());
-        
-        self.queue.write_buffer(&self.camera_buffer, 0, bytemuck::cast_slice(&camera_data));
+
+        self.queue
+            .write_buffer(&self.camera_buffer, 0, bytemuck::cast_slice(&camera_data));
     }
 
     /// Clear the screen with the given color
@@ -837,10 +849,18 @@ impl Renderer3D {
     /// let texture = renderer.load_texture("assets/wall.png")?;
     /// renderer.draw_textured_cube(pos, size, &texture);
     /// ```
-    pub fn load_texture(&self, path: impl AsRef<std::path::Path>) -> Result<crate::texture::Texture, Box<dyn std::error::Error>> {
-        crate::texture::Texture::from_file(&self.device, &self.queue, &self.texture_bind_group_layout, path)
+    pub fn load_texture(
+        &self,
+        path: impl AsRef<std::path::Path>,
+    ) -> Result<crate::texture::Texture, Box<dyn std::error::Error>> {
+        crate::texture::Texture::from_file(
+            &self.device,
+            &self.queue,
+            &self.texture_bind_group_layout,
+            path,
+        )
     }
-    
+
     /// Create a checkerboard texture
     ///
     /// Creates a procedural checkerboard pattern - useful for testing or placeholder textures.
@@ -940,25 +960,21 @@ impl Renderer3D {
         // Define 8 vertices of a cube
         let vertices = [
             // Front face
-            [-half_size.x, -half_size.y,  half_size.z],
-            [ half_size.x, -half_size.y,  half_size.z],
-            [ half_size.x,  half_size.y,  half_size.z],
-            [-half_size.x,  half_size.y,  half_size.z],
+            [-half_size.x, -half_size.y, half_size.z],
+            [half_size.x, -half_size.y, half_size.z],
+            [half_size.x, half_size.y, half_size.z],
+            [-half_size.x, half_size.y, half_size.z],
             // Back face
             [-half_size.x, -half_size.y, -half_size.z],
-            [ half_size.x, -half_size.y, -half_size.z],
-            [ half_size.x,  half_size.y, -half_size.z],
-            [-half_size.x,  half_size.y, -half_size.z],
+            [half_size.x, -half_size.y, -half_size.z],
+            [half_size.x, half_size.y, -half_size.z],
+            [-half_size.x, half_size.y, -half_size.z],
         ];
 
         // Add vertices with position offset
         for v in &vertices {
             self.vertices.push(Vertex3D {
-                position: [
-                    v[0] + position.x,
-                    v[1] + position.y,
-                    v[2] + position.z,
-                ],
+                position: [v[0] + position.x, v[1] + position.y, v[2] + position.z],
                 normal: [0.0, 0.0, 1.0], // Simplified normal
                 tex_coords: [0.0, 0.0],
                 color: color_array,
@@ -997,25 +1013,41 @@ impl Renderer3D {
         // 4 vertices for a plane
         self.vertices.extend_from_slice(&[
             Vertex3D {
-                position: [position.x - half_size.x, position.y, position.z - half_size.z],
+                position: [
+                    position.x - half_size.x,
+                    position.y,
+                    position.z - half_size.z,
+                ],
                 normal: [0.0, 1.0, 0.0],
                 tex_coords: [0.0, 0.0],
                 color: color_array,
             },
             Vertex3D {
-                position: [position.x + half_size.x, position.y, position.z - half_size.z],
+                position: [
+                    position.x + half_size.x,
+                    position.y,
+                    position.z - half_size.z,
+                ],
                 normal: [0.0, 1.0, 0.0],
                 tex_coords: [1.0, 0.0],
                 color: color_array,
             },
             Vertex3D {
-                position: [position.x + half_size.x, position.y, position.z + half_size.z],
+                position: [
+                    position.x + half_size.x,
+                    position.y,
+                    position.z + half_size.z,
+                ],
                 normal: [0.0, 1.0, 0.0],
                 tex_coords: [1.0, 1.0],
                 color: color_array,
             },
             Vertex3D {
-                position: [position.x - half_size.x, position.y, position.z + half_size.z],
+                position: [
+                    position.x - half_size.x,
+                    position.y,
+                    position.z + half_size.z,
+                ],
                 normal: [0.0, 1.0, 0.0],
                 tex_coords: [0.0, 1.0],
                 color: color_array,
@@ -1268,7 +1300,7 @@ impl Renderer3D {
 
                 compute_pass.set_pipeline(&self.ssgi_pipeline);
                 compute_pass.set_bind_group(0, &self.ssgi_bind_group, &[]);
-                
+
                 // Dispatch compute shader (8x8 workgroups)
                 let workgroup_size = 8;
                 let dispatch_x = (self.config.width + workgroup_size - 1) / workgroup_size;
@@ -1336,13 +1368,13 @@ impl Renderer3D {
             self.config.width = width;
             self.config.height = height;
             self.surface.configure(&self.device, &self.config);
-            
+
             let texture_size = wgpu::Extent3d {
                 width,
                 height,
                 depth_or_array_layers: 1,
             };
-            
+
             // Recreate depth texture
             self.depth_texture = self.device.create_texture(&wgpu::TextureDescriptor {
                 label: Some("Depth Texture"),
@@ -1351,11 +1383,14 @@ impl Renderer3D {
                 sample_count: 1,
                 dimension: wgpu::TextureDimension::D2,
                 format: wgpu::TextureFormat::Depth32Float,
-                usage: wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::TEXTURE_BINDING,
+                usage: wgpu::TextureUsages::RENDER_ATTACHMENT
+                    | wgpu::TextureUsages::TEXTURE_BINDING,
                 view_formats: &[],
             });
-            self.depth_view = self.depth_texture.create_view(&wgpu::TextureViewDescriptor::default());
-            
+            self.depth_view = self
+                .depth_texture
+                .create_view(&wgpu::TextureViewDescriptor::default());
+
             // Recreate G-Buffer textures
             self.gbuffer_position = self.device.create_texture(&wgpu::TextureDescriptor {
                 label: Some("G-Buffer Position"),
@@ -1364,10 +1399,13 @@ impl Renderer3D {
                 sample_count: 1,
                 dimension: wgpu::TextureDimension::D2,
                 format: wgpu::TextureFormat::Rgba32Float,
-                usage: wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::TEXTURE_BINDING,
+                usage: wgpu::TextureUsages::RENDER_ATTACHMENT
+                    | wgpu::TextureUsages::TEXTURE_BINDING,
                 view_formats: &[],
             });
-            self.gbuffer_position_view = self.gbuffer_position.create_view(&wgpu::TextureViewDescriptor::default());
+            self.gbuffer_position_view = self
+                .gbuffer_position
+                .create_view(&wgpu::TextureViewDescriptor::default());
 
             self.gbuffer_normal = self.device.create_texture(&wgpu::TextureDescriptor {
                 label: Some("G-Buffer Normal"),
@@ -1376,10 +1414,13 @@ impl Renderer3D {
                 sample_count: 1,
                 dimension: wgpu::TextureDimension::D2,
                 format: wgpu::TextureFormat::Rgba16Float,
-                usage: wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::TEXTURE_BINDING,
+                usage: wgpu::TextureUsages::RENDER_ATTACHMENT
+                    | wgpu::TextureUsages::TEXTURE_BINDING,
                 view_formats: &[],
             });
-            self.gbuffer_normal_view = self.gbuffer_normal.create_view(&wgpu::TextureViewDescriptor::default());
+            self.gbuffer_normal_view = self
+                .gbuffer_normal
+                .create_view(&wgpu::TextureViewDescriptor::default());
 
             self.gbuffer_albedo = self.device.create_texture(&wgpu::TextureDescriptor {
                 label: Some("G-Buffer Albedo"),
@@ -1388,10 +1429,13 @@ impl Renderer3D {
                 sample_count: 1,
                 dimension: wgpu::TextureDimension::D2,
                 format: wgpu::TextureFormat::Rgba8Unorm,
-                usage: wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::TEXTURE_BINDING,
+                usage: wgpu::TextureUsages::RENDER_ATTACHMENT
+                    | wgpu::TextureUsages::TEXTURE_BINDING,
                 view_formats: &[],
             });
-            self.gbuffer_albedo_view = self.gbuffer_albedo.create_view(&wgpu::TextureViewDescriptor::default());
+            self.gbuffer_albedo_view = self
+                .gbuffer_albedo
+                .create_view(&wgpu::TextureViewDescriptor::default());
 
             // Recreate SSGI output texture
             self.ssgi_output = self.device.create_texture(&wgpu::TextureDescriptor {
@@ -1404,11 +1448,12 @@ impl Renderer3D {
                 usage: wgpu::TextureUsages::STORAGE_BINDING | wgpu::TextureUsages::TEXTURE_BINDING,
                 view_formats: &[],
             });
-            self.ssgi_output_view = self.ssgi_output.create_view(&wgpu::TextureViewDescriptor::default());
-            
+            self.ssgi_output_view = self
+                .ssgi_output
+                .create_view(&wgpu::TextureViewDescriptor::default());
+
             // Note: Bind groups will need to be recreated with new texture views
             // This is handled automatically on next frame
         }
     }
 }
-
