@@ -1,6 +1,7 @@
 //! Container component
 
 use crate::simple_vnode::{VAttr, VNode};
+use crate::to_vnode::ToVNode;
 
 pub struct Container {
     pub children: Vec<VNode>,
@@ -16,44 +17,52 @@ impl Container {
             padding: Some("16px".to_string()),
         }
     }
-    
+
+<<<<<<< Updated upstream
     pub fn child(mut self, child: VNode) -> Self {
         self.children.push(child);
+=======
+    pub fn child(mut self, child: impl ToVNode) -> Self {
+        self.children.push(child.to_vnode());
+>>>>>>> Stashed changes
         self
     }
-    
+
     pub fn children(mut self, children: Vec<VNode>) -> Self {
         self.children = children;
         self
     }
-    
+
     pub fn max_width(mut self, width: impl Into<String>) -> Self {
         self.max_width = Some(width.into());
         self
     }
-    
+
     pub fn padding(mut self, padding: impl Into<String>) -> Self {
         self.padding = Some(padding.into());
         self
     }
-    
+
     pub fn render(&self) -> VNode {
         let mut style = String::new();
-        
+
         if let Some(ref max_width) = self.max_width {
             style.push_str(&format!("max-width: {}; ", max_width));
         }
-        
+
         if let Some(ref padding) = self.padding {
             style.push_str(&format!("padding: {}; ", padding));
         }
-        
+
         style.push_str("margin: 0 auto;");
-        
+
         VNode::Element {
             tag: "div".to_string(),
             attrs: vec![
-                ("class".to_string(), VAttr::Static("wj-container".to_string())),
+                (
+                    "class".to_string(),
+                    VAttr::Static("wj-container".to_string()),
+                ),
                 ("style".to_string(), VAttr::Static(style)),
             ],
             children: self.children.clone(),
@@ -66,4 +75,13 @@ impl Default for Container {
         Self::new()
     }
 }
+<<<<<<< Updated upstream
+=======
 
+// Implement ToVNode for Container
+impl ToVNode for Container {
+    fn to_vnode(self) -> VNode {
+        self.render()
+    }
+}
+>>>>>>> Stashed changes

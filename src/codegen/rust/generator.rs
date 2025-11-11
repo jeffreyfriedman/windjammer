@@ -356,7 +356,9 @@ impl CodeGenerator {
         output.push_str("\n");
         output.push_str("    // Lock cursor to window for FPS controls\n");
         output.push_str("    window.set_cursor_visible(false);\n");
-        output.push_str("    let _ = window.set_cursor_grab(winit::window::CursorGrabMode::Confined)\n");
+        output.push_str(
+            "    let _ = window.set_cursor_grab(winit::window::CursorGrabMode::Confined)\n",
+        );
         output.push_str("        .or_else(|_| window.set_cursor_grab(winit::window::CursorGrabMode::Locked));\n");
         output.push_str("\n");
         output.push_str("    // Initialize game state\n");
@@ -453,16 +455,18 @@ impl CodeGenerator {
                 input_fn
             ));
             output.push_str("                }\n");
-            
+
             // Handle mouse button input
             output.push_str("                WindowEvent::MouseInput { state, button, .. } => {\n");
-            output.push_str("                    input.update_mouse_button_from_winit(state, button);\n");
+            output.push_str(
+                "                    input.update_mouse_button_from_winit(state, button);\n",
+            );
             output.push_str(&format!(
                 "                    {}(&mut game, &input);\n",
                 input_fn
             ));
             output.push_str("                }\n");
-            
+
             // Handle mouse movement
             output.push_str("                WindowEvent::CursorMoved { position, .. } => {\n");
             output.push_str("                    input.update_mouse_position_from_winit(position.x, position.y);\n");
@@ -546,7 +550,7 @@ impl CodeGenerator {
 
         // Detect game framework decorators
         let game_framework_info = self.detect_game_framework(program);
-        
+
         // Detect UI framework usage
         let ui_framework_info = self.detect_ui_framework(program);
 
@@ -765,12 +769,13 @@ impl CodeGenerator {
         // Add game framework imports if this is a game (via decorators or std::game import)
         let uses_game_decorators = game_framework_info.is_some();
         let uses_game_import = self.detect_game_import(program);
-        
+
         if uses_game_decorators || uses_game_import {
             if let Some(ref info) = game_framework_info {
                 if info.is_3d {
-                    implicit_imports
-                        .push_str("use windjammer_game_framework::renderer3d::{Renderer3D, Camera3D};\n");
+                    implicit_imports.push_str(
+                        "use windjammer_game_framework::renderer3d::{Renderer3D, Camera3D};\n",
+                    );
                     implicit_imports.push_str("use windjammer_game_framework::renderer::Color;\n");
                 } else {
                     implicit_imports
@@ -781,7 +786,8 @@ impl CodeGenerator {
                 implicit_imports
                     .push_str("use windjammer_game_framework::renderer::{Renderer, Color};\n");
             }
-            implicit_imports.push_str("use windjammer_game_framework::input::{Input, Key, MouseButton};\n");
+            implicit_imports
+                .push_str("use windjammer_game_framework::input::{Input, Key, MouseButton};\n");
             implicit_imports.push_str("use windjammer_game_framework::math::{Vec3, Mat4};\n");
             implicit_imports.push_str("use windjammer_game_framework::ecs::*;\n");
             implicit_imports.push_str("use windjammer_game_framework::game_app::GameApp;\n");
@@ -844,7 +850,27 @@ impl CodeGenerator {
             implicit_imports.push_str("use std::fmt::Write;\n");
         }
 
-        // Combine: implicit imports + explicit imports + body
+        // Add Tauri invoke helper for WASM target if needed
+        let mut tauri_helper = String::new();
+        if self.target == CompilationTarget::Wasm && self.needs_serde_imports {
+            tauri_helper.push_str(r#"
+// Tauri invoke helper for WASM
+#[wasm_bindgen]
+extern "C" {
+    #[wasm_bindgen(js_namespace = ["window", "__TAURI__", "core"], js_name = invoke)]
+    async fn tauri_invoke_js(cmd: &str, args: JsValue) -> JsValue;
+}
+
+async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_json::Value) -> Result<T, String> {
+    let js_args = serde_wasm_bindgen::to_value(&args).map_err(|e| e.to_string())?;
+    let result = tauri_invoke_js(cmd, js_args).await;
+    serde_wasm_bindgen::from_value(result).map_err(|e| e.to_string())
+}
+
+"#);
+        }
+
+        // Combine: implicit imports + explicit imports + tauri helper + body
         let mut output = String::new();
         if !implicit_imports.is_empty() {
             output.push_str(&implicit_imports);
@@ -854,6 +880,10 @@ impl CodeGenerator {
         }
         if !imports.is_empty() {
             output.push_str(&imports);
+        }
+        if !tauri_helper.is_empty() {
+            output.push('\n');
+            output.push_str(&tauri_helper);
         }
         if !output.is_empty() && !body.is_empty() {
             output.push('\n');
@@ -918,6 +948,13 @@ impl CodeGenerator {
             // Handle Game framework - skip explicit import (handled by implicit imports)
             if module_name == "game" || module_name.starts_with("game::") {
                 // Game framework is handled by implicit imports from windjammer-game-framework crate
+                // Don't generate an explicit import here
+                return String::new();
+            }
+
+            // Handle Tauri framework - skip explicit import (functions are generated inline)
+            if module_name == "tauri" || module_name.starts_with("tauri::") {
+                // Tauri functions are handled by compiler codegen (generate_tauri_invoke)
                 // Don't generate an explicit import here
                 return String::new();
             }
@@ -1744,8 +1781,9 @@ impl CodeGenerator {
             output.push_str(&format!("#[{}]\n", rust_attr));
         }
 
-        // Add `pub` if we're in a #[wasm_bindgen] impl block OR compiling a module
-        if self.in_wasm_bindgen_impl || self.is_module {
+        // Add `pub` if we're in a #[wasm_bindgen] impl block OR compiling a module OR has @export decorator
+        let has_export = func.decorators.iter().any(|d| d.name == "export");
+        if self.in_wasm_bindgen_impl || self.is_module || has_export {
             output.push_str("pub ");
         }
 
@@ -1821,7 +1859,9 @@ impl CodeGenerator {
                     OwnershipHint::Owned => {
                         if param.name == "self" {
                             // Check if analyzer inferred a different ownership for self
-                            if let Some(ownership_mode) = analyzed.inferred_ownership.get(&param.name) {
+                            if let Some(ownership_mode) =
+                                analyzed.inferred_ownership.get(&param.name)
+                            {
                                 match ownership_mode {
                                     OwnershipMode::MutBorrowed => return "&mut self".to_string(),
                                     OwnershipMode::Borrowed => return "&self".to_string(),
@@ -1980,11 +2020,11 @@ impl CodeGenerator {
             } => {
                 let mut output = self.indent();
                 output.push_str("let ");
-                
+
                 // Check if we need &mut for index access on borrowed fields
                 // e.g., let enemy = self.enemies[i] should be let enemy = &mut self.enemies[i]
                 let needs_mut_ref = self.should_mut_borrow_index_access(value);
-                
+
                 if needs_mut_ref {
                     // Don't add mut keyword, but we'll add &mut to the value
                 } else if *mutable {
@@ -2084,7 +2124,7 @@ impl CodeGenerator {
                                 value_str = format!("{}.to_string()", value_str);
                             }
                         }
-                        
+
                         if needs_mut_ref {
                             value_str = format!("&mut {}", value_str);
                         }
@@ -2284,31 +2324,31 @@ impl CodeGenerator {
             } => {
                 let mut output = self.indent();
                 output.push_str("for ");
-                
+
                 // Check if the loop body modifies the loop variable
                 let pattern_str = self.pattern_to_rust(pattern);
                 let loop_var = self.extract_pattern_identifier(pattern);
-                let needs_mut = loop_var.as_ref().map_or(false, |var| {
-                    self.loop_body_modifies_variable(body, var)
-                });
-                
+                let needs_mut = loop_var
+                    .as_ref()
+                    .map_or(false, |var| self.loop_body_modifies_variable(body, var));
+
                 if needs_mut {
                     output.push_str("mut ");
                 }
                 output.push_str(&pattern_str);
                 output.push_str(" in ");
-                
+
                 // Check if we need to add & for borrowed iteration
                 // This handles the common case of iterating over fields of borrowed structs
                 let needs_borrow = self.should_borrow_for_iteration(iterable);
                 let needs_mut_borrow = needs_mut && needs_borrow;
-                
+
                 if needs_mut_borrow {
                     output.push_str("&mut ");
                 } else if needs_borrow {
                     output.push('&');
                 }
-                
+
                 output.push_str(&self.generate_expression(iterable));
                 output.push_str(" {\n");
 
@@ -2706,6 +2746,11 @@ impl CodeGenerator {
                 // Extract function name for signature lookup
                 let func_name = self.extract_function_name(function);
 
+                // Special case: Tauri command calls (for WASM target)
+                if self.target == CompilationTarget::Wasm && self.is_tauri_function(&func_name) {
+                    return self.generate_tauri_invoke(&func_name, arguments);
+                }
+
                 // Special case: convert print/println/eprintln/eprint() to macros
                 if func_name == "print"
                     || func_name == "println"
@@ -2747,9 +2792,15 @@ impl CodeGenerator {
                                 return format!("{}!({}{})", target_macro, format_str, args_str);
                             }
                         }
-                        
+
                         // Check for Binary expression with string concatenation (will become format!)
-                        if let Expression::Binary { left, op: BinaryOp::Add, right, .. } = first_arg {
+                        if let Expression::Binary {
+                            left,
+                            op: BinaryOp::Add,
+                            right,
+                            ..
+                        } = first_arg
+                        {
                             // Check if this is string concatenation
                             let has_string_literal = matches!(
                                 left.as_ref(),
@@ -2765,20 +2816,26 @@ impl CodeGenerator {
                                 }
                             ) || Self::contains_string_literal(left)
                                 || Self::contains_string_literal(right);
-                            
+
                             if has_string_literal {
                                 // Collect all parts of the concatenation
                                 let mut parts = Vec::new();
                                 Self::collect_concat_parts_static(left, &mut parts);
                                 Self::collect_concat_parts_static(right, &mut parts);
-                                
+
                                 // Generate format string and arguments
                                 let format_str = "{}".repeat(parts.len());
-                                let format_args: Vec<String> = parts.iter()
+                                let format_args: Vec<String> = parts
+                                    .iter()
                                     .map(|expr| self.generate_expression(expr))
                                     .collect();
-                                
-                                return format!("{}!(\"{}\", {})", target_macro, format_str, format_args.join(", "));
+
+                                return format!(
+                                    "{}!(\"{}\", {})",
+                                    target_macro,
+                                    format_str,
+                                    format_args.join(", ")
+                                );
                             }
                         }
 
@@ -3680,6 +3737,70 @@ impl CodeGenerator {
         }
     }
 
+    /// Check if a function is a Tauri command that needs special handling
+    fn is_tauri_function(&self, name: &str) -> bool {
+        matches!(
+            name,
+            "read_file"
+                | "write_file"
+                | "list_directory"
+                | "create_game_project"
+                | "run_game"
+                | "stop_game"
+                | "open_file_dialog"
+                | "save_file_dialog"
+                | "set_title"
+                | "minimize"
+                | "maximize"
+                | "close"
+        )
+    }
+
+    /// Generate a Tauri invoke call for WASM
+    fn generate_tauri_invoke(
+        &mut self,
+        func_name: &str,
+        arguments: &[(Option<String>, Expression)],
+    ) -> String {
+        // Generate the invoke call
+        let mut code = String::from("tauri_invoke(\"");
+        code.push_str(func_name);
+        code.push_str("\", ");
+
+        // Generate arguments object
+        if arguments.is_empty() {
+            code.push_str("serde_json::json!({})");
+        } else {
+            code.push_str("serde_json::json!({ ");
+            for (i, (param_name, arg_expr)) in arguments.iter().enumerate() {
+                if i > 0 {
+                    code.push_str(", ");
+                }
+                // Use parameter name or default to arg0, arg1, etc.
+                let key = param_name
+                    .as_ref()
+                    .map(|s| s.as_str())
+                    .unwrap_or_else(|| match i {
+                        0 => "arg0",
+                        1 => "arg1",
+                        2 => "arg2",
+                        _ => "arg",
+                    });
+                code.push('"');
+                code.push_str(key);
+                code.push_str("\": ");
+                code.push_str(&self.generate_expression(arg_expr));
+            }
+            code.push_str(" })");
+        }
+        code.push(')');
+
+        // Mark that we need serde_json imports
+        self.needs_serde_imports = true;
+
+        code
+    }
+
     fn is_reference_expression(&self, expr: &Expression) -> bool {
         matches!(
             expr,
@@ -3911,15 +4032,23 @@ impl CodeGenerator {
                 // Check if we're assigning to var_name or var_name.field
                 self.expression_references_variable_or_field(target, var_name)
             }
-            Statement::If { then_block, else_block, .. } => {
-                then_block.iter().any(|s| self.statement_modifies_variable(s, var_name))
+            Statement::If {
+                then_block,
+                else_block,
+                ..
+            } => {
+                then_block
+                    .iter()
+                    .any(|s| self.statement_modifies_variable(s, var_name))
                     || else_block.as_ref().map_or(false, |block| {
-                        block.iter().any(|s| self.statement_modifies_variable(s, var_name))
+                        block
+                            .iter()
+                            .any(|s| self.statement_modifies_variable(s, var_name))
                     })
             }
-            Statement::While { body, .. } | Statement::For { body, .. } => {
-                body.iter().any(|s| self.statement_modifies_variable(s, var_name))
-            }
+            Statement::While { body, .. } | Statement::For { body, .. } => body
+                .iter()
+                .any(|s| self.statement_modifies_variable(s, var_name)),
             _ => false,
         }
     }
@@ -3946,7 +4075,10 @@ impl CodeGenerator {
         match expr {
             Expression::Index { object, .. } => {
                 // Check if we're indexing into a field access (e.g., self.enemies[i])
-                if let Expression::FieldAccess { object: field_obj, .. } = &**object {
+                if let Expression::FieldAccess {
+                    object: field_obj, ..
+                } = &**object
+                {
                     // Check if the field is accessed on self or a borrowed parameter
                     if let Expression::Identifier { name, .. } = &**field_obj {
                         // For now, assume self and first parameter are borrowed

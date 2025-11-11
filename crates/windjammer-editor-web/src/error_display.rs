@@ -30,12 +30,12 @@ impl CompilerError {
             suggestion: None,
         }
     }
-    
+
     pub fn with_suggestion(mut self, suggestion: String) -> Self {
         self.suggestion = Some(suggestion);
         self
     }
-    
+
     pub fn with_code(mut self, code: String) -> Self {
         self.code = Some(code);
         self
@@ -48,19 +48,17 @@ pub struct ErrorDisplay {
 
 impl ErrorDisplay {
     pub fn new() -> Self {
-        Self {
-            errors: Vec::new(),
-        }
+        Self { errors: Vec::new() }
     }
-    
+
     pub fn add_error(&mut self, error: CompilerError) {
         self.errors.push(error);
     }
-    
+
     pub fn clear(&mut self) {
         self.errors.clear();
     }
-    
+
     pub fn has_errors(&self) -> bool {
         !self.errors.is_empty()
     }
@@ -71,4 +69,3 @@ impl Default for ErrorDisplay {
         Self::new()
     }
 }
-

@@ -1,0 +1,31 @@
+// Test Signal<T> compilation
+use std::ui::*
+
+// Test Signal in struct
+struct AppState {
+    counter: Signal<i32>,
+    message: Signal<string>,
+}
+
+fn main() {
+    // Test Signal with different types
+    let count: Signal<i32> = Signal::new(0)
+    let name: Signal<string> = Signal::new("Hello".to_string())
+    let active: Signal<bool> = Signal::new(true)
+    
+    // Test Signal methods
+    let current_count = count.get()
+    count.set(current_count + 1)
+    
+    let current_name = name.get()
+    println!("Count: {}, Name: {}", current_count, current_name)
+    
+    // Test Signal in struct
+    let state = AppState {
+        counter: Signal::new(42),
+        message: Signal::new("Test".to_string()),
+    }
+    
+    println!("State counter: {}", state.counter.get())
+}
+

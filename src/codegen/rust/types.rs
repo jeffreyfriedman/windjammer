@@ -12,8 +12,13 @@ pub fn type_to_rust(type_: &Type) -> String {
         Type::Bool => "bool".to_string(),
         Type::String => "String".to_string(),
         Type::Custom(name) => {
-            // Convert Windjammer module.Type syntax to Rust module::Type
-            name.replace('.', "::")
+            // Special case: Signal (without type params) -> windjammer_ui::reactivity::Signal
+            if name == "Signal" {
+                "windjammer_ui::reactivity::Signal".to_string()
+            } else {
+                // Convert Windjammer module.Type syntax to Rust module::Type
+                name.replace('.', "::")
+            }
         }
         Type::Generic(name) => name.clone(), // Type parameter: T -> T
         Type::Associated(base, assoc_name) => {
@@ -26,12 +31,21 @@ pub fn type_to_rust(type_: &Type) -> String {
             format!("Box<dyn {}>", trait_name)
         }
         Type::Parameterized(base, args) => {
-            // Generic type: Vec<T> -> Vec<T>, HashMap<K, V> -> HashMap<K, V>
-            format!(
-                "{}<{}>",
-                base,
-                args.iter().map(type_to_rust).collect::<Vec<_>>().join(", ")
-            )
+            // Special case: Signal<T> -> windjammer_ui::reactivity::Signal<T>
+            if base == "Signal" {
+                let rust_args: Vec<String> = args.iter().map(type_to_rust).collect();
+                format!(
+                    "windjammer_ui::reactivity::Signal<{}>",
+                    rust_args.join(", ")
+                )
+            } else {
+                // Generic type: Vec<T> -> Vec<T>, HashMap<K, V> -> HashMap<K, V>
+                format!(
+                    "{}<{}>",
+                    base,
+                    args.iter().map(type_to_rust).collect::<Vec<_>>().join(", ")
+                )
+            }
         }
         Type::Option(inner) => format!("Option<{}>", type_to_rust(inner)),
         Type::Result(ok, err) => format!("Result<{}, {}>", type_to_rust(ok), type_to_rust(err)),

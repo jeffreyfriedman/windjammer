@@ -339,7 +339,7 @@ fn build_project(path: &Path, output: &Path, target: CompilationTarget) -> Resul
     if !has_errors {
         // Create Cargo.toml with stdlib and external dependencies (unless it's a component project)
         if !is_component_project {
-            create_cargo_toml_with_deps(output, &all_stdlib_modules, &all_external_crates)?;
+            create_cargo_toml_with_deps(output, &all_stdlib_modules, &all_external_crates, target)?;
         }
 
         println!("\n{} Transpilation complete!", "Success!".green().bold());
@@ -1034,9 +1034,15 @@ fn create_cargo_toml_with_deps(
     output_dir: &Path,
     imported_modules: &HashSet<String>,
     external_crates: &[String],
+    target: CompilationTarget,
 ) -> Result<()> {
     use std::env;
     use std::fs;
+
+    // For WASM target, generate WASM-specific Cargo.toml
+    if target == CompilationTarget::Wasm {
+        return create_wasm_cargo_toml(output_dir, imported_modules);
+    }
 
     // Map imported stdlib modules to their Cargo dependencies
     let mut deps = Vec::new();
@@ -1092,13 +1098,17 @@ fn create_cargo_toml_with_deps(
     let mut external_crates = external_crates.to_vec();
 
     // Check if UI framework is used
-    let uses_ui = imported_modules.iter().any(|m| m == "ui" || m.starts_with("ui::"));
+    let uses_ui = imported_modules
+        .iter()
+        .any(|m| m == "ui" || m.starts_with("ui::"));
     if uses_ui && !external_crates.contains(&"windjammer_ui".to_string()) {
         external_crates.push("windjammer_ui".to_string());
     }
 
     // Check if Game framework is used
-    let uses_game = imported_modules.iter().any(|m| m == "game" || m.starts_with("game::"));
+    let uses_game = imported_modules
+        .iter()
+        .any(|m| m == "game" || m.starts_with("game::"));
     if uses_game && !external_crates.contains(&"windjammer_game_framework".to_string()) {
         external_crates.push("windjammer_game_framework".to_string());
     }
@@ -1247,39 +1257,46 @@ fn create_cargo_toml_with_deps(
             }
             "windjammer_game_framework" => {
                 // Use absolute path to the workspace crate
-                let windjammer_game_framework_path = if let Ok(manifest_dir) = env::var("CARGO_MANIFEST_DIR") {
-                    PathBuf::from(manifest_dir).join("crates/windjammer-game-framework")
-                } else {
-                    // Start from current directory and search upward
-                    let mut current = env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
-                    let mut found = false;
-
-                    // Try current directory first
-                    if current.join("crates/windjammer-game-framework/Cargo.toml").exists() {
-                        current.join("crates/windjammer-game-framework")
+                let windjammer_game_framework_path =
+                    if let Ok(manifest_dir) = env::var("CARGO_MANIFEST_DIR") {
+                        PathBuf::from(manifest_dir).join("crates/windjammer-game-framework")
                     } else {
-                        // Search upward (up to 5 levels)
-                        for _ in 0..5 {
-                            if let Some(parent) = current.parent() {
-                                if parent.join("crates/windjammer-game-framework/Cargo.toml").exists() {
-                                    current = parent.to_path_buf();
-                                    found = true;
-                                    break;
-                                }
-                                current = parent.to_path_buf();
-                            } else {
-                                break;
-                            }
-                        }
+                        // Start from current directory and search upward
+                        let mut current = env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
+                        let mut found = false;
 
-                        if found {
+                        // Try current directory first
+                        if current
+                            .join("crates/windjammer-game-framework/Cargo.toml")
+                            .exists()
+                        {
                             current.join("crates/windjammer-game-framework")
                         } else {
-                            // Fallback: assume we're in the root
-                            PathBuf::from("./crates/windjammer-game-framework")
+                            // Search upward (up to 5 levels)
+                            for _ in 0..5 {
+                                if let Some(parent) = current.parent() {
+                                    if parent
+                                        .join("crates/windjammer-game-framework/Cargo.toml")
+                                        .exists()
+                                    {
+                                        current = parent.to_path_buf();
+                                        found = true;
+                                        break;
+                                    }
+                                    current = parent.to_path_buf();
+                                } else {
+                                    break;
+                                }
+                            }
+
+                            if found {
+                                current.join("crates/windjammer-game-framework")
+                            } else {
+                                // Fallback: assume we're in the root
+                                PathBuf::from("./crates/windjammer-game-framework")
+                            }
                         }
-                    }
-                };
+                    };
 
                 external_deps.push(format!(
                     "windjammer-game-framework = {{ path = \"{}\" }}",
@@ -1376,6 +1393,118 @@ edition = "2021"
 opt-level = 3
 "#,
         deps_section, bin_section
+    );
+
+    let cargo_toml_path = output_dir.join("Cargo.toml");
+    fs::write(cargo_toml_path, cargo_toml)?;
+
+    Ok(())
+}
+
+/// Create WASM-specific Cargo.toml
+fn create_wasm_cargo_toml(output_dir: &Path, imported_modules: &HashSet<String>) -> Result<()> {
+    use std::env;
+    use std::fs;
+
+    // Check if UI framework is used
+    let uses_ui = imported_modules
+        .iter()
+        .any(|m| m == "ui" || m.starts_with("ui::"));
+
+    // Find windjammer-ui path
+    let windjammer_ui_path = if let Ok(manifest_dir) = env::var("CARGO_MANIFEST_DIR") {
+        PathBuf::from(manifest_dir).join("crates/windjammer-ui")
+    } else {
+        let mut current = env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
+        let mut found = false;
+
+        if current.join("crates/windjammer-ui/Cargo.toml").exists() {
+            current.join("crates/windjammer-ui")
+        } else {
+            for _ in 0..5 {
+                if let Some(parent) = current.parent() {
+                    if parent.join("crates/windjammer-ui/Cargo.toml").exists() {
+                        current = parent.to_path_buf();
+                        found = true;
+                        break;
+                    }
+                    current = parent.to_path_buf();
+                } else {
+                    break;
+                }
+            }
+
+            if found {
+                current.join("crates/windjammer-ui")
+            } else {
+                PathBuf::from("./crates/windjammer-ui")
+            }
+        }
+    };
+
+    // Find the first .rs file in the output directory to use as lib.rs
+    let lib_file = fs::read_dir(output_dir)?
+        .filter_map(|entry| entry.ok())
+        .find(|entry| {
+            entry.path().extension().and_then(|s| s.to_str()) == Some("rs")
+                && entry.path().file_name().and_then(|s| s.to_str()) != Some("main.rs")
+        })
+        .and_then(|entry| {
+            entry
+                .path()
+                .file_name()
+                .and_then(|s| s.to_str())
+                .map(String::from)
+        })
+        .unwrap_or_else(|| "lib.rs".to_string());
+
+    let cargo_toml = format!(
+        r#"[package]
+name = "windjammer-wasm"
+version = "0.1.0"
+edition = "2021"
+
+# Prevent this from being treated as part of parent workspace
+[workspace]
+
+[lib]
+crate-type = ["cdylib"]
+path = "{}"
+
+[dependencies]
+wasm-bindgen = "0.2"
+wasm-bindgen-futures = "0.4"
+serde-wasm-bindgen = "0.6"
+web-sys = {{ version = "0.3", features = [
+    "Document",
+    "Element",
+    "HtmlElement",
+    "Node",
+    "Text",
+    "Window",
+    "Event",
+    "MouseEvent",
+    "KeyboardEvent",
+] }}
+js-sys = "0.3"
+serde = {{ version = "1.0", features = ["derive"] }}
+serde_json = "1.0"
+console_error_panic_hook = "0.1"
+{}
+
+[profile.release]
+opt-level = "z"  # Optimize for size
+lto = true
+"#,
+        lib_file,
+        if uses_ui {
+            format!(
+                "windjammer-ui = {{ path = \"{}\" }}",
+                windjammer_ui_path.display()
+            )
+        } else {
+            String::new()
+        }
     );
 
     let cargo_toml_path = output_dir.join("Cargo.toml");

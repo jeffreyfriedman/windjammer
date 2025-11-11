@@ -21,26 +21,26 @@ impl Project {
 "#
             .to_string(),
         );
-        
+
         Self {
             name,
             files,
             entry_point: "main.wj".to_string(),
         }
     }
-    
+
     pub fn add_file(&mut self, path: String, content: String) {
         self.files.insert(path, content);
     }
-    
+
     pub fn get_file(&self, path: &str) -> Option<&String> {
         self.files.get(path)
     }
-    
+
     pub fn update_file(&mut self, path: String, content: String) {
         self.files.insert(path, content);
     }
-    
+
     pub fn remove_file(&mut self, path: &str) {
         self.files.remove(path);
     }
@@ -51,4 +51,3 @@ impl Default for Project {
         Self::new("My Project".to_string())
     }
 }
-

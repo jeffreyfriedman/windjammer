@@ -1,5 +1,6 @@
 //! Card component
 use crate::simple_vnode::{VAttr, VNode};
+use crate::to_vnode::ToVNode;
 
 pub struct Card {
     pub children: Vec<VNode>,
@@ -11,18 +12,16 @@ impl Card {
             children: Vec::new(),
         }
     }
-    
+
     pub fn child(mut self, child: VNode) -> Self {
         self.children.push(child);
         self
     }
-    
+
     pub fn render(&self) -> VNode {
         VNode::Element {
             tag: "div".to_string(),
-            attrs: vec![
-                ("class".to_string(), VAttr::Static("wj-card".to_string())),
-            ],
+            attrs: vec![("class".to_string(), VAttr::Static("wj-card".to_string()))],
             children: self.children.clone(),
         }
     }
@@ -31,5 +30,12 @@ impl Card {
 impl Default for Card {
     fn default() -> Self {
         Self::new()
+    }
+}
+
+// Implement ToVNode for Card
+impl ToVNode for Card {
+    fn to_vnode(self) -> VNode {
+        self.render()
     }
 }

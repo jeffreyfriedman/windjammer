@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Windjammer Game Editor - WASM</title>
+    <link rel="stylesheet" href="components.css">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background: #1e1e1e;
+            color: #d4d4d4;
+        }
+        
+        #app {
+            width: 100%;
+            height: 100vh;
+        }
+        
+        .loading {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            height: 100vh;
+            font-size: 24px;
+        }
+    </style>
+</head>
+<body>
+    <div id="app">
+        <div class="loading">Loading Windjammer Editor...</div>
+    </div>
+    
+    <script type="module">
+        import init, { start } from '../pkg_editor/windjammer_wasm.js';
+        
+        async function run() {
+            try {
+                await init();
+                console.log('✅ Windjammer WASM loaded successfully!');
+                
+                // Call the exported start function to mount the UI
+                start();
+                console.log('✅ Windjammer UI mounted!');
+            } catch (error) {
+                console.error('❌ Failed to load Windjammer WASM:', error);
+                document.getElementById('app').innerHTML = `
+                    <div class="loading" style="color: #f44747;">
+                        Failed to load editor: ${error.message}
+                    </div>
+                `;
+            }
+        }
+        
+        run();
+    </script>
+</body>
+</html>
+

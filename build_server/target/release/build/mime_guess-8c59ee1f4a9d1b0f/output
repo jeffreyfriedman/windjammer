@@ -1,0 +1,1 @@
+cargo:rustc-env=MIME_TYPES_GENERATED_PATH=/Users/jeffreyfriedman/src/windjammer/build_server/target/release/build/mime_guess-8c59ee1f4a9d1b0f/out/mime_types_generated.rs

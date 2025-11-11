@@ -1,0 +1,133 @@
+// Simple Todo App - Demonstrates reactive lists without closures
+// This is a simplified version that works with current Windjammer features
+
+use std::ui::*
+
+// Simple Todo item
+struct Todo {
+    id: i32,
+    text: string,
+    completed: bool,
+}
+
+impl Todo {
+    fn new(id: i32, text: string) -> Todo {
+        Todo {
+            id: id,
+            text: text,
+            completed: false,
+        }
+    }
+}
+
+// App state
+struct TodoState {
+    todos: Signal<Vec<Todo>>,
+    next_id: Signal<i32>,
+}
+
+impl TodoState {
+    fn new() -> TodoState {
+        let initial_todos = vec![
+            Todo::new(1, "Learn Windjammer".to_string()),
+            Todo::new(2, "Build amazing UIs".to_string()),
+            Todo::new(3, "Deploy to production".to_string()),
+        ]
+        
+        TodoState {
+            todos: Signal::new(initial_todos),
+            next_id: Signal::new(4),
+        }
+    }
+    
+    fn toggle_todo(self, id: i32) {
+        let mut todos = self.todos.get()
+        let mut i = 0
+        while i < todos.len() {
+            if todos[i].id == id {
+                todos[i].completed = !todos[i].completed
+            }
+            i = i + 1
+        }
+        self.todos.set(todos)
+    }
+    
+    fn count_active(self) -> i32 {
+        let todos = self.todos.get()
+        let mut count = 0
+        let mut i = 0
+        while i < todos.len() {
+            if !todos[i].completed {
+                count = count + 1
+            }
+            i = i + 1
+        }
+        count
+    }
+}
+
+// Render the todo app
+fn render_todo_app(state: TodoState) -> Container {
+    let todos = state.todos.get()
+    let active_count = state.count_active()
+    
+    let mut list = Flex::new()
+        .direction(FlexDirection::Column)
+        .gap("10px")
+    
+    // Render each todo
+    let mut i = 0
+    while i < todos.len() {
+        let todo = todos[i].clone()
+        let state_toggle = state.clone()
+        let todo_id = todo.id
+        
+        let checkbox = if todo.completed { "✓" } else { "○" }
+        
+        let item = Flex::new()
+            .direction(FlexDirection::Row)
+            .gap("10px")
+            .child(Button::new(checkbox.to_string())
+                .variant(if todo.completed { ButtonVariant::Primary } else { ButtonVariant::Ghost })
+                .on_click(move || {
+                    state_toggle.toggle_todo(todo_id)
+                }))
+            .child(Text::new(todo.text))
+        
+        list = list.child(item)
+        i = i + 1
+    }
+    
+    // Build full UI
+    Container::new()
+        .max_width("600px")
+        .child(Panel::new("📝 Simple Todo App".to_string())
+            .child(
+                Flex::new()
+                    .direction(FlexDirection::Column)
+                    .gap("20px")
+                    .child(Text::new("Click checkboxes to toggle completion!".to_string()))
+                    .child(list)
+                    .child(Text::new(format!("{} items left", active_count))
+                        .size(TextSize::Small))
+            )
+        )
+}
+
+@export
+fn start() {
+    println!("📝 Starting Simple Todo App")
+    
+    let state = TodoState::new()
+    
+    let render = move || {
+        render_todo_app(state.clone()).to_vnode()
+    }
+    
+    ReactiveApp::new("Simple Todo".to_string(), render).run()
+}
+
+fn main() {
+    start()
+}
+

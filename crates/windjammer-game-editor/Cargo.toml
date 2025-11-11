@@ -1,0 +1,18 @@
+[package]
+name = "windjammer-game-editor"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+tauri = { version = "2.1", features = ["devtools"] }
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+windjammer-ui = { path = "../windjammer-ui" }
+
+[build-dependencies]
+tauri-build = { version = "2.0", features = [] }
+
+[[bin]]
+name = "windjammer-game-editor"
+path = "src/main.rs"
+

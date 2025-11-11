@@ -1,5 +1,6 @@
 //! Grid layout component
 use crate::simple_vnode::{VAttr, VNode};
+use crate::to_vnode::ToVNode;
 
 pub struct Grid {
     pub children: Vec<VNode>,
@@ -13,20 +14,23 @@ impl Grid {
             columns: 2,
         }
     }
-    
+
     pub fn columns(mut self, columns: usize) -> Self {
         self.columns = columns;
         self
     }
-    
+
     pub fn child(mut self, child: VNode) -> Self {
         self.children.push(child);
         self
     }
-    
+
     pub fn render(&self) -> VNode {
-        let style = format!("display: grid; grid-template-columns: repeat({}, 1fr); gap: 16px;", self.columns);
-        
+        let style = format!(
+            "display: grid; grid-template-columns: repeat({}, 1fr); gap: 16px;",
+            self.columns
+        );
+
         VNode::Element {
             tag: "div".to_string(),
             attrs: vec![
@@ -41,5 +45,12 @@ impl Grid {
 impl Default for Grid {
     fn default() -> Self {
         Self::new()
+    }
+}
+
+// Implement ToVNode for Grid
+impl ToVNode for Grid {
+    fn to_vnode(self) -> VNode {
+        self.render()
     }
 }
