@@ -413,6 +413,11 @@ mod tests {
             name: "test".to_string(),
             parameters: vec![],
             return_type: None,
+            type_params: vec![],
+            where_clause: vec![],
+            decorators: vec![],
+            is_async: false,
+            parent_type: None,
             body: vec![
                 Statement::Let {
                     pattern: Pattern::Identifier("x".to_string()),
@@ -462,6 +467,7 @@ mod tests {
                         }),
                         method: "len".to_string(),
                         arguments: vec![],
+                        type_args: None,
                         location: None,
                     },
                     location: None,
@@ -491,6 +497,11 @@ mod tests {
             name: "test".to_string(),
             parameters: vec![],
             return_type: None,
+            type_params: vec![],
+            where_clause: vec![],
+            decorators: vec![],
+            is_async: false,
+            parent_type: None,
             body: vec![
                 Statement::Let {
                     pattern: Pattern::Identifier("x".to_string()),
@@ -520,9 +531,6 @@ mod tests {
                     location: None,
                 },
             ],
-            is_async: false,
-            decorators: vec![],
-            parent_type: None,
         };
 
         let analysis = AutoCloneAnalysis::analyze_function(&func);

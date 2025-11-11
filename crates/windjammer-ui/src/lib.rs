@@ -39,6 +39,8 @@
 pub use windjammer_ui_macro::component;
 pub use windjammer_ui_macro::Props;
 
+pub mod app;
+pub mod app_reactive;
 pub mod component;
 pub mod component_runtime;
 pub mod components; // Component library
@@ -52,6 +54,7 @@ pub mod runtime;
 pub mod simple_renderer;
 pub mod simple_vnode;
 pub mod ssr;
+pub mod to_vnode;
 pub mod vdom;
 #[cfg(target_arch = "wasm32")]
 pub mod wasm_events;
@@ -64,6 +67,7 @@ mod reactivity_tests;
 
 /// Prelude module with commonly used types and traits
 pub mod prelude {
+    pub use crate::app::App;
     pub use crate::component::{Component, ComponentProps};
     pub use crate::component_runtime;
     pub use crate::events::{Event, EventHandler};
@@ -72,7 +76,12 @@ pub mod prelude {
     pub use crate::renderer::{Renderer, WebRenderer};
     pub use crate::routing::{Route, Router};
     pub use crate::simple_vnode::{VAttr, VNode};
+    pub use crate::to_vnode::ToVNode;
     pub use crate::vdom::{VElement, VText};
+
+    // Reactive app (WASM only)
+    #[cfg(target_arch = "wasm32")]
+    pub use crate::app_reactive::{trigger_rerender, ReactiveApp};
 
     // Re-export the component macro
     pub use crate::component;

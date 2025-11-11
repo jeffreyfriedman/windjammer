@@ -1,5 +1,6 @@
 //! Toolbar component
 use crate::simple_vnode::{VAttr, VNode};
+use crate::to_vnode::ToVNode;
 
 pub struct Toolbar {
     pub children: Vec<VNode>,
@@ -11,18 +12,24 @@ impl Toolbar {
             children: Vec::new(),
         }
     }
-    
+
     pub fn child(mut self, child: VNode) -> Self {
         self.children.push(child);
         self
     }
-    
+
     pub fn render(&self) -> VNode {
         VNode::Element {
             tag: "div".to_string(),
             attrs: vec![
                 ("class".to_string(), VAttr::Static("wj-toolbar".to_string())),
-                ("style".to_string(), VAttr::Static("display: flex; gap: 8px; padding: 8px; border-bottom: 1px solid #ddd;".to_string())),
+                (
+                    "style".to_string(),
+                    VAttr::Static(
+                        "display: flex; gap: 8px; padding: 8px; border-bottom: 1px solid #ddd;"
+                            .to_string(),
+                    ),
+                ),
             ],
             children: self.children.clone(),
         }
@@ -32,5 +39,12 @@ impl Toolbar {
 impl Default for Toolbar {
     fn default() -> Self {
         Self::new()
+    }
+}
+
+// Implement ToVNode for Toolbar
+impl ToVNode for Toolbar {
+    fn to_vnode(self) -> VNode {
+        self.render()
     }
 }

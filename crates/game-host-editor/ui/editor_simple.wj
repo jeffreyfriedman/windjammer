@@ -1,0 +1,74 @@
+// Game Host Editor - Interactive Demo
+// Shows clickable buttons with console output
+
+use std::ui::*
+
+@export
+fn start() {
+    println!("🎮 Game Host Editor Demo")
+    
+    let console_msg = Signal::new("Welcome to Game Host Editor!\nClick any button to see it work!\n".to_string())
+    
+    let render = move || {
+        let msg_new = console_msg.clone()
+        let msg_open = console_msg.clone()
+        let msg_save = console_msg.clone()
+        let msg_run = console_msg.clone()
+        let msg_stop = console_msg.clone()
+        let msg_display = console_msg.clone()
+        
+        Container::new()
+            .max_width("100%")
+            .child(Panel::new("🎮 Game Host Editor".to_string())
+                .child(Text::new("Interactive Demo - All buttons work!".to_string())))
+            .child(Panel::new("Toolbar".to_string())
+                .child(Flex::new()
+                    .direction(FlexDirection::Row)
+                    .gap("8px")
+                    .child(Button::new("New Project".to_string())
+                        .variant(ButtonVariant::Primary)
+                        .on_click(move || {
+                            let current = msg_new.get()
+                            msg_new.set(current + "📁 Creating new project...\n")
+                            println!("New Project clicked")
+                        }))
+                    .child(Button::new("Open".to_string())
+                        .variant(ButtonVariant::Secondary)
+                        .on_click(move || {
+                            let current = msg_open.get()
+                            msg_open.set(current + "📂 Opening project...\n")
+                            println!("Open clicked")
+                        }))
+                    .child(Button::new("Save".to_string())
+                        .variant(ButtonVariant::Secondary)
+                        .on_click(move || {
+                            let current = msg_save.get()
+                            msg_save.set(current + "💾 Saving files...\n")
+                            println!("Save clicked")
+                        }))
+                    .child(Button::new("Run".to_string())
+                        .variant(ButtonVariant::Primary)
+                        .on_click(move || {
+                            let current = msg_run.get()
+                            msg_run.set(current + "▶️  Running game...\n")
+                            println!("Run clicked")
+                        }))
+                    .child(Button::new("Stop".to_string())
+                        .variant(ButtonVariant::Danger)
+                        .on_click(move || {
+                            let current = msg_stop.get()
+                            msg_stop.set(current + "⏹️  Game stopped\n")
+                            println!("Stop clicked")
+                        }))))
+            .child(Panel::new("Console".to_string())
+                .child(Text::new(msg_display.get())))
+            .to_vnode()
+    }
+    
+    ReactiveApp::new("Game Host Editor".to_string(), render).run()
+}
+
+fn main() {
+    start()
+}
+

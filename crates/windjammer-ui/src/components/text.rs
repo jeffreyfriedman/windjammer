@@ -1,5 +1,6 @@
 //! Text component
 use crate::simple_vnode::{VAttr, VNode};
+use crate::to_vnode::ToVNode;
 
 pub enum TextSize {
     Small,
@@ -27,38 +28,49 @@ impl Text {
             weight: TextWeight::Normal,
         }
     }
-    
+
     pub fn size(mut self, size: TextSize) -> Self {
         self.size = size;
         self
     }
-    
+
     pub fn bold(mut self) -> Self {
         self.weight = TextWeight::Bold;
         self
     }
-    
+
     pub fn render(&self) -> VNode {
         let mut classes = vec!["wj-text".to_string()];
-        
-        classes.push(match self.size {
-            TextSize::Small => "wj-text-sm",
-            TextSize::Medium => "wj-text-md",
-            TextSize::Large => "wj-text-lg",
-            TextSize::XLarge => "wj-text-xl",
-        }.to_string());
-        
-        classes.push(match self.weight {
-            TextWeight::Normal => "wj-text-normal",
-            TextWeight::Bold => "wj-text-bold",
-        }.to_string());
-        
+
+        classes.push(
+            match self.size {
+                TextSize::Small => "wj-text-sm",
+                TextSize::Medium => "wj-text-md",
+                TextSize::Large => "wj-text-lg",
+                TextSize::XLarge => "wj-text-xl",
+            }
+            .to_string(),
+        );
+
+        classes.push(
+            match self.weight {
+                TextWeight::Normal => "wj-text-normal",
+                TextWeight::Bold => "wj-text-bold",
+            }
+            .to_string(),
+        );
+
         VNode::Element {
             tag: "span".to_string(),
-            attrs: vec![
-                ("class".to_string(), VAttr::Static(classes.join(" "))),
-            ],
+            attrs: vec![("class".to_string(), VAttr::Static(classes.join(" ")))],
             children: vec![VNode::Text(self.content.clone())],
         }
+    }
+}
+
+// Implement ToVNode for Text
+impl ToVNode for Text {
+    fn to_vnode(self) -> VNode {
+        self.render()
     }
 }

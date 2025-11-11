@@ -12,7 +12,7 @@ pub struct Input {
     keys_pressed: HashSet<Key>,
     keys_just_pressed: HashSet<Key>,
     keys_just_released: HashSet<Key>,
-    
+
     // Mouse state
     mouse_buttons_pressed: HashSet<MouseButton>,
     mouse_buttons_just_pressed: HashSet<MouseButton>,
@@ -337,7 +337,7 @@ impl Input {
     // ========================================
 
     /// Internal: Update input state from a winit keyboard event
-    /// 
+    ///
     /// This method is used by the generated game loop code and should not be called directly.
     /// It's hidden from the public API to maintain zero-crate-leakage philosophy.
     #[doc(hidden)]

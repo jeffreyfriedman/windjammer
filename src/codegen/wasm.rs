@@ -343,6 +343,25 @@ crate-type = ["cdylib"]
 
 [dependencies]
 wasm-bindgen = "0.2"
+wasm-bindgen-futures = "0.4"
+serde-wasm-bindgen = "0.6"
+web-sys = { version = "0.3", features = [
+    "Document",
+    "Element",
+    "HtmlElement",
+    "Node",
+    "Text",
+    "Window",
+    "Event",
+    "MouseEvent",
+    "KeyboardEvent",
+] }
+js-sys = "0.3"
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+console_error_panic_hook = "0.1"
+windjammer-ui = { path = "../../../crates/windjammer-ui" }
+windjammer-runtime = { path = "../../../crates/windjammer-runtime", features = ["wasm"] }
 
 [profile.release]
 opt-level = "z"  # Optimize for size

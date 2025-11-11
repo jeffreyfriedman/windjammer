@@ -1753,8 +1753,14 @@ impl Analyzer {
                 // Check for mutating method calls on self.field
                 self.expression_mutates_self_fields(expr)
             }
-            Statement::If { then_block, else_block, .. } => {
-                then_block.iter().any(|s| self.statement_modifies_self_fields(s))
+            Statement::If {
+                then_block,
+                else_block,
+                ..
+            } => {
+                then_block
+                    .iter()
+                    .any(|s| self.statement_modifies_self_fields(s))
                     || else_block.as_ref().map_or(false, |block| {
                         block.iter().any(|s| self.statement_modifies_self_fields(s))
                     })
@@ -1802,21 +1808,32 @@ impl Analyzer {
     /// Check if a statement accesses self fields
     fn statement_accesses_self_fields(&self, stmt: &Statement) -> bool {
         match stmt {
-            Statement::Expression { expr, .. } | Statement::Return { value: Some(expr), .. } => {
-                self.expression_accesses_self_fields(expr)
-            }
+            Statement::Expression { expr, .. }
+            | Statement::Return {
+                value: Some(expr), ..
+            } => self.expression_accesses_self_fields(expr),
             Statement::Let { value, .. } => self.expression_accesses_self_fields(value),
             Statement::Assignment { target, value, .. } => {
-                self.expression_accesses_self_fields(target) || self.expression_accesses_self_fields(value)
+                self.expression_accesses_self_fields(target)
+                    || self.expression_accesses_self_fields(value)
             }
-            Statement::If { condition, then_block, else_block, .. } => {
+            Statement::If {
+                condition,
+                then_block,
+                else_block,
+                ..
+            } => {
                 self.expression_accesses_self_fields(condition)
-                    || then_block.iter().any(|s| self.statement_accesses_self_fields(s))
+                    || then_block
+                        .iter()
+                        .any(|s| self.statement_accesses_self_fields(s))
                     || else_block.as_ref().map_or(false, |block| {
                         block.iter().any(|s| self.statement_accesses_self_fields(s))
                     })
             }
-            Statement::While { condition, body, .. } => {
+            Statement::While {
+                condition, body, ..
+            } => {
                 self.expression_accesses_self_fields(condition)
                     || body.iter().any(|s| self.statement_accesses_self_fields(s))
             }
@@ -1834,17 +1851,22 @@ impl Analyzer {
             Expression::FieldAccess { object, .. } => {
                 matches!(&**object, Expression::Identifier { name, .. } if name == "self")
             }
-            Expression::MethodCall { object, arguments, .. } => {
+            Expression::MethodCall {
+                object, arguments, ..
+            } => {
                 self.expression_accesses_self_fields(object)
-                    || arguments.iter().any(|(_, arg)| self.expression_accesses_self_fields(arg))
+                    || arguments
+                        .iter()
+                        .any(|(_, arg)| self.expression_accesses_self_fields(arg))
             }
             Expression::Binary { left, right, .. } => {
-                self.expression_accesses_self_fields(left) || self.expression_accesses_self_fields(right)
+                self.expression_accesses_self_fields(left)
+                    || self.expression_accesses_self_fields(right)
             }
             Expression::Unary { operand, .. } => self.expression_accesses_self_fields(operand),
-            Expression::Call { arguments, .. } => {
-                arguments.iter().any(|(_, arg)| self.expression_accesses_self_fields(arg))
-            }
+            Expression::Call { arguments, .. } => arguments
+                .iter()
+                .any(|(_, arg)| self.expression_accesses_self_fields(arg)),
             _ => false,
         }
     }

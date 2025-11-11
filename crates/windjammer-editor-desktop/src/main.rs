@@ -19,9 +19,8 @@ fn write_file(path: String, content: String) -> Result<(), String> {
 /// List files in a directory
 #[tauri::command]
 fn list_directory(path: String) -> Result<Vec<FileEntry>, String> {
-    let entries = fs::read_dir(&path)
-        .map_err(|e| format!("Failed to read directory: {}", e))?;
-    
+    let entries = fs::read_dir(&path).map_err(|e| format!("Failed to read directory: {}", e))?;
+
     let mut files = Vec::new();
     for entry in entries {
         let entry = entry.map_err(|e| format!("Failed to read entry: {}", e))?;
@@ -31,14 +30,14 @@ fn list_directory(path: String) -> Result<Vec<FileEntry>, String> {
             .and_then(|n| n.to_str())
             .unwrap_or("")
             .to_string();
-        
+
         files.push(FileEntry {
             name,
             path: path.to_string_lossy().to_string(),
             is_directory: path.is_dir(),
         });
     }
-    
+
     Ok(files)
 }
 
@@ -67,7 +66,7 @@ fn compile_windjammer(source: String) -> Result<String, String> {
     if source.trim().is_empty() {
         return Err("Source code is empty".to_string());
     }
-    
+
     Ok(format!(
         "// Compiled from Windjammer\n// Source length: {} bytes\n\nfn main() {{\n    println!(\"Compiled successfully!\");\n}}",
         source.len()
@@ -94,4 +93,3 @@ fn main() {
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
 }
-

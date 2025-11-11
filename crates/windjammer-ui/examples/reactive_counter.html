@@ -1,0 +1,107 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Reactive Counter - Windjammer</title>
+    <link rel="stylesheet" href="../pkg/components.css">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background: #1e1e1e;
+            color: #d4d4d4;
+        }
+        
+        #app {
+            width: 100%;
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+        
+        .loading {
+            font-size: 24px;
+            text-align: center;
+        }
+        
+        .success-banner {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            background: #4caf50;
+            color: white;
+            padding: 15px 20px;
+            border-radius: 8px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+            font-size: 16px;
+            z-index: 1000;
+            animation: slideIn 0.5s ease-out;
+        }
+        
+        @keyframes slideIn {
+            from {
+                transform: translateX(400px);
+                opacity: 0;
+            }
+            to {
+                transform: translateX(0);
+                opacity: 1;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div id="success-banner" class="success-banner" style="display: none;">
+        🎉 UI IS REACTIVE! Click buttons to see live updates!
+    </div>
+    
+    <div id="app">
+        <div class="loading">Loading Reactive Counter...</div>
+    </div>
+    
+    <script type="module">
+        import init, { start } from '../pkg_counter/windjammer_wasm.js';
+        
+        async function run() {
+            try {
+                console.log('🔄 Initializing WASM...');
+                await init();
+                console.log('✅ WASM loaded successfully!');
+                
+                // Call the exported start function to mount the UI
+                start();
+                console.log('✅ Reactive Counter mounted!');
+                console.log('🎉 UI will automatically update when you click buttons!');
+                
+                // Show success banner
+                const banner = document.getElementById('success-banner');
+                banner.style.display = 'block';
+                setTimeout(() => {
+                    banner.style.opacity = '0';
+                    banner.style.transition = 'opacity 1s';
+                    setTimeout(() => banner.style.display = 'none', 1000);
+                }, 5000);
+                
+            } catch (error) {
+                console.error('❌ Failed to load WASM:', error);
+                document.getElementById('app').innerHTML = `
+                    <div class="loading" style="color: #f44747;">
+                        Failed to load: ${error.message}
+                    </div>
+                `;
+            }
+        }
+        
+        run();
+    </script>
+</body>
+</html>
+

@@ -19,4 +19,3 @@ tauri-build = { version = "2.5", features = [] }
 [features]
 default = ["custom-protocol"]
 custom-protocol = ["tauri/custom-protocol"]
-
