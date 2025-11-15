@@ -890,6 +890,16 @@ impl CodeGenerator {
             }
         }
 
+        // Generate game-decorated functions FIRST (before main)
+        if game_framework_info.is_some() {
+            for analyzed_func in analyzed {
+                if game_functions.contains(&analyzed_func.decl.name) {
+                    body.push_str(&self.generate_function(analyzed_func));
+                    body.push_str("\n\n");
+                }
+            }
+        }
+
         // Generate top-level functions (skip impl methods and game-decorated functions)
         for analyzed_func in analyzed {
             if !impl_methods.contains(&analyzed_func.decl.name) {
@@ -901,7 +911,7 @@ impl CodeGenerator {
                 if game_framework_info.is_some() && analyzed_func.decl.name == "main" {
                     continue;
                 }
-                // Skip game-decorated functions (they're handled in generate_game_main)
+                // Skip game-decorated functions (they were already generated above)
                 if game_functions.contains(&analyzed_func.decl.name) {
                     continue;
                 }
