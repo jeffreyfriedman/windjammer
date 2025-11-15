@@ -45,18 +45,16 @@ pub mod character_controller; // 3D character controller (movement, jumping, cam
 pub mod ecs; // Entity-Component-System (Rust implementation)
 pub mod ecs_optimized; // Optimized ECS with archetype storage and query caching
 pub mod ecs_windjammer; // Windjammer-friendly ECS API (recommended)
-pub mod game_app; // Complete game application with integrated systems
 pub mod game_loop; // Game loop with fixed timestep
 pub mod input; // Input handling
 pub mod lod; // Level of Detail (LOD) system
 pub mod math; // Math types (Vec2, Vec3, Mat4, etc.)
 pub mod mesh_clustering; // Mesh clustering system (Nanite-style)
-pub mod physics; // Physics integration (Rapier - exposes Rapier types)
 pub mod physics2d; // 2D physics system (Rapier2D integration with ECS)
 
 #[cfg(feature = "3d")]
 pub mod physics3d; // 3D physics system (Rapier3D integration with ECS)
-                 // pub mod physics_windjammer; // Windjammer-friendly physics API (zero crate leakage) - TODO: Fix for v2.0
+
 pub mod renderer; // High-level 2D renderer (for Windjammer games)
 pub mod renderer3d; // High-level 3D renderer (for Windjammer games)
 pub mod rendering; // Graphics rendering

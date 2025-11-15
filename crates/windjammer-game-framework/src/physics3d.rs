@@ -2,10 +2,11 @@
 //!
 //! Provides a high-level API for 3D physics simulation integrated with the ECS.
 
-use crate::ecs::{Entity, World};
+use crate::ecs::Entity;
 use crate::math::Vec3;
 use rapier3d::prelude::*;
 use rapier3d::dynamics::RigidBodyType as RapierRigidBodyType;
+use rapier3d::na::{Quaternion, UnitQuaternion};
 use std::collections::HashMap;
 
 /// Physics world for 3D simulation
