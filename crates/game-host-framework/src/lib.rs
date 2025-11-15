@@ -35,6 +35,7 @@
 //! ```
 
 pub mod animation; // Animation system (skeletal, blending, IK)
+pub mod animation_state_machine; // Animation state machine with transitions
 pub mod assets; // Asset loading and management
 pub mod audio; // Audio playback
 pub mod camera2d; // 2D camera system
@@ -83,6 +84,10 @@ pub mod prelude {
     pub use crate::animation::{
         Animation, AnimationBlender, AnimationPlayer, Bone, IKChain, Skeleton, Transform,
     };
+    pub use crate::animation_state_machine::{
+        AnimationState, AnimationStateMachine, AnimationTransition, ConditionType, Parameter,
+        TransitionCondition,
+    }; // Animation state machine
     pub use crate::assets::{AssetManager, Handle};
     pub use crate::audio::{AudioSystem, SpatialAudioSource};
     pub use crate::camera2d::Camera2D;
