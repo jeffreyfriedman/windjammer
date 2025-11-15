@@ -14,6 +14,7 @@ pub mod query;
 pub mod system;
 pub mod storage;
 pub mod archetype;
+pub mod scene;
 
 pub use entity::*;
 pub use component::*;
@@ -22,6 +23,7 @@ pub use query::*;
 pub use system::*;
 pub use storage::*;
 pub use archetype::*;
+pub use scene::*;
 
 /// Prelude for convenient imports
 pub mod prelude {
