@@ -1,0 +1,12 @@
+// Professional Windjammer Game Editor
+// Competitive with Unity, Unreal, and Godot
+use std::ui::*
+
+@export
+fn start() {
+    println!("🎮 Starting Professional Windjammer Editor")
+    
+    let app = EditorApp::new("Windjammer Game Editor".to_string())
+    app.run()
+}
+

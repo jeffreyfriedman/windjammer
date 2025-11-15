@@ -66,3 +66,6 @@ Thumbs.db
 Desktop.ini
 
 /.sandbox/
+crates/windjammer-editor-desktop/src-tauri/target/
+build_editor/
+build_game_editor/

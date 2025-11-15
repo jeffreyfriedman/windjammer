@@ -1,0 +1,18 @@
+// Docking-enabled Windjammer Game Editor
+use std::ui::*
+
+@export
+fn start() {
+    println!("🎮 Starting Windjammer Game Editor (Docking)")
+    
+    let app = DockingApp::new("Windjammer Editor".to_string(), move || {
+        // This VNode will be parsed to extract panels
+        // For now, just return a simple structure
+        Container::new()
+            .child(Text::new("Docking Editor - Panels managed by egui_dock".to_string()))
+            .to_vnode()
+    })
+    
+    app.run()
+}
+

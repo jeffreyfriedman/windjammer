@@ -21,6 +21,20 @@ struct UIFrameworkInfo {
     uses_ui: bool, // True if imports std::ui::*
 }
 
+/// Information about platform API usage
+#[derive(Debug, Clone, Default)]
+struct PlatformApis {
+    needs_fs: bool,       // True if imports std::fs
+    needs_process: bool,  // True if imports std::process
+    needs_dialog: bool,   // True if imports std::dialog
+    needs_env: bool,      // True if imports std::env
+    needs_encoding: bool, // True if imports std::encoding
+    needs_compute: bool,  // True if imports std::compute
+    needs_net: bool,      // True if imports std::net
+    needs_http: bool,     // True if imports std::http
+    needs_storage: bool,  // True if imports std::storage
+}
+
 pub struct CodeGenerator {
     indent_level: usize,
     signature_registry: SignatureRegistry,
@@ -242,6 +256,79 @@ impl CodeGenerator {
     }
 
     // ============================================================================
+    // UI FRAMEWORK SUPPORT
+    // ============================================================================
+
+    /// Check if an expression is a UI component that needs .to_vnode()
+    fn is_ui_component_expr(&self, expr: &Expression) -> bool {
+        // List of UI components that implement ToVNode
+        const UI_COMPONENTS: &[&str] = &[
+            "Button",
+            "Text",
+            "Panel",
+            "Container",
+            "Flex",
+            "Input",
+            "CodeEditor",
+            "FileTree",
+            "Alert",
+            "Card",
+            "Grid",
+            "Toolbar",
+            "Tabs",
+            "Checkbox",
+            "Radio",
+            "Select",
+            "Switch",
+            "Dialog",
+            "Slider",
+            "Tooltip",
+            "Badge",
+            "Progress",
+            "Spinner",
+        ];
+
+        match expr {
+            // Button::new(...) -> check if Button is a UI component
+            Expression::Call { function, .. } => {
+                if let Expression::FieldAccess { object, field, .. } = &**function {
+                    // Type::method() pattern - check the object (Button), not the method (new)
+                    if let Expression::Identifier { name, .. } = &**object {
+                        return UI_COMPONENTS.contains(&name.as_str());
+                    }
+                }
+                false
+            }
+            // button.variant(...).on_click(...) -> check the root object
+            Expression::MethodCall { object, .. } => self.is_ui_component_expr(object),
+            _ => false,
+        }
+    }
+
+    /// Check if a method is a builder method that returns Self (for chaining)
+    fn is_builder_method(&self, method: &str) -> bool {
+        // Common builder methods that return Self
+        const BUILDER_METHODS: &[&str] = &[
+            "variant",
+            "size",
+            "on_click",
+            "on_change",
+            "placeholder",
+            "child",
+            "direction",
+            "gap",
+            "max_width",
+            "padding",
+            "title",
+            "language",
+            "theme",
+            "bold",
+            "disabled",
+        ];
+        BUILDER_METHODS.contains(&method)
+    }
+
+    // ============================================================================
     // GAME FRAMEWORK SUPPORT
     // ============================================================================
 
@@ -321,6 +408,47 @@ impl CodeGenerator {
         }
 
         UIFrameworkInfo { uses_ui }
+    }
+
+    /// Detect which platform APIs are used (std::fs, std::process, etc.)
+    fn detect_platform_apis(&self, program: &Program) -> PlatformApis {
+        let mut apis = PlatformApis::default();
+
+        for item in &program.items {
+            if let Item::Use { path, .. } = item {
+                let path_str = path.join("::");
+
+                if path_str == "std::fs" || path_str.starts_with("std::fs::") {
+                    apis.needs_fs = true;
+                }
+                if path_str == "std::process" || path_str.starts_with("std::process::") {
+                    apis.needs_process = true;
+                }
+                if path_str == "std::dialog" || path_str.starts_with("std::dialog::") {
+                    apis.needs_dialog = true;
+                }
+                if path_str == "std::env" || path_str.starts_with("std::env::") {
+                    apis.needs_env = true;
+                }
+                if path_str == "std::encoding" || path_str.starts_with("std::encoding::") {
+                    apis.needs_encoding = true;
+                }
+                if path_str == "std::compute" || path_str.starts_with("std::compute::") {
+                    apis.needs_compute = true;
+                }
+                if path_str == "std::net" || path_str.starts_with("std::net::") {
+                    apis.needs_net = true;
+                }
+                if path_str == "std::http" || path_str.starts_with("std::http::") {
+                    apis.needs_http = true;
+                }
+                if path_str == "std::storage" || path_str.starts_with("std::storage::") {
+                    apis.needs_storage = true;
+                }
+            }
+        }
+
+        apis
     }
 
     /// Detect if this program imports std::game (for non-decorator game usage)
@@ -553,6 +681,9 @@ impl CodeGenerator {
 
         // Detect UI framework usage
         let ui_framework_info = self.detect_ui_framework(program);
+
+        // Detect platform API usage
+        let platform_apis = self.detect_platform_apis(program);
 
         // Collect bound aliases first (bound Name = Trait + Trait)
         for item in &program.items {
@@ -800,6 +931,92 @@ impl CodeGenerator {
             implicit_imports.push_str("use windjammer_ui::simple_vnode::{VNode, VAttr};\n");
         }
 
+        // Add platform API imports based on target
+        if platform_apis.needs_fs
+            || platform_apis.needs_process
+            || platform_apis.needs_dialog
+            || platform_apis.needs_env
+            || platform_apis.needs_encoding
+            || platform_apis.needs_compute
+            || platform_apis.needs_net
+            || platform_apis.needs_http
+            || platform_apis.needs_storage
+        {
+            // Use platform-specific imports based on compilation target
+            let platform = match self.target {
+                CompilationTarget::Wasm => "wasm",
+                CompilationTarget::Rust => "native",
+                _ => "native", // Default to native for other targets
+            };
+
+            if platform_apis.needs_fs {
+                implicit_imports.push_str(&format!(
+                    "use windjammer_runtime::platform::{}::fs;\n",
+                    platform
+                ));
+                implicit_imports.push_str(&format!(
+                    "use windjammer_runtime::platform::{}::fs::*;\n",
+                    platform
+                ));
+            }
+            if platform_apis.needs_process {
+                implicit_imports.push_str(&format!(
+                    "use windjammer_runtime::platform::{}::process;\n",
+                    platform
+                ));
+                implicit_imports.push_str(&format!(
+                    "use windjammer_runtime::platform::{}::process::*;\n",
+                    platform
+                ));
+            }
+            if platform_apis.needs_dialog {
+                implicit_imports.push_str(&format!(
+                    "use windjammer_runtime::platform::{}::dialog;\n",
+                    platform
+                ));
+                implicit_imports.push_str(&format!(
+                    "use windjammer_runtime::platform::{}::dialog::*;\n",
+                    platform
+                ));
+            }
+            if platform_apis.needs_env {
+                implicit_imports.push_str(&format!(
+                    "use windjammer_runtime::platform::{}::env::*;\n",
+                    platform
+                ));
+            }
+            if platform_apis.needs_encoding {
+                implicit_imports.push_str(&format!(
+                    "use windjammer_runtime::platform::{}::encoding::*;\n",
+                    platform
+                ));
+            }
+            if platform_apis.needs_compute {
+                implicit_imports.push_str(&format!(
+                    "use windjammer_runtime::platform::{}::compute::*;\n",
+                    platform
+                ));
+            }
+            if platform_apis.needs_net {
+                implicit_imports.push_str(&format!(
+                    "use windjammer_runtime::platform::{}::net::*;\n",
+                    platform
+                ));
+            }
+            if platform_apis.needs_http {
+                implicit_imports.push_str(&format!(
+                    "use windjammer_runtime::platform::{}::http::*;\n",
+                    platform
+                ));
+            }
+            if platform_apis.needs_storage {
+                implicit_imports.push_str(&format!(
+                    "use windjammer_runtime::platform::{}::storage::*;\n",
+                    platform
+                ));
+            }
+        }
+
         // Add trait imports for inferred bounds
         if !self.needs_trait_imports.is_empty() {
             let mut sorted_traits: Vec<_> = self.needs_trait_imports.iter().collect();
@@ -900,61 +1117,65 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
 
         let full_path = path.join(".");
 
-        // Handle glob imports: module.submodule.* -> use module::submodule::*;
-        if full_path.ends_with(".*") {
-            let path_without_glob = full_path.strip_suffix(".*").unwrap();
-            // Replace dots with :: but remove any trailing ::
-            let rust_path = path_without_glob
-                .replace('.', "::")
-                .trim_end_matches("::")
-                .to_string();
-            return format!("use {}::*;\n", rust_path);
-        }
+        // Handle stdlib imports FIRST (before glob handling)
+        // This ensures std::ui::*, std::fs::*, etc. are properly skipped
+        if full_path.starts_with("std::") || full_path.starts_with("std.") {
+            // Normalize to use :: separator
+            let normalized = full_path.replace('.', "::");
+            let module_name = normalized.strip_prefix("std::").unwrap();
 
-        // Handle braced imports: module::{A, B, C} or module.{A, B, C}
-        if (full_path.contains("::{") || full_path.contains(".{")) && full_path.contains('}') {
-            // Try :: separator first, then . separator
-            if let Some((base, items)) = full_path.split_once("::{") {
-                return format!("use {}::{{{};\n", base, items);
-            } else if let Some((base, items)) = full_path.split_once(".{") {
-                let rust_base = base.replace('.', "::");
-                return format!("use {}::{{{};\n", rust_base, items);
-            }
-        }
-
-        // Handle stdlib imports: std::fs -> windjammer_runtime::fs
-        // Map Windjammer stdlib modules to runtime implementations
-        if full_path.starts_with("std::") {
-            let module_name = full_path.strip_prefix("std::").unwrap();
+            // Strip glob suffix if present for checking
+            let module_base = module_name.strip_suffix("::*").unwrap_or(module_name);
 
             // Handle Rust stdlib modules that should NOT be mapped to windjammer_runtime
             // These are native Rust modules that should be used directly
-            if module_name.starts_with("collections::")
-                || module_name.starts_with("cmp::")
-                || module_name == "collections"
-                || module_name == "cmp"
-            {
+            if module_base.starts_with("collections") || module_base.starts_with("cmp") {
                 // Pass through to Rust's std library
                 return format!("use std::{};\n", module_name);
             }
 
             // Handle UI framework - skip explicit import (handled by implicit imports)
-            if module_name == "ui" || module_name.starts_with("ui::") {
+            if module_base == "ui" || module_base.starts_with("ui::") {
                 // UI framework is handled by implicit imports from windjammer-ui crate
                 // Don't generate an explicit import here
                 return String::new();
             }
 
             // Handle Game framework - skip explicit import (handled by implicit imports)
-            if module_name == "game" || module_name.starts_with("game::") {
+            if module_base == "game" || module_base.starts_with("game::") {
                 // Game framework is handled by implicit imports from windjammer-game-framework crate
                 // Don't generate an explicit import here
                 return String::new();
             }
 
             // Handle Tauri framework - skip explicit import (functions are generated inline)
-            if module_name == "tauri" || module_name.starts_with("tauri::") {
+            if module_base == "tauri" || module_base.starts_with("tauri::") {
                 // Tauri functions are handled by compiler codegen (generate_tauri_invoke)
+                // Don't generate an explicit import here
+                return String::new();
+            }
+
+            // Handle platform APIs - skip explicit import (handled by implicit imports)
+            if module_base == "fs"
+                || module_base.starts_with("fs::")
+                || module_base == "process"
+                || module_base.starts_with("process::")
+                || module_base == "dialog"
+                || module_base.starts_with("dialog::")
+                || module_base == "env"
+                || module_base.starts_with("env::")
+                || module_base == "encoding"
+                || module_base.starts_with("encoding::")
+                || module_base == "compute"
+                || module_base.starts_with("compute::")
+                || module_base == "net"
+                || module_base.starts_with("net::")
+                || module_base == "http"
+                || module_base.starts_with("http::")
+                || module_base == "storage"
+                || module_base.starts_with("storage::")
+            {
+                // Platform APIs are handled by implicit imports (platform-specific)
                 // Don't generate an explicit import here
                 return String::new();
             }
@@ -962,7 +1183,6 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
             // Map to windjammer_runtime (all stdlib modules are now implemented!)
             let rust_import = match module_name {
                 // Core modules
-                "fs" => "windjammer_runtime::fs",
                 "http" => "windjammer_runtime::http",
                 "mime" => "windjammer_runtime::mime",
                 "json" => "windjammer_runtime::json",
@@ -973,11 +1193,8 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
                 "crypto" => "windjammer_runtime::crypto",
                 "csv" => "windjammer_runtime::csv_mod",
                 "db" => "windjammer_runtime::db",
-                "encoding" => "windjammer_runtime::encoding",
-                "env" => "windjammer_runtime::env",
                 "log" => "windjammer_runtime::log_mod",
                 "math" => "windjammer_runtime::math",
-                "process" => "windjammer_runtime::process",
                 "random" => "windjammer_runtime::random",
                 "regex" => "windjammer_runtime::regex_mod",
                 "strings" => "windjammer_runtime::strings",
@@ -1030,6 +1247,28 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
         // Skip bare "std" imports
         if full_path == "std" {
             return String::new();
+        }
+
+        // Handle glob imports for non-stdlib modules: module.submodule.* -> use module::submodule::*;
+        if full_path.ends_with(".*") {
+            let path_without_glob = full_path.strip_suffix(".*").unwrap();
+            // Replace dots with :: but remove any trailing ::
+            let rust_path = path_without_glob
+                .replace('.', "::")
+                .trim_end_matches("::")
+                .to_string();
+            return format!("use {}::*;\n", rust_path);
+        }
+
+        // Handle braced imports: module::{A, B, C} or module.{A, B, C}
+        if (full_path.contains("::{") || full_path.contains(".{")) && full_path.contains('}') {
+            // Try :: separator first, then . separator
+            if let Some((base, items)) = full_path.split_once("::{") {
+                return format!("use {}::{{{};\n", base, items);
+            } else if let Some((base, items)) = full_path.split_once(".{") {
+                let rust_base = base.replace('.', "::");
+                return format!("use {}::{{{};\n", rust_base, items);
+            }
         }
 
         // Handle relative imports: ./utils or ../utils or ./config::Config
@@ -3137,13 +3376,24 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
                 //     }
                 // }
 
+                // UI FRAMEWORK: Check if we need to add .to_vnode() for .child() methods
+                let processed_args = if method == "child" && !arguments.is_empty() {
+                    // Always wrap the first argument with .to_vnode() for .child() methods
+                    // The ToVNode trait will handle the conversion
+                    let mut new_args = vec![format!("({}).to_vnode()", args[0])];
+                    new_args.extend_from_slice(&args[1..]);
+                    new_args
+                } else {
+                    args
+                };
+
                 let base_expr = format!(
                     "{}{}{}{}({})",
                     obj_str,
                     separator,
                     method,
                     turbofish,
-                    args.join(", ")
+                    processed_args.join(", ")
                 );
 
                 // AUTO-CLONE: Check if this method call needs to be cloned

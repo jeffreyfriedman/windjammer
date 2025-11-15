@@ -49,13 +49,19 @@ fn handle_connection(mut stream: TcpStream) {
     println!("📥 {} {}", parts[0], path);
 
     // Map URL paths to file paths
-    let file_path = match path {
-        "/" => "examples/index.html",
-        p if p.starts_with("/examples/") => &p[1..], // Remove leading slash
-        p if p.starts_with("/pkg/") => &p[1..],      // Remove leading slash
-        p if p.starts_with("/pkg_counter/") => &p[1..], // Remove leading slash
-        p if p.starts_with("/pkg_button_test/") => &p[1..], // Remove leading slash
-        p if p.starts_with("/pkg_editor/") => &p[1..], // Remove leading slash
+    let file_path: String = match path {
+        "/" => "examples/index.html".to_string(),
+        "/components.css" => "examples/components.css".to_string(),
+        p if p.starts_with("/examples/") => p[1..].to_string(), // Remove leading slash
+        p if p.starts_with("/pkg/") => p[1..].to_string(),      // Remove leading slash
+        p if p.starts_with("/pkg_counter/") => p[1..].to_string(), // Remove leading slash
+        p if p.starts_with("/pkg_button_test/") => p[1..].to_string(), // Remove leading slash
+        p if p.starts_with("/pkg_editor/") => p[1..].to_string(), // Remove leading slash
+        p if p.starts_with("/pkg_game_editor/") => p[1..].to_string(), // Remove leading slash
+        // Map root-level HTML files to examples directory
+        p if p.ends_with(".html") && p.starts_with("/") && !p[1..].contains("/") => {
+            format!("examples{}", p)
+        }
         _ => {
             send_response(&mut stream, 404, "text/plain", b"Not Found");
             return;
@@ -63,9 +69,9 @@ fn handle_connection(mut stream: TcpStream) {
     };
 
     // Read and serve the file
-    match fs::read(file_path) {
+    match fs::read(&file_path) {
         Ok(contents) => {
-            let mime_type = get_mime_type(file_path);
+            let mime_type = get_mime_type(&file_path);
             send_response(&mut stream, 200, mime_type, &contents);
         }
         Err(e) => {

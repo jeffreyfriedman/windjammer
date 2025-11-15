@@ -1,0 +1,124 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Windjammer Game Editor</title>
+    <link rel="stylesheet" href="components.css">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background: #1e1e1e;
+            color: #d4d4d4;
+            height: 100vh;
+            overflow: hidden;
+        }
+
+        #app {
+            width: 100%;
+            height: 100%;
+        }
+
+        /* Loading screen */
+        #loading {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 100vh;
+            background: #1e1e1e;
+        }
+
+        #loading h1 {
+            color: #569cd6;
+            font-size: 2.5rem;
+            margin-bottom: 1rem;
+        }
+
+        #loading p {
+            color: #858585;
+            font-size: 1.2rem;
+        }
+
+        .spinner {
+            width: 50px;
+            height: 50px;
+            border: 4px solid #333;
+            border-top-color: #569cd6;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin-top: 2rem;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        /* Error display */
+        .error {
+            background: #f44336;
+            color: white;
+            padding: 1rem;
+            margin: 1rem;
+            border-radius: 4px;
+            display: none;
+        }
+
+        .error.show {
+            display: block;
+        }
+    </style>
+</head>
+<body>
+    <div id="loading">
+        <h1>🎮 Windjammer Game Editor</h1>
+        <p>Loading WASM module...</p>
+        <div class="spinner"></div>
+    </div>
+
+    <div id="app"></div>
+
+    <div id="error" class="error"></div>
+
+    <!-- Load Tauri bridge first -->
+    <script src="tauri-bridge.js"></script>
+
+    <script type="module">
+        import init, { start } from './pkg_editor/windjammer_wasm.js';
+
+        async function run() {
+            try {
+                // Initialize the WASM module
+                await init();
+                
+                // Hide loading screen
+                document.getElementById('loading').style.display = 'none';
+                
+                // Start the Windjammer editor
+                start();
+                
+                console.log('✅ Windjammer Game Editor loaded successfully!');
+            } catch (error) {
+                console.error('❌ Failed to load Windjammer editor:', error);
+                
+                // Show error
+                const errorDiv = document.getElementById('error');
+                errorDiv.textContent = `Failed to load editor: ${error.message}`;
+                errorDiv.classList.add('show');
+                
+                // Hide loading screen
+                document.getElementById('loading').style.display = 'none';
+            }
+        }
+
+        run();
+    </script>
+</body>
+</html>
+

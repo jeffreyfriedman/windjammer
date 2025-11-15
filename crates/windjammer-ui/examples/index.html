@@ -325,6 +325,21 @@
                 </div>
                 
                 <div class="card">
+                    <div class="card-preview">✅</div>
+                    <div class="card-content">
+                        <div class="card-header">
+                            <h3 class="card-title">Todo Application</h3>
+                            <span class="status-badge working">Live</span>
+                        </div>
+                        <p class="card-description">
+                            Full-featured todo app with add, toggle, and delete functionality.
+                            Demonstrates dynamic lists and complex state management.
+                        </p>
+                        <a href="todo_simple.html" class="card-button">Launch App</a>
+                    </div>
+                </div>
+                
+                <div class="card">
                     <div class="card-preview">🎮</div>
                     <div class="card-content">
                         <div class="card-header">
@@ -335,7 +350,7 @@
                             Complex layout demo showing what a real application looks like.
                             Multiple panels, professional styling, and component composition.
                         </p>
-                        <a href="wasm_editor.html" class="card-button">View Editor</a>
+                        <a href="editor.html" class="card-button">Launch Editor</a>
                     </div>
                 </div>
             </div>
@@ -355,8 +370,32 @@
         <!-- COMPONENTS TAB -->
         <div id="components-tab" class="tab-content">
             <h2 class="section-title">🧩 Component Library</h2>
+            <p style="text-align: center; color: #b0b0b0; margin-bottom: 30px;">
+                <strong>24 Production-Ready Components</strong> | Inspired by shadcn/ui | Pure Windjammer API
+            </p>
             
             <div class="showcase-grid">
+                <div class="component-demo">
+                    <h3>Alert</h3>
+                    <div class="demo-section">
+                        <div class="wj-alert wj-alert-info">Info Alert</div>
+                        <div class="wj-alert wj-alert-success">Success Alert</div>
+                        <div class="wj-alert wj-alert-warning">Warning Alert</div>
+                        <div class="wj-alert wj-alert-error">Error Alert</div>
+                    </div>
+                </div>
+                
+                <div class="component-demo">
+                    <h3>Badge</h3>
+                    <div class="demo-section">
+                        <span class="wj-badge wj-badge-default wj-badge-md">Default</span>
+                        <span class="wj-badge wj-badge-primary wj-badge-md">Primary</span>
+                        <span class="wj-badge wj-badge-success wj-badge-md">Success</span>
+                        <span class="wj-badge wj-badge-warning wj-badge-md">Warning</span>
+                        <span class="wj-badge wj-badge-danger wj-badge-md">Danger</span>
+                    </div>
+                </div>
+                
                 <div class="component-demo">
                     <h3>Buttons</h3>
                     <div class="demo-section">
@@ -377,23 +416,61 @@
                 </div>
                 
                 <div class="component-demo">
-                    <h3>Text Sizes</h3>
-                    <div class="demo-section">
-                        <p class="wj-text wj-text-xs">Extra Small Text</p>
-                        <p class="wj-text wj-text-sm">Small Text</p>
-                        <p class="wj-text wj-text-md">Medium Text</p>
-                        <p class="wj-text wj-text-lg">Large Text</p>
-                        <p class="wj-text wj-text-xl">Extra Large Text</p>
+                    <h3>Card</h3>
+                    <div class="wj-card">
+                        <div class="wj-card-header">Card Title</div>
+                        <div class="wj-card-content">
+                            <p class="wj-text wj-text-md">Card content with header and styled container.</p>
+                        </div>
                     </div>
                 </div>
                 
                 <div class="component-demo">
-                    <h3>Alerts</h3>
+                    <h3>Checkbox</h3>
                     <div class="demo-section">
-                        <div class="wj-alert wj-alert-info">Info Alert</div>
-                        <div class="wj-alert wj-alert-success">Success Alert</div>
-                        <div class="wj-alert wj-alert-warning">Warning Alert</div>
-                        <div class="wj-alert wj-alert-error">Error Alert</div>
+                        <label class="wj-checkbox-container wj-checkbox-md">
+                            <input type="checkbox" class="wj-checkbox-input" checked>
+                            <span class="wj-checkbox-label">Enabled Option</span>
+                        </label>
+                        <label class="wj-checkbox-container wj-checkbox-md">
+                            <input type="checkbox" class="wj-checkbox-input">
+                            <span class="wj-checkbox-label">Disabled Option</span>
+                        </label>
+                    </div>
+                </div>
+                
+                <div class="component-demo">
+                    <h3>Container</h3>
+                    <div class="wj-container">
+                        <p class="wj-text wj-text-md">Container with max-width and auto margins.</p>
+                    </div>
+                </div>
+                
+                <div class="component-demo">
+                    <h3>Dialog (Modal)</h3>
+                    <div class="demo-section">
+                        <button class="wj-button wj-button-primary wj-button-md" onclick="document.getElementById('demo-dialog').style.display='flex'">
+                            Open Dialog
+                        </button>
+                        <div id="demo-dialog" class="wj-dialog-container" style="display: none;">
+                            <div class="wj-dialog-overlay" onclick="document.getElementById('demo-dialog').style.display='none'"></div>
+                            <div class="wj-dialog">
+                                <div class="wj-dialog-header">
+                                    <h2 class="wj-dialog-title">Example Dialog</h2>
+                                    <button class="wj-dialog-close" onclick="document.getElementById('demo-dialog').style.display='none'">×</button>
+                                </div>
+                                <div class="wj-dialog-content">
+                                    <p class="wj-text wj-text-md">This is a modal dialog with overlay, title, and close button.</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="component-demo">
+                    <h3>Input</h3>
+                    <div class="demo-section">
+                        <input type="text" class="wj-input" placeholder="Enter text here...">
                     </div>
                 </div>
                 
@@ -402,15 +479,169 @@
                     <div class="wj-panel">
                         <div class="wj-panel-header">Panel Title</div>
                         <div class="wj-panel-content">
-                            <p class="wj-text wj-text-md">Panel content goes here. Panels are great for grouping related content.</p>
+                            <p class="wj-text wj-text-md">Panel with title and bordered content area.</p>
                         </div>
                     </div>
                 </div>
                 
                 <div class="component-demo">
-                    <h3>Container</h3>
-                    <div class="wj-container">
-                        <p class="wj-text wj-text-md">Container with max-width and auto margins for centering content.</p>
+                    <h3>Progress</h3>
+                    <div class="demo-section">
+                        <div class="wj-progress-container">
+                            <div class="wj-progress-bar wj-progress-default" style="width: 35%">35%</div>
+                        </div>
+                        <div class="wj-progress-container">
+                            <div class="wj-progress-bar wj-progress-success" style="width: 70%">70%</div>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="component-demo">
+                    <h3>Radio Group</h3>
+                    <div class="demo-section">
+                        <label class="wj-radio-option">
+                            <input type="radio" name="demo-radio" class="wj-radio-input" checked>
+                            <span class="wj-radio-label">Option 1</span>
+                        </label>
+                        <label class="wj-radio-option">
+                            <input type="radio" name="demo-radio" class="wj-radio-input">
+                            <span class="wj-radio-label">Option 2</span>
+                        </label>
+                    </div>
+                </div>
+                
+                <div class="component-demo">
+                    <h3>Select</h3>
+                    <div class="demo-section">
+                        <select class="wj-select">
+                            <option>Choose an option...</option>
+                            <option>Option 1</option>
+                            <option>Option 2</option>
+                            <option>Option 3</option>
+                        </select>
+                    </div>
+                </div>
+                
+                <div class="component-demo">
+                    <h3>Slider</h3>
+                    <div class="demo-section">
+                        <div class="wj-slider-container">
+                            <input type="range" class="wj-slider-input" min="0" max="100" value="50" id="demo-slider" oninput="document.getElementById('slider-value').textContent = this.value">
+                            <span class="wj-slider-value" id="slider-value">50</span>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="component-demo">
+                    <h3>Spinner</h3>
+                    <div class="demo-section">
+                        <div class="wj-spinner wj-spinner-md"></div>
+                        <span class="wj-text wj-text-sm" style="color: #b0b0b0;">Loading...</span>
+                    </div>
+                </div>
+                
+                <div class="component-demo">
+                    <h3>Switch</h3>
+                    <div class="demo-section">
+                        <div class="wj-switch-container wj-switch-md">
+                            <button class="wj-switch-track wj-switch-checked" role="switch" aria-checked="true">
+                                <div class="wj-switch-thumb"></div>
+                            </button>
+                            <span class="wj-switch-label">Enabled</span>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="component-demo">
+                    <h3>Tabs</h3>
+                    <div class="demo-section">
+                        <div class="wj-tabs">
+                            <button class="wj-tab wj-tab-active">Tab 1</button>
+                            <button class="wj-tab">Tab 2</button>
+                            <button class="wj-tab">Tab 3</button>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="component-demo">
+                    <h3>Text Sizes</h3>
+                    <div class="demo-section">
+                        <p class="wj-text wj-text-xs">Extra Small</p>
+                        <p class="wj-text wj-text-sm">Small</p>
+                        <p class="wj-text wj-text-md">Medium</p>
+                        <p class="wj-text wj-text-lg">Large</p>
+                        <p class="wj-text wj-text-xl">Extra Large</p>
+                    </div>
+                </div>
+                
+                <div class="component-demo">
+                    <h3>Toolbar</h3>
+                    <div class="wj-toolbar">
+                        <button class="wj-button wj-button-secondary wj-button-sm">New</button>
+                        <button class="wj-button wj-button-secondary wj-button-sm">Open</button>
+                        <button class="wj-button wj-button-secondary wj-button-sm">Save</button>
+                    </div>
+                </div>
+                
+                <div class="component-demo">
+                    <h3>Tooltip</h3>
+                    <div class="demo-section">
+                        <div class="wj-tooltip-container">
+                            <button class="wj-button wj-button-secondary wj-button-md">Hover Me</button>
+                            <span class="wj-tooltip-text wj-tooltip-top">This is a tooltip!</span>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="component-demo">
+                    <h3>CodeEditor</h3>
+                    <div class="demo-section">
+                        <div class="wj-code-editor">
+                            <pre class="wj-code-content" style="background: #1e1e1e; padding: 12px; border-radius: 4px; color: #d4d4d4; font-family: 'Courier New', monospace; font-size: 13px; line-height: 1.5; margin: 0;"><code>fn main() {
+    println!("Hello, Windjammer!");
+}</code></pre>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="component-demo">
+                    <h3>FileTree</h3>
+                    <div class="demo-section">
+                        <div style="background: #2d2d2d; padding: 12px; border-radius: 4px;">
+                            <div style="color: #d4d4d4; font-size: 14px; font-family: monospace;">
+                                <div>📁 src/</div>
+                                <div style="padding-left: 20px;">📄 main.wj</div>
+                                <div style="padding-left: 20px;">📄 game.wj</div>
+                                <div>📁 assets/</div>
+                                <div style="padding-left: 20px;">🖼️ player.png</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="component-demo">
+                    <h3>Flex & Grid</h3>
+                    <div class="demo-section">
+                        <div style="display: flex; gap: 8px; margin-bottom: 12px;">
+                            <div style="flex: 1; background: #4caf50; padding: 12px; border-radius: 4px; text-align: center;">Flex 1</div>
+                            <div style="flex: 1; background: #2196f3; padding: 12px; border-radius: 4px; text-align: center;">Flex 2</div>
+                            <div style="flex: 1; background: #ff9800; padding: 12px; border-radius: 4px; text-align: center;">Flex 3</div>
+                        </div>
+                        <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px;">
+                            <div style="background: #4caf50; padding: 12px; border-radius: 4px; text-align: center;">Grid 1</div>
+                            <div style="background: #2196f3; padding: 12px; border-radius: 4px; text-align: center;">Grid 2</div>
+                            <div style="background: #ff9800; padding: 12px; border-radius: 4px; text-align: center;">Grid 3</div>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="component-demo">
+                    <h3>Custom Components</h3>
+                    <div class="demo-section">
+                        <div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); padding: 20px; border-radius: 8px; text-align: center; color: white;">
+                            <h4 style="margin: 0 0 8px 0;">Custom Component</h4>
+                            <p style="margin: 0; opacity: 0.9;">Build anything with ToVNode trait!</p>
+                        </div>
                     </div>
                 </div>
             </div>

@@ -1,74 +1,150 @@
-// Windjammer Game Editor - Interactive Demo
-// Shows clickable buttons with console output
-
+// Simplified Windjammer Game Editor - Demonstrates new components
 use std::ui::*
+use std::fs::*
+use std::process::*
 
 @export
 fn start() {
-    println!("🎮 Windjammer Game Editor Demo")
+    println!("🎮 Starting Windjammer Game Editor (Simple)")
     
-    let console_msg = Signal::new("Welcome to Windjammer Game Editor!\nClick any button to see it work!\n".to_string())
-    
-    let render = move || {
-        let msg_new = console_msg.clone()
-        let msg_open = console_msg.clone()
-        let msg_save = console_msg.clone()
-        let msg_run = console_msg.clone()
-        let msg_stop = console_msg.clone()
-        let msg_display = console_msg.clone()
-        
-        Container::new()
-            .max_width("100%")
-            .child(Panel::new("🎮 Windjammer Game Editor".to_string())
-                .child(Text::new("Interactive Demo - All buttons work!".to_string())))
-            .child(Panel::new("Toolbar".to_string())
-                .child(Flex::new()
+    let app = ReactiveApp::new("Windjammer Game Editor".to_string(), move || {
+        // Main toolbar
+        let toolbar = Panel::new("".to_string())
+            .background_color("#2d2d30".to_string())
+            .padding("8px")
+            .child(
+                Flex::new()
                     .direction(FlexDirection::Row)
                     .gap("8px")
-                    .child(Button::new("New Project".to_string())
-                        .variant(ButtonVariant::Primary)
-                        .on_click(move || {
-                            let current = msg_new.get()
-                            msg_new.set(current + "📁 Creating new project...\n")
-                            println!("New Project clicked")
-                        }))
-                    .child(Button::new("Open".to_string())
-                        .variant(ButtonVariant::Secondary)
-                        .on_click(move || {
-                            let current = msg_open.get()
-                            msg_open.set(current + "📂 Opening project...\n")
-                            println!("Open clicked")
-                        }))
-                    .child(Button::new("Save".to_string())
-                        .variant(ButtonVariant::Secondary)
-                        .on_click(move || {
-                            let current = msg_save.get()
-                            msg_save.set(current + "💾 Saving files...\n")
-                            println!("Save clicked")
-                        }))
-                    .child(Button::new("Run".to_string())
-                        .variant(ButtonVariant::Primary)
-                        .on_click(move || {
-                            let current = msg_run.get()
-                            msg_run.set(current + "▶️  Running game...\n")
-                            println!("Run clicked")
-                        }))
-                    .child(Button::new("Stop".to_string())
-                        .variant(ButtonVariant::Danger)
-                        .on_click(move || {
-                            let current = msg_stop.get()
-                            msg_stop.set(current + "⏹️  Game stopped\n")
-                            println!("Stop clicked")
-                        }))))
-            .child(Panel::new("Console".to_string())
-                .child(Text::new(msg_display.get())))
+                    .child(
+                        Button::new("📁 New Project".to_string())
+                            .variant(ButtonVariant::Primary)
+                            .on_click(move || {
+                                println!("🎉 New Project clicked!")
+                            })
+                    )
+                    .child(
+                        Button::new("💾 Save".to_string())
+                            .variant(ButtonVariant::Success)
+                            .on_click(move || {
+                                println!("💾 Save clicked!")
+                            })
+                    )
+                    .child(
+                        Button::new("▶️ Run".to_string())
+                            .variant(ButtonVariant::Success)
+                            .on_click(move || {
+                                println!("▶️ Run clicked!")
+                            })
+                    )
+                    .child(
+                        Button::new("🔨 Build".to_string())
+                            .variant(ButtonVariant::Primary)
+                            .on_click(move || {
+                                println!("🔨 Build clicked!")
+                            })
+                    )
+            )
+        
+        // File tree panel
+        let file_tree_panel = Panel::new("Files".to_string())
+            .background_color("#252526".to_string())
+            .width("250px")
+            .child(
+                TreeView::new()
+                    .items(vec![
+                        TreeItem::new("my_game", "📁")
+                            .expanded(true)
+                            .children(vec![
+                                TreeItem::new("main.wj", "📄"),
+                                TreeItem::new("assets/", "📁"),
+                            ])
+                    ])
+            )
+        
+        // Code editor panel
+        let code_editor_panel = Panel::new("Editor".to_string())
+            .background_color("#1e1e1e".to_string())
+            .child(
+                Text::new("use std::game::*\n\n@game\nstruct MyGame {\n    player_x: float,\n}\n\n@init\nfn init() -> MyGame {\n    MyGame { player_x: 100.0 }\n}\n".to_string())
+            )
+        
+        // Scene editor panel
+        let scene_panel = Panel::new("Scene".to_string())
+            .background_color("#252526".to_string())
+            .width("250px")
+            .child(
+                TreeView::new()
+                    .items(vec![
+                        TreeItem::new("Root", "🎬")
+                            .expanded(true)
+                            .children(vec![
+                                TreeItem::new("Player", "🎮"),
+                                TreeItem::new("Camera", "📷"),
+                            ])
+                    ])
+            )
+        
+        // Properties panel
+        let properties_panel = Panel::new("Properties".to_string())
+            .background_color("#252526".to_string())
+            .child(
+                Flex::new()
+                    .direction(FlexDirection::Column)
+                    .gap("8px")
+                    .child(Text::new("Position: (0, 0)".to_string()))
+                    .child(Text::new("Scale: (1, 1)".to_string()))
+            )
+        
+        // Right panel (scene + properties)
+        let right_panel = SplitPanel::new(SplitDirection::Vertical)
+            .top(scene_panel.to_vnode())
+            .bottom(properties_panel.to_vnode())
+            .split_ratio(0.6)
+        
+        // Main content area
+        let main_content = SplitPanel::new(SplitDirection::Horizontal)
+            .left(file_tree_panel.to_vnode())
+            .right(
+                SplitPanel::new(SplitDirection::Horizontal)
+                    .left(code_editor_panel.to_vnode())
+                    .right(right_panel.to_vnode())
+                    .split_ratio(0.7)
+                    .to_vnode()
+            )
+            .split_ratio(0.2)
+        
+        // Console panel
+        let console_panel = Panel::new("Console".to_string())
+            .background_color("#1e1e1e".to_string())
+            .height("200px")
+            .child(Text::new("Ready.\n".to_string()))
+        
+        // Status bar
+        let status_bar = Flex::new()
+            .direction(FlexDirection::Row)
+            .gap("16px")
+            .padding("4px 8px")
+            .background_color("#007acc".to_string())
+            .child(Text::new("Project: my_game".to_string()))
+            .child(Text::new("File: main.wj".to_string()))
+            .child(Text::new("✓ Ready".to_string()))
+        
+        // Complete layout
+        Container::new()
+            .max_width("100%")
+            .max_height("100%")
+            .background_color("#1e1e1e".to_string())
+            .child(toolbar)
+            .child(
+                SplitPanel::new(SplitDirection::Vertical)
+                    .top(main_content.to_vnode())
+                    .bottom(console_panel.to_vnode())
+                    .split_ratio(0.75)
+            )
+            .child(status_bar)
             .to_vnode()
-    }
+    })
     
-    ReactiveApp::new("Windjammer Game Editor".to_string(), render).run()
+    app.run()
 }
-
-fn main() {
-    start()
-}
-

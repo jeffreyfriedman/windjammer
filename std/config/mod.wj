@@ -1,0 +1,37 @@
+// std/config - Configuration management for Windjammer projects
+// Reads windjammer.toml configuration files
+
+// PUBLIC API - Users interact with these functions only
+
+/// Backend configuration for WASM proxy
+pub struct BackendConfig {
+    pub url: string,
+    pub api_key: Option<string>,
+    pub timeout: int, // seconds
+}
+
+/// Get backend configuration from windjammer.toml
+/// Returns None if no backend is configured
+pub fn get_backend() -> Option<BackendConfig> {
+    // Compiler will generate platform-specific code
+    None
+}
+
+/// Check if a backend is configured
+pub fn has_backend() -> bool {
+    // Compiler will generate platform-specific code
+    false
+}
+
+/// Get a custom configuration value
+pub fn get(key: string) -> Option<string> {
+    // Compiler will generate platform-specific code
+    None
+}
+
+/// Get a custom configuration value or return default
+pub fn get_or(key: string, default: string) -> string {
+    // Compiler will generate platform-specific code
+    default
+}
+

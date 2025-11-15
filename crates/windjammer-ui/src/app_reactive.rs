@@ -1,144 +1,103 @@
-//! Reactive app runtime with automatic re-rendering
-//!
-//! This module provides a reactive application runtime that automatically
-//! re-renders the UI when signals change.
-
+/// Reactive application runtime for WASM
+/// Simpler version without the complex winit+wgpu setup
 use crate::simple_vnode::VNode;
 use std::cell::RefCell;
 use std::rc::Rc;
-
-#[cfg(target_arch = "wasm32")]
 use wasm_bindgen::prelude::*;
-#[cfg(target_arch = "wasm32")]
-use web_sys::{window, Element};
 
-#[cfg(target_arch = "wasm32")]
-thread_local! {
-    /// Global render callback that can be triggered by signal updates
-    static RENDER_CALLBACK: RefCell<Option<Rc<dyn Fn()>>> = RefCell::new(None);
+// Global render callback for triggering re-renders
+static mut RENDER_CALLBACK: Option<Box<dyn Fn()>> = None;
+
+pub fn set_render_callback<F: Fn() + 'static>(callback: F) {
+    unsafe {
+        RENDER_CALLBACK = Some(Box::new(callback));
+    }
 }
 
-/// Set the global render callback
-#[cfg(target_arch = "wasm32")]
-pub fn set_render_callback(callback: impl Fn() + 'static) {
-    RENDER_CALLBACK.with(|rc| {
-        *rc.borrow_mut() = Some(Rc::new(callback));
-    });
-}
-
-/// Trigger a re-render (called by signals when they change)
-#[cfg(target_arch = "wasm32")]
-#[wasm_bindgen]
 pub fn trigger_rerender() {
-    web_sys::console::log_1(&"🔄 Triggering re-render...".into());
-    RENDER_CALLBACK.with(|rc| {
-        if let Some(callback) = rc.borrow().as_ref() {
+    unsafe {
+        if let Some(callback) = &RENDER_CALLBACK {
             callback();
-        } else {
-            web_sys::console::warn_1(&"⚠️ No render callback set!".into());
         }
-    });
+    }
 }
 
-/// Reactive app that re-renders when signals change
-#[cfg(target_arch = "wasm32")]
+/// Reactive application that automatically re-renders when signals change
 pub struct ReactiveApp {
     title: String,
     render_fn: Rc<dyn Fn() -> VNode>,
-    root_element: Option<Element>,
-    document: Option<web_sys::Document>,
 }
 
-#[cfg(target_arch = "wasm32")]
 impl ReactiveApp {
-    /// Create a new reactive app
-    pub fn new(title: impl Into<String>, render_fn: impl Fn() -> VNode + 'static) -> Self {
+    pub fn new<F>(title: String, render_fn: F) -> Self
+    where
+        F: Fn() -> VNode + 'static,
+    {
         Self {
-            title: title.into(),
+            title,
             render_fn: Rc::new(render_fn),
-            root_element: None,
-            document: None,
         }
     }
 
-    /// Mount and run the app
-    pub fn run(mut self) {
-        match self.run_internal() {
-            Ok(_) => {}
-            Err(e) => {
-                web_sys::console::error_1(&format!("Failed to mount app: {:?}", e).into());
-            }
-        }
-    }
+    pub fn run(self) {
+        use wasm_bindgen::JsCast;
+        use web_sys::{window, HtmlElement};
 
-    fn run_internal(&mut self) -> Result<(), JsValue> {
-        // Set up panic hook
-        console_error_panic_hook::set_once();
-
-        web_sys::console::log_1(&"🔧 Starting ReactiveApp".into());
-
-        // Get window and document
-        let window = window().ok_or("No window found")?;
-        let document = window.document().ok_or("No document found")?;
-
-        // Set document title
-        document.set_title(&self.title);
-
-        // Get root element
-        let root_element = document
+        let document = window().unwrap().document().unwrap();
+        let root = document
             .get_element_by_id("app")
-            .or_else(|| document.body().map(|b| b.into()))
-            .ok_or("No root element found")?;
+            .expect("Failed to find #app element")
+            .dyn_into::<HtmlElement>()
+            .unwrap();
 
-        // Store for re-renders
-        self.root_element = Some(root_element.clone());
-        self.document = Some(document.clone());
-
-        // Initial render
-        self.render()?;
-
-        // Set up re-render callback
         let render_fn = self.render_fn.clone();
-        let root_elem = root_element.clone();
-        let doc = document.clone();
+        let needs_rerender = Rc::new(RefCell::new(true));
 
+        let needs_rerender_clone = needs_rerender.clone();
         set_render_callback(move || {
-            web_sys::console::log_1(&"🎨 Re-rendering...".into());
-
-            // Clear and re-render
-            root_elem.set_inner_html("");
-            let vnode = render_fn();
-            match vnode.render(&doc) {
-                Ok(rendered) => {
-                    if let Err(e) = root_elem.append_child(&rendered) {
-                        web_sys::console::error_1(&format!("Re-render error: {:?}", e).into());
-                    } else {
-                        web_sys::console::log_1(&"✅ Re-render complete!".into());
-                    }
-                }
-                Err(e) => {
-                    web_sys::console::error_1(&format!("Render error: {:?}", e).into());
-                }
-            }
+            *needs_rerender_clone.borrow_mut() = true;
         });
 
-        web_sys::console::log_1(&"✅ ReactiveApp mounted!".into());
+        let render_fn_clone = render_fn.clone();
+        let needs_rerender_clone = needs_rerender.clone();
 
-        Ok(())
-    }
+        let render_loop = Rc::new(RefCell::new(None::<Closure<dyn FnMut()>>));
+        let render_loop_clone = render_loop.clone();
 
-    fn render(&self) -> Result<(), JsValue> {
-        let root_element = self.root_element.as_ref().ok_or("No root element")?;
-        let document = self.document.as_ref().ok_or("No document")?;
+        *render_loop.borrow_mut() = Some(Closure::wrap(Box::new(move || {
+            if *needs_rerender_clone.borrow() {
+                *needs_rerender_clone.borrow_mut() = false;
 
-        // Clear existing content
-        root_element.set_inner_html("");
+                let vnode = render_fn_clone();
+                let html = crate::renderer::render_to_html(&vnode);
+                root.set_inner_html(&html);
 
-        // Render the VNode
-        let vnode = (self.render_fn)();
-        let rendered = vnode.render(document)?;
-        root_element.append_child(&rendered)?;
+                crate::renderer::attach_event_listeners(&root, &vnode);
+            }
 
-        Ok(())
+            web_sys::window()
+                .unwrap()
+                .request_animation_frame(
+                    render_loop_clone
+                        .borrow()
+                        .as_ref()
+                        .unwrap()
+                        .as_ref()
+                        .unchecked_ref(),
+                )
+                .unwrap();
+        }) as Box<dyn FnMut()>));
+
+        web_sys::window()
+            .unwrap()
+            .request_animation_frame(
+                render_loop
+                    .borrow()
+                    .as_ref()
+                    .unwrap()
+                    .as_ref()
+                    .unchecked_ref(),
+            )
+            .unwrap();
     }
 }

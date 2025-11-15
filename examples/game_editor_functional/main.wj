@@ -1,0 +1,40 @@
+use std::ui::*
+
+@export
+fn start() {
+    let runs = Signal::new(0)
+    
+    let render_runs = runs.clone()
+    let button_runs = runs.clone()
+    
+    let render = move || {
+        let display_runs = render_runs.clone()
+        let inc_runs = button_runs.clone()
+        
+        Container::new()
+            .child(Panel::new("Windjammer Game Editor".to_string())
+                .child(Text::new("Build amazing games with Windjammer!".to_string())))
+            .child(Panel::new("Toolbar".to_string())
+                .child(Button::new("New Game".to_string())
+                    .variant(ButtonVariant::Secondary))
+                .child(Button::new("Open".to_string())
+                    .variant(ButtonVariant::Secondary))
+                .child(Button::new("Save".to_string())
+                    .variant(ButtonVariant::Secondary))
+                .child(Button::new("Run Game".to_string())
+                    .variant(ButtonVariant::Primary)
+                    .on_click(move || {
+                        let current = inc_runs.get()
+                        inc_runs.set(current + 1)
+                    })))
+            .child(Panel::new("Status".to_string())
+                .child(Text::new(format!("Games run: {}", display_runs.get()))))
+            .to_vnode()
+    }
+    
+    ReactiveApp::new("Game Editor".to_string(), render).run()
+}
+
+fn main() {
+    start()
+}

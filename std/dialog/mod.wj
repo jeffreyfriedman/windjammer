@@ -1,0 +1,32 @@
+// Windjammer Standard Library - Dialog Operations
+// Platform-agnostic dialog API
+// NO coupling to any specific platform
+
+// Dialog result type
+pub type DialogResult<T> = Result<T, string>
+
+// Open a file picker dialog
+pub fn open_file() -> DialogResult<string> {
+    // Compiler generates platform-specific implementation
+}
+
+// Open a directory picker dialog
+pub fn open_directory() -> DialogResult<string> {
+    // Compiler generates platform-specific implementation
+}
+
+// Open a save file dialog
+pub fn save_file() -> DialogResult<string> {
+    // Compiler generates platform-specific implementation
+}
+
+// Show a message dialog
+pub fn show_message(title: string, message: string) -> DialogResult<()> {
+    // Compiler generates platform-specific implementation
+}
+
+// Show a confirmation dialog
+pub fn show_confirm(title: string, message: string) -> DialogResult<bool> {
+    // Compiler generates platform-specific implementation
+}
+

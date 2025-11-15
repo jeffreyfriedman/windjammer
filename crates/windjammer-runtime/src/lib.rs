@@ -4,6 +4,9 @@
 //! When you write `use std::http` in Windjammer, the compiler generates code that calls
 //! functions from this crate.
 
+// Platform-specific implementations
+pub mod platform;
+
 // Core modules (fully implemented)
 pub mod fs;
 #[cfg(feature = "server")]
@@ -34,10 +37,8 @@ pub mod sync;
 pub mod testing;
 pub mod thread;
 pub mod time;
-pub mod ui;
 
 // Re-export commonly used types
 pub use game::{EntityId, Game, Mat4, Mesh, Sprite, Transform, Vec2, Vec3, Velocity, World};
 #[cfg(feature = "server")]
 pub use http::{Request, Response, Router, ServerResponse};
-pub use ui::{VComponent, VElement, VNode, VText};

@@ -1,0 +1,46 @@
+// Windjammer Game Editor - Simplified Desktop Version
+// Pure Windjammer UI with Tauri backend integration
+
+use std::ui;
+
+// Application state
+let current_project = Signal::new(String::new());
+let current_file = Signal::new(String::new());
+let file_text = Signal::new(String::new());
+let status_text = Signal::new(String::from("Ready"));
+
+// Main render function
+fn render_editor() -> VNode {
+    let project_val = current_project.clone();
+    let file_val = current_file.clone();
+    let text_val = file_text.clone();
+    let status_val = status_text.clone();
+    
+    Container::new()
+        .child(Panel::new("Windjammer Game Editor")
+            .child(Flex::new(FlexDirection::Row)
+                .child(Button::new("New Project")
+                    .variant(ButtonVariant::Primary)
+                    .on_click(|| {
+                        status_text.set(String::from("Creating project..."));
+                    }))
+                .child(Button::new("Save")
+                    .variant(ButtonVariant::Secondary)
+                    .on_click(|| {
+                        status_text.set(String::from("Saving file..."));
+                    }))
+                .child(Button::new("Run")
+                    .variant(ButtonVariant::Primary)
+                    .on_click(|| {
+                        status_text.set(String::from("Running game..."));
+                    })))
+            .child(Text::new(status_val.get())
+                .size(TextSize::Medium)))
+}
+
+// Entry point
+@export
+fn start() {
+    ReactiveApp::new("Windjammer Game Editor", render_editor).run();
+}
+

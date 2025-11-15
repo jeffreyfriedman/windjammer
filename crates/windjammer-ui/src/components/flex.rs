@@ -1,6 +1,6 @@
 //! Flex layout component
+use crate::prelude::ToVNode;
 use crate::simple_vnode::{VAttr, VNode};
-use crate::to_vnode::ToVNode;
 
 pub enum FlexDirection {
     Row,
@@ -11,6 +11,8 @@ pub struct Flex {
     pub children: Vec<VNode>,
     pub direction: FlexDirection,
     pub gap: String,
+    pub padding: Option<String>,
+    pub background_color: Option<String>,
 }
 
 impl Flex {
@@ -19,6 +21,8 @@ impl Flex {
             children: Vec::new(),
             direction: FlexDirection::Row,
             gap: "8px".to_string(),
+            padding: None,
+            background_color: None,
         }
     }
 
@@ -27,13 +31,8 @@ impl Flex {
         self
     }
 
-<<<<<<< Updated upstream
     pub fn child(mut self, child: VNode) -> Self {
         self.children.push(child);
-=======
-    pub fn child(mut self, child: impl ToVNode) -> Self {
-        self.children.push(child.to_vnode());
->>>>>>> Stashed changes
         self
     }
 
@@ -47,16 +46,34 @@ impl Flex {
         self
     }
 
+    pub fn padding(mut self, padding: impl Into<String>) -> Self {
+        self.padding = Some(padding.into());
+        self
+    }
+
+    pub fn background_color(mut self, color: impl Into<String>) -> Self {
+        self.background_color = Some(color.into());
+        self
+    }
+
     pub fn render(&self) -> VNode {
         let direction_str = match self.direction {
             FlexDirection::Row => "row",
             FlexDirection::Column => "column",
         };
 
-        let style = format!(
+        let mut style = format!(
             "display: flex; flex-direction: {}; gap: {};",
             direction_str, self.gap
         );
+
+        if let Some(ref p) = self.padding {
+            style.push_str(&format!(" padding: {};", p));
+        }
+
+        if let Some(ref bg) = self.background_color {
+            style.push_str(&format!(" background-color: {};", bg));
+        }
 
         VNode::Element {
             tag: "div".to_string(),
@@ -75,7 +92,6 @@ impl Default for Flex {
     }
 }
 
-// Implement ToVNode for Flex
 impl ToVNode for Flex {
     fn to_vnode(self) -> VNode {
         self.render()

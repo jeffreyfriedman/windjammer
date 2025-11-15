@@ -1,0 +1,71 @@
+// Minimal working editor to test layout
+use std::ui::*
+
+@export
+fn start() {
+    println!("🎮 Starting Minimal Editor")
+    
+    let app = ReactiveApp::new("Windjammer Editor".to_string(), move || {
+        Container::new()
+            .child(
+                Flex::new()
+                    .direction(FlexDirection::Row)
+                    .gap("8px")
+                    .padding("8px")
+                    .background_color("#2d2d30".to_string())
+                    .child(
+                        Button::new("New Project".to_string())
+                            .variant(ButtonVariant::Primary)
+                            .on_click(move || {
+                                println!("✅ New Project clicked!")
+                            })
+                    )
+                    .child(
+                        Button::new("Save".to_string())
+                            .variant(ButtonVariant::Success)
+                            .on_click(move || {
+                                println!("✅ Save clicked!")
+                            })
+                    )
+                    .child(
+                        Button::new("Run".to_string())
+                            .variant(ButtonVariant::Success)
+                            .on_click(move || {
+                                println!("✅ Run clicked!")
+                            })
+                    )
+            )
+            .child(
+                Flex::new()
+                    .direction(FlexDirection::Row)
+                    .gap("8px")
+                    .child(
+                        Panel::new("Files".to_string())
+                            .background_color("#252526".to_string())
+                            .width("200px")
+                            .child(Text::new("📁 my_game\n  📄 main.wj\n  📁 assets/".to_string()))
+                    )
+                    .child(
+                        Panel::new("Editor".to_string())
+                            .background_color("#1e1e1e".to_string())
+                            .child(Text::new("use std::game::*\n\n@game\nstruct MyGame {\n    x: float,\n}".to_string()))
+                    )
+                    .child(
+                        Panel::new("Properties".to_string())
+                            .background_color("#252526".to_string())
+                            .width("200px")
+                            .child(Text::new("Position: (0, 0)\nScale: (1, 1)".to_string()))
+                    )
+            )
+            .child(
+                Panel::new("Console".to_string())
+                    .background_color("#1e1e1e".to_string())
+                    .height("150px")
+                    .child(Text::new("Ready.".to_string()))
+            )
+            .to_vnode()
+    })
+    
+    app.run()
+}
+

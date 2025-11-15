@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Windjammer Game Editor - Web</title>
+    <link rel="stylesheet" href="components.css">
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background: #1e1e1e;
+            color: #d4d4d4;
+        }
+        
+        #app {
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+        
+        .loading {
+            text-align: center;
+        }
+        
+        .loading h1 {
+            color: #4caf50;
+            margin-bottom: 20px;
+        }
+        
+        .loading p {
+            color: #b0b0b0;
+        }
+    </style>
+</head>
+<body>
+    <div id="app">
+        <div class="loading">
+            <h1>🎮 Loading Windjammer Game Editor...</h1>
+            <p>Initializing WASM module...</p>
+        </div>
+    </div>
+    
+    <script type="module">
+        import init, { start } from '../pkg_game_editor/windjammer_wasm.js';
+        
+        async function run() {
+            try {
+                console.log('🔧 Initializing WASM...');
+                await init();
+                console.log('✅ WASM loaded successfully!');
+                
+                console.log('🎨 Starting UI...');
+                start();
+                console.log('✅ Windjammer Game Editor mounted!');
+            } catch (error) {
+                console.error('❌ Error loading editor:', error);
+                document.getElementById('app').innerHTML = `
+                    <div class="loading">
+                        <h1 style="color: #f44747;">❌ Error Loading Editor</h1>
+                        <p>${error.message}</p>
+                        <p style="margin-top: 20px;">
+                            <a href="/" style="color: #4caf50;">← Back to Showcase</a>
+                        </p>
+                    </div>
+                `;
+            }
+        }
+        
+        run();
+    </script>
+</body>
+</html>
+

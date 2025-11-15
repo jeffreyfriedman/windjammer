@@ -1,10 +1,7 @@
 //! Button component
 
+use crate::prelude::ToVNode;
 use crate::simple_vnode::{VAttr, VNode};
-<<<<<<< Updated upstream
-=======
-use crate::to_vnode::ToVNode;
->>>>>>> Stashed changes
 use std::cell::RefCell;
 use std::rc::Rc;
 
@@ -12,6 +9,7 @@ use std::rc::Rc;
 pub enum ButtonVariant {
     Primary,
     Secondary,
+    Success,
     Danger,
     Ghost,
 }
@@ -71,6 +69,7 @@ impl Button {
             match self.variant {
                 ButtonVariant::Primary => "wj-button-primary",
                 ButtonVariant::Secondary => "wj-button-secondary",
+                ButtonVariant::Success => "wj-button-success",
                 ButtonVariant::Danger => "wj-button-danger",
                 ButtonVariant::Ghost => "wj-button-ghost",
             }
@@ -92,44 +91,29 @@ impl Button {
             classes.push("wj-button-disabled".to_string());
         }
 
-<<<<<<< Updated upstream
-        VNode::Element {
-            tag: "button".to_string(),
-            attrs: vec![
-                ("class".to_string(), VAttr::Static(classes.join(" "))),
-                (
-                    "disabled".to_string(),
-                    VAttr::Static(if self.disabled { "true" } else { "false" }.to_string()),
-                ),
-            ],
-=======
-        let mut attrs = vec![("class".to_string(), VAttr::Static(classes.join(" ")))];
+        let mut attrs = vec![
+            ("class".to_string(), VAttr::Static(classes.join(" "))),
+            (
+                "disabled".to_string(),
+                VAttr::Static(if self.disabled { "true" } else { "false" }.to_string()),
+            ),
+        ];
 
-        // Only add disabled attribute if actually disabled
-        if self.disabled {
-            attrs.push(("disabled".to_string(), VAttr::Static("true".to_string())));
-        }
-
-        // Add click handler if present
-        if let Some(ref handler) = self.on_click {
+        // Add event handler if present
+        if let Some(handler) = &self.on_click {
             attrs.push(("on_click".to_string(), VAttr::Event(handler.clone())));
         }
 
         VNode::Element {
             tag: "button".to_string(),
             attrs,
->>>>>>> Stashed changes
             children: vec![VNode::Text(self.label.clone())],
         }
     }
 }
-<<<<<<< Updated upstream
-=======
 
-// Implement ToVNode for Button
 impl ToVNode for Button {
     fn to_vnode(self) -> VNode {
         self.render()
     }
 }
->>>>>>> Stashed changes
