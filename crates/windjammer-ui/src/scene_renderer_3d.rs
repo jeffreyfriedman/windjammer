@@ -3,7 +3,7 @@
 
 #![cfg(all(not(target_arch = "wasm32"), feature = "desktop"))]
 
-use crate::scene_manager::{Color, ObjectType, Scene, SceneObject, Transform, Vec3};
+use crate::scene_manager::{Color, ObjectType, Scene, SceneObject, Vec3};
 use std::sync::{Arc, Mutex};
 
 /// Basic 3D renderer for scene viewport
@@ -122,7 +122,7 @@ impl SceneRenderer3D {
     fn draw_object(
         &self,
         ui: &mut egui::Ui,
-        rect: egui::Rect,
+        _rect: egui::Rect,
         object: &SceneObject,
         _camera_pos: &Vec3,
         center_x: f32,

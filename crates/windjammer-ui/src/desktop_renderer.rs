@@ -12,6 +12,7 @@ use std::rc::Rc;
 #[cfg(not(target_arch = "wasm32"))]
 pub struct DesktopRenderer {
     // Store event handlers for buttons
+    #[allow(dead_code)]
     event_handlers: Rc<RefCell<Vec<Rc<RefCell<dyn FnMut()>>>>>,
 }
 
@@ -134,7 +135,7 @@ impl DesktopRenderer {
         ui: &mut Ui,
         classes: &str,
         style: &str,
-        attrs: &[(String, VAttr)],
+        _attrs: &[(String, VAttr)],
         children: &[VNode],
     ) {
         // Parse style for background color, width, height
@@ -191,7 +192,7 @@ impl DesktopRenderer {
                 // Container should fill all space and distribute to children
                 ui.vertical(|ui| {
                     let total_height = ui.available_height();
-                    let mut remaining_height = total_height;
+                    let remaining_height = total_height;
 
                     // First pass: render fixed-height children (toolbar, status bar)
                     // Second pass: give remaining space to flexible children
@@ -333,7 +334,7 @@ impl DesktopRenderer {
     }
 
     fn render_input(&mut self, ui: &mut Ui, attrs: &[(String, VAttr)]) {
-        let placeholder = self.get_attr_value(attrs, "placeholder");
+        let _placeholder = self.get_attr_value(attrs, "placeholder");
         let value = self.get_attr_value(attrs, "value");
 
         let mut text = value;
@@ -443,7 +444,7 @@ impl DesktopRenderer {
 
     fn render_tree_view(&mut self, ui: &mut Ui, children: &[VNode]) {
         egui::ScrollArea::vertical()
-            .id_source("tree_view_scroll")
+            .id_salt("tree_view_scroll")
             .show(ui, |ui| {
                 for child in children {
                     if let VNode::Element {
@@ -476,7 +477,7 @@ impl DesktopRenderer {
         // Find tab bar and content
         for child in children {
             if let VNode::Element {
-                tag,
+                tag: _tag,
                 attrs,
                 children: tab_children,
             } = child
@@ -589,7 +590,7 @@ impl DesktopRenderer {
 
     fn render_advanced_code_editor(&mut self, ui: &mut Ui, children: &[VNode]) {
         egui::ScrollArea::both()
-            .id_source("code_editor_scroll")
+            .id_salt("code_editor_scroll")
             .show(ui, |ui| {
                 Frame::none()
                     .fill(Color32::from_rgb(30, 30, 30))

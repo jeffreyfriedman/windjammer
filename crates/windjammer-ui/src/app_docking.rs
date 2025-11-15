@@ -23,12 +23,12 @@ impl DockingApp {
 
         // Set up initial layout: Files | Editor | Properties
         let main_surface = dock_state.main_surface_mut();
-        let [_main, right] = main_surface.split_right(
+        let [_main, _right] = main_surface.split_right(
             egui_dock::NodeIndex::root(),
             0.8, // 80% for left side
             vec!["properties".to_string()],
         );
-        let [files, _editor] = main_surface.split_left(
+        let [_files, _editor] = main_surface.split_left(
             egui_dock::NodeIndex::root(),
             0.2, // 20% for files
             vec!["files".to_string()],
@@ -49,7 +49,7 @@ impl DockingApp {
         }
     }
 
-    pub fn run(mut self) {
+    pub fn run(self) {
         use crate::desktop_renderer::DesktopRenderer;
 
         println!("🔧 Starting DockingApp (native with egui_dock)");
