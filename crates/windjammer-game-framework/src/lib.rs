@@ -38,6 +38,10 @@ pub mod animation; // Animation system (skeletal, blending, IK)
 pub mod assets; // Asset loading and management
 pub mod audio; // Audio playback
 pub mod camera2d; // 2D camera system
+
+#[cfg(feature = "3d")]
+pub mod character_controller; // 3D character controller (movement, jumping, cameras)
+
 pub mod ecs; // Entity-Component-System (Rust implementation)
 pub mod ecs_optimized; // Optimized ECS with archetype storage and query caching
 pub mod ecs_windjammer; // Windjammer-friendly ECS API (recommended)
@@ -80,6 +84,12 @@ pub mod prelude {
     pub use crate::assets::{AssetManager, Handle};
     pub use crate::audio::{AudioSystem, SpatialAudioSource};
     pub use crate::camera2d::Camera2D;
+    
+    #[cfg(feature = "3d")]
+    pub use crate::character_controller::{
+        CharacterController, CharacterControllerSystem, CharacterMovementInput,
+        FirstPersonCamera, ThirdPersonCamera,
+    }; // 3D character controller
 
     // Export ONLY Windjammer-friendly ECS API (zero crate leakage)
     pub use crate::ecs_windjammer::{Entity, System, World};
