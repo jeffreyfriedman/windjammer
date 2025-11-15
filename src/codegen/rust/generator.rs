@@ -469,8 +469,34 @@ impl CodeGenerator {
     fn generate_game_main(&mut self, info: &GameFrameworkInfo) -> String {
         let mut output = String::new();
 
+        // Generate GameWorld wrapper struct
+        output.push_str("// Generated: ECS world wrapper\n");
+        output.push_str("struct GameWorld {\n");
+        output.push_str("    world: windjammer_game_framework::ecs::World,\n");
+        output.push_str("    game_entity: windjammer_game_framework::ecs::Entity,\n");
+        output.push_str("}\n\n");
+        
+        output.push_str("impl GameWorld {\n");
+        output.push_str("    fn new() -> Self {\n");
+        output.push_str("        use windjammer_game_framework::ecs::*;\n");
+        output.push_str("        let mut world = World::new();\n");
+        output.push_str("        \n");
+        output.push_str("        // Spawn game entity with game component\n");
+        output.push_str(&format!("        let game_entity = world.spawn()\n"));
+        output.push_str(&format!("            .with({}::default())\n", info.game_struct));
+        output.push_str("            .build();\n");
+        output.push_str("        \n");
+        output.push_str("        Self { world, game_entity }\n");
+        output.push_str("    }\n");
+        output.push_str("    \n");
+        output.push_str(&format!("    fn game_mut(&mut self) -> &mut {} {{\n", info.game_struct));
+        output.push_str(&format!("        self.world.get_component_mut::<{}>(self.game_entity).unwrap()\n", info.game_struct));
+        output.push_str("    }\n");
+        output.push_str("}\n\n");
+
         output.push_str("fn main() -> Result<(), Box<dyn std::error::Error>> {\n");
         output.push_str("    use windjammer_game_framework::*;\n");
+        output.push_str("    use windjammer_game_framework::ecs::*;\n");
         output.push_str("    use winit::event::{Event, WindowEvent};\n");
         output.push_str("    use winit::event_loop::{ControlFlow, EventLoop};\n");
         output.push_str("    use winit::window::WindowBuilder;\n");
@@ -482,24 +508,14 @@ impl CodeGenerator {
         output.push_str("        .with_inner_size(winit::dpi::LogicalSize::new(800, 600))\n");
         output.push_str("        .build(&event_loop)?;\n");
         output.push_str("\n");
-        output.push_str("    // Lock cursor to window for FPS controls\n");
-        output.push_str("    window.set_cursor_visible(false);\n");
-        output.push_str(
-            "    let _ = window.set_cursor_grab(winit::window::CursorGrabMode::Confined)\n",
-        );
-        output.push_str("        .or_else(|_| window.set_cursor_grab(winit::window::CursorGrabMode::Locked));\n");
-        output.push_str("\n");
-        output.push_str("    // Initialize game state\n");
-        output.push_str(&format!(
-            "    let mut game = {}::default();\n",
-            info.game_struct
-        ));
+        output.push_str("    // Initialize ECS world\n");
+        output.push_str("    let mut game_world = GameWorld::new();\n");
         output.push_str("\n");
 
         // Call init function if present
         if let Some(init_fn) = &info.init_fn {
             output.push_str("    // Call init function\n");
-            output.push_str(&format!("    {}(&mut game);\n", init_fn));
+            output.push_str(&format!("    {}(game_world.game_mut());\n", init_fn));
             output.push_str("\n");
         }
 
@@ -529,7 +545,7 @@ impl CodeGenerator {
 
         // Call cleanup function if present
         if let Some(cleanup_fn) = &info.cleanup_fn {
-            output.push_str(&format!("                    {}(&mut game);\n", cleanup_fn));
+            output.push_str(&format!("                    {}(game_world.game_mut());\n", cleanup_fn));
         }
 
         output.push_str("                    elwt.exit();\n");
@@ -545,9 +561,12 @@ impl CodeGenerator {
         if let Some(update_fn) = &info.update_fn {
             output.push_str("                    // Update game logic\n");
             output.push_str(&format!(
-                "                    {}(&mut game, delta, &input);\n",
+                "                    {}(game_world.game_mut(), delta, &input);\n",
                 update_fn
             ));
+            output.push_str("\n");
+            output.push_str("                    // Update ECS systems (scene graph, etc.)\n");
+            output.push_str("                    SceneGraph::update_transforms(&mut game_world.world);\n");
             output.push_str("\n");
         }
 
@@ -557,12 +576,12 @@ impl CodeGenerator {
             if info.is_3d {
                 output.push_str("                    renderer.set_camera(&camera);\n");
                 output.push_str(&format!(
-                    "                    {}(&mut game, &mut renderer, &mut camera);\n",
+                    "                    {}(game_world.game_mut(), &mut renderer, &mut camera);\n",
                     render_fn
                 ));
             } else {
                 output.push_str(&format!(
-                    "                    {}(&mut game, &mut renderer);\n",
+                    "                    {}(game_world.game_mut(), &mut renderer);\n",
                     render_fn
                 ));
             }
@@ -579,7 +598,7 @@ impl CodeGenerator {
             output.push_str("                WindowEvent::KeyboardInput { event, .. } => {\n");
             output.push_str("                    input.update_from_winit(&event);\n");
             output.push_str(&format!(
-                "                    {}(&mut game, &input);\n",
+                "                    {}(game_world.game_mut(), &input);\n",
                 input_fn
             ));
             output.push_str("                }\n");
@@ -590,7 +609,7 @@ impl CodeGenerator {
                 "                    input.update_mouse_button_from_winit(state, button);\n",
             );
             output.push_str(&format!(
-                "                    {}(&mut game, &input);\n",
+                "                    {}(game_world.game_mut(), &input);\n",
                 input_fn
             ));
             output.push_str("                }\n");
