@@ -7,8 +7,6 @@
 //! - Managing application lifecycle
 
 use crate::simple_vnode::VNode;
-use std::cell::RefCell;
-use std::rc::Rc;
 
 #[cfg(target_arch = "wasm32")]
 use wasm_bindgen::prelude::*;
