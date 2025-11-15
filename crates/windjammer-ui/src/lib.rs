@@ -67,6 +67,8 @@ pub mod reactivity_optimized;
 pub mod renderer;
 pub mod routing;
 pub mod runtime;
+#[cfg(all(not(target_arch = "wasm32"), feature = "desktop"))]
+pub mod scene_manager;
 pub mod simple_renderer;
 pub mod simple_vnode;
 pub mod ssr;
