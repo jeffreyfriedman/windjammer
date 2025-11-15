@@ -1109,6 +1109,9 @@ fn create_cargo_toml_with_deps(
         .any(|m| m == "game" || m.starts_with("game::"));
     if uses_game && !external_crates.contains(&"windjammer_game_framework".to_string()) {
         external_crates.push("windjammer_game_framework".to_string());
+        // Game framework requires winit and pollster
+        deps.push("winit = \"0.29\"".to_string());
+        deps.push("pollster = \"0.3\"".to_string());
     }
 
     // Legacy: Keep old dependencies for modules not yet in runtime
