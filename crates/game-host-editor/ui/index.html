@@ -168,7 +168,7 @@
                             <div class="tab">Terminal</div>
                         </div>
                         <div class="panel-actions">
-                            <button class="icon-btn" title="Clear">🗑</button>
+                            <button class="icon-btn" id="clear-console" title="Clear Console">🗑</button>
                             <button class="icon-btn" title="Toggle">▼</button>
                         </div>
                     </div>
@@ -210,6 +210,60 @@ Ready to create amazing games.
                 <span id="cursor-position">Ln 1, Col 1</span>
                 <span class="status-separator">|</span>
                 <span id="language">Windjammer</span>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal Dialogs -->
+    <div id="new-project-dialog" class="modal" style="display: none;">
+        <div class="modal-overlay"></div>
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>Create New Game Project</h2>
+                <button class="modal-close" id="close-new-project">×</button>
+            </div>
+            <div class="modal-body">
+                <div class="form-group">
+                    <label for="project-name-input">Project Name:</label>
+                    <input type="text" id="project-name-input" placeholder="MyGame" class="form-input">
+                </div>
+                <div class="form-group">
+                    <label for="project-path-input">Project Path:</label>
+                    <input type="text" id="project-path-input" placeholder="/tmp" value="/tmp" class="form-input">
+                </div>
+                <div class="form-group">
+                    <label for="template-select">Game Template:</label>
+                    <select id="template-select" class="form-select">
+                        <option value="platformer">Platformer (jump and run)</option>
+                        <option value="puzzle">Puzzle (grid-based)</option>
+                        <option value="shooter">Shooter (space shooter)</option>
+                    </select>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" id="cancel-new-project">Cancel</button>
+                <button class="btn btn-primary" id="confirm-new-project">Create Project</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="open-project-dialog" class="modal" style="display: none;">
+        <div class="modal-overlay"></div>
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>Open Project</h2>
+                <button class="modal-close" id="close-open-project">×</button>
+            </div>
+            <div class="modal-body">
+                <div class="form-group">
+                    <label for="open-project-path-input">Project Path:</label>
+                    <input type="text" id="open-project-path-input" placeholder="/path/to/project" class="form-input">
+                    <p class="form-hint">Enter the path to an existing Windjammer project directory</p>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" id="cancel-open-project">Cancel</button>
+                <button class="btn btn-primary" id="confirm-open-project">Open</button>
             </div>
         </div>
     </div>

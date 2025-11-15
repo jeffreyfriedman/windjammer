@@ -86,13 +86,9 @@ impl CodeEditor {
         }
     }
 }
-<<<<<<< Updated upstream
-=======
 
-// Implement ToVNode for CodeEditor
 impl ToVNode for CodeEditor {
     fn to_vnode(self) -> VNode {
         self.render()
     }
 }
->>>>>>> Stashed changes

@@ -1,0 +1,12 @@
+// Professional Game Host Editor
+// Competitive with Unity, Unreal, and Godot
+use std::ui::*
+
+@export
+fn start() {
+    println!("🎮 Starting Professional Windjammer Editor")
+    
+    let app = EditorApp::new("Game Host Editor".to_string())
+    app.run()
+}
+

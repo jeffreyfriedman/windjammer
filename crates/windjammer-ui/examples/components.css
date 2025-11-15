@@ -47,6 +47,24 @@
     box-sizing: border-box;
 }
 
+html, body {
+    margin: 0;
+    padding: 0;
+    width: 100%;
+    height: 100%;
+    overflow: hidden;
+    background: var(--wj-bg-primary);
+    color: var(--wj-text-primary);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+}
+
+#root {
+    width: 100%;
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+}
+
 /* Button */
 .wj-button {
     display: inline-flex;
@@ -134,7 +152,10 @@
 /* Container */
 .wj-container {
     width: 100%;
+    height: 100%;
     margin: 0 auto;
+    display: flex;
+    flex-direction: column;
 }
 
 /* Input */
@@ -194,6 +215,16 @@
     display: flex;
 }
 
+.wj-flex[style*="flex-direction: row"] {
+    flex: 1;
+    min-height: 0;
+}
+
+.wj-flex[style*="flex-direction: column"] {
+    flex: 1;
+    min-width: 0;
+}
+
 /* Grid */
 .wj-grid {
     display: grid;
@@ -205,6 +236,10 @@
     border: 1px solid var(--wj-border);
     border-radius: var(--wj-radius-md);
     overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    flex: 1;
+    min-width: 200px;
 }
 
 .wj-panel-header {
@@ -214,10 +249,13 @@
     font-weight: 600;
     font-size: 13px;
     color: var(--wj-text-primary);
+    flex-shrink: 0;
 }
 
 .wj-panel-body {
     padding: var(--wj-spacing-md);
+    flex: 1;
+    overflow: auto;
 }
 
 /* Alert */

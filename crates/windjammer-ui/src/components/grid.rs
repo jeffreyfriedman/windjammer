@@ -1,6 +1,5 @@
 //! Grid layout component
 use crate::simple_vnode::{VAttr, VNode};
-use crate::to_vnode::ToVNode;
 
 pub struct Grid {
     pub children: Vec<VNode>,
@@ -45,12 +44,5 @@ impl Grid {
 impl Default for Grid {
     fn default() -> Self {
         Self::new()
-    }
-}
-
-// Implement ToVNode for Grid
-impl ToVNode for Grid {
-    fn to_vnode(self) -> VNode {
-        self.render()
     }
 }

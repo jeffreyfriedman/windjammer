@@ -1,6 +1,5 @@
 //! Alert component for messages
 use crate::simple_vnode::{VAttr, VNode};
-use crate::to_vnode::ToVNode;
 
 pub enum AlertVariant {
     Error,
@@ -68,12 +67,5 @@ impl Alert {
             attrs: vec![("class".to_string(), VAttr::Static(classes.join(" ")))],
             children: vec![VNode::Text(format!("{} {}", icon, self.message))],
         }
-    }
-}
-
-// Implement ToVNode for Alert
-impl ToVNode for Alert {
-    fn to_vnode(self) -> VNode {
-        self.render()
     }
 }

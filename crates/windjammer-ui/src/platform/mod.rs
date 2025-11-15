@@ -7,8 +7,10 @@
 
 pub mod capabilities;
 pub mod capability_impl;
-pub mod desktop;
-pub mod desktop_renderer;
+// Desktop platform (old winit+wgpu implementation, deprecated)
+// #[cfg(all(not(target_arch = "wasm32"), feature = "desktop-old"))]
+// pub mod desktop;
+// pub mod desktop_renderer;
 pub mod mobile;
 pub mod web;
 
@@ -92,7 +94,10 @@ pub fn detect_platform() -> PlatformType {
 pub fn create_platform() -> Box<dyn Platform> {
     match detect_platform() {
         PlatformType::Web => Box::new(web::WebPlatform::new()),
-        PlatformType::Desktop => Box::new(desktop::DesktopPlatform::new()),
+        PlatformType::Desktop => {
+            // Desktop platform is now handled by eframe, not a separate platform module
+            panic!("Desktop platform should use eframe directly, not create_platform()")
+        }
         PlatformType::Mobile => Box::new(mobile::MobilePlatform::new()),
     }
 }

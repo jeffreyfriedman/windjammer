@@ -1,6 +1,5 @@
 //! Card component
 use crate::simple_vnode::{VAttr, VNode};
-use crate::to_vnode::ToVNode;
 
 pub struct Card {
     pub children: Vec<VNode>,
@@ -30,12 +29,5 @@ impl Card {
 impl Default for Card {
     fn default() -> Self {
         Self::new()
-    }
-}
-
-// Implement ToVNode for Card
-impl ToVNode for Card {
-    fn to_vnode(self) -> VNode {
-        self.render()
     }
 }

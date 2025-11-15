@@ -1,0 +1,15 @@
+{
+  "name": "windjammer-wasm",
+  "type": "module",
+  "version": "0.1.0",
+  "files": [
+    "windjammer_wasm_bg.wasm",
+    "windjammer_wasm.js",
+    "windjammer_wasm.d.ts"
+  ],
+  "main": "windjammer_wasm.js",
+  "types": "windjammer_wasm.d.ts",
+  "sideEffects": [
+    "./snippets/*"
+  ]
+}

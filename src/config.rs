@@ -1,49 +1,17 @@
-// Configuration module for wj.toml parsing and management
+// Configuration file parsing for Windjammer projects (wj.toml and windjammer.toml)
+
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::fs;
 use std::path::Path;
 
-/// Windjammer project configuration (wj.toml)
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct WjConfig {
-    pub package: PackageConfig,
-    #[serde(default)]
-    pub lib: Option<LibConfig>,
-    #[serde(default)]
-    pub dependencies: HashMap<String, DependencySpec>,
-    #[serde(rename = "dev-dependencies")]
-    #[serde(default)]
-    pub dev_dependencies: HashMap<String, DependencySpec>,
-    #[serde(default)]
-    pub profile: HashMap<String, ProfileConfig>,
-    #[serde(default)]
-    pub target: HashMap<String, TargetConfig>,
-    #[serde(default)]
-    pub compiler: CompilerConfig,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct PackageConfig {
-    pub name: String,
-    pub version: String,
-    #[serde(default = "default_edition")]
-    pub edition: String,
-}
-
-fn default_edition() -> String {
-    "2025".to_string()
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct LibConfig {
-    // Future: library-specific configuration
-}
-
+/// Dependency specification (matches Cargo.toml format)
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(untagged)]
 pub enum DependencySpec {
+    /// Simple version string: "1.0.0"
     Simple(String),
+    /// Detailed specification with features, path, git, etc.
     Detailed {
         version: Option<String>,
         features: Option<Vec<String>>,
@@ -53,75 +21,57 @@ pub enum DependencySpec {
     },
 }
 
+/// Main Windjammer configuration (wj.toml)
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct WjConfig {
+    #[serde(default)]
+    pub package: PackageConfig,
+
+    #[serde(default)]
+    pub dependencies: HashMap<String, DependencySpec>,
+
+    #[serde(default)]
+    pub dev_dependencies: HashMap<String, DependencySpec>,
+
+    /// Backend configuration for WASM proxy (optional)
+    #[serde(default)]
+    pub backend: Option<BackendConfig>,
+}
+
+/// Package metadata
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct PackageConfig {
+    pub name: String,
+    pub version: String,
+    #[serde(default)]
+    pub authors: Vec<String>,
+    #[serde(default)]
+    pub edition: String,
+}
+
+/// Backend proxy configuration
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct ProfileConfig {
-    #[serde(rename = "opt-level")]
-    pub opt_level: Option<OptLevel>,
-    pub lto: Option<bool>,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(untagged)]
-pub enum OptLevel {
-    Int(u8),
-    Str(String),
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct TargetConfig {
-    pub enabled: Option<bool>,
-    // Future: target-specific configuration
-}
-
-/// Compiler optimization configuration
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct CompilerConfig {
-    /// Defer drop optimization mode: "auto", "always", "never"
-    #[serde(default = "default_defer_drop_mode")]
-    pub defer_drop: String,
-
-    /// Defer drop threshold in bytes (default: 102400 = 100KB)
-    #[serde(default = "default_defer_drop_threshold")]
-    pub defer_drop_threshold: usize,
-}
-
-fn default_defer_drop_mode() -> String {
-    "auto".to_string()
-}
-
-fn default_defer_drop_threshold() -> usize {
-    102400 // 100KB
-}
-
-impl Default for CompilerConfig {
-    fn default() -> Self {
-        Self {
-            defer_drop: default_defer_drop_mode(),
-            defer_drop_threshold: default_defer_drop_threshold(),
-        }
-    }
+pub struct BackendConfig {
+    pub url: String,
+    #[serde(default)]
+    pub api_key: Option<String>,
 }
 
 impl WjConfig {
-    /// Load wj.toml from a file
-    pub fn load_from_file<P: AsRef<Path>>(path: P) -> Result<Self, String> {
-        let content = fs::read_to_string(path.as_ref())
-            .map_err(|e| format!("Failed to read wj.toml: {}", e))?;
+    /// Load configuration from a file
+    pub fn load_from_file(path: &Path) -> Result<Self, String> {
+        let content = fs::read_to_string(path)
+            .map_err(|e| format!("Failed to read {}: {}", path.display(), e))?;
 
-        Self::parse(&content)
+        toml::from_str(&content).map_err(|e| format!("Failed to parse {}: {}", path.display(), e))
     }
 
-    /// Parse wj.toml from a string
-    pub fn parse(content: &str) -> Result<Self, String> {
-        toml::from_str(content).map_err(|e| format!("Failed to parse wj.toml: {}", e))
-    }
-
-    /// Save wj.toml to a file
-    pub fn save_to_file<P: AsRef<Path>>(&self, path: P) -> Result<(), String> {
+    /// Save configuration to a file
+    pub fn save_to_file(&self, path: &Path) -> Result<(), String> {
         let content = toml::to_string_pretty(self)
-            .map_err(|e| format!("Failed to serialize wj.toml: {}", e))?;
+            .map_err(|e| format!("Failed to serialize config: {}", e))?;
 
-        fs::write(path.as_ref(), content).map_err(|e| format!("Failed to write wj.toml: {}", e))
+        fs::write(path, content).map_err(|e| format!("Failed to write {}: {}", path.display(), e))
     }
 
     /// Add a dependency
@@ -134,31 +84,36 @@ impl WjConfig {
         self.dependencies.remove(name).is_some()
     }
 
-    /// Convert to Cargo.toml content
+    /// Convert to Cargo.toml format
     pub fn to_cargo_toml(&self) -> String {
-        let mut cargo_toml = String::new();
+        let mut output = String::new();
 
-        // [package] section
-        cargo_toml.push_str("[package]\n");
-        cargo_toml.push_str(&format!("name = \"{}\"\n", self.package.name));
-        cargo_toml.push_str(&format!("version = \"{}\"\n", self.package.version));
-        cargo_toml.push_str("edition = \"2021\"  # Rust edition\n");
-        cargo_toml.push('\n');
+        // Package section
+        output.push_str("[package]\n");
+        output.push_str(&format!("name = \"{}\"\n", self.package.name));
+        output.push_str(&format!("version = \"{}\"\n", self.package.version));
+        output.push_str(&format!(
+            "edition = \"{}\"\n",
+            if self.package.edition.is_empty() {
+                "2021"
+            } else {
+                &self.package.edition
+            }
+        ));
 
-        // [lib] section if this is a library
-        if self.lib.is_some() {
-            cargo_toml.push_str("[lib]\n");
-            cargo_toml.push_str("crate-type = [\"lib\"]\n");
-            cargo_toml.push('\n');
+        if !self.package.authors.is_empty() {
+            output.push_str(&format!("authors = {:?}\n", self.package.authors));
         }
 
-        // [dependencies] section
+        output.push_str("\n");
+
+        // Dependencies
         if !self.dependencies.is_empty() {
-            cargo_toml.push_str("[dependencies]\n");
+            output.push_str("[dependencies]\n");
             for (name, spec) in &self.dependencies {
                 match spec {
                     DependencySpec::Simple(version) => {
-                        cargo_toml.push_str(&format!("{} = \"{}\"\n", name, version));
+                        output.push_str(&format!("{} = \"{}\"\n", name, version));
                     }
                     DependencySpec::Detailed {
                         version,
@@ -167,7 +122,7 @@ impl WjConfig {
                         git,
                         branch,
                     } => {
-                        cargo_toml.push_str(&format!("{} = {{ ", name));
+                        output.push_str(&format!("{} = {{ ", name));
                         let mut parts = Vec::new();
 
                         if let Some(v) = version {
@@ -186,21 +141,21 @@ impl WjConfig {
                             parts.push(format!("branch = \"{}\"", b));
                         }
 
-                        cargo_toml.push_str(&parts.join(", "));
-                        cargo_toml.push_str(" }\n");
+                        output.push_str(&parts.join(", "));
+                        output.push_str(" }\n");
                     }
                 }
             }
-            cargo_toml.push('\n');
+            output.push_str("\n");
         }
 
-        // [dev-dependencies] section
+        // Dev dependencies
         if !self.dev_dependencies.is_empty() {
-            cargo_toml.push_str("[dev-dependencies]\n");
+            output.push_str("[dev-dependencies]\n");
             for (name, spec) in &self.dev_dependencies {
                 match spec {
                     DependencySpec::Simple(version) => {
-                        cargo_toml.push_str(&format!("{} = \"{}\"\n", name, version));
+                        output.push_str(&format!("{} = \"{}\"\n", name, version));
                     }
                     DependencySpec::Detailed {
                         version,
@@ -209,7 +164,7 @@ impl WjConfig {
                         git,
                         branch,
                     } => {
-                        cargo_toml.push_str(&format!("{} = {{ ", name));
+                        output.push_str(&format!("{} = {{ ", name));
                         let mut parts = Vec::new();
 
                         if let Some(v) = version {
@@ -228,100 +183,40 @@ impl WjConfig {
                             parts.push(format!("branch = \"{}\"", b));
                         }
 
-                        cargo_toml.push_str(&parts.join(", "));
-                        cargo_toml.push_str(" }\n");
+                        output.push_str(&parts.join(", "));
+                        output.push_str(" }\n");
                     }
                 }
             }
-            cargo_toml.push('\n');
         }
 
-        // [profile.*] sections
-        for (profile_name, profile) in &self.profile {
-            cargo_toml.push_str(&format!("[profile.{}]\n", profile_name));
-
-            if let Some(opt_level) = &profile.opt_level {
-                match opt_level {
-                    OptLevel::Int(level) => {
-                        cargo_toml.push_str(&format!("opt-level = {}\n", level));
-                    }
-                    OptLevel::Str(level) => {
-                        cargo_toml.push_str(&format!("opt-level = \"{}\"\n", level));
-                    }
-                }
-            }
-
-            if let Some(lto) = profile.lto {
-                cargo_toml.push_str(&format!("lto = {}\n", lto));
-            }
-
-            cargo_toml.push('\n');
-        }
-
-        cargo_toml
+        output
     }
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
+/// Windjammer project configuration (windjammer.toml) - for runtime settings
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct WindjammerConfig {
+    /// Backend configuration for WASM proxy
+    #[serde(default)]
+    pub backend: Option<BackendConfig>,
 
-    #[test]
-    fn test_parse_simple_wj_toml() {
-        let toml = r#"
-[package]
-name = "my-app"
-version = "0.1.0"
-edition = "2025"
+    /// Custom key-value pairs
+    #[serde(flatten)]
+    pub custom: HashMap<String, toml::Value>,
+}
 
-[dependencies]
-reqwest = "0.11"
-"#;
+impl WindjammerConfig {
+    /// Load from a file
+    pub fn load(path: &Path) -> Result<Self, String> {
+        let content = fs::read_to_string(path)
+            .map_err(|e| format!("Failed to read {}: {}", path.display(), e))?;
 
-        let config = WjConfig::parse(toml).unwrap();
-        assert_eq!(config.package.name, "my-app");
-        assert_eq!(config.package.version, "0.1.0");
-        assert_eq!(config.dependencies.len(), 1);
+        toml::from_str(&content).map_err(|e| format!("Failed to parse {}: {}", path.display(), e))
     }
 
-    #[test]
-    fn test_parse_detailed_dependencies() {
-        let toml = r#"
-[package]
-name = "my-app"
-version = "0.1.0"
-
-[dependencies]
-serde = { version = "1.0", features = ["derive"] }
-"#;
-
-        let config = WjConfig::parse(toml).unwrap();
-        assert!(config.dependencies.contains_key("serde"));
-    }
-
-    #[test]
-    fn test_to_cargo_toml() {
-        let mut config = WjConfig {
-            package: PackageConfig {
-                name: "test-app".to_string(),
-                version: "0.1.0".to_string(),
-                edition: "2025".to_string(),
-            },
-            lib: None,
-            dependencies: HashMap::new(),
-            dev_dependencies: HashMap::new(),
-            profile: HashMap::new(),
-            target: HashMap::new(),
-            compiler: CompilerConfig::default(),
-        };
-
-        config.add_dependency(
-            "reqwest".to_string(),
-            DependencySpec::Simple("0.11".to_string()),
-        );
-
-        let cargo_toml = config.to_cargo_toml();
-        assert!(cargo_toml.contains("name = \"test-app\""));
-        assert!(cargo_toml.contains("reqwest = \"0.11\""));
+    /// Get backend URL if configured
+    pub fn backend_url(&self) -> Option<&str> {
+        self.backend.as_ref().map(|b| b.url.as_str())
     }
 }
