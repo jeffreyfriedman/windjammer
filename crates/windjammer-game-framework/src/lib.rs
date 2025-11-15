@@ -50,6 +50,7 @@ pub mod ecs; // Entity-Component-System (Rust implementation)
 pub mod ecs_optimized; // Optimized ECS with archetype storage and query caching
 pub mod ecs_windjammer; // Windjammer-friendly ECS API (recommended)
 pub mod game_loop; // Game loop with fixed timestep
+pub mod gamepad; // Gamepad/controller input
 pub mod gltf_loader; // GLTF/GLB 3D model loader
 pub mod input; // Input handling
 pub mod lod; // Level of Detail (LOD) system
@@ -106,6 +107,7 @@ pub mod prelude {
     pub use crate::ecs_windjammer::{Entity, System, World};
 
     pub use crate::game_loop::{run_game_loop, GameLoopConfig, GameLoopRunner};
+    pub use crate::gamepad::{Gamepad, GamepadAxis, GamepadButton, GamepadManager, MAX_GAMEPADS}; // Gamepad/controller input
     pub use crate::gltf_loader::{
         AlphaMode, AnimationPath, FilterMode, GltfAnimation, GltfChannel, GltfDocument,
         GltfLoader, GltfMaterial, GltfMesh, GltfNode, GltfPrimitive, GltfSampler,
