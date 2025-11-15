@@ -5,7 +5,7 @@
 
 use crate::ecs::Entity;
 use crate::math::Vec3;
-use crate::physics3d::{PhysicsWorld3D, RigidBody3D, Collider3D, ColliderShape3D, RigidBodyType3D};
+use crate::physics3d::{PhysicsWorld3D, RigidBody3D, Collider3D, ColliderShape3D};
 
 /// Character controller component
 #[derive(Debug, Clone)]
@@ -266,7 +266,7 @@ impl CharacterControllerSystem {
         physics.set_linear_velocity(entity, velocity, true);
         
         // Check if grounded (simplified - in production, use raycasting)
-        if let Some(pos) = physics.get_position(entity) {
+        if let Some(_pos) = physics.get_position(entity) {
             if let Some(vel) = physics.get_linear_velocity(entity) {
                 // Simple ground check: if vertical velocity is near zero and we're moving down or stationary
                 if vel.y.abs() < 0.1 && controller.vertical_velocity <= 0.0 {
