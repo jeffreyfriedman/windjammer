@@ -68,6 +68,8 @@ pub mod runtime;
 pub mod simple_renderer;
 pub mod simple_vnode;
 pub mod ssr;
+#[cfg(all(not(target_arch = "wasm32"), feature = "desktop"))]
+pub mod syntax_highlighting;
 pub mod to_vnode;
 pub mod vdom;
 #[cfg(target_arch = "wasm32")]
