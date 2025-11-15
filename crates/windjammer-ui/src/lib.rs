@@ -61,6 +61,8 @@ pub mod reactivity;
 
 #[cfg(all(not(target_arch = "wasm32"), feature = "desktop"))]
 pub mod desktop_renderer;
+#[cfg(all(not(target_arch = "wasm32"), feature = "desktop"))]
+pub mod file_watcher;
 pub mod reactivity_optimized;
 pub mod renderer;
 pub mod routing;

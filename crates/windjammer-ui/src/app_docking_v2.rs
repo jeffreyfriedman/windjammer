@@ -19,6 +19,8 @@ pub struct EditorApp {
     unsaved_changes: Arc<Mutex<bool>>,
     syntax_highlighter: Arc<crate::syntax_highlighting::SyntaxHighlighter>,
     enable_syntax_highlighting: Arc<Mutex<bool>>,
+    file_watcher: Arc<Mutex<Option<crate::file_watcher::FileWatcher>>>,
+    enable_file_watching: Arc<Mutex<bool>>,
 }
 
 #[cfg(all(not(target_arch = "wasm32"), feature = "desktop"))]
@@ -127,6 +129,8 @@ impl EditorApp {
             unsaved_changes: Arc::new(Mutex::new(false)),
             syntax_highlighter: Arc::new(crate::syntax_highlighting::SyntaxHighlighter::new()),
             enable_syntax_highlighting: Arc::new(Mutex::new(true)),
+            file_watcher: Arc::new(Mutex::new(crate::file_watcher::FileWatcher::new().ok())),
+            enable_file_watching: Arc::new(Mutex::new(true)),
         }
     }
 
@@ -189,6 +193,27 @@ impl EditorApp {
                 &project_path,
                 &unsaved_changes,
             );
+
+            // Check for file changes (file watching)
+            if *self.enable_file_watching.lock().unwrap() {
+                if let Some(watcher) = self.file_watcher.lock().unwrap().as_ref() {
+                    let changed_files = watcher.check_events();
+                    for file_path in changed_files {
+                        // Check if it's the currently open file
+                        let current = current_file.lock().unwrap().clone();
+                        if current.as_ref() == Some(&file_path) {
+                            // Reload the file
+                            if let Ok(new_content) = std::fs::read_to_string(&file_path) {
+                                *current_file_content.lock().unwrap() = new_content;
+                                console_output
+                                    .lock()
+                                    .unwrap()
+                                    .push(format!("🔄 Reloaded: {}", file_path));
+                            }
+                        }
+                    }
+                }
+            }
 
             // Top menu bar
             egui::TopBottomPanel::top("menu_bar").show(ctx, |ui| {
