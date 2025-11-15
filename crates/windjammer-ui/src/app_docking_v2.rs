@@ -21,6 +21,7 @@ pub struct EditorApp {
     enable_syntax_highlighting: Arc<Mutex<bool>>,
     file_watcher: Arc<Mutex<Option<crate::file_watcher::FileWatcher>>>,
     enable_file_watching: Arc<Mutex<bool>>,
+    scene: Arc<Mutex<crate::scene_manager::Scene>>,
 }
 
 #[cfg(all(not(target_arch = "wasm32"), feature = "desktop"))]
@@ -131,6 +132,7 @@ impl EditorApp {
             enable_syntax_highlighting: Arc::new(Mutex::new(true)),
             file_watcher: Arc::new(Mutex::new(crate::file_watcher::FileWatcher::new().ok())),
             enable_file_watching: Arc::new(Mutex::new(true)),
+            scene: Arc::new(Mutex::new(crate::scene_manager::Scene::default())),
         }
     }
 
@@ -147,6 +149,7 @@ impl EditorApp {
         let unsaved_changes = self.unsaved_changes.clone();
         let syntax_highlighter = self.syntax_highlighter.clone();
         let enable_syntax_highlighting = self.enable_syntax_highlighting.clone();
+        let scene = self.scene.clone();
 
         let native_options = eframe::NativeOptions {
             viewport: egui::ViewportBuilder::default()
