@@ -395,6 +395,7 @@ impl EditorApp {
                     unsaved_changes: unsaved_changes.clone(),
                     syntax_highlighter: syntax_highlighter.clone(),
                     enable_syntax_highlighting: enable_syntax_highlighting.clone(),
+                    scene: scene.clone(),
                 };
 
                 egui_dock::DockArea::new(&mut self.dock_state)
@@ -416,6 +417,7 @@ struct TabViewer {
     unsaved_changes: Arc<Mutex<bool>>,
     syntax_highlighter: Arc<crate::syntax_highlighting::SyntaxHighlighter>,
     enable_syntax_highlighting: Arc<Mutex<bool>>,
+    scene: Arc<Mutex<crate::scene_manager::Scene>>,
 }
 
 #[cfg(all(not(target_arch = "wasm32"), feature = "desktop"))]
@@ -438,7 +440,9 @@ impl egui_dock::TabViewer for TabViewer {
                 PanelType::FileTree => {
                     render_file_tree(ui, &self.current_file, &self.current_file_content)
                 }
-                PanelType::SceneHierarchy => render_scene_hierarchy(ui, &self.selected_object),
+                PanelType::SceneHierarchy => {
+                    render_scene_hierarchy(ui, &self.scene, &self.selected_object)
+                }
                 PanelType::CodeEditor => render_code_editor(
                     ui,
                     &self.current_file_content,
@@ -446,7 +450,7 @@ impl egui_dock::TabViewer for TabViewer {
                     &self.syntax_highlighter,
                     &self.enable_syntax_highlighting,
                 ),
-                PanelType::Properties => render_properties(ui, &self.selected_object),
+                PanelType::Properties => render_properties(ui, &self.scene, &self.selected_object),
                 PanelType::Console => render_console(ui, &self.console_output),
                 PanelType::SceneView => render_scene_view(ui, &self.selected_object),
             }
@@ -629,114 +633,303 @@ fn render_file_tree(
 }
 
 #[cfg(all(not(target_arch = "wasm32"), feature = "desktop"))]
-fn render_scene_hierarchy(ui: &mut egui::Ui, selected_object: &Arc<Mutex<Option<String>>>) {
+fn render_scene_hierarchy(
+    ui: &mut egui::Ui,
+    scene_arc: &Arc<Mutex<crate::scene_manager::Scene>>,
+    selected_object: &Arc<Mutex<Option<String>>>,
+) {
     egui::ScrollArea::both().show(ui, |ui| {
         ui.heading("🎬 Scene Hierarchy");
         ui.separator();
 
         let current_selection = selected_object.lock().unwrap().clone();
+        let scene = scene_arc.lock().unwrap();
+
+        // Scene mode indicator
+        let mode_icon = match scene.mode {
+            crate::scene_manager::SceneMode::TwoD => "🎮 2D",
+            crate::scene_manager::SceneMode::ThreeD => "🎲 3D",
+        };
+        ui.label(format!("Mode: {}", mode_icon));
+        ui.separator();
 
         // Root scene node
-        egui::CollapsingHeader::new("🎮 MainScene")
+        egui::CollapsingHeader::new(format!("🎮 {}", scene.name))
             .default_open(true)
             .show(ui, |ui| {
-                // Camera
-                if ui
-                    .selectable_label(current_selection == Some("Camera".to_string()), "📷 Camera")
-                    .clicked()
-                {
-                    *selected_object.lock().unwrap() = Some("Camera".to_string());
+                // Render all scene objects
+                for (id, object) in &scene.objects {
+                    if !object.visible {
+                        continue; // Skip invisible objects
+                    }
+
+                    let icon = get_object_icon(&object.object_type);
+                    let is_selected = current_selection.as_ref() == Some(id);
+
+                    if ui
+                        .selectable_label(is_selected, format!("{} {}", icon, object.name))
+                        .clicked()
+                    {
+                        *selected_object.lock().unwrap() = Some(id.clone());
+                    }
                 }
-
-                // Game objects
-                egui::CollapsingHeader::new("🎯 GameObjects")
-                    .default_open(true)
-                    .show(ui, |ui| {
-                        if ui
-                            .selectable_label(
-                                current_selection == Some("Player".to_string()),
-                                "🧍 Player",
-                            )
-                            .clicked()
-                        {
-                            *selected_object.lock().unwrap() = Some("Player".to_string());
-                        }
-                        if ui
-                            .selectable_label(
-                                current_selection == Some("Ground".to_string()),
-                                "🧱 Ground",
-                            )
-                            .clicked()
-                        {
-                            *selected_object.lock().unwrap() = Some("Ground".to_string());
-                        }
-                        if ui
-                            .selectable_label(
-                                current_selection == Some("Collectible".to_string()),
-                                "🌟 Collectible",
-                            )
-                            .clicked()
-                        {
-                            *selected_object.lock().unwrap() = Some("Collectible".to_string());
-                        }
-                    });
-
-                // Lights
-                egui::CollapsingHeader::new("💡 Lights")
-                    .default_open(false)
-                    .show(ui, |ui| {
-                        if ui
-                            .selectable_label(
-                                current_selection == Some("DirectionalLight".to_string()),
-                                "☀️ DirectionalLight",
-                            )
-                            .clicked()
-                        {
-                            *selected_object.lock().unwrap() = Some("DirectionalLight".to_string());
-                        }
-                        if ui
-                            .selectable_label(
-                                current_selection == Some("PointLight".to_string()),
-                                "💡 PointLight",
-                            )
-                            .clicked()
-                        {
-                            *selected_object.lock().unwrap() = Some("PointLight".to_string());
-                        }
-                    });
-
-                // UI
-                egui::CollapsingHeader::new("🖼️ UI")
-                    .default_open(false)
-                    .show(ui, |ui| {
-                        if ui
-                            .selectable_label(
-                                current_selection == Some("ScoreText".to_string()),
-                                "📊 ScoreText",
-                            )
-                            .clicked()
-                        {
-                            *selected_object.lock().unwrap() = Some("ScoreText".to_string());
-                        }
-                        if ui
-                            .selectable_label(
-                                current_selection == Some("HealthBar".to_string()),
-                                "❤️ HealthBar",
-                            )
-                            .clicked()
-                        {
-                            *selected_object.lock().unwrap() = Some("HealthBar".to_string());
-                        }
-                    });
             });
 
         ui.separator();
 
-        // Add object button
-        if ui.button("➕ Add Object").clicked() {
-            println!("Add new object to scene");
+        drop(scene); // Release lock before UI that might modify scene
+
+        // Add object menu
+        ui.menu_button("➕ Add Object", |ui| {
+            ui.label("3D Primitives");
+            ui.separator();
+            if ui.button("🧊 Cube").clicked() {
+                add_cube_to_scene(scene_arc, selected_object);
+                ui.close_menu();
+            }
+            if ui.button("⚪ Sphere").clicked() {
+                add_sphere_to_scene(scene_arc, selected_object);
+                ui.close_menu();
+            }
+            if ui.button("⬜ Plane").clicked() {
+                add_plane_to_scene(scene_arc, selected_object);
+                ui.close_menu();
+            }
+
+            ui.separator();
+            ui.label("Lights");
+            ui.separator();
+            if ui.button("☀️ Directional Light").clicked() {
+                add_directional_light_to_scene(scene_arc, selected_object);
+                ui.close_menu();
+            }
+            if ui.button("💡 Point Light").clicked() {
+                add_point_light_to_scene(scene_arc, selected_object);
+                ui.close_menu();
+            }
+
+            ui.separator();
+            ui.label("2D Objects");
+            ui.separator();
+            if ui.button("🖼️ Sprite").clicked() {
+                add_sprite_to_scene(scene_arc, selected_object);
+                ui.close_menu();
+            }
+        });
+
+        // Remove object button
+        if current_selection.is_some() {
+            if ui.button("🗑️ Remove Selected").clicked() {
+                remove_selected_object(scene_arc, selected_object);
+            }
         }
     });
+}
+
+#[cfg(all(not(target_arch = "wasm32"), feature = "desktop"))]
+fn get_object_icon(object_type: &crate::scene_manager::ObjectType) -> &'static str {
+    use crate::scene_manager::ObjectType;
+    match object_type {
+        ObjectType::Cube { .. } => "🧊",
+        ObjectType::Sphere { .. } => "⚪",
+        ObjectType::Plane { .. } => "⬜",
+        ObjectType::Cylinder { .. } => "🥫",
+        ObjectType::Capsule { .. } => "💊",
+        ObjectType::Sprite { .. } => "🖼️",
+        ObjectType::TileMap { .. } => "🗺️",
+        ObjectType::DirectionalLight { .. } => "☀️",
+        ObjectType::PointLight { .. } => "💡",
+        ObjectType::SpotLight { .. } => "🔦",
+        ObjectType::Camera => "📷",
+        ObjectType::Empty => "📦",
+    }
+}
+
+#[cfg(all(not(target_arch = "wasm32"), feature = "desktop"))]
+fn add_cube_to_scene(
+    scene: &Arc<Mutex<crate::scene_manager::Scene>>,
+    selected_object: &Arc<Mutex<Option<String>>>,
+) {
+    use crate::scene_manager::{SceneObject, Vec3};
+    let cube = SceneObject::new_cube(
+        "Cube".to_string(),
+        Vec3 {
+            x: 0.0,
+            y: 0.0,
+            z: 0.0,
+        },
+        1.0,
+    );
+    let id = cube.id.clone();
+    scene.lock().unwrap().add_object(cube);
+    *selected_object.lock().unwrap() = Some(id);
+    println!("Added cube to scene");
+}
+
+#[cfg(all(not(target_arch = "wasm32"), feature = "desktop"))]
+fn add_sphere_to_scene(
+    scene: &Arc<Mutex<crate::scene_manager::Scene>>,
+    selected_object: &Arc<Mutex<Option<String>>>,
+) {
+    use crate::scene_manager::{SceneObject, Vec3};
+    let sphere = SceneObject::new_sphere(
+        "Sphere".to_string(),
+        Vec3 {
+            x: 0.0,
+            y: 0.0,
+            z: 0.0,
+        },
+        0.5,
+    );
+    let id = sphere.id.clone();
+    scene.lock().unwrap().add_object(sphere);
+    *selected_object.lock().unwrap() = Some(id);
+    println!("Added sphere to scene");
+}
+
+#[cfg(all(not(target_arch = "wasm32"), feature = "desktop"))]
+fn add_plane_to_scene(
+    scene: &Arc<Mutex<crate::scene_manager::Scene>>,
+    selected_object: &Arc<Mutex<Option<String>>>,
+) {
+    use crate::scene_manager::{SceneObject, Vec3};
+    let plane = SceneObject::new_plane(
+        "Plane".to_string(),
+        Vec3 {
+            x: 0.0,
+            y: 0.0,
+            z: 0.0,
+        },
+        10.0,
+        10.0,
+    );
+    let id = plane.id.clone();
+    scene.lock().unwrap().add_object(plane);
+    *selected_object.lock().unwrap() = Some(id);
+    println!("Added plane to scene");
+}
+
+#[cfg(all(not(target_arch = "wasm32"), feature = "desktop"))]
+fn add_directional_light_to_scene(
+    scene: &Arc<Mutex<crate::scene_manager::Scene>>,
+    selected_object: &Arc<Mutex<Option<String>>>,
+) {
+    use crate::scene_manager::{Color, ObjectType, SceneObject, Transform, Vec3};
+    let light = SceneObject {
+        id: format!("DirectionalLight_{}", uuid::Uuid::new_v4()),
+        name: "Directional Light".to_string(),
+        object_type: ObjectType::DirectionalLight {
+            color: Color {
+                r: 1.0,
+                g: 1.0,
+                b: 0.9,
+                a: 1.0,
+            },
+            intensity: 1.0,
+        },
+        transform: Transform {
+            position: Vec3 {
+                x: 0.0,
+                y: 10.0,
+                z: 0.0,
+            },
+            rotation: Vec3 {
+                x: -45.0,
+                y: 0.0,
+                z: 0.0,
+            },
+            scale: Vec3 {
+                x: 1.0,
+                y: 1.0,
+                z: 1.0,
+            },
+        },
+        visible: true,
+        children: vec![],
+    };
+    let id = light.id.clone();
+    scene.lock().unwrap().add_object(light);
+    *selected_object.lock().unwrap() = Some(id);
+    println!("Added directional light to scene");
+}
+
+#[cfg(all(not(target_arch = "wasm32"), feature = "desktop"))]
+fn add_point_light_to_scene(
+    scene: &Arc<Mutex<crate::scene_manager::Scene>>,
+    selected_object: &Arc<Mutex<Option<String>>>,
+) {
+    use crate::scene_manager::{Color, ObjectType, SceneObject, Transform, Vec3};
+    let light = SceneObject {
+        id: format!("PointLight_{}", uuid::Uuid::new_v4()),
+        name: "Point Light".to_string(),
+        object_type: ObjectType::PointLight {
+            color: Color {
+                r: 1.0,
+                g: 1.0,
+                b: 1.0,
+                a: 1.0,
+            },
+            intensity: 1.0,
+            range: 10.0,
+        },
+        transform: Transform {
+            position: Vec3 {
+                x: 0.0,
+                y: 5.0,
+                z: 0.0,
+            },
+            rotation: Vec3 {
+                x: 0.0,
+                y: 0.0,
+                z: 0.0,
+            },
+            scale: Vec3 {
+                x: 1.0,
+                y: 1.0,
+                z: 1.0,
+            },
+        },
+        visible: true,
+        children: vec![],
+    };
+    let id = light.id.clone();
+    scene.lock().unwrap().add_object(light);
+    *selected_object.lock().unwrap() = Some(id);
+    println!("Added point light to scene");
+}
+
+#[cfg(all(not(target_arch = "wasm32"), feature = "desktop"))]
+fn add_sprite_to_scene(
+    scene: &Arc<Mutex<crate::scene_manager::Scene>>,
+    selected_object: &Arc<Mutex<Option<String>>>,
+) {
+    use crate::scene_manager::{SceneObject, Vec3};
+    let sprite = SceneObject::new_sprite(
+        "Sprite".to_string(),
+        Vec3 {
+            x: 0.0,
+            y: 0.0,
+            z: 0.0,
+        },
+        "sprite.png".to_string(),
+        100.0,
+        100.0,
+    );
+    let id = sprite.id.clone();
+    scene.lock().unwrap().add_object(sprite);
+    *selected_object.lock().unwrap() = Some(id);
+    println!("Added sprite to scene");
+}
+
+#[cfg(all(not(target_arch = "wasm32"), feature = "desktop"))]
+fn remove_selected_object(
+    scene: &Arc<Mutex<crate::scene_manager::Scene>>,
+    selected_object: &Arc<Mutex<Option<String>>>,
+) {
+    if let Some(id) = selected_object.lock().unwrap().take() {
+        scene.lock().unwrap().remove_object(&id);
+        println!("Removed object: {}", id);
+    }
 }
 
 #[cfg(all(not(target_arch = "wasm32"), feature = "desktop"))]
@@ -847,67 +1040,195 @@ fn render_code_editor(
 }
 
 #[cfg(all(not(target_arch = "wasm32"), feature = "desktop"))]
-fn render_properties(ui: &mut egui::Ui, selected_object: &Arc<Mutex<Option<String>>>) {
+fn render_properties(
+    ui: &mut egui::Ui,
+    scene: &Arc<Mutex<crate::scene_manager::Scene>>,
+    selected_object: &Arc<Mutex<Option<String>>>,
+) {
     egui::ScrollArea::both().show(ui, |ui| {
-        ui.heading("Properties");
+        ui.heading("⚙️ Properties");
         ui.separator();
 
-        if let Some(obj_name) = selected_object.lock().unwrap().as_ref() {
-            ui.label(format!("Selected: {}", obj_name));
-            ui.separator();
+        if let Some(obj_id) = selected_object.lock().unwrap().as_ref() {
+            let mut scene = scene.lock().unwrap();
+            if let Some(object) = scene.get_object_mut(obj_id) {
+                // Object name (editable)
+                ui.horizontal(|ui| {
+                    ui.label("Name:");
+                    ui.text_edit_singleline(&mut object.name);
+                });
 
-            // Transform properties
-            ui.label("Transform");
-            ui.horizontal(|ui| {
-                ui.label("Position X:");
-                ui.add(egui::DragValue::new(&mut 0.0).speed(0.1));
-            });
-            ui.horizontal(|ui| {
-                ui.label("Position Y:");
-                ui.add(egui::DragValue::new(&mut 0.0).speed(0.1));
-            });
+                ui.separator();
 
-            ui.horizontal(|ui| {
-                ui.label("Scale X:");
-                ui.add(egui::DragValue::new(&mut 1.0).speed(0.01));
-            });
-            ui.horizontal(|ui| {
-                ui.label("Scale Y:");
-                ui.add(egui::DragValue::new(&mut 1.0).speed(0.01));
-            });
+                // Visibility toggle
+                ui.checkbox(&mut object.visible, "Visible");
 
-            ui.horizontal(|ui| {
-                ui.label("Rotation:");
-                ui.add(egui::Slider::new(&mut 0.0, 0.0..=360.0).suffix("°"));
-            });
+                ui.separator();
 
-            ui.separator();
-
-            // Object-specific properties
-            match obj_name.as_str() {
-                "Player" => {
-                    ui.label("Player Properties");
+                // Transform
+                ui.label("Transform");
+                ui.group(|ui| {
                     ui.horizontal(|ui| {
-                        ui.label("Speed:");
-                        ui.add(egui::DragValue::new(&mut 100.0).speed(1.0));
+                        ui.label("Position:");
                     });
                     ui.horizontal(|ui| {
-                        ui.label("Jump Force:");
-                        ui.add(egui::DragValue::new(&mut 500.0).speed(10.0));
+                        ui.add(
+                            egui::DragValue::new(&mut object.transform.position.x)
+                                .speed(0.1)
+                                .prefix("X: "),
+                        );
+                        ui.add(
+                            egui::DragValue::new(&mut object.transform.position.y)
+                                .speed(0.1)
+                                .prefix("Y: "),
+                        );
+                        ui.add(
+                            egui::DragValue::new(&mut object.transform.position.z)
+                                .speed(0.1)
+                                .prefix("Z: "),
+                        );
                     });
-                    ui.checkbox(&mut true, "Can Double Jump");
-                }
-                "Camera" => {
-                    ui.label("Camera Properties");
+
                     ui.horizontal(|ui| {
-                        ui.label("FOV:");
-                        ui.add(egui::Slider::new(&mut 60.0, 30.0..=120.0).suffix("°"));
+                        ui.label("Rotation:");
                     });
-                    ui.checkbox(&mut true, "Follow Player");
-                }
-                _ => {
-                    ui.label("No additional properties");
-                }
+                    ui.horizontal(|ui| {
+                        ui.add(
+                            egui::DragValue::new(&mut object.transform.rotation.x)
+                                .speed(1.0)
+                                .prefix("X: "),
+                        );
+                        ui.add(
+                            egui::DragValue::new(&mut object.transform.rotation.y)
+                                .speed(1.0)
+                                .prefix("Y: "),
+                        );
+                        ui.add(
+                            egui::DragValue::new(&mut object.transform.rotation.z)
+                                .speed(1.0)
+                                .prefix("Z: "),
+                        );
+                    });
+
+                    ui.horizontal(|ui| {
+                        ui.label("Scale:");
+                    });
+                    ui.horizontal(|ui| {
+                        ui.add(
+                            egui::DragValue::new(&mut object.transform.scale.x)
+                                .speed(0.1)
+                                .prefix("X: "),
+                        );
+                        ui.add(
+                            egui::DragValue::new(&mut object.transform.scale.y)
+                                .speed(0.1)
+                                .prefix("Y: "),
+                        );
+                        ui.add(
+                            egui::DragValue::new(&mut object.transform.scale.z)
+                                .speed(0.1)
+                                .prefix("Z: "),
+                        );
+                    });
+                });
+
+                ui.separator();
+
+                // Object-specific properties
+                ui.label("Object Properties");
+                ui.group(|ui| {
+                    use crate::scene_manager::ObjectType;
+                    match &mut object.object_type {
+                        ObjectType::Cube { size } => {
+                            ui.label("Type: Cube");
+                            ui.add(egui::Slider::new(size, 0.1..=10.0).text("Size"));
+                        }
+                        ObjectType::Sphere { radius } => {
+                            ui.label("Type: Sphere");
+                            ui.add(egui::Slider::new(radius, 0.1..=10.0).text("Radius"));
+                        }
+                        ObjectType::Plane { width, height } => {
+                            ui.label("Type: Plane");
+                            ui.add(egui::Slider::new(width, 0.1..=100.0).text("Width"));
+                            ui.add(egui::Slider::new(height, 0.1..=100.0).text("Height"));
+                        }
+                        ObjectType::Cylinder { radius, height } => {
+                            ui.label("Type: Cylinder");
+                            ui.add(egui::Slider::new(radius, 0.1..=10.0).text("Radius"));
+                            ui.add(egui::Slider::new(height, 0.1..=20.0).text("Height"));
+                        }
+                        ObjectType::Capsule { radius, height } => {
+                            ui.label("Type: Capsule");
+                            ui.add(egui::Slider::new(radius, 0.1..=10.0).text("Radius"));
+                            ui.add(egui::Slider::new(height, 0.1..=20.0).text("Height"));
+                        }
+                        ObjectType::Sprite {
+                            texture,
+                            width,
+                            height,
+                        } => {
+                            ui.label("Type: Sprite");
+                            ui.horizontal(|ui| {
+                                ui.label("Texture:");
+                                ui.text_edit_singleline(texture);
+                            });
+                            ui.add(egui::Slider::new(width, 1.0..=1000.0).text("Width"));
+                            ui.add(egui::Slider::new(height, 1.0..=1000.0).text("Height"));
+                        }
+                        ObjectType::DirectionalLight { color, intensity } => {
+                            ui.label("Type: Directional Light");
+                            let mut rgb = [color.r, color.g, color.b];
+                            ui.color_edit_button_rgb(&mut rgb);
+                            color.r = rgb[0];
+                            color.g = rgb[1];
+                            color.b = rgb[2];
+                            ui.add(egui::Slider::new(intensity, 0.0..=5.0).text("Intensity"));
+                        }
+                        ObjectType::PointLight {
+                            color,
+                            intensity,
+                            range,
+                        } => {
+                            ui.label("Type: Point Light");
+                            let mut rgb = [color.r, color.g, color.b];
+                            ui.color_edit_button_rgb(&mut rgb);
+                            color.r = rgb[0];
+                            color.g = rgb[1];
+                            color.b = rgb[2];
+                            ui.add(egui::Slider::new(intensity, 0.0..=5.0).text("Intensity"));
+                            ui.add(egui::Slider::new(range, 1.0..=100.0).text("Range"));
+                        }
+                        ObjectType::SpotLight {
+                            color,
+                            intensity,
+                            range,
+                            angle,
+                        } => {
+                            ui.label("Type: Spot Light");
+                            let mut rgb = [color.r, color.g, color.b];
+                            ui.color_edit_button_rgb(&mut rgb);
+                            color.r = rgb[0];
+                            color.g = rgb[1];
+                            color.b = rgb[2];
+                            ui.add(egui::Slider::new(intensity, 0.0..=5.0).text("Intensity"));
+                            ui.add(egui::Slider::new(range, 1.0..=100.0).text("Range"));
+                            ui.add(egui::Slider::new(angle, 1.0..=180.0).text("Cone Angle"));
+                        }
+                        ObjectType::Camera => {
+                            ui.label("Type: Camera");
+                            ui.label("(Camera properties managed globally)");
+                        }
+                        ObjectType::Empty => {
+                            ui.label("Type: Empty");
+                            ui.label("(Container for grouping objects)");
+                        }
+                        _ => {
+                            ui.label("Type: Other");
+                        }
+                    }
+                });
+            } else {
+                ui.label("Object not found in scene");
             }
         } else {
             ui.label("No object selected");
