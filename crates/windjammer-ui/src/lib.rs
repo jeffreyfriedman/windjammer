@@ -69,6 +69,8 @@ pub mod routing;
 pub mod runtime;
 #[cfg(all(not(target_arch = "wasm32"), feature = "desktop"))]
 pub mod scene_manager;
+#[cfg(all(not(target_arch = "wasm32"), feature = "desktop"))]
+pub mod scene_renderer_3d;
 pub mod simple_renderer;
 pub mod simple_vnode;
 pub mod ssr;
