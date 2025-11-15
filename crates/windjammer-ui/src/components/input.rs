@@ -1,6 +1,5 @@
 //! Input component
 use crate::simple_vnode::{VAttr, VNode};
-use crate::to_vnode::ToVNode;
 
 pub struct Input {
     pub value: String,
@@ -34,12 +33,5 @@ impl Input {
 impl Default for Input {
     fn default() -> Self {
         Self::new()
-    }
-}
-
-// Implement ToVNode for Input
-impl ToVNode for Input {
-    fn to_vnode(self) -> VNode {
-        self.render()
     }
 }

@@ -1,190 +1,309 @@
-// Windjammer Game Editor UI
-// Built with windjammer-ui for dogfooding
-// This is the REAL editor - written in pure Windjammer!
+// Windjammer Game Editor
+// 100% Pure Windjammer - NO HTML/CSS/JavaScript!
+// Uses ONLY platform-agnostic std APIs
 
 use std::ui::*
+use std::fs::*
+use std::process::*
+use std::dialog::*
 
-// Editor state with reactive signals
-struct EditorState {
-    current_file: Signal<string>,
-    code_content: Signal<string>,
-    project_path: Signal<string>,
-    console_output: Signal<string>,
-    is_running: Signal<bool>,
-}
-
-impl EditorState {
-    fn new() -> EditorState {
-        EditorState {
-            current_file: Signal::new("".to_string()),
-            code_content: Signal::new("".to_string()),
-            project_path: Signal::new("".to_string()),
-            console_output: Signal::new("Welcome to Windjammer Game Editor!\n".to_string()),
-            is_running: Signal::new(false),
-        }
-    }
+@export
+fn start() {
+    println!("🎮 Starting Pure Windjammer Game Editor")
     
-    fn log(self, message: string) {
-        let current = self.console_output.get()
-        let timestamp = get_timestamp()
-        let new_output = current + "[" + timestamp + "] " + message + "\n"
-        self.console_output.set(new_output)
-    }
-}
-
-// Get current timestamp (will be implemented via Tauri)
-fn get_timestamp() -> string {
-    "00:00:00".to_string()
-}
-
-// Tauri command bindings (these will call into Rust backend)
-fn tauri_create_project(path: string, name: string) {
-    // Compiler will generate: invoke('create_game_project', { path, name })
-}
-
-fn tauri_open_project(path: string) {
-    // Compiler will generate: invoke('list_directory', { path })
-}
-
-fn tauri_read_file(path: string) -> string {
-    // Compiler will generate: invoke('read_file', { path })
-    "".to_string()
-}
-
-fn tauri_write_file(path: string, content: string) {
-    // Compiler will generate: invoke('write_file', { path, content })
-}
-
-fn tauri_run_game(project_path: string) -> string {
-    // Compiler will generate: invoke('run_game', { projectPath: project_path })
-    "".to_string()
-}
-
-fn tauri_stop_game() {
-    // Compiler will generate: invoke('stop_game')
-}
-
-// Main editor UI
-fn render_editor(state: EditorState) -> Container {
-    Container::new()
-        .max_width("100%")
-        .child(render_toolbar(state.clone()))
-        .child(render_main_area(state.clone()))
-        .child(render_console(state.clone()))
-}
-
-fn render_toolbar(state: EditorState) -> Panel {
-    Panel::new("Toolbar".to_string())
-        .child(
-            Flex::new()
+    // ========================================
+    // REACTIVE STATE
+    // ========================================
+    
+    // Project state
+    let project_path = Signal::new("".to_string())
+    let project_name = Signal::new("No Project".to_string())
+    let project_files = Signal::new(Vec::<String>::new())
+    
+    // Editor state
+    let current_file = Signal::new("".to_string())
+    let code_content = Signal::new("// Welcome to Windjammer Game Editor!\n// Create a new project to get started.".to_string())
+    let is_modified = Signal::new(false)
+    
+    // Console state
+    let console_output = Signal::new("Welcome to Windjammer Game Editor!".to_string())
+    let is_running = Signal::new(false)
+    
+    // UI state
+    let selected_template = Signal::new("platformer".to_string())
+    
+    // ========================================
+    // REACTIVE APP
+    // ========================================
+    
+    let app = ReactiveApp::new("Windjammer Game Editor".to_string(), move || {
+        // Clone signals for use in this render (and nested closures)
+        // Render clones
+        let render_project_name = project_name.clone()
+        let render_project_path = project_path.clone()
+        let render_current_file = current_file.clone()
+        let render_code_content = code_content.clone()
+        let render_console = console_output.clone()
+        let render_is_running = is_running.clone()
+        let render_is_modified = is_modified.clone()
+        
+        // Button handler clones
+        let btn_console = console_output.clone()
+        let btn_template = selected_template.clone()
+        let btn_project_path = project_path.clone()
+        let btn_project_name = project_name.clone()
+        let btn_current_file = current_file.clone()
+        let btn_code_content = code_content.clone()
+        
+        let open_project_path = project_path.clone()
+        let open_project_name = project_name.clone()
+        let open_console = console_output.clone()
+        let open_current_file = current_file.clone()
+        let open_code_content = code_content.clone()
+        let open_is_modified = is_modified.clone()
+        
+        let save_current_file = current_file.clone()
+        let save_code_content = code_content.clone()
+        let save_console = console_output.clone()
+        let save_is_modified = is_modified.clone()
+        
+        let run_project_path = project_path.clone()
+        let run_console = console_output.clone()
+        let run_is_running = is_running.clone()
+        
+        let stop_console = console_output.clone()
+        let stop_is_running = is_running.clone()
+        
+        let build_project_path = project_path.clone()
+        let build_console = console_output.clone()
+        
+        // Main container
+        let main_container = Container::new()
+            .max_width("100%")
+        
+        // ========================================
+        // HEADER / TOOLBAR
+        // ========================================
+        
+        let toolbar = Panel::new("🎮 Windjammer Game Editor".to_string())
+            .child(Flex::new()
                 .direction(FlexDirection::Row)
                 .gap("8px")
                 .child(Button::new("New Project".to_string())
                     .variant(ButtonVariant::Primary)
-                    .on_click(|| {
-                        // TODO: Show dialog to get project name and path
-                        let name = "MyGame".to_string()
-                        let path = "/tmp".to_string()
-                        tauri_create_project(path, name)
-                        state.log("Creating project...".to_string())
-                    }))
-                .child(Button::new("Open".to_string())
-                    .variant(ButtonVariant::Secondary)
-                    .on_click(|| {
-                        // TODO: Show file picker
-                        state.log("Open project...".to_string())
-                    }))
-                .child(Button::new("Save".to_string())
-                    .variant(ButtonVariant::Secondary)
-                    .on_click(|| {
-                        let file = state.current_file.get()
-                        let content = state.code_content.get()
-                        if file != "" {
-                            tauri_write_file(file, content)
-                            state.log("File saved!".to_string())
-                        } else {
-                            state.log("No file open".to_string())
+                    .on_click(move || {
+                        btn_console.set("📝 Creating new project...".to_string())
+                        
+                        // In a real implementation, we'd show a dialog
+                        // For now, create a test project
+                        let project_dir = "/tmp/windjammer_projects".to_string()
+                        let name = "my_game".to_string()
+                        let template = btn_template.get()
+                        
+                        // Create project directory
+                        match fs::create_directory(project_dir.clone()) {
+                            Ok(_) => {
+                                btn_console.set("✓ Created project directory".to_string())
+                            },
+                            Err(e) => {
+                                btn_console.set("Note: Project directory may already exist".to_string())
+                            }
+                        }
+                        
+                        // Create main.wj file
+                        let project_full_path = project_dir.clone() + "/" + &name
+                        match fs::create_directory(project_full_path.clone()) {
+                            Ok(_) => {},
+                            Err(_) => {}
+                        }
+                        
+                        let main_file = project_full_path.clone() + "/main.wj"
+                        let template_code = get_template_code(template)
+                        
+                        match fs::write_file(main_file.clone(), template_code.clone()) {
+                            Ok(_) => {
+                                btn_project_path.set(project_full_path.clone())
+                                btn_project_name.set(name.clone())
+                                btn_current_file.set(main_file.clone())
+                                btn_code_content.set(template_code)
+                                btn_console.set("✓ Project created: ".to_string() + &name)
+                            },
+                            Err(e) => {
+                                btn_console.set(format!("✗ Failed to create project: {}", e))
+                            }
                         }
                     }))
-                .child(Button::new("Run".to_string())
+                .child(Button::new("Open Project".to_string())
+                    .variant(ButtonVariant::Secondary)
+                    .on_click(move || {
+                        open_console.set("📂 Opening project...".to_string())
+                        
+                        // In a real implementation, we'd use dialog::open_directory()
+                        // For now, open a test project
+                        let test_project = "/tmp/windjammer_projects/my_game".to_string()
+                        
+                        match fs::file_exists(test_project.clone()) {
+                            true => {
+                                open_project_path.set(test_project.clone())
+                                open_project_name.set("my_game".to_string())
+                                open_console.set("✓ Opened project: my_game".to_string())
+                            },
+                            false => {
+                                open_console.set("✗ Project not found. Create a new project first.".to_string())
+                            }
+                        }
+                    }))
+                .child(Button::new("Save File".to_string())
                     .variant(ButtonVariant::Primary)
-                    .on_click(|| {
-                        let project = state.project_path.get()
-                        if project != "" {
-                            state.is_running.set(true)
-                            state.log("Running game...".to_string())
-                            let result = tauri_run_game(project)
-                            state.log(result)
-                        } else {
-                            state.log("No project open".to_string())
+                    .on_click(move || {
+                        let file = save_current_file.get()
+                        if file == "" {
+                            save_console.set("✗ No file open".to_string())
+                            return
+                        }
+                        
+                        save_console.set("💾 Saving file...".to_string())
+                        
+                        match fs::write_file(file.clone(), save_code_content.get()) {
+                            Ok(_) => {
+                                save_is_modified.set(false)
+                                save_console.set("✓ File saved: ".to_string() + &file)
+                            },
+                            Err(e) => {
+                                save_console.set(format!("✗ Failed to save: {}", e))
+                            }
                         }
                     }))
-                .child(Button::new("Stop".to_string())
-                    .variant(ButtonVariant::Danger)
-                    .on_click(|| {
-                        tauri_stop_game()
-                        state.is_running.set(false)
-                        state.log("Game stopped".to_string())
+                .child(Button::new("Run Game".to_string())
+                    .variant(ButtonVariant::Primary)
+                    .on_click(move || {
+                        let project = run_project_path.get()
+                        if project == "" {
+                            run_console.set("✗ No project open".to_string())
+                            return
+                        }
+                        
+                        run_console.set("🎮 Compiling and running game...".to_string())
+                        run_is_running.set(true)
+                        
+                        // Execute windjammer compiler
+                        let args = vec!["build".to_string(), project.clone()]
+                        match process::execute("windjammer".to_string(), args) {
+                            Ok(output) => {
+                                run_console.set(format!("✓ Game compiled successfully!\n{}\n{}", output.stdout, output.stderr))
+                            },
+                            Err(e) => {
+                                run_console.set(format!("✗ Compilation failed:\n{}", e))
+                                run_is_running.set(false)
+                            }
+                        }
                     }))
-        )
+                .child(Button::new("Stop Game".to_string())
+                    .variant(ButtonVariant::Danger)
+                    .on_click(move || {
+                        stop_console.set("⏹ Stopping game...".to_string())
+                        stop_is_running.set(false)
+                        stop_console.set("✓ Game stopped".to_string())
+                    }))
+                .child(Button::new("Build".to_string())
+                    .variant(ButtonVariant::Secondary)
+                    .on_click(move || {
+                        let project = build_project_path.get()
+                        if project == "" {
+                            build_console.set("✗ No project open".to_string())
+                            return
+                        }
+                        
+                        build_console.set("🔨 Building game...".to_string())
+                        
+                        let args = vec!["build".to_string(), project.clone()]
+                        match process::execute("windjammer".to_string(), args) {
+                            Ok(output) => {
+                                build_console.set(format!("✓ Build complete!\n{}\n{}", output.stdout, output.stderr))
+                            },
+                            Err(e) => {
+                                build_console.set(format!("✗ Build failed:\n{}", e))
+                            }
+                        }
+                    })))
+        
+        // ========================================
+        // MAIN CONTENT AREA
+        // ========================================
+        
+        let content_area = Flex::new()
+            .direction(FlexDirection::Row)
+            .gap("16px")
+        
+        // Left sidebar - File tree (placeholder for now)
+        let sidebar = Panel::new("Files".to_string())
+            .child(Text::new("📁 ".to_string() + &render_project_name.get()))
+            .child(Text::new("  📄 main.wj".to_string()))
+        
+        // Center - Code editor
+        let editor_panel = Panel::new("Editor".to_string())
+            .child(Text::new("File: ".to_string() + &render_current_file.get()))
+            .child(CodeEditor::new(render_code_content.clone()))
+        
+        // Right sidebar - Properties (placeholder)
+        let properties = Panel::new("Properties".to_string())
+            .child(Text::new("Template:".to_string()))
+            .child(Text::new("  Platformer".to_string()))
+            .child(Text::new("".to_string()))
+            .child(Text::new("Status:".to_string()))
+            .child(Text::new(if render_is_running.get() { "  🎮 Running" } else { "  ⏸ Stopped" }))
+            .child(Text::new(if render_is_modified.get() { "  ● Modified" } else { "  ✓ Saved" }))
+        
+        let content_with_sidebars = content_area
+            .child(sidebar)
+            .child(editor_panel)
+            .child(properties)
+        
+        // ========================================
+        // BOTTOM PANEL - CONSOLE
+        // ========================================
+        
+        let console_panel = Panel::new("Console Output".to_string())
+            .child(Text::new(render_console.get()))
+        
+        // ========================================
+        // STATUS BAR
+        // ========================================
+        
+        let status_bar = Flex::new()
+            .direction(FlexDirection::Row)
+            .gap("16px")
+            .child(Text::new("Project: ".to_string() + &render_project_name.get()))
+            .child(Text::new("Path: ".to_string() + &render_project_path.get()))
+            .child(Text::new(if render_is_running.get() { "Status: Running" } else { "Status: Ready" }))
+        
+        // ========================================
+        // ASSEMBLE FULL UI
+        // ========================================
+        
+        let full_ui = main_container
+            .child(toolbar)
+            .child(content_with_sidebars)
+            .child(console_panel)
+            .child(status_bar)
+        
+        full_ui.to_vnode()
+    })
+    
+    app.run()
 }
 
-fn render_main_area(state: EditorState) -> Flex {
-    Flex::new()
-        .direction(FlexDirection::Row)
-        .gap("0px")
-        .child(render_file_tree(state.clone()))
-        .child(render_code_editor(state.clone()))
-        .child(render_preview(state.clone()))
-}
-
-fn render_file_tree(state: EditorState) -> Panel {
-    Panel::new("Files".to_string())
-        .child(Text::new("Project files will appear here".to_string()))
-}
-
-fn render_code_editor(state: EditorState) -> Panel {
-    let file = state.current_file.get()
-    let title = if file == "" {
-        "Editor".to_string()
+// Helper function to get template code
+fn get_template_code(template: string) -> string {
+    if template == "platformer" {
+        "// Platformer Game Template\nuse std::game::*\n\nfn main() {\n    println!(\"Platformer game!\")\n}".to_string()
+    } else if template == "puzzle" {
+        "// Puzzle Game Template\nuse std::game::*\n\nfn main() {\n    println!(\"Puzzle game!\")\n}".to_string()
     } else {
-        file
+        "// Shooter Game Template\nuse std::game::*\n\nfn main() {\n    println!(\"Shooter game!\")\n}".to_string()
     }
-    
-    let content = state.code_content.get()
-    
-    Panel::new(title)
-        .child(CodeEditor::new(content)
-            .language("windjammer")
-            .on_change(|new_content| {
-                state.code_content.set(new_content)
-            }))
-}
-
-fn render_preview(state: EditorState) -> Panel {
-    let is_running = state.is_running.get()
-    let content = if is_running {
-        Text::new("Game running...".to_string())
-    } else {
-        Text::new("Click 'Run' to start your game".to_string())
-    }
-    
-    Panel::new("Preview".to_string())
-        .child(content)
-}
-
-fn render_console(state: EditorState) -> Panel {
-    let output = state.console_output.get()
-    Panel::new("Console".to_string())
-        .child(Text::new(output))
 }
 
 fn main() {
-    println!("🎮 Windjammer Game Editor")
-    
-    let state = EditorState::new()
-    let ui = render_editor(state)
-    
-    // Mount the UI (compiler will generate WASM initialization)
-    App::new("Windjammer Game Editor".to_string(), ui).run()
+    start()
 }

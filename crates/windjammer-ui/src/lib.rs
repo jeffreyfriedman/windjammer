@@ -40,13 +40,27 @@ pub use windjammer_ui_macro::component;
 pub use windjammer_ui_macro::Props;
 
 pub mod app;
+#[cfg(all(not(target_arch = "wasm32"), feature = "desktop"))]
+pub mod app_docking;
+#[cfg(all(not(target_arch = "wasm32"), feature = "desktop"))]
+pub mod app_docking_v2;
+#[cfg(target_arch = "wasm32")]
 pub mod app_reactive;
+#[cfg(all(not(target_arch = "wasm32"), feature = "desktop"))]
+pub mod app_reactive_eframe;
+
+// Old app_reactive with manual winit+wgpu (deprecated, keeping for reference)
+#[cfg(all(not(target_arch = "wasm32"), not(feature = "desktop")))]
+mod app_reactive_old;
 pub mod component;
 pub mod component_runtime;
 pub mod components; // Component library
 pub mod events;
 pub mod platform;
 pub mod reactivity;
+
+#[cfg(all(not(target_arch = "wasm32"), feature = "desktop"))]
+pub mod desktop_renderer;
 pub mod reactivity_optimized;
 pub mod renderer;
 pub mod routing;
@@ -77,11 +91,18 @@ pub mod prelude {
     pub use crate::routing::{Route, Router};
     pub use crate::simple_vnode::{VAttr, VNode};
     pub use crate::to_vnode::ToVNode;
+
     pub use crate::vdom::{VElement, VText};
 
-    // Reactive app (WASM only)
+    // Reactive app (all platforms)
+    #[cfg(all(not(target_arch = "wasm32"), feature = "desktop"))]
+    pub use crate::app_docking::DockingApp;
+    #[cfg(all(not(target_arch = "wasm32"), feature = "desktop"))]
+    pub use crate::app_docking_v2::EditorApp;
     #[cfg(target_arch = "wasm32")]
     pub use crate::app_reactive::{trigger_rerender, ReactiveApp};
+    #[cfg(all(not(target_arch = "wasm32"), feature = "desktop"))]
+    pub use crate::app_reactive_eframe::{trigger_rerender, ReactiveApp};
 
     // Re-export the component macro
     pub use crate::component;

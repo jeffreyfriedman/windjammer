@@ -33,8 +33,10 @@
       }
     ],
     "security": {
-      "csp": null
-    }
+      "csp": null,
+      "capabilities": ["default"]
+    },
+    "withGlobalTauri": true
   }
 }
 

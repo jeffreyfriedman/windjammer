@@ -1411,6 +1411,20 @@ fn create_wasm_cargo_toml(output_dir: &Path, imported_modules: &HashSet<String>)
         .iter()
         .any(|m| m == "ui" || m.starts_with("ui::"));
 
+    // Check if platform APIs are used
+    let uses_platform_apis = imported_modules.iter().any(|m| {
+        m == "fs"
+            || m == "process"
+            || m == "dialog"
+            || m == "env"
+            || m == "encoding"
+            || m.starts_with("fs::")
+            || m.starts_with("process::")
+            || m.starts_with("dialog::")
+            || m.starts_with("env::")
+            || m.starts_with("encoding::")
+    });
+
     // Find windjammer-ui path
     let windjammer_ui_path = if let Ok(manifest_dir) = env::var("CARGO_MANIFEST_DIR") {
         PathBuf::from(manifest_dir).join("crates/windjammer-ui")
@@ -1438,6 +1452,40 @@ fn create_wasm_cargo_toml(output_dir: &Path, imported_modules: &HashSet<String>)
                 current.join("crates/windjammer-ui")
             } else {
                 PathBuf::from("./crates/windjammer-ui")
+            }
+        }
+    };
+
+    // Find windjammer-runtime path
+    let windjammer_runtime_path = if let Ok(manifest_dir) = env::var("CARGO_MANIFEST_DIR") {
+        PathBuf::from(manifest_dir).join("crates/windjammer-runtime")
+    } else {
+        let mut current = env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
+        let mut found = false;
+
+        if current
+            .join("crates/windjammer-runtime/Cargo.toml")
+            .exists()
+        {
+            current.join("crates/windjammer-runtime")
+        } else {
+            for _ in 0..5 {
+                if let Some(parent) = current.parent() {
+                    if parent.join("crates/windjammer-runtime/Cargo.toml").exists() {
+                        current = parent.to_path_buf();
+                        found = true;
+                        break;
+                    }
+                    current = parent.to_path_buf();
+                } else {
+                    break;
+                }
+            }
+
+            if found {
+                current.join("crates/windjammer-runtime")
+            } else {
+                PathBuf::from("./crates/windjammer-runtime")
             }
         }
     };
@@ -1490,7 +1538,7 @@ js-sys = "0.3"
 serde = {{ version = "1.0", features = ["derive"] }}
 serde_json = "1.0"
 console_error_panic_hook = "0.1"
-{}
+{}{}
 
 [profile.release]
 opt-level = "z"  # Optimize for size
@@ -1499,8 +1547,16 @@ lto = true
         lib_file,
         if uses_ui {
             format!(
-                "windjammer-ui = {{ path = \"{}\" }}",
+                "windjammer-ui = {{ path = \"{}\" }}\n",
                 windjammer_ui_path.display()
+            )
+        } else {
+            String::new()
+        },
+        if uses_platform_apis {
+            format!(
+                "windjammer-runtime = {{ path = \"{}\", features = [\"wasm\"] }}",
+                windjammer_runtime_path.display()
             )
         } else {
             String::new()
@@ -1986,21 +2042,10 @@ fn run_file(file: &Path, mut target: CompilationTarget, args: &[String]) -> Resu
         anyhow::bail!("File must have .wj extension: {:?}", file);
     }
 
-    // Auto-detect target based on imports if using default Rust target
-    if matches!(target, CompilationTarget::Rust) {
-        let source = fs::read_to_string(file)?;
-
-        // Check for UI framework imports - these require WASM
-        if source.contains("windjammer_ui") {
-            println!("{} UI app detected, using WASM target", "ℹ".cyan().bold());
-            target = CompilationTarget::Wasm;
-        }
-        // Check for game framework imports - these can run natively
-        else if source.contains("windjammer_game_framework") {
-            println!("{} Game app detected, using Rust target", "ℹ".cyan().bold());
-            // Keep Rust target for native games
-        }
-    }
+    // Auto-detect target based on imports ONLY if no explicit target was provided
+    // (default_value in CLI is "rust", so we can't distinguish between explicit and default)
+    // For now, skip auto-detection if user provided --target flag
+    // TODO: Better way to detect if user explicitly provided --target
 
     println!(
         "{} {:?} (target: {:?})",

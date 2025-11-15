@@ -15,6 +15,9 @@ pub fn type_to_rust(type_: &Type) -> String {
             // Special case: Signal (without type params) -> windjammer_ui::reactivity::Signal
             if name == "Signal" {
                 "windjammer_ui::reactivity::Signal".to_string()
+            // Special case: "string" as custom type -> String (for type aliases)
+            } else if name == "string" {
+                "String".to_string()
             } else {
                 // Convert Windjammer module.Type syntax to Rust module::Type
                 name.replace('.', "::")
@@ -48,7 +51,13 @@ pub fn type_to_rust(type_: &Type) -> String {
             }
         }
         Type::Option(inner) => format!("Option<{}>", type_to_rust(inner)),
-        Type::Result(ok, err) => format!("Result<{}, {}>", type_to_rust(ok), type_to_rust(err)),
+        Type::Result(ok, err) => {
+            // Special case: Result<T, string> -> Result<T, String>
+            // In Windjammer, `string` is the type, but Rust uses `String` for owned strings
+            let ok_rust = type_to_rust(ok);
+            let err_rust = type_to_rust(err);
+            format!("Result<{}, {}>", ok_rust, err_rust)
+        }
         Type::Vec(inner) => format!("Vec<{}>", type_to_rust(inner)),
         Type::Array(inner, size) => format!("[{}; {}]", type_to_rust(inner), size),
         Type::Reference(inner) => {

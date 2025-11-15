@@ -1,0 +1,152 @@
+// Windjammer Network API Demo
+// Demonstrates std::net for HTTP requests
+// Works on both native and WASM!
+
+use std::net::*
+
+@export
+async fn main() {
+    println!("🌐 Windjammer Network API Demo")
+    println!("================================")
+    println!("")
+
+    // Example 1: Simple GET request
+    println!("Example 1: GET Request")
+    println!("----------------------")
+    
+    match get("https://api.github.com/zen".to_string(), None).await {
+        Ok(response) => {
+            println!("Status: {}", response.status)
+            println!("Body: {}", response.body)
+        },
+        Err(e) => {
+            println!("Error: {}", e)
+        }
+    }
+    println!("")
+
+    // Example 2: GET with headers
+    println!("Example 2: GET with Headers")
+    println!("---------------------------")
+    
+    let mut headers = Map::new()
+    headers.insert("User-Agent".to_string(), "Windjammer/1.0".to_string())
+    headers.insert("Accept".to_string(), "application/json".to_string())
+    
+    match get("https://api.github.com/users/github".to_string(), Some(headers)).await {
+        Ok(response) => {
+            println!("Status: {}", response.status)
+            println!("Content-Type: {}", response.headers.get("content-type").unwrap_or(&"unknown".to_string()))
+            println!("Body (first 200 chars): {}...", response.body.chars().take(200).collect::<String>())
+        },
+        Err(e) => {
+            println!("Error: {}", e)
+        }
+    }
+    println!("")
+
+    // Example 3: POST request with JSON
+    println!("Example 3: POST Request")
+    println!("-----------------------")
+    
+    let mut post_headers = Map::new()
+    post_headers.insert("Content-Type".to_string(), "application/json".to_string())
+    
+    let json_body = r#"{"title": "Test Post", "body": "This is a test", "userId": 1}"#.to_string()
+    
+    match post("https://jsonplaceholder.typicode.com/posts".to_string(), Some(post_headers), json_body).await {
+        Ok(response) => {
+            println!("Status: {}", response.status)
+            println!("Response: {}", response.body)
+        },
+        Err(e) => {
+            println!("Error: {}", e)
+        }
+    }
+    println!("")
+
+    // Example 4: PUT request
+    println!("Example 4: PUT Request")
+    println!("----------------------")
+    
+    let mut put_headers = Map::new()
+    put_headers.insert("Content-Type".to_string(), "application/json".to_string())
+    
+    let update_body = r#"{"title": "Updated Title", "body": "Updated content", "userId": 1}"#.to_string()
+    
+    match put("https://jsonplaceholder.typicode.com/posts/1".to_string(), Some(put_headers), update_body).await {
+        Ok(response) => {
+            println!("Status: {}", response.status)
+            println!("Response: {}", response.body)
+        },
+        Err(e) => {
+            println!("Error: {}", e)
+        }
+    }
+    println!("")
+
+    // Example 5: DELETE request
+    println!("Example 5: DELETE Request")
+    println!("-------------------------")
+    
+    match delete("https://jsonplaceholder.typicode.com/posts/1".to_string(), None).await {
+        Ok(response) => {
+            println!("Status: {}", response.status)
+            println!("Deleted successfully!")
+        },
+        Err(e) => {
+            println!("Error: {}", e)
+        }
+    }
+    println!("")
+
+    // Example 6: Custom request method
+    println!("Example 6: Custom Request")
+    println!("-------------------------")
+    
+    let mut custom_headers = Map::new()
+    custom_headers.insert("Accept".to_string(), "application/json".to_string())
+    
+    match send_request(
+        "GET".to_string(),
+        "https://httpbin.org/get".to_string(),
+        Some(custom_headers),
+        None
+    ).await {
+        Ok(response) => {
+            println!("Status: {}", response.status)
+            println!("Body (first 300 chars): {}...", response.body.chars().take(300).collect::<String>())
+        },
+        Err(e) => {
+            println!("Error: {}", e)
+        }
+    }
+    println!("")
+
+    // Example 7: Error handling
+    println!("Example 7: Error Handling")
+    println!("-------------------------")
+    
+    match get("https://this-domain-does-not-exist-12345.com".to_string(), None).await {
+        Ok(response) => {
+            println!("Unexpected success: {}", response.status)
+        },
+        Err(e) => {
+            println!("Expected error caught: {}", e)
+        }
+    }
+    println!("")
+
+    println!("✅ All examples completed!")
+    println!("")
+    println!("Platform Notes:")
+    println!("  • Native:  Uses reqwest for HTTP requests")
+    println!("  • WASM:    Uses browser Fetch API")
+    println!("  • Same code works everywhere! 🎉")
+    println!("")
+    println!("Next Steps:")
+    println!("  • Try WebSocket support (coming soon!)")
+    println!("  • Build a REST API client")
+    println!("  • Create a web scraper")
+}
+

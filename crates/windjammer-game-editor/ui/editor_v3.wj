@@ -1,0 +1,337 @@
+// Windjammer Game Editor v3 - Full-Featured Professional Editor
+// Inspired by Godot minimal theme with modern enhancements
+
+use std::ui::*
+use std::fs::*
+use std::process::*
+use std::dialog::*
+
+@export
+fn start() {
+    println!("🎮 Starting Windjammer Game Editor v3")
+    
+    // ===== STATE MANAGEMENT =====
+    
+    // Project state
+    let project_name = Signal::new("".to_string())
+    let project_path = Signal::new("".to_string())
+    let is_project_open = Signal::new(false)
+    
+    // File tree state
+    let file_tree_items = Signal::new(Vec::<TreeItem>::new())
+    let current_file = Signal::new("".to_string())
+    
+    // Editor state
+    let open_tabs = Signal::new(Vec::<String>::new())
+    let active_tab_index = Signal::new(0)
+    let code_content = Signal::new("// Welcome to Windjammer!\n// Create a new project to get started.".to_string())
+    
+    // Console state
+    let console_output = Signal::new("Ready.\n".to_string())
+    let is_running = Signal::new(false)
+    
+    // Scene editor state
+    let scene_nodes = Signal::new(Vec::<String>::new())
+    let selected_node = Signal::new("".to_string())
+    
+    // ===== REACTIVE APP =====
+    
+    let app = ReactiveApp::new("Windjammer Game Editor".to_string(), move || {
+        // Clone all signals for use in render closure
+        let project_name_render = project_name.clone()
+        let project_path_render = project_path.clone()
+        let is_project_open_render = is_project_open.clone()
+        let file_tree_items_render = file_tree_items.clone()
+        let current_file_render = current_file.clone()
+        let open_tabs_render = open_tabs.clone()
+        let active_tab_index_render = active_tab_index.clone()
+        let code_content_render = code_content.clone()
+        let console_output_render = console_output.clone()
+        let is_running_render = is_running.clone()
+        let scene_nodes_render = scene_nodes.clone()
+        let selected_node_render = selected_node.clone()
+        
+        // Clone signals for event handlers
+        let project_name_new = project_name.clone()
+        let project_path_new = project_path.clone()
+        let is_project_open_new = is_project_open.clone()
+        let file_tree_items_new = file_tree_items.clone()
+        let current_file_new = current_file.clone()
+        let open_tabs_new = open_tabs.clone()
+        let active_tab_index_new = active_tab_index.clone()
+        let code_content_new = code_content.clone()
+        let console_output_new = console_output.clone()
+        let is_running_new = is_running.clone()
+        let scene_nodes_new = scene_nodes.clone()
+        
+        // ===== TOOLBAR =====
+        
+        let toolbar = Panel::new("".to_string())
+            .background_color("#2d2d30".to_string())
+            .padding("8px")
+            .child(
+                Flex::new()
+                    .direction(FlexDirection::Row)
+                    .gap("8px")
+                    .child(
+                        Button::new("📁 New Project".to_string())
+                            .variant(ButtonVariant::Primary)
+                            .on_click(move || {
+                                println!("Creating new project...")
+                                
+                                // Get project name from user (simplified for now)
+                                let name = "my_game".to_string()
+                                let path = format!("/tmp/windjammer_projects/{}", name)
+                                
+                                // Create project directory
+                                match fs::create_directory(path.clone()) {
+                                    Ok(_) => {
+                                        // Create main.wj
+                                        let main_content = get_template_code("platformer")
+                                        let main_path = format!("{}/main.wj", path)
+                                        
+                                        match fs::write_file(main_path.clone(), main_content.clone()) {
+                                            Ok(_) => {
+                                                project_name_new.set(name.clone())
+                                                project_path_new.set(path.clone())
+                                                is_project_open_new.set(true)
+                                                current_file_new.set(main_path.clone())
+                                                code_content_new.set(main_content)
+                                                console_output_new.set(format!("✓ Project created: {}\n", name))
+                                                
+                                                // Build file tree
+                                                let tree = vec![
+                                                    TreeItem::new(name.clone(), "📁")
+                                                        .expanded(true)
+                                                        .children(vec![
+                                                            TreeItem::new("main.wj", "📄"),
+                                                            TreeItem::new("assets/", "📁"),
+                                                        ])
+                                                ]
+                                                file_tree_items_new.set(tree)
+                                                
+                                                // Add to open tabs
+                                                let mut tabs = open_tabs_new.get()
+                                                tabs.push("main.wj".to_string())
+                                                open_tabs_new.set(tabs)
+                                                active_tab_index_new.set(0)
+                                            }
+                                            Err(e) => {
+                                                console_output_new.set(format!("✗ Failed to create main.wj: {}\n", e))
+                                            }
+                                        }
+                                    }
+                                    Err(e) => {
+                                        console_output_new.set(format!("✗ Failed to create project: {}\n", e))
+                                    }
+                                }
+                            })
+                    )
+                    .child(
+                        Button::new("💾 Save".to_string())
+                            .variant(ButtonVariant::Success)
+                            .on_click(move || {
+                                let file = current_file_new.get()
+                                let content = code_content_new.get()
+                                
+                                if !file.is_empty() {
+                                    match fs::write_file(file.clone(), content) {
+                                        Ok(_) => {
+                                            console_output_new.set(format!("✓ Saved: {}\n", file))
+                                        }
+                                        Err(e) => {
+                                            console_output_new.set(format!("✗ Save failed: {}\n", e))
+                                        }
+                                    }
+                                }
+                            })
+                    )
+                    .child(
+                        Button::new("▶️ Run".to_string())
+                            .variant(ButtonVariant::Success)
+                            .on_click(move || {
+                                let path = project_path_new.get()
+                                
+                                if !path.is_empty() {
+                                    is_running_new.set(true)
+                                    console_output_new.set("▶️ Running game...\n".to_string())
+                                    
+                                    let main_file = format!("{}/main.wj", path)
+                                    match process::execute("wj".to_string(), vec!["run".to_string(), main_file]) {
+                                        Ok(output) => {
+                                            console_output_new.set(format!("✓ Game output:\n{}\n{}\n", output.stdout, output.stderr))
+                                            is_running_new.set(false)
+                                        }
+                                        Err(e) => {
+                                            console_output_new.set(format!("✗ Run failed: {}\n", e))
+                                            is_running_new.set(false)
+                                        }
+                                    }
+                                }
+                            })
+                    )
+                    .child(
+                        Button::new("🔨 Build".to_string())
+                            .variant(ButtonVariant::Primary)
+                            .on_click(move || {
+                                let path = project_path_new.get()
+                                
+                                if !path.is_empty() {
+                                    console_output_new.set("🔨 Building game...\n".to_string())
+                                    
+                                    let main_file = format!("{}/main.wj", path)
+                                    match process::execute("wj".to_string(), vec!["build".to_string(), main_file, "--release".to_string()]) {
+                                        Ok(output) => {
+                                            console_output_new.set(format!("✓ Build complete:\n{}\n{}\n", output.stdout, output.stderr))
+                                        }
+                                        Err(e) => {
+                                            console_output_new.set(format!("✗ Build failed: {}\n", e))
+                                        }
+                                    }
+                                }
+                            })
+                    )
+                    .child(
+                        Button::new("🧹 Clean".to_string())
+                            .variant(ButtonVariant::Secondary)
+                            .on_click(move || {
+                                console_output_new.set("🧹 Cleaning build artifacts...\n".to_string())
+                                // TODO: Implement clean
+                            })
+                    )
+            )
+        
+        // ===== MAIN CONTENT AREA =====
+        
+        // Left panel: File tree
+        let file_tree_panel = Panel::new("Files".to_string())
+            .background_color("#252526".to_string())
+            .width("250px")
+            .child(
+                TreeView::new()
+                    .items(file_tree_items_render.get())
+            )
+        
+        // Center panel: Code editor with tabs
+        let editor_tabs = if open_tabs_render.get().is_empty() {
+            Vec::new()
+        } else {
+            open_tabs_render.get().iter().enumerate().map(|(i, tab_name)| {
+                TabPanelTab::new(
+                    tab_name.clone(),
+                    Text::new("".to_string()).to_vnode()
+                )
+            }).collect()
+        }
+        
+        let code_editor_panel = Panel::new("Editor".to_string())
+            .background_color("#1e1e1e".to_string())
+            .child(
+                if open_tabs_render.get().is_empty() {
+                    Text::new("No files open".to_string()).to_vnode()
+                } else {
+                    TabPanel::new()
+                        .tabs(editor_tabs)
+                        .active_tab(active_tab_index_render.get())
+                        .to_vnode()
+                }
+            )
+            .child(
+                CodeEditor::new(code_content_render.clone())
+            )
+        
+        // Right panel: Scene editor + Properties
+        let scene_editor_panel = Panel::new("Scene".to_string())
+            .background_color("#252526".to_string())
+            .width("250px")
+            .child(
+                TreeView::new()
+                    .items(vec![
+                        TreeItem::new("Root", "🎬")
+                            .expanded(true)
+                            .children(vec![
+                                TreeItem::new("Player", "🎮"),
+                                TreeItem::new("Camera", "📷"),
+                                TreeItem::new("Ground", "🟫"),
+                            ])
+                    ])
+            )
+        
+        let properties_panel = Panel::new("Properties".to_string())
+            .background_color("#252526".to_string())
+            .child(
+                Flex::new()
+                    .direction(FlexDirection::Column)
+                    .gap("8px")
+                    .child(Text::new("Position: (0, 0)".to_string()))
+                    .child(Text::new("Scale: (1, 1)".to_string()))
+                    .child(Text::new("Rotation: 0°".to_string()))
+            )
+        
+        // Combine scene and properties
+        let right_panel = SplitPanel::new(SplitDirection::Vertical)
+            .top(scene_editor_panel.to_vnode())
+            .bottom(properties_panel.to_vnode())
+            .split_ratio(0.6)
+        
+        // Main horizontal split
+        let main_content = SplitPanel::new(SplitDirection::Horizontal)
+            .left(file_tree_panel.to_vnode())
+            .right(
+                SplitPanel::new(SplitDirection::Horizontal)
+                    .left(code_editor_panel.to_vnode())
+                    .right(right_panel.to_vnode())
+                    .split_ratio(0.7)
+                    .to_vnode()
+            )
+            .split_ratio(0.2)
+        
+        // ===== BOTTOM PANEL: CONSOLE =====
+        
+        let console_panel = Panel::new("Console".to_string())
+            .background_color("#1e1e1e".to_string())
+            .height("200px")
+            .child(
+                Text::new(console_output_render.get())
+            )
+        
+        // ===== STATUS BAR =====
+        
+        let status_bar = Flex::new()
+            .direction(FlexDirection::Row)
+            .gap("16px")
+            .padding("4px 8px")
+            .background_color("#007acc".to_string())
+            .child(Text::new(format!("Project: {}", project_name_render.get())))
+            .child(Text::new(format!("File: {}", current_file_render.get())))
+            .child(Text::new(if is_running_render.get() { "⚡ Running" } else { "✓ Ready" }))
+        
+        // ===== COMPLETE LAYOUT =====
+        
+        Container::new()
+            .max_width("100%")
+            .max_height("100%")
+            .background_color("#1e1e1e".to_string())
+            .child(toolbar)
+            .child(
+                SplitPanel::new(SplitDirection::Vertical)
+                    .top(main_content.to_vnode())
+                    .bottom(console_panel.to_vnode())
+                    .split_ratio(0.75)
+            )
+            .child(status_bar)
+            .to_vnode()
+    })
+    
+    app.run()
+}
+
+// ===== HELPER FUNCTIONS =====
+
+fn get_template_code(template: string) -> string {
+    if template == "platformer" {
+        return "use std::game::*\n\n@game\nstruct MyGame {\n    player_x: float,\n    player_y: float,\n}\n\n@init\nfn init() -> MyGame {\n    MyGame {\n        player_x: 100.0,\n        player_y: 100.0,\n    }\n}\n\n@update\nfn update(game: &mut MyGame, delta: float) {\n    // Game logic here\n}\n\n@render\nfn render(game: &MyGame, renderer: &mut Renderer) {\n    renderer.clear(Color::BLACK)\n    renderer.draw_rect(game.player_x, game.player_y, 50.0, 50.0, Color::BLUE)\n}\n".to_string()
+    } else {
+        return "// New Windjammer game\n".to_string()
+    }
+}

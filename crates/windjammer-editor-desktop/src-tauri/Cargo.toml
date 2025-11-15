@@ -1,0 +1,25 @@
+[package]
+name = "windjammer-editor-desktop"
+version = "0.34.0"
+description = "Windjammer Game Editor - Desktop Application"
+authors = ["Windjammer Team"]
+license = "MIT"
+repository = "https://github.com/windjammer/windjammer"
+edition = "2021"
+
+# Prevent this from being treated as part of parent workspace
+[workspace]
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+tauri = { version = "2", features = [] }
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+tokio = { version = "1.35", features = ["full"] }
+
+[features]
+default = ["custom-protocol"]
+custom-protocol = ["tauri/custom-protocol"]
+

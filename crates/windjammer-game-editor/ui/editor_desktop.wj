@@ -1,0 +1,315 @@
+// Windjammer Game Editor - Desktop Version
+// Pure Windjammer UI with Tauri backend integration
+
+use std::ui;
+use std::tauri;
+
+// Application state - all reactive
+let current_project_path = Signal::new("");
+let current_file_path = Signal::new("");
+let file_content = Signal::new("");
+let console_messages = Signal::new(Vec<String>::new());
+let is_game_running = Signal::new(false);
+let status_message = Signal::new("Ready");
+let file_tree_data = Signal::new(Vec<String>::new());
+
+// Main render function
+fn render_ui() -> VNode {
+    Container::new()
+        .child(render_toolbar())
+        .child(render_main_area())
+        .child(render_status_bar())
+}
+
+// Toolbar with action buttons
+fn render_toolbar() -> VNode {
+    let project_path_clone = current_project_path.clone();
+    let file_path_clone = current_file_path.clone();
+    let running_clone = is_game_running.clone();
+    
+    Toolbar::new()
+        .child(Button::new("📁 New Project")
+            .variant(ButtonVariant::Primary)
+            .size(ButtonSize::Medium)
+            .on_click(move || {
+                handle_new_project();
+            }))
+        .child(Button::new("💾 Save")
+            .variant(ButtonVariant::Secondary)
+            .size(ButtonSize::Medium)
+            .disabled(file_path_clone.get() == "")
+            .on_click(move || {
+                handle_save_file();
+            }))
+        .child(Button::new("▶️ Run Game")
+            .variant(ButtonVariant::Primary)
+            .size(ButtonSize::Medium)
+            .disabled(project_path_clone.get() == "" || running_clone.get())
+            .on_click(move || {
+                handle_run_game();
+            }))
+        .child(Button::new("⏹️ Stop")
+            .variant(ButtonVariant::Danger)
+            .size(ButtonSize::Medium)
+            .disabled(!running_clone.get())
+            .on_click(move || {
+                handle_stop_game();
+            }))
+}
+
+// Main content area with three panels
+fn render_main_area() -> VNode {
+    Flex::new(FlexDirection::Row)
+        .child(render_file_browser())
+        .child(render_editor_panel())
+        .child(render_console_panel())
+}
+
+// Left sidebar - file browser
+fn render_file_browser() -> VNode {
+    let tree_data = file_tree_data.clone();
+    let project_path = current_project_path.clone();
+    
+    Panel::new("📂 Project Files")
+        .child(if project_path.get() == "" {
+            Text::new("No project open")
+                .size(TextSize::Small)
+        } else {
+            render_file_list()
+        })
+}
+
+// Render list of files
+fn render_file_list() -> VNode {
+    let files = file_tree_data.get();
+    let container = Container::new();
+    
+    // Add each file as a clickable item
+    for file in files {
+        let file_clone = file.clone();
+        container.child(
+            Button::new(file)
+                .variant(ButtonVariant::Ghost)
+                .size(ButtonSize::Small)
+                .on_click(move || {
+                    handle_open_file(file_clone);
+                })
+        );
+    }
+    
+    container
+}
+
+// Center panel - code editor
+fn render_editor_panel() -> VNode {
+    let content = file_content.clone();
+    let file_path = current_file_path.clone();
+    
+    Panel::new(if file_path.get() == "" {
+        "📝 Editor"
+    } else {
+        "📝 " + file_path.get()
+    })
+        .child(if file_path.get() == "" {
+            Text::new("Open a file to start editing")
+                .size(TextSize::Medium)
+        } else {
+            CodeEditor::new(content)
+        })
+}
+
+// Right panel - console output
+fn render_console_panel() -> VNode {
+    let messages = console_messages.clone();
+    
+    Panel::new("🖥️ Console")
+        .child(render_console_messages())
+}
+
+// Render console messages
+fn render_console_messages() -> VNode {
+    let messages = console_messages.get();
+    let container = Container::new();
+    
+    if messages.is_empty() {
+        container.child(
+            Text::new("Console output will appear here")
+                .size(TextSize::Small)
+        );
+    } else {
+        for msg in messages {
+            container.child(
+                Text::new(msg)
+                    .size(TextSize::Small)
+            );
+        }
+    }
+    
+    container
+}
+
+// Bottom status bar
+fn render_status_bar() -> VNode {
+    let status = status_message.clone();
+    let project = current_project_path.clone();
+    let running = is_game_running.clone();
+    
+    Container::new()
+        .child(Flex::new(FlexDirection::Row)
+            .child(Text::new("Status: " + status.get())
+                .size(TextSize::Small))
+            .child(Text::new("Project: " + if project.get() == "" {
+                "None"
+            } else {
+                project.get()
+            })
+                .size(TextSize::Small))
+            .child(Text::new(if running.get() {
+                "🟢 Running"
+            } else {
+                "⚪ Stopped"
+            })
+                .size(TextSize::Small)))
+}
+
+// Event Handlers
+
+fn handle_new_project() {
+    status_message.set("Creating new project...");
+    
+    // TODO: Show dialog for project name
+    let project_name = "my_game";
+    
+    // Call Tauri command to create project
+    let result = tauri::create_game_project(project_name, ".");
+    
+    if result.success {
+        current_project_path.set(result.path);
+        status_message.set("Project created successfully");
+        console_messages.update(move |msgs| {
+            msgs.push("✅ Created project: " + project_name);
+        });
+        refresh_file_tree();
+    } else {
+        status_message.set("Failed to create project");
+        console_messages.update(move |msgs| {
+            msgs.push("❌ Error: " + result.error);
+        });
+    }
+}
+
+fn handle_open_file(file_path: string) {
+    status_message.set("Opening file...");
+    
+    // Call Tauri command to read file
+    let result = tauri::read_file(file_path);
+    
+    if result.success {
+        current_file_path.set(file_path);
+        file_content.set(result.content);
+        status_message.set("File opened");
+    } else {
+        status_message.set("Failed to open file");
+        console_messages.update(move |msgs| {
+            msgs.push("❌ Error reading file: " + result.error);
+        });
+    }
+}
+
+fn handle_save_file() {
+    let path = current_file_path.get();
+    if path == "" {
+        return;
+    }
+    
+    status_message.set("Saving file...");
+    
+    // Call Tauri command to write file
+    let content = file_content.get();
+    let result = tauri::write_file(path, content);
+    
+    if result.success {
+        status_message.set("File saved");
+        console_messages.update(move |msgs| {
+            msgs.push("✅ Saved: " + path);
+        });
+    } else {
+        status_message.set("Failed to save file");
+        console_messages.update(move |msgs| {
+            msgs.push("❌ Error saving file: " + result.error);
+        });
+    }
+}
+
+fn handle_run_game() {
+    let project_path = current_project_path.get();
+    if project_path == "" {
+        return;
+    }
+    
+    is_game_running.set(true);
+    status_message.set("Running game...");
+    console_messages.update(move |msgs| {
+        msgs.push("🎮 Starting game...");
+    });
+    
+    // Call Tauri command to run game
+    let result = tauri::run_game(project_path);
+    
+    if result.success {
+        console_messages.update(move |msgs| {
+            msgs.push("✅ Game started");
+            msgs.push(result.output);
+        });
+    } else {
+        console_messages.update(move |msgs| {
+            msgs.push("❌ Error: " + result.error);
+        });
+        is_game_running.set(false);
+    }
+    
+    status_message.set("Game running");
+}
+
+fn handle_stop_game() {
+    status_message.set("Stopping game...");
+    
+    // Call Tauri command to stop game
+    let result = tauri::stop_game();
+    
+    is_game_running.set(false);
+    status_message.set("Game stopped");
+    console_messages.update(move |msgs| {
+        msgs.push("⏹️ Game stopped");
+    });
+}
+
+fn refresh_file_tree() {
+    let project_path = current_project_path.get();
+    if project_path == "" {
+        return;
+    }
+    
+    // Call Tauri command to list directory
+    let result = tauri::list_directory(project_path);
+    
+    if result.success {
+        file_tree_data.set(result.files);
+    } else {
+        console_messages.update(move |msgs| {
+            msgs.push("❌ Error listing files: " + result.error);
+        });
+    }
+}
+
+// Entry point - mount the reactive app
+@export
+fn start() {
+    console_messages.update(move |msgs| {
+        msgs.push("🎮 Windjammer Game Editor");
+        msgs.push("Ready to create amazing games!");
+    });
+    
+    ReactiveApp::new("Windjammer Game Editor", render_ui).run();
+}
+

@@ -1,0 +1,55 @@
+<!-- Modal Dialog for New Project -->
+<div id="new-project-dialog" class="modal" style="display: none;">
+    <div class="modal-overlay"></div>
+    <div class="modal-content">
+        <div class="modal-header">
+            <h2>Create New Game Project</h2>
+            <button class="modal-close" onclick="closeNewProjectDialog()">×</button>
+        </div>
+        <div class="modal-body">
+            <div class="form-group">
+                <label for="project-name-input">Project Name:</label>
+                <input type="text" id="project-name-input" placeholder="MyGame" class="form-input">
+            </div>
+            <div class="form-group">
+                <label for="project-path-input">Project Path:</label>
+                <input type="text" id="project-path-input" placeholder="/tmp" value="/tmp" class="form-input">
+            </div>
+            <div class="form-group">
+                <label for="template-select">Game Template:</label>
+                <select id="template-select" class="form-select">
+                    <option value="platformer">Platformer (jump and run)</option>
+                    <option value="puzzle">Puzzle (grid-based)</option>
+                    <option value="shooter">Shooter (space shooter)</option>
+                </select>
+            </div>
+        </div>
+        <div class="modal-footer">
+            <button class="btn btn-secondary" onclick="closeNewProjectDialog()">Cancel</button>
+            <button class="btn btn-primary" onclick="confirmNewProject()">Create Project</button>
+        </div>
+    </div>
+</div>
+
+<!-- Modal Dialog for Open Project -->
+<div id="open-project-dialog" class="modal" style="display: none;">
+    <div class="modal-overlay"></div>
+    <div class="modal-content">
+        <div class="modal-header">
+            <h2>Open Project</h2>
+            <button class="modal-close" onclick="closeOpenProjectDialog()">×</button>
+        </div>
+        <div class="modal-body">
+            <div class="form-group">
+                <label for="open-project-path-input">Project Path:</label>
+                <input type="text" id="open-project-path-input" placeholder="/path/to/project" class="form-input">
+                <p class="form-hint">Enter the path to an existing Windjammer project directory</p>
+            </div>
+        </div>
+        <div class="modal-footer">
+            <button class="btn btn-secondary" onclick="closeOpenProjectDialog()">Cancel</button>
+            <button class="btn btn-primary" onclick="confirmOpenProject()">Open</button>
+        </div>
+    </div>
+</div>
+

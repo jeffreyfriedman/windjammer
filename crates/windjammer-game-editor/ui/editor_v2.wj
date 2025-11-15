@@ -1,173 +1,333 @@
-// Windjammer Game Editor - Pure Windjammer Implementation
-// This is the REAL editor - written entirely in Windjammer with no HTML/CSS/JS!
+// Windjammer Game Editor V2
+// Beautiful, professional editor inspired by Godot
+// 100% Pure Windjammer - NO platform-specific code!
 
 use std::ui::*
-use std::tauri::*
+use std::fs::*
+use std::process::*
+use std::dialog::*
 
-// Editor state with reactive signals
-struct EditorState {
-    current_file: Signal<string>,
-    code_content: Signal<string>,
-    project_path: Signal<string>,
-    console_output: Signal<string>,
-    is_running: Signal<bool>,
-}
-
-impl EditorState {
-    fn new() -> EditorState {
-        EditorState {
-            current_file: Signal::new("".to_string()),
-            code_content: Signal::new("".to_string()),
-            project_path: Signal::new("".to_string()),
-            console_output: Signal::new("Welcome to Windjammer Game Editor!\n".to_string()),
-            is_running: Signal::new(false),
-        }
-    }
+@export
+fn start() {
+    println!("🎮 Starting Windjammer Game Editor V2")
     
-    fn log(self, message: string) {
-        let current = self.console_output.get()
-        let new_output = current + "[LOG] " + message + "\n"
-        self.console_output.set(new_output)
-    }
-}
-
-// Main editor UI
-fn render_editor(state: EditorState) -> Container {
-    Container::new()
-        .max_width("100%")
-        .child(render_toolbar(state.clone()))
-        .child(render_main_area(state.clone()))
-        .child(render_console(state.clone()))
-}
-
-fn render_toolbar(state: EditorState) -> Panel {
-    Panel::new("Toolbar".to_string())
-        .child(
-            Flex::new()
-                .direction(FlexDirection::Row)
-                .gap("8px")
+    // ========================================
+    // REACTIVE STATE
+    // ========================================
+    
+    // Project state
+    let project_path = Signal::new("".to_string())
+    let project_name = Signal::new("No Project".to_string())
+    let project_files = Signal::new(Vec::<String>::new())
+    
+    // Editor state
+    let current_file = Signal::new("".to_string())
+    let code_content = Signal::new("// Welcome to Windjammer Game Editor!\n// Create a new project or open an existing one to get started.\n\n// Windjammer is a modern game engine with:\n// - Pure Rust performance\n// - Cross-platform support\n// - Built-in ECS\n// - Visual editor\n// - Hot reload\n\nuse std::game::*\n\n@game\nstruct MyGame {\n    // Your game state here\n}\n\n@init\nfn init(game: &mut MyGame) {\n    println!(\"Game initialized!\");\n}\n\n@update\nfn update(game: &mut MyGame, delta: f32) {\n    // Update game logic\n}\n".to_string())
+    let is_modified = Signal::new(false)
+    
+    // Console state
+    let console_output = Signal::new("═══════════════════════════════════════\n🎮 Windjammer Game Editor\n═══════════════════════════════════════\n\nReady. Create a new project to begin.\n".to_string())
+    let is_running = Signal::new(false)
+    
+    // UI state
+    let selected_template = Signal::new("platformer".to_string())
+    let selected_tab = Signal::new("code".to_string()) // code, scene, assets
+    
+    // ========================================
+    // REACTIVE APP
+    // ========================================
+    
+    let app = ReactiveApp::new("Windjammer Game Editor".to_string(), move || {
+        // Clone signals for rendering
+        let r_project_name = project_name.clone()
+        let r_project_path = project_path.clone()
+        let r_current_file = current_file.clone()
+        let r_code_content = code_content.clone()
+        let r_console = console_output.clone()
+        let r_is_running = is_running.clone()
+        let r_is_modified = is_modified.clone()
+        let r_selected_tab = selected_tab.clone()
+        
+        // Clone for button handlers
+        let new_console = console_output.clone()
+        let new_template = selected_template.clone()
+        let new_project_path = project_path.clone()
+        let new_project_name = project_name.clone()
+        let new_current_file = current_file.clone()
+        let new_code_content = code_content.clone()
+        
+        let open_console = console_output.clone()
+        let open_project_path = project_path.clone()
+        let open_project_name = project_name.clone()
+        let open_current_file = current_file.clone()
+        let open_code_content = code_content.clone()
+        
+        let save_console = console_output.clone()
+        let save_current_file = current_file.clone()
+        let save_code_content = code_content.clone()
+        let save_is_modified = is_modified.clone()
+        
+        let run_console = console_output.clone()
+        let run_project_path = project_path.clone()
+        let run_is_running = is_running.clone()
+        
+        let build_console = console_output.clone()
+        let build_project_path = project_path.clone()
+        
+        let tab_selected_tab = selected_tab.clone()
+        
+        // ========================================
+        // MAIN LAYOUT
+        // ========================================
+        
+        Container::new()
+            .style("background: #1e1e1e; color: #cccccc; font-family: 'Segoe UI', sans-serif; height: 100vh; display: flex; flex-direction: column;")
+            
+            // ========================================
+            // TOP TOOLBAR
+            // ========================================
+            .child(Panel::new("".to_string())
+                .style("background: #2d2d30; border-bottom: 1px solid #3e3e42; padding: 8px 12px; display: flex; gap: 8px; align-items: center;")
+                .child(Text::new("🎮".to_string())
+                    .style("font-size: 20px;"))
+                .child(Text::new("Windjammer".to_string())
+                    .style("font-size: 14px; font-weight: 600; color: #4ec9b0;"))
                 .child(Button::new("New Project".to_string())
                     .variant(ButtonVariant::Primary)
-                    .on_click(|| {
-                        handle_new_project(state.clone())
+                    .style("background: #0e639c; color: white; border: none; padding: 6px 12px; border-radius: 3px; cursor: pointer; font-size: 13px;")
+                    .on_click(move || {
+                        new_console.set("📝 Creating new project...\n".to_string())
+                        
+                        let project_dir = "/tmp/windjammer_projects".to_string()
+                        let name = "my_game".to_string()
+                        let template = new_template.get()
+                        
+                        match fs::create_directory(project_dir.clone()) {
+                            Ok(_) => {},
+                            Err(_) => {}
+                        }
+                        
+                        let project_full_path = project_dir.clone() + "/" + &name
+                        match fs::create_directory(project_full_path.clone()) {
+                            Ok(_) => {},
+                            Err(_) => {}
+                        }
+                        
+                        let main_file = project_full_path.clone() + "/main.wj"
+                        let template_code = get_template_code(template)
+                        
+                        match fs::write_file(main_file.clone(), template_code.clone()) {
+                            Ok(_) => {
+                                new_project_path.set(project_full_path.clone())
+                                new_project_name.set(name.clone())
+                                new_current_file.set(main_file.clone())
+                                new_code_content.set(template_code)
+                                new_console.set("✅ Project created successfully!\n\nProject: ".to_string() + &name + "\nPath: " + &project_full_path + "\n\nYou can now edit your game code.\n")
+                            },
+                            Err(e) => {
+                                new_console.set(format!("❌ Failed to create project: {}\n", e))
+                            }
+                        }
                     }))
                 .child(Button::new("Open".to_string())
                     .variant(ButtonVariant::Secondary)
-                    .on_click(|| {
-                        handle_open_project(state.clone())
+                    .style("background: #3e3e42; color: #cccccc; border: 1px solid #555; padding: 6px 12px; border-radius: 3px; cursor: pointer; font-size: 13px;")
+                    .on_click(move || {
+                        open_console.set("📂 Opening project...\n".to_string())
+                        
+                        let test_project = "/tmp/windjammer_projects/my_game".to_string()
+                        let main_file = test_project.clone() + "/main.wj"
+                        
+                        match fs::file_exists(main_file.clone()) {
+                            true => {
+                                match fs::read_file(main_file.clone()) {
+                                    Ok(content) => {
+                                        open_project_path.set(test_project.clone())
+                                        open_project_name.set("my_game".to_string())
+                                        open_current_file.set(main_file.clone())
+                                        open_code_content.set(content)
+                                        open_console.set("✅ Project opened successfully!\n\nProject: my_game\nFile: ".to_string() + &main_file + "\n")
+                                    },
+                                    Err(e) => {
+                                        open_console.set(format!("❌ Failed to read file: {}\n", e))
+                                    }
+                                }
+                            },
+                            false => {
+                                open_console.set("❌ Project not found.\n\nCreate a new project first.\n".to_string())
+                            }
+                        }
                     }))
-                .child(Button::new("Save".to_string())
-                    .variant(ButtonVariant::Secondary)
-                    .on_click(|| {
-                        handle_save_file(state.clone())
-                    }))
-                .child(Button::new("Run".to_string())
+                .child(Button::new("💾 Save".to_string())
                     .variant(ButtonVariant::Primary)
-                    .on_click(|| {
-                        handle_run_game(state.clone())
+                    .style("background: #0e639c; color: white; border: none; padding: 6px 12px; border-radius: 3px; cursor: pointer; font-size: 13px;")
+                    .on_click(move || {
+                        let file = save_current_file.get()
+                        if file == "" {
+                            save_console.set("❌ No file open\n".to_string())
+                            return
+                        }
+                        
+                        save_console.set("💾 Saving file...\n".to_string())
+                        
+                        match fs::write_file(file.clone(), save_code_content.get()) {
+                            Ok(_) => {
+                                save_is_modified.set(false)
+                                save_console.set("✅ File saved successfully!\n\nFile: ".to_string() + &file + "\n")
+                            },
+                            Err(e) => {
+                                save_console.set(format!("❌ Failed to save: {}\n", e))
+                            }
+                        }
                     }))
-                .child(Button::new("Stop".to_string())
-                    .variant(ButtonVariant::Danger)
-                    .on_click(|| {
-                        handle_stop_game(state.clone())
+                .child(Text::new("|".to_string())
+                    .style("color: #555; margin: 0 4px;"))
+                .child(Button::new("▶ Run".to_string())
+                    .variant(ButtonVariant::Primary)
+                    .style("background: #16825d; color: white; border: none; padding: 6px 16px; border-radius: 3px; cursor: pointer; font-size: 13px; font-weight: 600;")
+                    .on_click(move || {
+                        let project = run_project_path.get()
+                        if project == "" {
+                            run_console.set("❌ No project open\n\nCreate or open a project first.\n".to_string())
+                            return
+                        }
+                        
+                        run_console.set("🎮 Compiling and running game...\n\n".to_string())
+                        run_is_running.set(true)
+                        
+                        let args = vec!["run".to_string(), project.clone() + "/main.wj"]
+                        match process::execute("wj".to_string(), args) {
+                            Ok(output) => {
+                                run_console.set("✅ Game compiled successfully!\n\n".to_string() + &output.stdout + "\n" + &output.stderr + "\n")
+                            },
+                            Err(e) => {
+                                run_console.set(format!("❌ Compilation failed:\n\n{}\n", e))
+                                run_is_running.set(false)
+                            }
+                        }
                     }))
-        )
+                .child(Button::new("🔨 Build".to_string())
+                    .variant(ButtonVariant::Secondary)
+                    .style("background: #3e3e42; color: #cccccc; border: 1px solid #555; padding: 6px 12px; border-radius: 3px; cursor: pointer; font-size: 13px;")
+                    .on_click(move || {
+                        let project = build_project_path.get()
+                        if project == "" {
+                            build_console.set("❌ No project open\n".to_string())
+                            return
+                        }
+                        
+                        build_console.set("🔨 Building game...\n\n".to_string())
+                        
+                        let args = vec!["build".to_string(), project.clone() + "/main.wj"]
+                        match process::execute("wj".to_string(), args) {
+                            Ok(output) => {
+                                build_console.set("✅ Build complete!\n\n".to_string() + &output.stdout + "\n" + &output.stderr + "\n")
+                            },
+                            Err(e) => {
+                                build_console.set(format!("❌ Build failed:\n\n{}\n", e))
+                            }
+                        }
+                    })))
+            
+            // ========================================
+            // MAIN CONTENT AREA
+            // ========================================
+            .child(Flex::new()
+                .direction(FlexDirection::Row)
+                .style("flex: 1; overflow: hidden;")
+                
+                // LEFT SIDEBAR - File Tree
+                .child(Panel::new("Files".to_string())
+                    .style("width: 250px; background: #252526; border-right: 1px solid #3e3e42; padding: 12px; overflow-y: auto;")
+                    .child(Text::new("📁 ".to_string() + &r_project_name.get())
+                        .style("font-size: 14px; font-weight: 600; color: #4ec9b0; margin-bottom: 8px;"))
+                    .child(Text::new("  📄 main.wj".to_string())
+                        .style("font-size: 13px; color: #cccccc; margin-left: 16px; cursor: pointer;"))
+                    .child(Text::new("  📁 assets".to_string())
+                        .style("font-size: 13px; color: #888; margin-left: 16px; margin-top: 4px;"))
+                    .child(Text::new("  📁 scenes".to_string())
+                        .style("font-size: 13px; color: #888; margin-left: 16px; margin-top: 4px;")))
+                
+                // CENTER - Editor Tabs and Content
+                .child(Flex::new()
+                    .direction(FlexDirection::Column)
+                    .style("flex: 1; background: #1e1e1e;")
+                    
+                    // Tab Bar
+                    .child(Flex::new()
+                        .direction(FlexDirection::Row)
+                        .style("background: #2d2d30; border-bottom: 1px solid #3e3e42; padding: 0;")
+                        .child(Button::new("Code".to_string())
+                            .style(if r_selected_tab.get() == "code" { "background: #1e1e1e; color: #4ec9b0; border: none; padding: 8px 16px; border-bottom: 2px solid #4ec9b0; cursor: pointer; font-size: 13px;" } else { "background: transparent; color: #888; border: none; padding: 8px 16px; cursor: pointer; font-size: 13px;" })
+                            .on_click(move || {
+                                tab_selected_tab.set("code".to_string())
+                            }))
+                        .child(Button::new("Scene".to_string())
+                            .style("background: transparent; color: #888; border: none; padding: 8px 16px; cursor: pointer; font-size: 13px;"))
+                        .child(Button::new("Assets".to_string())
+                            .style("background: transparent; color: #888; border: none; padding: 8px 16px; cursor: pointer; font-size: 13px;")))
+                    
+                    // File Info Bar
+                    .child(Panel::new("".to_string())
+                        .style("background: #2d2d30; padding: 6px 12px; border-bottom: 1px solid #3e3e42; font-size: 12px; color: #888;")
+                        .child(Text::new("📄 ".to_string() + &r_current_file.get() + if r_is_modified.get() { " ●" } else { "" })))
+                    
+                    // Code Editor
+                    .child(CodeEditor::new(r_code_content.clone())
+                        .style("flex: 1; background: #1e1e1e; color: #d4d4d4; font-family: 'Consolas', 'Monaco', monospace; font-size: 14px; padding: 16px; overflow: auto; line-height: 1.6;")))
+                
+                // RIGHT SIDEBAR - Properties/Inspector
+                .child(Panel::new("Inspector".to_string())
+                    .style("width: 280px; background: #252526; border-left: 1px solid #3e3e42; padding: 12px; overflow-y: auto;")
+                    .child(Text::new("Project".to_string())
+                        .style("font-size: 12px; font-weight: 600; color: #888; text-transform: uppercase; margin-bottom: 8px;"))
+                    .child(Text::new("Name: ".to_string() + &r_project_name.get())
+                        .style("font-size: 13px; color: #cccccc; margin-bottom: 4px;"))
+                    .child(Text::new("Path: ".to_string() + &r_project_path.get())
+                        .style("font-size: 11px; color: #888; margin-bottom: 12px; word-break: break-all;"))
+                    .child(Text::new("Status".to_string())
+                        .style("font-size: 12px; font-weight: 600; color: #888; text-transform: uppercase; margin-bottom: 8px; margin-top: 12px;"))
+                    .child(Text::new(if r_is_running.get() { "🎮 Running" } else { "⏸ Ready" })
+                        .style("font-size: 13px; color: " + if r_is_running.get() { "#16825d" } else { "#888" } + "; margin-bottom: 4px;"))
+                    .child(Text::new(if r_is_modified.get() { "● Modified" } else { "✓ Saved" })
+                        .style("font-size: 13px; color: " + if r_is_modified.get() { "#ce9178" } else { "#16825d" } + ";"))
+                    .child(Text::new("Template".to_string())
+                        .style("font-size: 12px; font-weight: 600; color: #888; text-transform: uppercase; margin-bottom: 8px; margin-top: 12px;"))
+                    .child(Text::new("Platformer".to_string())
+                        .style("font-size: 13px; color: #cccccc;"))))
+            
+            // ========================================
+            // BOTTOM PANEL - Console
+            // ========================================
+            .child(Panel::new("Console".to_string())
+                .style("height: 200px; background: #1e1e1e; border-top: 1px solid #3e3e42; padding: 12px; overflow-y: auto; font-family: 'Consolas', 'Monaco', monospace; font-size: 12px; color: #cccccc; line-height: 1.5;")
+                .child(Text::new(r_console.get())))
+            
+            // ========================================
+            // STATUS BAR
+            // ========================================
+            .child(Panel::new("".to_string())
+                .style("background: #007acc; color: white; padding: 4px 12px; font-size: 12px; display: flex; justify-content: space-between;")
+                .child(Text::new("Windjammer v0.34.0".to_string()))
+                .child(Text::new(r_project_name.get() + " | " + if r_is_running.get() { "Running" } else { "Ready" })))
+            
+            .to_vnode()
+    })
+    
+    app.run()
 }
 
-fn render_main_area(state: EditorState) -> Flex {
-    Flex::new()
-        .direction(FlexDirection::Row)
-        .gap("0px")
-        .child(render_file_tree(state.clone()))
-        .child(render_code_editor(state.clone()))
-}
-
-fn render_file_tree(state: EditorState) -> Panel {
-    Panel::new("Files".to_string())
-        .child(Text::new("Project files will appear here".to_string()))
-}
-
-fn render_code_editor(state: EditorState) -> Panel {
-    let file = state.current_file.get()
-    let title = if file == "" {
-        "Editor".to_string()
+// Helper function to get template code
+fn get_template_code(template: string) -> string {
+    if template == "platformer" {
+        "// Platformer Game Template\nuse std::game::*\n\n@game\nstruct PlatformerGame {\n    player_x: f32,\n    player_y: f32,\n    velocity_y: f32,\n}\n\n@init\nfn init(game: &mut PlatformerGame) {\n    game.player_x = 100.0;\n    game.player_y = 100.0;\n    game.velocity_y = 0.0;\n    println!(\"Platformer initialized!\");\n}\n\n@update\nfn update(game: &mut PlatformerGame, delta: f32) {\n    // Gravity\n    game.velocity_y += 980.0 * delta;\n    game.player_y += game.velocity_y * delta;\n    \n    // Ground collision\n    if game.player_y > 400.0 {\n        game.player_y = 400.0;\n        game.velocity_y = 0.0;\n    }\n}\n".to_string()
+    } else if template == "puzzle" {
+        "// Puzzle Game Template\nuse std::game::*\n\n@game\nstruct PuzzleGame {\n    grid: Vec<Vec<int>>,\n    score: int,\n}\n\n@init\nfn init(game: &mut PuzzleGame) {\n    // Initialize 8x8 grid\n    game.score = 0;\n    println!(\"Puzzle game initialized!\");\n}\n\n@update\nfn update(game: &mut PuzzleGame, delta: f32) {\n    // Game logic here\n}\n".to_string()
     } else {
-        file
+        "// Shooter Game Template\nuse std::game::*\n\n@game\nstruct ShooterGame {\n    player_x: f32,\n    enemies: Vec<Enemy>,\n}\n\nstruct Enemy {\n    x: f32,\n    y: f32,\n}\n\n@init\nfn init(game: &mut ShooterGame) {\n    game.player_x = 400.0;\n    println!(\"Shooter initialized!\");\n}\n\n@update\nfn update(game: &mut ShooterGame, delta: f32) {\n    // Game logic here\n}\n".to_string()
     }
-    
-    Panel::new(title)
-        .child(Text::new("Code editor content".to_string()))
-}
-
-fn render_console(state: EditorState) -> Panel {
-    let output = state.console_output.get()
-    Panel::new("Console".to_string())
-        .child(Text::new(output))
-}
-
-// Event handlers using Tauri commands
-fn handle_new_project(state: EditorState) {
-    state.log("Creating new project...".to_string())
-    
-    // For now, use hardcoded values
-    // TODO: Add dialog support
-    let name = "MyGame".to_string()
-    let path = "/tmp".to_string()
-    
-    let result = create_game_project(path, name)
-    
-    state.log("Project created!".to_string())
-}
-
-fn handle_open_project(state: EditorState) {
-    state.log("Opening project...".to_string())
-    
-    // TODO: Add file picker dialog
-    let path = "/tmp/MyGame".to_string()
-    let files = list_directory(path)
-    
-    state.log("Project opened!".to_string())
-}
-
-fn handle_save_file(state: EditorState) {
-    let file = state.current_file.get()
-    let content = state.code_content.get()
-    
-    if file == "" {
-        state.log("No file open".to_string())
-    } else {
-        let result = write_file(file, content)
-        state.log("File saved!".to_string())
-    }
-}
-
-fn handle_run_game(state: EditorState) {
-    let project = state.project_path.get()
-    
-    if project == "" {
-        state.log("No project open".to_string())
-    } else {
-        state.is_running.set(true)
-        state.log("Running game...".to_string())
-        
-        let result = run_game(project)
-        state.log("Game started!".to_string())
-    }
-}
-
-fn handle_stop_game(state: EditorState) {
-    let result = stop_game()
-    state.is_running.set(false)
-    state.log("Game stopped".to_string())
 }
 
 fn main() {
-    println!("🎮 Windjammer Game Editor - Pure Windjammer!")
-    
-    let state = EditorState::new()
-    let ui = render_editor(state)
-    
-    // Mount the UI (will run in WASM/Tauri)
-    App::new("Windjammer Game Editor".to_string(), ui).run()
+    start()
 }
-

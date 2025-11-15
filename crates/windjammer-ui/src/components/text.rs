@@ -1,6 +1,6 @@
 //! Text component
+use crate::prelude::ToVNode;
 use crate::simple_vnode::{VAttr, VNode};
-use crate::to_vnode::ToVNode;
 
 pub enum TextSize {
     Small,
@@ -68,7 +68,6 @@ impl Text {
     }
 }
 
-// Implement ToVNode for Text
 impl ToVNode for Text {
     fn to_vnode(self) -> VNode {
         self.render()

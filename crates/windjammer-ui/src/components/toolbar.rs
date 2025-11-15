@@ -1,6 +1,5 @@
 //! Toolbar component
 use crate::simple_vnode::{VAttr, VNode};
-use crate::to_vnode::ToVNode;
 
 pub struct Toolbar {
     pub children: Vec<VNode>,
@@ -39,12 +38,5 @@ impl Toolbar {
 impl Default for Toolbar {
     fn default() -> Self {
         Self::new()
-    }
-}
-
-// Implement ToVNode for Toolbar
-impl ToVNode for Toolbar {
-    fn to_vnode(self) -> VNode {
-        self.render()
     }
 }

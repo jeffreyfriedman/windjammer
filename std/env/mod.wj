@@ -1,0 +1,72 @@
+// Windjammer Standard Library - Environment Variables
+// Platform-agnostic environment access
+// NO coupling to any specific platform
+
+// IMPORTANT: This file contains TYPE DEFINITIONS ONLY.
+// The compiler generates platform-specific implementation.
+
+/// Get an environment variable
+/// Returns an Option<string>
+pub fn get(key: string) -> Option<string> {
+    // Compiler generates platform-specific implementation:
+    // - Native: std::env::var(key)
+    // - WASM: web_sys::window().location().search_params().get(key)
+    // - Tauri: tauri::api::process::env_var(key)
+}
+
+/// Get an environment variable or return a default
+pub fn get_or(key: string, default: string) -> string {
+    match get(key) {
+        Some(val) => val,
+        None => default
+    }
+}
+
+/// Set an environment variable
+pub fn set(key: string, value: string) {
+    // Compiler generates platform-specific implementation:
+    // - Native: std::env::set_var(key, value)
+    // - WASM: localStorage.setItem(key, value)
+    // - Tauri: tauri::api::process::set_env_var(key, value)
+}
+
+/// Remove an environment variable
+pub fn remove(key: string) {
+    // Compiler generates platform-specific implementation:
+    // - Native: std::env::remove_var(key)
+    // - WASM: localStorage.removeItem(key)
+    // - Tauri: tauri::api::process::remove_env_var(key)
+}
+
+/// Get the current working directory
+pub fn current_dir() -> string {
+    // Compiler generates platform-specific implementation:
+    // - Native: std::env::current_dir().to_string_lossy()
+    // - WASM: window.location.pathname
+    // - Tauri: tauri::api::path::current_dir()
+}
+
+/// Get all environment variables as a vector of (key, value) pairs
+pub fn vars() -> Vec<(string, string)> {
+    // Compiler generates platform-specific implementation:
+    // - Native: std::env::vars().collect()
+    // - WASM: Object.entries(localStorage)
+    // - Tauri: tauri::api::process::env_vars()
+}
+
+/// Get the home directory
+pub fn home_dir() -> Option<string> {
+    // Compiler generates platform-specific implementation:
+    // - Native: dirs::home_dir()
+    // - WASM: None (no home directory in browser)
+    // - Tauri: tauri::api::path::home_dir()
+}
+
+/// Get the temporary directory
+pub fn temp_dir() -> string {
+    // Compiler generates platform-specific implementation:
+    // - Native: std::env::temp_dir().to_string_lossy()
+    // - WASM: "/tmp" (virtual)
+    // - Tauri: tauri::api::path::temp_dir()
+}
+

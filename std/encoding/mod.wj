@@ -1,0 +1,128 @@
+// Windjammer Standard Library - Encoding/Decoding Utilities
+// Platform-agnostic encoding operations
+// NO coupling to any specific platform or crate
+
+// IMPORTANT: This file contains TYPE DEFINITIONS ONLY.
+// The compiler generates platform-specific implementation.
+
+//===============================================
+// BASE64 ENCODING
+//===============================================
+
+/// Encode bytes to base64 string
+pub fn base64_encode(data: Vec<u8>) -> string {
+    // Compiler generates platform-specific implementation:
+    // - Native: base64::encode(data)
+    // - WASM: btoa(String.from_char_code(...data))
+}
+
+/// Encode string to base64
+pub fn base64_encode_string(data: string) -> string {
+    // Compiler generates platform-specific implementation:
+    // - Native: base64::encode(data.as_bytes())
+    // - WASM: btoa(data)
+}
+
+/// Decode base64 string to bytes
+pub fn base64_decode(data: string) -> Result<Vec<u8>, string> {
+    // Compiler generates platform-specific implementation:
+    // - Native: base64::decode(data)
+    // - WASM: atob(data).split('').map(c => c.charCodeAt(0))
+}
+
+/// Decode base64 string to string
+pub fn base64_decode_string(data: string) -> Result<string, string> {
+    // Compiler generates platform-specific implementation:
+    // - Native: String::from_utf8(base64::decode(data)?)
+    // - WASM: atob(data)
+}
+
+//===============================================
+// HEX ENCODING
+//===============================================
+
+/// Encode bytes to hex string
+pub fn hex_encode(data: Vec<u8>) -> string {
+    // Compiler generates platform-specific implementation:
+    // - Native: hex::encode(data)
+    // - WASM: data.map(b => b.toString(16).padStart(2, '0')).join('')
+}
+
+/// Encode string to hex
+pub fn hex_encode_string(data: string) -> string {
+    // Compiler generates platform-specific implementation:
+    // - Native: hex::encode(data.as_bytes())
+    // - WASM: [...data].map(c => c.charCodeAt(0).toString(16)).join('')
+}
+
+/// Decode hex string to bytes
+pub fn hex_decode(data: string) -> Result<Vec<u8>, string> {
+    // Compiler generates platform-specific implementation:
+    // - Native: hex::decode(data)
+    // - WASM: data.match(/.{2}/g).map(h => parseInt(h, 16))
+}
+
+/// Decode hex string to string
+pub fn hex_decode_string(data: string) -> Result<string, string> {
+    // Compiler generates platform-specific implementation:
+    // - Native: String::from_utf8(hex::decode(data)?)
+    // - WASM: String.fromCharCode(...hex_decode(data))
+}
+
+//===============================================
+// URL ENCODING
+//===============================================
+
+/// URL encode a string
+pub fn url_encode(data: string) -> string {
+    // Compiler generates platform-specific implementation:
+    // - Native: urlencoding::encode(data)
+    // - WASM: encodeURIComponent(data)
+}
+
+/// URL decode a string
+pub fn url_decode(data: string) -> Result<string, string> {
+    // Compiler generates platform-specific implementation:
+    // - Native: urlencoding::decode(data)
+    // - WASM: decodeURIComponent(data)
+}
+
+/// URL encode a component (more aggressive than url_encode)
+pub fn url_encode_component(data: string) -> string {
+    // Compiler generates platform-specific implementation:
+    // - Native: urlencoding::encode(data)
+    // - WASM: encodeURIComponent(data)
+}
+
+/// URL decode a component
+pub fn url_decode_component(data: string) -> Result<string, string> {
+    // Compiler generates platform-specific implementation:
+    // - Native: urlencoding::decode(data)
+    // - WASM: decodeURIComponent(data)
+}
+
+//===============================================
+// JSON ENCODING (for convenience)
+//===============================================
+
+/// Encode value to JSON string
+pub fn json_encode<T>(value: T) -> Result<string, string> {
+    // Compiler generates platform-specific implementation:
+    // - Native: serde_json::to_string(&value)
+    // - WASM: JSON.stringify(value)
+}
+
+/// Decode JSON string to value
+pub fn json_decode<T>(data: string) -> Result<T, string> {
+    // Compiler generates platform-specific implementation:
+    // - Native: serde_json::from_str(&data)
+    // - WASM: JSON.parse(data)
+}
+
+/// Encode value to pretty JSON string
+pub fn json_encode_pretty<T>(value: T) -> Result<string, string> {
+    // Compiler generates platform-specific implementation:
+    // - Native: serde_json::to_string_pretty(&value)
+    // - WASM: JSON.stringify(value, null, 2)
+}
+

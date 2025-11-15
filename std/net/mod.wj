@@ -1,0 +1,225 @@
+// std/net - Network operations with proper abstraction
+// Implementation: reqwest (native), fetch API (browser)
+
+// PUBLIC API - Users interact with these functions only
+
+pub type NetResult<T> = Result<T, string>
+
+/// HTTP Response
+pub struct Response {
+    pub status: int,
+    pub headers: Vec<(string, string)>,
+    pub body: string,
+}
+
+/// HTTP Request builder
+pub struct Request {
+    pub url: string,
+    pub method: string,
+    pub headers: Vec<(string, string)>,
+    pub body: Option<string>,
+    pub timeout: Option<int>, // seconds
+}
+
+impl Request {
+    /// Create a new GET request
+    pub fn get(url: string) -> Request {
+        Request {
+            url: url,
+            method: "GET".to_string(),
+            headers: vec![],
+            body: None,
+            timeout: None,
+        }
+    }
+    
+    /// Create a new POST request
+    pub fn post(url: string, body: string) -> Request {
+        Request {
+            url: url,
+            method: "POST".to_string(),
+            headers: vec![],
+            body: Some(body),
+            timeout: None,
+        }
+    }
+    
+    /// Add a header
+    pub fn header(mut self, key: string, value: string) -> Request {
+        self.headers.push((key, value))
+        self
+    }
+    
+    /// Set timeout
+    pub fn timeout(mut self, seconds: int) -> Request {
+        self.timeout = Some(seconds)
+        self
+    }
+    
+    /// Send the request
+    pub fn send(self) -> NetResult<Response> {
+        // Compiler will generate platform-specific code
+        Err("Not implemented".to_string())
+    }
+    
+    /// Send the request asynchronously
+    pub async fn send_async(self) -> NetResult<Response> {
+        // Compiler will generate platform-specific code
+        Err("Not implemented".to_string())
+    }
+}
+
+/// Simple GET request
+pub fn get(url: string) -> NetResult<Response> {
+    Request::get(url).send()
+}
+
+/// Simple POST request
+pub fn post(url: string, body: string) -> NetResult<Response> {
+    Request::post(url, body).send()
+}
+
+/// Async GET request
+pub async fn get_async(url: string) -> NetResult<Response> {
+    Request::get(url).send_async().await
+}
+
+/// Async POST request
+pub async fn post_async(url: string, body: string) -> NetResult<Response> {
+    Request::post(url, body).send_async().await
+}
+
+/// Download a file
+pub fn download(url: string, path: string) -> NetResult<()> {
+    // Compiler will generate platform-specific code
+    Err("Not implemented".to_string())
+}
+
+/// Upload a file
+pub fn upload(url: string, path: string) -> NetResult<Response> {
+    // Compiler will generate platform-specific code
+    Err("Not implemented".to_string())
+}
+
+/// WebSocket connection
+pub struct WebSocket {
+    // Internal implementation hidden
+}
+
+impl WebSocket {
+    /// Connect to a WebSocket server
+    pub fn connect(url: string) -> NetResult<WebSocket> {
+        // Compiler will generate platform-specific code
+        Err("Not implemented".to_string())
+    }
+    
+    /// Send a message
+    pub fn send(&self, message: string) -> NetResult<()> {
+        // Compiler will generate platform-specific code
+        Err("Not implemented".to_string())
+    }
+    
+    /// Receive a message (blocking)
+    pub fn receive(&self) -> NetResult<string> {
+        // Compiler will generate platform-specific code
+        Err("Not implemented".to_string())
+    }
+    
+    /// Close the connection
+    pub fn close(self) -> NetResult<()> {
+        // Compiler will generate platform-specific code
+        Err("Not implemented".to_string())
+    }
+}
+
+// ============================================================================
+// HTTP SERVER API
+// ============================================================================
+
+/// HTTP Server Request (received by server)
+pub struct ServerRequest {
+    pub method: string,
+    pub path: string,
+    pub headers: Vec<(string, string)>,
+    pub body: string,
+}
+
+/// HTTP Server Response (sent by server)
+pub struct ServerResponse {
+    pub status: int,
+    pub headers: Vec<(string, string)>,
+    pub body: string,
+}
+
+impl ServerResponse {
+    /// Create a new response
+    pub fn new(status: int, body: string) -> ServerResponse {
+        ServerResponse {
+            status: status,
+            headers: vec![],
+            body: body,
+        }
+    }
+    
+    /// Create an HTML response
+    pub fn html(body: string) -> ServerResponse {
+        ServerResponse {
+            status: 200,
+            headers: vec![("Content-Type".to_string(), "text/html".to_string())],
+            body: body,
+        }
+    }
+    
+    /// Create a JSON response
+    pub fn json(body: string) -> ServerResponse {
+        ServerResponse {
+            status: 200,
+            headers: vec![("Content-Type".to_string(), "application/json".to_string())],
+            body: body,
+        }
+    }
+    
+    /// Create an error response
+    pub fn error(status: int, message: string) -> ServerResponse {
+        ServerResponse {
+            status: status,
+            headers: vec![("Content-Type".to_string(), "text/plain".to_string())],
+            body: message,
+        }
+    }
+    
+    /// Add a header
+    pub fn header(mut self, key: string, value: string) -> ServerResponse {
+        self.headers.push((key, value))
+        self
+    }
+}
+
+/// HTTP Server
+pub struct Server {
+    pub address: string,
+    pub port: int,
+}
+
+impl Server {
+    /// Create a new server
+    pub fn new(address: string, port: int) -> Server {
+        Server {
+            address: address,
+            port: port,
+        }
+    }
+    
+    /// Start the server with a request handler
+    /// The handler is called for each incoming request
+    pub fn serve<F>(self, handler: F) -> NetResult<()>
+    where
+        F: Fn(ServerRequest) -> ServerResponse
+    {
+        // Compiler will generate platform-specific code
+        // Native: Use std::net::TcpListener
+        // Browser: Not supported (servers can't run in browsers)
+        Err("Not implemented".to_string())
+    }
+}
+

@@ -113,16 +113,3 @@ impl FileTree {
         }
     }
 }
-<<<<<<< Updated upstream
-=======
-
-// Implement ToVNode for FileTree
-impl ToVNode for FileTree {
-    fn to_vnode(self) -> VNode {
-        self.render()
-    }
-}
-
-// FileNode is a data structure, not a renderable component
-// It doesn't need ToVNode implementation
->>>>>>> Stashed changes

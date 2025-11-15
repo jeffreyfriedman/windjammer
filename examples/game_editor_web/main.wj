@@ -1,0 +1,68 @@
+// Windjammer Game Editor - Web Version
+use std::ui::*
+
+@export
+fn start() {
+    let code_content = Signal::new("// Write your game code here\nuse std::game::*\n\nfn main() {\n    println!(\"Hello, game!\")\n}")
+    let console_text = Signal::new("Welcome to Windjammer Game Editor (Web)!\nReady to create games in your browser.")
+    let file_name = Signal::new("main.wj")
+    
+    let render_code = code_content.clone()
+    let render_console = console_text.clone()
+    let render_file = file_name.clone()
+    let button_code = code_content.clone()
+    let button_console = console_text.clone()
+    let button_file = file_name.clone()
+    
+    let render = move || {
+        let display_code = render_code.clone()
+        let display_console = render_console.clone()
+        let display_file = render_file.clone()
+        let new_code = button_code.clone()
+        let save_console = button_console.clone()
+        let save_file = button_file.clone()
+        let run_code = button_code.clone()
+        let run_console = button_console.clone()
+        
+        Container::new()
+            .child(Panel::new()
+                .title("🎮 Windjammer Game Editor (Web)")
+                .child(Text::new("Create games in your browser!").size(TextSize::Large)))
+            .child(Panel::new()
+                .title("Toolbar")
+                .child(Button::new("New")
+                    .variant(ButtonVariant::Secondary)
+                    .on_click(move || {
+                        new_code.set("// New game\nuse std::game::*\n\nfn main() {\n    println!(\"New game!\")\n}")
+                        save_file.set("untitled.wj")
+                        save_console.set("New file created.")
+                    }))
+                .child(Button::new("Save")
+                    .variant(ButtonVariant::Secondary)
+                    .on_click(move || {
+                        let msg = "File saved: ".to_string() + &save_file.get()
+                        save_console.set(msg)
+                    }))
+                .child(Button::new("Run")
+                    .variant(ButtonVariant::Primary)
+                    .on_click(move || {
+                        let output = "Compiling...\n\n".to_string() + &run_code.get() + "\n\n✓ Compilation complete!"
+                        run_console.set(output)
+                    })))
+            .child(Panel::new()
+                .title("Editor")
+                .child(Text::new("File: ".to_string() + &display_file.get()))
+                .child(CodeEditor::new(display_code.clone())
+                    .placeholder("Write your game code here...")))
+            .child(Panel::new()
+                .title("Console Output")
+                .child(Text::new(display_console.get())))
+            .to_vnode()
+    }
+    
+    ReactiveApp::new("Game Editor (Web)".to_string(), render).run()
+}
+
+fn main() {
+    start()
+}

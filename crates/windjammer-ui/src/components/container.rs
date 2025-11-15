@@ -1,12 +1,14 @@
 //! Container component
 
+use crate::prelude::ToVNode;
 use crate::simple_vnode::{VAttr, VNode};
-use crate::to_vnode::ToVNode;
 
 pub struct Container {
     pub children: Vec<VNode>,
     pub max_width: Option<String>,
+    pub max_height: Option<String>,
     pub padding: Option<String>,
+    pub background_color: Option<String>,
 }
 
 impl Container {
@@ -14,17 +16,14 @@ impl Container {
         Self {
             children: Vec::new(),
             max_width: None,
+            max_height: None,
             padding: Some("16px".to_string()),
+            background_color: None,
         }
     }
 
-<<<<<<< Updated upstream
     pub fn child(mut self, child: VNode) -> Self {
         self.children.push(child);
-=======
-    pub fn child(mut self, child: impl ToVNode) -> Self {
-        self.children.push(child.to_vnode());
->>>>>>> Stashed changes
         self
     }
 
@@ -38,8 +37,18 @@ impl Container {
         self
     }
 
+    pub fn max_height(mut self, height: impl Into<String>) -> Self {
+        self.max_height = Some(height.into());
+        self
+    }
+
     pub fn padding(mut self, padding: impl Into<String>) -> Self {
         self.padding = Some(padding.into());
+        self
+    }
+
+    pub fn background_color(mut self, color: impl Into<String>) -> Self {
+        self.background_color = Some(color.into());
         self
     }
 
@@ -50,8 +59,16 @@ impl Container {
             style.push_str(&format!("max-width: {}; ", max_width));
         }
 
+        if let Some(ref max_height) = self.max_height {
+            style.push_str(&format!("max-height: {}; ", max_height));
+        }
+
         if let Some(ref padding) = self.padding {
             style.push_str(&format!("padding: {}; ", padding));
+        }
+
+        if let Some(ref bg) = self.background_color {
+            style.push_str(&format!("background-color: {}; ", bg));
         }
 
         style.push_str("margin: 0 auto;");
@@ -75,13 +92,9 @@ impl Default for Container {
         Self::new()
     }
 }
-<<<<<<< Updated upstream
-=======
 
-// Implement ToVNode for Container
 impl ToVNode for Container {
     fn to_vnode(self) -> VNode {
         self.render()
     }
 }
->>>>>>> Stashed changes

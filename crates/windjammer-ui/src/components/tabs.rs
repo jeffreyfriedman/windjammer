@@ -1,6 +1,5 @@
 //! Tabs component
 use crate::simple_vnode::{VAttr, VNode};
-use crate::to_vnode::ToVNode;
 
 pub struct Tab {
     pub label: String,
@@ -103,13 +102,3 @@ impl Default for Tabs {
         Self::new()
     }
 }
-
-// Implement ToVNode for Tabs
-impl ToVNode for Tabs {
-    fn to_vnode(self) -> VNode {
-        self.render()
-    }
-}
-
-// Tab is a data structure, not a renderable component
-// It doesn't need ToVNode implementation

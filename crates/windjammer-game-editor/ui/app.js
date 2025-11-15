@@ -5,9 +5,16 @@
 document.addEventListener('DOMContentLoaded', async () => {
     console.log('DOM loaded, initializing editor...');
     
+    // Wait for Tauri API to be available
+    let attempts = 0;
+    while (!window.__TAURI__ && attempts < 50) {
+        await new Promise(resolve => setTimeout(resolve, 100));
+        attempts++;
+    }
+    
     // Check if Tauri API is available
     if (!window.__TAURI__) {
-        console.error('Tauri API not available!');
+        console.error('Tauri API not available after waiting!');
         alert('ERROR: Tauri API not loaded. Please restart the application.');
         return;
     }
@@ -63,12 +70,56 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
     
     // Event Listeners
-    if (newProjectBtn) newProjectBtn.addEventListener('click', createNewProject);
-    if (openProjectBtn) openProjectBtn.addEventListener('click', openProject);
+    if (newProjectBtn) {
+        newProjectBtn.addEventListener('click', createNewProject);
+        logToConsole('✓ New Project button listener attached');
+    }
+    if (openProjectBtn) {
+        openProjectBtn.addEventListener('click', openProject);
+        logToConsole('✓ Open Project button listener attached');
+    }
     if (saveFileBtn) saveFileBtn.addEventListener('click', saveFile);
     if (runGameBtn) runGameBtn.addEventListener('click', runGame);
     if (stopGameBtn) stopGameBtn.addEventListener('click', stopGame);
     if (buildGameBtn) buildGameBtn.addEventListener('click', buildGame);
+    
+    const clearConsoleBtn = document.getElementById('clear-console');
+    if (clearConsoleBtn) clearConsoleBtn.addEventListener('click', clearConsole);
+    
+    // Modal dialog button listeners
+    const closeNewProjectBtn = document.getElementById('close-new-project');
+    const cancelNewProjectBtn = document.getElementById('cancel-new-project');
+    const confirmNewProjectBtn = document.getElementById('confirm-new-project');
+    
+    if (closeNewProjectBtn) {
+        closeNewProjectBtn.addEventListener('click', closeNewProjectDialog);
+        logToConsole('✓ Close new project button listener attached');
+    }
+    if (cancelNewProjectBtn) {
+        cancelNewProjectBtn.addEventListener('click', closeNewProjectDialog);
+        logToConsole('✓ Cancel new project button listener attached');
+    }
+    if (confirmNewProjectBtn) {
+        confirmNewProjectBtn.addEventListener('click', confirmNewProject);
+        logToConsole('✓ Confirm new project button listener attached');
+    }
+    
+    const closeOpenProjectBtn = document.getElementById('close-open-project');
+    const cancelOpenProjectBtn = document.getElementById('cancel-open-project');
+    const confirmOpenProjectBtn = document.getElementById('confirm-open-project');
+    
+    if (closeOpenProjectBtn) {
+        closeOpenProjectBtn.addEventListener('click', closeOpenProjectDialog);
+        logToConsole('✓ Close open project button listener attached');
+    }
+    if (cancelOpenProjectBtn) {
+        cancelOpenProjectBtn.addEventListener('click', closeOpenProjectDialog);
+        logToConsole('✓ Cancel open project button listener attached');
+    }
+    if (confirmOpenProjectBtn) {
+        confirmOpenProjectBtn.addEventListener('click', confirmOpenProject);
+        logToConsole('✓ Confirm open project button listener attached');
+    }
     
     // Track cursor position in editor
     if (codeEditor) {
@@ -80,48 +131,114 @@ document.addEventListener('DOMContentLoaded', async () => {
     logToConsole('Editor initialized successfully!');
     updateStatus('Ready');
     
-    // Functions
-    async function createNewProject() {
+    // Modal Dialog Functions
+    function createNewProject() {
+        logToConsole('📝 Opening new project dialog...');
+        document.getElementById('new-project-dialog').style.display = 'flex';
+        setTimeout(() => {
+            document.getElementById('project-name-input').focus();
+        }, 100);
+    }
+    
+    function closeNewProjectDialog() {
+        document.getElementById('new-project-dialog').style.display = 'none';
+        logToConsole('✗ New project dialog closed');
+    }
+    
+    async function confirmNewProject() {
         try {
-            const projectName = prompt('Enter project name:');
-            if (!projectName) return;
+            const projectName = document.getElementById('project-name-input').value.trim();
+            const projectPath = document.getElementById('project-path-input').value.trim();
+            const template = document.getElementById('template-select').value;
             
-            const projectPath = prompt('Enter project path:', '/tmp');
-            if (!projectPath) return;
+            if (!projectName) {
+                logToConsole('✗ Project name is required');
+                alert('Please enter a project name');
+                return;
+            }
+            
+            if (!projectPath) {
+                logToConsole('✗ Project path is required');
+                alert('Please enter a project path');
+                return;
+            }
+            
+            // Close dialog
+            document.getElementById('new-project-dialog').style.display = 'none';
             
             updateStatus('Creating project...');
-            logToConsole(`Creating project: ${projectName} at ${projectPath}...`);
+            logToConsole(`Creating ${template} project: ${projectName} at ${projectPath}...`);
+            logToConsole(`Invoking Tauri command: create_game_project`);
             
             await invoke('create_game_project', {
                 path: projectPath,
-                name: projectName
+                name: projectName,
+                template: template
             });
             
             logToConsole(`✓ Project created successfully!`);
+            logToConsole(`   Template: ${template}`);
+            logToConsole(`   Location: ${projectPath}/${projectName}`);
             updateStatus('Project created');
             
             // Load the project
             currentProject = `${projectPath}/${projectName}`;
+            logToConsole(`Loading project files from: ${currentProject}`);
             await loadProjectFiles(currentProject);
             
+            // Open the main.wj file
+            const mainFile = `${currentProject}/main.wj`;
+            logToConsole(`Opening main file: ${mainFile}`);
+            await openFile(mainFile);
+            
             // Hide welcome screen
-            welcomeScreen.style.display = 'none';
-            codeEditor.style.display = 'block';
+            if (welcomeScreen) welcomeScreen.style.display = 'none';
+            if (codeEditor) codeEditor.style.display = 'block';
+            
+            logToConsole(`✓ Project setup complete!`);
+            
+            // Clear form
+            document.getElementById('project-name-input').value = '';
+            document.getElementById('project-path-input').value = '/tmp';
+            document.getElementById('template-select').value = 'platformer';
             
         } catch (error) {
-            logToConsole(`✗ Error: ${error}`);
+            logToConsole(`✗ Error creating project: ${error}`);
+            logToConsole(`   Error details: ${JSON.stringify(error)}`);
             updateStatus('Error creating project');
             console.error('Create project error:', error);
         }
     }
     
-    async function openProject() {
+    function openProject() {
+        logToConsole('📂 Opening project dialog...');
+        document.getElementById('open-project-dialog').style.display = 'flex';
+        setTimeout(() => {
+            document.getElementById('open-project-path-input').focus();
+        }, 100);
+    }
+    
+    function closeOpenProjectDialog() {
+        document.getElementById('open-project-dialog').style.display = 'none';
+        logToConsole('✗ Open project dialog closed');
+    }
+    
+    async function confirmOpenProject() {
         try {
-            const projectPath = prompt('Enter project path:');
-            if (!projectPath) return;
+            const projectPath = document.getElementById('open-project-path-input').value.trim();
+            
+            if (!projectPath) {
+                logToConsole('✗ Project path is required');
+                alert('Please enter a project path');
+                return;
+            }
+            
+            // Close dialog
+            document.getElementById('open-project-dialog').style.display = 'none';
             
             updateStatus('Opening project...');
             logToConsole(`Opening project: ${projectPath}...`);
+            logToConsole(`Invoking Tauri command: list_directory`);
             
             currentProject = projectPath;
             await loadProjectFiles(projectPath);
@@ -130,11 +247,15 @@ document.addEventListener('DOMContentLoaded', async () => {
             updateStatus('Project opened');
             
             // Hide welcome screen
-            welcomeScreen.style.display = 'none';
-            codeEditor.style.display = 'block';
+            if (welcomeScreen) welcomeScreen.style.display = 'none';
+            if (codeEditor) codeEditor.style.display = 'block';
+            
+            // Clear form
+            document.getElementById('open-project-path-input').value = '';
             
         } catch (error) {
-            logToConsole(`✗ Error: ${error}`);
+            logToConsole(`✗ Error opening project: ${error}`);
+            logToConsole(`   Error details: ${JSON.stringify(error)}`);
             updateStatus('Error opening project');
             console.error('Open project error:', error);
         }
@@ -142,7 +263,14 @@ document.addEventListener('DOMContentLoaded', async () => {
     
     async function loadProjectFiles(projectPath) {
         try {
+            logToConsole(`Listing directory: ${projectPath}`);
             const files = await invoke('list_directory', { path: projectPath });
+            logToConsole(`Found ${files.length} file(s)`);
+            
+            if (!fileTree) {
+                logToConsole('✗ Error: fileTree element not found!');
+                return;
+            }
             
             fileTree.innerHTML = '';
             files.forEach(file => {
@@ -161,10 +289,12 @@ document.addEventListener('DOMContentLoaded', async () => {
                 fileItem.onclick = () => openFile(file.path);
                 
                 fileTree.appendChild(fileItem);
+                logToConsole(`  - ${file.is_directory ? '📁' : '📄'} ${file.name}`);
             });
             
         } catch (error) {
             logToConsole(`✗ Error loading files: ${error}`);
+            logToConsole(`   Error details: ${JSON.stringify(error)}`);
             console.error('Load files error:', error);
         }
     }
@@ -324,6 +454,11 @@ document.addEventListener('DOMContentLoaded', async () => {
         const col = lines[lines.length - 1].length + 1;
         
         document.getElementById('cursor-position').textContent = `Ln ${line}, Col ${col}`;
+    }
+    
+    function clearConsole() {
+        consoleOutput.textContent = 'Console cleared.\n';
+        logToConsole('Ready for new output...');
     }
     
     // Initialize
