@@ -1,148 +1,69 @@
-// Simple 2D Platformer Demo
-// Demonstrates Windjammer's 2D game capabilities
+// 2D Platformer Demo
+// Demonstrates: ECS, Physics2D, Input, Rendering
 
 use std::game::*
 
-struct Platform {
-    x: float,
-    y: float,
-    width: float,
-    height: float,
-}
-
 @game
-struct Platformer2D {
-    player_x: float,
-    player_y: float,
-    player_velocity_x: float,
-    player_velocity_y: float,
-    is_grounded: bool,
-    platforms: Vec<Platform>,
+struct Platformer {
     score: int,
 }
 
 @init
-fn init() -> Platformer2D {
-    Platformer2D {
-        player_x: 100.0,
-        player_y: 300.0,
-        player_velocity_x: 0.0,
-        player_velocity_y: 0.0,
-        is_grounded: false,
-        platforms: vec![
-            // Ground
-            Platform { x: 0.0, y: 550.0, width: 800.0, height: 50.0 },
-            // Platforms
-            Platform { x: 200.0, y: 450.0, width: 150.0, height: 20.0 },
-            Platform { x: 450.0, y: 350.0, width: 150.0, height: 20.0 },
-            Platform { x: 100.0, y: 250.0, width: 150.0, height: 20.0 },
-            Platform { x: 550.0, y: 250.0, width: 150.0, height: 20.0 },
-        ],
-        score: 0,
-    }
+fn init(game: Platformer) {
+    println!("🎮 2D Platformer Starting!")
+    println!("Controls: Arrow keys to move, Space to jump")
+    
+    game.score = 0
+    
+    // TODO: Create player, ground, and platforms using ECS
+    // For now, just initialize the game state
 }
 
 @update
-fn update(game: &mut Platformer2D, delta: float) {
-    // Input handling
-    let mut move_x = 0.0;
-    if input::is_key_down(Key::Left) || input::is_key_down(Key::A) {
-        move_x = -250.0;
+fn update(game: Platformer, delta: float, input: Input) {
+    // Player movement
+    let move_speed = 200.0
+    let jump_force = 400.0
+    
+    // Left/Right movement
+    if input.is_key_pressed(Key::Left) {
+        // TODO: Apply velocity to player
+        println!("Moving left")
     }
-    if input::is_key_down(Key::Right) || input::is_key_down(Key::D) {
-        move_x = 250.0;
+    
+    if input.is_key_pressed(Key::Right) {
+        // TODO: Apply velocity to player
+        println!("Moving right")
     }
     
     // Jump
-    if (input::is_key_pressed(Key::Space) || input::is_key_pressed(Key::Up) || input::is_key_pressed(Key::W)) && game.is_grounded {
-        game.player_velocity_y = -600.0;
-        game.is_grounded = false;
+    if input.is_key_just_pressed(Key::Space) {
+        // TODO: Apply jump force
+        println!("Jump!")
+        game.score += 1
     }
     
-    // Apply horizontal movement
-    game.player_velocity_x = move_x;
+    // TODO: Step physics simulation
     
-    // Apply gravity
-    game.player_velocity_y += 1200.0 * delta;
-    
-    // Update position
-    game.player_x += game.player_velocity_x * delta;
-    game.player_y += game.player_velocity_y * delta;
-    
-    // Keep player in bounds (horizontal)
-    if game.player_x < 0.0 {
-        game.player_x = 0.0;
-    }
-    if game.player_x > 768.0 { // 800 - 32 (player width)
-        game.player_x = 768.0;
-    }
-    
-    // Collision detection with platforms
-    game.is_grounded = false;
-    let player_width = 32.0;
-    let player_height = 32.0;
-    
-    for platform in &game.platforms {
-        // Check if player is colliding with platform
-        if game.player_x + player_width > platform.x &&
-           game.player_x < platform.x + platform.width &&
-           game.player_y + player_height > platform.y &&
-           game.player_y < platform.y + platform.height {
-            
-            // Collision from above (landing on platform)
-            if game.player_velocity_y > 0.0 {
-                game.player_y = platform.y - player_height;
-                game.player_velocity_y = 0.0;
-                game.is_grounded = true;
-            }
-        }
-    }
-    
-    // Fall off screen = game over (respawn)
-    if game.player_y > 600.0 {
-        game.player_x = 100.0;
-        game.player_y = 300.0;
-        game.player_velocity_x = 0.0;
-        game.player_velocity_y = 0.0;
-        game.score = 0;
+    // Display score every 60 frames
+    if game.score > 0 && game.score % 10 == 0 {
+        println!("Score: {}", game.score)
     }
 }
 
 @render
-fn render(game: &Platformer2D) {
-    // Clear screen with sky blue
-    draw::clear(Color::rgb(0.53, 0.81, 0.92));
+fn render(game: Platformer, renderer: Renderer) {
+    // Clear to sky blue
+    renderer.clear(Color::rgb(0.5, 0.7, 1.0))
     
-    // Draw platforms
-    for platform in &game.platforms {
-        draw::rect(platform.x, platform.y, platform.width, platform.height, 
-                   Color::rgb(0.2, 0.6, 0.2));
-        // Platform shadow
-        draw::rect(platform.x + 2.0, platform.y + 2.0, platform.width, platform.height, 
-                   Color::rgba(0.0, 0.0, 0.0, 0.2));
-    }
+    // TODO: Draw player (green square)
+    renderer.draw_rect(100.0, 300.0, 50.0, 50.0, Color::green())
     
-    // Draw player
-    draw::rect(game.player_x, game.player_y, 32.0, 32.0, 
-               Color::rgb(0.2, 0.4, 0.8));
+    // TODO: Draw ground (brown rectangle)
+    renderer.draw_rect(0.0, 550.0, 800.0, 50.0, Color::rgb(0.6, 0.4, 0.2))
     
-    // Draw player eyes
-    draw::rect(game.player_x + 8.0, game.player_y + 8.0, 6.0, 6.0, 
-               Color::rgb(1.0, 1.0, 1.0));
-    draw::rect(game.player_x + 18.0, game.player_y + 8.0, 6.0, 6.0, 
-               Color::rgb(1.0, 1.0, 1.0));
-    
-    // Draw UI
-    draw::text(format!("Score: {}", game.score), 10.0, 10.0, 24.0, 
-               Color::rgb(1.0, 1.0, 1.0));
-    draw::text("Controls: Arrow Keys or WASD to move, Space/W/Up to jump", 
-               10.0, 580.0, 16.0, Color::rgb(1.0, 1.0, 1.0));
-    
-    // Grounded indicator
-    if game.is_grounded {
-        draw::text("Grounded", 10.0, 40.0, 16.0, Color::rgb(0.0, 1.0, 0.0));
-    } else {
-        draw::text("Airborne", 10.0, 40.0, 16.0, Color::rgb(1.0, 0.5, 0.0));
-    }
+    // TODO: Draw platforms
+    renderer.draw_rect(200.0, 450.0, 150.0, 20.0, Color::rgb(0.6, 0.4, 0.2))
+    renderer.draw_rect(400.0, 350.0, 150.0, 20.0, Color::rgb(0.6, 0.4, 0.2))
+    renderer.draw_rect(600.0, 250.0, 150.0, 20.0, Color::rgb(0.6, 0.4, 0.2))
 }
-
