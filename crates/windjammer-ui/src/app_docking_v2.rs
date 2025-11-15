@@ -1294,8 +1294,8 @@ fn handle_new_project(
     current_file_content: &Arc<Mutex<String>>,
 ) {
     // TODO: Show dialog to select template and project name
-    // For now, use default "Platformer" template
-    let template = "platformer";
+    // For now, use default "blank" template
+    let template = "blank";
     let project_name = "my_game";
 
     console.lock().unwrap().push(format!(
@@ -1349,66 +1349,22 @@ windjammer-game-framework = {{ path = "../../../crates/windjammer-game-framework
 #[cfg(all(not(target_arch = "wasm32"), feature = "desktop"))]
 fn get_project_template(template: &str) -> String {
     match template {
-        "platformer" => r#"use std::game::*
+        "blank" => r#"// Blank Windjammer Project
+// Add your code here
 
-@game
-struct PlatformerGame {
-    player_x: float,
-    player_y: float,
-    player_velocity_y: float,
-    is_jumping: bool,
-    score: int,
+fn main() {
+    println!("Hello from Windjammer!")
 }
+"#
+        .to_string(),
+        
+        "platformer" => r#"// Simple 2D Platformer
+// NOTE: Game framework is under development
+// This is a placeholder template
 
-@init
-fn init() -> PlatformerGame {
-    PlatformerGame {
-        player_x: 100.0,
-        player_y: 300.0,
-        player_velocity_y: 0.0,
-        is_jumping: false,
-        score: 0,
-    }
-}
-
-@update
-fn update(game: &mut PlatformerGame, delta: float) {
-    // Handle input
-    if input::is_key_pressed(Key::Space) && !game.is_jumping {
-        game.player_velocity_y = -500.0
-        game.is_jumping = true
-    }
-    
-    if input::is_key_down(Key::Right) {
-        game.player_x += 200.0 * delta
-    }
-    
-    if input::is_key_down(Key::Left) {
-        game.player_x -= 200.0 * delta
-    }
-    
-    // Apply gravity
-    game.player_velocity_y += 980.0 * delta
-    game.player_y += game.player_velocity_y * delta
-    
-    // Ground collision
-    if game.player_y > 300.0 {
-        game.player_y = 300.0
-        game.player_velocity_y = 0.0
-        game.is_jumping = false
-    }
-}
-
-@render
-fn render(game: &PlatformerGame) {
-    // Draw player
-    draw::rect(game.player_x, game.player_y, 32.0, 32.0, Color::Blue)
-    
-    // Draw ground
-    draw::rect(0.0, 332.0, 800.0, 100.0, Color::Green)
-    
-    // Draw score
-    draw::text(&format!("Score: {}", game.score), 10.0, 10.0, 24.0, Color::White)
+fn main() {
+    println!("Platformer game template")
+    println!("Game framework coming soon!")
 }
 "#
         .to_string(),
