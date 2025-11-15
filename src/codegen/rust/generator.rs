@@ -871,7 +871,7 @@ impl CodeGenerator {
             }
         }
 
-        // Generate top-level functions (skip impl methods, but include game-decorated functions)
+        // Generate top-level functions (skip impl methods and game-decorated functions)
         for analyzed_func in analyzed {
             if !impl_methods.contains(&analyzed_func.decl.name) {
                 // Skip main() function in modules - it should only be in the entry point
@@ -882,7 +882,11 @@ impl CodeGenerator {
                 if game_framework_info.is_some() && analyzed_func.decl.name == "main" {
                     continue;
                 }
-                // Generate the function (including game-decorated functions)
+                // Skip game-decorated functions (they're handled in generate_game_main)
+                if game_functions.contains(&analyzed_func.decl.name) {
+                    continue;
+                }
+                // Generate the function
                 body.push_str(&self.generate_function(analyzed_func));
                 body.push_str("\n\n");
             }
