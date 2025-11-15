@@ -17,6 +17,8 @@ pub struct EditorApp {
     selected_object: Arc<Mutex<Option<String>>>,
     open_files: Arc<Mutex<HashMap<String, String>>>, // path -> content
     unsaved_changes: Arc<Mutex<bool>>,
+    syntax_highlighter: Arc<crate::syntax_highlighting::SyntaxHighlighter>,
+    enable_syntax_highlighting: Arc<Mutex<bool>>,
 }
 
 #[cfg(all(not(target_arch = "wasm32"), feature = "desktop"))]
@@ -123,6 +125,8 @@ impl EditorApp {
             selected_object: Arc::new(Mutex::new(None)),
             open_files: Arc::new(Mutex::new(HashMap::new())),
             unsaved_changes: Arc::new(Mutex::new(false)),
+            syntax_highlighter: Arc::new(crate::syntax_highlighting::SyntaxHighlighter::new()),
+            enable_syntax_highlighting: Arc::new(Mutex::new(true)),
         }
     }
 
@@ -137,6 +141,8 @@ impl EditorApp {
         let selected_object = self.selected_object.clone();
         let open_files = self.open_files.clone();
         let unsaved_changes = self.unsaved_changes.clone();
+        let syntax_highlighter = self.syntax_highlighter.clone();
+        let enable_syntax_highlighting = self.enable_syntax_highlighting.clone();
 
         let native_options = eframe::NativeOptions {
             viewport: egui::ViewportBuilder::default()
@@ -359,6 +365,8 @@ impl EditorApp {
                     current_file_content: current_file_content.clone(),
                     selected_object: selected_object.clone(),
                     unsaved_changes: unsaved_changes.clone(),
+                    syntax_highlighter: syntax_highlighter.clone(),
+                    enable_syntax_highlighting: enable_syntax_highlighting.clone(),
                 };
 
                 egui_dock::DockArea::new(&mut self.dock_state)
@@ -378,6 +386,8 @@ struct TabViewer {
     current_file_content: Arc<Mutex<String>>,
     selected_object: Arc<Mutex<Option<String>>>,
     unsaved_changes: Arc<Mutex<bool>>,
+    syntax_highlighter: Arc<crate::syntax_highlighting::SyntaxHighlighter>,
+    enable_syntax_highlighting: Arc<Mutex<bool>>,
 }
 
 #[cfg(all(not(target_arch = "wasm32"), feature = "desktop"))]
@@ -401,12 +411,16 @@ impl egui_dock::TabViewer for TabViewer {
                     render_file_tree(ui, &self.current_file, &self.current_file_content)
                 }
                 PanelType::SceneHierarchy => render_scene_hierarchy(ui, &self.selected_object),
-                PanelType::CodeEditor => {
-                    render_code_editor(ui, &self.current_file_content, &self.unsaved_changes)
-                }
+                PanelType::CodeEditor => render_code_editor(
+                    ui,
+                    &self.current_file_content,
+                    &self.unsaved_changes,
+                    &self.syntax_highlighter,
+                    &self.enable_syntax_highlighting,
+                ),
                 PanelType::Properties => render_properties(ui, &self.selected_object),
                 PanelType::Console => render_console(ui, &self.console_output),
-                PanelType::SceneView => render_scene_view(ui),
+                PanelType::SceneView => render_scene_view(ui, &self.selected_object),
             }
         }
     }
@@ -762,11 +776,16 @@ fn render_code_editor(
     ui: &mut egui::Ui,
     content: &Arc<Mutex<String>>,
     unsaved_changes: &Arc<Mutex<bool>>,
+    syntax_highlighter: &Arc<crate::syntax_highlighting::SyntaxHighlighter>,
+    enable_syntax_highlighting: &Arc<Mutex<bool>>,
 ) {
     let mut text = content.lock().unwrap().clone();
     let original_text = text.clone();
+    let highlighting_enabled = *enable_syntax_highlighting.lock().unwrap();
 
     egui::ScrollArea::both().show(ui, |ui| {
+        // For now, use simple TextEdit (syntax highlighting with editable text is complex in egui)
+        // TODO: Implement custom text editor with syntax highlighting
         let response = ui.add(
             egui::TextEdit::multiline(&mut text)
                 .code_editor()
@@ -781,9 +800,21 @@ fn render_code_editor(
             *unsaved_changes.lock().unwrap() = true;
         }
 
-        // Show line count
-        let line_count = content.lock().unwrap().lines().count();
-        ui.label(format!("Lines: {}", line_count));
+        // Show line count and syntax highlighting toggle
+        ui.horizontal(|ui| {
+            let line_count = content.lock().unwrap().lines().count();
+            ui.label(format!("Lines: {}", line_count));
+
+            ui.separator();
+
+            let mut enabled = highlighting_enabled;
+            if ui
+                .checkbox(&mut enabled, "Syntax Highlighting (preview)")
+                .changed()
+            {
+                *enable_syntax_highlighting.lock().unwrap() = enabled;
+            }
+        });
     });
 }
 
@@ -870,9 +901,107 @@ fn render_console(ui: &mut egui::Ui, console_output: &Arc<Mutex<Vec<String>>>) {
 }
 
 #[cfg(all(not(target_arch = "wasm32"), feature = "desktop"))]
-fn render_scene_view(ui: &mut egui::Ui) {
+fn render_scene_view(ui: &mut egui::Ui, selected_object: &Arc<Mutex<Option<String>>>) {
     ui.heading("Scene View");
-    ui.label("3D viewport will be rendered here");
+
+    let available_size = ui.available_size();
+    let (rect, response) = ui.allocate_exact_size(available_size, egui::Sense::click_and_drag());
+
+    // Draw main scene viewport
+    ui.painter()
+        .rect_filled(rect, 0.0, egui::Color32::from_rgb(30, 30, 30));
+
+    // Draw grid
+    let grid_spacing = 50.0;
+    for i in 0..((rect.width() / grid_spacing) as i32) {
+        let x = rect.left() + i as f32 * grid_spacing;
+        ui.painter().line_segment(
+            [egui::pos2(x, rect.top()), egui::pos2(x, rect.bottom())],
+            egui::Stroke::new(1.0, egui::Color32::from_rgb(50, 50, 50)),
+        );
+    }
+    for i in 0..((rect.height() / grid_spacing) as i32) {
+        let y = rect.top() + i as f32 * grid_spacing;
+        ui.painter().line_segment(
+            [egui::pos2(rect.left(), y), egui::pos2(rect.right(), y)],
+            egui::Stroke::new(1.0, egui::Color32::from_rgb(50, 50, 50)),
+        );
+    }
+
+    // Camera Preview (Picture-in-Picture) - inspired by Godot
+    // Show in bottom-right corner
+    let preview_width = 200.0;
+    let preview_height = 150.0;
+    let preview_margin = 10.0;
+
+    let preview_rect = egui::Rect::from_min_size(
+        egui::pos2(
+            rect.right() - preview_width - preview_margin,
+            rect.bottom() - preview_height - preview_margin,
+        ),
+        egui::vec2(preview_width, preview_height),
+    );
+
+    // Draw camera preview background
+    ui.painter().rect_filled(
+        preview_rect,
+        4.0,
+        egui::Color32::from_rgba_unmultiplied(20, 20, 20, 230),
+    );
+
+    // Draw camera preview border
+    ui.painter().rect_stroke(
+        preview_rect,
+        4.0,
+        egui::Stroke::new(2.0, egui::Color32::from_rgb(100, 150, 255)),
+    );
+
+    // Draw camera icon and label
+    let label_pos = egui::pos2(preview_rect.left() + 5.0, preview_rect.top() + 5.0);
+    ui.painter().text(
+        label_pos,
+        egui::Align2::LEFT_TOP,
+        "📷 Camera Preview",
+        egui::FontId::proportional(12.0),
+        egui::Color32::from_rgb(200, 200, 200),
+    );
+
+    // Draw simplified camera view (checkerboard pattern to show it's a preview)
+    let checker_size = 20.0;
+    for y in 0..((preview_height / checker_size) as i32) {
+        for x in 0..((preview_width / checker_size) as i32) {
+            if (x + y) % 2 == 0 {
+                let checker_rect = egui::Rect::from_min_size(
+                    egui::pos2(
+                        preview_rect.left() + x as f32 * checker_size,
+                        preview_rect.top() + 20.0 + y as f32 * checker_size,
+                    ),
+                    egui::vec2(checker_size, checker_size),
+                );
+                ui.painter()
+                    .rect_filled(checker_rect, 0.0, egui::Color32::from_rgb(40, 40, 40));
+            }
+        }
+    }
+
+    // Show camera info
+    let info_pos = egui::pos2(preview_rect.center().x, preview_rect.bottom() - 20.0);
+    ui.painter().text(
+        info_pos,
+        egui::Align2::CENTER_BOTTOM,
+        "FOV: 60° | Pos: (0, 0, 10)",
+        egui::FontId::proportional(10.0),
+        egui::Color32::from_rgb(150, 150, 150),
+    );
+
+    // Draw placeholder scene objects
+    ui.painter().text(
+        rect.center(),
+        egui::Align2::CENTER_CENTER,
+        "3D Viewport\n(wgpu integration coming soon)",
+        egui::FontId::proportional(16.0),
+        egui::Color32::from_rgb(100, 100, 100),
+    );
 }
 
 // Action handlers
