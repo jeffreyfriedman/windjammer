@@ -40,6 +40,9 @@ pub mod audio; // Audio playback
 pub mod camera2d; // 2D camera system
 
 #[cfg(feature = "3d")]
+pub mod camera3d; // 3D camera system (perspective, third-person, first-person, free)
+
+#[cfg(feature = "3d")]
 pub mod character_controller; // 3D character controller (movement, jumping, cameras)
 
 pub mod ecs; // Entity-Component-System (Rust implementation)
@@ -84,9 +87,13 @@ pub mod prelude {
     pub use crate::camera2d::Camera2D;
     
     #[cfg(feature = "3d")]
+    pub use crate::camera3d::{
+        Camera3D, CameraProjection, FirstPersonCamera, FreeCamera, ThirdPersonCamera,
+    }; // 3D camera system
+    
+    #[cfg(feature = "3d")]
     pub use crate::character_controller::{
         CharacterController, CharacterControllerSystem, CharacterMovementInput,
-        FirstPersonCamera, ThirdPersonCamera,
     }; // 3D character controller
 
     // Export ONLY Windjammer-friendly ECS API (zero crate leakage)
@@ -113,7 +120,7 @@ pub mod prelude {
        //     ConstraintType, PhysicsMaterial, PhysicsWorldWj, RaycastHit, RigidBodyBuilder,
        // }; // Windjammer-friendly physics (zero crate leakage)
     pub use crate::renderer::{Color, Renderer}; // High-level 2D renderer (no wgpu types exposed)
-    pub use crate::renderer3d::{Camera3D, Renderer3D, SSGIConfig}; // High-level 3D renderer with SSGI (no wgpu types exposed)
+    pub use crate::renderer3d::{Camera3D as RenderCamera3D, Renderer3D, SSGIConfig}; // High-level 3D renderer with SSGI (no wgpu types exposed)
     pub use crate::rendering::{Camera, Material, Mesh, RenderContext, Sprite, SpriteBatch};
     pub use crate::texture::Texture; // Texture loading (no wgpu or image types exposed)
     pub use crate::time::Time;
