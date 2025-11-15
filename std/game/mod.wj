@@ -6,12 +6,14 @@ pub use self::types::*
 pub use self::ecs::*
 pub use self::input::*
 pub use self::renderer::*
+pub use self::physics2d::*
 pub use self::runner::*
 
 mod types
 mod ecs
 mod input
 mod renderer
+mod physics2d
 mod runner
 
 // Prelude for easy imports
@@ -20,6 +22,7 @@ pub mod prelude {
     pub use super::ecs::*
     pub use super::input::*
     pub use super::renderer::*
+    pub use super::physics2d::*
     pub use super::runner::*
 }
 

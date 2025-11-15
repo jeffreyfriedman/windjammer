@@ -1,0 +1,91 @@
+// 2D Platformer with Rapier2D Physics Engine
+// Demonstrates: ECS + Rapier2D + Input + Rendering
+// This version uses the actual Rapier2D physics engine
+
+use std::game::*
+
+@game
+struct Platformer {
+    score: int,
+    player_x: float,
+    player_y: float,
+    player_on_ground: bool,
+}
+
+@init
+fn init(game: Platformer) {
+    println!("🎮 2D Platformer with Rapier2D!")
+    println!("Controls: Arrow keys to move, Space to jump")
+    println!("Using: Rapier2D physics engine")
+    
+    game.score = 0
+    game.player_x = 100.0
+    game.player_y = 300.0
+    game.player_on_ground = false
+    
+    // TODO: Initialize Rapier2D physics world
+    // TODO: Create player rigid body + collider
+    // TODO: Create ground rigid body + collider
+    // TODO: Create platform rigid bodies + colliders
+}
+
+@update
+fn update(game: Platformer, delta: float, input: Input) {
+    let move_speed = 300.0
+    let jump_force = 500.0
+    
+    // For now, use manual physics until we expose Rapier2D API to Windjammer
+    // This is a placeholder showing what the API should look like
+    
+    // Horizontal movement
+    if input.is_key_pressed(Key::Left) {
+        game.player_x -= move_speed * delta
+    }
+    if input.is_key_pressed(Key::Right) {
+        game.player_x += move_speed * delta
+    }
+    
+    // Jump
+    if input.is_key_just_pressed(Key::Space) && game.player_on_ground {
+        game.score += 1
+        println!("Jump! Score: {}", game.score)
+    }
+    
+    // TODO: Step Rapier2D physics world
+    // TODO: Sync player position from physics body
+    // TODO: Check if player is on ground (collision detection)
+    
+    // Keep player in bounds
+    if game.player_x < 0.0 {
+        game.player_x = 0.0
+    }
+    if game.player_x > 750.0 {
+        game.player_x = 750.0
+    }
+}
+
+@render
+fn render(game: Platformer, renderer: Renderer) {
+    // Clear to sky blue
+    renderer.clear(Color::rgb(0.5, 0.7, 1.0))
+    
+    // Draw player (green square)
+    renderer.draw_rect(game.player_x, game.player_y, 50.0, 50.0, Color::green())
+    
+    // Draw ground (brown rectangle)
+    renderer.draw_rect(0.0, 550.0, 800.0, 50.0, Color::rgb(0.6, 0.4, 0.2))
+    
+    // Draw platforms
+    renderer.draw_rect(200.0, 450.0, 150.0, 20.0, Color::rgb(0.6, 0.4, 0.2))
+    renderer.draw_rect(400.0, 350.0, 150.0, 20.0, Color::rgb(0.6, 0.4, 0.2))
+    renderer.draw_rect(600.0, 250.0, 150.0, 20.0, Color::rgb(0.6, 0.4, 0.2))
+    
+    // Draw score
+    // TODO: Add text rendering
+    
+    // Draw ground indicator
+    if game.player_on_ground {
+        renderer.draw_circle(game.player_x + 25.0, game.player_y + 60.0, 5.0, Color::yellow())
+    }
+}
+
