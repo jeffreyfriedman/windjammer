@@ -22,6 +22,7 @@ pub struct EditorApp {
     file_watcher: Arc<Mutex<Option<crate::file_watcher::FileWatcher>>>,
     enable_file_watching: Arc<Mutex<bool>>,
     scene: Arc<Mutex<crate::scene_manager::Scene>>,
+    scene_renderer: Arc<Mutex<crate::scene_renderer_3d::SceneRenderer3D>>,
 }
 
 #[cfg(all(not(target_arch = "wasm32"), feature = "desktop"))]
@@ -133,6 +134,7 @@ impl EditorApp {
             file_watcher: Arc::new(Mutex::new(crate::file_watcher::FileWatcher::new().ok())),
             enable_file_watching: Arc::new(Mutex::new(true)),
             scene: Arc::new(Mutex::new(crate::scene_manager::Scene::default())),
+            scene_renderer: Arc::new(Mutex::new(crate::scene_renderer_3d::SceneRenderer3D::new())),
         }
     }
 
@@ -396,6 +398,7 @@ impl EditorApp {
                     syntax_highlighter: syntax_highlighter.clone(),
                     enable_syntax_highlighting: enable_syntax_highlighting.clone(),
                     scene: scene.clone(),
+                    scene_renderer: self.scene_renderer.clone(),
                 };
 
                 egui_dock::DockArea::new(&mut self.dock_state)
@@ -418,6 +421,7 @@ struct TabViewer {
     syntax_highlighter: Arc<crate::syntax_highlighting::SyntaxHighlighter>,
     enable_syntax_highlighting: Arc<Mutex<bool>>,
     scene: Arc<Mutex<crate::scene_manager::Scene>>,
+    scene_renderer: Arc<Mutex<crate::scene_renderer_3d::SceneRenderer3D>>,
 }
 
 #[cfg(all(not(target_arch = "wasm32"), feature = "desktop"))]
@@ -452,7 +456,9 @@ impl egui_dock::TabViewer for TabViewer {
                 ),
                 PanelType::Properties => render_properties(ui, &self.scene, &self.selected_object),
                 PanelType::Console => render_console(ui, &self.console_output),
-                PanelType::SceneView => render_scene_view(ui, &self.selected_object),
+                PanelType::SceneView => {
+                    render_scene_view(ui, &self.scene, &self.scene_renderer, &self.selected_object)
+                }
             }
         }
     }
@@ -1250,8 +1256,17 @@ fn render_console(ui: &mut egui::Ui, console_output: &Arc<Mutex<Vec<String>>>) {
 }
 
 #[cfg(all(not(target_arch = "wasm32"), feature = "desktop"))]
-fn render_scene_view(ui: &mut egui::Ui, selected_object: &Arc<Mutex<Option<String>>>) {
+fn render_scene_view(
+    ui: &mut egui::Ui,
+    scene: &Arc<Mutex<crate::scene_manager::Scene>>,
+    scene_renderer: &Arc<Mutex<crate::scene_renderer_3d::SceneRenderer3D>>,
+    _selected_object: &Arc<Mutex<Option<String>>>,
+) {
     ui.heading("Scene View");
+
+    // Use the 3D renderer
+    scene_renderer.lock().unwrap().render(ui, scene);
+    return;
 
     let available_size = ui.available_size();
     let (rect, response) = ui.allocate_exact_size(available_size, egui::Sense::click_and_drag());

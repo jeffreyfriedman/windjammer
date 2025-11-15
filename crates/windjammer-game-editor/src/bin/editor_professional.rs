@@ -7,8 +7,7 @@ use windjammer_ui::prelude::*;
 
 fn main() {
     println!("🎮 Starting Professional Windjammer Editor");
-    
+
     let app = EditorApp::new("Windjammer Game Editor".to_string());
     app.run();
 }
-
