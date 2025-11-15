@@ -178,6 +178,32 @@ impl World {
         self.entities.clear();
         self.components.clear();
     }
+    
+    /// Query for entities with a specific component (immutable)
+    /// 
+    /// Example:
+    /// ```
+    /// let query = world.query::<&Position>();
+    /// for (entity, pos) in query.iter() {
+    ///     println!("Entity {:?} at ({}, {})", entity, pos.x, pos.y);
+    /// }
+    /// ```
+    pub fn query<'w, T: Component>(&'w self) -> crate::ecs::Query<'w, &'w T> {
+        crate::ecs::Query::new(self)
+    }
+    
+    /// Query for entities with a specific component (mutable)
+    /// 
+    /// Example:
+    /// ```
+    /// let mut query = world.query_mut::<&mut Position>();
+    /// for (entity, pos) in query.iter_mut() {
+    ///     pos.x += 1.0;
+    /// }
+    /// ```
+    pub fn query_mut<'w, T: Component>(&'w mut self) -> crate::ecs::QueryMut<'w, &'w mut T> {
+        crate::ecs::QueryMut::new(self)
+    }
 }
 
 impl Default for World {

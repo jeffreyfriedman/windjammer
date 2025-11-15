@@ -32,6 +32,7 @@ impl<'w, T> Query<'w, T> {
 impl<'w, T: Component> Query<'w, &'w T> {
     /// Iterate over all entities with component T
     pub fn iter(&self) -> Box<dyn Iterator<Item = (Entity, &'w T)> + 'w> {
+        // Note: T is the actual component type (not a reference)
         let storage = self._world.get_storage::<T>();
         
         if let Some(storage) = storage {
@@ -44,12 +45,12 @@ impl<'w, T: Component> Query<'w, &'w T> {
 }
 
 /// Query for single component (mutable)
-pub struct QueryMut<'w, T: Component> {
+pub struct QueryMut<'w, T> {
     world: &'w mut World,
     _marker: std::marker::PhantomData<T>,
 }
 
-impl<'w, T: Component> QueryMut<'w, T> {
+impl<'w, T> QueryMut<'w, T> {
     /// Create a new mutable query (internal use)
     pub(crate) fn new(world: &'w mut World) -> Self {
         Self {
@@ -57,7 +58,10 @@ impl<'w, T: Component> QueryMut<'w, T> {
             _marker: std::marker::PhantomData,
         }
     }
-    
+}
+
+/// Query for single component (mutable)
+impl<'w, T: Component> QueryMut<'w, &'w mut T> {
     /// Iterate over all entities with component T (mutable)
     pub fn iter_mut(&mut self) -> Box<dyn Iterator<Item = (Entity, &mut T)> + '_> {
         let storage = self.world.get_storage_mut::<T>();
