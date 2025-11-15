@@ -1671,76 +1671,80 @@ fn handle_run(
     let project = project_path.lock().unwrap().clone();
     let file = current_file.lock().unwrap().clone();
 
-    if let Some(path) = project.or(file) {
-        let console_clone = console.clone();
-        console
-            .lock()
-            .unwrap()
-            .push(format!("▶️ Running: {}", path));
-
-        // Spawn async task to build and run
-        std::thread::spawn(move || {
-            use std::process::Command;
-
-            let project_dir = format!("/tmp/windjammer_projects/{}", path);
-            let main_file = format!("{}/main.wj", project_dir);
-
-            console_clone
-                .lock()
-                .unwrap()
-                .push("Compiling...".to_string());
-
-            // First, build the project
-            match Command::new("wj")
-                .args(&["build", &main_file, "--target", "rust"])
-                .current_dir(&project_dir)
-                .output()
-            {
-                Ok(output) => {
-                    if output.status.success() {
-                        console_clone
-                            .lock()
-                            .unwrap()
-                            .push("✅ Build successful!".to_string());
-                        console_clone
-                            .lock()
-                            .unwrap()
-                            .push("🎮 Starting game...".to_string());
-
-                        // Try to run the compiled game
-                        // The compiled output is typically in a temp directory
-                        // For now, just indicate success
-                        console_clone
-                            .lock()
-                            .unwrap()
-                            .push("✅ Game launched!".to_string());
-                        console_clone
-                            .lock()
-                            .unwrap()
-                            .push("(Game window opened in separate process)".to_string());
-                    } else {
-                        console_clone
-                            .lock()
-                            .unwrap()
-                            .push("❌ Build failed!".to_string());
-                        let stderr = String::from_utf8_lossy(&output.stderr);
-                        console_clone.lock().unwrap().push(stderr.to_string());
-                    }
-                }
-                Err(e) => {
-                    console_clone
-                        .lock()
-                        .unwrap()
-                        .push(format!("❌ Run error: {}", e));
-                }
-            }
-        });
+    // Determine the actual file to run
+    let file_to_run = if let Some(proj) = project {
+        // If we have a project, use its main.wj
+        let project_dir = format!("/tmp/windjammer_projects/{}", proj);
+        format!("{}/main.wj", project_dir)
+    } else if let Some(f) = file {
+        // Otherwise use the current file
+        f
     } else {
         console
             .lock()
             .unwrap()
             .push("⚠️  No project or file open".to_string());
-    }
+        return;
+    };
+
+    let console_clone = console.clone();
+    console
+        .lock()
+        .unwrap()
+        .push(format!("▶️ Running: {}", file_to_run));
+
+    // Spawn async task to build and run
+    std::thread::spawn(move || {
+        use std::process::Command;
+
+        console_clone
+            .lock()
+            .unwrap()
+            .push("🔨 Compiling...".to_string());
+
+        // Use wj run command which handles build + run
+        match Command::new("wj")
+            .args(&["run", &file_to_run, "--target", "rust"])
+            .spawn()
+        {
+            Ok(mut child) => {
+                console_clone
+                    .lock()
+                    .unwrap()
+                    .push("✅ Build started!".to_string());
+                console_clone
+                    .lock()
+                    .unwrap()
+                    .push("🎮 Game should open in a new window...".to_string());
+                
+                // Wait for the process in the background
+                std::thread::spawn(move || {
+                    match child.wait() {
+                        Ok(status) => {
+                            if status.success() {
+                                println!("Game exited successfully");
+                            } else {
+                                println!("Game exited with status: {}", status);
+                            }
+                        }
+                        Err(e) => {
+                            println!("Error waiting for game: {}", e);
+                        }
+                    }
+                });
+            }
+            Err(e) => {
+                console_clone
+                    .lock()
+                    .unwrap()
+                    .push(format!("❌ Run error: {}", e));
+                console_clone
+                    .lock()
+                    .unwrap()
+                    .push("Make sure 'wj' command is in your PATH".to_string());
+            }
+        }
+    });
 }
 
 #[cfg(all(not(target_arch = "wasm32"), feature = "desktop"))]
