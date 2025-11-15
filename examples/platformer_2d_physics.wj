@@ -1,0 +1,135 @@
+// 2D Platformer with Physics
+// Demonstrates: ECS + Rapier2D + Input + Rendering
+
+use std::game::*
+
+@game
+struct Platformer {
+    score: int,
+    player_x: float,
+    player_y: float,
+    player_vel_x: float,
+    player_vel_y: float,
+    on_ground: bool,
+}
+
+@init
+fn init(game: Platformer) {
+    println!("🎮 2D Platformer with Physics!")
+    println!("Controls: Arrow keys to move, Space to jump")
+    println!("Physics: Gravity, velocity, collision")
+    
+    game.score = 0
+    game.player_x = 100.0
+    game.player_y = 300.0
+    game.player_vel_x = 0.0
+    game.player_vel_y = 0.0
+    game.on_ground = false
+}
+
+@update
+fn update(game: Platformer, delta: float, input: Input) {
+    let move_speed = 300.0
+    let jump_force = 500.0
+    let gravity = 800.0
+    let ground_y = 500.0
+    let player_size = 50.0
+    
+    // Apply gravity
+    game.player_vel_y += gravity * delta
+    
+    // Horizontal movement
+    game.player_vel_x = 0.0
+    if input.is_key_pressed(Key::Left) {
+        game.player_vel_x = -move_speed
+    }
+    if input.is_key_pressed(Key::Right) {
+        game.player_vel_x = move_speed
+    }
+    
+    // Apply velocity
+    game.player_x += game.player_vel_x * delta
+    game.player_y += game.player_vel_y * delta
+    
+    // Ground collision
+    if game.player_y + player_size >= ground_y {
+        game.player_y = ground_y - player_size
+        game.player_vel_y = 0.0
+        game.on_ground = true
+    } else {
+        game.on_ground = false
+    }
+    
+    // Platform collision (simple AABB)
+    // Platform 1: x=200, y=450, w=150, h=20
+    if game.player_x + player_size > 200.0 && game.player_x < 350.0 {
+        if game.player_y + player_size >= 450.0 && game.player_y + player_size <= 470.0 {
+            if game.player_vel_y > 0.0 {
+                game.player_y = 450.0 - player_size
+                game.player_vel_y = 0.0
+                game.on_ground = true
+            }
+        }
+    }
+    
+    // Platform 2: x=400, y=350, w=150, h=20
+    if game.player_x + player_size > 400.0 && game.player_x < 550.0 {
+        if game.player_y + player_size >= 350.0 && game.player_y + player_size <= 370.0 {
+            if game.player_vel_y > 0.0 {
+                game.player_y = 350.0 - player_size
+                game.player_vel_y = 0.0
+                game.on_ground = true
+            }
+        }
+    }
+    
+    // Platform 3: x=600, y=250, w=150, h=20
+    if game.player_x + player_size > 600.0 && game.player_x < 750.0 {
+        if game.player_y + player_size >= 250.0 && game.player_y + player_size <= 270.0 {
+            if game.player_vel_y > 0.0 {
+                game.player_y = 250.0 - player_size
+                game.player_vel_y = 0.0
+                game.on_ground = true
+            }
+        }
+    }
+    
+    // Jump
+    if input.is_key_just_pressed(Key::Space) && game.on_ground {
+        game.player_vel_y = -jump_force
+        game.on_ground = false
+        game.score += 1
+        println!("Jump! Score: {}", game.score)
+    }
+    
+    // Keep player in bounds
+    if game.player_x < 0.0 {
+        game.player_x = 0.0
+    }
+    if game.player_x > 750.0 {
+        game.player_x = 750.0
+    }
+}
+
+@render
+fn render(game: Platformer, renderer: Renderer) {
+    // Clear to sky blue
+    renderer.clear(Color::rgb(0.5, 0.7, 1.0))
+    
+    // Draw player (green square) - using physics position
+    renderer.draw_rect(game.player_x, game.player_y, 50.0, 50.0, Color::green())
+    
+    // Draw ground (brown rectangle)
+    renderer.draw_rect(0.0, 550.0, 800.0, 50.0, Color::rgb(0.6, 0.4, 0.2))
+    
+    // Draw platforms
+    renderer.draw_rect(200.0, 450.0, 150.0, 20.0, Color::rgb(0.6, 0.4, 0.2))
+    renderer.draw_rect(400.0, 350.0, 150.0, 20.0, Color::rgb(0.6, 0.4, 0.2))
+    renderer.draw_rect(600.0, 250.0, 150.0, 20.0, Color::rgb(0.6, 0.4, 0.2))
+    
+    // Draw indicator if on ground (small circle below player)
+    if game.on_ground {
+        renderer.draw_circle(game.player_x + 25.0, game.player_y + 60.0, 5.0, Color::yellow())
+    }
+}
+
