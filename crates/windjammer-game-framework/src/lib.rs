@@ -49,6 +49,7 @@ pub mod ecs; // Entity-Component-System (Rust implementation)
 pub mod ecs_optimized; // Optimized ECS with archetype storage and query caching
 pub mod ecs_windjammer; // Windjammer-friendly ECS API (recommended)
 pub mod game_loop; // Game loop with fixed timestep
+pub mod gltf_loader; // GLTF/GLB 3D model loader
 pub mod input; // Input handling
 pub mod lod; // Level of Detail (LOD) system
 pub mod math; // Math types (Vec2, Vec3, Mat4, etc.)
@@ -100,6 +101,11 @@ pub mod prelude {
     pub use crate::ecs_windjammer::{Entity, System, World};
 
     pub use crate::game_loop::{run_game_loop, GameLoopConfig, GameLoopRunner};
+    pub use crate::gltf_loader::{
+        AlphaMode, AnimationPath, FilterMode, GltfAnimation, GltfChannel, GltfDocument,
+        GltfLoader, GltfMaterial, GltfMesh, GltfNode, GltfPrimitive, GltfSampler,
+        GltfSampler2, GltfTexture, InterpolationMode, WrapMode,
+    }; // GLTF/GLB 3D model loader
     pub use crate::input::{Input, Key, MouseButton}; // Ergonomic input API with held(), pressed(), released()
     pub use crate::lod::{LODConfig, LODLevel, LODSelector, LODStats}; // Level of Detail system
     pub use crate::math::{Mat4, Quat, Vec2, Vec3, Vec4};
