@@ -48,6 +48,7 @@ pub mod lod; // Level of Detail (LOD) system
 pub mod math; // Math types (Vec2, Vec3, Mat4, etc.)
 pub mod mesh_clustering; // Mesh clustering system (Nanite-style)
 pub mod physics; // Physics integration (Rapier - exposes Rapier types)
+pub mod physics2d; // 2D physics system (Rapier2D integration with ECS)
                  // pub mod physics_windjammer; // Windjammer-friendly physics API (zero crate leakage) - TODO: Fix for v2.0
 pub mod renderer; // High-level 2D renderer (for Windjammer games)
 pub mod renderer3d; // High-level 3D renderer (for Windjammer games)
@@ -87,6 +88,9 @@ pub mod prelude {
     pub use crate::mesh_clustering::{
         ClusterConfig, ClusterStats, MeshCluster, MeshClusteringSystem,
     }; // Mesh clustering
+    pub use crate::physics2d::{
+        Collider2D, ColliderShape2D, PhysicsWorld2D, RigidBody2D, RigidBodyType,
+    }; // 2D physics (Rapier2D integration)
        // TODO v2.0: Re-enable physics_windjammer once fixed
        // pub use crate::physics_windjammer::{
        //     BodyHandle, BodyType, ColliderBuilder, ColliderHandle, CollisionShape, ConstraintHandle,
