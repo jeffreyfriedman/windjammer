@@ -31,14 +31,14 @@ impl<'w, T> Query<'w, T> {
 /// Query for single component (read-only)
 impl<'w, T: Component> Query<'w, &'w T> {
     /// Iterate over all entities with component T
-    pub fn iter(&self) -> impl Iterator<Item = (Entity, &T)> {
+    pub fn iter(&self) -> Box<dyn Iterator<Item = (Entity, &'w T)> + 'w> {
         let storage = self._world.get_storage::<T>();
         
         if let Some(storage) = storage {
-            storage.iter()
+            Box::new(storage.iter())
         } else {
             // Return empty iterator if no storage exists
-            [].iter().map(|_: &()| unreachable!())
+            Box::new(std::iter::empty())
         }
     }
 }
@@ -59,14 +59,14 @@ impl<'w, T: Component> QueryMut<'w, T> {
     }
     
     /// Iterate over all entities with component T (mutable)
-    pub fn iter_mut(&mut self) -> impl Iterator<Item = (Entity, &mut T)> {
+    pub fn iter_mut(&mut self) -> Box<dyn Iterator<Item = (Entity, &mut T)> + '_> {
         let storage = self.world.get_storage_mut::<T>();
         
         if let Some(storage) = storage {
-            storage.iter_mut()
+            Box::new(storage.iter_mut())
         } else {
             // Return empty iterator if no storage exists
-            [].iter_mut().map(|_: &mut ()| unreachable!())
+            Box::new(std::iter::empty())
         }
     }
 }
