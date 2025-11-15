@@ -4,9 +4,7 @@ use notify::{Config, Event, RecommendedWatcher, RecursiveMode, Watcher};
 #[cfg(all(not(target_arch = "wasm32"), feature = "desktop"))]
 use std::path::Path;
 #[cfg(all(not(target_arch = "wasm32"), feature = "desktop"))]
-use std::sync::mpsc::{channel, Receiver, Sender};
-#[cfg(all(not(target_arch = "wasm32"), feature = "desktop"))]
-use std::sync::{Arc, Mutex};
+use std::sync::mpsc::{channel, Receiver};
 
 #[cfg(all(not(target_arch = "wasm32"), feature = "desktop"))]
 pub struct FileWatcher {

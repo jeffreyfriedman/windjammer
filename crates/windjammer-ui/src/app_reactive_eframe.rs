@@ -18,7 +18,8 @@ pub fn set_render_callback<F: Fn() + 'static>(callback: F) {
 
 pub fn trigger_rerender() {
     unsafe {
-        if let Some(callback) = &RENDER_CALLBACK {
+        let ptr = &raw const RENDER_CALLBACK;
+        if let Some(callback) = &*ptr {
             callback();
         }
     }
@@ -142,8 +143,6 @@ impl ReactiveApp {
         let render_fn = self.render_fn.clone();
         let needs_rerender = self.needs_rerender.clone();
         let mut renderer = DesktopRenderer::new();
-        let frame_count = Arc::new(Mutex::new(0u32));
-        let frame_count_clone = frame_count.clone();
 
         let native_options = eframe::NativeOptions {
             viewport: egui::ViewportBuilder::default()
@@ -170,10 +169,8 @@ impl ReactiveApp {
 }
 
 #[cfg(all(not(target_arch = "wasm32"), feature = "desktop"))]
+#[allow(dead_code)]
 fn save_screenshot_to_file(image: &egui::ColorImage, path: &str) -> Result<(), String> {
-    use std::fs::File;
-    use std::io::BufWriter;
-
     let width = image.width();
     let height = image.height();
 

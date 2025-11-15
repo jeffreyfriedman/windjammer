@@ -67,7 +67,7 @@ impl Dialog {
         };
 
         // Create close button
-        let mut close_button_children = vec![VNode::Text("×".to_string())];
+        let close_button_children = vec![VNode::Text("×".to_string())];
         let mut close_button_attrs = vec![(
             "class".to_string(),
             VAttr::Static("wj-dialog-close".to_string()),
