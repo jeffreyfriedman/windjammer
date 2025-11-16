@@ -103,7 +103,10 @@ pub mod prelude {
         AnimationState, AnimationStateMachine, AnimationTransition, ConditionType, Parameter,
         TransitionCondition,
     }; // Animation state machine
-    pub use crate::assets::{AssetManager, Handle};
+    pub use crate::assets::{
+        AssetManager, Handle, Texture, TextureConfig, TextureFilter, TextureFormat, TextureHandle,
+        TextureLoader, TextureWrap,
+    };
     pub use crate::audio::{AudioSystem, SpatialAudioSource};
     pub use crate::audio_advanced::{
         Audio3DParams, AudioBus, AudioClip, AudioEffect, AudioEngine, AudioSource, RolloffMode,
@@ -167,7 +170,7 @@ pub mod prelude {
     pub use crate::renderer3d::{Camera3D as RenderCamera3D, Renderer3D, SSGIConfig}; // High-level 3D renderer with SSGI (no wgpu types exposed)
     pub use crate::rendering::{Camera, Material, Mesh, RenderContext, Sprite, SpriteBatch};
     pub use crate::terrain::{Terrain, TerrainLOD, TerrainLayer, TerrainPatch}; // Heightmap terrain
-    pub use crate::texture::Texture; // Texture loading (no wgpu or image types exposed)
+    // Texture is now re-exported from assets module
     pub use crate::time::Time;
     pub use crate::transform::{Transform2D, Transform3D};
     pub use crate::ui_immediate::{DrawCommand, LayoutDirection, UIStyle, UI}; // Immediate mode UI
