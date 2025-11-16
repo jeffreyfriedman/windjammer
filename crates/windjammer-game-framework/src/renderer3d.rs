@@ -977,6 +977,7 @@ impl Renderer3D {
                 position: [v[0] + position.x, v[1] + position.y, v[2] + position.z],
                 normal: [0.0, 0.0, 1.0], // Simplified normal
                 tex_coords: [0.0, 0.0],
+                tangent: [1.0, 0.0, 0.0, 1.0], // Default tangent
                 color: color_array,
             });
         }
@@ -1020,6 +1021,7 @@ impl Renderer3D {
                 ],
                 normal: [0.0, 1.0, 0.0],
                 tex_coords: [0.0, 0.0],
+                tangent: [1.0, 0.0, 0.0, 1.0], // Default tangent
                 color: color_array,
             },
             Vertex3D {
@@ -1030,6 +1032,7 @@ impl Renderer3D {
                 ],
                 normal: [0.0, 1.0, 0.0],
                 tex_coords: [1.0, 0.0],
+                tangent: [1.0, 0.0, 0.0, 1.0], // Default tangent
                 color: color_array,
             },
             Vertex3D {
@@ -1040,6 +1043,7 @@ impl Renderer3D {
                 ],
                 normal: [0.0, 1.0, 0.0],
                 tex_coords: [1.0, 1.0],
+                tangent: [1.0, 0.0, 0.0, 1.0], // Default tangent
                 color: color_array,
             },
             Vertex3D {
@@ -1050,6 +1054,7 @@ impl Renderer3D {
                 ],
                 normal: [0.0, 1.0, 0.0],
                 tex_coords: [0.0, 1.0],
+                tangent: [1.0, 0.0, 0.0, 1.0], // Default tangent
                 color: color_array,
             },
         ]);
