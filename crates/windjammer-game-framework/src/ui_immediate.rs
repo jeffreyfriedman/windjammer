@@ -4,9 +4,8 @@
 //!
 //! **Philosophy**: Zero crate leakage - clean, simple API for Windjammer games.
 
-use crate::math::{Vec2, Vec4};
+use crate::math::Vec2;
 use crate::renderer::Color;
-use std::collections::HashMap;
 
 /// UI context (main entry point)
 pub struct UI {

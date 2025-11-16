@@ -11,8 +11,6 @@
 //! - Weapon attachments & modifications
 //! - Damage falloff over distance
 
-use crate::math::Vec3;
-use std::collections::HashMap;
 
 /// Weapon inventory manager
 #[derive(Debug, Clone)]
