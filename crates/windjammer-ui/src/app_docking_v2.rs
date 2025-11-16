@@ -3,6 +3,9 @@
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 
+// Import game editor panels (they need to be in scope for rendering)
+// We'll create placeholder implementations here to avoid circular dependencies
+
 #[cfg(all(not(target_arch = "wasm32"), feature = "desktop"))]
 pub struct EditorApp {
     title: String,
@@ -21,6 +24,43 @@ pub struct EditorApp {
     enable_file_watching: Arc<Mutex<bool>>,
     scene: Arc<Mutex<crate::scene_manager::Scene>>,
     scene_renderer: Arc<Mutex<crate::scene_renderer_3d::SceneRenderer3D>>,
+    // Game Framework Panels
+    game_panels: GameFrameworkPanels,
+}
+
+// Game Framework Panels integration
+#[cfg(all(not(target_arch = "wasm32"), feature = "desktop"))]
+struct GameFrameworkPanels {
+    show_pbr_material: bool,
+    show_post_processing: bool,
+    show_profiler: bool,
+    show_particle: bool,
+    show_animation: bool,
+    show_terrain: bool,
+    show_ai_behavior: bool,
+    show_audio_mixer: bool,
+    show_gamepad_config: bool,
+    show_weapon: bool,
+    show_navmesh: bool,
+}
+
+#[cfg(all(not(target_arch = "wasm32"), feature = "desktop"))]
+impl Default for GameFrameworkPanels {
+    fn default() -> Self {
+        Self {
+            show_pbr_material: false,
+            show_post_processing: false,
+            show_profiler: false,
+            show_particle: false,
+            show_animation: false,
+            show_terrain: false,
+            show_ai_behavior: false,
+            show_audio_mixer: false,
+            show_gamepad_config: false,
+            show_weapon: false,
+            show_navmesh: false,
+        }
+    }
 }
 
 #[cfg(all(not(target_arch = "wasm32"), feature = "desktop"))]
@@ -133,6 +173,7 @@ impl EditorApp {
             enable_file_watching: Arc::new(Mutex::new(true)),
             scene: Arc::new(Mutex::new(crate::scene_manager::Scene::default())),
             scene_renderer: Arc::new(Mutex::new(crate::scene_renderer_3d::SceneRenderer3D::new())),
+            game_panels: GameFrameworkPanels::default(),
         }
     }
 
@@ -300,6 +341,43 @@ impl EditorApp {
                         if ui.button("🔄 Reset Layout").clicked() {
                             ui.close_menu();
                         }
+                        
+                        ui.separator();
+                        ui.label("Game Framework Panels:");
+                        
+                        if ui.checkbox(&mut self.game_panels.show_pbr_material, "🎨 PBR Material Editor").clicked() {
+                            ui.close_menu();
+                        }
+                        if ui.checkbox(&mut self.game_panels.show_post_processing, "✨ Post-Processing").clicked() {
+                            ui.close_menu();
+                        }
+                        if ui.checkbox(&mut self.game_panels.show_profiler, "📊 Profiler").clicked() {
+                            ui.close_menu();
+                        }
+                        if ui.checkbox(&mut self.game_panels.show_particle, "✨ Particle Editor").clicked() {
+                            ui.close_menu();
+                        }
+                        if ui.checkbox(&mut self.game_panels.show_animation, "🎬 Animation Editor").clicked() {
+                            ui.close_menu();
+                        }
+                        if ui.checkbox(&mut self.game_panels.show_terrain, "🏔️ Terrain Editor").clicked() {
+                            ui.close_menu();
+                        }
+                        if ui.checkbox(&mut self.game_panels.show_ai_behavior, "🤖 AI Behavior Tree").clicked() {
+                            ui.close_menu();
+                        }
+                        if ui.checkbox(&mut self.game_panels.show_audio_mixer, "🔊 Audio Mixer").clicked() {
+                            ui.close_menu();
+                        }
+                        if ui.checkbox(&mut self.game_panels.show_gamepad_config, "🎮 Gamepad Config").clicked() {
+                            ui.close_menu();
+                        }
+                        if ui.checkbox(&mut self.game_panels.show_weapon, "🔫 Weapon Editor").clicked() {
+                            ui.close_menu();
+                        }
+                        if ui.checkbox(&mut self.game_panels.show_navmesh, "🗺️ NavMesh Editor").clicked() {
+                            ui.close_menu();
+                        }
                     });
 
                     ui.menu_button("Help", |ui| {
@@ -403,6 +481,9 @@ impl EditorApp {
                     .style(create_dock_style())
                     .show_inside(ui, &mut tab_viewer);
             });
+            
+            // Render Game Framework panels as floating windows
+            render_game_framework_panels(ctx, &mut self.game_panels);
         })
         .unwrap();
     }
@@ -1805,5 +1886,150 @@ fn handle_clean(console: &Arc<Mutex<Vec<String>>>, project_path: &Arc<Mutex<Opti
             .lock()
             .unwrap()
             .push("⚠️  No project open".to_string());
+    }
+}
+
+// Render Game Framework panels as floating windows
+#[cfg(all(not(target_arch = "wasm32"), feature = "desktop"))]
+fn render_game_framework_panels(ctx: &egui::Context, panels: &mut GameFrameworkPanels) {
+    // Note: The actual panel implementations are in windjammer-game-editor crate
+    // For now, we'll show placeholder windows that indicate the panels are available
+    // In a future refactor, we'll properly integrate the panel rendering here
+    
+    if panels.show_pbr_material {
+        egui::Window::new("🎨 PBR Material Editor")
+            .default_width(400.0)
+            .default_height(600.0)
+            .open(&mut panels.show_pbr_material)
+            .show(ctx, |ui| {
+                ui.label("PBR Material Editor");
+                ui.separator();
+                ui.label("✅ Fully implemented in windjammer-game-editor crate");
+                ui.label("Run 'editor_enhanced' binary to see full implementation");
+            });
+    }
+    
+    if panels.show_post_processing {
+        egui::Window::new("✨ Post-Processing")
+            .default_width(400.0)
+            .default_height(600.0)
+            .open(&mut panels.show_post_processing)
+            .show(ctx, |ui| {
+                ui.label("Post-Processing Effects");
+                ui.separator();
+                ui.label("✅ Fully implemented in windjammer-game-editor crate");
+                ui.label("Run 'editor_enhanced' binary to see full implementation");
+            });
+    }
+    
+    if panels.show_profiler {
+        egui::Window::new("📊 Performance Profiler")
+            .default_width(700.0)
+            .default_height(500.0)
+            .open(&mut panels.show_profiler)
+            .show(ctx, |ui| {
+                ui.label("Performance Profiler");
+                ui.separator();
+                ui.label("✅ Fully implemented in windjammer-game-editor crate");
+                ui.label("Run 'editor_enhanced' binary to see full implementation");
+            });
+    }
+    
+    if panels.show_particle {
+        egui::Window::new("✨ Particle System Editor")
+            .default_width(600.0)
+            .default_height(600.0)
+            .open(&mut panels.show_particle)
+            .show(ctx, |ui| {
+                ui.label("Particle System Editor");
+                ui.separator();
+                ui.label("✅ Fully implemented in windjammer-game-editor crate");
+                ui.label("Run 'editor_enhanced' binary to see full implementation");
+            });
+    }
+    
+    // Stub panels
+    if panels.show_animation {
+        egui::Window::new("🎬 Animation State Machine")
+            .default_width(800.0)
+            .default_height(600.0)
+            .open(&mut panels.show_animation)
+            .show(ctx, |ui| {
+                ui.label("Animation State Machine Editor");
+                ui.separator();
+                ui.label("🚧 Coming soon...");
+            });
+    }
+    
+    if panels.show_terrain {
+        egui::Window::new("🏔️ Terrain Editor")
+            .default_width(600.0)
+            .default_height(600.0)
+            .open(&mut panels.show_terrain)
+            .show(ctx, |ui| {
+                ui.label("Terrain Editor");
+                ui.separator();
+                ui.label("🚧 Coming soon...");
+            });
+    }
+    
+    if panels.show_ai_behavior {
+        egui::Window::new("🤖 AI Behavior Tree")
+            .default_width(800.0)
+            .default_height(600.0)
+            .open(&mut panels.show_ai_behavior)
+            .show(ctx, |ui| {
+                ui.label("AI Behavior Tree Editor");
+                ui.separator();
+                ui.label("🚧 Coming soon...");
+            });
+    }
+    
+    if panels.show_audio_mixer {
+        egui::Window::new("🔊 Audio Mixer")
+            .default_width(600.0)
+            .default_height(500.0)
+            .open(&mut panels.show_audio_mixer)
+            .show(ctx, |ui| {
+                ui.label("Audio Mixer");
+                ui.separator();
+                ui.label("🚧 Coming soon...");
+            });
+    }
+    
+    if panels.show_gamepad_config {
+        egui::Window::new("🎮 Gamepad Configuration")
+            .default_width(500.0)
+            .default_height(400.0)
+            .open(&mut panels.show_gamepad_config)
+            .show(ctx, |ui| {
+                ui.label("Gamepad Configuration");
+                ui.separator();
+                ui.label("🚧 Coming soon...");
+            });
+    }
+    
+    if panels.show_weapon {
+        egui::Window::new("🔫 Weapon System Editor")
+            .default_width(500.0)
+            .default_height(500.0)
+            .open(&mut panels.show_weapon)
+            .show(ctx, |ui| {
+                ui.label("Weapon System Editor");
+                ui.separator();
+                ui.label("🚧 Coming soon...");
+            });
+    }
+    
+    if panels.show_navmesh {
+        egui::Window::new("🗺️ Navigation Mesh Editor")
+            .default_width(600.0)
+            .default_height(600.0)
+            .open(&mut panels.show_navmesh)
+            .show(ctx, |ui| {
+                ui.label("Navigation Mesh Editor");
+                ui.separator();
+                ui.label("🚧 Coming soon...");
+            });
     }
 }
