@@ -24,6 +24,7 @@ pub struct EditorApp {
     enable_file_watching: Arc<Mutex<bool>>,
     scene: Arc<Mutex<crate::scene_manager::Scene>>,
     scene_renderer: Arc<Mutex<crate::scene_renderer_3d::SceneRenderer3D>>,
+    asset_browser: Arc<Mutex<crate::asset_browser::AssetBrowser>>,
 }
 
 #[cfg(all(not(target_arch = "wasm32"), feature = "desktop"))]
@@ -44,6 +45,7 @@ pub enum PanelType {
     Properties,
     Console,
     SceneView,
+    AssetBrowser,
     // Game framework panels
     PBRMaterialEditor,
     PostProcessing,
@@ -132,6 +134,9 @@ impl EditorApp {
             },
         );
 
+        // Initialize asset browser with current directory or project path
+        let asset_browser_path = std::env::current_dir().unwrap_or_else(|_| std::path::PathBuf::from("."));
+        
         Self {
             title,
             dock_state,
@@ -149,6 +154,7 @@ impl EditorApp {
             enable_file_watching: Arc::new(Mutex::new(true)),
             scene: Arc::new(Mutex::new(crate::scene_manager::Scene::default())),
             scene_renderer: Arc::new(Mutex::new(crate::scene_renderer_3d::SceneRenderer3D::new())),
+            asset_browser: Arc::new(Mutex::new(crate::asset_browser::AssetBrowser::new(asset_browser_path))),
         }
     }
 
@@ -166,6 +172,7 @@ impl EditorApp {
         let syntax_highlighter = self.syntax_highlighter.clone();
         let enable_syntax_highlighting = self.enable_syntax_highlighting.clone();
         let scene = self.scene.clone();
+        let asset_browser = self.asset_browser.clone();
 
         let native_options = eframe::NativeOptions {
             viewport: egui::ViewportBuilder::default()
@@ -318,6 +325,14 @@ impl EditorApp {
                         }
                         
                         ui.separator();
+                        ui.label("Core Panels:");
+                        
+                        if ui.button("📁 Asset Browser").clicked() {
+                            add_panel_to_dock(&mut self.dock_state, &self.panels, "assets", "📁 Assets", PanelType::AssetBrowser);
+                            ui.close_menu();
+                        }
+                        
+                        ui.separator();
                         ui.label("Game Framework Panels:");
                         
                         if ui.button("🎨 PBR Material Editor").clicked() {
@@ -461,6 +476,7 @@ impl EditorApp {
                     enable_syntax_highlighting: enable_syntax_highlighting.clone(),
                     scene: scene.clone(),
                     scene_renderer: self.scene_renderer.clone(),
+                    asset_browser: asset_browser.clone(),
                 };
 
                 egui_dock::DockArea::new(&mut self.dock_state)
@@ -484,6 +500,7 @@ struct TabViewer {
     enable_syntax_highlighting: Arc<Mutex<bool>>,
     scene: Arc<Mutex<crate::scene_manager::Scene>>,
     scene_renderer: Arc<Mutex<crate::scene_renderer_3d::SceneRenderer3D>>,
+    asset_browser: Arc<Mutex<crate::asset_browser::AssetBrowser>>,
 }
 
 #[cfg(all(not(target_arch = "wasm32"), feature = "desktop"))]
@@ -521,6 +538,10 @@ impl egui_dock::TabViewer for TabViewer {
                 PanelType::Console => render_console(ui, &self.console_output),
                 PanelType::SceneView => {
                     render_scene_view(ui, &self.scene, &self.scene_renderer, &self.selected_object)
+                }
+                PanelType::AssetBrowser => {
+                    let mut browser = self.asset_browser.lock().unwrap();
+                    browser.ui(ui);
                 }
                 // Game framework panels
                 // Note: Full implementations are in windjammer-game-editor crate
