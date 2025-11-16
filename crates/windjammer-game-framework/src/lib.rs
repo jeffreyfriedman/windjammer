@@ -69,6 +69,7 @@ pub mod texture; // Texture loading and management
 pub mod time; // Time and delta time management
 pub mod transform;
 pub mod ui_immediate; // Immediate mode UI system (for games) // 2D and 3D transform components
+pub mod weapon_system; // Weapon management (FPS/TPS/Action games)
 
 #[cfg(not(target_arch = "wasm32"))]
 pub mod window; // Window creation and management (native only)
@@ -143,6 +144,9 @@ pub mod prelude {
     pub use crate::time::Time;
     pub use crate::transform::{Transform2D, Transform3D};
     pub use crate::ui_immediate::{DrawCommand, LayoutDirection, UIStyle, UI}; // Immediate mode UI
+    pub use crate::weapon_system::{
+        DamageFalloff, Weapon, WeaponAttachment, WeaponInventory, WeaponType,
+    }; // Weapon system
 
     #[cfg(not(target_arch = "wasm32"))]
     pub use crate::window::{Window, WindowConfig, WindowRunner};
