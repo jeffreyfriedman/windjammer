@@ -25,6 +25,7 @@ pub struct EditorApp {
     scene: Arc<Mutex<crate::scene_manager::Scene>>,
     scene_renderer: Arc<Mutex<crate::scene_renderer_3d::SceneRenderer3D>>,
     asset_browser: Arc<Mutex<crate::asset_browser::AssetBrowser>>,
+    build_system: Arc<Mutex<crate::build_system::BuildSystem>>,
 }
 
 #[cfg(all(not(target_arch = "wasm32"), feature = "desktop"))]
@@ -155,6 +156,7 @@ impl EditorApp {
             scene: Arc::new(Mutex::new(crate::scene_manager::Scene::default())),
             scene_renderer: Arc::new(Mutex::new(crate::scene_renderer_3d::SceneRenderer3D::new())),
             asset_browser: Arc::new(Mutex::new(crate::asset_browser::AssetBrowser::new(asset_browser_path))),
+            build_system: Arc::new(Mutex::new(crate::build_system::BuildSystem::new())),
         }
     }
 
@@ -173,6 +175,7 @@ impl EditorApp {
         let enable_syntax_highlighting = self.enable_syntax_highlighting.clone();
         let scene = self.scene.clone();
         let asset_browser = self.asset_browser.clone();
+        let build_system = self.build_system.clone();
 
         let native_options = eframe::NativeOptions {
             viewport: egui::ViewportBuilder::default()
@@ -378,6 +381,97 @@ impl EditorApp {
                         if ui.button("🗺️ NavMesh Editor").clicked() {
                             add_panel_to_dock(&mut self.dock_state, &self.panels, "navmesh", "🗺️ NavMesh", PanelType::NavMeshEditor);
                             ui.close_menu();
+                        }
+                    });
+
+                    ui.menu_button("Build", |ui| {
+                        let mut build_sys = build_system.lock().unwrap();
+                        let is_running = build_sys.is_running();
+                        let is_compiling = build_sys.is_compiling();
+                        
+                        // Update build system state
+                        build_sys.update();
+                        
+                        // Set project path if available
+                        if let Some(path) = project_path.lock().unwrap().as_ref() {
+                            build_sys.set_project_path(std::path::PathBuf::from(path));
+                        }
+                        
+                        ui.add_enabled_ui(!is_compiling, |ui| {
+                            if ui.button("🔨 Compile").clicked() {
+                                match build_sys.compile() {
+                                    Ok(_) => {
+                                        console_output.lock().unwrap().push("✅ Compilation successful".to_string());
+                                    }
+                                    Err(e) => {
+                                        console_output.lock().unwrap().push(format!("❌ Compilation failed: {}", e));
+                                    }
+                                }
+                                ui.close_menu();
+                            }
+                        });
+                        
+                        ui.add_enabled_ui(!is_running && !is_compiling, |ui| {
+                            if ui.button("▶️ Run").clicked() {
+                                match build_sys.run() {
+                                    Ok(_) => {
+                                        console_output.lock().unwrap().push("▶️ Running project...".to_string());
+                                    }
+                                    Err(e) => {
+                                        console_output.lock().unwrap().push(format!("❌ Run failed: {}", e));
+                                    }
+                                }
+                                ui.close_menu();
+                            }
+                        });
+                        
+                        ui.add_enabled_ui(is_running, |ui| {
+                            if ui.button("⏹️ Stop").clicked() {
+                                match build_sys.stop() {
+                                    Ok(_) => {
+                                        console_output.lock().unwrap().push("⏹️ Stopped".to_string());
+                                    }
+                                    Err(e) => {
+                                        console_output.lock().unwrap().push(format!("❌ Stop failed: {}", e));
+                                    }
+                                }
+                                ui.close_menu();
+                            }
+                        });
+                        
+                        ui.separator();
+                        
+                        if ui.button("🧹 Clean").clicked() {
+                            match build_sys.clean() {
+                                Ok(_) => {
+                                    console_output.lock().unwrap().push("🧹 Clean successful".to_string());
+                                }
+                                Err(e) => {
+                                    console_output.lock().unwrap().push(format!("❌ Clean failed: {}", e));
+                                }
+                            }
+                            ui.close_menu();
+                        }
+                        
+                        ui.separator();
+                        
+                        // Build configuration
+                        ui.label("Build Target:");
+                        let mut config = build_sys.get_config().clone();
+                        let mut changed = false;
+                        
+                        if ui.radio_value(&mut config.target, crate::build_system::BuildTarget::Native, "Native").clicked() {
+                            changed = true;
+                        }
+                        if ui.radio_value(&mut config.target, crate::build_system::BuildTarget::Wasm, "WASM").clicked() {
+                            changed = true;
+                        }
+                        if ui.radio_value(&mut config.target, crate::build_system::BuildTarget::Release, "Release").clicked() {
+                            changed = true;
+                        }
+                        
+                        if changed {
+                            build_sys.set_config(config);
                         }
                     });
 
