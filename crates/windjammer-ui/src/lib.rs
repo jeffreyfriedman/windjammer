@@ -48,6 +48,8 @@ pub mod app_docking_v2;
 pub mod app_reactive;
 #[cfg(all(not(target_arch = "wasm32"), feature = "desktop"))]
 pub mod app_reactive_eframe;
+#[cfg(all(not(target_arch = "wasm32"), feature = "desktop"))]
+pub mod asset_browser;
 
 // Old app_reactive with manual winit+wgpu (deprecated, keeping for reference)
 #[cfg(all(not(target_arch = "wasm32"), not(feature = "desktop")))]
