@@ -84,13 +84,14 @@ impl Vertex2D {
     }
 }
 
-/// Vertex for 3D rendering
+/// Vertex for 3D rendering with PBR support
 #[repr(C)]
 #[derive(Copy, Clone, Debug)]
 pub struct Vertex3D {
     pub position: [f32; 3],
     pub normal: [f32; 3],
     pub tex_coords: [f32; 2],
+    pub tangent: [f32; 4], // xyz = tangent, w = handedness
     pub color: [f32; 4],
 }
 
@@ -122,11 +123,18 @@ impl Vertex3D {
                     shader_location: 2,
                     format: wgpu::VertexFormat::Float32x2,
                 },
-                // Color
+                // Tangent (with handedness in w component)
                 wgpu::VertexAttribute {
                     offset: (std::mem::size_of::<[f32; 3]>() * 2 + std::mem::size_of::<[f32; 2]>())
                         as wgpu::BufferAddress,
                     shader_location: 3,
+                    format: wgpu::VertexFormat::Float32x4,
+                },
+                // Color
+                wgpu::VertexAttribute {
+                    offset: (std::mem::size_of::<[f32; 3]>() * 2 + std::mem::size_of::<[f32; 2]>() + std::mem::size_of::<[f32; 4]>())
+                        as wgpu::BufferAddress,
+                    shader_location: 4,
                     format: wgpu::VertexFormat::Float32x4,
                 },
             ],
