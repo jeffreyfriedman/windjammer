@@ -4,22 +4,14 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-tauri = { version = "2.1", features = ["devtools"], optional = true }
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 windjammer-ui = { path = "../windjammer-ui" }
 
-[build-dependencies]
-tauri-build = { version = "2.0", features = [], optional = true }
-
 [features]
-default = []
+default = ["desktop"]
 desktop = ["windjammer-ui/desktop"]
-tauri = ["dep:tauri", "dep:tauri-build"]
-
-[[bin]]
-name = "windjammer-game-editor"
-path = "src/main.rs"
+web = ["windjammer-ui/web"]
 
 [[bin]]
 name = "editor_professional"
