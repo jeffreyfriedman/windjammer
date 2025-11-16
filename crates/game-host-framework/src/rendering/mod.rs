@@ -10,6 +10,7 @@ pub mod backend;
 pub mod pipeline_2d;
 pub mod pipeline_3d;
 pub mod pipeline_pbr;
+pub mod pipeline_shadow;
 pub mod sprite;
 
 pub use pipeline_2d::Pipeline2D;
@@ -18,6 +19,7 @@ pub use pipeline_pbr::{
     CameraUniform as PBRCameraUniform, LightUniform as PBRLightUniform,
     MaterialUniform as PBRMaterialUniform, PipelinePBR,
 };
+pub use pipeline_shadow::{CubeShadowMap, ShadowCameraUniform, ShadowMap, ShadowMapPipeline};
 pub use sprite::{Sprite, SpriteBatch};
 
 use crate::math::{Mat4, Vec2, Vec3, Vec4};
