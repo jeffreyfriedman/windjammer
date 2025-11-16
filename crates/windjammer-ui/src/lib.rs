@@ -54,6 +54,7 @@ pub mod asset_browser;
 pub mod build_system;
 #[cfg(all(not(target_arch = "wasm32"), feature = "desktop"))]
 pub mod scene_gizmos;
+pub mod undo_redo; // Available on all platforms
 
 // Old app_reactive with manual winit+wgpu (deprecated, keeping for reference)
 #[cfg(all(not(target_arch = "wasm32"), not(feature = "desktop")))]
