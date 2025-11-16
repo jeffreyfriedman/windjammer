@@ -1,5 +1,12 @@
 //! Asset loading and management
 
+pub mod texture_loader;
+
+pub use texture_loader::{
+    Texture, TextureConfig, TextureFilter, TextureFormat, TextureHandle, TextureLoader,
+    TextureWrap,
+};
+
 use std::collections::HashMap;
 use std::path::Path;
 

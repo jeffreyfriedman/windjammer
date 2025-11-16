@@ -1,8 +1,6 @@
 // Shadow Map Pipeline
 // Renders depth from light's perspective for shadow mapping
 
-use wgpu::util::DeviceExt;
-
 /// Shadow map pipeline for rendering depth from light's perspective
 pub struct ShadowMapPipeline {
     render_pipeline: wgpu::RenderPipeline,
@@ -68,13 +66,11 @@ impl ShadowMapPipeline {
                         }],
                     },
                 ],
-                compilation_options: wgpu::PipelineCompilationOptions::default(),
             },
             fragment: Some(wgpu::FragmentState {
                 module: &shader,
                 entry_point: "fs_main",
                 targets: &[], // No color output, only depth
-                compilation_options: wgpu::PipelineCompilationOptions::default(),
             }),
             primitive: wgpu::PrimitiveState {
                 topology: wgpu::PrimitiveTopology::TriangleList,
@@ -102,7 +98,6 @@ impl ShadowMapPipeline {
                 alpha_to_coverage_enabled: false,
             },
             multiview: None,
-            cache: None,
         });
 
         Self {
