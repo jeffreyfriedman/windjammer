@@ -60,6 +60,7 @@ pub mod math; // Math types (Vec2, Vec3, Mat4, etc.)
 pub mod mesh_clustering; // Mesh clustering system (Nanite-style)
 pub mod navmesh; // Navigation mesh for 3D pathfinding
 pub mod pathfinding; // A* pathfinding for AI navigation
+pub mod pbr; // Physically-based rendering (PBR) materials and lighting
 pub mod physics2d; // 2D physics system (Rapier2D integration with ECS)
 
 #[cfg(feature = "3d")]
@@ -132,6 +133,10 @@ pub mod prelude {
     }; // Mesh clustering
     pub use crate::navmesh::{NavAgent, NavMesh, NavPath, NavPoly}; // Navigation mesh
     pub use crate::pathfinding::{GridPos, Heuristic, Path, PathfindingGrid}; // A* pathfinding
+    pub use crate::pbr::{
+        AlphaMode as PBRAlphaMode, DirectionalLight, EnvironmentMap, Light, PBRMaterial,
+        PointLight, ShadowMap, SpotLight,
+    }; // PBR materials and lighting
     pub use crate::physics2d::{
         Collider2D, ColliderShape2D, PhysicsWorld2D, RigidBody2D, RigidBodyType,
     }; // 2D physics (Rapier2D integration)
