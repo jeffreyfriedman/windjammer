@@ -305,7 +305,6 @@ impl ProfilerPanel {
     
     fn update_simulated_data(&mut self) {
         // Simulate performance data (in real implementation, this comes from the profiler)
-        use std::f32::consts::PI;
         let time = std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
             .unwrap()
