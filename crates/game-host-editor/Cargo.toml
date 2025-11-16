@@ -17,12 +17,7 @@ desktop = ["windjammer-ui/desktop", "dep:egui", "dep:eframe", "dep:rfd"]
 web = ["windjammer-ui/web"]
 
 [[bin]]
-name = "editor_professional"
-path = "src/bin/editor_professional.rs"
-required-features = ["desktop"]
-
-[[bin]]
-name = "editor_enhanced"
-path = "src/bin/editor_enhanced.rs"
+name = "editor"
+path = "src/bin/editor.rs"
 required-features = ["desktop"]
 
