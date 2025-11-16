@@ -7,10 +7,12 @@ edition = "2021"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 windjammer-ui = { path = "../windjammer-ui" }
+egui = { version = "0.29", optional = true }
+rfd = { version = "0.14", optional = true }
 
 [features]
 default = ["desktop"]
-desktop = ["windjammer-ui/desktop"]
+desktop = ["windjammer-ui/desktop", "dep:egui", "dep:rfd"]
 web = ["windjammer-ui/web"]
 
 [[bin]]
