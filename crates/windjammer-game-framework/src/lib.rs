@@ -34,6 +34,7 @@
 //! }
 //! ```
 
+pub mod ai_behavior_tree; // AI behavior tree system
 pub mod animation; // Animation system (skeletal, blending, IK)
 pub mod animation_state_machine; // Animation state machine with transitions
 pub mod assets; // Asset loading and management
@@ -84,6 +85,9 @@ pub mod window; // Window creation and management (native only)
 /// use windjammer_game_framework::ecs::{World as RustWorld, ...};
 /// ```
 pub mod prelude {
+    pub use crate::ai_behavior_tree::{
+        BehaviorContext, BehaviorNode, BehaviorTree, Blackboard, BlackboardValue, NodeStatus,
+    }; // AI behavior tree
     pub use crate::animation::{
         Animation, AnimationBlender, AnimationPlayer, Bone, IKChain, Skeleton, Transform,
     };
