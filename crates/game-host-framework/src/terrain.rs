@@ -10,7 +10,7 @@
 //! - Collision mesh generation
 //! - Terrain editing tools
 
-use crate::math::{Vec2, Vec3};
+use crate::math::Vec3;
 
 /// Terrain heightmap
 #[derive(Debug, Clone)]

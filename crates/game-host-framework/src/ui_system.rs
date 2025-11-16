@@ -11,7 +11,6 @@
 //! - Z-ordering
 
 use crate::math::{Vec2, Vec4};
-use std::collections::HashMap;
 
 /// UI system
 #[derive(Debug)]

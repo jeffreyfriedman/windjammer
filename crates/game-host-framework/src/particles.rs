@@ -10,7 +10,7 @@
 //! - Collision and forces
 //! - Particle pooling
 
-use crate::math::{Vec2, Vec3, Vec4};
+use crate::math::{Vec3, Vec4};
 use std::collections::VecDeque;
 
 /// Simple pseudo-random number generator (for particle variance)

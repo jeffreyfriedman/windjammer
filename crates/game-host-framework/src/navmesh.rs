@@ -9,7 +9,7 @@
 //! - Agent radius support
 //! - Height-based filtering
 
-use crate::math::{Vec2, Vec3};
+use crate::math::Vec3;
 use std::collections::{HashMap, HashSet, VecDeque};
 
 /// Navigation mesh polygon (triangle)
