@@ -38,6 +38,7 @@ pub mod animation; // Animation system (skeletal, blending, IK)
 pub mod animation_state_machine; // Animation state machine with transitions
 pub mod assets; // Asset loading and management
 pub mod audio; // Audio playback
+pub mod audio_advanced; // Advanced audio (3D spatial, mixing, effects)
 pub mod camera2d; // 2D camera system
 
 #[cfg(feature = "3d")]
@@ -91,6 +92,9 @@ pub mod prelude {
     }; // Animation state machine
     pub use crate::assets::{AssetManager, Handle};
     pub use crate::audio::{AudioSystem, SpatialAudioSource};
+    pub use crate::audio_advanced::{
+        Audio3DParams, AudioBus, AudioClip, AudioEffect, AudioEngine, AudioSource, RolloffMode,
+    }; // Advanced audio system
     pub use crate::camera2d::Camera2D;
     
     #[cfg(feature = "3d")]
