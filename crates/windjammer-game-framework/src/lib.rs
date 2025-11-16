@@ -58,6 +58,7 @@ pub mod input; // Input handling
 pub mod lod; // Level of Detail (LOD) system
 pub mod math; // Math types (Vec2, Vec3, Mat4, etc.)
 pub mod mesh_clustering; // Mesh clustering system (Nanite-style)
+pub mod pathfinding; // A* pathfinding for AI navigation
 pub mod physics2d; // 2D physics system (Rapier2D integration with ECS)
 
 #[cfg(feature = "3d")]
@@ -128,6 +129,7 @@ pub mod prelude {
     pub use crate::mesh_clustering::{
         ClusterConfig, ClusterStats, MeshCluster, MeshClusteringSystem,
     }; // Mesh clustering
+    pub use crate::pathfinding::{GridPos, Heuristic, Path, PathfindingGrid}; // A* pathfinding
     pub use crate::physics2d::{
         Collider2D, ColliderShape2D, PhysicsWorld2D, RigidBody2D, RigidBodyType,
     }; // 2D physics (Rapier2D integration)
