@@ -69,6 +69,7 @@ pub mod physics3d; // 3D physics system (Rapier3D integration with ECS)
 
 pub mod renderer; // High-level 2D renderer (for Windjammer games)
 pub mod renderer3d; // High-level 3D renderer (for Windjammer games)
+pub mod terrain; // Heightmap-based terrain with LOD
 pub mod rendering; // Graphics rendering
 pub mod texture; // Texture loading and management
 pub mod time; // Time and delta time management
@@ -155,6 +156,7 @@ pub mod prelude {
     pub use crate::renderer::{Color, Renderer}; // High-level 2D renderer (no wgpu types exposed)
     pub use crate::renderer3d::{Camera3D as RenderCamera3D, Renderer3D, SSGIConfig}; // High-level 3D renderer with SSGI (no wgpu types exposed)
     pub use crate::rendering::{Camera, Material, Mesh, RenderContext, Sprite, SpriteBatch};
+    pub use crate::terrain::{Terrain, TerrainLOD, TerrainLayer, TerrainPatch}; // Heightmap terrain
     pub use crate::texture::Texture; // Texture loading (no wgpu or image types exposed)
     pub use crate::time::Time;
     pub use crate::transform::{Transform2D, Transform3D};
