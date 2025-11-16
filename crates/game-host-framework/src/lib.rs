@@ -63,6 +63,7 @@ pub mod particles; // Particle system for visual effects
 pub mod pathfinding; // A* pathfinding for AI navigation
 pub mod pbr; // Physically-based rendering (PBR) materials and lighting
 pub mod post_processing; // Post-processing effects (bloom, DOF, etc.)
+pub mod profiler; // Performance profiler for optimization
 pub mod physics2d; // 2D physics system (Rapier2D integration with ECS)
 
 #[cfg(feature = "3d")]
@@ -145,6 +146,9 @@ pub mod prelude {
         BloomEffect, ChromaticAberrationEffect, ColorGrading, DepthOfFieldEffect, FilmGrainEffect,
         MotionBlurEffect, PostProcessing, ToneMappingMode, VignetteEffect,
     }; // Post-processing effects
+    pub use crate::profiler::{
+        FrameTimePercentiles, MemoryStats, PerformanceStats, ProfileGuard, ProfileScope, Profiler,
+    }; // Performance profiler
     pub use crate::physics2d::{
         Collider2D, ColliderShape2D, PhysicsWorld2D, RigidBody2D, RigidBodyType,
     }; // 2D physics (Rapier2D integration)
