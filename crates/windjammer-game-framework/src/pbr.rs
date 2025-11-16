@@ -33,7 +33,21 @@ pub struct PBRMaterial {
     pub alpha_cutoff: f32,
     /// Alpha mode
     pub alpha_mode: AlphaMode,
+    /// Base color texture (optional)
+    pub base_color_texture: Option<TextureHandle>,
+    /// Metallic-roughness texture (optional, B=metallic, G=roughness)
+    pub metallic_roughness_texture: Option<TextureHandle>,
+    /// Normal map texture (optional)
+    pub normal_texture: Option<TextureHandle>,
+    /// Ambient occlusion texture (optional)
+    pub occlusion_texture: Option<TextureHandle>,
+    /// Emissive texture (optional)
+    pub emissive_texture: Option<TextureHandle>,
 }
+
+/// Handle to a texture resource
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub struct TextureHandle(pub u32);
 
 /// Alpha blending mode
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -144,6 +158,11 @@ impl Default for PBRMaterial {
             occlusion_strength: 1.0,
             alpha_cutoff: 0.5,
             alpha_mode: AlphaMode::Opaque,
+            base_color_texture: None,
+            metallic_roughness_texture: None,
+            normal_texture: None,
+            occlusion_texture: None,
+            emissive_texture: None,
         }
     }
 }
@@ -182,6 +201,36 @@ impl PBRMaterial {
     /// Set alpha mode
     pub fn with_alpha_mode(mut self, mode: AlphaMode) -> Self {
         self.alpha_mode = mode;
+        self
+    }
+
+    /// Set base color texture
+    pub fn with_base_color_texture(mut self, texture: TextureHandle) -> Self {
+        self.base_color_texture = Some(texture);
+        self
+    }
+
+    /// Set metallic-roughness texture
+    pub fn with_metallic_roughness_texture(mut self, texture: TextureHandle) -> Self {
+        self.metallic_roughness_texture = Some(texture);
+        self
+    }
+
+    /// Set normal map texture
+    pub fn with_normal_texture(mut self, texture: TextureHandle) -> Self {
+        self.normal_texture = Some(texture);
+        self
+    }
+
+    /// Set ambient occlusion texture
+    pub fn with_occlusion_texture(mut self, texture: TextureHandle) -> Self {
+        self.occlusion_texture = Some(texture);
+        self
+    }
+
+    /// Set emissive texture
+    pub fn with_emissive_texture(mut self, texture: TextureHandle) -> Self {
+        self.emissive_texture = Some(texture);
         self
     }
 
