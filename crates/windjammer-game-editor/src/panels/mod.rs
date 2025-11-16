@@ -15,13 +15,13 @@ pub mod profiler_panel;
 // Re-exports
 pub use pbr_material_editor::PBRMaterialEditorPanel;
 pub use post_processing_editor::PostProcessingPanel;
-pub use animation_editor::AnimationEditorPanel;
+pub use animation_editor::AnimationEditor;
 pub use particle_editor::ParticleEditorPanel;
-pub use terrain_editor::TerrainEditorPanel;
-pub use ai_behavior_editor::AIBehaviorEditorPanel;
-pub use audio_mixer::AudioMixerPanel;
+pub use terrain_editor::TerrainEditor;
+pub use ai_behavior_editor::AIBehaviorEditor;
+pub use audio_mixer::AudioMixer;
 pub use gamepad_config::GamepadConfigPanel;
-pub use weapon_editor::WeaponEditorPanel;
-pub use navmesh_editor::NavMeshEditorPanel;
+pub use weapon_editor::WeaponEditor;
+pub use navmesh_editor::NavMeshEditor;
 pub use profiler_panel::ProfilerPanel;
 
