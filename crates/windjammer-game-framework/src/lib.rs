@@ -75,8 +75,9 @@ pub mod terrain; // Heightmap-based terrain with LOD
 pub mod rendering; // Graphics rendering
 pub mod texture; // Texture loading and management
 pub mod time; // Time and delta time management
-pub mod transform;
-pub mod ui_immediate; // Immediate mode UI system (for games) // 2D and 3D transform components
+pub mod transform; // 2D and 3D transform components
+pub mod ui_immediate; // Immediate mode UI system (for games)
+pub mod ui_system; // Retained mode UI system (for in-game UI)
 pub mod weapon_system; // Weapon management (FPS/TPS/Action games)
 
 #[cfg(not(target_arch = "wasm32"))]
@@ -170,6 +171,9 @@ pub mod prelude {
     pub use crate::time::Time;
     pub use crate::transform::{Transform2D, Transform3D};
     pub use crate::ui_immediate::{DrawCommand, LayoutDirection, UIStyle, UI}; // Immediate mode UI
+    pub use crate::ui_system::{
+        LayoutType, UIElement, UIElementType, UIEvent, UIStyle as UIStyleRetained, UISystem,
+    }; // Retained mode UI
     pub use crate::weapon_system::{
         DamageFalloff, Weapon, WeaponAttachment, WeaponInventory, WeaponType,
     }; // Weapon system
