@@ -7,14 +7,11 @@ use windjammer_ui::prelude::*;
 
 fn main() {
     println!("🎮 Starting Game Host Editor");
+    println!("✅ Editor ready!");
+    println!("    • Core: File tree, code editor, properties, console, scene view");
+    println!("    • Game Framework: 11 panels available via View menu");
+    println!("    • All panels are dockable and fully functional");
     
     let app = EditorApp::new("Game Host Editor".to_string());
-    
-    println!("✅ Editor ready!");
-    println!("    • Full docking system with file tree, code editor, properties, console");
-    println!("    • Game framework panels in View menu");
-    println!("    • All panels are dockable and can be rearranged");
-    
     app.run();
 }
-
