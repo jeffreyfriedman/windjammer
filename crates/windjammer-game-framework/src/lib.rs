@@ -62,6 +62,7 @@ pub mod navmesh; // Navigation mesh for 3D pathfinding
 pub mod particles; // Particle system for visual effects
 pub mod pathfinding; // A* pathfinding for AI navigation
 pub mod pbr; // Physically-based rendering (PBR) materials and lighting
+pub mod post_processing; // Post-processing effects (bloom, DOF, etc.)
 pub mod physics2d; // 2D physics system (Rapier2D integration with ECS)
 
 #[cfg(feature = "3d")]
@@ -140,6 +141,10 @@ pub mod prelude {
         AlphaMode as PBRAlphaMode, DirectionalLight, EnvironmentMap, Light, PBRMaterial,
         PointLight, ShadowMap, SpotLight,
     }; // PBR materials and lighting
+    pub use crate::post_processing::{
+        BloomEffect, ChromaticAberrationEffect, ColorGrading, DepthOfFieldEffect, FilmGrainEffect,
+        MotionBlurEffect, PostProcessing, ToneMappingMode, VignetteEffect,
+    }; // Post-processing effects
     pub use crate::physics2d::{
         Collider2D, ColliderShape2D, PhysicsWorld2D, RigidBody2D, RigidBodyType,
     }; // 2D physics (Rapier2D integration)
