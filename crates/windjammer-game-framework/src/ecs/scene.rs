@@ -3,7 +3,7 @@
 /// Manages parent-child relationships and transform propagation.
 /// Inspired by Unity and Godot's scene systems.
 
-use crate::ecs::{Entity, World, Component};
+use crate::ecs::{Entity, World};
 use crate::math::{Vec3, Quat, Mat4};
 
 /// Transform component

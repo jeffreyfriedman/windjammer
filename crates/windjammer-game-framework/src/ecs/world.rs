@@ -42,7 +42,7 @@ impl World {
     ///     .with(Velocity { x: 1.0, y: 0.0, z: 0.0 })
     ///     .build();
     /// ```
-    pub fn spawn(&mut self) -> EntityBuilder {
+    pub fn spawn(&mut self) -> EntityBuilder<'_> {
         let entity = self.entities.allocate();
         EntityBuilder {
             world: self,

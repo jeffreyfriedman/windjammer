@@ -1,8 +1,8 @@
 //! PBR rendering pipeline with full material support
 
 use super::backend::{GraphicsBackend, Vertex3D};
-use crate::math::{Mat4, Vec3, Vec4};
-use crate::pbr::{AlphaMode, Light, PBRMaterial, TextureHandle};
+use crate::math::{Mat4, Vec3};
+use crate::pbr::{AlphaMode, Light, PBRMaterial};
 
 /// PBR rendering pipeline
 pub struct PipelinePBR {
