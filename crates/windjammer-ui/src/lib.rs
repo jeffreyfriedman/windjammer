@@ -52,6 +52,8 @@ pub mod app_reactive_eframe;
 pub mod asset_browser;
 #[cfg(all(not(target_arch = "wasm32"), feature = "desktop"))]
 pub mod build_system;
+#[cfg(all(not(target_arch = "wasm32"), feature = "desktop"))]
+pub mod scene_gizmos;
 
 // Old app_reactive with manual winit+wgpu (deprecated, keeping for reference)
 #[cfg(all(not(target_arch = "wasm32"), not(feature = "desktop")))]
