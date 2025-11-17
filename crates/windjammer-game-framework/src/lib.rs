@@ -71,9 +71,7 @@ pub mod plugin_ffi; // Plugin system for extensibility
 pub mod post_processing; // Post-processing effects (bloom, DOF, etc.)
 pub mod profiler; // Performance profiler for optimization
 pub mod physics2d; // 2D physics system (Rapier2D integration with ECS)
-
-#[cfg(feature = "3d")]
-pub mod physics3d; // 3D physics system (Rapier3D integration with ECS)
+pub mod physics3d; // 3D physics system (Rapier3D integration)
 
 pub mod renderer; // High-level 2D renderer (for Windjammer games)
 pub mod renderer3d; // High-level 3D renderer (for Windjammer games)
@@ -167,7 +165,7 @@ pub mod prelude {
     
     #[cfg(feature = "3d")]
     pub use crate::physics3d::{
-        Collider3D, ColliderShape3D, PhysicsWorld3D, RaycastHit3D, RigidBody3D, RigidBodyType3D,
+        PhysicsWorld3D, RaycastHit,
     }; // 3D physics (Rapier3D integration)
        // TODO v2.0: Re-enable physics_windjammer once fixed
        // pub use crate::physics_windjammer::{
