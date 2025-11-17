@@ -46,9 +46,7 @@ pub mod asset_hot_reload; // Asset hot-reload for rapid iteration
 pub mod audio; // Audio playback
 pub mod audio_advanced; // Advanced audio (3D spatial, mixing, effects)
 pub mod camera2d; // 2D camera system
-
-#[cfg(feature = "3d")]
-pub mod camera3d; // 3D camera system (perspective, third-person, first-person, free)
+pub mod camera3d; // 3D camera system (first-person, third-person, smooth follow, shake)
 
 #[cfg(feature = "3d")]
 pub mod character_controller; // 3D character controller (movement, jumping, cameras)
