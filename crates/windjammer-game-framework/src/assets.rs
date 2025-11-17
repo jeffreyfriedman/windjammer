@@ -1,11 +1,13 @@
 //! Asset loading and management
 
 pub mod texture_loader;
+pub mod audio_loader;
 
 pub use texture_loader::{
     Texture, TextureConfig, TextureFilter, TextureFormat, TextureHandle, TextureLoader,
     TextureWrap,
 };
+pub use audio_loader::{AudioData, AudioFormat, AudioLoader};
 
 use std::collections::HashMap;
 use std::path::Path;
