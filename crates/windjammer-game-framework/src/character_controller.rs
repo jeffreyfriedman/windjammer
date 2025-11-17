@@ -5,7 +5,8 @@
 
 use crate::ecs::Entity;
 use crate::math::Vec3;
-use crate::physics3d::{PhysicsWorld3D, RigidBody3D, Collider3D, ColliderShape3D};
+use crate::physics3d::PhysicsWorld3D;
+// TODO: Add RigidBody3D, Collider3D, ColliderShape3D when implementing character controller
 
 /// Character controller component
 #[derive(Debug, Clone)]
@@ -151,26 +152,19 @@ impl CharacterController {
         self.time_since_jump += delta;
     }
     
-    /// Create a rigid body for this character controller
-    pub fn create_rigid_body(&self) -> RigidBody3D {
-        let mut body = RigidBody3D::new_kinematic();
-        body.mass = 70.0; // Average human mass in kg
-        body.linear_damping = 0.0; // No damping for character movement
-        body.angular_damping = 1.0; // Prevent rotation
-        body
-    }
+    // TODO: Implement create_rigid_body and create_collider when implementing character controller
+    // These will use PhysicsWorld3D methods directly
     
-    /// Create a collider for this character controller
-    pub fn create_collider(&self) -> Collider3D {
-        let half_height = self.get_effective_height() / 2.0 - self.radius;
-        Collider3D {
-            shape: ColliderShape3D::Capsule(half_height, self.radius),
-            density: 1.0,
-            restitution: 0.0, // No bounciness
-            friction: 0.0, // No friction (we handle movement ourselves)
-            is_sensor: false,
-        }
-    }
+    // /// Create a rigid body for this character controller
+    // pub fn create_rigid_body(&self, physics: &mut PhysicsWorld3D, entity_id: u64, position: Vec3) -> RigidBodyHandle {
+    //     physics.create_kinematic_body(entity_id, position, Quat::IDENTITY)
+    // }
+    
+    // /// Create a collider for this character controller
+    // pub fn create_collider(&self, physics: &mut PhysicsWorld3D, entity_id: u64, body_handle: RigidBodyHandle) -> ColliderHandle {
+    //     let half_height = self.get_effective_height() / 2.0 - self.radius;
+    //     physics.add_capsule_collider(entity_id, body_handle, half_height, self.radius)
+    // }
 }
 
 /// Character movement input
