@@ -147,13 +147,13 @@ impl Crossfade {
 /// Advanced animation blending system
 pub struct AnimationBlendingSystem {
     /// Animation layers (ordered by priority)
-    layers: Vec<AnimationLayer>,
+    pub layers: Vec<AnimationLayer>,
     
     /// Active crossfade (if any)
-    crossfade: Option<Crossfade>,
+    pub crossfade: Option<Crossfade>,
     
     /// Blend tree nodes (for complex blending)
-    blend_nodes: HashMap<String, BlendNode>,
+    pub blend_nodes: HashMap<String, BlendNode>,
 }
 
 impl AnimationBlendingSystem {

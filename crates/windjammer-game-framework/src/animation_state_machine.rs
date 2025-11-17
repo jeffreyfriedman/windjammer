@@ -26,11 +26,11 @@ pub struct AnimationStateMachine {
     /// Parameters for transition conditions
     pub parameters: HashMap<String, Parameter>,
     /// Transition progress (0.0 to 1.0)
-    transition_progress: f32,
+    pub transition_progress: f32,
     /// Transition target state (if transitioning)
-    transition_target: Option<String>,
+    pub transition_target: Option<String>,
     /// Transition blend time
-    transition_blend_time: f32,
+    pub transition_blend_time: f32,
 }
 
 /// Animation state
