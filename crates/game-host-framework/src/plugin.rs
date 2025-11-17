@@ -166,7 +166,7 @@ impl VersionReq {
         // Wildcard: 1.* means >=1.0.0, <2.0.0
         if s.contains('*') {
             let parts: Vec<&str> = s.split('.').collect();
-            if parts.len() != 3 {
+            if parts.len() < 2 || parts.len() > 3 {
                 return Err(format!("Invalid wildcard version: {}", s));
             }
 
@@ -174,20 +174,45 @@ impl VersionReq {
                 .parse::<u32>()
                 .map_err(|_| format!("Invalid major version: {}", parts[0]))?;
 
-            let min = Version {
-                major,
-                minor: 0,
-                patch: 0,
-            };
-            let max = Version {
-                major: major + 1,
-                minor: 0,
-                patch: 0,
-            };
-            return Ok(Self {
-                min,
-                max: Some(max),
-            });
+            // Check if it's "1.*" or "1.*.*"
+            if parts[1] == "*" {
+                // 1.* means >=1.0.0, <2.0.0
+                let min = Version {
+                    major,
+                    minor: 0,
+                    patch: 0,
+                };
+                let max = Version {
+                    major: major + 1,
+                    minor: 0,
+                    patch: 0,
+                };
+                return Ok(Self {
+                    min,
+                    max: Some(max),
+                });
+            } else if parts.len() == 3 && parts[2] == "*" {
+                // 1.2.* means >=1.2.0, <1.3.0
+                let minor = parts[1]
+                    .parse::<u32>()
+                    .map_err(|_| format!("Invalid minor version: {}", parts[1]))?;
+                let min = Version {
+                    major,
+                    minor,
+                    patch: 0,
+                };
+                let max = Version {
+                    major,
+                    minor: minor + 1,
+                    patch: 0,
+                };
+                return Ok(Self {
+                    min,
+                    max: Some(max),
+                });
+            } else {
+                return Err(format!("Invalid wildcard version: {}", s));
+            }
         }
 
         // Exact version
@@ -202,7 +227,13 @@ impl VersionReq {
         }
 
         if let Some(ref max) = self.max {
+            // Range requirement (e.g., ^1.0.0, ~1.0.0, 1.*)
             if version >= max {
+                return false;
+            }
+        } else {
+            // Exact requirement (e.g., 1.0.0)
+            if version != &self.min {
                 return false;
             }
         }

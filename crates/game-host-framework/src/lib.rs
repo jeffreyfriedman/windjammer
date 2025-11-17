@@ -148,7 +148,7 @@ pub mod prelude {
         AlphaMode as PBRAlphaMode, DirectionalLight, EnvironmentMap, Light, PBRMaterial,
         PointLight, ShadowMap, SpotLight,
     }; // PBR materials and lighting
-    pub use crate::plugin::{Plugin, PluginCategory, PluginDependency, PluginError, PluginManager, PluginState};
+    pub use crate::plugin::{App, Plugin, PluginCategory, PluginDependency, PluginError, PluginManager, PluginState, Version, VersionReq};
     pub use crate::plugin_ffi::{DynamicPlugin, WjApp, WjPluginCategory, WjPluginDependency, WjPluginErrorCode, WjPluginInfo};
     pub use crate::post_processing::{
         BloomEffect, ChromaticAberrationEffect, ColorGrading, DepthOfFieldEffect, FilmGrainEffect,
