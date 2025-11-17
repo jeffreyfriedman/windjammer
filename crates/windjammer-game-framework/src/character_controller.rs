@@ -4,9 +4,8 @@
 //! Handles movement, jumping, crouching, and collision with the physics world.
 
 use crate::ecs::Entity;
-use crate::math::Vec3;
-use crate::physics3d::PhysicsWorld3D;
-// TODO: Add RigidBody3D, Collider3D, ColliderShape3D when implementing character controller
+use crate::math::{Quat, Vec3};
+use crate::physics3d::{ColliderHandle, PhysicsWorld3D, RigidBodyHandle};
 
 /// Character controller component
 #[derive(Debug, Clone)]
@@ -152,19 +151,16 @@ impl CharacterController {
         self.time_since_jump += delta;
     }
     
-    // TODO: Implement create_rigid_body and create_collider when implementing character controller
-    // These will use PhysicsWorld3D methods directly
+    /// Create a rigid body for this character controller
+    pub fn create_rigid_body(&self, physics: &mut PhysicsWorld3D, entity_id: u64, position: Vec3) -> RigidBodyHandle {
+        physics.create_kinematic_body(entity_id, position, Quat::IDENTITY)
+    }
     
-    // /// Create a rigid body for this character controller
-    // pub fn create_rigid_body(&self, physics: &mut PhysicsWorld3D, entity_id: u64, position: Vec3) -> RigidBodyHandle {
-    //     physics.create_kinematic_body(entity_id, position, Quat::IDENTITY)
-    // }
-    
-    // /// Create a collider for this character controller
-    // pub fn create_collider(&self, physics: &mut PhysicsWorld3D, entity_id: u64, body_handle: RigidBodyHandle) -> ColliderHandle {
-    //     let half_height = self.get_effective_height() / 2.0 - self.radius;
-    //     physics.add_capsule_collider(entity_id, body_handle, half_height, self.radius)
-    // }
+    /// Create a collider for this character controller
+    pub fn create_collider(&self, physics: &mut PhysicsWorld3D, entity_id: u64, body_handle: RigidBodyHandle) -> ColliderHandle {
+        let half_height = self.get_effective_height() / 2.0 - self.radius;
+        physics.add_capsule_collider(entity_id, body_handle, half_height, self.radius)
+    }
 }
 
 /// Character movement input
@@ -487,3 +483,347 @@ impl ThirdPersonCamera {
     }
 }
 
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_character_controller_creation() {
+        let controller = CharacterController::new();
+        assert_eq!(controller.move_speed, 5.0);
+        assert_eq!(controller.sprint_multiplier, 2.0);
+        assert_eq!(controller.crouch_multiplier, 0.5);
+        assert_eq!(controller.jump_force, 10.0);
+        assert!(!controller.is_grounded);
+        assert!(!controller.is_crouching);
+        assert!(!controller.is_sprinting);
+    }
+
+    #[test]
+    fn test_character_controller_with_dimensions() {
+        let controller = CharacterController::with_dimensions(2.0, 0.5);
+        assert_eq!(controller.height, 2.0);
+        assert_eq!(controller.radius, 0.5);
+    }
+
+    #[test]
+    fn test_character_controller_with_speeds() {
+        let controller = CharacterController::with_speeds(10.0, 1.5, 0.3);
+        assert_eq!(controller.move_speed, 10.0);
+        assert_eq!(controller.sprint_multiplier, 1.5);
+        assert_eq!(controller.crouch_multiplier, 0.3);
+    }
+
+    #[test]
+    fn test_effective_speed_normal() {
+        let mut controller = CharacterController::new();
+        controller.is_grounded = true;
+        assert_eq!(controller.get_effective_speed(), 5.0);
+    }
+
+    #[test]
+    fn test_effective_speed_sprinting() {
+        let mut controller = CharacterController::new();
+        controller.is_grounded = true;
+        controller.is_sprinting = true;
+        assert_eq!(controller.get_effective_speed(), 10.0); // 5.0 * 2.0
+    }
+
+    #[test]
+    fn test_effective_speed_crouching() {
+        let mut controller = CharacterController::new();
+        controller.is_grounded = true;
+        controller.is_crouching = true;
+        assert_eq!(controller.get_effective_speed(), 2.5); // 5.0 * 0.5
+    }
+
+    #[test]
+    fn test_effective_speed_air_control() {
+        let mut controller = CharacterController::new();
+        controller.is_grounded = false;
+        let speed = controller.get_effective_speed();
+        assert_eq!(speed, 1.5); // 5.0 * 0.3 (air control)
+    }
+
+    #[test]
+    fn test_effective_height_normal() {
+        let controller = CharacterController::new();
+        assert_eq!(controller.get_effective_height(), 1.8);
+    }
+
+    #[test]
+    fn test_effective_height_crouching() {
+        let mut controller = CharacterController::new();
+        controller.is_crouching = true;
+        assert_eq!(controller.get_effective_height(), 1.08); // 1.8 * 0.6
+    }
+
+    #[test]
+    fn test_can_jump_when_grounded() {
+        let mut controller = CharacterController::new();
+        controller.is_grounded = true;
+        controller.time_since_jump = 1.0;
+        assert!(controller.can_jump());
+    }
+
+    #[test]
+    fn test_cannot_jump_when_airborne() {
+        let mut controller = CharacterController::new();
+        controller.is_grounded = false;
+        controller.time_since_jump = 1.0;
+        assert!(!controller.can_jump());
+    }
+
+    #[test]
+    fn test_cannot_jump_during_cooldown() {
+        let mut controller = CharacterController::new();
+        controller.is_grounded = true;
+        controller.time_since_jump = 0.1; // Less than cooldown (0.2)
+        assert!(!controller.can_jump());
+    }
+
+    #[test]
+    fn test_jump() {
+        let mut controller = CharacterController::new();
+        controller.is_grounded = true;
+        controller.time_since_jump = 1.0;
+
+        let result = controller.jump();
+        assert!(result);
+        assert_eq!(controller.vertical_velocity, 10.0);
+        assert!(!controller.is_grounded);
+        assert_eq!(controller.time_since_jump, 0.0);
+    }
+
+    #[test]
+    fn test_jump_fail_when_airborne() {
+        let mut controller = CharacterController::new();
+        controller.is_grounded = false;
+        controller.time_since_jump = 1.0;
+
+        let result = controller.jump();
+        assert!(!result);
+        assert_eq!(controller.vertical_velocity, 0.0);
+    }
+
+    #[test]
+    fn test_set_crouching() {
+        let mut controller = CharacterController::new();
+        controller.set_crouching(true);
+        assert!(controller.is_crouching);
+        
+        controller.set_crouching(false);
+        assert!(!controller.is_crouching);
+    }
+
+    #[test]
+    fn test_set_sprinting() {
+        let mut controller = CharacterController::new();
+        controller.set_sprinting(true);
+        assert!(controller.is_sprinting);
+        
+        controller.set_sprinting(false);
+        assert!(!controller.is_sprinting);
+    }
+
+    #[test]
+    fn test_update() {
+        let mut controller = CharacterController::new();
+        controller.time_since_jump = 0.0;
+        
+        controller.update(0.1);
+        assert_eq!(controller.time_since_jump, 0.1);
+        
+        controller.update(0.05);
+        assert!((controller.time_since_jump - 0.15).abs() < 0.001);
+    }
+
+    #[test]
+    fn test_movement_input_creation() {
+        let input = CharacterMovementInput::new();
+        assert_eq!(input.forward, 0.0);
+        assert_eq!(input.right, 0.0);
+        assert!(!input.jump);
+        assert!(!input.sprint);
+        assert!(!input.crouch);
+    }
+
+    #[test]
+    fn test_movement_input_direction_forward() {
+        let mut input = CharacterMovementInput::new();
+        input.forward = 1.0;
+        
+        let dir = input.get_direction();
+        assert_eq!(dir.x, 0.0);
+        assert_eq!(dir.y, 0.0);
+        assert_eq!(dir.z, -1.0);
+    }
+
+    #[test]
+    fn test_movement_input_direction_right() {
+        let mut input = CharacterMovementInput::new();
+        input.right = 1.0;
+        
+        let dir = input.get_direction();
+        assert_eq!(dir.x, 1.0);
+        assert_eq!(dir.y, 0.0);
+        assert_eq!(dir.z, 0.0);
+    }
+
+    #[test]
+    fn test_movement_input_direction_diagonal() {
+        let mut input = CharacterMovementInput::new();
+        input.forward = 1.0;
+        input.right = 1.0;
+        
+        let dir = input.get_direction();
+        let len = (dir.x * dir.x + dir.z * dir.z).sqrt();
+        assert!((len - 1.0).abs() < 0.001); // Should be normalized
+    }
+
+    #[test]
+    fn test_movement_input_magnitude() {
+        let mut input = CharacterMovementInput::new();
+        assert_eq!(input.get_magnitude(), 0.0);
+        
+        input.forward = 1.0;
+        assert_eq!(input.get_magnitude(), 1.0);
+        
+        input.right = 1.0;
+        let mag = input.get_magnitude();
+        assert!((mag - 1.0).abs() < 0.001); // Clamped to 1.0
+    }
+
+    #[test]
+    fn test_first_person_camera_creation() {
+        let camera = FirstPersonCamera::new();
+        assert_eq!(camera.pitch, 0.0);
+        assert_eq!(camera.yaw, 0.0);
+        assert_eq!(camera.sensitivity, 0.1);
+        assert_eq!(camera.eye_height, 1.6);
+    }
+
+    #[test]
+    fn test_first_person_camera_rotation() {
+        let mut camera = FirstPersonCamera::new();
+        camera.update_rotation(10.0, 5.0);
+        
+        assert_eq!(camera.yaw, 1.0); // 10.0 * 0.1
+        assert_eq!(camera.pitch, -0.5); // -5.0 * 0.1
+    }
+
+    #[test]
+    fn test_first_person_camera_pitch_clamping() {
+        let mut camera = FirstPersonCamera::new();
+        camera.update_rotation(0.0, 1000.0); // Large downward movement
+        
+        assert_eq!(camera.pitch, -89.0); // Clamped to min_pitch
+        
+        camera.pitch = 0.0;
+        camera.update_rotation(0.0, -1000.0); // Large upward movement
+        
+        assert_eq!(camera.pitch, 89.0); // Clamped to max_pitch
+    }
+
+    #[test]
+    fn test_first_person_camera_yaw_wrapping() {
+        let mut camera = FirstPersonCamera::new();
+        camera.update_rotation(4000.0, 0.0); // Large rotation
+        
+        assert!(camera.yaw >= 0.0 && camera.yaw < 360.0); // Should wrap
+    }
+
+    #[test]
+    fn test_first_person_camera_forward() {
+        let camera = FirstPersonCamera::new();
+        let forward = camera.get_forward();
+        
+        // At pitch=0, yaw=0, forward should be (0, 0, 1)
+        assert!((forward.x - 0.0).abs() < 0.001);
+        assert!((forward.y - 0.0).abs() < 0.001);
+        assert!((forward.z - 1.0).abs() < 0.001);
+    }
+
+    #[test]
+    fn test_first_person_camera_right() {
+        let camera = FirstPersonCamera::new();
+        let right = camera.get_right();
+        
+        // At yaw=0, right should be (1, 0, 0)
+        assert!((right.x - 1.0).abs() < 0.001);
+        assert_eq!(right.y, 0.0);
+        assert!((right.z - 0.0).abs() < 0.001);
+    }
+
+    #[test]
+    fn test_first_person_camera_offset() {
+        let camera = FirstPersonCamera::new();
+        let offset = camera.get_camera_offset();
+        
+        assert_eq!(offset.x, 0.0);
+        assert_eq!(offset.y, 1.6);
+        assert_eq!(offset.z, 0.0);
+    }
+
+    #[test]
+    fn test_third_person_camera_creation() {
+        let camera = ThirdPersonCamera::new();
+        assert_eq!(camera.pitch, 20.0);
+        assert_eq!(camera.yaw, 0.0);
+        assert_eq!(camera.distance, 5.0);
+        assert_eq!(camera.height_offset, 1.5);
+    }
+
+    #[test]
+    fn test_third_person_camera_rotation() {
+        let mut camera = ThirdPersonCamera::new();
+        camera.update_rotation(10.0, 5.0);
+        
+        assert_eq!(camera.yaw, 1.0); // 10.0 * 0.1
+        assert_eq!(camera.pitch, 19.5); // 20.0 - 5.0 * 0.1
+    }
+
+    #[test]
+    fn test_third_person_camera_distance() {
+        let mut camera = ThirdPersonCamera::new();
+        camera.update_distance(2.0);
+        
+        assert_eq!(camera.distance, 3.0); // 5.0 - 2.0
+        
+        camera.update_distance(-10.0); // Try to zoom out too far
+        assert_eq!(camera.distance, 10.0); // Clamped to max_distance
+        
+        camera.update_distance(20.0); // Try to zoom in too far
+        assert_eq!(camera.distance, 2.0); // Clamped to min_distance
+    }
+
+    #[test]
+    fn test_third_person_camera_offset() {
+        let camera = ThirdPersonCamera::new();
+        let offset = camera.get_camera_offset();
+        
+        // Offset should be behind and above the character
+        assert!(offset.y > camera.height_offset); // Above character
+        let horizontal_dist = (offset.x * offset.x + offset.z * offset.z).sqrt();
+        assert!(horizontal_dist > 0.0); // Behind character
+    }
+
+    #[test]
+    fn test_character_controller_system_normalize() {
+        let v = Vec3::new(3.0, 4.0, 0.0);
+        let normalized = CharacterControllerSystem::normalize(v);
+        
+        let len = (normalized.x * normalized.x + normalized.y * normalized.y + normalized.z * normalized.z).sqrt();
+        assert!((len - 1.0).abs() < 0.001);
+    }
+
+    #[test]
+    fn test_character_controller_system_normalize_zero() {
+        let v = Vec3::new(0.0, 0.0, 0.0);
+        let normalized = CharacterControllerSystem::normalize(v);
+        
+        assert_eq!(normalized.x, 0.0);
+        assert_eq!(normalized.y, 0.0);
+        assert_eq!(normalized.z, 0.0);
+    }
+}
