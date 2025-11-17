@@ -62,7 +62,8 @@ pub mod navmesh; // Navigation mesh for 3D pathfinding
 pub mod particles; // Particle system for visual effects
 pub mod pathfinding; // A* pathfinding for AI navigation
 pub mod pbr; // Physically-based rendering (PBR) materials and lighting
-pub mod plugin; // Plugin system for extensibility
+pub mod plugin;
+pub mod plugin_ffi; // Plugin system for extensibility
 pub mod post_processing; // Post-processing effects (bloom, DOF, etc.)
 pub mod profiler; // Performance profiler for optimization
 pub mod physics2d; // 2D physics system (Rapier2D integration with ECS)
@@ -147,6 +148,8 @@ pub mod prelude {
         AlphaMode as PBRAlphaMode, DirectionalLight, EnvironmentMap, Light, PBRMaterial,
         PointLight, ShadowMap, SpotLight,
     }; // PBR materials and lighting
+    pub use crate::plugin::{Plugin, PluginCategory, PluginDependency, PluginError, PluginManager, PluginState};
+    pub use crate::plugin_ffi::{DynamicPlugin, WjApp, WjPluginCategory, WjPluginDependency, WjPluginErrorCode, WjPluginInfo};
     pub use crate::post_processing::{
         BloomEffect, ChromaticAberrationEffect, ColorGrading, DepthOfFieldEffect, FilmGrainEffect,
         MotionBlurEffect, PostProcessing, ToneMappingMode, VignetteEffect,

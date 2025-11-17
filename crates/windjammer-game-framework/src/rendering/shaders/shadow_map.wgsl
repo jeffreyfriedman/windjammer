@@ -34,3 +34,4 @@ fn fs_main(in: VertexOutput) {
     // This fragment shader is just a placeholder
 }
 
+

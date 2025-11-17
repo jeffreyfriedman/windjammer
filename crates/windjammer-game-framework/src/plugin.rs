@@ -512,6 +512,8 @@ pub enum PluginError {
     },
     /// Invalid version string
     InvalidVersion(String, String),
+    /// Failed to load plugin
+    LoadFailed(String),
 }
 
 impl fmt::Display for PluginError {
@@ -547,6 +549,7 @@ impl fmt::Display for PluginError {
             PluginError::InvalidVersion(plugin, error) => {
                 write!(f, "Invalid version for {}: {}", plugin, error)
             }
+            PluginError::LoadFailed(msg) => write!(f, "Failed to load plugin: {}", msg),
         }
     }
 }
