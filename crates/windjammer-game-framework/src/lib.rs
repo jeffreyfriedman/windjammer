@@ -72,6 +72,7 @@ pub mod post_processing; // Post-processing effects (bloom, DOF, etc.)
 pub mod profiler; // Performance profiler for optimization
 pub mod physics2d; // 2D physics system (Rapier2D integration with ECS)
 pub mod physics3d; // 3D physics system (Rapier3D integration)
+pub mod ragdoll; // Ragdoll physics for realistic character interactions
 
 pub mod renderer; // High-level 2D renderer (for Windjammer games)
 pub mod renderer3d; // High-level 3D renderer (for Windjammer games)
@@ -170,6 +171,11 @@ pub mod prelude {
     pub use crate::physics3d::{
         PhysicsWorld3D, RaycastHit,
     }; // 3D physics (Rapier3D integration)
+    
+    pub use crate::ragdoll::{
+        BoneShape, JointType, Ragdoll, RagdollBone, RagdollBuilder, RagdollConfig, RagdollJoint,
+        RagdollManager,
+    }; // Ragdoll physics
        // TODO v2.0: Re-enable physics_windjammer once fixed
        // pub use crate::physics_windjammer::{
        //     BodyHandle, BodyType, ColliderBuilder, ColliderHandle, CollisionShape, ConstraintHandle,
