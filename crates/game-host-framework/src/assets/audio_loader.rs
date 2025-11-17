@@ -139,7 +139,9 @@ impl AudioLoader {
     /// Decode audio metadata (sample rate, channels, duration)
     #[cfg(feature = "audio")]
     fn decode_metadata(data: &[u8], format: AudioFormat) -> Result<(u32, u16, f32), String> {
-        let cursor = Cursor::new(data);
+        // Clone the data to avoid lifetime issues
+        let data_owned = data.to_vec();
+        let cursor = Cursor::new(data_owned);
         let decoder = Decoder::new(cursor)
             .map_err(|e| format!("Failed to decode audio (format: {:?}): {}", format, e))?;
         
