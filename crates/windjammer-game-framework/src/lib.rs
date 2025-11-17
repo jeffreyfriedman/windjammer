@@ -42,6 +42,7 @@ pub mod animation_gpu; // GPU-accelerated skeletal animation
 pub mod animation_ik; // Advanced IK system (FABRIK, Two-Bone, CCD, Look-At, Foot Placement)
 pub mod animation_state_machine; // Animation state machine with transitions
 pub mod assets; // Asset loading and management
+pub mod asset_hot_reload; // Asset hot-reload for rapid iteration
 pub mod audio; // Audio playback
 pub mod audio_advanced; // Advanced audio (3D spatial, mixing, effects)
 pub mod camera2d; // 2D camera system
