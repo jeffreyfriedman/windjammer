@@ -36,6 +36,7 @@
 
 pub mod ai_behavior_tree_simple; // Simple AI behavior tree (production-ready)
 pub mod animation; // Animation system (skeletal, blending, IK)
+pub mod animation_blending; // Advanced animation blending and crossfade
 pub mod animation_gpu; // GPU-accelerated skeletal animation
 pub mod animation_state_machine; // Animation state machine with transitions
 pub mod assets; // Asset loading and management

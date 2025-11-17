@@ -229,6 +229,7 @@ impl Animation {
 }
 
 /// Animation player
+#[derive(Clone, Debug)]
 pub struct AnimationPlayer {
     /// Current animation
     pub current_animation: Option<Animation>,
@@ -303,6 +304,11 @@ impl AnimationPlayer {
         } else {
             Vec::new()
         }
+    }
+    
+    /// Get current pose (alias for get_pose)
+    pub fn get_current_pose(&self) -> Vec<Transform> {
+        self.get_pose()
     }
 }
 
