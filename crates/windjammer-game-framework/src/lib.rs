@@ -62,6 +62,7 @@ pub mod navmesh; // Navigation mesh for 3D pathfinding
 pub mod particles; // Particle system for visual effects
 pub mod pathfinding; // A* pathfinding for AI navigation
 pub mod pbr; // Physically-based rendering (PBR) materials and lighting
+pub mod plugin; // Plugin system for extensibility
 pub mod post_processing; // Post-processing effects (bloom, DOF, etc.)
 pub mod profiler; // Performance profiler for optimization
 pub mod physics2d; // 2D physics system (Rapier2D integration with ECS)
