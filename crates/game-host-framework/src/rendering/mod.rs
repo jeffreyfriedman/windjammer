@@ -7,12 +7,16 @@
 //! - WebGPU (web)
 
 pub mod backend;
+pub mod deferred;
 pub mod pipeline_2d;
 pub mod pipeline_3d;
 pub mod pipeline_pbr;
 pub mod pipeline_shadow;
 pub mod sprite;
 
+pub use deferred::{
+    DeferredLight, DeferredRenderer, GBuffer, GBufferConfig, GBufferFormat, GBufferTexture,
+};
 pub use pipeline_2d::Pipeline2D;
 pub use pipeline_3d::{CameraUniform, LightUniform, MaterialUniform, Pipeline3D};
 pub use pipeline_pbr::{
