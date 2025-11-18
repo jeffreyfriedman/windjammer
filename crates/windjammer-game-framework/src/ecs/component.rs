@@ -132,9 +132,13 @@ mod tests {
     
     #[test]
     fn test_component_trait() {
-        // These types automatically implement Component
-        let _pos: &dyn Component = &Position { x: 0.0, y: 0.0, z: 0.0 };
-        let _vel: &dyn Component = &Velocity { x: 0.0, y: 0.0, z: 0.0 };
+        // These types automatically implement Component (can't use as trait object due to Sized requirement)
+        let _pos = Position { x: 0.0, y: 0.0, z: 0.0 };
+        let _vel = Velocity { x: 0.0, y: 0.0, z: 0.0 };
+        
+        // Verify they implement Component by checking type info
+        let _info1 = ComponentInfo::of::<Position>();
+        let _info2 = ComponentInfo::of::<Velocity>();
     }
     
     #[test]

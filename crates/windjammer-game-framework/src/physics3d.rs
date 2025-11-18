@@ -8,6 +8,10 @@ use rapier3d::prelude::*;
 use crate::math::{Quat, Vec3};
 use std::collections::HashMap;
 
+// Re-export handle types for external use
+#[cfg(feature = "3d")]
+pub use rapier3d::prelude::{ColliderHandle, RigidBodyHandle};
+
 /// 3D Physics World
 #[cfg(feature = "3d")]
 pub struct PhysicsWorld3D {
@@ -381,6 +385,50 @@ impl PhysicsWorld3D {
                 true,
             );
         }
+    }
+    
+    /// Set rigid body mass
+    pub fn set_mass(&mut self, handle: RigidBodyHandle, mass: f32) {
+        if let Some(body) = self.rigid_body_set.get_mut(handle) {
+            body.set_additional_mass(mass, true);
+        }
+    }
+    
+    /// Set linear damping
+    pub fn set_linear_damping(&mut self, handle: RigidBodyHandle, damping: f32) {
+        if let Some(body) = self.rigid_body_set.get_mut(handle) {
+            body.set_linear_damping(damping);
+        }
+    }
+    
+    /// Set angular damping
+    pub fn set_angular_damping(&mut self, handle: RigidBodyHandle, damping: f32) {
+        if let Some(body) = self.rigid_body_set.get_mut(handle) {
+            body.set_angular_damping(damping);
+        }
+    }
+    
+    /// Enable or disable a rigid body
+    pub fn set_enabled(&mut self, handle: RigidBodyHandle, enabled: bool) {
+        if let Some(body) = self.rigid_body_set.get_mut(handle) {
+            body.set_enabled(enabled);
+        }
+    }
+    
+    /// Get rigid body position
+    pub fn get_body_position(&self, handle: RigidBodyHandle) -> Option<Vec3> {
+        self.rigid_body_set.get(handle).map(|body| {
+            let pos = body.translation();
+            Vec3::new(pos.x, pos.y, pos.z)
+        })
+    }
+    
+    /// Get rigid body rotation
+    pub fn get_body_rotation(&self, handle: RigidBodyHandle) -> Option<Quat> {
+        self.rigid_body_set.get(handle).map(|body| {
+            let rot = body.rotation();
+            Quat::from_xyzw(rot.i, rot.j, rot.k, rot.w)
+        })
     }
 }
 

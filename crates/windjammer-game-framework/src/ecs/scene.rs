@@ -311,7 +311,7 @@ mod tests {
         
         // Child's world position should be (15, 0, 0)
         let child_transform = world.get_component::<Transform>(child).unwrap();
-        let world_pos = child_transform.world_matrix().translation();
+        let (_, _, world_pos) = child_transform.world_matrix().to_scale_rotation_translation();
         
         assert!((world_pos.x - 15.0).abs() < 0.001);
         assert!((world_pos.y - 0.0).abs() < 0.001);

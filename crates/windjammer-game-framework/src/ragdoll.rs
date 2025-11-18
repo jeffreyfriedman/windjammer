@@ -1,10 +1,12 @@
 // Ragdoll Physics System
 // Provides realistic physics-based character animation for death, knockback, and interactions.
 
-use crate::animation::Skeleton;
-use crate::math::{Quat, Vec3};
-use crate::physics3d::{ColliderHandle, PhysicsWorld3D, RigidBodyHandle};
-use std::collections::HashMap;
+#[cfg(feature = "3d")]
+mod ragdoll_impl {
+    use crate::animation::Skeleton;
+    use crate::math::{Quat, Vec3};
+    use crate::physics3d::{ColliderHandle, PhysicsWorld3D, RigidBodyHandle};
+    use std::collections::HashMap;
 
 /// Ragdoll configuration for a character
 #[derive(Debug, Clone)]
@@ -978,3 +980,8 @@ mod tests {
     }
 }
 
+} // end of ragdoll_impl module
+
+// Re-export types when 3d feature is enabled
+#[cfg(feature = "3d")]
+pub use ragdoll_impl::*;
