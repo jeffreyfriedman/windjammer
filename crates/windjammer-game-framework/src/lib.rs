@@ -34,6 +34,7 @@
 //! }
 //! ```
 
+pub mod ai_behavior_tree; // Advanced AI behavior tree system
 pub mod ai_behavior_tree_simple; // Simple AI behavior tree (production-ready)
 pub mod ai_state_machine; // AI state machine for NPC behavior
 pub mod ai_steering; // Steering behaviors for smooth AI movement
@@ -107,6 +108,9 @@ pub mod window; // Window creation and management (native only)
 /// use windjammer_game_framework::ecs::{World as RustWorld, ...};
 /// ```
 pub mod prelude {
+    pub use crate::ai_behavior_tree::{
+        BehaviorNode, BehaviorTree, BehaviorTreeBuilder, Blackboard, NodeType, Status,
+    }; // Advanced AI behavior tree
     pub use crate::ai_behavior_tree_simple::{
         AIBlackboard, AIStatus, AITask, ConditionTask, SelectorTask, SequenceTask,
     }; // Simple AI behavior tree (production-ready)
