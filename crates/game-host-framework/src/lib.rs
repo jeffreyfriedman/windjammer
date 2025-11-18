@@ -36,6 +36,7 @@
 
 pub mod ai_behavior_tree_simple; // Simple AI behavior tree (production-ready)
 pub mod ai_state_machine; // AI state machine for NPC behavior
+pub mod ai_steering; // Steering behaviors for smooth AI movement
 pub mod animation; // Animation system (skeletal, blending, IK)
 pub mod animation_blending; // Advanced animation blending and crossfade
 pub mod animation_controller; // High-level animation controller (state machine + blending)
@@ -105,6 +106,10 @@ pub mod prelude {
     pub use crate::ai_state_machine::{
         AIState, AIStateMachine, AIStateMachineBuilder, AITransition, StateId, TransitionCondition,
     }; // AI state machine
+    pub use crate::ai_steering::{
+        SteeringAgent2D, SteeringAgent3D, SteeringBehaviors2D, SteeringBehaviors3D,
+        SteeringCombiner, SteeringForce2D, SteeringForce3D,
+    }; // Steering behaviors
     pub use crate::animation::{
         Animation, AnimationBlender, AnimationPlayer, Bone, IKChain, Skeleton, Transform,
     };
