@@ -110,7 +110,6 @@ pub mod prelude {
     };
     pub use crate::animation_state_machine::{
         AnimationState, AnimationStateMachine, AnimationTransition, ConditionType, Parameter,
-        TransitionCondition,
     }; // Animation state machine
     pub use crate::assets::{
         AssetManager, Handle, Texture, TextureConfig, TextureFilter, TextureFormat, TextureHandle,
@@ -176,6 +175,7 @@ pub mod prelude {
         PhysicsWorld3D, RaycastHit,
     }; // 3D physics (Rapier3D integration)
     
+    #[cfg(feature = "3d")]
     pub use crate::ragdoll::{
         BoneShape, JointType, Ragdoll, RagdollBone, RagdollBuilder, RagdollConfig, RagdollJoint,
         RagdollManager,
