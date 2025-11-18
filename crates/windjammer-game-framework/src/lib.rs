@@ -89,6 +89,7 @@ pub mod time; // Time and delta time management
 pub mod transform; // 2D and 3D transform components
 pub mod ui_immediate; // Immediate mode UI system (for games)
 pub mod ui_ingame; // In-game UI system (HUD, menus, dialogs)
+pub mod ui_layout; // UI layout system (flexbox, grid, anchors)
 pub mod ui_system; // Retained mode UI system (for in-game UI)
 pub mod weapon_system; // Weapon management (FPS/TPS/Action games)
 
@@ -220,6 +221,10 @@ pub mod prelude {
     pub use crate::time::Time;
     pub use crate::transform::{Transform2D, Transform3D};
     pub use crate::ui_immediate::{DrawCommand, LayoutDirection, UIStyle, UI}; // Immediate mode UI
+    pub use crate::ui_layout::{
+        AlignContent, AlignItems, Anchor, AnchorLayout, FlexDirection, FlexLayout, FlexWrap,
+        GridLayout, JustifyContent, LayoutRect,
+    }; // UI layout system
     pub use crate::ui_system::{
         LayoutType, UIElement, UIElementType, UIEvent, UIStyle as UIStyleRetained, UISystem,
     }; // Retained mode UI
