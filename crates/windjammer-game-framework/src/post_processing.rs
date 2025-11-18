@@ -11,8 +11,11 @@
 //! - Vignette
 //! - Chromatic Aberration
 //! - Film Grain
+//! - SSAO (Screen-Space Ambient Occlusion)
+//! - HDR (High Dynamic Range)
 
 use crate::math::{Vec2, Vec3};
+use std::sync::Arc;
 
 /// Post-processing stack
 #[derive(Debug, Clone)]
@@ -33,6 +36,10 @@ pub struct PostProcessing {
     pub chromatic_aberration: Option<ChromaticAberrationEffect>,
     /// Film grain
     pub film_grain: Option<FilmGrainEffect>,
+    /// SSAO (Screen-Space Ambient Occlusion)
+    pub ssao: Option<SSAOEffect>,
+    /// HDR settings
+    pub hdr: HDRSettings,
     /// Enabled
     pub enabled: bool,
 }
@@ -133,6 +140,103 @@ pub struct FilmGrainEffect {
     pub size: f32,
 }
 
+/// SSAO (Screen-Space Ambient Occlusion) effect
+#[derive(Debug, Clone)]
+pub struct SSAOEffect {
+    /// SSAO radius (sampling radius)
+    pub radius: f32,
+    /// SSAO bias (to prevent self-shadowing)
+    pub bias: f32,
+    /// Number of samples
+    pub samples: u32,
+    /// SSAO intensity
+    pub intensity: f32,
+    /// Blur radius for SSAO blur pass
+    pub blur_radius: f32,
+}
+
+impl Default for SSAOEffect {
+    fn default() -> Self {
+        Self {
+            radius: 0.5,
+            bias: 0.025,
+            samples: 16,
+            intensity: 1.0,
+            blur_radius: 2.0,
+        }
+    }
+}
+
+impl SSAOEffect {
+    /// Create a high-quality SSAO effect
+    pub fn high_quality() -> Self {
+        Self {
+            radius: 0.5,
+            bias: 0.025,
+            samples: 32,
+            intensity: 1.2,
+            blur_radius: 2.0,
+        }
+    }
+
+    /// Create a performance-friendly SSAO effect
+    pub fn performance() -> Self {
+        Self {
+            radius: 0.4,
+            bias: 0.03,
+            samples: 8,
+            intensity: 0.8,
+            blur_radius: 1.5,
+        }
+    }
+}
+
+/// HDR (High Dynamic Range) settings
+#[derive(Debug, Clone)]
+pub struct HDRSettings {
+    /// Enable HDR
+    pub enabled: bool,
+    /// Exposure value
+    pub exposure: f32,
+    /// White point (for tone mapping)
+    pub white_point: f32,
+    /// Adaptation speed (for auto-exposure)
+    pub adaptation_speed: f32,
+}
+
+impl Default for HDRSettings {
+    fn default() -> Self {
+        Self {
+            enabled: true,
+            exposure: 1.0,
+            white_point: 11.2,
+            adaptation_speed: 1.0,
+        }
+    }
+}
+
+impl HDRSettings {
+    /// Create HDR settings for bright outdoor scenes
+    pub fn outdoor() -> Self {
+        Self {
+            enabled: true,
+            exposure: 0.8,
+            white_point: 11.2,
+            adaptation_speed: 0.5,
+        }
+    }
+
+    /// Create HDR settings for dark indoor scenes
+    pub fn indoor() -> Self {
+        Self {
+            enabled: true,
+            exposure: 1.5,
+            white_point: 11.2,
+            adaptation_speed: 1.5,
+        }
+    }
+}
+
 impl Default for PostProcessing {
     fn default() -> Self {
         Self {
@@ -144,6 +248,8 @@ impl Default for PostProcessing {
             vignette: None,
             chromatic_aberration: None,
             film_grain: None,
+            ssao: None,
+            hdr: HDRSettings::default(),
             enabled: true,
         }
     }
@@ -191,6 +297,18 @@ impl PostProcessing {
         self
     }
 
+    /// Enable SSAO
+    pub fn with_ssao(mut self, ssao: SSAOEffect) -> Self {
+        self.ssao = Some(ssao);
+        self
+    }
+
+    /// Set HDR settings
+    pub fn with_hdr(mut self, hdr: HDRSettings) -> Self {
+        self.hdr = hdr;
+        self
+    }
+
     /// Create a cinematic preset
     pub fn cinematic() -> Self {
         Self::new()
@@ -198,6 +316,8 @@ impl PostProcessing {
             .with_dof(DepthOfFieldEffect::cinematic())
             .with_color_grading(ColorGrading::cinematic())
             .with_vignette(VignetteEffect::default())
+            .with_ssao(SSAOEffect::default())
+            .with_hdr(HDRSettings::default())
             .with_tone_mapping(ToneMappingMode::ACES)
     }
 
@@ -486,6 +606,77 @@ mod tests {
         assert!(pp.color_grading.is_some());
         assert_eq!(pp.tone_mapping, ToneMappingMode::Reinhard);
         println!("✅ Stylized preset");
+    }
+
+    #[test]
+    fn test_ssao_default() {
+        let ssao = SSAOEffect::default();
+        assert_eq!(ssao.radius, 0.5);
+        assert_eq!(ssao.samples, 16);
+        assert_eq!(ssao.intensity, 1.0);
+        println!("✅ SSAO default");
+    }
+
+    #[test]
+    fn test_ssao_high_quality() {
+        let ssao = SSAOEffect::high_quality();
+        assert_eq!(ssao.samples, 32);
+        assert!(ssao.intensity > 1.0);
+        println!("✅ SSAO high quality");
+    }
+
+    #[test]
+    fn test_ssao_performance() {
+        let ssao = SSAOEffect::performance();
+        assert_eq!(ssao.samples, 8);
+        println!("✅ SSAO performance");
+    }
+
+    #[test]
+    fn test_hdr_default() {
+        let hdr = HDRSettings::default();
+        assert!(hdr.enabled);
+        assert_eq!(hdr.exposure, 1.0);
+        assert_eq!(hdr.white_point, 11.2);
+        println!("✅ HDR default");
+    }
+
+    #[test]
+    fn test_hdr_outdoor() {
+        let hdr = HDRSettings::outdoor();
+        assert!(hdr.enabled);
+        assert!(hdr.exposure < 1.0);
+        println!("✅ HDR outdoor");
+    }
+
+    #[test]
+    fn test_hdr_indoor() {
+        let hdr = HDRSettings::indoor();
+        assert!(hdr.enabled);
+        assert!(hdr.exposure > 1.0);
+        println!("✅ HDR indoor");
+    }
+
+    #[test]
+    fn test_post_processing_with_ssao() {
+        let pp = PostProcessing::new().with_ssao(SSAOEffect::default());
+        assert!(pp.ssao.is_some());
+        println!("✅ PostProcessing with SSAO");
+    }
+
+    #[test]
+    fn test_post_processing_with_hdr() {
+        let pp = PostProcessing::new().with_hdr(HDRSettings::outdoor());
+        assert!(pp.hdr.enabled);
+        println!("✅ PostProcessing with HDR");
+    }
+
+    #[test]
+    fn test_cinematic_has_ssao() {
+        let pp = PostProcessing::cinematic();
+        assert!(pp.ssao.is_some());
+        assert!(pp.hdr.enabled);
+        println!("✅ Cinematic has SSAO and HDR");
     }
 }
 
