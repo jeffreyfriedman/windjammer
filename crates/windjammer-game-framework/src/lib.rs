@@ -83,6 +83,7 @@ pub mod renderer; // High-level 2D renderer (for Windjammer games)
 pub mod renderer3d; // High-level 3D renderer (for Windjammer games)
 pub mod terrain; // Heightmap-based terrain with LOD
 pub mod rendering; // Graphics rendering
+pub mod text_rendering; // Text rendering with TrueType/OpenType fonts
 pub mod texture; // Texture loading and management
 pub mod time; // Time and delta time management
 pub mod transform; // 2D and 3D transform components
@@ -211,6 +212,10 @@ pub mod prelude {
     pub use crate::renderer3d::{Camera3D as RenderCamera3D, Renderer3D, SSGIConfig}; // High-level 3D renderer with SSGI (no wgpu types exposed)
     pub use crate::rendering::{Camera, Material, Mesh, RenderContext, Sprite, SpriteBatch};
     pub use crate::terrain::{Terrain, TerrainLOD, TerrainLayer, TerrainPatch}; // Heightmap terrain
+    pub use crate::text_rendering::{
+        Font, FontId, FontManager, FontMetrics, FontStyle, FontWeight, GlyphId, GlyphMetrics,
+        PositionedGlyph, TextAlign, TextDecoration, TextLayout, TextStyle, VerticalAlign,
+    }; // Text rendering
     // Texture is now re-exported from assets module
     pub use crate::time::Time;
     pub use crate::transform::{Transform2D, Transform3D};
