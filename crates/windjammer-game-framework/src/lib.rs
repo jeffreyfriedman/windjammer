@@ -66,6 +66,7 @@ pub mod math; // Math types (Vec2, Vec3, Mat4, etc.)
 pub mod mesh_clustering; // Mesh clustering system (Nanite-style)
 pub mod navmesh; // Navigation mesh for 3D pathfinding
 pub mod networking; // Client-server networking for multiplayer games
+pub mod networking_replication; // Entity replication for multiplayer games
 pub mod particles; // Particle system for visual effects
 pub mod pathfinding; // A* pathfinding for AI navigation
 pub mod pbr; // Physically-based rendering (PBR) materials and lighting
@@ -162,6 +163,11 @@ pub mod prelude {
         ClientId, NetworkChannel, NetworkClient, NetworkError, NetworkEvent, NetworkMessage,
         NetworkServer, NetworkStats, NetworkTransport,
     }; // Client-server networking
+    pub use crate::networking_replication::{
+        ComponentData, ComponentId, EntityId, EntityOwnership, ReplicatedEntity,
+        ReplicationError, ReplicationManager, ReplicationMessage, ReplicationMode,
+        ReplicationPriority, ReplicationSnapshot,
+    }; // Entity replication
     pub use crate::particles::{EmitterShape, Particle, ParticleEmitter, ParticleSystem}; // Particle system
     pub use crate::pathfinding::{GridPos, Heuristic, Path, PathfindingGrid}; // A* pathfinding
     pub use crate::pbr::{
