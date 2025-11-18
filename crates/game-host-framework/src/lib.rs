@@ -47,6 +47,7 @@ pub mod animation_state_machine; // Animation state machine with transitions
 pub mod assets; // Asset loading and management
 pub mod asset_hot_reload; // Asset hot-reload for rapid iteration
 pub mod audio; // Audio playback
+pub mod batching; // Runtime draw call batching for performance
 pub mod audio_advanced; // Advanced audio (3D spatial, mixing, effects)
 pub mod audio_streaming; // Audio streaming for music and large files
 pub mod camera2d; // 2D camera system
@@ -139,6 +140,10 @@ pub mod prelude {
     pub use crate::audio_advanced::{
         Audio3DParams, AudioBus, AudioClip, AudioEffect, AudioEngine, AudioSource, RolloffMode,
     }; // Advanced audio system
+    pub use crate::batching::{
+        Batch, BatchConfig, BatchManager, BatchSorter, BatchStats, BatchType, DrawInstance,
+        MaterialId, MeshId,
+    }; // Runtime batching
     pub use crate::audio_streaming::{
         AudioStreamManager, MusicPlayer, RepeatMode, StreamConfig, StreamHandle, StreamState,
     }; // Audio streaming for music and large files
