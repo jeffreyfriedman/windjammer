@@ -67,6 +67,7 @@ pub mod mesh_clustering; // Mesh clustering system (Nanite-style)
 pub mod navmesh; // Navigation mesh for 3D pathfinding
 pub mod networking; // Client-server networking for multiplayer games
 pub mod networking_replication; // Entity replication for multiplayer games
+pub mod networking_rpc; // RPC (Remote Procedure Calls) for multiplayer games
 pub mod particles; // Particle system for visual effects
 pub mod pathfinding; // A* pathfinding for AI navigation
 pub mod pbr; // Physically-based rendering (PBR) materials and lighting
@@ -168,6 +169,10 @@ pub mod prelude {
         ReplicationError, ReplicationManager, ReplicationMessage, ReplicationMode,
         ReplicationPriority, ReplicationSnapshot,
     }; // Entity replication
+    pub use crate::networking_rpc::{
+        RpcCall, RpcError, RpcHandler, RpcId, RpcManager, RpcReliability, RpcResponse, RpcStats,
+        RpcTarget,
+    }; // RPCs
     pub use crate::particles::{EmitterShape, Particle, ParticleEmitter, ParticleSystem}; // Particle system
     pub use crate::pathfinding::{GridPos, Heuristic, Path, PathfindingGrid}; // A* pathfinding
     pub use crate::pbr::{
