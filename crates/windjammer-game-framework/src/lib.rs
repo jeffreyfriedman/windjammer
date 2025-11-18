@@ -69,6 +69,7 @@ pub mod networking; // Client-server networking for multiplayer games
 pub mod networking_replication; // Entity replication for multiplayer games
 pub mod networking_rpc; // RPC (Remote Procedure Calls) for multiplayer games
 pub mod particles; // Particle system for visual effects
+pub mod particles_gpu; // GPU particle system with forces and collision
 pub mod pathfinding; // A* pathfinding for AI navigation
 pub mod pbr; // Physically-based rendering (PBR) materials and lighting
 pub mod plugin;
@@ -176,6 +177,9 @@ pub mod prelude {
         RpcTarget,
     }; // RPCs
     pub use crate::particles::{EmitterShape, Particle, ParticleEmitter, ParticleSystem}; // Particle system
+    pub use crate::particles_gpu::{
+        Collider, CollisionShape, ForceField, ForceType, GPUParticle, GPUParticleSystem,
+    }; // GPU particle system
     pub use crate::pathfinding::{GridPos, Heuristic, Path, PathfindingGrid}; // A* pathfinding
     pub use crate::pbr::{
         AlphaMode as PBRAlphaMode, DirectionalLight, EnvironmentMap, Light, PBRMaterial,
