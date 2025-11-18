@@ -72,6 +72,7 @@ pub mod networking_rpc; // RPC (Remote Procedure Calls) for multiplayer games
 pub mod particles; // Particle system for visual effects
 pub mod particles_gpu; // GPU particle system with forces and collision
 pub mod pathfinding; // A* pathfinding for AI navigation
+pub mod pathfinding_advanced; // Advanced pathfinding with caching and smoothing
 pub mod pbr; // Physically-based rendering (PBR) materials and lighting
 pub mod plugin;
 pub mod plugin_ffi; // Plugin system for extensibility
@@ -185,6 +186,9 @@ pub mod prelude {
         Collider, CollisionShape, ForceField, ForceType, GPUParticle, GPUParticleSystem,
     }; // GPU particle system
     pub use crate::pathfinding::{GridPos, Heuristic, Path, PathfindingGrid}; // A* pathfinding
+    pub use crate::pathfinding_advanced::{
+        AdvancedPathfinder, PathRequest, PathResult,
+    }; // Advanced pathfinding
     pub use crate::pbr::{
         AlphaMode as PBRAlphaMode, DirectionalLight, EnvironmentMap, Light, PBRMaterial,
         PointLight, ShadowMap, SpotLight,
