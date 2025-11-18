@@ -35,6 +35,7 @@
 //! ```
 
 pub mod ai_behavior_tree_simple; // Simple AI behavior tree (production-ready)
+pub mod ai_state_machine; // AI state machine for NPC behavior
 pub mod animation; // Animation system (skeletal, blending, IK)
 pub mod animation_blending; // Advanced animation blending and crossfade
 pub mod animation_controller; // High-level animation controller (state machine + blending)
@@ -101,6 +102,9 @@ pub mod prelude {
     pub use crate::ai_behavior_tree_simple::{
         AIBlackboard, AIStatus, AITask, ConditionTask, SelectorTask, SequenceTask,
     }; // Simple AI behavior tree (production-ready)
+    pub use crate::ai_state_machine::{
+        AIState, AIStateMachine, AIStateMachineBuilder, AITransition, StateId, TransitionCondition,
+    }; // AI state machine
     pub use crate::animation::{
         Animation, AnimationBlender, AnimationPlayer, Bone, IKChain, Skeleton, Transform,
     };
