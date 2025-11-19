@@ -10,6 +10,7 @@ members = [
     "crates/windjammer-runtime",
     "crates/windjammer-ui",
     "crates/windjammer-ui-macro",
+    "sdks/rust",
 ]
 
 [workspace.package]
