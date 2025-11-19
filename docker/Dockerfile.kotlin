@@ -1,0 +1,16 @@
+FROM gradle:8.5-jdk17
+
+WORKDIR /sdk
+
+# Copy gradle files
+COPY sdks/kotlin/build.gradle.kts sdks/kotlin/settings.gradle.kts ./
+
+# Download dependencies
+RUN gradle dependencies || true
+
+# Copy SDK source
+COPY sdks/kotlin/ ./
+
+# Build and test
+CMD ["gradle", "build", "test"]
+

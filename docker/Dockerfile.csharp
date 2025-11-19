@@ -1,0 +1,16 @@
+FROM mcr.microsoft.com/dotnet/sdk:8.0
+
+WORKDIR /sdk
+
+# Copy project file
+COPY sdks/csharp/Windjammer.SDK/Windjammer.SDK.csproj ./Windjammer.SDK/
+
+# Restore dependencies
+RUN dotnet restore ./Windjammer.SDK/Windjammer.SDK.csproj || true
+
+# Copy SDK source
+COPY sdks/csharp/ ./
+
+# Build and test
+CMD ["dotnet", "test", "--verbosity", "normal"]
+
