@@ -1,0 +1,52 @@
+version: '3.8'
+
+services:
+  test-python:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.python
+    volumes:
+      - ../sdks/python:/sdk
+
+  test-javascript:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.javascript
+    volumes:
+      - ../sdks/javascript:/sdk
+
+  test-go:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.go
+    volumes:
+      - ../sdks/go:/sdk
+
+  test-java:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.java
+    volumes:
+      - ../sdks/java:/sdk
+
+  test-csharp:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.csharp
+    volumes:
+      - ../sdks/csharp:/sdk
+
+  test-cpp:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.cpp
+    volumes:
+      - ../sdks/cpp:/sdk
+
+  test-kotlin:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.kotlin
+    volumes:
+      - ../sdks/kotlin:/sdk
+

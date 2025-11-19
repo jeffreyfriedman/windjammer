@@ -1,0 +1,280 @@
+{
+  "name": "windjammer",
+  "version": "0.1.0",
+  "types": [],
+  "functions": [],
+  "constants": [
+    {
+      "name": "VERSION",
+      "const_type": { "Primitive": "String" },
+      "value": "0.1.0",
+      "doc": "Windjammer SDK version"
+    }
+  ],
+  "enums": [],
+  "structs": [
+    {
+      "name": "Vec2",
+      "fields": [
+        {
+          "name": "x",
+          "field_type": { "Primitive": "Float32" },
+          "doc": "X coordinate",
+          "public": true
+        },
+        {
+          "name": "y",
+          "field_type": { "Primitive": "Float32" },
+          "doc": "Y coordinate",
+          "public": true
+        }
+      ],
+      "doc": "2D vector",
+      "generics": []
+    },
+    {
+      "name": "Vec3",
+      "fields": [
+        {
+          "name": "x",
+          "field_type": { "Primitive": "Float32" },
+          "doc": "X coordinate",
+          "public": true
+        },
+        {
+          "name": "y",
+          "field_type": { "Primitive": "Float32" },
+          "doc": "Y coordinate",
+          "public": true
+        },
+        {
+          "name": "z",
+          "field_type": { "Primitive": "Float32" },
+          "doc": "Z coordinate",
+          "public": true
+        }
+      ],
+      "doc": "3D vector",
+      "generics": []
+    },
+    {
+      "name": "Time",
+      "fields": [
+        {
+          "name": "delta_seconds",
+          "field_type": { "Primitive": "Float32" },
+          "doc": "Time since last frame in seconds",
+          "public": true
+        },
+        {
+          "name": "total_seconds",
+          "field_type": { "Primitive": "Float32" },
+          "doc": "Total time since application start",
+          "public": true
+        },
+        {
+          "name": "frame_count",
+          "field_type": { "Primitive": "Int32" },
+          "doc": "Current frame number",
+          "public": true
+        }
+      ],
+      "doc": "Time information for the current frame",
+      "generics": []
+    }
+  ],
+  "classes": [
+    {
+      "name": "App",
+      "base": null,
+      "interfaces": [],
+      "fields": [],
+      "methods": [
+        {
+          "name": "add_system",
+          "params": [
+            {
+              "name": "system",
+              "param_type": {
+                "Function": {
+                  "params": [],
+                  "return_type": { "Void": null }
+                }
+              },
+              "default": null,
+              "doc": "System function to run every frame"
+            }
+          ],
+          "return_type": { "Void": null },
+          "doc": "Adds a system that runs every frame",
+          "is_async": false,
+          "is_static": false,
+          "deprecated": null,
+          "since": null
+        },
+        {
+          "name": "add_startup_system",
+          "params": [
+            {
+              "name": "system",
+              "param_type": {
+                "Function": {
+                  "params": [],
+                  "return_type": { "Void": null }
+                }
+              },
+              "default": null,
+              "doc": "Startup system function"
+            }
+          ],
+          "return_type": { "Void": null },
+          "doc": "Adds a startup system that runs once at the beginning",
+          "is_async": false,
+          "is_static": false,
+          "deprecated": null,
+          "since": null
+        },
+        {
+          "name": "run",
+          "params": [],
+          "return_type": { "Void": null },
+          "doc": "Runs the application",
+          "is_async": false,
+          "is_static": false,
+          "deprecated": null,
+          "since": null
+        }
+      ],
+      "constructors": [
+        {
+          "name": "new",
+          "params": [],
+          "return_type": { "Custom": "App" },
+          "doc": "Creates a new Windjammer application",
+          "is_async": false,
+          "is_static": true,
+          "deprecated": null,
+          "since": null
+        }
+      ],
+      "doc": "Main application class for Windjammer games",
+      "generics": []
+    },
+    {
+      "name": "Camera2D",
+      "base": null,
+      "interfaces": [],
+      "fields": [
+        {
+          "name": "position",
+          "field_type": { "Custom": "Vec2" },
+          "doc": "Camera position",
+          "public": true
+        },
+        {
+          "name": "zoom",
+          "field_type": { "Primitive": "Float32" },
+          "doc": "Zoom level",
+          "public": true
+        }
+      ],
+      "methods": [],
+      "constructors": [
+        {
+          "name": "new",
+          "params": [
+            {
+              "name": "position",
+              "param_type": { "Custom": "Vec2" },
+              "default": null,
+              "doc": "Camera position"
+            },
+            {
+              "name": "zoom",
+              "param_type": { "Primitive": "Float32" },
+              "default": "1.0",
+              "doc": "Zoom level"
+            }
+          ],
+          "return_type": { "Custom": "Camera2D" },
+          "doc": "Creates a new 2D camera",
+          "is_async": false,
+          "is_static": true,
+          "deprecated": null,
+          "since": null
+        }
+      ],
+      "doc": "2D orthographic camera",
+      "generics": []
+    },
+    {
+      "name": "Sprite",
+      "base": null,
+      "interfaces": [],
+      "fields": [
+        {
+          "name": "texture",
+          "field_type": { "Primitive": "String" },
+          "doc": "Texture path",
+          "public": true
+        },
+        {
+          "name": "position",
+          "field_type": { "Custom": "Vec2" },
+          "doc": "Sprite position",
+          "public": true
+        },
+        {
+          "name": "size",
+          "field_type": { "Custom": "Vec2" },
+          "doc": "Sprite size",
+          "public": true
+        }
+      ],
+      "methods": [],
+      "constructors": [
+        {
+          "name": "new",
+          "params": [
+            {
+              "name": "texture",
+              "param_type": { "Primitive": "String" },
+              "default": null,
+              "doc": "Texture path"
+            },
+            {
+              "name": "position",
+              "param_type": { "Custom": "Vec2" },
+              "default": null,
+              "doc": "Sprite position"
+            },
+            {
+              "name": "size",
+              "param_type": { "Custom": "Vec2" },
+              "default": null,
+              "doc": "Sprite size"
+            }
+          ],
+          "return_type": { "Custom": "Sprite" },
+          "doc": "Creates a new sprite",
+          "is_async": false,
+          "is_static": true,
+          "deprecated": null,
+          "since": null
+        }
+      ],
+      "doc": "2D sprite component",
+      "generics": []
+    }
+  ],
+  "modules": [
+    {
+      "name": "windjammer",
+      "submodules": ["math", "time", "sprite"],
+      "types": ["App", "Vec2", "Vec3", "Time", "Camera2D", "Sprite"],
+      "functions": [],
+      "doc": "Windjammer Game Engine SDK"
+    }
+  ]
+}
+
