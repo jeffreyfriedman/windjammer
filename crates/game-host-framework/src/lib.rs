@@ -52,6 +52,7 @@ pub mod audio_advanced; // Advanced audio (3D spatial, mixing, effects)
 pub mod audio_streaming; // Audio streaming for music and large files
 pub mod camera2d; // 2D camera system
 pub mod camera3d; // 3D camera system (first-person, third-person, smooth follow, shake)
+pub mod compiler_analysis; // Compiler analysis pass for game-specific optimizations
 
 #[cfg(feature = "3d")]
 pub mod character_controller; // 3D character controller (movement, jumping, cameras)
