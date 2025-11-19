@@ -190,7 +190,7 @@ pub mod prelude {
         GltfSampler2, GltfTexture, InterpolationMode, WrapMode,
     }; // GLTF/GLB 3D model loader
     pub use crate::input::{Input, Key, MouseButton}; // Ergonomic input API with held(), pressed(), released()
-    pub use crate::lod::{LODConfig, LODLevel, LODSelector, LODStats}; // Level of Detail system
+    pub use crate::lod::{LODSelector}; // Level of Detail system (other LOD types from lod_system)
     pub use crate::math::{Mat4, Quat, Vec2, Vec3, Vec4};
     pub use crate::mesh_clustering::{
         ClusterConfig, ClusterStats, MeshCluster, MeshClusteringSystem,
