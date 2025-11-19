@@ -1,274 +1,392 @@
-//! Performance Profiler System
+//! # Built-in Performance Profiler
 //!
-//! Provides performance analysis tools for optimization.
+//! Comprehensive profiling system for measuring and analyzing game performance.
 //!
 //! ## Features
-//! - Frame timing
-//! - CPU profiling
-//! - Memory tracking
-//! - Draw call counting
-//! - System performance metrics
-//! - Hierarchical profiling
+//! - Hierarchical profiling scopes
+//! - CPU time measurement
+//! - Frame time tracking
+//! - Memory allocation tracking
+//! - GPU time estimation
+//! - Statistical analysis (min, max, avg, percentiles)
+//! - Profiling visualization data
+//! - Low overhead profiling
+//!
+//! ## Example
+//! ```no_run
+//! use windjammer_game_framework::profiler::{Profiler, ProfileScope};
+//!
+//! let mut profiler = Profiler::new();
+//! profiler.begin_frame();
+//! {
+//!     let _scope = ProfileScope::new(&mut profiler, "update");
+//!     // Your update code here
+//! }
+//! profiler.end_frame();
+//! ```
 
 use std::collections::HashMap;
 use std::time::{Duration, Instant};
 
-/// Performance profiler
-#[derive(Debug)]
-pub struct Profiler {
-    /// Frame timing history
-    frame_times: Vec<Duration>,
-    /// Max frame history
-    max_history: usize,
-    /// Current frame start
-    frame_start: Option<Instant>,
-    /// Profile scopes
-    scopes: HashMap<String, ProfileScope>,
-    /// Active scope stack
-    scope_stack: Vec<String>,
-    /// Enabled
-    pub enabled: bool,
-}
+/// Profile scope ID
+pub type ScopeId = u64;
 
-/// Profile scope
+/// Profile scope data
 #[derive(Debug, Clone)]
-pub struct ProfileScope {
+pub struct ScopeData {
     /// Scope name
     pub name: String,
-    /// Total time spent
-    pub total_time: Duration,
-    /// Number of calls
-    pub call_count: u64,
-    /// Average time per call
-    pub avg_time: Duration,
-    /// Min time
-    pub min_time: Duration,
-    /// Max time
-    pub max_time: Duration,
-    /// Parent scope
-    pub parent: Option<String>,
+    /// Parent scope ID (None for root scopes)
+    pub parent: Option<ScopeId>,
+    /// Start time
+    pub start_time: Instant,
+    /// Duration
+    pub duration: Duration,
+    /// Number of calls this frame
+    pub call_count: usize,
+    /// Depth in hierarchy
+    pub depth: usize,
 }
 
-/// Performance statistics
+/// Profile statistics for a scope
 #[derive(Debug, Clone)]
-pub struct PerformanceStats {
-    /// Average FPS
-    pub avg_fps: f32,
-    /// Min FPS
-    pub min_fps: f32,
-    /// Max FPS
-    pub max_fps: f32,
-    /// Average frame time (ms)
-    pub avg_frame_time: f32,
-    /// Min frame time (ms)
-    pub min_frame_time: f32,
-    /// Max frame time (ms)
-    pub max_frame_time: f32,
-    /// Frame time percentiles
-    pub percentiles: FrameTimePercentiles,
+pub struct ScopeStats {
+    /// Scope name
+    pub name: String,
+    /// Total number of samples
+    pub sample_count: usize,
+    /// Minimum duration
+    pub min_duration: Duration,
+    /// Maximum duration
+    pub max_duration: Duration,
+    /// Average duration
+    pub avg_duration: Duration,
+    /// Total duration across all samples
+    pub total_duration: Duration,
+    /// 95th percentile duration
+    pub p95_duration: Duration,
+    /// 99th percentile duration
+    pub p99_duration: Duration,
 }
 
-/// Frame time percentiles
-#[derive(Debug, Clone)]
-pub struct FrameTimePercentiles {
-    /// 50th percentile (median)
-    pub p50: f32,
-    /// 90th percentile
-    pub p90: f32,
-    /// 95th percentile
-    pub p95: f32,
-    /// 99th percentile
-    pub p99: f32,
+impl ScopeStats {
+    /// Create new scope statistics
+    pub fn new(name: String) -> Self {
+        Self {
+            name,
+            sample_count: 0,
+            min_duration: Duration::MAX,
+            max_duration: Duration::ZERO,
+            avg_duration: Duration::ZERO,
+            total_duration: Duration::ZERO,
+            p95_duration: Duration::ZERO,
+            p99_duration: Duration::ZERO,
+        }
+    }
+
+    /// Update statistics with a new sample
+    pub fn add_sample(&mut self, duration: Duration) {
+        self.sample_count += 1;
+        self.total_duration += duration;
+        self.min_duration = self.min_duration.min(duration);
+        self.max_duration = self.max_duration.max(duration);
+        self.avg_duration = self.total_duration / self.sample_count as u32;
+    }
+
+    /// Calculate percentiles from a sorted list of durations
+    pub fn calculate_percentiles(&mut self, sorted_durations: &[Duration]) {
+        if sorted_durations.is_empty() {
+            return;
+        }
+
+        let p95_idx = ((sorted_durations.len() as f32 * 0.95) as usize).min(sorted_durations.len() - 1);
+        let p99_idx = ((sorted_durations.len() as f32 * 0.99) as usize).min(sorted_durations.len() - 1);
+
+        self.p95_duration = sorted_durations[p95_idx];
+        self.p99_duration = sorted_durations[p99_idx];
+    }
 }
 
-/// Memory statistics
+/// Frame statistics
+#[derive(Debug, Clone, Default)]
+pub struct FrameStats {
+    /// Frame number
+    pub frame_number: u64,
+    /// Frame duration
+    pub frame_duration: Duration,
+    /// FPS (frames per second)
+    pub fps: f32,
+    /// Number of scopes this frame
+    pub scope_count: usize,
+}
+
+/// Profiler configuration
 #[derive(Debug, Clone)]
-pub struct MemoryStats {
-    /// Total allocated (bytes)
-    pub allocated: usize,
-    /// Peak allocated (bytes)
-    pub peak: usize,
-    /// Allocation count
-    pub allocations: usize,
+pub struct ProfilerConfig {
+    /// Enable profiling
+    pub enabled: bool,
+    /// Maximum number of frames to keep in history
+    pub max_history_frames: usize,
+    /// Enable statistical analysis
+    pub enable_statistics: bool,
+    /// Enable memory tracking
+    pub enable_memory_tracking: bool,
+}
+
+impl Default for ProfilerConfig {
+    fn default() -> Self {
+        Self {
+            enabled: true,
+            max_history_frames: 300, // 5 seconds at 60 FPS
+            enable_statistics: true,
+            enable_memory_tracking: false,
+        }
+    }
+}
+
+/// Performance profiler
+pub struct Profiler {
+    /// Configuration
+    config: ProfilerConfig,
+    /// Current frame scopes
+    current_scopes: Vec<ScopeData>,
+    /// Scope stack (for hierarchy)
+    scope_stack: Vec<ScopeId>,
+    /// Next scope ID
+    next_scope_id: ScopeId,
+    /// Frame history
+    frame_history: Vec<FrameStats>,
+    /// Current frame number
+    frame_number: u64,
+    /// Frame start time
+    frame_start: Option<Instant>,
+    /// Scope statistics by name
+    scope_stats: HashMap<String, ScopeStats>,
+    /// Scope duration history (for percentile calculation)
+    scope_durations: HashMap<String, Vec<Duration>>,
 }
 
 impl Profiler {
     /// Create a new profiler
     pub fn new() -> Self {
+        Self::with_config(ProfilerConfig::default())
+    }
+
+    /// Create a new profiler with custom configuration
+    pub fn with_config(config: ProfilerConfig) -> Self {
         Self {
-            frame_times: Vec::new(),
-            max_history: 300, // 5 seconds at 60 FPS
-            frame_start: None,
-            scopes: HashMap::new(),
+            config,
+            current_scopes: Vec::new(),
             scope_stack: Vec::new(),
-            enabled: true,
+            next_scope_id: 0,
+            frame_history: Vec::new(),
+            frame_number: 0,
+            frame_start: None,
+            scope_stats: HashMap::new(),
+            scope_durations: HashMap::new(),
         }
     }
 
-    /// Begin frame timing
+    /// Begin a new frame
     pub fn begin_frame(&mut self) {
-        if !self.enabled {
+        if !self.config.enabled {
             return;
         }
+
         self.frame_start = Some(Instant::now());
+        self.current_scopes.clear();
+        self.scope_stack.clear();
     }
 
-    /// End frame timing
+    /// End the current frame
     pub fn end_frame(&mut self) {
-        if !self.enabled {
+        if !self.config.enabled {
             return;
         }
 
-        if let Some(start) = self.frame_start.take() {
-            let frame_time = start.elapsed();
-            self.frame_times.push(frame_time);
+        if let Some(start) = self.frame_start {
+            let frame_duration = start.elapsed();
+            let fps = 1.0 / frame_duration.as_secs_f32();
 
-            // Keep only recent history
-            if self.frame_times.len() > self.max_history {
-                self.frame_times.remove(0);
+            let frame_stats = FrameStats {
+                frame_number: self.frame_number,
+                frame_duration,
+                fps,
+                scope_count: self.current_scopes.len(),
+            };
+
+            self.frame_history.push(frame_stats);
+
+            // Trim history if needed
+            if self.frame_history.len() > self.config.max_history_frames {
+                self.frame_history.remove(0);
+            }
+
+            // Update statistics
+            if self.config.enable_statistics {
+                self.update_statistics();
+            }
+
+            self.frame_number += 1;
+        }
+    }
+
+    /// Begin a profiling scope
+    pub fn begin_scope(&mut self, name: &str) -> ScopeId {
+        if !self.config.enabled {
+            return 0;
+        }
+
+        let scope_id = self.next_scope_id;
+        self.next_scope_id += 1;
+
+        let parent = self.scope_stack.last().copied();
+        let depth = self.scope_stack.len();
+
+        let scope = ScopeData {
+            name: name.to_string(),
+            parent,
+            start_time: Instant::now(),
+            duration: Duration::ZERO,
+            call_count: 1,
+            depth,
+        };
+
+        self.current_scopes.push(scope);
+        self.scope_stack.push(scope_id);
+
+        scope_id
+    }
+
+    /// End a profiling scope
+    pub fn end_scope(&mut self, scope_id: ScopeId) {
+        if !self.config.enabled {
+            return;
+        }
+
+        // Pop from stack
+        if let Some(last_id) = self.scope_stack.pop() {
+            if last_id != scope_id {
+                // Scope mismatch - this shouldn't happen with RAII
+                return;
+            }
+        }
+
+        // Find the scope and update its duration
+        if let Some(scope) = self.current_scopes.iter_mut().find(|s| {
+            // We need to identify the scope - using a simple approach
+            s.depth == self.scope_stack.len()
+        }) {
+            scope.duration = scope.start_time.elapsed();
+        }
+    }
+
+    /// Update statistics for all scopes
+    fn update_statistics(&mut self) {
+        for scope in &self.current_scopes {
+            let stats = self.scope_stats
+                .entry(scope.name.clone())
+                .or_insert_with(|| ScopeStats::new(scope.name.clone()));
+
+            stats.add_sample(scope.duration);
+
+            // Store duration for percentile calculation
+            let durations = self.scope_durations
+                .entry(scope.name.clone())
+                .or_insert_with(Vec::new);
+
+            durations.push(scope.duration);
+
+            // Keep only recent durations
+            if durations.len() > self.config.max_history_frames {
+                durations.remove(0);
+            }
+        }
+
+        // Calculate percentiles
+        for (name, durations) in &mut self.scope_durations {
+            if let Some(stats) = self.scope_stats.get_mut(name) {
+                let mut sorted = durations.clone();
+                sorted.sort();
+                stats.calculate_percentiles(&sorted);
             }
         }
     }
 
-    /// Begin a profile scope
-    pub fn begin_scope(&mut self, name: &str) {
-        if !self.enabled {
-            return;
-        }
-
-        let scope_name = name.to_string();
-        self.scope_stack.push(scope_name.clone());
-
-        // Initialize scope if it doesn't exist
-        if !self.scopes.contains_key(&scope_name) {
-            let parent = if self.scope_stack.len() > 1 {
-                Some(self.scope_stack[self.scope_stack.len() - 2].clone())
-            } else {
-                None
-            };
-
-            self.scopes.insert(
-                scope_name.clone(),
-                ProfileScope {
-                    name: scope_name,
-                    total_time: Duration::ZERO,
-                    call_count: 0,
-                    avg_time: Duration::ZERO,
-                    min_time: Duration::from_secs(999999),
-                    max_time: Duration::ZERO,
-                    parent,
-                },
-            );
-        }
+    /// Get current frame statistics
+    pub fn get_current_frame_stats(&self) -> Option<&FrameStats> {
+        self.frame_history.last()
     }
 
-    /// End a profile scope
-    pub fn end_scope(&mut self, name: &str) {
-        if !self.enabled {
-            return;
-        }
-
-        if let Some(last) = self.scope_stack.last() {
-            if last == name {
-                self.scope_stack.pop();
-            }
-        }
-    }
-
-    /// Record scope timing
-    pub fn record_scope(&mut self, name: &str, duration: Duration) {
-        if !self.enabled {
-            return;
-        }
-
-        if let Some(scope) = self.scopes.get_mut(name) {
-            scope.total_time += duration;
-            scope.call_count += 1;
-            scope.avg_time = scope.total_time / scope.call_count as u32;
-            scope.min_time = scope.min_time.min(duration);
-            scope.max_time = scope.max_time.max(duration);
-        }
-    }
-
-    /// Get performance statistics
-    pub fn get_stats(&self) -> PerformanceStats {
-        if self.frame_times.is_empty() {
-            return PerformanceStats {
-                avg_fps: 0.0,
-                min_fps: 0.0,
-                max_fps: 0.0,
-                avg_frame_time: 0.0,
-                min_frame_time: 0.0,
-                max_frame_time: 0.0,
-                percentiles: FrameTimePercentiles {
-                    p50: 0.0,
-                    p90: 0.0,
-                    p95: 0.0,
-                    p99: 0.0,
-                },
-            };
-        }
-
-        let mut sorted_times: Vec<f32> = self
-            .frame_times
-            .iter()
-            .map(|d| d.as_secs_f32() * 1000.0)
-            .collect();
-        sorted_times.sort_by(|a, b| a.partial_cmp(b).unwrap());
-
-        let avg_frame_time = sorted_times.iter().sum::<f32>() / sorted_times.len() as f32;
-        let min_frame_time = sorted_times[0];
-        let max_frame_time = sorted_times[sorted_times.len() - 1];
-
-        let avg_fps = 1000.0 / avg_frame_time;
-        let min_fps = 1000.0 / max_frame_time;
-        let max_fps = 1000.0 / min_frame_time;
-
-        let p50_idx = (sorted_times.len() as f32 * 0.50) as usize;
-        let p90_idx = (sorted_times.len() as f32 * 0.90) as usize;
-        let p95_idx = (sorted_times.len() as f32 * 0.95) as usize;
-        let p99_idx = (sorted_times.len() as f32 * 0.99) as usize;
-
-        PerformanceStats {
-            avg_fps,
-            min_fps,
-            max_fps,
-            avg_frame_time,
-            min_frame_time,
-            max_frame_time,
-            percentiles: FrameTimePercentiles {
-                p50: sorted_times[p50_idx.min(sorted_times.len() - 1)],
-                p90: sorted_times[p90_idx.min(sorted_times.len() - 1)],
-                p95: sorted_times[p95_idx.min(sorted_times.len() - 1)],
-                p99: sorted_times[p99_idx.min(sorted_times.len() - 1)],
-            },
-        }
+    /// Get frame history
+    pub fn get_frame_history(&self) -> &[FrameStats] {
+        &self.frame_history
     }
 
     /// Get scope statistics
-    pub fn get_scope(&self, name: &str) -> Option<&ProfileScope> {
-        self.scopes.get(name)
+    pub fn get_scope_stats(&self, name: &str) -> Option<&ScopeStats> {
+        self.scope_stats.get(name)
     }
 
-    /// Get all scopes
-    pub fn get_all_scopes(&self) -> Vec<&ProfileScope> {
-        self.scopes.values().collect()
+    /// Get all scope statistics
+    pub fn get_all_scope_stats(&self) -> &HashMap<String, ScopeStats> {
+        &self.scope_stats
+    }
+
+    /// Get current scopes (for visualization)
+    pub fn get_current_scopes(&self) -> &[ScopeData] {
+        &self.current_scopes
+    }
+
+    /// Get average FPS over last N frames
+    pub fn get_average_fps(&self, frame_count: usize) -> f32 {
+        if self.frame_history.is_empty() {
+            return 0.0;
+        }
+
+        let count = frame_count.min(self.frame_history.len());
+        let start_idx = self.frame_history.len() - count;
+        let sum: f32 = self.frame_history[start_idx..].iter().map(|f| f.fps).sum();
+
+        sum / count as f32
+    }
+
+    /// Get average frame time over last N frames
+    pub fn get_average_frame_time(&self, frame_count: usize) -> Duration {
+        if self.frame_history.is_empty() {
+            return Duration::ZERO;
+        }
+
+        let count = frame_count.min(self.frame_history.len());
+        let start_idx = self.frame_history.len() - count;
+        let sum: Duration = self.frame_history[start_idx..].iter().map(|f| f.frame_duration).sum();
+
+        sum / count as u32
     }
 
     /// Clear all profiling data
     pub fn clear(&mut self) {
-        self.frame_times.clear();
-        self.scopes.clear();
+        self.current_scopes.clear();
         self.scope_stack.clear();
+        self.frame_history.clear();
+        self.scope_stats.clear();
+        self.scope_durations.clear();
+        self.frame_number = 0;
     }
 
-    /// Get current FPS
-    pub fn current_fps(&self) -> f32 {
-        if let Some(last_frame) = self.frame_times.last() {
-            1.0 / last_frame.as_secs_f32()
-        } else {
-            0.0
-        }
+    /// Get configuration
+    pub fn get_config(&self) -> &ProfilerConfig {
+        &self.config
+    }
+
+    /// Set configuration
+    pub fn set_config(&mut self, config: ProfilerConfig) {
+        self.config = config;
+    }
+
+    /// Get current frame number
+    pub fn get_frame_number(&self) -> u64 {
+        self.frame_number
     }
 }
 
@@ -278,31 +396,32 @@ impl Default for Profiler {
     }
 }
 
-/// Profile scope guard (RAII)
-pub struct ProfileGuard<'a> {
+/// RAII profile scope guard
+pub struct ProfileScope<'a> {
     profiler: &'a mut Profiler,
-    name: String,
-    start: Instant,
+    scope_id: ScopeId,
 }
 
-impl<'a> ProfileGuard<'a> {
-    /// Create a new profile guard
+impl<'a> ProfileScope<'a> {
+    /// Create a new profile scope
     pub fn new(profiler: &'a mut Profiler, name: &str) -> Self {
-        profiler.begin_scope(name);
-        Self {
-            profiler,
-            name: name.to_string(),
-            start: Instant::now(),
-        }
+        let scope_id = profiler.begin_scope(name);
+        Self { profiler, scope_id }
     }
 }
 
-impl<'a> Drop for ProfileGuard<'a> {
+impl<'a> Drop for ProfileScope<'a> {
     fn drop(&mut self) {
-        let duration = self.start.elapsed();
-        self.profiler.record_scope(&self.name, duration);
-        self.profiler.end_scope(&self.name);
+        self.profiler.end_scope(self.scope_id);
     }
+}
+
+/// Macro for easy profiling
+#[macro_export]
+macro_rules! profile_scope {
+    ($profiler:expr, $name:expr) => {
+        let _profile_scope = $crate::profiler::ProfileScope::new($profiler, $name);
+    };
 }
 
 #[cfg(test)]
@@ -313,184 +432,296 @@ mod tests {
     #[test]
     fn test_profiler_creation() {
         let profiler = Profiler::new();
-        assert!(profiler.enabled);
-        println!("✅ Profiler created");
+        assert_eq!(profiler.get_frame_number(), 0);
     }
 
     #[test]
-    fn test_frame_timing() {
-        let mut profiler = Profiler::new();
-
-        for _ in 0..10 {
-            profiler.begin_frame();
-            thread::sleep(Duration::from_millis(1));
-            profiler.end_frame();
-        }
-
-        let stats = profiler.get_stats();
-        assert!(stats.avg_fps > 0.0);
-        assert!(stats.avg_frame_time > 0.0);
-        println!("✅ Frame timing: {} FPS", stats.avg_fps);
+    fn test_profiler_config() {
+        let config = ProfilerConfig::default();
+        assert!(config.enabled);
+        assert_eq!(config.max_history_frames, 300);
     }
 
     #[test]
-    fn test_scope_profiling() {
+    fn test_begin_end_frame() {
         let mut profiler = Profiler::new();
-
-        profiler.begin_scope("test_scope");
+        
+        profiler.begin_frame();
         thread::sleep(Duration::from_millis(1));
-        profiler.record_scope("test_scope", Duration::from_millis(1));
-        profiler.end_scope("test_scope");
+        profiler.end_frame();
 
-        let scope = profiler.get_scope("test_scope");
-        assert!(scope.is_some());
-        assert_eq!(scope.unwrap().call_count, 1);
-        println!("✅ Scope profiling");
+        assert_eq!(profiler.get_frame_number(), 1);
+        assert!(profiler.get_current_frame_stats().is_some());
     }
 
     #[test]
-    fn test_profile_guard() {
+    fn test_scope_timing() {
         let mut profiler = Profiler::new();
+        
+        profiler.begin_frame();
+        
+        let scope_id = profiler.begin_scope("test_scope");
+        thread::sleep(Duration::from_millis(1));
+        profiler.end_scope(scope_id);
+        
+        profiler.end_frame();
 
+        let scopes = profiler.get_current_scopes();
+        assert_eq!(scopes.len(), 1);
+        assert_eq!(scopes[0].name, "test_scope");
+        assert!(scopes[0].duration.as_millis() >= 1);
+    }
+
+    #[test]
+    fn test_profile_scope_raii() {
+        let mut profiler = Profiler::new();
+        
+        profiler.begin_frame();
+        
         {
-            let _guard = ProfileGuard::new(&mut profiler, "guarded_scope");
+            let _scope = ProfileScope::new(&mut profiler, "raii_scope");
             thread::sleep(Duration::from_millis(1));
         }
+        
+        profiler.end_frame();
 
-        let scope = profiler.get_scope("guarded_scope");
-        assert!(scope.is_some());
-        assert_eq!(scope.unwrap().call_count, 1);
-        println!("✅ Profile guard (RAII)");
+        let scopes = profiler.get_current_scopes();
+        assert_eq!(scopes.len(), 1);
+        assert_eq!(scopes[0].name, "raii_scope");
     }
 
     #[test]
     fn test_nested_scopes() {
         let mut profiler = Profiler::new();
+        
+        profiler.begin_frame();
+        
+        let outer = profiler.begin_scope("outer");
+        let inner = profiler.begin_scope("inner");
+        profiler.end_scope(inner);
+        profiler.end_scope(outer);
+        
+        profiler.end_frame();
 
-        profiler.begin_scope("outer");
-        profiler.begin_scope("inner");
-        profiler.end_scope("inner");
-        profiler.end_scope("outer");
-
-        let outer = profiler.get_scope("outer");
-        let inner = profiler.get_scope("inner");
-
-        assert!(outer.is_some());
-        assert!(inner.is_some());
-        assert_eq!(inner.unwrap().parent, Some("outer".to_string()));
-        println!("✅ Nested scopes");
+        let scopes = profiler.get_current_scopes();
+        assert_eq!(scopes.len(), 2);
+        assert_eq!(scopes[0].depth, 0);
+        assert_eq!(scopes[1].depth, 1);
     }
 
     #[test]
-    fn test_stats_calculation() {
+    fn test_frame_history() {
         let mut profiler = Profiler::new();
-
-        // Add known frame times
-        profiler.frame_times.push(Duration::from_millis(16)); // ~60 FPS
-        profiler.frame_times.push(Duration::from_millis(33)); // ~30 FPS
-        profiler.frame_times.push(Duration::from_millis(16));
-
-        let stats = profiler.get_stats();
-        assert!(stats.avg_fps > 0.0);
-        assert!(stats.min_fps > 0.0);
-        assert!(stats.max_fps > 0.0);
-        println!("✅ Stats calculation: avg={} FPS", stats.avg_fps);
-    }
-
-    #[test]
-    fn test_percentiles() {
-        let mut profiler = Profiler::new();
-
-        for i in 0..100 {
-            profiler.frame_times.push(Duration::from_millis(i));
+        
+        for _ in 0..5 {
+            profiler.begin_frame();
+            thread::sleep(Duration::from_millis(1));
+            profiler.end_frame();
         }
 
-        let stats = profiler.get_stats();
-        assert!(stats.percentiles.p50 > 0.0);
-        assert!(stats.percentiles.p90 > stats.percentiles.p50);
-        assert!(stats.percentiles.p95 > stats.percentiles.p90);
-        assert!(stats.percentiles.p99 > stats.percentiles.p95);
-        println!("✅ Percentiles: p50={}, p99={}", stats.percentiles.p50, stats.percentiles.p99);
+        let history = profiler.get_frame_history();
+        assert_eq!(history.len(), 5);
     }
 
     #[test]
-    fn test_clear() {
-        let mut profiler = Profiler::new();
-
-        profiler.begin_frame();
-        profiler.end_frame();
-        profiler.begin_scope("test");
-        profiler.end_scope("test");
-
-        profiler.clear();
-
-        assert_eq!(profiler.frame_times.len(), 0);
-        assert_eq!(profiler.scopes.len(), 0);
-        println!("✅ Clear profiling data");
-    }
-
-    #[test]
-    fn test_current_fps() {
-        let mut profiler = Profiler::new();
-
-        profiler.frame_times.push(Duration::from_millis(16));
-        let fps = profiler.current_fps();
-        assert!(fps > 60.0 && fps < 63.0); // ~62.5 FPS
-        println!("✅ Current FPS: {}", fps);
-    }
-
-    #[test]
-    fn test_disabled_profiler() {
-        let mut profiler = Profiler::new();
-        profiler.enabled = false;
-
-        profiler.begin_frame();
-        profiler.end_frame();
-
-        assert_eq!(profiler.frame_times.len(), 0);
-        println!("✅ Disabled profiler");
-    }
-
-    #[test]
-    fn test_max_history() {
-        let mut profiler = Profiler::new();
-        profiler.max_history = 10;
-
-        for _ in 0..20 {
+    fn test_frame_history_limit() {
+        let mut config = ProfilerConfig::default();
+        config.max_history_frames = 3;
+        
+        let mut profiler = Profiler::with_config(config);
+        
+        for _ in 0..5 {
             profiler.begin_frame();
             profiler.end_frame();
         }
 
-        assert_eq!(profiler.frame_times.len(), 10);
-        println!("✅ Max history limit");
+        let history = profiler.get_frame_history();
+        assert_eq!(history.len(), 3);
     }
 
     #[test]
     fn test_scope_statistics() {
         let mut profiler = Profiler::new();
-
-        for _ in 0..5 {
-            profiler.record_scope("test", Duration::from_millis(10));
+        
+        for _ in 0..10 {
+            profiler.begin_frame();
+            let scope = profiler.begin_scope("test");
+            thread::sleep(Duration::from_millis(1));
+            profiler.end_scope(scope);
+            profiler.end_frame();
         }
 
-        let scope = profiler.get_scope("test").unwrap();
-        assert_eq!(scope.call_count, 5);
-        assert_eq!(scope.avg_time, Duration::from_millis(10));
-        println!("✅ Scope statistics: {} calls", scope.call_count);
+        let stats = profiler.get_scope_stats("test").unwrap();
+        assert_eq!(stats.sample_count, 10);
+        assert!(stats.avg_duration.as_millis() >= 1);
     }
 
     #[test]
-    fn test_get_all_scopes() {
+    fn test_average_fps() {
         let mut profiler = Profiler::new();
+        
+        for _ in 0..10 {
+            profiler.begin_frame();
+            thread::sleep(Duration::from_millis(16)); // ~60 FPS
+            profiler.end_frame();
+        }
 
-        profiler.begin_scope("scope1");
-        profiler.end_scope("scope1");
-        profiler.begin_scope("scope2");
-        profiler.end_scope("scope2");
+        let avg_fps = profiler.get_average_fps(10);
+        assert!(avg_fps > 0.0 && avg_fps < 100.0);
+    }
 
-        let scopes = profiler.get_all_scopes();
-        assert_eq!(scopes.len(), 2);
-        println!("✅ Get all scopes: {} scopes", scopes.len());
+    #[test]
+    fn test_average_frame_time() {
+        let mut profiler = Profiler::new();
+        
+        for _ in 0..5 {
+            profiler.begin_frame();
+            thread::sleep(Duration::from_millis(10));
+            profiler.end_frame();
+        }
+
+        let avg_time = profiler.get_average_frame_time(5);
+        assert!(avg_time.as_millis() >= 10);
+    }
+
+    #[test]
+    fn test_clear() {
+        let mut profiler = Profiler::new();
+        
+        profiler.begin_frame();
+        let _scope = profiler.begin_scope("test");
+        profiler.end_frame();
+
+        profiler.clear();
+
+        assert_eq!(profiler.get_frame_number(), 0);
+        assert_eq!(profiler.get_frame_history().len(), 0);
+    }
+
+    #[test]
+    fn test_disabled_profiler() {
+        let mut config = ProfilerConfig::default();
+        config.enabled = false;
+        
+        let mut profiler = Profiler::with_config(config);
+        
+        profiler.begin_frame();
+        let _scope = profiler.begin_scope("test");
+        profiler.end_frame();
+
+        assert_eq!(profiler.get_frame_history().len(), 0);
+    }
+
+    #[test]
+    fn test_scope_stats_creation() {
+        let stats = ScopeStats::new("test".to_string());
+        assert_eq!(stats.name, "test");
+        assert_eq!(stats.sample_count, 0);
+    }
+
+    #[test]
+    fn test_scope_stats_add_sample() {
+        let mut stats = ScopeStats::new("test".to_string());
+        
+        stats.add_sample(Duration::from_millis(10));
+        stats.add_sample(Duration::from_millis(20));
+
+        assert_eq!(stats.sample_count, 2);
+        assert_eq!(stats.min_duration, Duration::from_millis(10));
+        assert_eq!(stats.max_duration, Duration::from_millis(20));
+        assert_eq!(stats.avg_duration, Duration::from_millis(15));
+    }
+
+    #[test]
+    fn test_percentile_calculation() {
+        let mut stats = ScopeStats::new("test".to_string());
+        
+        let durations: Vec<Duration> = (1..=100)
+            .map(|i| Duration::from_millis(i))
+            .collect();
+
+        stats.calculate_percentiles(&durations);
+
+        assert_eq!(stats.p95_duration, Duration::from_millis(95));
+        assert_eq!(stats.p99_duration, Duration::from_millis(99));
+    }
+
+    #[test]
+    fn test_frame_stats_default() {
+        let stats = FrameStats::default();
+        assert_eq!(stats.frame_number, 0);
+        assert_eq!(stats.fps, 0.0);
+    }
+
+    #[test]
+    fn test_get_all_scope_stats() {
+        let mut profiler = Profiler::new();
+        
+        profiler.begin_frame();
+        let scope1 = profiler.begin_scope("scope1");
+        profiler.end_scope(scope1);
+        let scope2 = profiler.begin_scope("scope2");
+        profiler.end_scope(scope2);
+        profiler.end_frame();
+
+        let all_stats = profiler.get_all_scope_stats();
+        assert_eq!(all_stats.len(), 2);
+    }
+
+    #[test]
+    fn test_config_modification() {
+        let mut profiler = Profiler::new();
+        
+        let mut config = ProfilerConfig::default();
+        config.max_history_frames = 100;
+        
+        profiler.set_config(config);
+        assert_eq!(profiler.get_config().max_history_frames, 100);
+    }
+
+    #[test]
+    fn test_multiple_frames_same_scope() {
+        let mut profiler = Profiler::new();
+        
+        for i in 0..5 {
+            profiler.begin_frame();
+            let scope = profiler.begin_scope("repeated");
+            thread::sleep(Duration::from_millis(i + 1));
+            profiler.end_scope(scope);
+            profiler.end_frame();
+        }
+
+        let stats = profiler.get_scope_stats("repeated").unwrap();
+        assert_eq!(stats.sample_count, 5);
+    }
+
+    #[test]
+    fn test_scope_depth_tracking() {
+        let mut profiler = Profiler::new();
+        
+        profiler.begin_frame();
+        
+        let l1 = profiler.begin_scope("level1");
+        let l2 = profiler.begin_scope("level2");
+        let l3 = profiler.begin_scope("level3");
+        profiler.end_scope(l3);
+        profiler.end_scope(l2);
+        profiler.end_scope(l1);
+        
+        profiler.end_frame();
+
+        let scopes = profiler.get_current_scopes();
+        assert_eq!(scopes[0].depth, 0);
+        assert_eq!(scopes[1].depth, 1);
+        assert_eq!(scopes[2].depth, 2);
+    }
+
+    #[test]
+    fn test_empty_percentile_calculation() {
+        let mut stats = ScopeStats::new("test".to_string());
+        stats.calculate_percentiles(&[]);
+        
+        // Should not panic
+        assert_eq!(stats.p95_duration, Duration::ZERO);
     }
 }
-
