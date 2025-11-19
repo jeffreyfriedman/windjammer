@@ -1,0 +1,52 @@
+[package]
+name = "windjammer-sdk"
+version = "0.1.0"
+edition = "2021"
+authors = ["Windjammer Contributors"]
+license = "MIT OR Apache-2.0"
+description = "Rust SDK for Windjammer Game Engine - Zero-cost native bindings"
+keywords = ["game", "engine", "gamedev", "windjammer", "sdk"]
+categories = ["game-engines", "game-development"]
+repository = "https://github.com/windjammer/windjammer"
+documentation = "https://docs.rs/windjammer-sdk"
+readme = "README.md"
+
+[lib]
+name = "windjammer_sdk"
+path = "src/lib.rs"
+
+[dependencies]
+# Core Windjammer framework (re-exported)
+windjammer-game-framework = { path = "../../crates/windjammer-game-framework", version = "0.34.0" }
+
+# Math library (re-exported)
+glam = "0.25"
+
+# Serialization (for save games, configs, etc.)
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+
+[dev-dependencies]
+# For examples and tests
+tokio = { version = "1.35", features = ["full"] }
+
+[features]
+default = ["3d", "audio", "networking"]
+3d = ["windjammer-game-framework/3d"]
+audio = ["windjammer-game-framework/audio"]
+networking = ["windjammer-game-framework/networking"]
+plugins = ["windjammer-game-framework/plugins"]
+
+[[example]]
+name = "hello_world"
+path = "examples/hello_world.rs"
+
+[[example]]
+name = "sprite_demo"
+path = "examples/sprite_demo.rs"
+
+[[example]]
+name = "3d_scene"
+path = "examples/3d_scene.rs"
+required-features = ["3d"]
+
