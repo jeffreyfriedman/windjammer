@@ -92,6 +92,7 @@ pub mod ragdoll; // Ragdoll physics for realistic character interactions
 
 pub mod renderer; // High-level 2D renderer (for Windjammer games)
 pub mod renderer3d; // High-level 3D renderer (for Windjammer games)
+pub mod runtime_optimizer; // Runtime optimization for ALL SDKs (Python, JS, etc.)
 pub mod sdk_codegen; // SDK code generator for multi-language bindings
 pub mod sdk_ffi; // C FFI layer for multi-language bindings
 pub mod sdk_idl; // SDK Interface Definition Language for multi-language bindings
