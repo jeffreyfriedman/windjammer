@@ -367,11 +367,35 @@ impl CodeGenerator {
                 }
                 code.push_str("}\n");
             }
+            Language::JavaScript => {
+                if !struct_def.doc.is_empty() {
+                    code.push_str(&format!("/** {} */\n", struct_def.doc));
+                }
+                code.push_str(&format!("export class {} {{\n", struct_def.name));
+                code.push_str("  constructor(");
+                for (i, field) in struct_def.fields.iter().enumerate() {
+                    if i > 0 {
+                        code.push_str(", ");
+                    }
+                    code.push_str(&field.name);
+                }
+                code.push_str(") {\n");
+                for field in &struct_def.fields {
+                    code.push_str(&format!("    this.{} = {};\n", field.name, field.name));
+                }
+                code.push_str("  }\n");
+                code.push_str("}\n");
+            }
             _ => {
-                return Err(CodeGenError::UnsupportedType(format!(
-                    "Struct generation not implemented for {}",
-                    self.language
-                )));
+                // Fallback for other languages: generate simple struct/class
+                if !struct_def.doc.is_empty() {
+                    code.push_str(&format!("// {}\n", struct_def.doc));
+                }
+                code.push_str(&format!("struct {} {{\n", struct_def.name));
+                for field in &struct_def.fields {
+                    code.push_str(&format!("  {};\n", field.name));
+                }
+                code.push_str("}\n");
             }
         }
 
@@ -424,11 +448,24 @@ impl CodeGenerator {
                 }
                 code.push_str("}\n");
             }
+            Language::JavaScript => {
+                if !enum_def.doc.is_empty() {
+                    code.push_str(&format!("/** {} */\n", enum_def.doc));
+                }
+                code.push_str(&format!("export const {} = {{\n", enum_def.name));
+                for (i, variant) in enum_def.variants.iter().enumerate() {
+                    let value = variant.value.unwrap_or(i as i64);
+                    code.push_str(&format!("  {}: {},\n", variant.name, value));
+                }
+                code.push_str("};\n");
+            }
             _ => {
-                return Err(CodeGenError::UnsupportedType(format!(
-                    "Enum generation not implemented for {}",
-                    self.language
-                )));
+                // For other languages, generate simple const-based enums
+                code.push_str(&format!("// Enum: {}\n", enum_def.name));
+                for (i, variant) in enum_def.variants.iter().enumerate() {
+                    let value = variant.value.unwrap_or(i as i64);
+                    code.push_str(&format!("const {} = {};\n", variant.name, value));
+                }
             }
         }
 
@@ -440,6 +477,61 @@ impl CodeGenerator {
         let mut code = String::new();
 
         match self.language {
+            Language::Rust => {
+                // Generate struct
+                if !class_def.doc.is_empty() {
+                    code.push_str(&format!("/// {}\n", class_def.doc));
+                }
+                code.push_str(&format!("pub struct {} {{\n", class_def.name));
+                for field in &class_def.fields {
+                    if !field.doc.is_empty() {
+                        code.push_str(&format!("    /// {}\n", field.doc));
+                    }
+                    let field_type = self.map_type(&field.field_type)?;
+                    code.push_str(&format!("    pub {}: {},\n", field.name, field_type));
+                }
+                code.push_str("}\n\n");
+                
+                // Generate impl block
+                code.push_str(&format!("impl {} {{\n", class_def.name));
+                
+                // Constructors
+                for constructor in &class_def.constructors {
+                    code.push_str("    pub fn new(");
+                    for (i, param) in constructor.params.iter().enumerate() {
+                        if i > 0 {
+                            code.push_str(", ");
+                        }
+                        let param_type = self.map_type(&param.param_type)?;
+                        code.push_str(&format!("{}: {}", param.name, param_type));
+                    }
+                    code.push_str(&format!(") -> {} {{\n", class_def.name));
+                    code.push_str("        todo!()\n");
+                    code.push_str("    }\n\n");
+                }
+                
+                // Methods
+                for method in &class_def.methods {
+                    if !method.doc.is_empty() {
+                        code.push_str(&format!("    /// {}\n", method.doc));
+                    }
+                    code.push_str("    pub fn ");
+                    code.push_str(&method.name);
+                    code.push_str("(&mut self");
+                    for param in &method.params {
+                        let param_type = self.map_type(&param.param_type)?;
+                        code.push_str(&format!(", {}: {}", param.name, param_type));
+                    }
+                    code.push(')');
+                    let return_type = self.map_type(&method.return_type)?;
+                    if return_type != "()" {
+                        code.push_str(&format!(" -> {}", return_type));
+                    }
+                    code.push_str(" {\n        todo!()\n    }\n\n");
+                }
+                
+                code.push_str("}\n");
+            }
             Language::Python => {
                 let base = class_def.base.as_ref().map(|b| format!("({})", b)).unwrap_or_default();
                 code.push_str(&format!("class {}{}:\n", class_def.name, base));
@@ -478,11 +570,50 @@ impl CodeGenerator {
                 
                 code.push_str("}\n");
             }
+            Language::JavaScript => {
+                if !class_def.doc.is_empty() {
+                    code.push_str(&format!("/** {} */\n", class_def.doc));
+                }
+                let base = class_def.base.as_ref().map(|b| format!(" extends {}", b)).unwrap_or_default();
+                code.push_str(&format!("export class {}{} {{\n", class_def.name, base));
+                
+                // Constructor
+                if !class_def.constructors.is_empty() {
+                    let constructor = &class_def.constructors[0];
+                    code.push_str("  constructor(");
+                    for (i, param) in constructor.params.iter().enumerate() {
+                        if i > 0 {
+                            code.push_str(", ");
+                        }
+                        code.push_str(&param.name);
+                    }
+                    code.push_str(") {\n");
+                    for field in &class_def.fields {
+                        code.push_str(&format!("    this.{} = null;\n", field.name));
+                    }
+                    code.push_str("  }\n\n");
+                }
+                
+                // Methods
+                for method in &class_def.methods {
+                    code.push_str(&self.generate_method(method)?);
+                }
+                
+                code.push_str("}\n");
+            }
             _ => {
-                return Err(CodeGenError::UnsupportedType(format!(
-                    "Class generation not implemented for {}",
-                    self.language
-                )));
+                // Fallback for other languages: generate simple class
+                if !class_def.doc.is_empty() {
+                    code.push_str(&format!("// {}\n", class_def.doc));
+                }
+                code.push_str(&format!("class {} {{\n", class_def.name));
+                for field in &class_def.fields {
+                    code.push_str(&format!("  {};\n", field.name));
+                }
+                for method in &class_def.methods {
+                    code.push_str(&format!("  {}();\n", method.name));
+                }
+                code.push_str("}\n");
             }
         }
 
@@ -594,11 +725,22 @@ impl CodeGenerator {
                 }
                 code.push_str(" {\n    throw new Error('Not implemented');\n  }\n\n");
             }
+            Language::JavaScript => {
+                if !method.doc.is_empty() {
+                    code.push_str(&format!("  /** {} */\n", method.doc));
+                }
+                code.push_str(&format!("  {}(", method.name));
+                for (i, param) in method.params.iter().enumerate() {
+                    if i > 0 {
+                        code.push_str(", ");
+                    }
+                    code.push_str(&param.name);
+                }
+                code.push_str(") {\n    throw new Error('Not implemented');\n  }\n\n");
+            }
             _ => {
-                return Err(CodeGenError::UnsupportedType(format!(
-                    "Method generation not implemented for {}",
-                    self.language
-                )));
+                // Fallback for other languages
+                code.push_str(&format!("  {}() {{}}\n\n", method.name));
             }
         }
 
@@ -657,6 +799,25 @@ impl CodeGenerator {
                 }
             }
             TypeKind::Custom(name) => Ok(name.clone()),
+            TypeKind::Function { params, return_type } => {
+                match self.language {
+                    Language::TypeScript | Language::JavaScript => {
+                        let param_types: Vec<String> = params.iter()
+                            .enumerate()
+                            .map(|(i, p)| {
+                                let param_type = self.map_type(p).unwrap_or_else(|_| "any".to_string());
+                                format!("arg{}: {}", i, param_type)
+                            })
+                            .collect();
+                        let ret = self.map_type(return_type)?;
+                        Ok(format!("({}) => {}", param_types.join(", "), ret))
+                    }
+                    Language::Python => {
+                        Ok("Callable".to_string())
+                    }
+                    _ => Ok("Function".to_string()),
+                }
+            }
             _ => Err(CodeGenError::UnsupportedType(format!("{:?}", type_kind))),
         }
     }
