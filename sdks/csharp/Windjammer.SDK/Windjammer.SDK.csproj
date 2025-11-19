@@ -1,0 +1,28 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <LangVersion>latest</LangVersion>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <PackageId>Windjammer.SDK</PackageId>
+    <Version>0.1.0</Version>
+    <Authors>Windjammer Contributors</Authors>
+    <Company>Windjammer</Company>
+    <Description>C# SDK for Windjammer Game Engine - Unity-like API for game development</Description>
+    <Copyright>Copyright © 2024 Windjammer Contributors</Copyright>
+    <PackageLicenseExpression>MIT OR Apache-2.0</PackageLicenseExpression>
+    <PackageProjectUrl>https://windjammer.dev</PackageProjectUrl>
+    <RepositoryUrl>https://github.com/windjammer/windjammer</RepositoryUrl>
+    <RepositoryType>git</RepositoryType>
+    <PackageTags>game;engine;gamedev;2d;3d;graphics;windjammer;unity;csharp</PackageTags>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <None Include="../README.md" Pack="true" PackagePath="/" />
+  </ItemGroup>
+
+</Project>
+
