@@ -396,6 +396,20 @@ impl CodeGenerator {
                 }
                 code.push_str("}\n");
             }
+            Language::Python => {
+                code.push_str("from enum import IntEnum\n\n");
+                if !enum_def.doc.is_empty() {
+                    code.push_str(&format!("class {}(IntEnum):\n", enum_def.name));
+                    code.push_str(&format!("    \"\"\"{}\"\"\"\n", enum_def.doc));
+                } else {
+                    code.push_str(&format!("class {}(IntEnum):\n", enum_def.name));
+                }
+                for (i, variant) in enum_def.variants.iter().enumerate() {
+                    let value = variant.value.unwrap_or(i as i64);
+                    code.push_str(&format!("    {} = {}\n", variant.name, value));
+                }
+                code.push('\n');
+            }
             Language::TypeScript => {
                 if !enum_def.doc.is_empty() {
                     code.push_str(&format!("/** {} */\n", enum_def.doc));
