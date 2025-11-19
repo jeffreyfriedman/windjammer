@@ -40,6 +40,7 @@ image = "0.25"  # Image loading (PNG, JPEG, etc.)
 gltf = "1.4"  # GLTF/GLB loading
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
+toml = "0.8"  # TOML serialization for configuration
 bincode = "1.3"  # Binary serialization for networking
 
 # Plugin system
