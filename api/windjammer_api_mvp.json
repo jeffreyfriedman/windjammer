@@ -1,0 +1,500 @@
+{
+  "name": "windjammer",
+  "version": "0.1.0",
+  "types": [],
+  "functions": [],
+  "constants": [
+    {
+      "name": "VERSION",
+      "const_type": { "Primitive": "String" },
+      "value": "0.1.0",
+      "doc": "Windjammer SDK version"
+    }
+  ],
+  "enums": [
+    {
+      "name": "Key",
+      "variants": [
+        {"name": "A", "value": 0, "data": [], "doc": "A key"},
+        {"name": "B", "value": 1, "data": [], "doc": "B key"},
+        {"name": "W", "value": 2, "data": [], "doc": "W key"},
+        {"name": "S", "value": 3, "data": [], "doc": "S key"},
+        {"name": "Space", "value": 4, "data": [], "doc": "Space key"},
+        {"name": "Escape", "value": 5, "data": [], "doc": "Escape key"}
+      ],
+      "doc": "Keyboard key codes"
+    },
+    {
+      "name": "MouseButton",
+      "variants": [
+        {"name": "Left", "value": 0, "data": [], "doc": "Left mouse button"},
+        {"name": "Right", "value": 1, "data": [], "doc": "Right mouse button"},
+        {"name": "Middle", "value": 2, "data": [], "doc": "Middle mouse button"}
+      ],
+      "doc": "Mouse button codes"
+    },
+    {
+      "name": "RigidBodyType",
+      "variants": [
+        {"name": "Dynamic", "value": 0, "data": [], "doc": "Dynamic body (affected by forces)"},
+        {"name": "Static", "value": 1, "data": [], "doc": "Static body (never moves)"},
+        {"name": "Kinematic", "value": 2, "data": [], "doc": "Kinematic body (moved by code)"}
+      ],
+      "doc": "Rigid body type for physics"
+    }
+  ],
+  "structs": [
+    {
+      "name": "Vec2",
+      "fields": [
+        {"name": "x", "field_type": {"Primitive": "Float32"}, "doc": "X coordinate", "public": true},
+        {"name": "y", "field_type": {"Primitive": "Float32"}, "doc": "Y coordinate", "public": true}
+      ],
+      "doc": "2D vector",
+      "generics": []
+    },
+    {
+      "name": "Vec3",
+      "fields": [
+        {"name": "x", "field_type": {"Primitive": "Float32"}, "doc": "X coordinate", "public": true},
+        {"name": "y", "field_type": {"Primitive": "Float32"}, "doc": "Y coordinate", "public": true},
+        {"name": "z", "field_type": {"Primitive": "Float32"}, "doc": "Z coordinate", "public": true}
+      ],
+      "doc": "3D vector",
+      "generics": []
+    },
+    {
+      "name": "Vec4",
+      "fields": [
+        {"name": "x", "field_type": {"Primitive": "Float32"}, "doc": "X coordinate", "public": true},
+        {"name": "y", "field_type": {"Primitive": "Float32"}, "doc": "Y coordinate", "public": true},
+        {"name": "z", "field_type": {"Primitive": "Float32"}, "doc": "Z coordinate", "public": true},
+        {"name": "w", "field_type": {"Primitive": "Float32"}, "doc": "W coordinate", "public": true}
+      ],
+      "doc": "4D vector",
+      "generics": []
+    },
+    {
+      "name": "Color",
+      "fields": [
+        {"name": "r", "field_type": {"Primitive": "Float32"}, "doc": "Red (0-1)", "public": true},
+        {"name": "g", "field_type": {"Primitive": "Float32"}, "doc": "Green (0-1)", "public": true},
+        {"name": "b", "field_type": {"Primitive": "Float32"}, "doc": "Blue (0-1)", "public": true},
+        {"name": "a", "field_type": {"Primitive": "Float32"}, "doc": "Alpha (0-1)", "public": true}
+      ],
+      "doc": "RGBA color",
+      "generics": []
+    },
+    {
+      "name": "Time",
+      "fields": [
+        {"name": "delta_seconds", "field_type": {"Primitive": "Float32"}, "doc": "Time since last frame", "public": true},
+        {"name": "total_seconds", "field_type": {"Primitive": "Float32"}, "doc": "Total time since start", "public": true},
+        {"name": "frame_count", "field_type": {"Primitive": "Int32"}, "doc": "Frame number", "public": true}
+      ],
+      "doc": "Time information",
+      "generics": []
+    }
+  ],
+  "classes": [
+    {
+      "name": "World",
+      "base": null,
+      "interfaces": [],
+      "fields": [],
+      "methods": [
+        {
+          "name": "spawn",
+          "params": [],
+          "return_type": {"Custom": "Entity"},
+          "doc": "Spawns a new entity",
+          "is_async": false,
+          "is_static": false,
+          "deprecated": null,
+          "since": null
+        },
+        {
+          "name": "despawn",
+          "params": [
+            {"name": "entity", "param_type": {"Custom": "Entity"}, "default": null, "doc": "Entity to despawn"}
+          ],
+          "return_type": {"Void": null},
+          "doc": "Despawns an entity",
+          "is_async": false,
+          "is_static": false,
+          "deprecated": null,
+          "since": null
+        }
+      ],
+      "constructors": [
+        {
+          "name": "new",
+          "params": [],
+          "return_type": {"Custom": "World"},
+          "doc": "Creates a new ECS world",
+          "is_async": false,
+          "is_static": true,
+          "deprecated": null,
+          "since": null
+        }
+      ],
+      "doc": "ECS World - manages all entities and components",
+      "generics": []
+    },
+    {
+      "name": "Entity",
+      "base": null,
+      "interfaces": [],
+      "fields": [
+        {"name": "id", "field_type": {"Primitive": "Int64"}, "doc": "Entity ID", "public": true}
+      ],
+      "methods": [],
+      "constructors": [],
+      "doc": "Entity handle in the ECS",
+      "generics": []
+    },
+    {
+      "name": "Transform2D",
+      "base": null,
+      "interfaces": [],
+      "fields": [
+        {"name": "position", "field_type": {"Custom": "Vec2"}, "doc": "Position", "public": true},
+        {"name": "rotation", "field_type": {"Primitive": "Float32"}, "doc": "Rotation in radians", "public": true},
+        {"name": "scale", "field_type": {"Custom": "Vec2"}, "doc": "Scale", "public": true}
+      ],
+      "methods": [
+        {
+          "name": "translate",
+          "params": [
+            {"name": "offset", "param_type": {"Custom": "Vec2"}, "default": null, "doc": "Translation offset"}
+          ],
+          "return_type": {"Void": null},
+          "doc": "Translates the transform",
+          "is_async": false,
+          "is_static": false,
+          "deprecated": null,
+          "since": null
+        },
+        {
+          "name": "rotate",
+          "params": [
+            {"name": "angle", "param_type": {"Primitive": "Float32"}, "default": null, "doc": "Rotation angle in radians"}
+          ],
+          "return_type": {"Void": null},
+          "doc": "Rotates the transform",
+          "is_async": false,
+          "is_static": false,
+          "deprecated": null,
+          "since": null
+        }
+      ],
+      "constructors": [
+        {
+          "name": "new",
+          "params": [
+            {"name": "position", "param_type": {"Custom": "Vec2"}, "default": null, "doc": "Initial position"},
+            {"name": "rotation", "param_type": {"Primitive": "Float32"}, "default": "0.0", "doc": "Initial rotation"},
+            {"name": "scale", "param_type": {"Custom": "Vec2"}, "default": null, "doc": "Initial scale"}
+          ],
+          "return_type": {"Custom": "Transform2D"},
+          "doc": "Creates a new 2D transform",
+          "is_async": false,
+          "is_static": true,
+          "deprecated": null,
+          "since": null
+        }
+      ],
+      "doc": "2D transformation (position, rotation, scale)",
+      "generics": []
+    },
+    {
+      "name": "Input",
+      "base": null,
+      "interfaces": [],
+      "fields": [],
+      "methods": [
+        {
+          "name": "is_key_pressed",
+          "params": [
+            {"name": "key", "param_type": {"Custom": "Key"}, "default": null, "doc": "Key to check"}
+          ],
+          "return_type": {"Primitive": "Bool"},
+          "doc": "Returns true if key was just pressed this frame",
+          "is_async": false,
+          "is_static": false,
+          "deprecated": null,
+          "since": null
+        },
+        {
+          "name": "is_key_held",
+          "params": [
+            {"name": "key", "param_type": {"Custom": "Key"}, "default": null, "doc": "Key to check"}
+          ],
+          "return_type": {"Primitive": "Bool"},
+          "doc": "Returns true if key is currently held down",
+          "is_async": false,
+          "is_static": false,
+          "deprecated": null,
+          "since": null
+        },
+        {
+          "name": "is_mouse_button_pressed",
+          "params": [
+            {"name": "button", "param_type": {"Custom": "MouseButton"}, "default": null, "doc": "Button to check"}
+          ],
+          "return_type": {"Primitive": "Bool"},
+          "doc": "Returns true if mouse button was just pressed",
+          "is_async": false,
+          "is_static": false,
+          "deprecated": null,
+          "since": null
+        },
+        {
+          "name": "mouse_position",
+          "params": [],
+          "return_type": {"Custom": "Vec2"},
+          "doc": "Returns current mouse position",
+          "is_async": false,
+          "is_static": false,
+          "deprecated": null,
+          "since": null
+        }
+      ],
+      "constructors": [
+        {
+          "name": "new",
+          "params": [],
+          "return_type": {"Custom": "Input"},
+          "doc": "Creates input manager",
+          "is_async": false,
+          "is_static": true,
+          "deprecated": null,
+          "since": null
+        }
+      ],
+      "doc": "Input manager for keyboard and mouse",
+      "generics": []
+    },
+    {
+      "name": "Camera2D",
+      "base": null,
+      "interfaces": [],
+      "fields": [
+        {"name": "position", "field_type": {"Custom": "Vec2"}, "doc": "Camera position", "public": true},
+        {"name": "zoom", "field_type": {"Primitive": "Float32"}, "doc": "Zoom level", "public": true}
+      ],
+      "methods": [],
+      "constructors": [
+        {
+          "name": "new",
+          "params": [
+            {"name": "position", "param_type": {"Custom": "Vec2"}, "default": null, "doc": "Camera position"},
+            {"name": "zoom", "param_type": {"Primitive": "Float32"}, "default": "1.0", "doc": "Zoom level"}
+          ],
+          "return_type": {"Custom": "Camera2D"},
+          "doc": "Creates a new 2D camera",
+          "is_async": false,
+          "is_static": true,
+          "deprecated": null,
+          "since": null
+        }
+      ],
+      "doc": "2D orthographic camera",
+      "generics": []
+    },
+    {
+      "name": "Sprite",
+      "base": null,
+      "interfaces": [],
+      "fields": [
+        {"name": "texture", "field_type": {"Primitive": "String"}, "doc": "Texture path", "public": true},
+        {"name": "position", "field_type": {"Custom": "Vec2"}, "doc": "Position", "public": true},
+        {"name": "size", "field_type": {"Custom": "Vec2"}, "doc": "Size", "public": true},
+        {"name": "color", "field_type": {"Custom": "Color"}, "doc": "Tint color", "public": true}
+      ],
+      "methods": [],
+      "constructors": [
+        {
+          "name": "new",
+          "params": [
+            {"name": "texture", "param_type": {"Primitive": "String"}, "default": null, "doc": "Texture path"},
+            {"name": "position", "param_type": {"Custom": "Vec2"}, "default": null, "doc": "Position"},
+            {"name": "size", "param_type": {"Custom": "Vec2"}, "default": null, "doc": "Size"}
+          ],
+          "return_type": {"Custom": "Sprite"},
+          "doc": "Creates a new sprite",
+          "is_async": false,
+          "is_static": true,
+          "deprecated": null,
+          "since": null
+        }
+      ],
+      "doc": "2D sprite component",
+      "generics": []
+    },
+    {
+      "name": "RigidBody2D",
+      "base": null,
+      "interfaces": [],
+      "fields": [
+        {"name": "body_type", "field_type": {"Custom": "RigidBodyType"}, "doc": "Body type", "public": true},
+        {"name": "velocity", "field_type": {"Custom": "Vec2"}, "doc": "Linear velocity", "public": true},
+        {"name": "mass", "field_type": {"Primitive": "Float32"}, "doc": "Mass", "public": true}
+      ],
+      "methods": [
+        {
+          "name": "apply_force",
+          "params": [
+            {"name": "force", "param_type": {"Custom": "Vec2"}, "default": null, "doc": "Force vector"}
+          ],
+          "return_type": {"Void": null},
+          "doc": "Applies a force to the body",
+          "is_async": false,
+          "is_static": false,
+          "deprecated": null,
+          "since": null
+        },
+        {
+          "name": "apply_impulse",
+          "params": [
+            {"name": "impulse", "param_type": {"Custom": "Vec2"}, "default": null, "doc": "Impulse vector"}
+          ],
+          "return_type": {"Void": null},
+          "doc": "Applies an impulse to the body",
+          "is_async": false,
+          "is_static": false,
+          "deprecated": null,
+          "since": null
+        }
+      ],
+      "constructors": [
+        {
+          "name": "new",
+          "params": [
+            {"name": "body_type", "param_type": {"Custom": "RigidBodyType"}, "default": null, "doc": "Body type"}
+          ],
+          "return_type": {"Custom": "RigidBody2D"},
+          "doc": "Creates a new 2D rigid body",
+          "is_async": false,
+          "is_static": true,
+          "deprecated": null,
+          "since": null
+        }
+      ],
+      "doc": "2D physics rigid body",
+      "generics": []
+    },
+    {
+      "name": "AudioSource",
+      "base": null,
+      "interfaces": [],
+      "fields": [
+        {"name": "volume", "field_type": {"Primitive": "Float32"}, "doc": "Volume (0-1)", "public": true},
+        {"name": "pitch", "field_type": {"Primitive": "Float32"}, "doc": "Pitch multiplier", "public": true},
+        {"name": "looping", "field_type": {"Primitive": "Bool"}, "doc": "Whether to loop", "public": true}
+      ],
+      "methods": [
+        {
+          "name": "play",
+          "params": [
+            {"name": "audio_path", "param_type": {"Primitive": "String"}, "default": null, "doc": "Path to audio file"}
+          ],
+          "return_type": {"Void": null},
+          "doc": "Plays an audio file",
+          "is_async": false,
+          "is_static": false,
+          "deprecated": null,
+          "since": null
+        },
+        {
+          "name": "stop",
+          "params": [],
+          "return_type": {"Void": null},
+          "doc": "Stops playback",
+          "is_async": false,
+          "is_static": false,
+          "deprecated": null,
+          "since": null
+        },
+        {
+          "name": "pause",
+          "params": [],
+          "return_type": {"Void": null},
+          "doc": "Pauses playback",
+          "is_async": false,
+          "is_static": false,
+          "deprecated": null,
+          "since": null
+        }
+      ],
+      "constructors": [
+        {
+          "name": "new",
+          "params": [],
+          "return_type": {"Custom": "AudioSource"},
+          "doc": "Creates a new audio source",
+          "is_async": false,
+          "is_static": true,
+          "deprecated": null,
+          "since": null
+        }
+      ],
+      "doc": "Audio source component",
+      "generics": []
+    },
+    {
+      "name": "App",
+      "base": null,
+      "interfaces": [],
+      "fields": [],
+      "methods": [
+        {
+          "name": "add_system",
+          "params": [
+            {"name": "system", "param_type": {"Function": {"params": [], "return_type": {"Void": null}}}, "default": null, "doc": "System function"}
+          ],
+          "return_type": {"Void": null},
+          "doc": "Adds a system that runs every frame",
+          "is_async": false,
+          "is_static": false,
+          "deprecated": null,
+          "since": null
+        },
+        {
+          "name": "run",
+          "params": [],
+          "return_type": {"Void": null},
+          "doc": "Runs the application",
+          "is_async": false,
+          "is_static": false,
+          "deprecated": null,
+          "since": null
+        }
+      ],
+      "constructors": [
+        {
+          "name": "new",
+          "params": [],
+          "return_type": {"Custom": "App"},
+          "doc": "Creates a new Windjammer application",
+          "is_async": false,
+          "is_static": true,
+          "deprecated": null,
+          "since": null
+        }
+      ],
+      "doc": "Main application class",
+      "generics": []
+    }
+  ],
+  "modules": [
+    {
+      "name": "windjammer",
+      "submodules": ["ecs", "math", "transform", "input", "rendering", "physics", "audio"],
+      "types": ["World", "Entity", "Vec2", "Vec3", "Vec4", "Color", "Time", "Transform2D", "Input", "Camera2D", "Sprite", "RigidBody2D", "AudioSource", "App"],
+      "functions": [],
+      "doc": "Windjammer Game Engine SDK - MVP"
+    }
+  ]
+}
+

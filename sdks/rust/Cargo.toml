@@ -31,11 +31,11 @@ serde_json = "1.0"
 tokio = { version = "1.35", features = ["full"] }
 
 [features]
-default = ["3d", "audio", "networking"]
-3d = ["windjammer-game-framework/3d"]
-audio = ["windjammer-game-framework/audio"]
-networking = ["windjammer-game-framework/networking"]
-plugins = ["windjammer-game-framework/plugins"]
+default = []
+3d = []
+audio = []
+networking = []
+plugins = []
 
 [[example]]
 name = "hello_world"

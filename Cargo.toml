@@ -11,6 +11,7 @@ members = [
     "crates/windjammer-ui",
     "crates/windjammer-ui-macro",
     "sdks/rust",
+    "tools/sdk-generator",
 ]
 
 [workspace.package]
