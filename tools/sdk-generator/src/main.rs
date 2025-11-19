@@ -26,7 +26,7 @@ struct Cli {
     all: bool,
 }
 
-#[derive(Copy, Clone, PartialEq, Eq, PartialOrd, Ord, ValueEnum)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord, ValueEnum)]
 enum TargetLanguage {
     Rust,
     Python,
