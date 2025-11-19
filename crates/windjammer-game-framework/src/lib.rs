@@ -56,6 +56,8 @@ pub mod camera3d; // 3D camera system (first-person, third-person, smooth follow
 #[cfg(feature = "3d")]
 pub mod character_controller; // 3D character controller (movement, jumping, cameras)
 
+pub mod culling; // Runtime culling system (frustum, occlusion)
+
 pub mod ecs; // Entity-Component-System (Rust implementation)
 pub mod ecs_optimized; // Optimized ECS with archetype storage and query caching
 pub mod ecs_windjammer; // Windjammer-friendly ECS API (recommended)
@@ -148,6 +150,10 @@ pub mod prelude {
         AudioStreamManager, MusicPlayer, RepeatMode, StreamConfig, StreamHandle, StreamState,
     }; // Audio streaming for music and large files
     pub use crate::camera2d::Camera2D;
+    pub use crate::culling::{
+        BoundingSphere, Cullable, CullableObject, CullingConfig, CullingStats, CullingSystem,
+        Frustum, Plane, AABB,
+    }; // Runtime culling
     
     #[cfg(feature = "3d")]
     pub use crate::camera3d::{
