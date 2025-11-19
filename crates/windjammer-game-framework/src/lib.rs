@@ -57,6 +57,7 @@ pub mod camera3d; // 3D camera system (first-person, third-person, smooth follow
 pub mod character_controller; // 3D character controller (movement, jumping, cameras)
 
 pub mod culling; // Runtime culling system (frustum, occlusion)
+pub mod lod_system; // Runtime LOD (Level of Detail) system
 
 pub mod ecs; // Entity-Component-System (Rust implementation)
 pub mod ecs_optimized; // Optimized ECS with archetype storage and query caching
@@ -154,6 +155,9 @@ pub mod prelude {
         BoundingSphere, Cullable, CullableObject, CullingConfig, CullingStats, CullingSystem,
         Frustum, Plane, AABB,
     }; // Runtime culling
+    pub use crate::lod_system::{
+        LODConfig, LODGroup, LODLevel, LODManager, LODSelection, LODStats,
+    }; // Runtime LOD system
     
     #[cfg(feature = "3d")]
     pub use crate::camera3d::{
