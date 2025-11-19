@@ -1,0 +1,17 @@
+FROM python:3.11-slim
+
+WORKDIR /sdk
+
+# Install dependencies
+COPY sdks/python/pyproject.toml sdks/python/setup.py ./
+RUN pip install --no-cache-dir -e .
+
+# Copy SDK source
+COPY sdks/python/ ./
+
+# Install test dependencies
+RUN pip install --no-cache-dir pytest pytest-cov black mypy pylint
+
+# Run tests
+CMD ["pytest", "tests/", "-v", "--cov=windjammer_sdk"]
+
