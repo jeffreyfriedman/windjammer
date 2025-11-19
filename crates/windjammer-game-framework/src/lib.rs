@@ -59,6 +59,7 @@ pub mod character_controller; // 3D character controller (movement, jumping, cam
 pub mod culling; // Runtime culling system (frustum, occlusion)
 pub mod lod_system; // Runtime LOD (Level of Detail) system
 pub mod memory_pool; // Automatic memory pooling system
+pub mod profiler; // Built-in performance profiler
 
 pub mod ecs; // Entity-Component-System (Rust implementation)
 pub mod ecs_optimized; // Optimized ECS with archetype storage and query caching
@@ -82,7 +83,6 @@ pub mod pbr; // Physically-based rendering (PBR) materials and lighting
 pub mod plugin;
 pub mod plugin_ffi; // Plugin system for extensibility
 pub mod post_processing; // Post-processing effects (bloom, DOF, etc.)
-pub mod profiler; // Performance profiler for optimization
 pub mod physics2d; // 2D physics system (Rapier2D integration with ECS)
 pub mod physics3d; // 3D physics system (Rapier3D integration)
 pub mod ragdoll; // Ragdoll physics for realistic character interactions
@@ -160,6 +160,9 @@ pub mod prelude {
         LODConfig, LODGroup, LODLevel, LODManager, LODSelection, LODStats,
     }; // Runtime LOD system
     pub use crate::memory_pool::{Pool, PoolConfig, PoolStats, PooledObject, ThreadSafePool}; // Memory pooling
+    pub use crate::profiler::{
+        FrameStats, ProfileScope, Profiler, ProfilerConfig, ScopeData, ScopeId, ScopeStats,
+    }; // Performance profiler
     
     #[cfg(feature = "3d")]
     pub use crate::camera3d::{
@@ -219,9 +222,6 @@ pub mod prelude {
         BloomEffect, ChromaticAberrationEffect, ColorGrading, DepthOfFieldEffect, FilmGrainEffect,
         MotionBlurEffect, PostProcessing, ToneMappingMode, VignetteEffect,
     }; // Post-processing effects
-    pub use crate::profiler::{
-        FrameTimePercentiles, MemoryStats, PerformanceStats, ProfileGuard, ProfileScope, Profiler,
-    }; // Performance profiler
     pub use crate::sdk_codegen::{
         CodeGenError, CodeGenerator, GeneratedCode, Language, PackageMetadata,
     }; // SDK Code Generator
