@@ -43,6 +43,7 @@ pub mod engine_bridge;
 // pub mod error_display;
 // pub mod file_browser;
 // pub mod project;
+pub mod storage;
 
 /// Initialize the web editor
 #[wasm_bindgen(start)]
