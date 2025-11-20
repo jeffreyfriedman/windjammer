@@ -11,8 +11,10 @@ repository = "https://github.com/windjammer-lang/windjammer"
 crate-type = ["cdylib", "rlib"]
 
 [dependencies]
-windjammer-ui = { path = "../windjammer-ui" }
-windjammer = { path = "../.." }
+# Note: windjammer-ui and windjammer are excluded for WASM builds
+# They contain native dependencies that don't compile to WASM
+# windjammer-ui = { path = "../windjammer-ui", optional = true }
+# windjammer = { path = "../..", optional = true }
 wasm-bindgen = "0.2"
 web-sys = { version = "0.3", features = [
     "console",
@@ -24,17 +26,25 @@ web-sys = { version = "0.3", features = [
     "HtmlButtonElement",
     "HtmlDivElement",
     "HtmlInputElement",
+    "HtmlCanvasElement",
+    "CanvasRenderingContext2d",
     "Node",
     "Text",
     "Event",
     "MouseEvent",
     "KeyboardEvent",
     "Storage",
+    "Performance",
 ] }
 js-sys = "0.3"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 serde-wasm-bindgen = "0.6"
+
+[features]
+default = []
+# Enable this feature for native builds that need the full framework
+native = []
 
 [dev-dependencies]
 wasm-bindgen-test = "0.3"
