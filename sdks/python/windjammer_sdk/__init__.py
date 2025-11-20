@@ -29,7 +29,15 @@ except ImportError:
     Camera2D = None
 
 # 3D imports
-from .mesh import Mesh, Material, Camera3D, PointLight, DirectionalLight, SpotLight
+try:
+    from .mesh import Mesh, Material, Camera3D, PointLight, DirectionalLight, PostProcessing
+except ImportError:
+    Mesh = None
+    Material = None
+    Camera3D = None
+    PointLight = None
+    DirectionalLight = None
+    PostProcessing = None
 
 # Physics imports
 from .physics import RigidBody, Collider
@@ -67,7 +75,7 @@ __all__ = [
     "Camera3D",
     "PointLight",
     "DirectionalLight",
-    "SpotLight",
+    "PostProcessing",
     # Physics
     "RigidBody",
     "Collider",
