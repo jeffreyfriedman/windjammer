@@ -34,20 +34,23 @@
 //! ```
 
 use wasm_bindgen::prelude::*;
-use web_sys::{console, window, Document, Element, HtmlTextAreaElement, Storage};
+use web_sys::{console, window, Document, HtmlTextAreaElement};
 
-pub mod compiler_bridge;
-pub mod editor;
-pub mod error_display;
-pub mod file_browser;
-pub mod project;
+// Note: Some modules are commented out as they depend on non-WASM compatible crates
+// pub mod compiler_bridge;
+// pub mod editor;
+pub mod engine_bridge;
+// pub mod error_display;
+// pub mod file_browser;
+// pub mod project;
 
 /// Initialize the web editor
 #[wasm_bindgen(start)]
 pub fn init() {
     // Set up panic hook for better error messages
-    #[cfg(feature = "console_error_panic_hook")]
-    console_error_panic_hook::set_once();
+    // Note: Add console_error_panic_hook dependency if you want better error messages
+    // #[cfg(feature = "console_error_panic_hook")]
+    // console_error_panic_hook::set_once();
 
     console::log_1(&"Windjammer Web Editor initialized!".into());
 }
