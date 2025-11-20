@@ -1,0 +1,151 @@
+name: Test All SDK Examples
+
+on:
+  push:
+    branches: [ main, develop, feature/** ]
+    paths:
+      - 'sdks/**'
+      - 'docker/**'
+      - '.github/workflows/test-sdks.yml'
+  pull_request:
+    branches: [ main, develop ]
+    paths:
+      - 'sdks/**'
+      - 'docker/**'
+  workflow_dispatch:
+
+jobs:
+  test-python:
+    name: Test Python SDK
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build Python Docker image
+        run: docker build -f docker/Dockerfile.python -t windjammer-test-python .
+      - name: Run Python examples
+        run: docker run --rm windjammer-test-python
+
+  test-rust:
+    name: Test Rust SDK
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build Rust Docker image
+        run: docker build -f docker/Dockerfile.rust -t windjammer-test-rust .
+      - name: Run Rust examples
+        run: docker run --rm windjammer-test-rust
+
+  test-nodejs:
+    name: Test Node.js/TypeScript SDK
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build Node.js Docker image
+        run: docker build -f docker/Dockerfile.nodejs -t windjammer-test-nodejs .
+      - name: Run Node.js examples
+        run: docker run --rm windjammer-test-nodejs
+
+  test-csharp:
+    name: Test C# SDK
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build C# Docker image
+        run: docker build -f docker/Dockerfile.csharp -t windjammer-test-csharp .
+      - name: Run C# examples
+        run: docker run --rm windjammer-test-csharp
+
+  test-cpp:
+    name: Test C++ SDK
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build C++ Docker image
+        run: docker build -f docker/Dockerfile.cpp -t windjammer-test-cpp .
+      - name: Run C++ examples
+        run: docker run --rm windjammer-test-cpp
+
+  test-go:
+    name: Test Go SDK
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build Go Docker image
+        run: docker build -f docker/Dockerfile.go -t windjammer-test-go .
+      - name: Run Go examples
+        run: docker run --rm windjammer-test-go
+
+  test-java:
+    name: Test Java SDK
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build Java Docker image
+        run: docker build -f docker/Dockerfile.java -t windjammer-test-java .
+      - name: Run Java examples
+        run: docker run --rm windjammer-test-java
+
+  test-kotlin:
+    name: Test Kotlin SDK
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build Kotlin Docker image
+        run: docker build -f docker/Dockerfile.kotlin -t windjammer-test-kotlin .
+      - name: Run Kotlin examples
+        run: docker run --rm windjammer-test-kotlin
+
+  test-lua:
+    name: Test Lua SDK
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build Lua Docker image
+        run: docker build -f docker/Dockerfile.lua -t windjammer-test-lua .
+      - name: Run Lua examples
+        run: docker run --rm windjammer-test-lua
+
+  test-swift:
+    name: Test Swift SDK
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build Swift Docker image
+        run: docker build -f docker/Dockerfile.swift -t windjammer-test-swift .
+      - name: Run Swift examples
+        run: docker run --rm windjammer-test-swift
+
+  test-ruby:
+    name: Test Ruby SDK
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build Ruby Docker image
+        run: docker build -f docker/Dockerfile.ruby -t windjammer-test-ruby .
+      - name: Run Ruby examples
+        run: docker run --rm windjammer-test-ruby
+
+  summary:
+    name: Test Summary
+    runs-on: ubuntu-latest
+    needs: [test-python, test-rust, test-nodejs, test-csharp, test-cpp, test-go, test-java, test-kotlin, test-lua, test-swift, test-ruby]
+    if: always()
+    steps:
+      - name: Check test results
+        run: |
+          echo "## SDK Test Results" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| SDK | Status |" >> $GITHUB_STEP_SUMMARY
+          echo "|-----|--------|" >> $GITHUB_STEP_SUMMARY
+          echo "| Python | ${{ needs.test-python.result == 'success' && '✅ Pass' || '❌ Fail' }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Rust | ${{ needs.test-rust.result == 'success' && '✅ Pass' || '❌ Fail' }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Node.js/TypeScript | ${{ needs.test-nodejs.result == 'success' && '✅ Pass' || '❌ Fail' }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| C# | ${{ needs.test-csharp.result == 'success' && '✅ Pass' || '❌ Fail' }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| C++ | ${{ needs.test-cpp.result == 'success' && '✅ Pass' || '❌ Fail' }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Go | ${{ needs.test-go.result == 'success' && '✅ Pass' || '❌ Fail' }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Java | ${{ needs.test-java.result == 'success' && '✅ Pass' || '❌ Fail' }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Kotlin | ${{ needs.test-kotlin.result == 'success' && '✅ Pass' || '❌ Fail' }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Lua | ${{ needs.test-lua.result == 'success' && '✅ Pass' || '❌ Fail' }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Swift | ${{ needs.test-swift.result == 'success' && '✅ Pass' || '❌ Fail' }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Ruby | ${{ needs.test-ruby.result == 'success' && '✅ Pass' || '❌ Fail' }} |" >> $GITHUB_STEP_SUMMARY
+
