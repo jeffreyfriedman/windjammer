@@ -1,0 +1,23 @@
+[package]
+name = "windjammer-c-ffi"
+version = "0.1.0"
+edition = "2021"
+authors = ["Windjammer Contributors"]
+description = "C FFI bindings for Windjammer Game Framework"
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/windjammer/windjammer"
+
+[lib]
+crate-type = ["cdylib", "staticlib", "rlib"]
+
+[dependencies]
+windjammer-game-framework = { path = "../windjammer-game-framework" }
+glam = "0.28"
+libc = "0.2"
+
+[dev-dependencies]
+cbindgen = "0.26"
+
+[build-dependencies]
+cbindgen = "0.26"
+
