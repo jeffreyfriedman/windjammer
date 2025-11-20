@@ -1,6 +1,6 @@
 //! 3D Scene Example
 //!
-//! Demonstrates 3D rendering with PBR materials and lighting.
+//! Demonstrates 3D rendering with PBR materials, lighting, and post-processing.
 //!
 //! Run with: cargo run --example 3d_scene --features 3d
 
@@ -9,53 +9,60 @@ use windjammer_sdk::prelude::*;
 
 #[cfg(feature = "3d")]
 fn main() {
-    println!("=== Windjammer 3D Scene Demo ===");
-    
-    // Create 3D application
     let mut app = utils::new_3d_app();
-    
-    // Add startup system
-    app.add_startup_system(setup_3d_scene);
-    
-    // Add update system
-    app.add_system(rotate_objects);
-    
-    println!("3D application configured!");
-    println!("- Camera: Perspective");
-    println!("- Rendering: Deferred + PBR");
-    println!("- Physics: 3D (Rapier3D)");
-    println!("- Lighting: Point, Directional, Spot");
-    
-    // In a real app, this would start the game loop
+    app.add_startup_system(setup);
+    app.add_system(update);
     // app.run();
 }
 
 #[cfg(feature = "3d")]
-fn setup_3d_scene() {
-    println!("\n[Setup] Creating 3D scene...");
+fn setup() {
+    // Camera
+    Camera3D {
+        position: Vec3::new(0.0, 5.0, 10.0),
+        look_at: Vec3::ZERO,
+        fov: 60.0,
+    };
     
-    // Create camera
-    println!("  - Spawning 3D camera at (0, 5, 10)");
-    let camera_pos = Vec3::new(0.0, 5.0, 10.0);
-    println!("    Position: {:?}", camera_pos);
+    // Lights
+    PointLight::new(Vec3::new(5.0, 5.0, 5.0), Color::new(1.0, 0.8, 0.6, 1.0), 2000.0);
+    PointLight::new(Vec3::new(-5.0, 5.0, 5.0), Color::new(0.6, 0.8, 1.0, 1.0), 1500.0);
+    PointLight::new(Vec3::new(0.0, 10.0, -5.0), Color::WHITE, 1000.0);
     
-    // Create lights
-    println!("  - Spawning point light");
-    println!("    Intensity: 1500.0");
-    println!("    Position: (4, 8, 4)");
+    // Meshes with PBR materials
+    Mesh::cube(1.0).with_material(Material {
+        albedo: Color::new(0.8, 0.2, 0.2, 1.0),
+        metallic: 0.8,
+        roughness: 0.2,
+        emissive: Color::new(0.5, 0.1, 0.1, 1.0),
+    });
     
-    // Create 3D objects
-    println!("  - Spawning cube mesh");
-    println!("  - Applying PBR material");
-    println!("    Metallic: 0.5");
-    println!("    Roughness: 0.5");
+    Mesh::sphere(1.0, 32).with_material(Material {
+        albedo: Color::new(0.2, 0.2, 0.8, 1.0),
+        metallic: 0.5,
+        roughness: 0.5,
+        emissive: Color::new(0.1, 0.1, 0.5, 1.0),
+    });
     
-    println!("[Setup] 3D scene ready!");
+    Mesh::plane(10.0).with_material(Material {
+        albedo: Color::new(0.3, 0.3, 0.3, 1.0),
+        metallic: 0.0,
+        roughness: 0.9,
+        emissive: Color::BLACK,
+    });
+    
+    // Post-processing
+    let mut post = PostProcessing::new();
+    post.enable_hdr(true);
+    post.set_bloom(BloomSettings { threshold: 1.0, intensity: 0.8, radius: 4.0, soft_knee: 0.5 });
+    post.set_ssao(SSAOSettings { radius: 0.5, intensity: 1.5, bias: 0.025, samples: 16 });
+    post.set_tone_mapping(ToneMappingMode::ACES, 1.2);
+    post.set_color_grading(ColorGrading { temperature: 0.1, tint: 0.0, saturation: 1.2, contrast: 1.1 });
 }
 
 #[cfg(feature = "3d")]
-fn rotate_objects() {
-    // This would rotate 3D objects each frame
+fn update() {
+    // Rotate objects for dynamic lighting
 }
 
 #[cfg(not(feature = "3d"))]
