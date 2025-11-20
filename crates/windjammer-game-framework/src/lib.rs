@@ -49,6 +49,7 @@ pub mod asset_hot_reload; // Asset hot-reload for rapid iteration
 pub mod audio; // Audio playback
 pub mod batching; // Runtime draw call batching for performance
 pub mod batching_codegen; // Automatic draw call batching code generation
+pub mod parallelization_codegen; // Automatic parallelization code generation
 pub mod audio_advanced; // Advanced audio (3D spatial, mixing, effects)
 pub mod audio_streaming; // Audio streaming for music and large files
 pub mod camera2d; // 2D camera system
