@@ -15,7 +15,7 @@ using System.Reflection;
 [assembly: System.Reflection.AssemblyCopyrightAttribute("Copyright © 2024 Windjammer Contributors")]
 [assembly: System.Reflection.AssemblyDescriptionAttribute("C# SDK for Windjammer Game Engine - Unity-like API for game development")]
 [assembly: System.Reflection.AssemblyFileVersionAttribute("0.1.0.0")]
-[assembly: System.Reflection.AssemblyInformationalVersionAttribute("0.1.0+662bd80c66294007257ba8be5dd8f0c392ca5299")]
+[assembly: System.Reflection.AssemblyInformationalVersionAttribute("0.1.0+ce34c5c8d58f4caa052c789bee0915c71f551dcd")]
 [assembly: System.Reflection.AssemblyProductAttribute("Windjammer.SDK")]
 [assembly: System.Reflection.AssemblyTitleAttribute("Windjammer.SDK")]
 [assembly: System.Reflection.AssemblyVersionAttribute("0.1.0.0")]
