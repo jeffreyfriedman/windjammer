@@ -25,6 +25,11 @@ use std::ptr;
 // Re-export glam types for FFI
 pub use glam::{Vec2, Vec3, Vec4, Quat, Mat4};
 
+// Submodules
+pub mod rendering;
+pub mod components;
+pub mod input;
+
 // ============================================================================
 // Error Handling
 // ============================================================================
