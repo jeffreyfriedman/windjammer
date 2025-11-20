@@ -9,6 +9,36 @@
 #include <stdlib.h>
 
 /**
+ * Behavior tree node types
+ */
+typedef enum WjBehaviorNodeType {
+  /**
+   * Sequence node (runs children in order, fails on first failure)
+   */
+  Sequence = 0,
+  /**
+   * Selector node (runs children in order, succeeds on first success)
+   */
+  Selector = 1,
+  /**
+   * Parallel node (runs all children simultaneously)
+   */
+  Parallel = 2,
+  /**
+   * Decorator node (modifies child behavior)
+   */
+  Decorator = 3,
+  /**
+   * Action node (leaf node that performs an action)
+   */
+  Action = 4,
+  /**
+   * Condition node (leaf node that checks a condition)
+   */
+  Condition = 5,
+} WjBehaviorNodeType;
+
+/**
  * Physics body type
  */
 typedef enum WjBodyType {
@@ -172,6 +202,38 @@ typedef enum WjMouseButton {
 } WjMouseButton;
 
 /**
+ * Network transport protocol
+ */
+typedef enum WjNetworkProtocol {
+  TCP = 0,
+  UDP = 1,
+} WjNetworkProtocol;
+
+/**
+ * Steering behavior types
+ */
+typedef enum WjSteeringBehavior {
+  Seek = 0,
+  Flee = 1,
+  Arrive = 2,
+  Pursue = 3,
+  Evade = 4,
+  Wander = 5,
+} WjSteeringBehavior;
+
+/**
+ * Widget types
+ */
+typedef enum WjWidgetType {
+  Button = 0,
+  Label = 1,
+  Image = 2,
+  Slider = 3,
+  Checkbox = 4,
+  InputField = 5,
+} WjWidgetType;
+
+/**
  * Opaque handle to the game engine
  */
 typedef struct WjEngine {
@@ -308,6 +370,71 @@ typedef struct WjTime {
   uint64_t frame_count;
   float fps;
 } WjTime;
+
+/**
+ * Opaque handle to a behavior tree
+ */
+typedef struct WjBehaviorTree {
+  uint8_t _private[0];
+} WjBehaviorTree;
+
+/**
+ * Path result
+ */
+typedef struct WjPath {
+  struct WjVec3 *points;
+  uintptr_t point_count;
+} WjPath;
+
+/**
+ * Opaque handle to a state machine
+ */
+typedef struct WjStateMachine {
+  uint8_t _private[0];
+} WjStateMachine;
+
+/**
+ * Opaque handle to a network connection
+ */
+typedef struct WjNetworkConnection {
+  uint8_t _private[0];
+} WjNetworkConnection;
+
+/**
+ * RPC callback function type
+ */
+typedef void (*WjRpcCallback)(struct WjEntity *entity, const uint8_t *data, uintptr_t data_len);
+
+/**
+ * Network statistics
+ */
+typedef struct WjNetworkStats {
+  uint64_t bytes_sent;
+  uint64_t bytes_received;
+  uint64_t packets_sent;
+  uint64_t packets_received;
+  uint64_t packets_lost;
+  float ping_ms;
+} WjNetworkStats;
+
+/**
+ * Opaque handle to an animation clip
+ */
+typedef struct WjAnimationClip {
+  uint8_t _private[0];
+} WjAnimationClip;
+
+/**
+ * Opaque handle to a UI widget
+ */
+typedef struct WjWidget {
+  uint8_t _private[0];
+} WjWidget;
+
+/**
+ * UI click callback
+ */
+typedef void (*WjUiClickCallback)(struct WjWidget *widget);
 
 #ifdef __cplusplus
 extern "C" {
@@ -848,6 +975,227 @@ enum WjErrorCode wj_set_target_fps(float fps);
  * Set time scale (for slow motion / fast forward)
  */
 enum WjErrorCode wj_set_time_scale(float scale);
+
+/**
+ * Create a new behavior tree
+ */
+struct WjBehaviorTree *wj_behavior_tree_new(void);
+
+/**
+ * Free a behavior tree
+ */
+void wj_behavior_tree_free(struct WjBehaviorTree *tree);
+
+/**
+ * Add node to behavior tree
+ */
+enum WjErrorCode wj_behavior_tree_add_node(struct WjBehaviorTree *tree,
+                                           enum WjBehaviorNodeType node_type,
+                                           const char *name);
+
+/**
+ * Tick behavior tree (update for one frame)
+ */
+enum WjErrorCode wj_behavior_tree_tick(struct WjBehaviorTree *tree,
+                                       struct WjEntity *entity,
+                                       float delta_time);
+
+/**
+ * Find path from start to end
+ */
+struct WjPath wj_pathfinding_find_path(struct WjWorld *world,
+                                       struct WjVec3 start,
+                                       struct WjVec3 end);
+
+/**
+ * Free path
+ */
+void wj_path_free(struct WjPath path);
+
+/**
+ * Calculate steering force
+ */
+struct WjVec3 wj_steering_calculate(enum WjSteeringBehavior behavior,
+                                    struct WjVec3 position,
+                                    struct WjVec3 velocity,
+                                    struct WjVec3 target,
+                                    float max_speed);
+
+/**
+ * Add steering behavior to entity
+ */
+enum WjErrorCode wj_add_steering_behavior(struct WjEntity *entity,
+                                          enum WjSteeringBehavior behavior,
+                                          struct WjVec3 target);
+
+/**
+ * Create a new state machine
+ */
+struct WjStateMachine *wj_state_machine_new(void);
+
+/**
+ * Free a state machine
+ */
+void wj_state_machine_free(struct WjStateMachine *sm);
+
+/**
+ * Add state to state machine
+ */
+enum WjErrorCode wj_state_machine_add_state(struct WjStateMachine *sm, const char *state_name);
+
+/**
+ * Add transition to state machine
+ */
+enum WjErrorCode wj_state_machine_add_transition(struct WjStateMachine *sm,
+                                                 const char *from_state,
+                                                 const char *to_state,
+                                                 const char *condition);
+
+/**
+ * Update state machine
+ */
+enum WjErrorCode wj_state_machine_update(struct WjStateMachine *sm,
+                                         struct WjEntity *entity,
+                                         float delta_time);
+
+/**
+ * Get current state
+ */
+const char *wj_state_machine_get_current_state(struct WjStateMachine *sm);
+
+/**
+ * Create a server
+ */
+struct WjNetworkConnection *wj_network_create_server(unsigned short port,
+                                                     enum WjNetworkProtocol protocol);
+
+/**
+ * Connect to a server
+ */
+struct WjNetworkConnection *wj_network_connect(const char *host,
+                                               unsigned short port,
+                                               enum WjNetworkProtocol protocol);
+
+/**
+ * Disconnect
+ */
+enum WjErrorCode wj_network_disconnect(struct WjNetworkConnection *conn);
+
+/**
+ * Free network connection
+ */
+void wj_network_free(struct WjNetworkConnection *conn);
+
+/**
+ * Check if connected
+ */
+bool wj_network_is_connected(struct WjNetworkConnection *conn);
+
+/**
+ * Send message (raw bytes)
+ */
+enum WjErrorCode wj_network_send(struct WjNetworkConnection *conn,
+                                 const uint8_t *data,
+                                 uintptr_t data_len,
+                                 bool reliable);
+
+/**
+ * Receive message (raw bytes)
+ */
+enum WjErrorCode wj_network_receive(struct WjNetworkConnection *conn,
+                                    uint8_t *buffer,
+                                    uintptr_t buffer_size,
+                                    uintptr_t *bytes_received);
+
+/**
+ * Mark entity for replication
+ */
+enum WjErrorCode wj_network_replicate_entity(struct WjNetworkConnection *conn,
+                                             struct WjEntity *entity);
+
+/**
+ * Stop replicating entity
+ */
+enum WjErrorCode wj_network_stop_replicating_entity(struct WjNetworkConnection *conn,
+                                                    struct WjEntity *entity);
+
+/**
+ * Register RPC handler
+ */
+enum WjErrorCode wj_network_register_rpc(struct WjNetworkConnection *conn,
+                                         const char *rpc_name,
+                                         WjRpcCallback callback);
+
+/**
+ * Call RPC
+ */
+enum WjErrorCode wj_network_call_rpc(struct WjNetworkConnection *conn,
+                                     const char *rpc_name,
+                                     struct WjEntity *entity,
+                                     const uint8_t *data,
+                                     uintptr_t data_len);
+
+/**
+ * Get network statistics
+ */
+struct WjNetworkStats wj_network_get_stats(struct WjNetworkConnection *conn);
+
+/**
+ * Load animation clip
+ */
+struct WjAnimationClip *wj_animation_load(const char *path);
+
+/**
+ * Free animation clip
+ */
+void wj_animation_free(struct WjAnimationClip *clip);
+
+/**
+ * Play animation
+ */
+enum WjErrorCode wj_animation_play(struct WjEntity *entity,
+                                   struct WjAnimationClip *clip,
+                                   bool loop_animation);
+
+/**
+ * Stop animation
+ */
+enum WjErrorCode wj_animation_stop(struct WjEntity *entity);
+
+/**
+ * Set animation speed
+ */
+enum WjErrorCode wj_animation_set_speed(struct WjEntity *entity, float speed);
+
+/**
+ * Blend between two animations
+ */
+enum WjErrorCode wj_animation_blend(struct WjEntity *entity,
+                                    struct WjAnimationClip *clip_a,
+                                    struct WjAnimationClip *clip_b,
+                                    float blend_factor);
+
+/**
+ * Create UI widget
+ */
+struct WjWidget *wj_ui_create_widget(enum WjWidgetType widget_type,
+                                     struct WjVec2 position,
+                                     struct WjVec2 size);
+
+/**
+ * Free UI widget
+ */
+void wj_ui_free_widget(struct WjWidget *widget);
+
+/**
+ * Set widget text
+ */
+enum WjErrorCode wj_ui_set_text(struct WjWidget *widget, const char *text);
+
+/**
+ * Set click callback
+ */
+enum WjErrorCode wj_ui_set_click_callback(struct WjWidget *widget, WjUiClickCallback callback);
 
 #ifdef __cplusplus
 } // extern "C"
