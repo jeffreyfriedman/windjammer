@@ -199,6 +199,147 @@
         .console-log.error {
             color: #f48771;
         }
+
+        /* Inspector Enhancements */
+        .entity-name-input {
+            width: 100%;
+            background: #3e3e42;
+            border: 1px solid #3e3e42;
+            color: #d4d4d4;
+            padding: 8px;
+            border-radius: 3px;
+            font-size: 14px;
+            font-weight: 600;
+            margin-bottom: 12px;
+        }
+
+        .entity-name-input:focus {
+            outline: none;
+            border-color: #007acc;
+        }
+
+        .components-list {
+            margin-bottom: 12px;
+        }
+
+        .component-section {
+            background: #2d2d30;
+            border-radius: 4px;
+            margin-bottom: 8px;
+            overflow: hidden;
+        }
+
+        .component-header {
+            background: #3e3e42;
+            padding: 8px 12px;
+            font-weight: 600;
+            font-size: 12px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .component-name {
+            color: #4fc3f7;
+        }
+
+        .component-remove {
+            background: transparent;
+            border: none;
+            color: #858585;
+            cursor: pointer;
+            font-size: 18px;
+            padding: 0 4px;
+        }
+
+        .component-remove:hover {
+            color: #f48771;
+        }
+
+        .component-properties {
+            padding: 12px;
+        }
+
+        .property-group {
+            margin-bottom: 12px;
+        }
+
+        .property-group > label {
+            display: block;
+            font-size: 11px;
+            color: #858585;
+            margin-bottom: 6px;
+            text-transform: uppercase;
+        }
+
+        .property-fields {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(80px, 1fr));
+            gap: 8px;
+        }
+
+        .property-field {
+            display: flex;
+            flex-direction: column;
+        }
+
+        .property-field label {
+            font-size: 10px;
+            color: #858585;
+            margin-bottom: 4px;
+        }
+
+        .property-field input {
+            background: #1e1e1e;
+            border: 1px solid #3e3e42;
+            color: #d4d4d4;
+            padding: 6px 8px;
+            border-radius: 3px;
+            font-size: 12px;
+        }
+
+        .property-field input:focus {
+            outline: none;
+            border-color: #007acc;
+        }
+
+        .add-component-btn {
+            width: 100%;
+            background: #094771;
+            border: none;
+            color: white;
+            padding: 8px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 13px;
+        }
+
+        .add-component-btn:hover {
+            background: #0c5a8a;
+        }
+
+        /* Entity List Enhancements */
+        .entity-delete {
+            background: transparent;
+            border: none;
+            color: #858585;
+            cursor: pointer;
+            font-size: 18px;
+            padding: 0 4px;
+            margin-left: auto;
+        }
+
+        .entity-delete:hover {
+            color: #f48771;
+        }
+
+        .entity-icon {
+            margin-right: 6px;
+        }
+
+        .entity-name {
+            flex: 1;
+        }
     </style>
 </head>
 <body>
@@ -206,21 +347,17 @@
         <!-- Top Bar -->
         <div class="top-bar">
             <div class="logo">🎮 Windjammer</div>
-            <button id="newScene">New Scene</button>
-            <button id="saveScene">Save</button>
-            <button id="loadScene">Load</button>
-            <button id="playScene">▶ Play</button>
+            <button id="new-scene">New Scene</button>
+            <button id="save-scene">Save</button>
+            <button id="load-scene">Load</button>
+            <button id="play-scene">▶ Play</button>
         </div>
 
         <!-- Hierarchy Panel -->
         <div class="hierarchy-panel">
             <div class="panel-title">Hierarchy</div>
-            <ul class="entity-list" id="entityList">
-                <li class="entity-item">📦 Scene Root</li>
-                <li class="entity-item">📷 Main Camera</li>
-                <li class="entity-item">💡 Directional Light</li>
-            </ul>
-            <button style="margin-top: 12px; width: 100%; background: #094771; border: none; color: white; padding: 8px; border-radius: 4px; cursor: pointer;">+ Add Entity</button>
+            <div class="entity-list" id="entity-list"></div>
+            <button id="add-entity" style="margin-top: 12px; width: 100%; background: #094771; border: none; color: white; padding: 8px; border-radius: 4px; cursor: pointer;">+ Add Entity</button>
         </div>
 
         <!-- Viewport -->
@@ -236,149 +373,52 @@
         <!-- Inspector Panel -->
         <div class="inspector-panel">
             <div class="panel-title">Inspector</div>
-            
-            <div class="component">
-                <div class="component-header">Transform</div>
-                <div class="property">
-                    <div class="property-label">Position</div>
-                    <input class="property-input" type="text" value="0, 0, 0" placeholder="x, y, z">
-                </div>
-                <div class="property">
-                    <div class="property-label">Rotation</div>
-                    <input class="property-input" type="text" value="0, 0, 0" placeholder="x, y, z">
-                </div>
-                <div class="property">
-                    <div class="property-label">Scale</div>
-                    <input class="property-input" type="text" value="1, 1, 1" placeholder="x, y, z">
-                </div>
-            </div>
-
-            <div class="component">
-                <div class="component-header">Mesh Renderer</div>
-                <div class="property">
-                    <div class="property-label">Mesh</div>
-                    <input class="property-input" type="text" value="Cube" placeholder="Mesh name">
-                </div>
-                <div class="property">
-                    <div class="property-label">Material</div>
-                    <input class="property-input" type="text" value="Default" placeholder="Material name">
-                </div>
-            </div>
+            <div id="inspector-content"></div>
         </div>
 
         <!-- Console Panel -->
         <div class="console-panel">
             <div class="panel-title">Console</div>
-            <div id="consoleOutput">
-                <div class="console-log info">[INFO] Windjammer Editor initialized</div>
-                <div class="console-log info">[INFO] Scene: Untitled</div>
-                <div class="console-log info">[INFO] Entities: 3</div>
-            </div>
+            <div id="console-output"></div>
         </div>
     </div>
 
+    <!-- Load all JavaScript modules -->
     <script src="webgl-renderer.js"></script>
+    <script src="editor-state.js"></script>
+    <script src="editor-ui.js"></script>
     <script>
-        // Scene editor logic
+        // Initialize the Windjammer Browser Editor
         const canvas = document.getElementById('canvas');
-        const entityList = document.getElementById('entityList');
-        const consoleOutput = document.getElementById('consoleOutput');
         
         // Initialize WebGL renderer
         let renderer = null;
-        let use2D = false; // Toggle between 2D canvas and 3D WebGL
-        
         try {
             renderer = new WebGLRenderer(canvas);
-            logConsole('[INFO] WebGL renderer initialized', 'info');
+            console.log('[WebGL] Renderer initialized successfully');
         } catch (e) {
-            logConsole('[ERROR] WebGL initialization failed: ' + e.message, 'error');
-            use2D = true;
+            console.error('[WebGL] Failed to initialize:', e);
         }
         
-        // Fallback 2D context
-        const ctx = use2D ? canvas.getContext('2d') : null;
-
-        // Draw scene (WebGL or 2D fallback)
-        function drawScene() {
-            if (renderer && !use2D) {
-                // Use WebGL renderer for 3D scene
-                renderer.render();
-            } else if (ctx) {
-                // Fallback to 2D canvas
-                ctx.fillStyle = '#1e1e1e';
-                ctx.fillRect(0, 0, canvas.width, canvas.height);
-
-                // Draw grid
-                ctx.strokeStyle = '#3e3e42';
-                ctx.lineWidth = 1;
-                for (let i = 0; i <= canvas.width; i += 40) {
-                    ctx.beginPath();
-                    ctx.moveTo(i, 0);
-                    ctx.lineTo(i, canvas.height);
-                    ctx.stroke();
-                }
-                for (let i = 0; i <= canvas.height; i += 40) {
-                    ctx.beginPath();
-                    ctx.moveTo(0, i);
-                    ctx.lineTo(canvas.width, i);
-                    ctx.stroke();
-                }
-
-                // Draw a cube (simple 3D projection)
-                ctx.strokeStyle = '#4fc3f7';
-                ctx.lineWidth = 2;
-                ctx.strokeRect(300, 200, 200, 200);
-                
-                // Add some text
-                ctx.fillStyle = '#858585';
-                ctx.font = '14px monospace';
-                ctx.fillText('Viewport (2D fallback mode)', 20, 30);
-            }
-        }
-
-        // Handle entity selection
-        entityList.addEventListener('click', (e) => {
-            if (e.target.classList.contains('entity-item')) {
-                document.querySelectorAll('.entity-item').forEach(item => {
-                    item.classList.remove('selected');
-                });
-                e.target.classList.add('selected');
-                log('Selected: ' + e.target.textContent);
-            }
-        });
-
-        // Console logging
-        function logConsole(message, type = 'info') {
-            const logEntry = document.createElement('div');
-            logEntry.className = `console-log ${type}`;
-            logEntry.textContent = message;
-            consoleOutput.appendChild(logEntry);
-            consoleOutput.scrollTop = consoleOutput.scrollHeight;
-        }
+        // Initialize editor state
+        const editorState = new EditorState();
         
-        // Alias for backward compatibility
-        const log = logConsole;
-
-        // Button handlers
-        document.getElementById('newScene').addEventListener('click', () => log('New scene created'));
-        document.getElementById('saveScene').addEventListener('click', () => log('Scene saved'));
-        document.getElementById('loadScene').addEventListener('click', () => log('Load scene dialog'));
-        document.getElementById('playScene').addEventListener('click', () => {
-            log('Playing scene...', 'info');
-            setTimeout(() => log('Scene stopped', 'info'), 2000);
-        });
-
-        // Initialize
-        // Animation loop
+        // Initialize editor UI
+        const editorUI = new EditorUI(editorState, renderer);
+        
+        // Log initialization
+        editorUI.log('Windjammer Browser Editor initialized');
+        editorUI.log(`WebGL: ${renderer ? 'Enabled' : 'Disabled'}`);
+        editorUI.log('Scene loaded with ' + editorState.scene.entities.length + ' entities');
+        
+        // Start render loop
         function animate() {
-            drawScene();
+            if (renderer) {
+                renderer.render();
+            }
             requestAnimationFrame(animate);
         }
-        
-        // Start animation
         animate();
-        log('Editor ready!');
         
         // Handle window resize
         window.addEventListener('resize', () => {
@@ -386,6 +426,15 @@
                 renderer.resize(canvas.clientWidth, canvas.clientHeight);
             }
         });
+        
+        // Try to load saved scene from localStorage
+        const savedScene = localStorage.getItem('windjammer_scene');
+        if (savedScene) {
+            if (editorState.fromJSON(savedScene)) {
+                editorUI.refresh();
+                editorUI.log('Loaded scene from localStorage');
+            }
+        }
     </script>
 </body>
 </html>
