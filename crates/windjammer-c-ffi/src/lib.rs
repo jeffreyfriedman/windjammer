@@ -32,6 +32,10 @@ pub mod input;
 pub mod physics;
 pub mod audio;
 pub mod world;
+pub mod ai;
+pub mod networking;
+pub mod animation;
+pub mod ui;
 
 // ============================================================================
 // Error Handling
