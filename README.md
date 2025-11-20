@@ -18,7 +18,7 @@ Windjammer is a **next-generation game framework** that solves the fundamental p
 - ❌ **Slow iteration cycles** → ✅ **Hot-reload everything** (code, assets, shaders)
 - ❌ **Vendor lock-in** → ✅ **Open source** (MIT/Apache-2.0)
 
-**Status**: 36+ features complete, public beta July 2025 🚀
+**Status**: 37+ features complete, **C FFI 100% complete** (145 functions), public beta July 2025 🚀
 
 ---
 
@@ -219,13 +219,15 @@ All languages get **95%+ of native Rust performance** through automatic runtime 
 - [Project Status](docs/PROJECT_STATUS.md) ✅ - Current status and roadmap
 
 ### Core Concepts
-- [Feature Showcase](docs/FEATURE_SHOWCASE.md) ✅ - All 36+ features explained
+- [Feature Showcase](docs/FEATURE_SHOWCASE.md) ✅ - All 37+ features explained
 - [Competitive Analysis](docs/COMPETITIVE_ANALYSIS.md) ✅ - vs Unity/Godot/Unreal
 - [Engine Comparison](docs/COMPARISON.md) ✅ - Detailed feature comparison
 - [Optimization Architecture](docs/OPTIMIZATION_ARCHITECTURE.md) ✅
 - [Multi-Language Optimization](docs/MULTI_LANGUAGE_OPTIMIZATION.md) ✅
 
 ### Advanced Topics
+- [C FFI Layer - COMPLETE](docs/FFI_COMPLETE.md) ✅ - 145 functions, 11 modules, 100% complete
+- [FFI Generation Proposal](docs/FFI_GENERATION_PROPOSAL.md) ✅ - Future IDL-based generation
 - [Plugin System](docs/PLUGIN_SYSTEM_ARCHITECTURE.md) ✅
 - [SDK Code Generation](docs/SDK_MVP_VALIDATION.md) ✅
 - [Cookbook](docs/COOKBOOK.md) ✅ - Common patterns (14 categories)
