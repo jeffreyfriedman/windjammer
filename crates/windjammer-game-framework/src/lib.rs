@@ -86,6 +86,7 @@ pub mod particles_gpu; // GPU particle system with forces and collision
 pub mod pathfinding; // A* pathfinding for AI navigation
 pub mod pathfinding_advanced; // Advanced pathfinding with caching and smoothing
 pub mod pbr; // Physically-based rendering (PBR) materials and lighting
+pub mod pgo; // Profile-Guided Optimization (PGO) system
 pub mod plugin;
 pub mod plugin_ffi; // Plugin system for extensibility
 pub mod post_processing; // Post-processing effects (bloom, DOF, etc.)
