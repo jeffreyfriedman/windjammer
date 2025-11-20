@@ -277,44 +277,64 @@
         </div>
     </div>
 
+    <script src="webgl-renderer.js"></script>
     <script>
-        // Simple scene editor logic
+        // Scene editor logic
         const canvas = document.getElementById('canvas');
-        const ctx = canvas.getContext('2d');
         const entityList = document.getElementById('entityList');
         const consoleOutput = document.getElementById('consoleOutput');
+        
+        // Initialize WebGL renderer
+        let renderer = null;
+        let use2D = false; // Toggle between 2D canvas and 3D WebGL
+        
+        try {
+            renderer = new WebGLRenderer(canvas);
+            logConsole('[INFO] WebGL renderer initialized', 'info');
+        } catch (e) {
+            logConsole('[ERROR] WebGL initialization failed: ' + e.message, 'error');
+            use2D = true;
+        }
+        
+        // Fallback 2D context
+        const ctx = use2D ? canvas.getContext('2d') : null;
 
-        // Draw a simple 3D-looking scene
+        // Draw scene (WebGL or 2D fallback)
         function drawScene() {
-            // Clear canvas
-            ctx.fillStyle = '#1e1e1e';
-            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            if (renderer && !use2D) {
+                // Use WebGL renderer for 3D scene
+                renderer.render();
+            } else if (ctx) {
+                // Fallback to 2D canvas
+                ctx.fillStyle = '#1e1e1e';
+                ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-            // Draw grid
-            ctx.strokeStyle = '#3e3e42';
-            ctx.lineWidth = 1;
-            for (let i = 0; i <= canvas.width; i += 40) {
-                ctx.beginPath();
-                ctx.moveTo(i, 0);
-                ctx.lineTo(i, canvas.height);
-                ctx.stroke();
-            }
-            for (let i = 0; i <= canvas.height; i += 40) {
-                ctx.beginPath();
-                ctx.moveTo(0, i);
-                ctx.lineTo(canvas.width, i);
-                ctx.stroke();
-            }
+                // Draw grid
+                ctx.strokeStyle = '#3e3e42';
+                ctx.lineWidth = 1;
+                for (let i = 0; i <= canvas.width; i += 40) {
+                    ctx.beginPath();
+                    ctx.moveTo(i, 0);
+                    ctx.lineTo(i, canvas.height);
+                    ctx.stroke();
+                }
+                for (let i = 0; i <= canvas.height; i += 40) {
+                    ctx.beginPath();
+                    ctx.moveTo(0, i);
+                    ctx.lineTo(canvas.width, i);
+                    ctx.stroke();
+                }
 
-            // Draw a cube (simple 3D projection)
-            ctx.strokeStyle = '#4fc3f7';
-            ctx.lineWidth = 2;
-            ctx.strokeRect(300, 200, 200, 200);
-            
-            // Add some text
-            ctx.fillStyle = '#858585';
-            ctx.font = '14px monospace';
-            ctx.fillText('Viewport (WebGL rendering coming soon)', 20, 30);
+                // Draw a cube (simple 3D projection)
+                ctx.strokeStyle = '#4fc3f7';
+                ctx.lineWidth = 2;
+                ctx.strokeRect(300, 200, 200, 200);
+                
+                // Add some text
+                ctx.fillStyle = '#858585';
+                ctx.font = '14px monospace';
+                ctx.fillText('Viewport (2D fallback mode)', 20, 30);
+            }
         }
 
         // Handle entity selection
@@ -329,13 +349,16 @@
         });
 
         // Console logging
-        function log(message, type = 'info') {
+        function logConsole(message, type = 'info') {
             const logEntry = document.createElement('div');
             logEntry.className = `console-log ${type}`;
-            logEntry.textContent = `[${type.toUpperCase()}] ${message}`;
+            logEntry.textContent = message;
             consoleOutput.appendChild(logEntry);
             consoleOutput.scrollTop = consoleOutput.scrollHeight;
         }
+        
+        // Alias for backward compatibility
+        const log = logConsole;
 
         // Button handlers
         document.getElementById('newScene').addEventListener('click', () => log('New scene created'));
@@ -347,8 +370,22 @@
         });
 
         // Initialize
-        drawScene();
+        // Animation loop
+        function animate() {
+            drawScene();
+            requestAnimationFrame(animate);
+        }
+        
+        // Start animation
+        animate();
         log('Editor ready!');
+        
+        // Handle window resize
+        window.addEventListener('resize', () => {
+            if (renderer) {
+                renderer.resize(canvas.clientWidth, canvas.clientHeight);
+            }
+        });
     </script>
 </body>
 </html>
