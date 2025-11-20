@@ -1,16 +1,23 @@
-FROM gcc:13
+# Dockerfile for testing C++ SDK examples
+FROM gcc:16
 
-WORKDIR /sdk
+WORKDIR /app
 
 # Install CMake
-RUN apt-get update && apt-get install -y cmake && rm -rf /var/lib/apt/lists/*
+RUN apt-get update && apt-get install -y \
+    cmake \
+    ninja-build \
+    git \
+    && rm -rf /var/lib/apt/lists/*
 
-# Copy SDK source
-COPY sdks/cpp/ ./
+# Copy C++ SDK
+COPY sdks/cpp /app/sdks/cpp
 
-# Build
-RUN mkdir -p build && cd build && cmake .. && make
+# Build examples
+WORKDIR /app/sdks/cpp
+RUN mkdir -p build && cd build && \
+    cmake .. -GNinja && \
+    ninja
 
-# Run tests (if we add them)
-CMD ["echo", "C++ SDK built successfully"]
-
+# Run tests
+CMD ["sh", "-c", "./build/examples/hello_world && ./build/examples/math_demo && ./build/examples/sprite_demo && ./build/examples/3d_scene"]

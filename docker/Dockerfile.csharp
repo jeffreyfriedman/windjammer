@@ -1,16 +1,15 @@
-FROM mcr.microsoft.com/dotnet/sdk:8.0
+# Dockerfile for testing C# SDK examples
+FROM mcr.microsoft.com/dotnet/sdk:9.0
 
-WORKDIR /sdk
+WORKDIR /app
 
-# Copy project file
-COPY sdks/csharp/Windjammer.SDK/Windjammer.SDK.csproj ./Windjammer.SDK/
+# Copy C# SDK
+COPY sdks/csharp /app/sdks/csharp
 
-# Restore dependencies
-RUN dotnet restore ./Windjammer.SDK/Windjammer.SDK.csproj || true
+# Build SDK
+WORKDIR /app/sdks/csharp/Windjammer.SDK
+RUN dotnet build
 
-# Copy SDK source
-COPY sdks/csharp/ ./
-
-# Build and test
-CMD ["dotnet", "test", "--verbosity", "normal"]
-
+# Run examples
+WORKDIR /app/sdks/csharp/Examples
+CMD ["sh", "-c", "dotnet run HelloWorld.cs && dotnet run SpriteDemo.cs && dotnet run 3DScene.cs"]
