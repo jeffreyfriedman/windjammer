@@ -12,11 +12,13 @@
 
 Windjammer is a **next-generation game framework** that solves the fundamental problems plaguing modern game development:
 
-- ❌ **Unity's runtime fees** → ✅ **Free forever**
-- ❌ **Single-language lock-in** → ✅ **12 languages supported**
-- ❌ **Manual optimization burden** → ✅ **Automatic optimization**
-- ❌ **Slow iteration cycles** → ✅ **Hot-reload everything**
-- ❌ **Vendor lock-in** → ✅ **Open source (MIT/Apache)**
+- ❌ **Unity's runtime fees** → ✅ **Free forever** ($0 vs $0.20/install)
+- ❌ **Single-language lock-in** → ✅ **12 languages supported** (95%+ native performance)
+- ❌ **Manual optimization burden** → ✅ **Automatic optimization** (batching, culling, LOD)
+- ❌ **Slow iteration cycles** → ✅ **Hot-reload everything** (code, assets, shaders)
+- ❌ **Vendor lock-in** → ✅ **Open source** (MIT/Apache-2.0)
+
+**Status**: 36+ features complete, public beta July 2025 🚀
 
 ---
 
@@ -57,15 +59,16 @@ Change code, assets, shaders **without restarting**:
 - ✅ State preservation
 
 ### 🎨 Complete Feature Set
-Everything you need to make 2D and 3D games:
-- ✅ Advanced rendering (PBR, deferred, post-processing)
-- ✅ Skeletal animation with IK
-- ✅ 2D/3D physics (Rapier)
-- ✅ 3D spatial audio with effects
-- ✅ AI (behavior trees, pathfinding, steering)
-- ✅ Networking (client-server, replication, RPCs)
-- ✅ Particle systems (CPU + GPU)
-- ✅ UI system (widgets, layouts, text)
+**36+ production-ready features** for 2D and 3D games:
+- ✅ **Rendering**: PBR, deferred, HDR, bloom, SSAO, tone mapping
+- ✅ **Animation**: Skeletal, blending, IK (FABRIK, Two-Bone, CCD)
+- ✅ **Physics**: 2D/3D (Rapier), character controller, ragdoll
+- ✅ **Audio**: 3D spatial, mixing, effects, streaming
+- ✅ **AI**: Behavior trees, pathfinding, state machines, steering
+- ✅ **Networking**: Client-server, replication, RPCs
+- ✅ **Particles**: CPU + GPU with forces and collision
+- ✅ **UI**: Widgets, layouts, text rendering
+- ✅ **Observability**: OpenTelemetry, tracing, metrics
 
 ---
 
@@ -211,33 +214,26 @@ All languages get **95%+ of native Rust performance** through automatic runtime 
 ## Documentation
 
 ### Getting Started
-- [Installation Guide](docs/INSTALLATION.md) (TODO)
-- [Quick Start Tutorial](docs/QUICK_START.md) (TODO)
-- [Your First 2D Game](docs/FIRST_2D_GAME.md) (TODO)
-- [Your First 3D Game](docs/FIRST_3D_GAME.md) (TODO)
+- [Quick Start Guide](docs/QUICKSTART.md) ✅ - 5-minute start for all languages
+- [API Reference](docs/API_REFERENCE.md) ✅ - Complete API documentation
+- [Project Status](docs/PROJECT_STATUS.md) ✅ - Current status and roadmap
 
 ### Core Concepts
-- [Feature Showcase](docs/FEATURE_SHOWCASE.md) ✅
+- [Feature Showcase](docs/FEATURE_SHOWCASE.md) ✅ - All 36+ features explained
+- [Competitive Analysis](docs/COMPETITIVE_ANALYSIS.md) ✅ - vs Unity/Godot/Unreal
+- [Engine Comparison](docs/COMPARISON.md) ✅ - Detailed feature comparison
 - [Optimization Architecture](docs/OPTIMIZATION_ARCHITECTURE.md) ✅
 - [Multi-Language Optimization](docs/MULTI_LANGUAGE_OPTIMIZATION.md) ✅
-- [Competitive Analysis](docs/COMPETITIVE_ANALYSIS.md) ✅
 
 ### Advanced Topics
 - [Plugin System](docs/PLUGIN_SYSTEM_ARCHITECTURE.md) ✅
 - [SDK Code Generation](docs/SDK_MVP_VALIDATION.md) ✅
-- [Automatic Optimization](docs/AUTO_OPTIMIZATION.md) (TODO)
-- [Networking Guide](docs/NETWORKING.md) (TODO)
+- [Cookbook](docs/COOKBOOK.md) ✅ - Common patterns (14 categories)
+- [Roadmap](docs/ROADMAP.md) ✅ - Future plans
 
 ### Migration Guides
-- [Unity → Windjammer](docs/UNITY_MIGRATION.md) (TODO)
-- [Unreal → Windjammer](docs/UNREAL_MIGRATION.md) (TODO)
-- [Godot → Windjammer](docs/GODOT_MIGRATION.md) (TODO)
-
-### API Reference
-- [Rust API](docs/api/rust/index.html) (TODO)
-- [Python API](docs/api/python/index.html) (TODO)
-- [JavaScript API](docs/api/javascript/index.html) (TODO)
-- [C# API](docs/api/csharp/index.html) (TODO)
+- [Unity → Windjammer](docs/UNITY_MIGRATION.md) ✅ - Complete migration guide
+- [Godot → Windjammer](docs/GODOT_MIGRATION.md) ✅ - Complete migration guide
 
 ---
 
@@ -399,7 +395,7 @@ Windjammer builds on the shoulders of giants:
 ## FAQ
 
 ### Q: Is Windjammer production-ready?
-**A**: Core features are complete and stable. Visual editor is in progress. We recommend it for new projects, especially indies.
+**A**: 36+ core features are complete and stable. Visual editor is in progress. Public beta: July 2025. Recommended for new projects, especially indies.
 
 ### Q: Will there ever be runtime fees?
 **A**: **Never.** Windjammer is open source (MIT/Apache) and will remain free forever.
@@ -414,7 +410,7 @@ Windjammer builds on the shoulders of giants:
 **A**: Any language you're comfortable with! All 12 languages get 95%+ of native performance. Python and JavaScript are great for beginners, Rust for maximum performance.
 
 ### Q: How do I migrate from Unity?
-**A**: We provide a Unity → Windjammer migration guide (coming soon) and a C# SDK with Unity-like APIs.
+**A**: We provide comprehensive migration guides for [Unity](docs/UNITY_MIGRATION.md) and [Godot](docs/GODOT_MIGRATION.md), plus a C# SDK with Unity-like APIs.
 
 ### Q: Does Windjammer support consoles?
 **A**: Not yet, but console support is planned through partnerships with Nintendo, Sony, and Microsoft.
