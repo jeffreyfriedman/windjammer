@@ -29,6 +29,9 @@ pub use glam::{Vec2, Vec3, Vec4, Quat, Mat4};
 pub mod rendering;
 pub mod components;
 pub mod input;
+pub mod physics;
+pub mod audio;
+pub mod world;
 
 // ============================================================================
 // Error Handling

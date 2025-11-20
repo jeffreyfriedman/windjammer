@@ -9,6 +9,24 @@
 #include <stdlib.h>
 
 /**
+ * Physics body type
+ */
+typedef enum WjBodyType {
+  /**
+   * Dynamic body (affected by forces)
+   */
+  Dynamic = 0,
+  /**
+   * Static body (never moves)
+   */
+  Static = 1,
+  /**
+   * Kinematic body (moves but not affected by forces)
+   */
+  Kinematic = 2,
+} WjBodyType;
+
+/**
  * Error codes returned by FFI functions
  */
 typedef enum WjErrorCode {
@@ -252,6 +270,45 @@ typedef struct WjQuat {
   float w;
 } WjQuat;
 
+/**
+ * Raycast result
+ */
+typedef struct WjRaycastHit2D {
+  bool hit;
+  struct WjVec2 point;
+  struct WjVec2 normal;
+  float distance;
+  struct WjEntity *entity;
+} WjRaycastHit2D;
+
+/**
+ * Raycast result (3D)
+ */
+typedef struct WjRaycastHit3D {
+  bool hit;
+  struct WjVec3 point;
+  struct WjVec3 normal;
+  float distance;
+  struct WjEntity *entity;
+} WjRaycastHit3D;
+
+/**
+ * Opaque handle to an audio source
+ */
+typedef struct WjAudioSource {
+  uint8_t _private[0];
+} WjAudioSource;
+
+/**
+ * Time information
+ */
+typedef struct WjTime {
+  float delta_time;
+  float total_time;
+  uint64_t frame_count;
+  float fps;
+} WjTime;
+
 #ifdef __cplusplus
 extern "C" {
 #endif // __cplusplus
@@ -355,10 +412,10 @@ void wj_version_numbers(int *major, int *minor, int *patch);
  * Create a sprite
  */
 enum WjErrorCode wj_sprite_new(struct WjEntity *entity,
-                               struct WjTexture *texture,
-                               struct WjVec2 position,
-                               struct WjVec2 size,
-                               struct WjColor color);
+                               struct WjTexture *_texture,
+                               struct WjVec2 _position,
+                               struct WjVec2 _size,
+                               struct WjColor _color);
 
 /**
  * Set sprite texture
@@ -373,17 +430,17 @@ enum WjErrorCode wj_sprite_set_color(struct WjEntity *entity, struct WjColor col
 /**
  * Create a cube mesh
  */
-struct WjMesh *wj_mesh_cube(float size);
+struct WjMesh *wj_mesh_cube(float _size);
 
 /**
  * Create a sphere mesh
  */
-struct WjMesh *wj_mesh_sphere(float radius, unsigned int subdivisions);
+struct WjMesh *wj_mesh_sphere(float _radius, unsigned int _subdivisions);
 
 /**
  * Create a plane mesh
  */
-struct WjMesh *wj_mesh_plane(float size);
+struct WjMesh *wj_mesh_plane(float _size);
 
 /**
  * Free a mesh
@@ -398,10 +455,10 @@ struct WjTexture *wj_texture_load(const char *path);
 /**
  * Create a texture from raw data
  */
-struct WjTexture *wj_texture_from_data(unsigned int width,
-                                       unsigned int height,
+struct WjTexture *wj_texture_from_data(unsigned int _width,
+                                       unsigned int _height,
                                        const uint8_t *data,
-                                       uintptr_t data_len);
+                                       uintptr_t _data_len);
 
 /**
  * Free a texture
@@ -411,24 +468,26 @@ void wj_texture_free(struct WjTexture *texture);
 /**
  * Create a 2D camera
  */
-enum WjErrorCode wj_camera2d_new(struct WjVec2 position, float zoom);
+enum WjErrorCode wj_camera2d_new(struct WjVec2 _position, float _zoom);
 
 /**
  * Create a 3D camera
  */
-enum WjErrorCode wj_camera3d_new(struct WjVec3 position, struct WjVec3 look_at, float fov);
+enum WjErrorCode wj_camera3d_new(struct WjVec3 _position, struct WjVec3 _look_at, float _fov);
 
 /**
  * Create a point light
  */
-enum WjErrorCode wj_point_light_new(struct WjVec3 position, struct WjColor color, float intensity);
+enum WjErrorCode wj_point_light_new(struct WjVec3 _position,
+                                    struct WjColor _color,
+                                    float _intensity);
 
 /**
  * Create a directional light
  */
-enum WjErrorCode wj_directional_light_new(struct WjVec3 direction,
-                                          struct WjColor color,
-                                          float intensity);
+enum WjErrorCode wj_directional_light_new(struct WjVec3 _direction,
+                                          struct WjColor _color,
+                                          float _intensity);
 
 /**
  * Create a material
@@ -444,9 +503,9 @@ void wj_material_set_emissive(struct WjMaterial *material, struct WjColor emissi
  * Add Transform2D component to entity
  */
 enum WjErrorCode wj_add_transform2d(struct WjEntity *entity,
-                                    struct WjVec2 position,
-                                    float rotation,
-                                    struct WjVec2 scale);
+                                    struct WjVec2 _position,
+                                    float _rotation,
+                                    struct WjVec2 _scale);
 
 /**
  * Get Transform2D position
@@ -462,9 +521,9 @@ enum WjErrorCode wj_set_transform2d_position(struct WjEntity *entity, struct WjV
  * Add Transform3D component to entity
  */
 enum WjErrorCode wj_add_transform3d(struct WjEntity *entity,
-                                    struct WjVec3 position,
-                                    struct WjQuat rotation,
-                                    struct WjVec3 scale);
+                                    struct WjVec3 _position,
+                                    struct WjQuat _rotation,
+                                    struct WjVec3 _scale);
 
 /**
  * Get Transform3D position
@@ -479,7 +538,7 @@ enum WjErrorCode wj_set_transform3d_position(struct WjEntity *entity, struct WjV
 /**
  * Add Velocity2D component to entity
  */
-enum WjErrorCode wj_add_velocity2d(struct WjEntity *entity, struct WjVec2 velocity);
+enum WjErrorCode wj_add_velocity2d(struct WjEntity *entity, struct WjVec2 _velocity);
 
 /**
  * Get Velocity2D
@@ -544,12 +603,251 @@ struct WjVec2 wj_input_get_mouse_scroll(void);
 /**
  * Check if a gamepad button is pressed
  */
-bool wj_input_is_gamepad_button_down(int gamepad_id, enum WjGamepadButton button);
+bool wj_input_is_gamepad_button_down(int _gamepad_id, enum WjGamepadButton _button);
 
 /**
  * Get gamepad axis value
  */
-float wj_input_get_gamepad_axis(int gamepad_id, enum WjGamepadAxis axis);
+float wj_input_get_gamepad_axis(int _gamepad_id, enum WjGamepadAxis _axis);
+
+/**
+ * Add RigidBody2D component to entity
+ */
+enum WjErrorCode wj_add_rigidbody2d(struct WjEntity *entity, enum WjBodyType body_type, float mass);
+
+/**
+ * Add BoxCollider2D component to entity
+ */
+enum WjErrorCode wj_add_box_collider2d(struct WjEntity *entity,
+                                       struct WjVec2 size,
+                                       struct WjVec2 offset);
+
+/**
+ * Add CircleCollider2D component to entity
+ */
+enum WjErrorCode wj_add_circle_collider2d(struct WjEntity *entity,
+                                          float radius,
+                                          struct WjVec2 offset);
+
+/**
+ * Apply force to 2D rigid body
+ */
+enum WjErrorCode wj_rigidbody2d_apply_force(struct WjEntity *entity, struct WjVec2 force);
+
+/**
+ * Apply impulse to 2D rigid body
+ */
+enum WjErrorCode wj_rigidbody2d_apply_impulse(struct WjEntity *entity, struct WjVec2 impulse);
+
+/**
+ * Set 2D rigid body velocity
+ */
+enum WjErrorCode wj_rigidbody2d_set_velocity(struct WjEntity *entity, struct WjVec2 velocity);
+
+/**
+ * Get 2D rigid body velocity
+ */
+struct WjVec2 wj_rigidbody2d_get_velocity(struct WjEntity *entity);
+
+/**
+ * Add RigidBody3D component to entity
+ */
+enum WjErrorCode wj_add_rigidbody3d(struct WjEntity *entity, enum WjBodyType body_type, float mass);
+
+/**
+ * Add BoxCollider3D component to entity
+ */
+enum WjErrorCode wj_add_box_collider3d(struct WjEntity *entity,
+                                       struct WjVec3 size,
+                                       struct WjVec3 offset);
+
+/**
+ * Add SphereCollider3D component to entity
+ */
+enum WjErrorCode wj_add_sphere_collider3d(struct WjEntity *entity,
+                                          float radius,
+                                          struct WjVec3 offset);
+
+/**
+ * Add CapsuleCollider3D component to entity
+ */
+enum WjErrorCode wj_add_capsule_collider3d(struct WjEntity *entity,
+                                           float radius,
+                                           float height,
+                                           struct WjVec3 offset);
+
+/**
+ * Apply force to 3D rigid body
+ */
+enum WjErrorCode wj_rigidbody3d_apply_force(struct WjEntity *entity, struct WjVec3 force);
+
+/**
+ * Apply torque to 3D rigid body
+ */
+enum WjErrorCode wj_rigidbody3d_apply_torque(struct WjEntity *entity, struct WjVec3 torque);
+
+/**
+ * Perform 2D raycast
+ */
+struct WjRaycastHit2D wj_raycast2d(struct WjWorld *world,
+                                   struct WjVec2 origin,
+                                   struct WjVec2 direction,
+                                   float max_distance);
+
+/**
+ * Perform 3D raycast
+ */
+struct WjRaycastHit3D wj_raycast3d(struct WjWorld *world,
+                                   struct WjVec3 origin,
+                                   struct WjVec3 direction,
+                                   float max_distance);
+
+/**
+ * Load an audio file
+ */
+struct WjAudioSource *wj_audio_load(const char *path);
+
+/**
+ * Free an audio source
+ */
+void wj_audio_free(struct WjAudioSource *source);
+
+/**
+ * Play an audio source
+ */
+enum WjErrorCode wj_audio_play(struct WjAudioSource *source);
+
+/**
+ * Stop an audio source
+ */
+enum WjErrorCode wj_audio_stop(struct WjAudioSource *source);
+
+/**
+ * Pause an audio source
+ */
+enum WjErrorCode wj_audio_pause(struct WjAudioSource *source);
+
+/**
+ * Resume an audio source
+ */
+enum WjErrorCode wj_audio_resume(struct WjAudioSource *source);
+
+/**
+ * Set audio volume (0.0 to 1.0)
+ */
+enum WjErrorCode wj_audio_set_volume(struct WjAudioSource *source, float volume);
+
+/**
+ * Set audio pitch (0.5 to 2.0, 1.0 is normal)
+ */
+enum WjErrorCode wj_audio_set_pitch(struct WjAudioSource *source, float pitch);
+
+/**
+ * Set audio looping
+ */
+enum WjErrorCode wj_audio_set_looping(struct WjAudioSource *source, bool looping);
+
+/**
+ * Set 3D audio position
+ */
+enum WjErrorCode wj_audio_set_position(struct WjAudioSource *source, struct WjVec3 position);
+
+/**
+ * Set 3D audio listener position
+ */
+enum WjErrorCode wj_audio_set_listener_position(struct WjVec3 position);
+
+/**
+ * Set 3D audio listener orientation
+ */
+enum WjErrorCode wj_audio_set_listener_orientation(struct WjVec3 forward, struct WjVec3 up);
+
+/**
+ * Set audio attenuation (how quickly sound fades with distance)
+ */
+enum WjErrorCode wj_audio_set_attenuation(struct WjAudioSource *source, float attenuation);
+
+/**
+ * Set audio min/max distance for 3D audio
+ */
+enum WjErrorCode wj_audio_set_distance_range(struct WjAudioSource *source,
+                                             float min_distance,
+                                             float max_distance);
+
+/**
+ * Check if audio is playing
+ */
+bool wj_audio_is_playing(struct WjAudioSource *source);
+
+/**
+ * Get audio playback position (in seconds)
+ */
+float wj_audio_get_playback_position(struct WjAudioSource *source);
+
+/**
+ * Get audio duration (in seconds)
+ */
+float wj_audio_get_duration(struct WjAudioSource *source);
+
+/**
+ * Create a new world
+ */
+struct WjWorld *wj_world_new(void);
+
+/**
+ * Free a world
+ */
+void wj_world_free(struct WjWorld *world);
+
+/**
+ * Update world (run systems for one frame)
+ */
+enum WjErrorCode wj_world_update(struct WjWorld *world, float delta_time);
+
+/**
+ * Get number of entities in world
+ */
+uintptr_t wj_world_entity_count(struct WjWorld *world);
+
+/**
+ * Find entity by name
+ */
+struct WjEntity *wj_world_find_entity(struct WjWorld *world, const char *name);
+
+/**
+ * Destroy entity
+ */
+enum WjErrorCode wj_world_destroy_entity(struct WjWorld *world, struct WjEntity *entity);
+
+/**
+ * Save world to file
+ */
+enum WjErrorCode wj_world_save(struct WjWorld *world, const char *path);
+
+/**
+ * Load world from file
+ */
+struct WjWorld *wj_world_load(const char *path);
+
+/**
+ * Clear all entities from world
+ */
+enum WjErrorCode wj_world_clear(struct WjWorld *world);
+
+/**
+ * Get current time information
+ */
+struct WjTime wj_get_time(void);
+
+/**
+ * Set target FPS
+ */
+enum WjErrorCode wj_set_target_fps(float fps);
+
+/**
+ * Set time scale (for slow motion / fast forward)
+ */
+enum WjErrorCode wj_set_time_scale(float scale);
 
 #ifdef __cplusplus
 } // extern "C"
