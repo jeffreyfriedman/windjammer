@@ -15,7 +15,8 @@ __license__ = "MIT OR Apache-2.0"
 
 # Core imports
 from .app import App
-from .math import Vec2, Vec3, Vec4, Mat4, Quat
+from .math import Vec2, Vec3, Color
+from .ffi import get_version
 from .transform import Transform
 from .time import Time
 from .input import Input, KeyCode, MouseButton
@@ -44,9 +45,8 @@ __all__ = [
     "App",
     "Vec2",
     "Vec3",
-    "Vec4",
-    "Mat4",
-    "Quat",
+    "Color",
+    "get_version",
     "Transform",
     "Time",
     "Input",
