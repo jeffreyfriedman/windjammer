@@ -357,6 +357,82 @@ class WebGLRenderer {
         this.gl.viewport(0, 0, width, height);
         this.updateProjectionMatrix();
     }
+    
+    /**
+     * Update scene from editor state
+     */
+    updateScene(scene) {
+        if (!scene || !scene.entities) return;
+        
+        // Clear existing entities
+        this.entities = [];
+        
+        // Convert editor entities to renderable entities
+        scene.entities.forEach(entity => {
+            const hasMesh = entity.components.some(c => c.type === 'Mesh');
+            if (!hasMesh) return; // Only render entities with meshes
+            
+            const transform = entity.components.find(c => c.type === 'Transform3D');
+            const material = entity.components.find(c => c.type === 'Material');
+            const mesh = entity.components.find(c => c.type === 'Mesh');
+            
+            if (transform) {
+                const renderEntity = {
+                    position: [
+                        transform.position.x,
+                        transform.position.y,
+                        transform.position.z
+                    ],
+                    rotation: [
+                        transform.rotation.x,
+                        transform.rotation.y,
+                        transform.rotation.z
+                    ],
+                    scale: [
+                        transform.scale.x,
+                        transform.scale.y,
+                        transform.scale.z
+                    ],
+                    color: material ? [
+                        material.albedo.r,
+                        material.albedo.g,
+                        material.albedo.b
+                    ] : [1, 1, 1],
+                    metallic: material ? material.metallic : 0.0,
+                    roughness: material ? material.roughness : 0.5
+                };
+                
+                this.entities.push(renderEntity);
+            }
+        });
+        
+        // Update camera from scene
+        const cameraEntity = scene.entities.find(e => 
+            e.components.some(c => c.type === 'Camera3D')
+        );
+        
+        if (cameraEntity) {
+            const transform = cameraEntity.components.find(c => c.type === 'Transform3D');
+            const camera = cameraEntity.components.find(c => c.type === 'Camera3D');
+            
+            if (transform) {
+                this.camera.position = [
+                    transform.position.x,
+                    transform.position.y,
+                    transform.position.z
+                ];
+            }
+            
+            if (camera) {
+                this.camera.fov = camera.fov;
+                this.camera.near = camera.near;
+                this.camera.far = camera.far;
+                this.updateProjectionMatrix();
+            }
+        }
+        
+        this.updateViewMatrix();
+    }
 }
 
 // Simple mat4 library (minimal implementation)
