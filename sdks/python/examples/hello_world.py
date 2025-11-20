@@ -15,18 +15,13 @@ def main():
     print()
     
     # Create a new application
-    app = App()
+    app = App(title="Hello World")
     
-    # Add a simple system using decorator
-    @app.system
-    def hello_system():
-        print("Hello from the game loop!")
+    # Add a simple system
+    app.add_system(lambda: print("Hello from the game loop!"))
     
     print("Application created successfully!")
     print("Systems registered: 1")
-    print()
-    print("Note: Full app.run() would start the game loop")
-    print("For this example, we're just demonstrating SDK setup")
     print()
     
     # Run the application

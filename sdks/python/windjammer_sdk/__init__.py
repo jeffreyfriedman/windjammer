@@ -14,7 +14,7 @@ __author__ = "Windjammer Contributors"
 __license__ = "MIT OR Apache-2.0"
 
 # Core imports
-from .app import App
+from .app import App, World, Entity
 from .math import Vec2, Vec3, Color
 from .ffi import get_version
 from .transform import Transform
@@ -43,6 +43,8 @@ from .ai import BehaviorTree, Pathfinder
 __all__ = [
     # Core
     "App",
+    "World",
+    "Entity",
     "Vec2",
     "Vec3",
     "Color",
