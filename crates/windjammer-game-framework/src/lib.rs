@@ -65,6 +65,7 @@ pub mod lod_system; // Runtime LOD (Level of Detail) system
 pub mod memory_pool; // Automatic memory pooling system
 pub mod profiler; // Built-in performance profiler
 pub mod optimization_config; // Optimization configuration system
+pub mod observability; // OpenTelemetry observability (tracing, metrics, logging)
 
 pub mod ecs; // Entity-Component-System (Rust implementation)
 pub mod ecs_optimized; // Optimized ECS with archetype storage and query caching
