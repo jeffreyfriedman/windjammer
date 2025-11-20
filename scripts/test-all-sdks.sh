@@ -1,50 +1,54 @@
 #!/bin/bash
+# Test all SDK examples in Docker containers
+
 set -e
 
-echo "🧪 Testing All Windjammer SDKs"
-echo "================================"
+echo "🧪 Testing All Windjammer SDK Examples"
+echo "======================================"
+echo ""
 
-cd "$(dirname "$0")/.."
-
-# Array of SDK languages
-SDKS=("python" "javascript" "go" "java" "csharp" "cpp" "kotlin")
+# Colors for output
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+NC='\033[0m' # No Color
 
 # Track results
-PASSED=()
-FAILED=()
+PASSED=0
+FAILED=0
+TOTAL=12
 
-for sdk in "${SDKS[@]}"; do
-    echo ""
-    echo "Testing $sdk SDK..."
-    echo "-------------------"
+# Array of languages
+LANGUAGES=("python" "rust" "nodejs" "csharp" "cpp" "go" "java" "kotlin" "lua" "swift" "ruby")
+
+# Test each language
+for lang in "${LANGUAGES[@]}"; do
+    echo "Testing $lang SDK..."
     
-    if docker-compose -f docker/docker-compose.test.yml run --rm "test-$sdk"; then
-        PASSED+=("$sdk")
-        echo "✅ $sdk SDK tests passed"
+    if docker-compose -f docker-compose.test.yml run --rm "test-$lang"; then
+        echo -e "${GREEN}✅ $lang SDK tests PASSED${NC}"
+        ((PASSED++))
     else
-        FAILED+=("$sdk")
-        echo "❌ $sdk SDK tests failed"
+        echo -e "${RED}❌ $lang SDK tests FAILED${NC}"
+        ((FAILED++))
     fi
-done
-
-echo ""
-echo "================================"
-echo "Test Summary"
-echo "================================"
-echo "✅ Passed: ${#PASSED[@]}"
-for sdk in "${PASSED[@]}"; do
-    echo "  - $sdk"
-done
-
-if [ ${#FAILED[@]} -gt 0 ]; then
-    echo "❌ Failed: ${#FAILED[@]}"
-    for sdk in "${FAILED[@]}"; do
-        echo "  - $sdk"
-    done
-    exit 1
-else
+    
     echo ""
-    echo "🎉 All SDK tests passed!"
-    exit 0
-fi
+done
 
+# Summary
+echo "======================================"
+echo "📊 Test Summary"
+echo "======================================"
+echo -e "Total: $TOTAL"
+echo -e "${GREEN}Passed: $PASSED${NC}"
+echo -e "${RED}Failed: $FAILED${NC}"
+echo ""
+
+if [ $FAILED -eq 0 ]; then
+    echo -e "${GREEN}🎉 All tests passed!${NC}"
+    exit 0
+else
+    echo -e "${RED}❌ Some tests failed${NC}"
+    exit 1
+fi

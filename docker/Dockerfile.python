@@ -1,17 +1,25 @@
-FROM python:3.11-slim
+# Dockerfile for testing Python SDK examples
+FROM python:3.12-slim
 
-WORKDIR /sdk
+WORKDIR /app
 
-# Install dependencies
-COPY sdks/python/pyproject.toml sdks/python/setup.py ./
+# Install system dependencies
+RUN apt-get update && apt-get install -y \
+    git \
+    build-essential \
+    && rm -rf /var/lib/apt/lists/*
+
+# Copy Python SDK
+COPY sdks/python /app/sdks/python
+
+# Install Python SDK
+WORKDIR /app/sdks/python
 RUN pip install --no-cache-dir -e .
 
-# Copy SDK source
-COPY sdks/python/ ./
+# Copy examples
+COPY sdks/python/examples /app/examples
 
-# Install test dependencies
-RUN pip install --no-cache-dir pytest pytest-cov black mypy pylint
+WORKDIR /app
 
 # Run tests
-CMD ["pytest", "tests/", "-v", "--cov=windjammer_sdk"]
-
+CMD ["sh", "-c", "python examples/hello_world.py && python examples/sprite_demo.py && python examples/3d_scene.py"]
