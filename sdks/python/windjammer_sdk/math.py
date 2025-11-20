@@ -136,6 +136,16 @@ class Vec3:
     def __truediv__(self, scalar: float) -> 'Vec3':
         """Divide vector by scalar."""
         return Vec3(self.x / scalar, self.y / scalar, self.z / scalar)
+    
+    @staticmethod
+    def zero() -> 'Vec3':
+        """Create a zero vector."""
+        return Vec3(0.0, 0.0, 0.0)
+    
+    @staticmethod
+    def one() -> 'Vec3':
+        """Create a vector with all components set to 1."""
+        return Vec3(1.0, 1.0, 1.0)
 
 # ============================================================================
 # Color

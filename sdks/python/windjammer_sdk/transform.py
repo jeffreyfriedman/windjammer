@@ -1,6 +1,6 @@
 """Transform component for position, rotation, and scale."""
 
-from .math import Vec3, Quat
+from .math import Vec3
 
 
 class Transform:
