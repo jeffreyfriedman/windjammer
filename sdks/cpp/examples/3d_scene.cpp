@@ -1,77 +1,65 @@
 /**
  * 3D Scene Demo
  * 
- * Demonstrates 3D rendering with the Windjammer C++ SDK.
+ * Demonstrates 3D rendering with PBR materials, lighting, and post-processing.
  * 
  * Build with: cmake --build build && ./build/examples/3d_scene
  */
 
 #include <windjammer/windjammer.hpp>
-#include <iostream>
 
 using namespace windjammer;
 
 int main() {
-    std::cout << "=== Windjammer 3D Scene Demo (C++) ===" << std::endl;
-    
-    // Create 3D application
     App app;
     
-    // Setup system
     app.add_startup_system([]() {
-        std::cout << "\n[Setup] Creating 3D scene..." << std::endl;
-        
-        // Create 3D camera
-        auto camera = Camera3D{
+        // Camera
+        Camera3D{
             .position = Vec3{0.0f, 5.0f, 10.0f},
             .look_at = Vec3{0.0f, 0.0f, 0.0f},
             .fov = 60.0f
         };
-        std::cout << "  - Camera3D at (0, 5, 10) looking at (0, 0, 0)" << std::endl;
         
-        // Create meshes
-        auto cube = Mesh::cube(1.0f);
-        std::cout << "  - Cube mesh (size=1.0)" << std::endl;
+        // Lights
+        PointLight{ Vec3{5.0f, 5.0f, 5.0f}, Color{1.0f, 0.8f, 0.6f, 1.0f}, 2000.0f };
+        PointLight{ Vec3{-5.0f, 5.0f, 5.0f}, Color{0.6f, 0.8f, 1.0f, 1.0f}, 1500.0f };
+        PointLight{ Vec3{0.0f, 10.0f, -5.0f}, Color{1.0f, 1.0f, 1.0f, 1.0f}, 1000.0f };
         
-        auto sphere = Mesh::sphere(1.0f, 32);
-        std::cout << "  - Sphere mesh (radius=1.0, subdivisions=32)" << std::endl;
-        
-        auto plane = Mesh::plane(10.0f);
-        std::cout << "  - Plane mesh (size=10.0)" << std::endl;
-        
-        // Create materials
-        auto material = Material{
+        // Meshes with PBR materials
+        Mesh::cube(1.0f).with_material(Material{
             .albedo = Color{0.8f, 0.2f, 0.2f, 1.0f},
+            .metallic = 0.8f,
+            .roughness = 0.2f,
+            .emissive = Color{0.5f, 0.1f, 0.1f, 1.0f}
+        });
+        
+        Mesh::sphere(1.0f, 32).with_material(Material{
+            .albedo = Color{0.2f, 0.2f, 0.8f, 1.0f},
             .metallic = 0.5f,
-            .roughness = 0.5f
-        };
-        std::cout << "  - PBR Material (red, metallic=0.5, roughness=0.5)" << std::endl;
+            .roughness = 0.5f,
+            .emissive = Color{0.1f, 0.1f, 0.5f, 1.0f}
+        });
         
-        // Create light
-        auto light = PointLight{
-            .position = Vec3{5.0f, 5.0f, 5.0f},
-            .color = Color{1.0f, 1.0f, 1.0f, 1.0f},
-            .intensity = 1000.0f
-        };
-        std::cout << "  - Point Light at (5, 5, 5) intensity=1000" << std::endl;
+        Mesh::plane(10.0f).with_material(Material{
+            .albedo = Color{0.3f, 0.3f, 0.3f, 1.0f},
+            .metallic = 0.0f,
+            .roughness = 0.9f
+        });
         
-        std::cout << "[Setup] Scene ready!" << std::endl;
+        // Post-processing
+        auto post = PostProcessing{};
+        post.enable_hdr(true);
+        post.set_bloom(BloomSettings{ .threshold = 1.0f, .intensity = 0.8f, .radius = 4.0f, .soft_knee = 0.5f });
+        post.set_ssao(SSAOSettings{ .radius = 0.5f, .intensity = 1.5f, .bias = 0.025f, .samples = 16 });
+        post.set_tone_mapping(ToneMappingMode::ACES, 1.2f);
+        post.set_color_grading(ColorGrading{ .temperature = 0.1f, .tint = 0.0f, .saturation = 1.2f, .contrast = 1.1f });
     });
     
-    // Update system
     app.add_system([](const Time& time) {
-        // This would rotate meshes each frame
+        // Rotate objects for dynamic lighting
     });
     
-    std::cout << "3D application configured!" << std::endl;
-    std::cout << "- Camera: Perspective (60° FOV)" << std::endl;
-    std::cout << "- Rendering: Deferred PBR" << std::endl;
-    std::cout << "- Lighting: Point Light" << std::endl;
-    std::cout << std::endl;
-    
-    // Run the application
     app.run();
-    
     return 0;
 }
-

@@ -1,7 +1,7 @@
 /**
  * 3D Scene Demo
  * 
- * Demonstrates 3D rendering with the Windjammer C# SDK.
+ * Demonstrates 3D rendering with PBR materials, lighting, and post-processing.
  * 
  * Run with: dotnet run --project Examples/3DScene.cs
  */
@@ -15,70 +15,61 @@ namespace Windjammer.Examples
     {
         static void Main(string[] args)
         {
-            Console.WriteLine("=== Windjammer 3D Scene Demo (C#) ===");
-
-            // Create 3D application
             var app = new App();
 
-            // Setup system
             app.AddStartupSystem(() =>
             {
-                Console.WriteLine("\n[Setup] Creating 3D scene...");
-
-                // Create 3D camera
-                var camera = new Camera3D(
+                // Camera
+                new Camera3D(
                     position: new Vector3(0, 5, 10),
                     lookAt: new Vector3(0, 0, 0),
                     fov: 60.0f
                 );
-                Console.WriteLine("  - Camera3D at (0, 5, 10) looking at (0, 0, 0)");
 
-                // Create meshes
-                var cube = Mesh.Cube(size: 1.0f);
-                Console.WriteLine("  - Cube mesh (size=1.0)");
+                // Lights
+                new PointLight { Position = new Vector3(5, 5, 5), Color = new Color(1.0f, 0.8f, 0.6f, 1.0f), Intensity = 2000.0f };
+                new PointLight { Position = new Vector3(-5, 5, 5), Color = new Color(0.6f, 0.8f, 1.0f, 1.0f), Intensity = 1500.0f };
+                new PointLight { Position = new Vector3(0, 10, -5), Color = new Color(1, 1, 1, 1), Intensity = 1000.0f };
 
-                var sphere = Mesh.Sphere(radius: 1.0f, subdivisions: 32);
-                Console.WriteLine("  - Sphere mesh (radius=1.0, subdivisions=32)");
-
-                var plane = Mesh.Plane(size: 10.0f);
-                Console.WriteLine("  - Plane mesh (size=10.0)");
-
-                // Create materials
-                var material = new Material
+                // Meshes with PBR materials
+                Mesh.Cube(1.0f).WithMaterial(new Material
                 {
                     Albedo = new Color(0.8f, 0.2f, 0.2f, 1.0f),
-                    Metallic = 0.5f,
-                    Roughness = 0.5f
-                };
-                Console.WriteLine("  - PBR Material (red, metallic=0.5, roughness=0.5)");
+                    Metallic = 0.8f,
+                    Roughness = 0.2f,
+                    Emissive = new Color(0.5f, 0.1f, 0.1f, 1.0f)
+                });
 
-                // Create light
-                var light = new PointLight
+                Mesh.Sphere(1.0f, 32).WithMaterial(new Material
                 {
-                    Position = new Vector3(5, 5, 5),
-                    Color = new Color(1, 1, 1, 1),
-                    Intensity = 1000.0f
-                };
-                Console.WriteLine("  - Point Light at (5, 5, 5) intensity=1000");
+                    Albedo = new Color(0.2f, 0.2f, 0.8f, 1.0f),
+                    Metallic = 0.5f,
+                    Roughness = 0.5f,
+                    Emissive = new Color(0.1f, 0.1f, 0.5f, 1.0f)
+                });
 
-                Console.WriteLine("[Setup] Scene ready!");
+                Mesh.Plane(10.0f).WithMaterial(new Material
+                {
+                    Albedo = new Color(0.3f, 0.3f, 0.3f, 1.0f),
+                    Metallic = 0.0f,
+                    Roughness = 0.9f
+                });
+
+                // Post-processing
+                var post = new PostProcessing();
+                post.EnableHDR(true);
+                post.SetBloom(new BloomSettings { Threshold = 1.0f, Intensity = 0.8f, Radius = 4.0f, SoftKnee = 0.5f });
+                post.SetSSAO(new SSAOSettings { Radius = 0.5f, Intensity = 1.5f, Bias = 0.025f, Samples = 16 });
+                post.SetToneMapping(ToneMappingMode.ACES, 1.2f);
+                post.SetColorGrading(new ColorGrading { Temperature = 0.1f, Tint = 0.0f, Saturation = 1.2f, Contrast = 1.1f });
             });
 
-            // Update system
             app.AddSystem((Time time) =>
             {
-                // This would rotate meshes each frame
+                // Rotate objects for dynamic lighting
             });
 
-            Console.WriteLine("3D application configured!");
-            Console.WriteLine("- Camera: Perspective (60° FOV)");
-            Console.WriteLine("- Rendering: Deferred PBR");
-            Console.WriteLine("- Lighting: Point Light");
-            Console.WriteLine();
-
-            // Run the application
             app.Run();
         }
     }
 }
-

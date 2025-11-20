@@ -1,64 +1,64 @@
 /**
  * 3D Scene Example
  * 
- * Demonstrates 3D rendering with PBR materials and lighting.
+ * Demonstrates 3D rendering with PBR materials, lighting, and post-processing.
  * 
  * Run with: npm run build && node dist/examples/3d-scene.js
  */
 
-import { App, Vec3, Camera3D, PointLight, Mesh, Material } from '../src/index';
+import { 
+  App, Vec3, Camera3D, PointLight, Mesh, Material, Color,
+  PostProcessing, BloomSettings, SSAOSettings, ToneMappingMode, ColorGrading
+} from '../src/index';
 
-console.log('=== Windjammer 3D Scene Demo (TypeScript) ===');
-
-// Create 3D application
 const app = new App();
 
-// Setup system
 app.addStartupSystem(() => {
-  console.log('\n[Setup] Creating 3D scene...');
-  
-  // Create camera
-  const camera = new Camera3D({
+  // Camera
+  new Camera3D({
     position: new Vec3(0, 5, 10),
     lookAt: new Vec3(0, 0, 0),
-    fov: 60
+    fov: 60.0
   });
-  console.log(`  - ${camera}`);
   
-  // Create lights
-  const light = new PointLight({
-    position: new Vec3(4, 8, 4),
-    intensity: 1500
-  });
-  console.log(`  - ${light}`);
+  // Lights
+  new PointLight({ position: new Vec3(5, 5, 5), color: new Color(1.0, 0.8, 0.6, 1.0), intensity: 2000.0 });
+  new PointLight({ position: new Vec3(-5, 5, 5), color: new Color(0.6, 0.8, 1.0, 1.0), intensity: 1500.0 });
+  new PointLight({ position: new Vec3(0, 10, -5), color: new Color(1, 1, 1, 1), intensity: 1000.0 });
   
-  // Create 3D objects
-  const cube = Mesh.cube(1.0);
-  const material = Material.standard();
-  console.log(`  - ${cube}`);
-  console.log(`  - ${material}`);
+  // Meshes with PBR materials
+  Mesh.cube(1.0).withMaterial(new Material({
+    albedo: new Color(0.8, 0.2, 0.2, 1.0),
+    metallic: 0.8,
+    roughness: 0.2,
+    emissive: new Color(0.5, 0.1, 0.1, 1.0)
+  }));
   
-  const sphere = Mesh.sphere(0.5, 32);
-  console.log(`  - ${sphere}`);
+  Mesh.sphere(1.0, 32).withMaterial(new Material({
+    albedo: new Color(0.2, 0.2, 0.8, 1.0),
+    metallic: 0.5,
+    roughness: 0.5,
+    emissive: new Color(0.1, 0.1, 0.5, 1.0)
+  }));
   
-  const plane = Mesh.plane(10.0);
-  console.log(`  - ${plane}`);
+  Mesh.plane(10.0).withMaterial(new Material({
+    albedo: new Color(0.3, 0.3, 0.3, 1.0),
+    metallic: 0.0,
+    roughness: 0.9
+  }));
   
-  console.log('[Setup] 3D scene ready!');
+  // Post-processing
+  const post = new PostProcessing();
+  post.enableHDR(true);
+  post.setBloom({ threshold: 1.0, intensity: 0.8, radius: 4.0, softKnee: 0.5 });
+  post.setSSAO({ radius: 0.5, intensity: 1.5, bias: 0.025, samples: 16 });
+  post.setToneMapping(ToneMappingMode.ACES, 1.2);
+  post.setColorGrading({ temperature: 0.1, tint: 0.0, saturation: 1.2, contrast: 1.1 });
 });
 
-// Update system
 app.addSystem(() => {
-  // This would rotate 3D objects each frame
+  // Rotate objects for dynamic lighting
 });
 
-console.log('3D application configured!');
-console.log('- Camera: Perspective');
-console.log('- Rendering: Deferred + PBR');
-console.log('- Physics: 3D (Rapier3D)');
-console.log('- Lighting: Point, Directional, Spot');
-console.log();
-
-// Run the application
 app.run();
 
