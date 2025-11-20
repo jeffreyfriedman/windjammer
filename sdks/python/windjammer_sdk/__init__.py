@@ -22,7 +22,11 @@ from .time import Time
 from .input import Input, KeyCode, MouseButton
 
 # 2D imports
-from .sprite import Sprite, Camera2D
+try:
+    from .sprite import Sprite, Camera2D
+except ImportError:
+    Sprite = None
+    Camera2D = None
 
 # 3D imports
 from .mesh import Mesh, Material, Camera3D, PointLight, DirectionalLight, SpotLight
