@@ -217,6 +217,7 @@ All languages get **95%+ of native Rust performance** through automatic runtime 
 - [Quick Start Guide](docs/QUICKSTART.md) ✅ - 5-minute start for all languages
 - [API Reference](docs/API_REFERENCE.md) ✅ - Complete API documentation
 - [Project Status](docs/PROJECT_STATUS.md) ✅ - Current status and roadmap
+- [Editor Status](docs/EDITOR_STATUS.md) ✅ - Desktop & browser editor status
 
 ### Core Concepts
 - [Feature Showcase](docs/FEATURE_SHOWCASE.md) ✅ - All 37+ features explained
@@ -232,6 +233,10 @@ All languages get **95%+ of native Rust performance** through automatic runtime 
 - [SDK Code Generation](docs/SDK_MVP_VALIDATION.md) ✅
 - [Cookbook](docs/COOKBOOK.md) ✅ - Common patterns (14 categories)
 - [Roadmap](docs/ROADMAP.md) ✅ - Future plans
+
+### Tutorials
+- [2D Platformer Tutorial](docs/tutorials/01_PLATFORMER_GAME.md) ✅ - Build a complete platformer
+- [3D FPS Tutorial](docs/tutorials/02_FPS_GAME.md) ✅ - Build a first-person shooter
 
 ### Migration Guides
 - [Unity → Windjammer](docs/UNITY_MIGRATION.md) ✅ - Complete migration guide
