@@ -1,0 +1,14 @@
+# Cargo configuration for Windjammer
+
+[build]
+# Use all available CPU cores for compilation
+jobs = -1
+
+[test]
+# Run tests single-threaded to avoid race conditions in LSP/MCP tests
+# These crates use tokio runtimes and shared state that can deadlock in parallel
+jobs = 1
+
+# Alternative: Use RUST_TEST_THREADS=1 environment variable
+# RUST_TEST_THREADS = "1"
+

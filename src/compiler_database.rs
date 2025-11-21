@@ -104,7 +104,7 @@ pub struct SourceInput {
 pub fn tokenize<'db>(db: &'db dyn salsa::Database, source: SourceInput) -> TokenStream<'db> {
     let text = source.source_text(db);
     let mut lexer = lexer::Lexer::new(text);
-    let tokens = lexer.tokenize();
+    let tokens = lexer.tokenize_with_locations();
 
     TokenStream::new(db, tokens)
 }
@@ -167,7 +167,7 @@ pub fn perform_analysis(program: &parser::Program) -> Result<AnalysisResults, St
     let mut inference_engine = InferenceEngine::new();
     let mut inferred_bounds_map = std::collections::HashMap::new();
     for item in &program.items {
-        if let crate::parser::Item::Function(func) = item {
+        if let crate::parser::Item::Function { decl: func, .. } = item {
             let bounds = inference_engine.infer_function_bounds(func);
             inferred_bounds_map.insert(func.name.clone(), bounds);
         }
@@ -261,7 +261,7 @@ pub fn generate_rust<'db>(
 #[salsa::tracked]
 pub struct TokenStream<'db> {
     #[returns(ref)]
-    pub tokens: Vec<lexer::Token>,
+    pub tokens: Vec<lexer::TokenWithLocation>,
 }
 
 /// A parsed program

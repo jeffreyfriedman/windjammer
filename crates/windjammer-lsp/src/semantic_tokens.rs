@@ -74,10 +74,16 @@ impl SemanticTokensProvider {
 
     fn collect_item_tokens(&self, item: &Item, tokens: &mut Vec<SemanticToken>) {
         match item {
-            Item::Function(func) => {
+            Item::Function {
+                decl: func,
+                location: _,
+            } => {
                 self.collect_function_tokens(func, tokens);
             }
-            Item::Struct(s) => {
+            Item::Struct {
+                decl: s,
+                location: _,
+            } => {
                 // Add struct name token
                 if let Ok(pos) = self.find_identifier_position(&s.name, 0) {
                     tokens.push(SemanticToken {
@@ -89,7 +95,10 @@ impl SemanticTokensProvider {
                     });
                 }
             }
-            Item::Enum(e) => {
+            Item::Enum {
+                decl: e,
+                location: _,
+            } => {
                 // Add enum name token
                 if let Ok(pos) = self.find_identifier_position(&e.name, 0) {
                     tokens.push(SemanticToken {
@@ -164,6 +173,10 @@ impl SemanticTokensProvider {
                 self.collect_type_tokens(inner, tokens);
                 return;
             }
+            WJType::Array(inner, _size) => {
+                self.collect_type_tokens(inner, tokens);
+                return;
+            }
             WJType::Result(ok, err) => {
                 self.collect_type_tokens(ok, tokens);
                 self.collect_type_tokens(err, tokens);
@@ -181,13 +194,15 @@ impl SemanticTokensProvider {
             }
             WJType::TraitObject(name) => name.as_str(),
             WJType::Associated(base, _assoc) => base.as_str(),
-            // Primitive types - don't need highlighting
+            // Primitive types and infer - don't need highlighting
             WJType::Int
             | WJType::Int32
             | WJType::Uint
             | WJType::Float
             | WJType::Bool
-            | WJType::String => return,
+            | WJType::String
+            | WJType::Infer
+            | WJType::FunctionPointer { .. } => return,
         };
 
         if let Ok(pos) = self.find_identifier_position(type_name, 0) {

@@ -1,0 +1,68 @@
+// Complete counter example with WASM support
+// This demonstrates a fully functional reactive counter
+
+use windjammer_ui::reactivity::Signal
+use windjammer_ui::vdom::{VElement, VNode, VText}
+use windjammer_ui::wasm_events
+
+struct CounterApp {
+    count: Signal<i32>,
+    root_element: Option<web_sys::Element>,
+}
+
+impl CounterApp {
+    fn new() -> CounterApp {
+        CounterApp {
+            count: Signal::new(0),
+            root_element: None,
+        }
+    }
+    
+    fn render(self) -> VNode {
+        let count_value = self.count.get()
+        
+        VNode::Element(
+            VElement::new("div")
+                .attr("class", "counter-app")
+                .child(VNode::Element(
+                    VElement::new("h1")
+                        .child(VNode::Text(VText::new("Count: ${count_value}")))
+                ))
+                .child(VNode::Element(
+                    VElement::new("div")
+                        .attr("class", "buttons")
+                        .child(VNode::Element(
+                            VElement::new("button")
+                                .attr("id", "decrement-btn")
+                                .attr("class", "btn")
+                                .child(VNode::Text(VText::new("-")))
+                        ))
+                        .child(VNode::Element(
+                            VElement::new("button")
+                                .attr("id", "reset-btn")
+                                .attr("class", "btn")
+                                .child(VNode::Text(VText::new("Reset")))
+                        ))
+                        .child(VNode::Element(
+                            VElement::new("button")
+                                .attr("id", "increment-btn")
+                                .attr("class", "btn")
+                                .child(VNode::Text(VText::new("+")))
+                        ))
+                ))
+        )
+    }
+    
+    fn mount(self, selector: &str) -> Result<(), String> {
+        // This will be implemented for WASM target
+        print("Mounting to: ${selector}")
+        Ok(())
+    }
+}
+
+fn main() {
+    let app = CounterApp::new()
+    let _ = app.mount("#app")
+    print("Counter app created and mounted!")
+}
+

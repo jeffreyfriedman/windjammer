@@ -3,10 +3,20 @@ members = [
     ".",
     "crates/windjammer-lsp",
     "crates/windjammer-mcp",
+    "crates/windjammer-runtime",
+    "crates/windjammer-ui-macro",
+    # Removed: crates/windjammer-c-ffi (moved to windjammer-game repo)
+    # Removed: crates/windjammer-editor-desktop (moved to windjammer-game repo)
+    # Removed: crates/windjammer-editor-web (moved to windjammer-game repo)
+    # Removed: crates/windjammer-game-editor (moved to windjammer-game repo)
+    # Removed: crates/windjammer-game-framework (moved to windjammer-game repo)
+    # Removed: crates/windjammer-ui (moved to windjammer-ui repo)
+    # Removed: sdks/rust (moved to windjammer-game repo)
+    # Removed: tools/sdk-generator (no longer exists)
 ]
 
 [workspace.package]
-version = "0.32.0"
+version = "0.34.0"
 edition = "2021"
 authors = ["Jeffrey Friedman <jeffrey@example.com>", "Windjammer Contributors"]
 license = "MIT OR Apache-2.0"
@@ -48,6 +58,9 @@ path = "src/main.rs"
 name = "wj"
 path = "src/bin/wj.rs"
 
+[features]
+default = []
+
 [dependencies]
 # Parser combinator library
 nom = "7.1"
@@ -63,6 +76,12 @@ colored = "2.1"
 # JSON parsing for rustc diagnostics
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
+# Syntax highlighting for error snippets
+syntect = "5.2"
+
+# Terminal UI for interactive error navigation
+ratatui = "0.28"
+crossterm = "0.28"
 # TOML parsing for wj.toml
 toml = "0.8"
 # Temporary directories for wj run

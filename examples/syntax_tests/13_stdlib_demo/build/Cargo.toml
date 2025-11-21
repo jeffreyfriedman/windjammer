@@ -1,0 +1,7 @@
+[package]
+name = "stdlib-demo"
+version = "0.1.0"
+edition = "2021"
+[[bin]]
+name = "stdlib-demo"
+path = "main.rs"

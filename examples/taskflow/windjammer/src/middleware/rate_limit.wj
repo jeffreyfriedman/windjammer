@@ -1,7 +1,7 @@
 // Rate limiting middleware using token bucket algorithm
 
-use std.time
-use std.http
+use std::time
+use std::http
 
 // Simple in-memory rate limiter (for demo - use Redis in production)
 struct RateLimiter {
@@ -54,7 +54,7 @@ impl RateLimiter {
     }
 }
 
-@derive(Debug)]
+@derive(Debug)
 pub struct RateLimitError {
     pub retry_after: int,
     pub limit: int,

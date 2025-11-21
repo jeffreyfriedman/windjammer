@@ -1,0 +1,15 @@
+[package]
+name = "windjammer-sdk-generator"
+version = "0.1.0"
+edition = "2021"
+
+[[bin]]
+name = "wj-sdk-gen"
+path = "src/main.rs"
+
+[dependencies]
+windjammer-game-framework = { path = "../../crates/windjammer-game-framework" }
+clap = { version = "4.4", features = ["derive"] }
+serde_json = "1.0"
+anyhow = "1.0"
+

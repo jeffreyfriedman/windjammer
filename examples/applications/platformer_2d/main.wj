@@ -1,0 +1,273 @@
+// Simple 2D Platformer Game Example
+// Demonstrates: ECS, Physics, Input, Camera, Rendering
+
+use std::collections::HashMap
+
+// Game components
+struct Player {
+    speed: f32,
+    jump_force: f32,
+    grounded: bool
+,}
+
+struct Enemy {
+    patrol_speed: f32,
+    patrol_range: f32,
+    start_x: f32
+,}
+
+struct Platform {
+    width: f32,
+    height: f32
+,}
+
+struct Velocity {
+    x: f32,
+    y: f32
+,}
+
+struct Position {
+    x: f32,
+    y: f32
+,}
+
+struct Sprite {
+    color: [f32; 4],
+    width: f32,
+    height: f32
+,}
+
+// Game state
+struct GameState {
+    player_entity: i64,
+    score: i32,
+    game_over: bool
+,}
+
+fn create_player(world: World, x: f32, y: f32) -> i64 {
+    let entity = world.spawn()
+    world.add_component(entity, Position { x: x, y: y })
+    world.add_component(entity, Velocity { x: 0.0, y: 0.0 })
+    world.add_component(entity, Player { 
+        speed: 200.0, 
+        jump_force: 400.0,
+        grounded: false 
+    })
+    world.add_component(entity, Sprite { 
+        color: [0.2, 0.6, 1.0, 1.0],
+        width: 32.0,
+        height: 32.0
+    })
+    entity
+}
+
+fn create_platform(world: World, x: f32, y: f32, width: f32) {
+    let entity = world.spawn()
+    world.add_component(entity, Position { x: x, y: y })
+    world.add_component(entity, Platform { width: width, height: 20.0 })
+    world.add_component(entity, Sprite { 
+        color: [0.3, 0.3, 0.3, 1.0],
+        width: width,
+        height: 20.0
+    })
+}
+
+fn create_enemy(world: World, x: f32, y: f32) {
+    let entity = world.spawn()
+    world.add_component(entity, Position { x: x, y: y })
+    world.add_component(entity, Velocity { x: 50.0, y: 0.0 })
+    world.add_component(entity, Enemy { 
+        patrol_speed: 50.0,
+        patrol_range: 100.0,
+        start_x: x
+    })
+    world.add_component(entity, Sprite { 
+        color: [1.0, 0.2, 0.2, 1.0],
+        width: 24.0,
+        height: 24.0
+    })
+}
+
+fn update_player_input(world: World, input: Input, delta: f32) {
+    let entities = world.query_with_player()
+    
+    for entity in entities {
+        let player = world.get_component_player(entity)
+        let velocity = world.get_component_velocity(entity)
+        
+        // Horizontal movement
+        let mut vx = 0.0
+        if input.is_key_down("ArrowLeft") {
+            vx = -player.speed
+        }
+        if input.is_key_down("ArrowRight") {
+            vx = player.speed
+        }
+        velocity.x = vx
+        
+        // Jump
+        if input.is_key_pressed("Space") && player.grounded {
+            velocity.y = player.jump_force
+            player.grounded = false
+        }
+    }
+}
+
+fn update_physics(world: World, delta: f32) {
+    let gravity = -800.0
+    let entities = world.query_with_velocity()
+    
+    for entity in entities {
+        let velocity = world.get_component_velocity(entity)
+        let position = world.get_component_position(entity)
+        
+        // Apply gravity
+        velocity.y = velocity.y + gravity * delta
+        
+        // Update position
+        position.x = position.x + velocity.x * delta
+        position.y = position.y + velocity.y * delta
+        
+        // Ground collision (simple)
+        if position.y < 50.0 {
+            position.y = 50.0
+            velocity.y = 0.0
+            
+            // Mark player as grounded
+            if world.has_component_player(entity) {
+                let player = world.get_component_player(entity)
+                player.grounded = true
+            }
+        }
+    }
+}
+
+fn update_enemy_ai(world: World, delta: f32) {
+    let entities = world.query_with_enemy()
+    
+    for entity in entities {
+        let enemy = world.get_component_enemy(entity)
+        let position = world.get_component_position(entity)
+        let velocity = world.get_component_velocity(entity)
+        
+        // Simple patrol behavior
+        let distance = position.x - enemy.start_x
+        if distance > enemy.patrol_range {
+            velocity.x = -enemy.patrol_speed
+        } else if distance < -enemy.patrol_range {
+            velocity.x = enemy.patrol_speed
+        }
+    }
+}
+
+fn check_collisions(world: World, state: GameState) {
+    let player_entities = world.query_with_player()
+    let enemy_entities = world.query_with_enemy()
+    
+    for player_entity in player_entities {
+        let player_pos = world.get_component_position(player_entity)
+        let player_sprite = world.get_component_sprite(player_entity)
+        
+        for enemy_entity in enemy_entities {
+            let enemy_pos = world.get_component_position(enemy_entity)
+            let enemy_sprite = world.get_component_sprite(enemy_entity)
+            
+            // Simple AABB collision
+            let dx = (player_pos.x - enemy_pos.x).abs()
+            let dy = (player_pos.y - enemy_pos.y).abs()
+            
+            if dx < (player_sprite.width + enemy_sprite.width) / 2.0 &&
+               dy < (player_sprite.height + enemy_sprite.height) / 2.0 {
+                state.game_over = true
+                print("Game Over! Score: ${state.score}")
+            }
+        }
+    }
+}
+
+fn render_game(world: World, renderer: Renderer) {
+    renderer.clear([0.1, 0.1, 0.15, 1.0])
+    
+    let entities = world.query_with_sprite()
+    
+    for entity in entities {
+        let position = world.get_component_position(entity)
+        let sprite = world.get_component_sprite(entity)
+        
+        renderer.draw_rect(
+            position.x,
+            position.y,
+            sprite.width,
+            sprite.height,
+            sprite.color
+        )
+    }
+}
+
+fn main() {
+    print("=== Windjammer 2D Platformer ===")
+    
+    // Initialize game systems
+    let world = World::new()
+    let input = Input::new()
+    let renderer = Renderer::new(800, 600)
+    let camera = Camera2D::new()
+    
+    // Create game state
+    let state = GameState {
+        player_entity: 0,
+        score: 0,
+        game_over: false
+    }
+    
+    // Create game entities
+    state.player_entity = create_player(world, 100.0, 200.0)
+    
+    // Create platforms
+    create_platform(world, 400.0, 50.0, 800.0)  // Ground
+    create_platform(world, 200.0, 150.0, 150.0)
+    create_platform(world, 500.0, 250.0, 150.0)
+    create_platform(world, 300.0, 350.0, 150.0)
+    
+    // Create enemies
+    create_enemy(world, 250.0, 200.0)
+    create_enemy(world, 550.0, 300.0)
+    
+    print("Game initialized! Use Arrow Keys to move, Space to jump")
+    print("Avoid the red enemies!")
+    
+    // Game loop
+    let last_time = time.now()
+    
+    loop {
+        let current_time = time.now()
+        let delta = (current_time - last_time) / 1000.0
+        last_time = current_time
+        
+        if state.game_over {
+            break
+        }
+        
+        // Update systems
+        update_player_input(world, input, delta)
+        update_enemy_ai(world, delta)
+        update_physics(world, delta)
+        check_collisions(world, state)
+        
+        // Update camera to follow player
+        let player_pos = world.get_component_position(state.player_entity)
+        camera.follow(player_pos.x, player_pos.y, 5.0, delta)
+        
+        // Render
+        render_game(world, renderer)
+        
+        // Update score
+        state.score = state.score + 1
+        
+        // Small delay to control frame rate
+        time.sleep(0.016)  // ~60 FPS
+    }
+    
+    print("Thanks for playing!")
+}
+

@@ -1,0 +1,26 @@
+// Simple UI test to verify compiler codegen
+use std::ui::*
+
+fn main() {
+    // Test Button creation
+    let button = Button::new("Click Me")
+        .variant(ButtonVariant::Primary)
+    
+    println("Button created successfully!")
+    
+    // Test Container
+    let container = Container::new()
+        .max_width("1200px")
+    
+    println("Container created successfully!")
+    
+    // Test Text
+    let text = Text::new("Hello World")
+        .size(TextSize::Large)
+        .bold()
+    
+    println("Text created successfully!")
+    
+    println("All UI components work!")
+}
+

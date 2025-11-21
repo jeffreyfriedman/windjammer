@@ -1,8 +1,8 @@
 // Database operations for projects
 
-use std.db
-use std.log
-use ../models.project.{Project, CreateProjectRequest, ProjectMember}
+use std::db
+use std::log
+use ../models/project::{Project, CreateProjectRequest, ProjectMember}
 
 // Create a new project
 pub async fn create(conn: Connection, req: CreateProjectRequest, owner_id: int) -> Result<Project, Error> {
@@ -58,14 +58,14 @@ pub async fn find_by_id(conn: Connection, project_id: int) -> Result<Option<Proj
                 created_at: row.get("created_at")?,
                 updated_at: row.get("updated_at")?,
             }))
-        },
+        }
         None => Ok(None)
     }
 }
 
 // List projects for a user (owned or member of)
 pub async fn list_for_user(conn: Connection, user_id: int) -> Result<Vec<Project>, Error> {
-    log.debug_with("Listing projects for user", "user_id", &user_id.to_string())
+    log.debug_with("Listing projects for use", "user_id", &user_id.to_string())
     
     let query = r#"
         SELECT DISTINCT p.id, p.owner_id, p.name, p.description,

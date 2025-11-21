@@ -26,8 +26,14 @@ impl CompletionProvider {
         // Add keywords
         items.extend(self.keyword_completions());
 
+        // Add decorators (UI framework)
+        items.extend(self.decorator_completions());
+
         // Add stdlib modules
         items.extend(self.stdlib_completions());
+
+        // Add UI framework types
+        items.extend(self.ui_framework_completions());
 
         // Add user-defined items from the program
         if let Some(program) = &self.program {
@@ -251,6 +257,132 @@ impl CompletionProvider {
         ]
     }
 
+    /// UI framework decorator completions
+    fn decorator_completions(&self) -> Vec<CompletionItem> {
+        vec![
+            CompletionItem {
+                label: "@component".to_string(),
+                kind: Some(CompletionItemKind::KEYWORD),
+                detail: Some("UI component decorator".to_string()),
+                documentation: Some(Documentation::MarkupContent(MarkupContent {
+                    kind: MarkupKind::Markdown,
+                    value: "Marks a struct as a UI component. Automatically generates `new()` and `with_state()` methods.\n\n```windjammer\n@component\nstruct Counter {\n    count: int\n}\n```".to_string(),
+                })),
+                insert_text: Some("@component\n".to_string()),
+                ..Default::default()
+            },
+            CompletionItem {
+                label: "@game".to_string(),
+                kind: Some(CompletionItemKind::KEYWORD),
+                detail: Some("Game entity decorator".to_string()),
+                documentation: Some(Documentation::MarkupContent(MarkupContent {
+                    kind: MarkupKind::Markdown,
+                    value: "Marks a struct as a game entity with ECS support.\n\n```windjammer\n@game\nstruct Player {\n    position: Vec2\n    health: int\n}\n```".to_string(),
+                })),
+                insert_text: Some("@game\n".to_string()),
+                ..Default::default()
+            },
+            CompletionItem {
+                label: "@derive".to_string(),
+            kind: Some(CompletionItemKind::KEYWORD),
+                detail: Some("Derive trait implementations".to_string()),
+                documentation: Some(Documentation::MarkupContent(MarkupContent {
+                    kind: MarkupKind::Markdown,
+                    value: "Automatically implement common traits.\n\n```windjammer\n@derive(Debug, Clone, PartialEq)\nstruct Point { x: int, y: int }\n```".to_string(),
+                })),
+                insert_text: Some("@derive($0)".to_string()),
+            ..Default::default()
+            },
+        ]
+    }
+
+    /// UI framework type and module completions
+    fn ui_framework_completions(&self) -> Vec<CompletionItem> {
+        vec![
+            CompletionItem {
+                label: "windjammer_ui.prelude.*".to_string(),
+                kind: Some(CompletionItemKind::MODULE),
+                detail: Some("UI framework prelude (all common types)".to_string()),
+                documentation: Some(Documentation::MarkupContent(MarkupContent {
+                    kind: MarkupKind::Markdown,
+                    value: "Import all commonly used UI framework types and traits.\n\n```windjammer\nuse windjammer_ui.prelude.*\n```".to_string(),
+                })),
+                insert_text: Some("use windjammer_ui.prelude.*".to_string()),
+                ..Default::default()
+            },
+            CompletionItem {
+                label: "windjammer_ui.vdom".to_string(),
+                kind: Some(CompletionItemKind::MODULE),
+                detail: Some("Virtual DOM types".to_string()),
+                documentation: Some(Documentation::MarkupContent(MarkupContent {
+                    kind: MarkupKind::Markdown,
+                    value: "Virtual DOM types: VElement, VNode, VText\n\n```windjammer\nuse windjammer_ui.vdom.{VElement, VNode}\n```".to_string(),
+                })),
+                ..Default::default()
+            },
+            CompletionItem {
+                label: "windjammer_ui.game".to_string(),
+                kind: Some(CompletionItemKind::MODULE),
+                detail: Some("Game framework types".to_string(),) ,
+                documentation: Some(Documentation::MarkupContent(MarkupContent {
+                    kind: MarkupKind::Markdown,
+                    value: "Game development types: Vec2, Vec3, GameLoop, Input, RenderContext\n\n```windjammer\nuse windjammer_ui.game.*\n```".to_string(),
+                })),
+                ..Default::default()
+            },
+            CompletionItem {
+                label: "VElement".to_string(),
+                kind: Some(CompletionItemKind::CLASS),
+                detail: Some("Virtual DOM element".to_string()),
+                documentation: Some(Documentation::MarkupContent(MarkupContent {
+                    kind: MarkupKind::Markdown,
+                    value: "Create virtual DOM elements.\n\n```windjammer\nVElement::new(\"div\")\n    .attr(\"class\", \"container\")\n    .child(VNode::Text(VText::new(\"Hello\")))\n```".to_string(),
+                })),
+                ..Default::default()
+            },
+            CompletionItem {
+                label: "VNode".to_string(),
+                kind: Some(CompletionItemKind::ENUM),
+                detail: Some("Virtual DOM node".to_string()),
+                documentation: Some(Documentation::MarkupContent(MarkupContent {
+                    kind: MarkupKind::Markdown,
+                    value: "Represents a node in the virtual DOM tree.\n\nVariants: Element, Text, Component, Empty".to_string(),
+                })),
+                ..Default::default()
+            },
+            CompletionItem {
+                label: "Vec2".to_string(),
+                kind: Some(CompletionItemKind::STRUCT),
+                detail: Some("2D vector for game development".to_string()),
+                documentation: Some(Documentation::MarkupContent(MarkupContent {
+                    kind: MarkupKind::Markdown,
+                    value: "2D vector with x and y components.\n\n```windjammer\nlet pos = Vec2 { x: 10.0, y: 20.0 }\n```".to_string(),
+                })),
+                ..Default::default()
+            },
+            CompletionItem {
+                label: "Vec3".to_string(),
+                kind: Some(CompletionItemKind::STRUCT),
+                detail: Some("3D vector for game development".to_string()),
+                documentation: Some(Documentation::MarkupContent(MarkupContent {
+                    kind: MarkupKind::Markdown,
+                    value: "3D vector with x, y, and z components.\n\n```windjammer\nlet pos = Vec3 { x: 1.0, y: 2.0, z: 3.0 }\n```".to_string(),
+                })),
+                ..Default::default()
+            },
+            CompletionItem {
+                label: "GameLoop".to_string(),
+                kind: Some(CompletionItemKind::INTERFACE),
+                detail: Some("Game loop trait".to_string()),
+                documentation: Some(Documentation::MarkupContent(MarkupContent {
+                    kind: MarkupKind::Markdown,
+                    value: "Implement this trait for game update and render logic.\n\n```windjammer\nimpl GameLoop for MyGame {\n    fn update(delta: f32) { }\n    fn render(ctx: RenderContext) { }\n}\n```".to_string(),
+                })),
+                ..Default::default()
+            },
+        ]
+    }
+
     /// Windjammer standard library completions
     fn stdlib_completions(&self) -> Vec<CompletionItem> {
         vec![
@@ -437,36 +569,45 @@ impl CompletionProvider {
 
         for item in &program.items {
             match item {
-                Item::Function(func) => {
+                Item::Function {
+                    decl: func,
+                    location: _,
+                } => {
                     items.push(CompletionItem {
                         label: func.name.clone(),
                         kind: Some(CompletionItemKind::FUNCTION),
                         detail: Some(format!("fn {}", func.name)),
-                        documentation: Some(Documentation::String(format!(
-                            "Function defined in this file"
-                        ))),
+                        documentation: Some(Documentation::String(
+                            "Function defined in this file".to_string(),
+                        )),
                         ..Default::default()
                     });
                 }
-                Item::Struct(struct_decl) => {
+                Item::Struct {
+                    decl: struct_decl,
+                    location: _,
+                } => {
                     items.push(CompletionItem {
                         label: struct_decl.name.clone(),
                         kind: Some(CompletionItemKind::STRUCT),
                         detail: Some(format!("struct {}", struct_decl.name)),
-                        documentation: Some(Documentation::String(format!(
-                            "Struct defined in this file"
-                        ))),
+                        documentation: Some(Documentation::String(
+                            "Struct defined in this file".to_string(),
+                        )),
                         ..Default::default()
                     });
                 }
-                Item::Enum(enum_decl) => {
+                Item::Enum {
+                    decl: enum_decl,
+                    location: _,
+                } => {
                     items.push(CompletionItem {
                         label: enum_decl.name.clone(),
                         kind: Some(CompletionItemKind::ENUM),
                         detail: Some(format!("enum {}", enum_decl.name)),
-                        documentation: Some(Documentation::String(format!(
-                            "Enum defined in this file"
-                        ))),
+                        documentation: Some(Documentation::String(
+                            "Enum defined in this file".to_string(),
+                        )),
                         ..Default::default()
                     });
 
@@ -475,7 +616,7 @@ impl CompletionProvider {
                         items.push(CompletionItem {
                             label: format!("{}::{}", enum_decl.name, variant.name),
                             kind: Some(CompletionItemKind::ENUM_MEMBER),
-                            detail: Some(format!("enum variant")),
+                            detail: Some("enum variant".to_string()),
                             documentation: Some(Documentation::String(format!(
                                 "Variant of enum {}",
                                 enum_decl.name
@@ -484,14 +625,17 @@ impl CompletionProvider {
                         });
                     }
                 }
-                Item::Trait(trait_decl) => {
+                Item::Trait {
+                    decl: trait_decl,
+                    location: _,
+                } => {
                     items.push(CompletionItem {
                         label: trait_decl.name.clone(),
                         kind: Some(CompletionItemKind::INTERFACE),
                         detail: Some(format!("trait {}", trait_decl.name)),
-                        documentation: Some(Documentation::String(format!(
-                            "Trait defined in this file"
-                        ))),
+                        documentation: Some(Documentation::String(
+                            "Trait defined in this file".to_string(),
+                        )),
                         ..Default::default()
                     });
                 }

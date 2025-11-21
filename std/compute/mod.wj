@@ -1,0 +1,64 @@
+// std/compute - Parallel and background computation with proper abstraction
+// Implementation: rayon (native), Web Workers (browser)
+
+// PUBLIC API - Users interact with these functions only
+
+/// Run a computation in parallel across multiple items
+/// Native: Uses rayon for multi-threaded parallelism
+/// WASM: Uses Web Workers for parallel execution
+pub fn parallel<T, R>(items: Vec<T>, f: fn(T) -> R) -> Vec<R> {
+    // Compiler will generate platform-specific code
+    vec![]
+}
+
+/// Run a computation in the background (non-blocking)
+/// Returns a Future that can be awaited
+/// Native: Spawns a thread
+/// WASM: Uses Web Worker
+pub fn background<T>(f: fn() -> T) -> Future<T> {
+    // Compiler will generate platform-specific code
+}
+
+/// Get the number of available workers/cores
+/// Native: Returns number of CPU cores
+/// WASM: Returns number of Web Workers (typically CPU cores - 1)
+pub fn num_workers() -> int {
+    // Compiler will generate platform-specific code
+    1
+}
+
+/// Run multiple computations in parallel and wait for all to complete
+/// Native: Uses rayon's join
+/// WASM: Spawns multiple Web Workers
+pub fn join<A, B>(a: fn() -> A, b: fn() -> B) -> (A, B) {
+    // Compiler will generate platform-specific code
+}
+
+/// Map-reduce pattern: parallel map followed by reduce
+/// Native: Uses rayon's par_iter + reduce
+/// WASM: Distributes work across Web Workers, then reduces
+pub fn map_reduce<T, R>(items: Vec<T>, map_fn: fn(T) -> R, reduce_fn: fn(R, R) -> R, initial: R) -> R {
+    // Compiler will generate platform-specific code
+    initial
+}
+
+// INTERNAL TYPES (used by compiler-generated code)
+
+/// Future type for background computations
+pub struct Future<T> {
+    // Internal implementation hidden from users
+}
+
+impl<T> Future<T> {
+    /// Wait for the computation to complete
+    pub fn await(self) -> T {
+        // Compiler will generate platform-specific code
+    }
+    
+    /// Check if the computation is complete
+    pub fn is_ready(&self) -> bool {
+        // Compiler will generate platform-specific code
+        false
+    }
+}
+

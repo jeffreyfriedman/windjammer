@@ -2,6 +2,7 @@ use tower_lsp::{LspService, Server};
 use tracing_subscriber::{fmt, prelude::*, EnvFilter};
 
 mod analysis;
+mod cache;
 mod completion;
 pub mod database;
 mod debug_adapter;
@@ -30,7 +31,7 @@ async fn main() {
     let stdout = tokio::io::stdout();
 
     // Create the LSP service
-    let (service, socket) = LspService::new(|client| WindjammerLanguageServer::new(client));
+    let (service, socket) = LspService::new(WindjammerLanguageServer::new);
 
     // Run the server
     Server::new(stdin, stdout, socket).serve(service).await;

@@ -1,0 +1,19 @@
+// Test UI and Game framework integration
+use std::ui::*
+use std::game::*
+
+fn main() {
+    // Test UI components
+    let button = Button::new("Start Game")
+        .variant(ButtonVariant::Primary)
+    println("UI Button created!")
+    
+    // Test Game framework
+    let position = Vec3::new(10.0, 20.0, 30.0)
+    let color = Color::rgb(0.5, 0.8, 1.0)
+    println("Game types created!")
+    
+    println("Position: ({}, {}, {})", position.x, position.y, position.z)
+    println("UI + Game framework integration works!")
+}
+

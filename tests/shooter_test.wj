@@ -1,0 +1,269 @@
+// Shooter Game Tests
+// Tests for the 3D shooter game to verify all functionality
+
+fn test_player_movement_forward() {
+    // Test W key moves player forward
+    let game = ShooterGame::default()
+    let mut input = Input::new()
+    
+    input.simulate_key_press(Key::W)
+    game.update_player_movement(0.016, input)
+    
+    // Player should have moved in the forward direction
+    // With yaw=0, forward is +Z
+    assert(game.player_pos.z > 0.0, "W should move player forward (+Z)")
+}
+
+fn test_player_movement_backward() {
+    // Test S key moves player backward
+    let game = ShooterGame::default()
+    let mut input = Input::new()
+    
+    input.simulate_key_press(Key::S)
+    game.update_player_movement(0.016, input)
+    
+    // Player should have moved backward
+    assert(game.player_pos.z < 0.0, "S should move player backward (-Z)")
+}
+
+fn test_player_movement_left() {
+    // Test A key moves player left
+    let game = ShooterGame::default()
+    let mut input = Input::new()
+    
+    input.simulate_key_press(Key::A)
+    game.update_player_movement(0.016, input)
+    
+    // Player should have moved left
+    assert(game.player_pos.x < 0.0, "A should move player left (-X)")
+}
+
+fn test_player_movement_right() {
+    // Test D key moves player right
+    let game = ShooterGame::default()
+    let mut input = Input::new()
+    
+    input.simulate_key_press(Key::D)
+    game.update_player_movement(0.016, input)
+    
+    // Player should have moved right
+    assert(game.player_pos.x > 0.0, "D should move player right (+X)")
+}
+
+fn test_mouse_look_yaw() {
+    // Test mouse horizontal movement rotates yaw
+    let game = ShooterGame::default()
+    let mut input = Input::new()
+    
+    let initial_yaw = game.player_yaw
+    
+    input.simulate_mouse_delta(100.0, 0.0)
+    game.update(0.016, input)
+    
+    assert(game.player_yaw > initial_yaw, "Mouse right should increase yaw")
+}
+
+fn test_mouse_look_pitch() {
+    // Test mouse vertical movement rotates pitch
+    let game = ShooterGame::default()
+    let mut input = Input::new()
+    
+    let initial_pitch = game.player_pitch
+    
+    input.simulate_mouse_delta(0.0, -100.0)
+    game.update(0.016, input)
+    
+    assert(game.player_pitch > initial_pitch, "Mouse up should increase pitch")
+}
+
+fn test_pitch_clamping_positive() {
+    // Test pitch is clamped to prevent camera flipping
+    let game = ShooterGame::default()
+    let mut input = Input::new()
+    
+    // Simulate extreme upward mouse movement
+    input.simulate_mouse_delta(0.0, -10000.0)
+    game.update(0.016, input)
+    
+    assert(game.player_pitch <= 89.0, "Pitch should be clamped at 89 degrees")
+}
+
+fn test_pitch_clamping_negative() {
+    // Test pitch is clamped in negative direction
+    let game = ShooterGame::default()
+    let mut input = Input::new()
+    
+    // Simulate extreme downward mouse movement
+    input.simulate_mouse_delta(0.0, 10000.0)
+    game.update(0.016, input)
+    
+    assert(game.player_pitch >= -89.0, "Pitch should be clamped at -89 degrees")
+}
+
+fn test_shooting_spawns_bullet() {
+    // Test left click spawns a bullet
+    let game = ShooterGame::default()
+    let mut input = Input::new()
+    
+    let initial_bullet_count = game.bullets.len()
+    
+    input.simulate_mouse_press(MouseButton::Left)
+    game.handle_input(input)
+    
+    assert(game.bullets.len() == initial_bullet_count + 1, "Left click should spawn a bullet")
+}
+
+fn test_weapon_switching() {
+    // Test weapon switching with number keys
+    let game = ShooterGame::default()
+    let mut input = Input::new()
+    
+    // Switch to shotgun
+    input.simulate_key_press(Key::Num2)
+    game.handle_input(input)
+    assert(game.weapon == 1, "Key 2 should switch to shotgun (weapon 1)")
+    
+    // Switch to rocket
+    input.clear_frame_state()
+    input.simulate_key_press(Key::Num3)
+    game.handle_input(input)
+    assert(game.weapon == 2, "Key 3 should switch to rocket (weapon 2)")
+    
+    // Switch back to pistol
+    input.clear_frame_state()
+    input.simulate_key_press(Key::Num1)
+    game.handle_input(input)
+    assert(game.weapon == 0, "Key 1 should switch to pistol (weapon 0)")
+}
+
+fn test_gravity() {
+    // Test gravity pulls player down
+    let game = ShooterGame::default()
+    game.player_pos.y = 10.0
+    game.player_on_ground = false
+    
+    let initial_y = game.player_pos.y
+    
+    // Update for 1 second (60 frames)
+    for i in 0..60 {
+        game.update_player_movement(0.016, Input::new())
+    }
+    
+    assert(game.player_pos.y < initial_y, "Gravity should pull player down")
+    assert(game.player_pos.y == 2.0, "Player should land on ground at y=2.0")
+    assert(game.player_on_ground == true, "Player should be on ground")
+}
+
+fn test_jumping() {
+    // Test space bar makes player jump
+    let game = ShooterGame::default()
+    let mut input = Input::new()
+    
+    game.player_on_ground = true
+    let initial_y = game.player_pos.y
+    
+    input.simulate_key_press(Key::Space)
+    game.update_player_movement(0.016, input)
+    
+    assert(game.player_velocity.y > 0.0, "Jump should give upward velocity")
+    assert(game.player_on_ground == false, "Player should leave ground when jumping")
+}
+
+fn test_pause() {
+    // Test ESC pauses the game
+    let game = ShooterGame::default()
+    let mut input = Input::new()
+    
+    assert(game.paused == false, "Game should start unpaused")
+    
+    input.simulate_key_press(Key::Escape)
+    game.handle_input(input)
+    
+    assert(game.paused == true, "ESC should pause the game")
+    
+    // Press ESC again to unpause
+    input.clear_frame_state()
+    input.simulate_key_press(Key::Escape)
+    game.handle_input(input)
+    
+    assert(game.paused == false, "ESC should unpause the game")
+}
+
+fn test_collision_with_wall() {
+    // Test player can't walk through walls
+    let game = ShooterGame::default()
+    let mut input = Input::new()
+    
+    // Position player near a wall
+    game.player_pos.x = 19.0
+    game.player_pos.z = 0.0
+    
+    // Try to move into the wall (right)
+    input.simulate_key_press(Key::D)
+    
+    // Update many times to ensure we hit the wall
+    for i in 0..100 {
+        game.update_player_movement(0.016, input)
+    }
+    
+    // Player should be stopped by the wall
+    assert(game.player_pos.x < 20.0, "Player should not go through wall at x=20")
+}
+
+fn test_enemy_chase() {
+    // Test enemies chase the player
+    let game = ShooterGame::default()
+    
+    // Set player position
+    game.player_pos = Vec3::new(10.0, 2.0, 10.0)
+    
+    // Get initial enemy position
+    let enemy = game.enemies[0]
+    let initial_pos = enemy.pos
+    
+    // Update for 5 seconds
+    for i in 0..300 {
+        game.update_enemies(0.016)
+    }
+    
+    // Enemy should have moved closer to player
+    let final_enemy = game.enemies[0]
+    let initial_dist = distance(initial_pos, game.player_pos)
+    let final_dist = distance(final_enemy.pos, game.player_pos)
+    
+    assert(final_dist < initial_dist, "Enemy should move closer to player")
+}
+
+fn test_bullet_hits_enemy() {
+    // Test bullets damage enemies
+    let game = ShooterGame::default()
+    
+    // Position enemy in front of player
+    game.enemies[0].pos = Vec3::new(0.0, 2.0, 5.0)
+    let initial_health = game.enemies[0].health
+    
+    // Spawn bullet heading toward enemy
+    game.bullets.push(Bullet {
+        pos: Vec3::new(0.0, 2.0, 1.0),
+        velocity: Vec3::new(0.0, 0.0, 30.0),
+        damage: 1,
+        lifetime: 5.0,
+    })
+    
+    // Update until bullet hits
+    for i in 0..10 {
+        game.update_bullets(0.016)
+    }
+    
+    // Enemy should be damaged
+    assert(game.enemies[0].health < initial_health, "Bullet should damage enemy")
+}
+
+// Helper function for distance calculation
+fn distance(a: Vec3, b: Vec3) -> f32 {
+    let dx = b.x - a.x
+    let dy = b.y - a.y
+    let dz = b.z - a.z
+    return (dx * dx + dy * dy + dz * dz).sqrt()
+}
+

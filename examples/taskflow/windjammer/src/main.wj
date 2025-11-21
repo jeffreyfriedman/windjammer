@@ -1,22 +1,22 @@
 // TaskFlow API - Windjammer Implementation
 // Production-ready task management REST API
 
-use std.http
-use std.log  
-use std.env
-use std.db
-use std.json
+use std::http
+use std::log  
+use std::env
+use std::db
+use std::json
 
 // Import modules
 use ./config
-use ./models.user
-use ./models.project
-use ./models.task
-use ./handlers.health
-use ./handlers.auth
-use ./handlers.users
-use ./handlers.projects
-use ./handlers.tasks
+use ./models/user
+use ./models/project
+use ./models/task
+use ./handlers/health
+use ./handlers/auth
+use ./handlers/users
+use ./handlers/projects
+use ./handlers/tasks
 
 @async
 fn main() {

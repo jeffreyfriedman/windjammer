@@ -1,0 +1,89 @@
+// Example 29: Advanced Trait System
+// Combines trait objects, supertraits, generic traits, and all Phase 1 features
+
+// Generic trait
+trait Converter<T> {
+    fn convert(&self, value: T) -> string { "converted".to_string() }
+}
+
+// Supertrait (trait inheritance)
+trait Animal {
+    fn make_sound(&self) { println!("...") }
+    fn name(&self) -> string { "unknown".to_string() }
+}
+
+trait Pet: Animal {
+    fn play(&self) { println!("Playing!") }
+}
+
+
+// Struct implementing multiple traits
+struct Dog {
+    dog_name: string,
+}
+
+impl Animal for Dog {
+    fn make_sound(&self) {
+        println!("Woof!")
+    }
+    
+    fn name(&self) -> string {
+        self.dog_name.clone()
+    }
+}
+
+impl Pet for Dog {
+    fn play(&self) {
+        println!("{} is playing fetch!", self.dog_name)
+    }
+}
+
+// Function with trait bounds and where clause
+fn greet_pet<P>(pet: &P)
+where
+    P: Pet + Clone
+{
+    println!("Hello, {}!", pet.name())
+    pet.make_sound()
+    pet.play()
+}
+
+// Function taking trait object
+fn interact_with_animal(animal: &dyn Animal) {
+    println!("Interacting with: {}", animal.name())
+    animal.make_sound()
+}
+
+// Function returning trait object
+fn create_pet(name: string) -> dyn Pet {
+    Dog { dog_name: name }
+}
+
+fn main() {
+    println!("=== Advanced Trait System Example ===")
+    
+    // Test 1: Supertrait
+    println!("\n1. Supertrait (Pet extends Animal):")
+    let dog = Dog { dog_name: "Buddy".to_string() }
+    dog.make_sound()  // From Animal
+    dog.play()        // From Pet
+    
+    // Test 2: Trait object
+    println!("\n2. Trait object polymorphism:")
+    interact_with_animal(&dog)
+    
+    // Test 3: Return trait object
+    println!("\n3. Function returning trait object:")
+    let new_pet = create_pet("Max".to_string())
+    interact_with_animal(&new_pet)
+    
+    println!("\n=== Done ===")
+    println!("Demonstrated:")
+    println!("- Generic traits: trait Converter<T>")
+    println!("- Supertraits: trait Pet: Animal")
+    println!("- Trait objects: &dyn Animal")
+    println!("- Trait bounds: T: Pet + Clone")
+    println!("- Where clauses: where P: Pet")
+    println!("\nComplete trait system working together!")
+}
+

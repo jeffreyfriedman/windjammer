@@ -1,0 +1,65 @@
+// Windjammer HTTP Server for UI Examples
+// Serves static files from crates/windjammer-ui/examples
+
+use std::http
+use std::fs
+
+fn serve_file(path: string) -> ServerResponse {
+    let base_path = "crates/windjammer-ui/examples"
+    let full_path = format!("{}/{}", base_path, path)
+    
+    match fs::read_to_string(full_path) {
+        Ok(content) => {
+            // Determine content type
+            let content_type = if path.ends_with(".html") {
+                "text/html"
+            } else if path.ends_with(".js") {
+                "application/javascript"
+            } else if path.ends_with(".wasm") {
+                "application/wasm"
+            } else if path.ends_with(".css") {
+                "text/css"
+            } else {
+                "text/plain"
+            }
+            
+            ServerResponse::ok(content)
+                .with_header("Content-Type", content_type)
+        }
+        Err(_) => ServerResponse::not_found()
+    }
+}
+
+fn handle_index(req: Request) -> ServerResponse {
+    serve_file("showcase.html")
+}
+
+fn handle_static(req: Request) -> ServerResponse {
+    let path = req.path().trim_start_matches('/')
+    serve_file(path)
+}
+
+@async
+fn main() {
+    println!("🚀 Windjammer UI Server")
+    println!()
+    println!("Serving from: crates/windjammer-ui/examples")
+    println!()
+    println!("Available pages:")
+    println!("  http://localhost:8080/           - Full showcase")
+    println!("  http://localhost:8080/showcase.html")
+    println!("  http://localhost:8080/simple_counter.html")
+    println!()
+    println!("Starting server on http://0.0.0.0:8080...")
+    println!()
+    
+    let router = Router::new()
+        .get("/", handle_index)
+        .get("/*", handle_static)
+    
+    match http.serve("0.0.0.0:8080", router).await {
+        Ok(_) => println!("Server stopped"),
+        Err(e) => println!("Server error: {}", e)
+    }
+}
+

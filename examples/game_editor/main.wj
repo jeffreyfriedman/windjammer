@@ -1,0 +1,161 @@
+// Windjammer Game Editor
+// Built with windjammer-ui for dogfooding
+
+use std::ui::*
+use std::fs
+use std::http
+
+// Editor state
+struct EditorState {
+    current_file: string,
+    code_content: string,
+    project_files: Vec<string>,
+    console_output: string,
+    is_running: bool,
+}
+
+impl EditorState {
+    fn new() -> EditorState {
+        EditorState {
+            current_file: "".to_string(),
+            code_content: "// Start coding your game here!\n".to_string(),
+            project_files: Vec::new(),
+            console_output: "Welcome to Windjammer Game Editor!\n".to_string(),
+            is_running: false,
+        }
+    }
+    
+    fn load_file(mut self, path: string) -> EditorState {
+        match fs::read_to_string(path.clone()) {
+            Ok(content) => {
+                self.current_file = path
+                self.code_content = content
+                self.console_output += format!("Loaded: {}\n", path).as_str()
+            }
+            Err(e) => {
+                self.console_output += format!("Error loading {}: {}\n", path, e).as_str()
+            }
+        }
+        self
+    }
+    
+    fn save_file(mut self) -> EditorState {
+        if self.current_file.is_empty() {
+            self.console_output += "No file open\n"
+            return self
+        }
+        
+        match fs::write(self.current_file.clone(), self.code_content.clone()) {
+            Ok(_) => {
+                self.console_output += format!("Saved: {}\n", self.current_file).as_str()
+            }
+            Err(e) => {
+                self.console_output += format!("Error saving: {}\n", e).as_str()
+            }
+        }
+        self
+    }
+}
+
+// Main editor UI
+fn render_editor(state: EditorState) -> VNode {
+    Container::new()
+        .max_width("100%")
+        .child(render_toolbar(state.clone()))
+        .child(render_main_area(state.clone()))
+        .child(render_console(state.clone()))
+        .render()
+}
+
+fn render_toolbar(state: EditorState) -> VNode {
+    Toolbar::new()
+        .child(Button::new("New File")
+            .variant(ButtonVariant::Primary)
+            .size(ButtonSize::Small))
+        .child(Button::new("Open")
+            .variant(ButtonVariant::Secondary)
+            .size(ButtonSize::Small))
+        .child(Button::new("Save")
+            .variant(ButtonVariant::Secondary)
+            .size(ButtonSize::Small))
+        .child(Button::new("Run")
+            .variant(ButtonVariant::Primary)
+            .size(ButtonSize::Medium))
+        .child(Button::new("Stop")
+            .variant(ButtonVariant::Danger)
+            .size(ButtonSize::Medium)
+            .disabled(!state.is_running))
+        .render()
+}
+
+fn render_main_area(state: EditorState) -> VNode {
+    Flex::new()
+        .direction(FlexDirection::Row)
+        .child(render_file_tree(state.clone()))
+        .child(render_code_editor(state.clone()))
+        .child(render_preview(state.clone()))
+        .render()
+}
+
+fn render_file_tree(state: EditorState) -> VNode {
+    Panel::new()
+        .title("Files")
+        .child(Text::new("Project files will appear here"))
+        .render()
+}
+
+fn render_code_editor(state: EditorState) -> VNode {
+    Panel::new()
+        .title(if state.current_file.is_empty() { 
+            "Editor" 
+        } else { 
+            state.current_file.as_str() 
+        })
+        .child(CodeEditor::new(state.code_content)
+            .language("windjammer")
+            .line_numbers(true))
+        .render()
+}
+
+fn render_preview(state: EditorState) -> VNode {
+    Panel::new()
+        .title("Preview")
+        .child(if state.is_running {
+            Text::new("Game running...")
+        } else {
+            Text::new("Click 'Run' to start")
+        })
+        .render()
+}
+
+fn render_console(state: EditorState) -> VNode {
+    Panel::new()
+        .title("Console")
+        .child(Text::new(state.console_output))
+        .render()
+}
+
+@async
+fn main() {
+    println!("🎮 Windjammer Game Editor")
+    println!()
+    println!("Starting editor server on http://localhost:3001...")
+    println!()
+    
+    // Initialize editor state
+    let state = EditorState::new()
+    
+    // Serve the editor UI
+    let router = Router::new()
+        .get("/", |req| {
+            let html = render_editor(state.clone())
+            ServerResponse::ok(html.to_html())
+                .with_header("Content-Type", "text/html")
+        })
+    
+    match http.serve("0.0.0.0:3001", router).await {
+        Ok(_) => println!("Editor stopped"),
+        Err(e) => println!("Editor error: {}", e)
+    }
+}
+

@@ -101,15 +101,23 @@ pub fn optimize_simd_vectorization(program: &Program) -> (Program, SimdStats) {
 
     for item in &program.items {
         let new_item = match item {
-            Item::Function(func) => {
+            Item::Function { decl: func, .. } => {
                 let (new_func, func_stats) = optimize_function_simd(func);
                 stats.add(&func_stats);
-                Item::Function(new_func)
+                Item::Function {
+                    decl: new_func,
+                    location: None,
+                }
             }
-            Item::Impl(impl_block) => {
+            Item::Impl {
+                block: impl_block, ..
+            } => {
                 let (new_impl, impl_stats) = optimize_impl_simd(impl_block);
                 stats.add(&impl_stats);
-                Item::Impl(new_impl)
+                Item::Impl {
+                    block: new_impl,
+                    location: None,
+                }
             }
             _ => item.clone(),
         };
@@ -193,51 +201,61 @@ fn optimize_statements_simd(stmts: &[Statement], stats: &mut SimdStats) -> Vec<S
 fn optimize_statement_simd(stmt: &Statement, stats: &mut SimdStats) -> Statement {
     match stmt {
         Statement::For {
-            variable,
+            pattern,
             iterable,
             body,
+            ..
         } => {
-            // Check if this loop is vectorizable
-            if let Some(vectorizable) = analyze_loop_vectorizability(variable, iterable, body) {
-                if vectorizable.is_safe && is_numeric_operation(&vectorizable.operation_type) {
-                    // Mark for vectorization (codegen will handle actual SIMD generation)
-                    stats.loops_vectorized += 1;
-                    stats.total_optimizations += 1;
+            // Only vectorize simple loops with identifier patterns
+            if let Pattern::Identifier(variable) = pattern {
+                // Check if this loop is vectorizable
+                if let Some(vectorizable) = analyze_loop_vectorizability(variable, iterable, body) {
+                    if vectorizable.is_safe && is_numeric_operation(&vectorizable.operation_type) {
+                        // Mark for vectorization (codegen will handle actual SIMD generation)
+                        stats.loops_vectorized += 1;
+                        stats.total_optimizations += 1;
 
-                    match vectorizable.operation_type {
-                        VectorOperation::Reduction => stats.reductions_vectorized += 1,
-                        VectorOperation::Map => stats.maps_vectorized += 1,
-                        VectorOperation::ElementWise => stats.maps_vectorized += 1,
-                        _ => {}
+                        match vectorizable.operation_type {
+                            VectorOperation::Reduction => stats.reductions_vectorized += 1,
+                            VectorOperation::Map => stats.maps_vectorized += 1,
+                            VectorOperation::ElementWise => stats.maps_vectorized += 1,
+                            _ => {}
+                        }
+
+                        // Add a decorator to mark this loop as vectorizable
+                        // The codegen phase will see this and generate SIMD code
+                        return create_vectorized_loop(variable, iterable, body, &vectorizable);
                     }
-
-                    // Add a decorator to mark this loop as vectorizable
-                    // The codegen phase will see this and generate SIMD code
-                    return create_vectorized_loop(variable, iterable, body, &vectorizable);
                 }
             }
 
             // Not vectorizable, recurse into body
             Statement::For {
-                variable: variable.clone(),
+                pattern: pattern.clone(),
                 iterable: iterable.clone(),
                 body: optimize_statements_simd(body, stats),
+                location: None,
             }
         }
         Statement::If {
             condition,
             then_block,
             else_block,
+            ..
         } => Statement::If {
             condition: condition.clone(),
             then_block: optimize_statements_simd(then_block, stats),
             else_block: else_block
                 .as_ref()
                 .map(|stmts| optimize_statements_simd(stmts, stats)),
+            location: None,
         },
-        Statement::While { condition, body } => Statement::While {
+        Statement::While {
+            condition, body, ..
+        } => Statement::While {
             condition: condition.clone(),
             body: optimize_statements_simd(body, stats),
+            location: None,
         },
         _ => stmt.clone(),
     }
@@ -252,7 +270,7 @@ fn analyze_loop_vectorizability(
     // Check if we're iterating over a range or array
     let is_range_or_array = matches!(
         iterable,
-        Expression::Range { .. } | Expression::Identifier(_) | Expression::MethodCall { .. }
+        Expression::Range { .. } | Expression::Identifier { .. } | Expression::MethodCall { .. }
     );
 
     if !is_range_or_array {
@@ -283,7 +301,7 @@ fn classify_loop_operation(variable: &str, body: &[Statement]) -> VectorOperatio
                     return VectorOperation::Reduction;
                 }
             }
-            Statement::Expression(expr) => {
+            Statement::Expression { expr, .. } => {
                 // Check for array assignment (a[i] = ...)
                 if is_array_assignment(expr, variable) {
                     return VectorOperation::Map;
@@ -302,9 +320,11 @@ fn check_vectorization_safety(body: &[Statement]) -> bool {
     // No function calls, no control flow, no early returns
     for stmt in body {
         match stmt {
-            Statement::Return(_) | Statement::Break | Statement::Continue => return false,
+            Statement::Return { .. } | Statement::Break { .. } | Statement::Continue { .. } => {
+                return false
+            }
             Statement::If { .. } | Statement::While { .. } | Statement::For { .. } => return false,
-            Statement::Expression(expr) => {
+            Statement::Expression { expr, .. } => {
                 if contains_function_call(expr) {
                     return false;
                 }
@@ -357,9 +377,10 @@ fn create_vectorized_loop(
     // and generate SIMD code. For now, we just preserve the loop structure
     // and track it in stats.
     Statement::For {
-        variable: variable.to_string(),
+        pattern: Pattern::Identifier(variable.to_string()),
         iterable: iterable.clone(),
         body: body.to_vec(),
+        location: None,
     }
 }
 
@@ -381,13 +402,13 @@ mod tests {
                 return_type: None,
                 body: vec![
                     Statement::Let {
-                        name: "sum".to_string(),
+                        pattern: Pattern::Identifier("sum".to_string()),
                         mutable: true,
                         type_: Some(Type::Custom("f64".to_string())),
                         value: Expression::Literal(Literal::Float(0.0)),
                     },
                     Statement::For {
-                        variable: "i".to_string(),
+                        pattern: Pattern::Identifier("i".to_string()),
                         iterable: Expression::Range {
                             start: Box::new(Expression::Literal(Literal::Int(0))),
                             end: Box::new(Expression::Identifier("n".to_string())),
@@ -431,7 +452,7 @@ mod tests {
                 parameters: vec![],
                 return_type: None,
                 body: vec![Statement::For {
-                    variable: "i".to_string(),
+                    pattern: Pattern::Identifier("i".to_string()),
                     iterable: Expression::Range {
                         start: Box::new(Expression::Literal(Literal::Int(0))),
                         end: Box::new(Expression::Literal(Literal::Int(10))),

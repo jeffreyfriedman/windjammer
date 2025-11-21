@@ -1,0 +1,44 @@
+// Code generation tests - Testing that Windjammer generates correct Rust code
+
+fn test_print_simple() {
+    // Test simple print without interpolation
+    print("Hello, World!")
+}
+
+fn test_print_with_interpolation() {
+    // Test print with string interpolation
+    let name = "Windjammer"
+    print("Hello, ${name}!")
+}
+
+fn test_print_with_number_interpolation() {
+    // Test print with number interpolation
+    let port = 8080
+    print("Port: ${port}")
+}
+
+fn test_string_concatenation() {
+    // Test string concatenation
+    let greeting = "Hello" + ", " + "World"
+    assert(greeting == "Hello, World")
+}
+
+fn test_string_literal_in_function_call() {
+    // Test that string literals are converted to String when needed
+    let s = "test"
+    assert(s == "test")
+}
+
+fn test_empty_vec_with_type() {
+    // Test empty vec with type annotation
+    let v: Vec<int> = vec![]
+    assert(v.len() == 0)
+}
+
+fn test_vec_with_elements() {
+    // Test vec with elements
+    let v = vec![1, 2, 3]
+    assert(v.len() == 3)
+}
+
+

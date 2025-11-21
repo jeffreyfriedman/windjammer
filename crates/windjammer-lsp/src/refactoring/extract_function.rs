@@ -1,3 +1,4 @@
+#![allow(dead_code)] // Refactoring implementation - some parts planned for future versions
 //! Extract Function refactoring
 //!
 //! Transforms selected code into a new function with automatic parameter

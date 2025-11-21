@@ -1,13 +1,13 @@
 // Authentication handlers
 
-use std.http
-use std.json
-use std.crypto
-use std.time
-use std.db
-use std.log
+use std::http
+use std::json
+use std::crypto
+use std::time
+use std::db
+use std::log
 
-use ../models.user
+use ../models/user
 
 @derive(Debug, Serialize, Deserialize)
 pub struct LoginRequest {

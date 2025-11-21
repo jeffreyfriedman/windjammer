@@ -1,26 +1,18 @@
-// wj test - Run tests
+// wj test - Run Windjammer tests
 //
-// This command wraps `cargo test` for a better user experience.
+// Discovers and runs Windjammer test files (*_test.wj)
 
-use anyhow::{bail, Result};
-use colored::*;
-use std::process::Command;
+use anyhow::Result;
+use std::path::Path;
 
 pub fn execute(filter: Option<&str>) -> Result<()> {
-    println!("{} tests", "Running".green().bold());
-
-    let mut cmd = Command::new("cargo");
-    cmd.arg("test");
-
-    if let Some(f) = filter {
-        cmd.arg(f);
-    }
-
-    let status = cmd.status()?;
-
-    if !status.success() {
-        bail!("Tests failed");
-    }
-
-    Ok(())
+    // Call the main run_tests function from main.rs
+    // For now, test current directory with default settings
+    crate::run_tests(
+        Some(Path::new(".")),
+        filter,
+        false, // nocapture
+        true,  // parallel
+        false, // json
+    )
 }

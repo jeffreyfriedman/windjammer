@@ -26,7 +26,9 @@
 //! array[0] = 0; array[1] = 1; array[2] = 2; array[3] = 3;
 //! ```
 
-use crate::parser::{BinaryOp, Expression, FunctionDecl, ImplBlock, Item, Program, Statement};
+use crate::parser::{
+    BinaryOp, Expression, FunctionDecl, ImplBlock, Item, Pattern, Program, Statement,
+};
 // No additional imports needed for Phase 13
 
 /// Statistics about loop optimizations
@@ -90,20 +92,30 @@ fn optimize_loops_in_item(
     stats: &mut LoopOptimizationStats,
 ) -> Item {
     match item {
-        Item::Function(func) => {
+        Item::Function {
+            decl: func,
+            location,
+        } => {
             let new_body = optimize_loops_in_statements(&func.body, config, stats);
-            Item::Function(FunctionDecl {
-                name: func.name.clone(),
-                type_params: func.type_params.clone(),
-                where_clause: func.where_clause.clone(),
-                decorators: func.decorators.clone(),
-                is_async: func.is_async,
-                parameters: func.parameters.clone(),
-                return_type: func.return_type.clone(),
-                body: new_body,
-            })
+            Item::Function {
+                decl: FunctionDecl {
+                    name: func.name.clone(),
+                    type_params: func.type_params.clone(),
+                    where_clause: func.where_clause.clone(),
+                    decorators: func.decorators.clone(),
+                    is_async: func.is_async,
+                    parameters: func.parameters.clone(),
+                    return_type: func.return_type.clone(),
+                    body: new_body,
+                    parent_type: func.parent_type.clone(),
+                },
+                location: location.clone(),
+            }
         }
-        Item::Impl(impl_block) => {
+        Item::Impl {
+            block: impl_block,
+            location,
+        } => {
             let new_functions = impl_block
                 .functions
                 .iter()
@@ -116,35 +128,47 @@ fn optimize_loops_in_item(
                     parameters: func.parameters.clone(),
                     return_type: func.return_type.clone(),
                     body: optimize_loops_in_statements(&func.body, config, stats),
+                    parent_type: func.parent_type.clone(),
                 })
                 .collect();
 
-            Item::Impl(ImplBlock {
-                type_name: impl_block.type_name.clone(),
-                type_params: impl_block.type_params.clone(),
-                where_clause: impl_block.where_clause.clone(),
-                trait_name: impl_block.trait_name.clone(),
-                trait_type_args: impl_block.trait_type_args.clone(),
-                associated_types: impl_block.associated_types.clone(),
-                functions: new_functions,
-                decorators: impl_block.decorators.clone(),
-            })
+            Item::Impl {
+                block: ImplBlock {
+                    type_name: impl_block.type_name.clone(),
+                    type_params: impl_block.type_params.clone(),
+                    where_clause: impl_block.where_clause.clone(),
+                    trait_name: impl_block.trait_name.clone(),
+                    trait_type_args: impl_block.trait_type_args.clone(),
+                    associated_types: impl_block.associated_types.clone(),
+                    functions: new_functions,
+                    decorators: impl_block.decorators.clone(),
+                },
+                location: location.clone(),
+            }
         }
         Item::Static {
             name,
             mutable,
             type_,
             value,
+            location,
         } => Item::Static {
             name: name.clone(),
             mutable: *mutable,
             type_: type_.clone(),
             value: optimize_loops_in_expression(value, config, stats),
+            location: location.clone(),
         },
-        Item::Const { name, type_, value } => Item::Const {
+        Item::Const {
+            name,
+            type_,
+            value,
+            location,
+        } => Item::Const {
             name: name.clone(),
             type_: type_.clone(),
             value: optimize_loops_in_expression(value, config, stats),
+            location: location.clone(),
         },
         _ => item.clone(),
     }
@@ -161,44 +185,64 @@ fn optimize_loops_in_statements(
     for stmt in statements {
         match stmt {
             Statement::For {
-                variable,
+                pattern,
                 iterable,
                 body,
+                location,
             } => {
-                // Try to unroll the loop if it's a small constant range
-                if config.enable_unrolling {
-                    if let Some(unrolled) = try_unroll_loop(variable, iterable, body, config, stats)
-                    {
-                        result.extend(unrolled);
-                        stats.loops_unrolled += 1;
-                        stats.loops_optimized += 1;
-                        continue;
+                // Extract simple identifier from pattern for optimization
+                // Only optimize simple loops with a single identifier pattern
+                if let Pattern::Identifier(variable) = pattern {
+                    // Try to unroll the loop if it's a small constant range
+                    if config.enable_unrolling {
+                        if let Some(unrolled) =
+                            try_unroll_loop(variable, iterable, body, config, stats)
+                        {
+                            result.extend(unrolled);
+                            stats.loops_unrolled += 1;
+                            stats.loops_optimized += 1;
+                            continue;
+                        }
                     }
-                }
 
-                // Apply LICM if enabled
-                let optimized_body = if config.enable_licm {
-                    let (hoisted, new_body) = hoist_loop_invariants(body, variable, stats);
-                    let has_hoisted = !hoisted.is_empty();
-                    result.extend(hoisted);
-                    if has_hoisted {
-                        stats.loops_optimized += 1;
-                    }
-                    new_body
+                    // Apply LICM if enabled
+                    let optimized_body = if config.enable_licm {
+                        let (hoisted, new_body) = hoist_loop_invariants(body, variable, stats);
+                        let has_hoisted = !hoisted.is_empty();
+                        result.extend(hoisted);
+                        if has_hoisted {
+                            stats.loops_optimized += 1;
+                        }
+                        new_body
+                    } else {
+                        body.clone()
+                    };
+
+                    // Recursively optimize the loop body
+                    let final_body = optimize_loops_in_statements(&optimized_body, config, stats);
+
+                    result.push(Statement::For {
+                        pattern: pattern.clone(),
+                        iterable: optimize_loops_in_expression(iterable, config, stats),
+                        body: final_body,
+                        location: location.clone(),
+                    });
                 } else {
-                    body.clone()
-                };
-
-                // Recursively optimize the loop body
-                let final_body = optimize_loops_in_statements(&optimized_body, config, stats);
-
-                result.push(Statement::For {
-                    variable: variable.clone(),
-                    iterable: optimize_loops_in_expression(iterable, config, stats),
-                    body: final_body,
-                });
+                    // For complex patterns (tuples, etc.), just recursively optimize the body
+                    let final_body = optimize_loops_in_statements(body, config, stats);
+                    result.push(Statement::For {
+                        pattern: pattern.clone(),
+                        iterable: optimize_loops_in_expression(iterable, config, stats),
+                        body: final_body,
+                        location: location.clone(),
+                    });
+                }
             }
-            Statement::While { condition, body } => {
+            Statement::While {
+                condition,
+                body,
+                location,
+            } => {
                 // Apply LICM if enabled
                 let optimized_body = if config.enable_licm {
                     let (hoisted, new_body) = hoist_loop_invariants(body, "", stats);
@@ -218,6 +262,7 @@ fn optimize_loops_in_statements(
                 result.push(Statement::While {
                     condition: optimize_loops_in_expression(condition, config, stats),
                     body: final_body,
+                    location: location.clone(),
                 });
             }
             _ => result.push(optimize_loops_in_statement(stmt, config, stats)),
@@ -234,39 +279,57 @@ fn optimize_loops_in_statement(
     stats: &mut LoopOptimizationStats,
 ) -> Statement {
     match stmt {
-        Statement::Expression(expr) => {
-            Statement::Expression(optimize_loops_in_expression(expr, config, stats))
-        }
-        Statement::Return(Some(expr)) => {
-            Statement::Return(Some(optimize_loops_in_expression(expr, config, stats)))
-        }
+        Statement::Expression { expr, location } => Statement::Expression {
+            expr: optimize_loops_in_expression(expr, config, stats),
+            location: location.clone(),
+        },
+        Statement::Return {
+            value: Some(expr),
+            location,
+        } => Statement::Return {
+            value: Some(optimize_loops_in_expression(expr, config, stats)),
+            location: location.clone(),
+        },
         Statement::Let {
-            name,
+            pattern,
             mutable,
             type_,
             value,
+            location,
         } => Statement::Let {
-            name: name.clone(),
+            pattern: pattern.clone(),
             mutable: *mutable,
             type_: type_.clone(),
             value: optimize_loops_in_expression(value, config, stats),
+            location: location.clone(),
         },
-        Statement::Assignment { target, value } => Statement::Assignment {
+        Statement::Assignment {
+            target,
+            value,
+            location,
+        } => Statement::Assignment {
             target: target.clone(),
             value: optimize_loops_in_expression(value, config, stats),
+            location: location.clone(),
         },
         Statement::If {
             condition,
             then_block,
             else_block,
+            location,
         } => Statement::If {
             condition: optimize_loops_in_expression(condition, config, stats),
             then_block: optimize_loops_in_statements(then_block, config, stats),
             else_block: else_block
                 .as_ref()
                 .map(|stmts| optimize_loops_in_statements(stmts, config, stats)),
+            location: location.clone(),
         },
-        Statement::Match { value, arms } => Statement::Match {
+        Statement::Match {
+            value,
+            arms,
+            location,
+        } => Statement::Match {
             value: optimize_loops_in_expression(value, config, stats),
             arms: arms
                 .iter()
@@ -279,6 +342,7 @@ fn optimize_loops_in_statement(
                     body: optimize_loops_in_expression(&arm.body, config, stats),
                 })
                 .collect(),
+            location: location.clone(),
         },
         _ => stmt.clone(),
     }
@@ -294,6 +358,7 @@ fn optimize_loops_in_expression(
         Expression::Call {
             function,
             arguments,
+            location,
         } => Expression::Call {
             function: Box::new(optimize_loops_in_expression(function, config, stats)),
             arguments: arguments
@@ -305,12 +370,14 @@ fn optimize_loops_in_expression(
                     )
                 })
                 .collect(),
+            location: location.clone(),
         },
         Expression::MethodCall {
             object,
             method,
             type_args,
             arguments,
+            location,
         } => Expression::MethodCall {
             object: Box::new(optimize_loops_in_expression(object, config, stats)),
             method: method.clone(),
@@ -324,8 +391,14 @@ fn optimize_loops_in_expression(
                     )
                 })
                 .collect(),
+            location: location.clone(),
         },
-        Expression::Binary { left, op, right } => {
+        Expression::Binary {
+            left,
+            op,
+            right,
+            location,
+        } => {
             // Apply strength reduction if enabled
             if config.enable_strength_reduction {
                 if let Some(reduced) = try_strength_reduction(left, op, right, config, stats) {
@@ -337,79 +410,117 @@ fn optimize_loops_in_expression(
                 left: Box::new(optimize_loops_in_expression(left, config, stats)),
                 op: *op,
                 right: Box::new(optimize_loops_in_expression(right, config, stats)),
+                location: location.clone(),
             }
         }
-        Expression::Unary { op, operand } => Expression::Unary {
+        Expression::Unary {
+            op,
+            operand,
+            location,
+        } => Expression::Unary {
             op: *op,
             operand: Box::new(optimize_loops_in_expression(operand, config, stats)),
+            location: location.clone(),
         },
-        Expression::Block(statements) => {
-            Expression::Block(optimize_loops_in_statements(statements, config, stats))
-        }
-        Expression::Closure { parameters, body } => Expression::Closure {
+        Expression::Block {
+            statements,
+            location,
+        } => Expression::Block {
+            statements: optimize_loops_in_statements(statements, config, stats),
+            location: location.clone(),
+        },
+        Expression::Closure {
+            parameters,
+            body,
+            location,
+        } => Expression::Closure {
             parameters: parameters.clone(),
             body: Box::new(optimize_loops_in_expression(body, config, stats)),
+            location: location.clone(),
         },
-        Expression::Ternary {
-            condition,
-            true_expr,
-            false_expr,
-        } => Expression::Ternary {
-            condition: Box::new(optimize_loops_in_expression(condition, config, stats)),
-            true_expr: Box::new(optimize_loops_in_expression(true_expr, config, stats)),
-            false_expr: Box::new(optimize_loops_in_expression(false_expr, config, stats)),
-        },
-        Expression::Index { object, index } => Expression::Index {
+        Expression::Index {
+            object,
+            index,
+            location,
+        } => Expression::Index {
             object: Box::new(optimize_loops_in_expression(object, config, stats)),
             index: Box::new(optimize_loops_in_expression(index, config, stats)),
+            location: location.clone(),
         },
-        Expression::FieldAccess { object, field } => Expression::FieldAccess {
+        Expression::FieldAccess {
+            object,
+            field,
+            location,
+        } => Expression::FieldAccess {
             object: Box::new(optimize_loops_in_expression(object, config, stats)),
             field: field.clone(),
+            location: location.clone(),
         },
-        Expression::Cast { expr, type_ } => Expression::Cast {
+        Expression::Cast {
+            expr,
+            type_,
+            location,
+        } => Expression::Cast {
             expr: Box::new(optimize_loops_in_expression(expr, config, stats)),
             type_: type_.clone(),
+            location: location.clone(),
         },
-        Expression::StructLiteral { name, fields } => Expression::StructLiteral {
+        Expression::StructLiteral {
+            name,
+            fields,
+            location,
+        } => Expression::StructLiteral {
             name: name.clone(),
             fields: fields
                 .iter()
                 .map(|(k, v)| (k.clone(), optimize_loops_in_expression(v, config, stats)))
                 .collect(),
+            location: location.clone(),
         },
-        Expression::Tuple(elements) => Expression::Tuple(
-            elements
+        Expression::Tuple { elements, location } => Expression::Tuple {
+            elements: elements
                 .iter()
                 .map(|e| optimize_loops_in_expression(e, config, stats))
                 .collect(),
-        ),
+            location: location.clone(),
+        },
         Expression::Range {
             start,
             end,
             inclusive,
+            location,
         } => Expression::Range {
             start: Box::new(optimize_loops_in_expression(start, config, stats)),
             end: Box::new(optimize_loops_in_expression(end, config, stats)),
             inclusive: *inclusive,
+            location: location.clone(),
         },
-        Expression::ChannelSend { channel, value } => Expression::ChannelSend {
+        Expression::ChannelSend {
+            channel,
+            value,
+            location,
+        } => Expression::ChannelSend {
             channel: Box::new(optimize_loops_in_expression(channel, config, stats)),
             value: Box::new(optimize_loops_in_expression(value, config, stats)),
+            location: location.clone(),
         },
-        Expression::ChannelRecv(channel) => Expression::ChannelRecv(Box::new(
-            optimize_loops_in_expression(channel, config, stats),
-        )),
-        Expression::Await(expr) => {
-            Expression::Await(Box::new(optimize_loops_in_expression(expr, config, stats)))
-        }
-        Expression::TryOp(expr) => {
-            Expression::TryOp(Box::new(optimize_loops_in_expression(expr, config, stats)))
-        }
+        Expression::ChannelRecv { channel, location } => Expression::ChannelRecv {
+            channel: Box::new(optimize_loops_in_expression(channel, config, stats)),
+            location: location.clone(),
+        },
+        Expression::Await { expr, location } => Expression::Await {
+            expr: Box::new(optimize_loops_in_expression(expr, config, stats)),
+            location: location.clone(),
+        },
+        Expression::TryOp { expr, location } => Expression::TryOp {
+            expr: Box::new(optimize_loops_in_expression(expr, config, stats)),
+            location: location.clone(),
+        },
         Expression::MacroInvocation {
             name,
             args,
             delimiter,
+            location,
         } => Expression::MacroInvocation {
             name: name.clone(),
             args: args
@@ -417,6 +528,7 @@ fn optimize_loops_in_expression(
                 .map(|a| optimize_loops_in_expression(a, config, stats))
                 .collect(),
             delimiter: delimiter.clone(),
+            location: location.clone(),
         },
         _ => expr.clone(),
     }
@@ -435,16 +547,25 @@ fn try_unroll_loop(
         start,
         end,
         inclusive,
+        ..
     } = iterable
     {
         // Check if start is 0
-        if let Expression::Literal(crate::parser::Literal::Int(start_val)) = &**start {
+        if let Expression::Literal {
+            value: crate::parser::Literal::Int(start_val),
+            ..
+        } = &**start
+        {
             if *start_val != 0 {
                 return None;
             }
 
             // Check if end is a constant
-            if let Expression::Literal(crate::parser::Literal::Int(end_val)) = &**end {
+            if let Expression::Literal {
+                value: crate::parser::Literal::Int(end_val),
+                ..
+            } = &**end
+            {
                 let iterations = if *inclusive {
                     (*end_val + 1) as usize
                 } else {
@@ -460,7 +581,10 @@ fn try_unroll_loop(
                 let mut unrolled = Vec::new();
                 for i in 0..iterations {
                     // Replace loop variable with the current iteration value
-                    let iter_expr = Expression::Literal(crate::parser::Literal::Int(i as i64));
+                    let iter_expr = Expression::Literal {
+                        value: crate::parser::Literal::Int(i as i64),
+                        location: None,
+                    };
                     for stmt in body {
                         unrolled.push(replace_variable_in_statement(stmt, variable, &iter_expr));
                     }
@@ -507,7 +631,7 @@ fn is_loop_invariant(stmt: &Statement, loop_var: &str) -> bool {
 /// Check if an expression uses a specific variable
 fn expression_uses_variable(expr: &Expression, var_name: &str) -> bool {
     match expr {
-        Expression::Identifier(name) => name == var_name,
+        Expression::Identifier { name, .. } => name == var_name,
         Expression::Binary { left, right, .. } => {
             expression_uses_variable(left, var_name) || expression_uses_variable(right, var_name)
         }
@@ -515,6 +639,7 @@ fn expression_uses_variable(expr: &Expression, var_name: &str) -> bool {
         Expression::Call {
             function,
             arguments,
+            ..
         } => {
             expression_uses_variable(function, var_name)
                 || arguments
@@ -529,12 +654,12 @@ fn expression_uses_variable(expr: &Expression, var_name: &str) -> bool {
                     .iter()
                     .any(|(_, arg)| expression_uses_variable(arg, var_name))
         }
-        Expression::Index { object, index } => {
+        Expression::Index { object, index, .. } => {
             expression_uses_variable(object, var_name) || expression_uses_variable(index, var_name)
         }
         Expression::FieldAccess { object, .. } => expression_uses_variable(object, var_name),
         Expression::Cast { expr, .. } => expression_uses_variable(expr, var_name),
-        Expression::Tuple(elements) => elements
+        Expression::Tuple { elements, .. } => elements
             .iter()
             .any(|e| expression_uses_variable(e, var_name)),
         Expression::StructLiteral { fields, .. } => fields
@@ -543,24 +668,15 @@ fn expression_uses_variable(expr: &Expression, var_name: &str) -> bool {
         Expression::Range { start, end, .. } => {
             expression_uses_variable(start, var_name) || expression_uses_variable(end, var_name)
         }
-        Expression::Ternary {
-            condition,
-            true_expr,
-            false_expr,
-        } => {
-            expression_uses_variable(condition, var_name)
-                || expression_uses_variable(true_expr, var_name)
-                || expression_uses_variable(false_expr, var_name)
-        }
         Expression::Closure { body, .. } => expression_uses_variable(body, var_name),
-        Expression::Block(statements) => statements
+        Expression::Block { statements, .. } => statements
             .iter()
             .any(|s| statement_uses_variable(s, var_name)),
-        Expression::ChannelSend { channel, value } => {
+        Expression::ChannelSend { channel, value, .. } => {
             expression_uses_variable(channel, var_name) || expression_uses_variable(value, var_name)
         }
-        Expression::ChannelRecv(channel) => expression_uses_variable(channel, var_name),
-        Expression::Await(expr) | Expression::TryOp(expr) => {
+        Expression::ChannelRecv { channel, .. } => expression_uses_variable(channel, var_name),
+        Expression::Await { expr, .. } | Expression::TryOp { expr, .. } => {
             expression_uses_variable(expr, var_name)
         }
         Expression::MacroInvocation { args, .. } => {
@@ -573,17 +689,19 @@ fn expression_uses_variable(expr: &Expression, var_name: &str) -> bool {
 /// Check if a statement uses a specific variable
 fn statement_uses_variable(stmt: &Statement, var_name: &str) -> bool {
     match stmt {
-        Statement::Expression(expr) | Statement::Return(Some(expr)) => {
-            expression_uses_variable(expr, var_name)
-        }
+        Statement::Expression { expr, .. }
+        | Statement::Return {
+            value: Some(expr), ..
+        } => expression_uses_variable(expr, var_name),
         Statement::Let { value, .. } => expression_uses_variable(value, var_name),
-        Statement::Assignment { target, value } => {
+        Statement::Assignment { target, value, .. } => {
             expression_uses_variable(target, var_name) || expression_uses_variable(value, var_name)
         }
         Statement::If {
             condition,
             then_block,
             else_block,
+            ..
         } => {
             expression_uses_variable(condition, var_name)
                 || then_block
@@ -593,23 +711,32 @@ fn statement_uses_variable(stmt: &Statement, var_name: &str) -> bool {
                     .as_ref()
                     .is_some_and(|stmts| stmts.iter().any(|s| statement_uses_variable(s, var_name)))
         }
-        Statement::While { condition, body } => {
+        Statement::While {
+            condition, body, ..
+        } => {
             expression_uses_variable(condition, var_name)
                 || body.iter().any(|s| statement_uses_variable(s, var_name))
         }
         Statement::For {
-            variable,
+            pattern,
             iterable,
             body,
+            ..
         } => {
             // If this is a nested loop with the same variable, it shadows the outer one
-            if variable == var_name {
+            // For tuple patterns, we're conservative and assume it might shadow
+            let shadows = match pattern {
+                Pattern::Identifier(var) => var == var_name,
+                Pattern::Tuple(_) => true, // Conservative: assume tuple might contain the variable
+                _ => false,
+            };
+            if shadows {
                 return false;
             }
             expression_uses_variable(iterable, var_name)
                 || body.iter().any(|s| statement_uses_variable(s, var_name))
         }
-        Statement::Match { value, arms } => {
+        Statement::Match { value, arms, .. } => {
             expression_uses_variable(value, var_name)
                 || arms.iter().any(|arm| {
                     arm.guard
@@ -629,28 +756,33 @@ fn replace_variable_in_statement(
     replacement: &Expression,
 ) -> Statement {
     match stmt {
-        Statement::Expression(expr) => {
-            Statement::Expression(replace_variable_in_expression(expr, var_name, replacement))
-        }
-        Statement::Return(Some(expr)) => Statement::Return(Some(replace_variable_in_expression(
-            expr,
-            var_name,
-            replacement,
-        ))),
+        Statement::Expression { expr, .. } => Statement::Expression {
+            expr: replace_variable_in_expression(expr, var_name, replacement),
+            location: None,
+        },
+        Statement::Return {
+            value: Some(expr), ..
+        } => Statement::Return {
+            value: Some(replace_variable_in_expression(expr, var_name, replacement)),
+            location: None,
+        },
         Statement::Let {
-            name,
+            pattern,
             mutable,
             type_,
             value,
+            ..
         } => Statement::Let {
-            name: name.clone(),
+            pattern: pattern.clone(),
             mutable: *mutable,
             type_: type_.clone(),
             value: replace_variable_in_expression(value, var_name, replacement),
+            location: None,
         },
-        Statement::Assignment { target, value } => Statement::Assignment {
+        Statement::Assignment { target, value, .. } => Statement::Assignment {
             target: replace_variable_in_expression(target, var_name, replacement),
             value: replace_variable_in_expression(value, var_name, replacement),
+            location: None,
         },
         _ => stmt.clone(),
     }
@@ -663,27 +795,32 @@ fn replace_variable_in_expression(
     replacement: &Expression,
 ) -> Expression {
     match expr {
-        Expression::Identifier(name) if name == var_name => replacement.clone(),
-        Expression::Binary { left, op, right } => Expression::Binary {
+        Expression::Identifier { name, .. } if name == var_name => replacement.clone(),
+        Expression::Binary {
+            left, op, right, ..
+        } => Expression::Binary {
             left: Box::new(replace_variable_in_expression(left, var_name, replacement)),
             op: *op,
             right: Box::new(replace_variable_in_expression(right, var_name, replacement)),
+            location: None,
         },
-        Expression::Unary { op, operand } => Expression::Unary {
+        Expression::Unary { op, operand, .. } => Expression::Unary {
             op: *op,
             operand: Box::new(replace_variable_in_expression(
                 operand,
                 var_name,
                 replacement,
             )),
+            location: None,
         },
-        Expression::Index { object, index } => Expression::Index {
+        Expression::Index { object, index, .. } => Expression::Index {
             object: Box::new(replace_variable_in_expression(
                 object,
                 var_name,
                 replacement,
             )),
             index: Box::new(replace_variable_in_expression(index, var_name, replacement)),
+            location: None,
         },
         _ => expr.clone(),
     }
@@ -723,7 +860,7 @@ mod tests {
                 parameters: vec![],
                 return_type: None,
                 body: vec![Statement::For {
-                    variable: "i".to_string(),
+                    pattern: Pattern::Identifier("i".to_string()),
                     iterable: Expression::Range {
                         start: Box::new(Expression::Literal(Literal::Int(0))),
                         end: Box::new(Expression::Literal(Literal::Int(3))),
@@ -761,7 +898,7 @@ mod tests {
                 parameters: vec![],
                 return_type: None,
                 body: vec![Statement::For {
-                    variable: "i".to_string(),
+                    pattern: Pattern::Identifier("i".to_string()),
                     iterable: Expression::Range {
                         start: Box::new(Expression::Literal(Literal::Int(0))),
                         end: Box::new(Expression::Literal(Literal::Int(100))),
@@ -770,7 +907,7 @@ mod tests {
                     body: vec![
                         // Loop-invariant: doesn't use 'i'
                         Statement::Let {
-                            name: "x".to_string(),
+                            pattern: Pattern::Identifier("x".to_string()),
                             mutable: false,
                             type_: None,
                             value: Expression::Literal(Literal::Int(42)),
@@ -836,7 +973,7 @@ mod tests {
                 parameters: vec![],
                 return_type: None,
                 body: vec![Statement::For {
-                    variable: "i".to_string(),
+                    pattern: Pattern::Identifier("i".to_string()),
                     iterable: Expression::Range {
                         start: Box::new(Expression::Literal(Literal::Int(0))),
                         end: Box::new(Expression::Literal(Literal::Int(1000))), // Too large
@@ -873,7 +1010,7 @@ mod tests {
                 parameters: vec![],
                 return_type: None,
                 body: vec![Statement::For {
-                    variable: "i".to_string(),
+                    pattern: Pattern::Identifier("i".to_string()),
                     iterable: Expression::Range {
                         start: Box::new(Expression::Literal(Literal::Int(0))),
                         end: Box::new(Expression::Literal(Literal::Int(10))),
@@ -882,7 +1019,7 @@ mod tests {
                     body: vec![
                         // Loop-variant: uses 'i'
                         Statement::Let {
-                            name: "x".to_string(),
+                            pattern: Pattern::Identifier("x".to_string()),
                             mutable: false,
                             type_: None,
                             value: Expression::Binary {

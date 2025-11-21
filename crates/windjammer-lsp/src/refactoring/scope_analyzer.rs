@@ -1,3 +1,4 @@
+#![allow(dead_code)] // Refactoring implementation - some parts planned for future versions
 //! Scope analysis for refactoring operations
 //!
 //! This module analyzes variable scopes to determine:
@@ -6,7 +7,7 @@
 //! - Which variables are purely local (→ stay inside)
 
 use std::collections::{HashMap, HashSet};
-use windjammer::parser::{Expression, Statement};
+use windjammer::parser::{Expression, Pattern, Statement};
 
 /// Result of analyzing a code selection for extraction
 #[derive(Debug, Clone)]
@@ -122,36 +123,46 @@ impl ScopeAnalyzer {
     fn analyze_statement(&mut self, stmt: &Statement) {
         match stmt {
             Statement::Let {
-                name,
+                pattern,
                 mutable,
                 value,
                 ..
             } => {
-                // Record definition
-                self.inner_scope.insert(name.clone());
+                // Only handle simple identifier patterns
+                if let Pattern::Identifier(name) = pattern {
+                    // Record definition
+                    self.inner_scope.insert(name.clone());
 
-                // Analyze the value expression
-                self.analyze_expression(value);
+                    // Analyze the value expression
+                    self.analyze_expression(value);
 
-                // Record write
-                self.writes.insert(
-                    name.clone(),
-                    Variable {
-                        name: name.clone(),
-                        type_name: None, // TODO: Type inference
-                        is_mutable: *mutable,
-                        defined_at: None,
-                    },
-                );
+                    // Record write
+                    self.writes.insert(
+                        name.clone(),
+                        Variable {
+                            name: name.clone(),
+                            type_name: None, // TODO: Type inference
+                            is_mutable: *mutable,
+                            defined_at: None,
+                        },
+                    );
+                } else {
+                    // For non-identifier patterns (tuple, wildcard), just analyze the value
+                    self.analyze_expression(value);
+                }
             }
 
-            Statement::Expression(expr) => {
+            Statement::Expression { expr, location: _ } => {
                 self.analyze_expression(expr);
             }
 
-            Statement::Assignment { target, value } => {
+            Statement::Assignment {
+                target,
+                value,
+                location: _,
+            } => {
                 // Record write to target
-                if let Expression::Identifier(name) = target {
+                if let Expression::Identifier { name, location: _ } = target {
                     self.writes.insert(
                         name.clone(),
                         Variable {
@@ -167,16 +178,22 @@ impl ScopeAnalyzer {
                 self.analyze_expression(value);
             }
 
-            Statement::Return(expr) => {
-                if let Some(expr) = expr {
-                    self.analyze_expression(expr);
-                }
+            Statement::Return {
+                value: Some(expr),
+                location: _,
+            } => {
+                self.analyze_expression(expr);
             }
+            Statement::Return {
+                value: None,
+                location: _,
+            } => {}
 
             Statement::If {
                 condition,
                 then_block,
                 else_block,
+                location: _,
             } => {
                 self.analyze_expression(condition);
                 self.analyze_statements(then_block);
@@ -185,7 +202,11 @@ impl ScopeAnalyzer {
                 }
             }
 
-            Statement::While { condition, body } => {
+            Statement::While {
+                condition,
+                body,
+                location: _,
+            } => {
                 self.analyze_expression(condition);
                 self.analyze_statements(body);
             }
@@ -203,7 +224,7 @@ impl ScopeAnalyzer {
     /// Analyze an expression for variable usage
     fn analyze_expression(&mut self, expr: &Expression) {
         match expr {
-            Expression::Identifier(name) => {
+            Expression::Identifier { name, location: _ } => {
                 // Is this a read from outer scope?
                 if !self.inner_scope.contains(name) {
                     self.reads.insert(
@@ -230,6 +251,7 @@ impl ScopeAnalyzer {
             Expression::Call {
                 function,
                 arguments,
+                location: _,
             } => {
                 self.analyze_expression(function);
                 for (_, arg) in arguments {
@@ -250,16 +272,7 @@ impl ScopeAnalyzer {
                 self.analyze_expression(object);
             }
 
-            Expression::Ternary {
-                condition,
-                true_expr,
-                false_expr,
-            } => {
-                self.analyze_expression(condition);
-                self.analyze_expression(true_expr);
-                self.analyze_expression(false_expr);
-            }
-
+            // Ternary operator removed from Windjammer - use if/else expressions instead
             _ => {
                 // Literals, etc. don't have variable usage
             }
@@ -269,11 +282,25 @@ impl ScopeAnalyzer {
     /// Collect variable definitions in a statement
     fn collect_definitions_in_statement(stmt: &Statement, scope: &mut HashSet<String>) {
         match stmt {
-            Statement::Let { name, .. } => {
+            Statement::Let {
+                pattern: windjammer::parser::Pattern::Identifier(name),
+                ..
+            } => {
                 scope.insert(name.clone());
             }
-            Statement::For { variable, .. } => {
-                scope.insert(variable.clone());
+            Statement::Let { .. } => {
+                // Non-identifier patterns (tuple, wildcard) - skip for now
+            }
+            Statement::For {
+                pattern: windjammer::parser::Pattern::Identifier(var),
+                ..
+            } => {
+                // For simple identifier patterns, add to scope
+                scope.insert(var.clone());
+            }
+            Statement::For { .. } => {
+                // For tuple patterns, we'd need to extract all identifiers
+                // For now, skip complex patterns
             }
             _ => {}
         }
@@ -282,10 +309,13 @@ impl ScopeAnalyzer {
     /// Collect variable usages in a statement
     fn collect_usages_in_statement(stmt: &Statement, usages: &mut HashSet<String>) {
         match stmt {
-            Statement::Expression(expr) => {
+            Statement::Expression { expr, location: _ } => {
                 Self::collect_usages_in_expression(expr, usages);
             }
-            Statement::Return(Some(expr)) => {
+            Statement::Return {
+                value: Some(expr),
+                location: _,
+            } => {
                 Self::collect_usages_in_expression(expr, usages);
             }
             Statement::Assignment { value, .. } => {
@@ -295,6 +325,7 @@ impl ScopeAnalyzer {
                 condition,
                 then_block,
                 else_block,
+                location: _,
             } => {
                 Self::collect_usages_in_expression(condition, usages);
                 for stmt in then_block {
@@ -313,7 +344,7 @@ impl ScopeAnalyzer {
     /// Collect variable usages in an expression
     fn collect_usages_in_expression(expr: &Expression, usages: &mut HashSet<String>) {
         match expr {
-            Expression::Identifier(name) => {
+            Expression::Identifier { name, location: _ } => {
                 usages.insert(name.clone());
             }
             Expression::Binary { left, right, .. } => {
@@ -326,6 +357,7 @@ impl ScopeAnalyzer {
             Expression::Call {
                 function,
                 arguments,
+                location: _,
             } => {
                 Self::collect_usages_in_expression(function, usages);
                 for (_, arg) in arguments {
@@ -387,7 +419,7 @@ mod tests {
 
         // Before: let x = 10;
         let before = vec![Statement::Let {
-            name: "x".to_string(),
+            pattern: windjammer::parser::Pattern::Identifier("x".to_string()),
             mutable: false,
             type_: None,
             value: Expression::Literal(windjammer::parser::Literal::Int(10)),
@@ -395,11 +427,14 @@ mod tests {
 
         // Selection: let y = x + 5;
         let selected = vec![Statement::Let {
-            name: "y".to_string(),
+            pattern: windjammer::parser::Pattern::Identifier("y".to_string()),
             mutable: false,
             type_: None,
             value: Expression::Binary {
-                left: Box::new(Expression::Identifier("x".to_string())),
+                left: Box::new(Expression::Identifier {
+                    name: "x".to_string(),
+                    location: None,
+                }),
                 op: BinaryOp::Add,
                 right: Box::new(Expression::Literal(windjammer::parser::Literal::Int(5))),
             },
@@ -426,7 +461,7 @@ mod tests {
 
         // Selection: let result = 42;
         let selected = vec![Statement::Let {
-            name: "result".to_string(),
+            pattern: windjammer::parser::Pattern::Identifier("result".to_string()),
             mutable: false,
             type_: None,
             value: Expression::Literal(windjammer::parser::Literal::Int(42)),
@@ -434,8 +469,17 @@ mod tests {
 
         // After: println(result);
         let after = vec![Statement::Expression(Expression::Call {
-            function: Box::new(Expression::Identifier("println".to_string())),
-            arguments: vec![(None, Expression::Identifier("result".to_string()))],
+            function: Box::new(Expression::Identifier {
+                name: "println".to_string(),
+                location: None,
+            }),
+            arguments: vec![(
+                None,
+                Expression::Identifier {
+                    name: "result".to_string(),
+                    location: None,
+                },
+            )],
         })];
 
         let analysis = analyzer.analyze(&before, &selected, &after);
@@ -451,7 +495,7 @@ mod tests {
 
         // Before: let x = 10;
         let before = vec![Statement::Let {
-            name: "x".to_string(),
+            pattern: windjammer::parser::Pattern::Identifier("x".to_string()),
             mutable: false,
             type_: None,
             value: Expression::Literal(windjammer::parser::Literal::Int(10)),
@@ -459,11 +503,14 @@ mod tests {
 
         // Selection: let y = x * 2;
         let selected = vec![Statement::Let {
-            name: "y".to_string(),
+            pattern: windjammer::parser::Pattern::Identifier("y".to_string()),
             mutable: false,
             type_: None,
             value: Expression::Binary {
-                left: Box::new(Expression::Identifier("x".to_string())),
+                left: Box::new(Expression::Identifier {
+                    name: "x".to_string(),
+                    location: None,
+                }),
                 op: BinaryOp::Mul,
                 right: Box::new(Expression::Literal(windjammer::parser::Literal::Int(2))),
             },
@@ -471,8 +518,17 @@ mod tests {
 
         // After: use(y);
         let after = vec![Statement::Expression(Expression::Call {
-            function: Box::new(Expression::Identifier("use".to_string())),
-            arguments: vec![(None, Expression::Identifier("y".to_string()))],
+            function: Box::new(Expression::Identifier {
+                name: "use".to_string(),
+                location: None,
+            }),
+            arguments: vec![(
+                None,
+                Expression::Identifier {
+                    name: "y".to_string(),
+                    location: None,
+                },
+            )],
         })];
 
         let analysis = analyzer.analyze(&before, &selected, &after);

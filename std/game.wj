@@ -1,0 +1,244 @@
+// Windjammer Game Framework - Idiomatic Helpers
+// Simple, ECS-inspired game development without Rust ceremony
+
+// ============================================================================
+// Core Math Types (backed by windjammer-game runtime)
+// ============================================================================
+
+struct Vec2 {
+    x: float,
+    y: float,
+}
+
+struct Vec3 {
+    x: float,
+    y: float,
+    z: float,
+}
+
+struct Mat4 {
+    // Internal implementation details hidden
+}
+
+// ============================================================================
+// Math Helpers - Clean, intuitive API
+// ============================================================================
+
+fn vec2(x: float, y: float) -> Vec2 {
+    Vec2 { x, y }
+}
+
+fn vec3(x: float, y: float, z: float) -> Vec3 {
+    Vec3 { x, y, z }
+}
+
+fn add_vec2(a: Vec2, b: Vec2) -> Vec2 {
+    Vec2 { x: a.x + b.x, y: a.y + b.y }
+}
+
+fn add_vec3(a: Vec3, b: Vec3) -> Vec3 {
+    Vec3 { x: a.x + b.x, y: a.y + b.y, z: a.z + b.z }
+}
+
+fn scale_vec2(v: Vec2, s: float) -> Vec2 {
+    Vec2 { x: v.x * s, y: v.y * s }
+}
+
+fn scale_vec3(v: Vec3, s: float) -> Vec3 {
+    Vec3 { x: v.x * s, y: v.y * s, z: v.z * s }
+}
+
+fn length_vec2(v: Vec2) -> float {
+    ((v.x * v.x) + (v.y * v.y)).sqrt()
+}
+
+fn length_vec3(v: Vec3) -> float {
+    ((v.x * v.x) + (v.y * v.y) + (v.z * v.z)).sqrt()
+}
+
+fn normalize_vec2(v: Vec2) -> Vec2 {
+    let len = length_vec2(v)
+    if len > 0.0 {
+        Vec2 { x: v.x / len, y: v.y / len }
+    } else {
+        v
+    }
+}
+
+fn normalize_vec3(v: Vec3) -> Vec3 {
+    let len = length_vec3(v)
+    if len > 0.0 {
+        Vec3 { x: v.x / len, y: v.y / len, z: v.z / len }
+    } else {
+        v
+    }
+}
+
+// ============================================================================
+// Transform Helpers - Position, rotation, scale
+// ============================================================================
+
+struct Transform {
+    position: Vec3,
+    rotation: Vec3,  // Euler angles
+    scale: Vec3,
+}
+
+fn transform(position: Vec3, rotation: Vec3, scale: Vec3) -> Transform {
+    Transform { position, rotation, scale }
+}
+
+fn identity_transform() -> Transform {
+    Transform {
+        position: vec3(0.0, 0.0, 0.0),
+        rotation: vec3(0.0, 0.0, 0.0),
+        scale: vec3(1.0, 1.0, 1.0),
+    }
+}
+
+// ============================================================================
+// Input Helpers - Keyboard and mouse
+// ============================================================================
+
+struct Input {
+    // Internal implementation details hidden
+}
+
+fn is_key_pressed(input: &Input, key: String) -> bool {
+    // Check if a key is currently pressed
+    false
+}
+
+fn is_key_just_pressed(input: &Input, key: String) -> bool {
+    // Check if a key was just pressed this frame
+    false
+}
+
+fn is_key_just_released(input: &Input, key: String) -> bool {
+    // Check if a key was just released this frame
+    false
+}
+
+fn mouse_position(input: &Input) -> Vec2 {
+    // Get the current mouse position
+    vec2(0.0, 0.0)
+}
+
+fn is_mouse_button_pressed(input: &Input, button: int) -> bool {
+    // Check if a mouse button is pressed (0=left, 1=right, 2=middle)
+    false
+}
+
+// ============================================================================
+// Rendering Helpers - Draw 2D and 3D content
+// ============================================================================
+
+struct RenderContext {
+    // Internal implementation details hidden
+}
+
+fn draw_rect(ctx: &mut RenderContext, position: Vec2, size: Vec2, color: int) {
+    // Draw a 2D rectangle
+}
+
+fn draw_circle(ctx: &mut RenderContext, position: Vec2, radius: float, color: int) {
+    // Draw a 2D circle
+}
+
+fn draw_line(ctx: &mut RenderContext, start: Vec2, end: Vec2, color: int, width: float) {
+    // Draw a 2D line
+}
+
+fn draw_sprite(ctx: &mut RenderContext, texture: String, position: Vec2, size: Vec2) {
+    // Draw a 2D sprite
+}
+
+fn draw_mesh_3d(ctx: &mut RenderContext, mesh: String, transform: Transform) {
+    // Draw a 3D mesh with transform
+}
+
+fn draw_text(ctx: &mut RenderContext, text: String, position: Vec2, size: float, color: int) {
+    // Draw text on screen
+}
+
+// ============================================================================
+// Physics Helpers - Simple collision and physics
+// ============================================================================
+
+struct Collider {
+    // Internal implementation details hidden
+}
+
+fn box_collider(size: Vec3) -> Collider {
+    // Create a box-shaped collider
+    Collider {}
+}
+
+fn sphere_collider(radius: float) -> Collider {
+    // Create a sphere-shaped collider
+    Collider {}
+}
+
+fn capsule_collider(height: float, radius: float) -> Collider {
+    // Create a capsule-shaped collider
+    Collider {}
+}
+
+fn check_collision(a: &Collider, a_pos: Vec3, b: &Collider, b_pos: Vec3) -> bool {
+    // Check if two colliders are colliding
+    false
+}
+
+// ============================================================================
+// Audio Helpers - Play sounds and music
+// ============================================================================
+
+fn play_sound(path: String, volume: float) {
+    // Play a sound effect
+}
+
+fn play_music(path: String, volume: float, looping: bool) {
+    // Play background music
+}
+
+fn stop_music() {
+    // Stop currently playing music
+}
+
+fn set_volume(volume: float) {
+    // Set global audio volume (0.0 to 1.0)
+}
+
+// ============================================================================
+// Game Loop - Use @game decorator on your structs
+// ============================================================================
+
+// Example usage (this is documentation, not executable code):
+//
+// @game
+// struct MyGame {
+//     player_pos: Vec3,
+//     enemies: Vec<Vec3>,
+// }
+//
+// impl MyGame {
+//     fn new() -> Self {
+//         Self {
+//             player_pos: vec3(0.0, 0.0, 0.0),
+//             enemies: vec![],
+//         }
+//     }
+//
+//     fn update(&mut self, input: &Input, delta_time: float) {
+//         // Update game logic
+//         if is_key_pressed(input, "W") {
+//             self.player_pos.z = self.player_pos.z + 5.0 * delta_time
+//         }
+//     }
+//
+//     fn render(&self, ctx: &mut RenderContext) {
+//         // Render game content
+//         draw_circle(ctx, vec2(self.player_pos.x, self.player_pos.y), 10.0, 0xFF0000)
+//     }
+// }
+

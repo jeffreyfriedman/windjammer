@@ -1,0 +1,13 @@
+{
+  "mappings": [
+    {
+      "rust_file": "build_reactive_counter/main.rs",
+      "rust_line": 1,
+      "rust_column": 0,
+      "wj_file": "examples/reactive_counter/main.wj",
+      "wj_line": 68,
+      "wj_column": 30
+    }
+  ],
+  "version": 1
+}

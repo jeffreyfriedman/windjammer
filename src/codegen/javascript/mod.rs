@@ -6,9 +6,17 @@
 //! - TypeScript definitions (.d.ts)
 //! - npm package.json
 
+pub mod code_splitter;
+pub mod differential_loading;
 mod generator;
-mod source_maps;
+pub mod minifier;
+pub mod module_federation;
+pub mod polyfills;
+pub mod source_maps;
+pub mod tree_shaker;
 mod type_definitions;
+pub mod v8_optimizer;
+pub mod web_workers;
 
 use crate::codegen::backend::{CodegenBackend, CodegenConfig, CodegenOutput, Target};
 use crate::parser::Program;
@@ -42,21 +50,58 @@ impl CodegenBackend for JavaScriptBackend {
     }
 
     fn generate(&self, program: &Program, config: &CodegenConfig) -> Result<CodegenOutput> {
+        // Apply tree shaking if configured
+        let program = if config.tree_shake {
+            tree_shaker::shake_tree(program)
+        } else {
+            program.clone()
+        };
+
         let mut generator = JavaScriptGenerator::new();
-        let code = generator.generate(program);
+        let mut code = generator.generate(&program);
+
+        // Apply polyfills if configured
+        if config.polyfills {
+            let polyfill_config = polyfills::PolyfillConfig {
+                target: polyfills::PolyfillTarget::ES2015,
+                include_promise: true,
+                include_array_methods: true,
+                include_object_methods: true,
+                include_symbol: false,
+            };
+            let polyfill_code = polyfills::generate_polyfills(&polyfill_config);
+            code = format!("{}\n{}", polyfill_code, code);
+        }
+
+        // Apply V8 optimizations if configured
+        if config.v8_optimize {
+            let optimizer = v8_optimizer::V8Optimizer::new();
+            code = optimizer.optimize(&code);
+        }
+
+        // Apply minification if configured
+        if config.minify {
+            let mut minifier = minifier::Minifier::new();
+            code = minifier.minify(&code);
+        }
+
+        // Generate source maps if configured (before moving code)
+        let source_map_json = if config.source_maps {
+            let source_map = source_maps::generate_source_map("output.js", "input.wj", "", &code);
+            Some(serde_json::to_string(&source_map).unwrap_or_default())
+        } else {
+            None
+        };
 
         let mut output = CodegenOutput::new(code, "js".to_string());
 
-        // Generate source maps if configured
-        if config.source_maps {
-            if let Ok(source_map) = source_maps::generate_source_map(program) {
-                output = output.with_source_map(source_map);
-            }
+        if let Some(source_map) = source_map_json {
+            output = output.with_source_map(source_map);
         }
 
         // Generate TypeScript definitions if configured
         if config.type_definitions {
-            if let Some(type_defs) = type_definitions::generate_type_definitions(program) {
+            if let Some(type_defs) = type_definitions::generate_type_definitions(&program) {
                 output = output.with_type_definitions(type_defs);
             }
         }

@@ -1,0 +1,15 @@
+# Dockerfile for testing C# SDK examples
+FROM mcr.microsoft.com/dotnet/sdk:9.0
+
+WORKDIR /app
+
+# Copy C# SDK
+COPY sdks/csharp /app/sdks/csharp
+
+# Build SDK
+WORKDIR /app/sdks/csharp/Windjammer.SDK
+RUN dotnet build
+
+# Run examples
+WORKDIR /app/sdks/csharp/Examples
+CMD ["sh", "-c", "dotnet run HelloWorld.cs && dotnet run SpriteDemo.cs && dotnet run 3DScene.cs"]

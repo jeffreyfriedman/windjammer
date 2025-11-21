@@ -1,0 +1,479 @@
+{
+  "name": "windjammer",
+  "version": "0.2.0",
+  "types": [],
+  "functions": [],
+  "constants": [],
+  "structs": [
+    {
+      "name": "Vec2",
+      "doc": "2D vector",
+      "fields": [
+        {"name": "x", "field_type": {"Primitive": "Float32"}, "doc": "X component"},
+        {"name": "y", "field_type": {"Primitive": "Float32"}, "doc": "Y component"}
+      ]
+    },
+    {
+      "name": "Vec3",
+      "doc": "3D vector",
+      "fields": [
+        {"name": "x", "field_type": {"Primitive": "Float32"}, "doc": "X component"},
+        {"name": "y", "field_type": {"Primitive": "Float32"}, "doc": "Y component"},
+        {"name": "z", "field_type": {"Primitive": "Float32"}, "doc": "Z component"}
+      ]
+    },
+    {
+      "name": "Vec4",
+      "doc": "4D vector",
+      "fields": [
+        {"name": "x", "field_type": {"Primitive": "Float32"}, "doc": "X component"},
+        {"name": "y", "field_type": {"Primitive": "Float32"}, "doc": "Y component"},
+        {"name": "z", "field_type": {"Primitive": "Float32"}, "doc": "Z component"},
+        {"name": "w", "field_type": {"Primitive": "Float32"}, "doc": "W component"}
+      ]
+    },
+    {
+      "name": "Quat",
+      "doc": "Quaternion for 3D rotations",
+      "fields": [
+        {"name": "x", "field_type": {"Primitive": "Float32"}, "doc": "X component"},
+        {"name": "y", "field_type": {"Primitive": "Float32"}, "doc": "Y component"},
+        {"name": "z", "field_type": {"Primitive": "Float32"}, "doc": "Z component"},
+        {"name": "w", "field_type": {"Primitive": "Float32"}, "doc": "W component"}
+      ]
+    },
+    {
+      "name": "Color",
+      "doc": "RGBA color",
+      "fields": [
+        {"name": "r", "field_type": {"Primitive": "Float32"}, "doc": "Red (0-1)"},
+        {"name": "g", "field_type": {"Primitive": "Float32"}, "doc": "Green (0-1)"},
+        {"name": "b", "field_type": {"Primitive": "Float32"}, "doc": "Blue (0-1)"},
+        {"name": "a", "field_type": {"Primitive": "Float32"}, "doc": "Alpha (0-1)"}
+      ]
+    },
+    {
+      "name": "Transform2D",
+      "doc": "2D transform (position, rotation, scale)",
+      "fields": [
+        {"name": "position", "field_type": {"Custom": "Vec2"}, "doc": "Position"},
+        {"name": "rotation", "field_type": {"Primitive": "Float32"}, "doc": "Rotation in radians"},
+        {"name": "scale", "field_type": {"Custom": "Vec2"}, "doc": "Scale"}
+      ]
+    },
+    {
+      "name": "Transform3D",
+      "doc": "3D transform (position, rotation, scale)",
+      "fields": [
+        {"name": "position", "field_type": {"Custom": "Vec3"}, "doc": "Position"},
+        {"name": "rotation", "field_type": {"Custom": "Quat"}, "doc": "Rotation quaternion"},
+        {"name": "scale", "field_type": {"Custom": "Vec3"}, "doc": "Scale"}
+      ]
+    },
+    {
+      "name": "Rect",
+      "doc": "Rectangle",
+      "fields": [
+        {"name": "x", "field_type": {"Primitive": "Float32"}, "doc": "X position"},
+        {"name": "y", "field_type": {"Primitive": "Float32"}, "doc": "Y position"},
+        {"name": "width", "field_type": {"Primitive": "Float32"}, "doc": "Width"},
+        {"name": "height", "field_type": {"Primitive": "Float32"}, "doc": "Height"}
+      ]
+    }
+  ],
+  "enums": [
+    {
+      "name": "Key",
+      "doc": "Keyboard keys",
+      "variants": [
+        {"name": "A", "value": 0},
+        {"name": "B", "value": 1},
+        {"name": "C", "value": 2},
+        {"name": "D", "value": 3},
+        {"name": "E", "value": 4},
+        {"name": "F", "value": 5},
+        {"name": "Space", "value": 32},
+        {"name": "Enter", "value": 13},
+        {"name": "Escape", "value": 27},
+        {"name": "Left", "value": 37},
+        {"name": "Up", "value": 38},
+        {"name": "Right", "value": 39},
+        {"name": "Down", "value": 40}
+      ]
+    },
+    {
+      "name": "MouseButton",
+      "doc": "Mouse buttons",
+      "variants": [
+        {"name": "Left", "value": 0},
+        {"name": "Right", "value": 1},
+        {"name": "Middle", "value": 2}
+      ]
+    },
+    {
+      "name": "RigidBodyType",
+      "doc": "Physics body type",
+      "variants": [
+        {"name": "Dynamic", "value": 0, "doc": "Affected by forces"},
+        {"name": "Static", "value": 1, "doc": "Never moves"},
+        {"name": "Kinematic", "value": 2, "doc": "Moves via velocity"}
+      ]
+    },
+    {
+      "name": "ColliderShape",
+      "doc": "Collider shape type",
+      "variants": [
+        {"name": "Box", "value": 0},
+        {"name": "Sphere", "value": 1},
+        {"name": "Capsule", "value": 2},
+        {"name": "Cylinder", "value": 3}
+      ]
+    }
+  ],
+  "classes": [
+    {
+      "name": "App",
+      "doc": "Main application class",
+      "fields": [],
+      "constructors": [
+        {"params": []}
+      ],
+      "methods": [
+        {
+          "name": "add_system",
+          "params": [{"name": "system", "param_type": {"Function": {"params": [], "return_type": "Void"}}}],
+          "return_type": "Void",
+          "doc": "Adds a system that runs every frame"
+        },
+        {
+          "name": "run",
+          "params": [],
+          "return_type": "Void",
+          "doc": "Runs the application"
+        }
+      ]
+    },
+    {
+      "name": "World",
+      "doc": "ECS world containing all entities",
+      "fields": [],
+      "constructors": [
+        {"params": []}
+      ],
+      "methods": [
+        {
+          "name": "create_entity",
+          "params": [],
+          "return_type": {"Custom": "Entity"},
+          "doc": "Creates a new entity"
+        },
+        {
+          "name": "destroy_entity",
+          "params": [{"name": "entity", "param_type": {"Custom": "Entity"}}],
+          "return_type": "Void",
+          "doc": "Destroys an entity"
+        }
+      ]
+    },
+    {
+      "name": "Entity",
+      "doc": "Game entity (ECS)",
+      "fields": [
+        {"name": "id", "field_type": {"Primitive": "Int64"}, "doc": "Entity ID"}
+      ],
+      "constructors": [],
+      "methods": []
+    },
+    {
+      "name": "Input",
+      "doc": "Input system",
+      "fields": [],
+      "constructors": [
+        {"params": []}
+      ],
+      "methods": [
+        {
+          "name": "is_key_pressed",
+          "params": [{"name": "key", "param_type": {"Custom": "Key"}}],
+          "return_type": {"Primitive": "Bool"},
+          "doc": "Check if key was just pressed this frame"
+        },
+        {
+          "name": "is_key_held",
+          "params": [{"name": "key", "param_type": {"Custom": "Key"}}],
+          "return_type": {"Primitive": "Bool"},
+          "doc": "Check if key is currently held down"
+        },
+        {
+          "name": "is_mouse_button_pressed",
+          "params": [{"name": "button", "param_type": {"Custom": "MouseButton"}}],
+          "return_type": {"Primitive": "Bool"},
+          "doc": "Check if mouse button was just pressed"
+        },
+        {
+          "name": "mouse_position",
+          "params": [],
+          "return_type": {"Custom": "Vec2"},
+          "doc": "Get current mouse position"
+        }
+      ]
+    },
+    {
+      "name": "Time",
+      "doc": "Time and delta time management",
+      "fields": [],
+      "constructors": [],
+      "methods": [
+        {
+          "name": "delta_time",
+          "params": [],
+          "return_type": {"Primitive": "Float32"},
+          "doc": "Time since last frame in seconds"
+        },
+        {
+          "name": "total_time",
+          "params": [],
+          "return_type": {"Primitive": "Float32"},
+          "doc": "Total time since app started"
+        },
+        {
+          "name": "fps",
+          "params": [],
+          "return_type": {"Primitive": "Float32"},
+          "doc": "Current frames per second"
+        }
+      ]
+    },
+    {
+      "name": "Camera2D",
+      "doc": "2D camera",
+      "fields": [
+        {"name": "position", "field_type": {"Custom": "Vec2"}, "doc": "Camera position"},
+        {"name": "zoom", "field_type": {"Primitive": "Float32"}, "doc": "Zoom level"}
+      ],
+      "constructors": [
+        {"params": []}
+      ],
+      "methods": [
+        {
+          "name": "follow",
+          "params": [{"name": "target", "param_type": {"Custom": "Vec2"}}],
+          "return_type": "Void",
+          "doc": "Follow a target position"
+        }
+      ]
+    },
+    {
+      "name": "Camera3D",
+      "doc": "3D camera",
+      "fields": [
+        {"name": "position", "field_type": {"Custom": "Vec3"}, "doc": "Camera position"},
+        {"name": "target", "field_type": {"Custom": "Vec3"}, "doc": "Look-at target"},
+        {"name": "fov", "field_type": {"Primitive": "Float32"}, "doc": "Field of view"}
+      ],
+      "constructors": [
+        {"params": []}
+      ],
+      "methods": [
+        {
+          "name": "look_at",
+          "params": [{"name": "target", "param_type": {"Custom": "Vec3"}}],
+          "return_type": "Void",
+          "doc": "Point camera at target"
+        }
+      ]
+    },
+    {
+      "name": "Sprite",
+      "doc": "2D sprite renderer",
+      "fields": [
+        {"name": "texture_path", "field_type": {"Primitive": "String"}, "doc": "Path to texture"},
+        {"name": "color", "field_type": {"Custom": "Color"}, "doc": "Tint color"}
+      ],
+      "constructors": [
+        {"params": [{"name": "texture_path", "param_type": {"Primitive": "String"}}]}
+      ],
+      "methods": []
+    },
+    {
+      "name": "Mesh3D",
+      "doc": "3D mesh renderer",
+      "fields": [
+        {"name": "mesh_path", "field_type": {"Primitive": "String"}, "doc": "Path to mesh file"}
+      ],
+      "constructors": [
+        {"params": [{"name": "mesh_path", "param_type": {"Primitive": "String"}}]}
+      ],
+      "methods": []
+    },
+    {
+      "name": "RigidBody2D",
+      "doc": "2D physics body",
+      "fields": [
+        {"name": "body_type", "field_type": {"Custom": "RigidBodyType"}, "doc": "Body type"},
+        {"name": "velocity", "field_type": {"Custom": "Vec2"}, "doc": "Linear velocity"},
+        {"name": "mass", "field_type": {"Primitive": "Float32"}, "doc": "Mass"}
+      ],
+      "constructors": [
+        {"params": [{"name": "body_type", "param_type": {"Custom": "RigidBodyType"}}]}
+      ],
+      "methods": [
+        {
+          "name": "apply_force",
+          "params": [{"name": "force", "param_type": {"Custom": "Vec2"}}],
+          "return_type": "Void",
+          "doc": "Apply force to body"
+        },
+        {
+          "name": "apply_impulse",
+          "params": [{"name": "impulse", "param_type": {"Custom": "Vec2"}}],
+          "return_type": "Void",
+          "doc": "Apply impulse to body"
+        }
+      ]
+    },
+    {
+      "name": "RigidBody3D",
+      "doc": "3D physics body",
+      "fields": [
+        {"name": "body_type", "field_type": {"Custom": "RigidBodyType"}, "doc": "Body type"},
+        {"name": "velocity", "field_type": {"Custom": "Vec3"}, "doc": "Linear velocity"},
+        {"name": "mass", "field_type": {"Primitive": "Float32"}, "doc": "Mass"}
+      ],
+      "constructors": [
+        {"params": [{"name": "body_type", "param_type": {"Custom": "RigidBodyType"}}]}
+      ],
+      "methods": [
+        {
+          "name": "apply_force",
+          "params": [{"name": "force", "param_type": {"Custom": "Vec3"}}],
+          "return_type": "Void",
+          "doc": "Apply force to body"
+        },
+        {
+          "name": "apply_torque",
+          "params": [{"name": "torque", "param_type": {"Custom": "Vec3"}}],
+          "return_type": "Void",
+          "doc": "Apply torque to body"
+        }
+      ]
+    },
+    {
+      "name": "Collider2D",
+      "doc": "2D collider",
+      "fields": [
+        {"name": "shape", "field_type": {"Custom": "ColliderShape"}, "doc": "Collider shape"}
+      ],
+      "constructors": [
+        {"params": [{"name": "shape", "param_type": {"Custom": "ColliderShape"}}]}
+      ],
+      "methods": []
+    },
+    {
+      "name": "AudioSource",
+      "doc": "Audio playback",
+      "fields": [
+        {"name": "audio_path", "field_type": {"Primitive": "String"}, "doc": "Path to audio file"},
+        {"name": "volume", "field_type": {"Primitive": "Float32"}, "doc": "Volume (0-1)"},
+        {"name": "looping", "field_type": {"Primitive": "Bool"}, "doc": "Loop audio"}
+      ],
+      "constructors": [
+        {"params": [{"name": "audio_path", "param_type": {"Primitive": "String"}}]}
+      ],
+      "methods": [
+        {
+          "name": "play",
+          "params": [],
+          "return_type": "Void",
+          "doc": "Play audio"
+        },
+        {
+          "name": "stop",
+          "params": [],
+          "return_type": "Void",
+          "doc": "Stop audio"
+        },
+        {
+          "name": "pause",
+          "params": [],
+          "return_type": "Void",
+          "doc": "Pause audio"
+        }
+      ]
+    },
+    {
+      "name": "ParticleSystem",
+      "doc": "Particle effects",
+      "fields": [
+        {"name": "max_particles", "field_type": {"Primitive": "Int32"}, "doc": "Maximum particles"}
+      ],
+      "constructors": [
+        {"params": []}
+      ],
+      "methods": [
+        {
+          "name": "emit",
+          "params": [{"name": "count", "param_type": {"Primitive": "Int32"}}],
+          "return_type": "Void",
+          "doc": "Emit particles"
+        }
+      ]
+    },
+    {
+      "name": "AnimationPlayer",
+      "doc": "Animation playback",
+      "fields": [],
+      "constructors": [
+        {"params": []}
+      ],
+      "methods": [
+        {
+          "name": "play",
+          "params": [{"name": "animation_name", "param_type": {"Primitive": "String"}}],
+          "return_type": "Void",
+          "doc": "Play animation"
+        },
+        {
+          "name": "stop",
+          "params": [],
+          "return_type": "Void",
+          "doc": "Stop animation"
+        }
+      ]
+    },
+    {
+      "name": "UIButton",
+      "doc": "UI button widget",
+      "fields": [
+        {"name": "text", "field_type": {"Primitive": "String"}, "doc": "Button text"},
+        {"name": "rect", "field_type": {"Custom": "Rect"}, "doc": "Button rectangle"}
+      ],
+      "constructors": [
+        {"params": [{"name": "text", "param_type": {"Primitive": "String"}}]}
+      ],
+      "methods": [
+        {
+          "name": "is_clicked",
+          "params": [],
+          "return_type": {"Primitive": "Bool"},
+          "doc": "Check if button was clicked"
+        }
+      ]
+    },
+    {
+      "name": "UILabel",
+      "doc": "UI text label",
+      "fields": [
+        {"name": "text", "field_type": {"Primitive": "String"}, "doc": "Label text"},
+        {"name": "position", "field_type": {"Custom": "Vec2"}, "doc": "Label position"}
+      ],
+      "constructors": [
+        {"params": [{"name": "text", "param_type": {"Primitive": "String"}}]}
+      ],
+      "methods": []
+    }
+  ],
+  "functions": [],
+  "modules": []
+}
+

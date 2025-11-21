@@ -1,0 +1,44 @@
+// Vector operations tests
+
+fn test_vec_creation() {
+    let v = vec![1, 2, 3]
+    assert(v.len() == 3)
+}
+
+fn test_vec_push() {
+    let mut v = vec![1, 2]
+    v.push(3)
+    assert(v.len() == 3)
+}
+
+fn test_vec_access() {
+    let v = vec![10, 20, 30]
+    assert(v[0] == 10)
+    assert(v[1] == 20)
+    assert(v[2] == 30)
+}
+
+fn test_vec_empty() {
+    let v: Vec<int> = vec![]
+    assert(v.len() == 0)
+}
+
+fn test_vec_iteration() {
+    let v = vec![1, 2, 3]
+    let mut sum = 0
+    
+    for item in v {
+        sum = sum + item
+    }
+    
+    assert(sum == 6)
+}
+
+fn test_vec_strings() {
+    let v = vec!["hello", "world"]
+    assert(v.len() == 2)
+    assert(v[0] == "hello")
+    assert(v[1] == "world")
+}
+
+

@@ -1,4 +1,5 @@
 //! Utilities for AST manipulation and text generation
+#![allow(dead_code)] // Utility functions used by various refactoring modules
 
 use tower_lsp::lsp_types::Position;
 use tower_lsp::lsp_types::*;
@@ -89,11 +90,7 @@ pub fn format_type(ty: &Type) -> String {
         Type::Custom(name) => name.clone(),
         Type::Generic(name) => name.clone(),
         Type::Parameterized(base, args) => {
-            let args_str = args
-                .iter()
-                .map(|arg| format_type(arg))
-                .collect::<Vec<_>>()
-                .join(", ");
+            let args_str = args.iter().map(format_type).collect::<Vec<_>>().join(", ");
             format!("{}<{}>", base, args_str)
         }
         Type::Associated(base, assoc) => format!("{}::{}", base, assoc),
@@ -101,15 +98,24 @@ pub fn format_type(ty: &Type) -> String {
         Type::Option(inner) => format!("Option<{}>", format_type(inner)),
         Type::Result(ok, err) => format!("Result<{}, {}>", format_type(ok), format_type(err)),
         Type::Vec(inner) => format!("Vec<{}>", format_type(inner)),
+        Type::Array(inner, size) => format!("[{}; {}]", format_type(inner), size),
         Type::Reference(inner) => format!("&{}", format_type(inner)),
         Type::MutableReference(inner) => format!("&mut {}", format_type(inner)),
         Type::Tuple(types) => {
-            let types_str = types
-                .iter()
-                .map(|ty| format_type(ty))
-                .collect::<Vec<_>>()
-                .join(", ");
+            let types_str = types.iter().map(format_type).collect::<Vec<_>>().join(", ");
             format!("({})", types_str)
+        }
+        Type::Infer => "_".to_string(),
+        Type::FunctionPointer {
+            params,
+            return_type,
+        } => {
+            let param_strs: Vec<String> = params.iter().map(format_type).collect();
+            if let Some(ret) = return_type {
+                format!("fn({}) -> {}", param_strs.join(", "), format_type(ret))
+            } else {
+                format!("fn({})", param_strs.join(", "))
+            }
         }
     }
 }

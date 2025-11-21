@@ -96,6 +96,7 @@ impl ClientCredentials {
 /// Refresh token data
 #[derive(Debug, Clone)]
 struct RefreshToken {
+    #[allow(dead_code)]
     token: String,
     client_id: String,
     scopes: Vec<String>,
@@ -545,7 +546,7 @@ mod tests {
 
         manager.register_client(credentials).await.unwrap();
 
-        let response = manager
+        let _response = manager
             .client_credentials_grant("test-client", "test-secret", vec!["read".to_string()])
             .await
             .unwrap();

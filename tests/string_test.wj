@@ -1,0 +1,49 @@
+// String operations tests
+
+fn test_string_creation() {
+    let s = "Hello, World!"
+    assert(s == "Hello, World!")
+}
+
+fn test_string_concatenation() {
+    let s1 = "Hello"
+    let s2 = "World"
+    let result = s1 + ", " + s2 + "!"
+    assert(result == "Hello, World!")
+}
+
+fn test_string_interpolation() {
+    let name = "Windjammer"
+    let greeting = "Hello, ${name}!"
+    assert(greeting == "Hello, Windjammer!")
+}
+
+fn test_string_interpolation_numbers() {
+    let count = 42
+    let message = "The answer is ${count}"
+    assert(message == "The answer is 42")
+}
+
+fn test_string_length() {
+    let s = "Hello"
+    assert(s.len() == 5)
+}
+
+fn test_empty_string() {
+    let s = ""
+    assert(s.len() == 0)
+}
+
+fn test_string_equality() {
+    let s1 = "test"
+    let s2 = "test"
+    assert(s1 == s2)
+}
+
+fn test_string_inequality() {
+    let s1 = "test"
+    let s2 = "other"
+    assert(s1 != s2)
+}
+
+

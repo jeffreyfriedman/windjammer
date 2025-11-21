@@ -1,12 +1,12 @@
 // File replacement functionality for wjfind
 
-use std.fs
-use std.io
-use std.path
-use std.log
+use std::fs
+use std::io
+use std::path
+use std::log
 
-use ./config.Config
-use ./search.Match
+use ./config::Config
+use ./search::Match
 
 pub struct ReplaceManager {
     dry_run: bool,
@@ -22,10 +22,10 @@ impl ReplaceManager {
     }
     
     pub fn replace_in_files(
-        self,
+        &self,
         matches: Vec<Match>,
-        replacement: string
-    ) -> Result<ReplaceStats, Error> {
+        replacement: &string
+    ) -> Result<ReplaceStats, string> {
         let mut stats = ReplaceStats {
             files_modified: 0,
             total_replacements: 0,
@@ -33,7 +33,7 @@ impl ReplaceManager {
         }
         
         // Group matches by file
-        let mut files_to_replace = std.collections.HashMap::new()
+        let mut files_to_replace = std::collections::HashMap::new()
         
         for m in matches {
             files_to_replace.entry(m.file.clone())
@@ -51,11 +51,11 @@ impl ReplaceManager {
                 Ok(count) => {
                     stats.files_modified += 1
                     stats.total_replacements += count
-                },
+                }
                 Err(e) => {
                     stats.errors.push(ReplaceError {
                         file: file_path,
-                        error: e.to_string(),
+                        error: e,
                     })
                 }
             }
@@ -65,18 +65,18 @@ impl ReplaceManager {
     }
     
     fn replace_in_file(
-        self,
+        &self,
         file_path: string,
         matches: Vec<Match>,
         replacement: string
-    ) -> Result<int, Error> {
+    ) -> Result<int, string> {
         // Read original file contents
-        let contents = fs.read_to_string(file_path.clone())?
+        let contents = fs::read_to_string(file_path.clone())?
         
         // Create backup if requested
         if self.backup && !self.dry_run {
             let backup_path = format!("{}.bak", file_path)
-            fs.copy(file_path.clone(), backup_path)?
+            fs::copy(file_path.clone(), backup_path)?
         }
         
         // Sort matches by line number (descending) to replace from bottom up
@@ -93,7 +93,7 @@ impl ReplaceManager {
             let line_idx = (m.line_number - 1) as usize
             
             if line_idx >= lines.len() {
-                log.warn("Line number out of bounds", {
+                log::warn("Line number out of bounds", {
                     "file": file_path.clone(),
                     "line": m.line_number,
                 })
@@ -111,14 +111,14 @@ impl ReplaceManager {
         // Write back to file (unless dry run)
         if !self.dry_run {
             let new_contents = lines.join("\n")
-            fs.write(file_path.clone(), new_contents)?
+            fs::write(file_path.clone(), new_contents)?
             
-            log.info("File modified", {
+            log::info("File modified", {
                 "file": file_path,
                 "replacements": replacement_count,
             })
         } else {
-            log.info("Dry run - would modify file", {
+            log::info("Dry run - would modify file", {
                 "file": file_path,
                 "replacements": replacement_count,
             })
@@ -128,9 +128,9 @@ impl ReplaceManager {
     }
     
     pub fn preview_replacements(
-        self,
+        &self,
         matches: Vec<Match>,
-        replacement: string
+        replacement: &string
     ) -> Vec<ReplacementPreview> {
         let mut previews = vec![]
         
@@ -150,35 +150,35 @@ impl ReplaceManager {
         previews
     }
     
-    pub fn restore_from_backup(file_path: string) -> Result<(), Error> {
+    pub fn restore_from_backup(file_path: string) -> Result<(), string> {
         let backup_path = format!("{}.bak", file_path)
         
-        if !fs.exists(backup_path.clone()) {
+        if !fs::exists(backup_path.clone()) {
             return Err(format!("Backup file not found: {}", backup_path))
         }
         
-        fs.copy(backup_path, file_path.clone())?
+        fs::copy(backup_path, file_path.clone())?
         
-        log.info("File restored from backup", {
+        log::info("File restored from backup", {
             "file": file_path,
         })
         
         Ok(())
     }
     
-    pub fn cleanup_backups(directory: string) -> Result<int, Error> {
+    pub fn cleanup_backups(directory: string) -> Result<int, string> {
         let mut count = 0
         
-        for entry in fs.read_dir(directory)? {
+        for entry in fs::read_dir(directory)? {
             let path = entry.path()
             
             if path.ends_with(".bak") {
-                fs.remove_file(path)?
+                fs::remove_file(path)?
                 count += 1
             }
         }
         
-        log.info("Backup files cleaned up", {
+        log::info("Backup files cleaned up", {
             "count": count,
         })
         
@@ -186,20 +186,20 @@ impl ReplaceManager {
     }
 }
 
-@derive(Debug, Clone)]
+@derive(Debug, Clone)
 pub struct ReplaceStats {
     pub files_modified: int,
     pub total_replacements: int,
     pub errors: Vec<ReplaceError>,
 }
 
-@derive(Debug, Clone)]
+@derive(Debug, Clone)
 pub struct ReplaceError {
     pub file: string,
     pub error: string,
 }
 
-@derive(Debug, Clone)]
+@derive(Debug, Clone)
 pub struct ReplacementPreview {
     pub file: string,
     pub line_number: int,

@@ -1,0 +1,71 @@
+// Windjammer Compute API Demo
+// Demonstrates transparent parallel computation across platforms
+
+use std::compute::*
+
+fn main() {
+    println!("🚀 Windjammer Compute API Demo")
+    println!("================================")
+    println!("")
+    
+    // Get available workers
+    let workers = num_workers()
+    println!("Available workers: {}", workers)
+    println!("")
+    
+    // Example 1: Parallel map
+    println!("Example 1: Parallel Map")
+    println!("-----------------------")
+    let numbers = vec![1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
+    let squared = parallel(numbers, |x| x * x)
+    println!("Input:  {:?}", vec![1, 2, 3, 4, 5, 6, 7, 8, 9, 10])
+    println!("Output: {:?}", squared)
+    println!("")
+    
+    // Example 2: Map-reduce
+    println!("Example 2: Map-Reduce (Sum of Squares)")
+    println!("---------------------------------------")
+    let data = vec![1, 2, 3, 4, 5]
+    let sum_of_squares = map_reduce(
+        data,
+        |x| x * x,           // Map: square each number
+        |a, b| a + b,        // Reduce: sum them up
+        0                    // Initial value
+    )
+    println!("Input:  {:?}", vec![1, 2, 3, 4, 5])
+    println!("Result: {} (1² + 2² + 3² + 4² + 5² = 55)", sum_of_squares)
+    println!("")
+    
+    // Example 3: Join (parallel execution of two tasks)
+    println!("Example 3: Join (Two Parallel Tasks)")
+    println!("-------------------------------------")
+    let (result_a, result_b) = join(
+        || {
+            // Task A: Sum 1..100
+            let mut sum = 0
+            for i in 1..101 {
+                sum = sum + i
+            }
+            sum
+        },
+        || {
+            // Task B: Product 1..10
+            let mut product = 1
+            for i in 1..11 {
+                product = product * i
+            }
+            product
+        }
+    )
+    println!("Task A (sum 1..100):     {}", result_a)
+    println!("Task B (product 1..10):  {}", result_b)
+    println!("")
+    
+    println!("✅ All examples completed!")
+    println!("")
+    println!("Platform Notes:")
+    println!("  • Native:  Uses rayon for multi-threaded parallelism")
+    println!("  • WASM:    Uses Web Workers (or sequential fallback)")
+    println!("  • Same code works everywhere! 🎉")
+}
+
