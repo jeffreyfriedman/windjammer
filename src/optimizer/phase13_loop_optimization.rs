@@ -848,38 +848,57 @@ mod tests {
     #[test]
     fn test_loop_unrolling_simple() {
         let program = Program {
-            items: vec![Item::Function(FunctionDecl {
-                name: "test".to_string(),
-                type_params: vec![],
-                where_clause: vec![],
-                decorators: vec![Decorator {
-                    name: "pub".to_string(),
-                    arguments: vec![],
-                }],
-                is_async: false,
-                parameters: vec![],
-                return_type: None,
-                body: vec![Statement::For {
-                    pattern: Pattern::Identifier("i".to_string()),
-                    iterable: Expression::Range {
-                        start: Box::new(Expression::Literal(Literal::Int(0))),
-                        end: Box::new(Expression::Literal(Literal::Int(3))),
-                        inclusive: false,
-                    },
-                    body: vec![Statement::Expression(Expression::MacroInvocation {
-                        name: "println".to_string(),
-                        args: vec![Expression::Identifier("i".to_string())],
-                        delimiter: crate::parser::MacroDelimiter::Parens,
-                    })],
-                }],
-            })],
+            items: vec![Item::Function {
+                decl: FunctionDecl {
+                    name: "test".to_string(),
+                    type_params: vec![],
+                    where_clause: vec![],
+                    decorators: vec![Decorator {
+                        name: "pub".to_string(),
+                        arguments: vec![],
+                    }],
+                    is_async: false,
+                    parent_type: None,
+                    parameters: vec![],
+                    return_type: None,
+                    body: vec![Statement::For {
+                        pattern: Pattern::Identifier("i".to_string()),
+                        iterable: Expression::Range {
+                            start: Box::new(Expression::Literal {
+                                value: Literal::Int(0),
+                                location: None,
+                            }),
+                            end: Box::new(Expression::Literal {
+                                value: Literal::Int(3),
+                                location: None,
+                            }),
+                            inclusive: false,
+                            location: None,
+                        },
+                        body: vec![Statement::Expression {
+                            expr: Expression::MacroInvocation {
+                                name: "println".to_string(),
+                                args: vec![Expression::Identifier {
+                                    name: "i".to_string(),
+                                    location: None,
+                                }],
+                                delimiter: crate::parser::MacroDelimiter::Parens,
+                                location: None,
+                            },
+                            location: None,
+                        }],
+                        location: None,
+                    }],
+                },
+                location: None,
+            }],
         };
 
         let (optimized, stats) = optimize_loops(&program);
         assert_eq!(stats.loops_unrolled, 1);
 
         let func = match &optimized.items[0] {
-            Item::Function(f) => f,
+            Item::Function { decl: f, .. } => f,
             _ => panic!("Expected function"),
         };
         // After unrolling, we should have 3 statements instead of 1 loop
@@ -889,38 +908,64 @@ mod tests {
     #[test]
     fn test_licm_hoisting() {
         let program = Program {
-            items: vec![Item::Function(FunctionDecl {
-                name: "test".to_string(),
-                type_params: vec![],
-                where_clause: vec![],
-                decorators: vec![],
-                is_async: false,
-                parameters: vec![],
-                return_type: None,
-                body: vec![Statement::For {
-                    pattern: Pattern::Identifier("i".to_string()),
-                    iterable: Expression::Range {
-                        start: Box::new(Expression::Literal(Literal::Int(0))),
-                        end: Box::new(Expression::Literal(Literal::Int(100))),
-                        inclusive: false,
-                    },
-                    body: vec![
-                        // Loop-invariant: doesn't use 'i'
-                        Statement::Let {
-                            pattern: Pattern::Identifier("x".to_string()),
-                            mutable: false,
-                            type_: None,
-                            value: Expression::Literal(Literal::Int(42)),
+            items: vec![Item::Function {
+                decl: FunctionDecl {
+                    name: "test".to_string(),
+                    type_params: vec![],
+                    where_clause: vec![],
+                    decorators: vec![],
+                    is_async: false,
+                    parent_type: None,
+                    parameters: vec![],
+                    return_type: None,
+                    body: vec![Statement::For {
+                        pattern: Pattern::Identifier("i".to_string()),
+                        iterable: Expression::Range {
+                            start: Box::new(Expression::Literal {
+                                value: Literal::Int(0),
+                                location: None,
+                            }),
+                            end: Box::new(Expression::Literal {
+                                value: Literal::Int(100),
+                                location: None,
+                            }),
+                            inclusive: false,
+                            location: None,
                         },
-                        // Loop-variant: uses 'i'
-                        Statement::Expression(Expression::Binary {
-                            left: Box::new(Expression::Identifier("x".to_string())),
-                            op: BinaryOp::Add,
-                            right: Box::new(Expression::Identifier("i".to_string())),
-                        }),
-                    ],
-                }],
-            })],
+                        body: vec![
+                            // Loop-invariant: doesn't use 'i'
+                            Statement::Let {
+                                pattern: Pattern::Identifier("x".to_string()),
+                                mutable: false,
+                                type_: None,
+                                value: Expression::Literal {
+                                    value: Literal::Int(42),
+                                    location: None,
+                                },
+                                location: None,
+                            },
+                            // Loop-variant: uses 'i'
+                            Statement::Expression {
+                                expr: Expression::Binary {
+                                    left: Box::new(Expression::Identifier {
+                                        name: "x".to_string(),
+                                        location: None,
+                                    }),
+                                    op: BinaryOp::Add,
+                                    right: Box::new(Expression::Identifier {
+                                        name: "i".to_string(),
+                                        location: None,
+                                    }),
+                                    location: None,
+                                },
+                                location: None,
+                            },
+                        ],
+                        location: None,
+                    }],
+                },
+                location: None,
+            }],
         };
 
         let (optimized, stats) = optimize_loops(&program);
@@ -928,7 +973,7 @@ mod tests {
         assert_eq!(stats.loops_optimized, 1);
 
         let func = match &optimized.items[0] {
-            Item::Function(f) => f,
+            Item::Function { decl: f, .. } => f,
             _ => panic!("Expected function"),
         };
         // The hoisted statement should come before the loop
@@ -940,20 +985,34 @@ mod tests {
         // Placeholder test for strength reduction
         // Currently no strength reductions are implemented due to limited BinaryOp variants
         let program = Program {
-            items: vec![Item::Function(FunctionDecl {
-                name: "test".to_string(),
-                type_params: vec![],
-                where_clause: vec![],
-                decorators: vec![],
-                is_async: false,
-                parameters: vec![],
-                return_type: Some(Type::Custom("i32".to_string())),
-                body: vec![Statement::Return(Some(Expression::Binary {
-                    left: Box::new(Expression::Identifier("x".to_string())),
-                    op: BinaryOp::Mul,
-                    right: Box::new(Expression::Literal(Literal::Int(4))),
-                }))],
-            })],
+            items: vec![Item::Function {
+                decl: FunctionDecl {
+                    name: "test".to_string(),
+                    type_params: vec![],
+                    where_clause: vec![],
+                    decorators: vec![],
+                    is_async: false,
+                    parent_type: None,
+                    parameters: vec![],
+                    return_type: Some(Type::Custom("i32".to_string())),
+                    body: vec![Statement::Return {
+                        value: Some(Expression::Binary {
+                            left: Box::new(Expression::Identifier {
+                                name: "x".to_string(),
+                                location: None,
+                            }),
+                            op: BinaryOp::Mul,
+                            right: Box::new(Expression::Literal {
+                                value: Literal::Int(4),
+                                location: None,
+                            }),
+                            location: None,
+                        }),
+                        location: None,
+                    }],
+                },
+                location: None,
+            }],
         };
 
         let (_, stats) = optimize_loops(&program);
@@ -964,33 +1023,49 @@ mod tests {
     #[test]
     fn test_no_unrolling_for_large_loops() {
         let program = Program {
-            items: vec![Item::Function(FunctionDecl {
-                name: "test".to_string(),
-                type_params: vec![],
-                where_clause: vec![],
-                decorators: vec![],
-                is_async: false,
-                parameters: vec![],
-                return_type: None,
-                body: vec![Statement::For {
-                    pattern: Pattern::Identifier("i".to_string()),
-                    iterable: Expression::Range {
-                        start: Box::new(Expression::Literal(Literal::Int(0))),
-                        end: Box::new(Expression::Literal(Literal::Int(1000))), // Too large
-                        inclusive: false,
-                    },
-                    body: vec![Statement::Expression(Expression::Identifier(
-                        "i".to_string(),
-                    ))],
-                }],
-            })],
+            items: vec![Item::Function {
+                decl: FunctionDecl {
+                    name: "test".to_string(),
+                    type_params: vec![],
+                    where_clause: vec![],
+                    decorators: vec![],
+                    is_async: false,
+                    parent_type: None,
+                    parameters: vec![],
+                    return_type: None,
+                    body: vec![Statement::For {
+                        pattern: Pattern::Identifier("i".to_string()),
+                        iterable: Expression::Range {
+                            start: Box::new(Expression::Literal {
+                                value: Literal::Int(0),
+                                location: None,
+                            }),
+                            end: Box::new(Expression::Literal {
+                                value: Literal::Int(1000),
+                                location: None,
+                            }), // Too large
+                            inclusive: false,
+                            location: None,
+                        },
+                        body: vec![Statement::Expression {
+                            expr: Expression::Identifier {
+                                name: "i".to_string(),
+                                location: None,
+                            },
+                            location: None,
+                        }],
+                        location: None,
+                    }],
+                },
+                location: None,
+            }],
         };
 
         let (optimized, stats) = optimize_loops(&program);
         assert_eq!(stats.loops_unrolled, 0); // Should not unroll
 
         let func = match &optimized.items[0] {
-            Item::Function(f) => f,
+            Item::Function { decl: f, .. } => f,
             _ => panic!("Expected function"),
         };
         // Loop should remain
@@ -1001,36 +1076,56 @@ mod tests {
     #[test]
     fn test_no_hoisting_for_variant_code() {
         let program = Program {
-            items: vec![Item::Function(FunctionDecl {
-                name: "test".to_string(),
-                type_params: vec![],
-                where_clause: vec![],
-                decorators: vec![],
-                is_async: false,
-                parameters: vec![],
-                return_type: None,
-                body: vec![Statement::For {
-                    pattern: Pattern::Identifier("i".to_string()),
-                    iterable: Expression::Range {
-                        start: Box::new(Expression::Literal(Literal::Int(0))),
-                        end: Box::new(Expression::Literal(Literal::Int(10))),
-                        inclusive: false,
-                    },
-                    body: vec![
-                        // Loop-variant: uses 'i'
-                        Statement::Let {
-                            pattern: Pattern::Identifier("x".to_string()),
-                            mutable: false,
-                            type_: None,
-                            value: Expression::Binary {
-                                left: Box::new(Expression::Identifier("i".to_string())),
-                                op: BinaryOp::Mul,
-                                right: Box::new(Expression::Literal(Literal::Int(2))),
-                            },
+            items: vec![Item::Function {
+                decl: FunctionDecl {
+                    name: "test".to_string(),
+                    type_params: vec![],
+                    where_clause: vec![],
+                    decorators: vec![],
+                    is_async: false,
+                    parent_type: None,
+                    parameters: vec![],
+                    return_type: None,
+                    body: vec![Statement::For {
+                        pattern: Pattern::Identifier("i".to_string()),
+                        iterable: Expression::Range {
+                            start: Box::new(Expression::Literal {
+                                value: Literal::Int(0),
+                                location: None,
+                            }),
+                            end: Box::new(Expression::Literal {
+                                value: Literal::Int(10),
+                                location: None,
+                            }),
+                            inclusive: false,
+                            location: None,
                         },
-                    ],
-                }],
-            })],
+                        body: vec![
+                            // Loop-variant: uses 'i'
+                            Statement::Let {
+                                pattern: Pattern::Identifier("x".to_string()),
+                                mutable: false,
+                                type_: None,
+                                value: Expression::Binary {
+                                    left: Box::new(Expression::Identifier {
+                                        name: "i".to_string(),
+                                        location: None,
+                                    }),
+                                    op: BinaryOp::Mul,
+                                    right: Box::new(Expression::Literal {
+                                        value: Literal::Int(2),
+                                        location: None,
+                                    }),
+                                    location: None,
+                                },
+                                location: None,
+                            },
+                        ],
+                        location: None,
+                    }],
+                },
+                location: None,
+            }],
         };
 
         let (_, stats) = optimize_loops(&program);

@@ -190,8 +190,7 @@ impl ErrorTui {
         let items: Vec<ListItem> = self
             .diagnostics
             .iter()
-            .enumerate()
-            .map(|(_i, diag)| {
+            .map(|diag| {
                 let (icon, color) = match diag.level {
                     DiagnosticLevel::Error => ("✗", Color::Red),
                     DiagnosticLevel::Warning => ("⚠", Color::Yellow),

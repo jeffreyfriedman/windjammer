@@ -227,6 +227,7 @@ mod tests {
                 location: None
             }),
             arguments: vec![],
+            location: None,
         }));
 
         // Macro invocation is not safe
@@ -234,6 +235,7 @@ mod tests {
             name: "println".to_string(),
             args: vec![],
             delimiter: windjammer::parser::MacroDelimiter::Parens,
+            location: None,
         }));
     }
 }

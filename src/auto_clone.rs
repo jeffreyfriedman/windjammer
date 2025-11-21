@@ -32,6 +32,12 @@ pub enum CloneReason {
     ReturnedButUsedAgain,
 }
 
+impl Default for AutoCloneAnalysis {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl AutoCloneAnalysis {
     pub fn new() -> Self {
         AutoCloneAnalysis {
@@ -78,13 +84,11 @@ impl AutoCloneAnalysis {
 
                 // Mark the variable as defined
                 if let Pattern::Identifier(name) = pattern {
-                    map.entry(name.clone())
-                        .or_insert_with(Vec::new)
-                        .push(Usage {
-                            statement_idx: idx,
-                            kind: UsageKind::Definition,
-                            is_move: false,
-                        });
+                    map.entry(name.clone()).or_default().push(Usage {
+                        statement_idx: idx,
+                        kind: UsageKind::Definition,
+                        is_move: false,
+                    });
                 }
             }
             Statement::Assignment { target, value, .. } => {
@@ -156,19 +160,13 @@ impl AutoCloneAnalysis {
             Expression::Identifier { name, .. } => Some(name.clone()),
             Expression::FieldAccess { object, field, .. } => {
                 // Recursively build the path: object.field
-                if let Some(base_path) = Self::extract_expression_path(object) {
-                    Some(format!("{}.{}", base_path, field))
-                } else {
-                    None
-                }
+                Self::extract_expression_path(object)
+                    .map(|base_path| format!("{}.{}", base_path, field))
             }
             Expression::MethodCall { object, method, .. } => {
                 // Build path for method calls: object.method()
-                if let Some(base_path) = Self::extract_expression_path(object) {
-                    Some(format!("{}.{}()", base_path, method))
-                } else {
-                    None
-                }
+                Self::extract_expression_path(object)
+                    .map(|base_path| format!("{}.{}()", base_path, method))
             }
             Expression::Index { object, index, .. } => {
                 // Build path for index expressions: object[index]
@@ -202,18 +200,16 @@ impl AutoCloneAnalysis {
     ) {
         match expr {
             Expression::Identifier { name, .. } => {
-                map.entry(name.clone())
-                    .or_insert_with(Vec::new)
-                    .push(Usage {
-                        statement_idx: idx,
-                        kind,
-                        is_move: kind == UsageKind::Move,
-                    });
+                map.entry(name.clone()).or_default().push(Usage {
+                    statement_idx: idx,
+                    kind,
+                    is_move: kind == UsageKind::Move,
+                });
             }
             Expression::FieldAccess { object, .. } => {
                 // Track the full field access path (e.g., "config.paths")
                 if let Some(path) = Self::extract_expression_path(expr) {
-                    map.entry(path).or_insert_with(Vec::new).push(Usage {
+                    map.entry(path).or_default().push(Usage {
                         statement_idx: idx,
                         kind,
                         is_move: kind == UsageKind::Move,
@@ -240,7 +236,7 @@ impl AutoCloneAnalysis {
             } => {
                 // Track the full method call path (e.g., "source.get_items()")
                 if let Some(path) = Self::extract_expression_path(expr) {
-                    map.entry(path).or_insert_with(Vec::new).push(Usage {
+                    map.entry(path).or_default().push(Usage {
                         statement_idx: idx,
                         kind,
                         is_move: kind == UsageKind::Move,
@@ -262,7 +258,7 @@ impl AutoCloneAnalysis {
             Expression::Index { object, index, .. } => {
                 // Track the full index expression path (e.g., "items[0]", "arr[i]")
                 if let Some(path) = Self::extract_expression_path(expr) {
-                    map.entry(path).or_insert_with(Vec::new).push(Usage {
+                    map.entry(path).or_default().push(Usage {
                         statement_idx: idx,
                         kind,
                         is_move: kind == UsageKind::Move,
@@ -473,9 +469,6 @@ mod tests {
                     location: None,
                 },
             ],
-            is_async: false,
-            decorators: vec![],
-            parent_type: None,
         };
 
         let analysis = AutoCloneAnalysis::analyze_function(&func);
