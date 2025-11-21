@@ -333,7 +333,7 @@ match value {
                 for (i, cause) in error.causes.iter().enumerate() {
                     output.push_str(&format!("  {}. {}\n", i + 1, cause));
                 }
-                output.push_str("\n");
+                output.push('\n');
             }
 
             if !error.solutions.is_empty() {
@@ -341,7 +341,7 @@ match value {
                 for (i, solution) in error.solutions.iter().enumerate() {
                     output.push_str(&format!("  {}. {}\n", i + 1, solution));
                 }
-                output.push_str("\n");
+                output.push('\n');
             }
 
             if let Some(ref example) = error.example {

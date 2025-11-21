@@ -149,17 +149,17 @@ fn benchmark_parser(c: &mut Criterion) {
     // Pre-lex the programs
     let simple_tokens = {
         let mut lexer = lexer::Lexer::new(SIMPLE_PROGRAM);
-        lexer.tokenize()
+        lexer.tokenize_with_locations()
     };
 
     let medium_tokens = {
         let mut lexer = lexer::Lexer::new(MEDIUM_PROGRAM);
-        lexer.tokenize()
+        lexer.tokenize_with_locations()
     };
 
     let complex_tokens = {
         let mut lexer = lexer::Lexer::new(COMPLEX_PROGRAM);
-        lexer.tokenize()
+        lexer.tokenize_with_locations()
     };
 
     group.bench_with_input(

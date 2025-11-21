@@ -852,7 +852,7 @@ mod tests {
         assert_eq!(program.items.len(), 1);
 
         // Verify it's a function
-        if let parser::Item::Function(func) = &program.items[0] {
+        if let parser::Item::Function { decl: func, .. } = &program.items[0] {
             assert_eq!(func.name, "main");
         } else {
             panic!("Expected function item");

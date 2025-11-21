@@ -65,7 +65,7 @@ mod hover_tests {
 
         // Parse the program to ensure it's valid
         let mut lexer = Lexer::new(&program);
-        let tokens = lexer.tokenize();
+        let tokens = lexer.tokenize_with_locations();
         let mut parser = Parser::new(tokens);
         let ast = parser.parse();
 
@@ -88,7 +88,7 @@ mod hover_tests {
         let program = complex_program();
 
         let mut lexer = Lexer::new(&program);
-        let tokens = lexer.tokenize();
+        let tokens = lexer.tokenize_with_locations();
         let mut parser = Parser::new(tokens);
         let ast = parser.parse();
 
@@ -99,7 +99,7 @@ mod hover_tests {
         let has_struct = program
             .items
             .iter()
-            .any(|item| matches!(item, windjammer::parser::Item::Struct(_)));
+            .any(|item| matches!(item, windjammer::parser::Item::Struct { .. }));
         assert!(has_struct, "Program should contain struct definitions");
     }
 
@@ -113,7 +113,7 @@ fn main() {
 "#;
 
         let mut lexer = Lexer::new(program);
-        let tokens = lexer.tokenize();
+        let tokens = lexer.tokenize_with_locations();
         let mut parser = Parser::new(tokens);
         let ast = parser.parse();
 
@@ -152,7 +152,7 @@ fn test_func() {
 "#;
 
         let mut lexer = Lexer::new(keywords_program);
-        let tokens = lexer.tokenize();
+        let tokens = lexer.tokenize_with_locations();
         let mut parser = Parser::new(tokens);
         let ast = parser.parse();
 
@@ -180,7 +180,7 @@ fn main() {
 "#;
 
         let mut lexer = Lexer::new(stdlib_program);
-        let tokens = lexer.tokenize();
+        let tokens = lexer.tokenize_with_locations();
         let mut parser = Parser::new(tokens);
         let ast = parser.parse();
 
@@ -195,7 +195,7 @@ fn main() {
         let program = complex_program();
 
         let mut lexer = Lexer::new(&program);
-        let tokens = lexer.tokenize();
+        let tokens = lexer.tokenize_with_locations();
         let mut parser = Parser::new(tokens);
         let ast = parser.parse();
 
@@ -206,11 +206,11 @@ fn main() {
         let has_user_function = prog
             .items
             .iter()
-            .any(|item| matches!(item, windjammer::parser::Item::Function(_)));
+            .any(|item| matches!(item, windjammer::parser::Item::Function { .. }));
         let has_user_struct = prog
             .items
             .iter()
-            .any(|item| matches!(item, windjammer::parser::Item::Struct(_)));
+            .any(|item| matches!(item, windjammer::parser::Item::Struct { .. }));
 
         assert!(has_user_function, "Should have user-defined functions");
         assert!(has_user_struct, "Should have user-defined structs");
@@ -248,7 +248,7 @@ fn main() {
 "#;
 
         let mut lexer = Lexer::new(program);
-        let tokens = lexer.tokenize();
+        let tokens = lexer.tokenize_with_locations();
         let mut parser = Parser::new(tokens);
         let ast = parser.parse();
 
@@ -259,7 +259,7 @@ fn main() {
         let has_impl = prog
             .items
             .iter()
-            .any(|item| matches!(item, windjammer::parser::Item::Impl(_)));
+            .any(|item| matches!(item, windjammer::parser::Item::Impl { .. }));
 
         assert!(has_impl, "Should have impl block with methods");
 
@@ -287,7 +287,7 @@ fn main() {
 "#;
 
         let mut lexer = Lexer::new(program);
-        let tokens = lexer.tokenize();
+        let tokens = lexer.tokenize_with_locations();
         let mut parser = Parser::new(tokens);
         let ast = parser.parse();
 
@@ -296,7 +296,7 @@ fn main() {
         // Verify we have the function definition
         let prog = ast.unwrap();
         let helper_fn = prog.items.iter().find(|item| {
-            if let windjammer::parser::Item::Function(f) = item {
+            if let windjammer::parser::Item::Function { decl: f, .. } = item {
                 f.name == "helper"
             } else {
                 false
@@ -316,7 +316,7 @@ fn main() {
         let program = complex_program();
 
         let mut lexer = Lexer::new(&program);
-        let tokens = lexer.tokenize();
+        let tokens = lexer.tokenize_with_locations();
         let mut parser = Parser::new(tokens);
         let ast = parser.parse();
 
@@ -325,7 +325,7 @@ fn main() {
         // Find the User struct definition
         let prog = ast.unwrap();
         let user_struct = prog.items.iter().find(|item| {
-            if let windjammer::parser::Item::Struct(s) = item {
+            if let windjammer::parser::Item::Struct { decl: s, .. } = item {
                 s.name == "User"
             } else {
                 false
@@ -348,7 +348,7 @@ fn main() {
 "#;
 
         let mut lexer = Lexer::new(program);
-        let tokens = lexer.tokenize();
+        let tokens = lexer.tokenize_with_locations();
         let mut parser = Parser::new(tokens);
         let ast = parser.parse();
 
@@ -379,7 +379,7 @@ fn main() {
 "#;
 
         let mut lexer = Lexer::new(program);
-        let tokens = lexer.tokenize();
+        let tokens = lexer.tokenize_with_locations();
         let mut parser = Parser::new(tokens);
         let ast = parser.parse();
 
@@ -409,7 +409,7 @@ fn main() {
 "#;
 
         let mut lexer = Lexer::new(program);
-        let tokens = lexer.tokenize();
+        let tokens = lexer.tokenize_with_locations();
         let mut parser = Parser::new(tokens);
         let ast = parser.parse();
 
@@ -420,7 +420,7 @@ fn main() {
 
         let prog = ast.unwrap();
         let has_point = prog.items.iter().any(|item| {
-            if let windjammer::parser::Item::Struct(s) = item {
+            if let windjammer::parser::Item::Struct { decl: s, .. } = item {
                 s.name == "Point"
             } else {
                 false
@@ -449,7 +449,7 @@ fn main() {
 "#;
 
         let mut lexer = Lexer::new(program);
-        let tokens = lexer.tokenize();
+        let tokens = lexer.tokenize_with_locations();
         let mut parser = Parser::new(tokens);
         let ast = parser.parse();
 
@@ -471,7 +471,7 @@ mod rename_tests {
         let program = simple_program();
 
         let mut lexer = Lexer::new(&program);
-        let tokens = lexer.tokenize();
+        let tokens = lexer.tokenize_with_locations();
         let mut parser = Parser::new(tokens);
         let ast = parser.parse();
 
@@ -480,7 +480,7 @@ mod rename_tests {
         // Verify function exists
         let prog = ast.unwrap();
         let has_greet = prog.items.iter().any(|item| {
-            if let windjammer::parser::Item::Function(f) = item {
+            if let windjammer::parser::Item::Function { decl: f, .. } = item {
                 f.name == "greet"
             } else {
                 false
@@ -505,7 +505,7 @@ fn calculate() -> int {
 "#;
 
         let mut lexer = Lexer::new(program);
-        let tokens = lexer.tokenize();
+        let tokens = lexer.tokenize_with_locations();
         let mut parser = Parser::new(tokens);
         let ast = parser.parse();
 
@@ -533,7 +533,7 @@ fn main() {
 "#;
 
         let mut lexer = Lexer::new(program);
-        let tokens = lexer.tokenize();
+        let tokens = lexer.tokenize_with_locations();
         let mut parser = Parser::new(tokens);
         let ast = parser.parse();
 
@@ -541,7 +541,7 @@ fn main() {
 
         let prog = ast.unwrap();
         let has_user = prog.items.iter().any(|item| {
-            if let windjammer::parser::Item::Struct(s) = item {
+            if let windjammer::parser::Item::Struct { decl: s, .. } = item {
                 s.name == "User"
             } else {
                 false
@@ -568,7 +568,7 @@ mod diagnostics_tests {
         let invalid_program = "fn main() { let x = }"; // Missing value
 
         let mut lexer = Lexer::new(invalid_program);
-        let tokens = lexer.tokenize();
+        let tokens = lexer.tokenize_with_locations();
 
         // Lexer always succeeds (doesn't validate syntax)
         assert!(
@@ -603,7 +603,7 @@ fn main() {
 "#;
 
         let mut lexer = Lexer::new(program_with_type_issue);
-        let tokens = lexer.tokenize();
+        let tokens = lexer.tokenize_with_locations();
         let mut parser = Parser::new(tokens);
         let ast = parser.parse();
 
@@ -623,7 +623,7 @@ fn main() {
 "#;
 
         let mut lexer = Lexer::new(program_with_undefined);
-        let tokens = lexer.tokenize();
+        let tokens = lexer.tokenize_with_locations();
         let mut parser = Parser::new(tokens);
         let ast = parser.parse();
 
@@ -654,7 +654,7 @@ fn main() {
 "#;
 
         let mut lexer = Lexer::new(program);
-        let tokens = lexer.tokenize();
+        let tokens = lexer.tokenize_with_locations();
         let mut parser = Parser::new(tokens);
         let ast = parser.parse();
 
@@ -674,7 +674,7 @@ fn read_data(content: string) {
 "#;
 
         let mut lexer = Lexer::new(program);
-        let tokens = lexer.tokenize();
+        let tokens = lexer.tokenize_with_locations();
         let mut parser = Parser::new(tokens);
         let ast = parser.parse();
 
@@ -692,7 +692,7 @@ fn increment(counter: int) {
 "#;
 
         let mut lexer = Lexer::new(program);
-        let tokens = lexer.tokenize();
+        let tokens = lexer.tokenize_with_locations();
         let mut parser = Parser::new(tokens);
         let ast = parser.parse();
 
@@ -710,7 +710,7 @@ fn take_ownership(data: string) {
 "#;
 
         let mut lexer = Lexer::new(program);
-        let tokens = lexer.tokenize();
+        let tokens = lexer.tokenize_with_locations();
         let mut parser = Parser::new(tokens);
         let ast = parser.parse();
 
@@ -737,7 +737,7 @@ fn main() {
 "#;
 
         let mut lexer = Lexer::new(program);
-        let tokens = lexer.tokenize();
+        let tokens = lexer.tokenize_with_locations();
         let mut parser = Parser::new(tokens);
         let ast = parser.parse();
 
@@ -760,7 +760,7 @@ fn main() {
 "#;
 
         let mut lexer = Lexer::new(program);
-        let tokens = lexer.tokenize();
+        let tokens = lexer.tokenize_with_locations();
         let mut parser = Parser::new(tokens);
         let ast = parser.parse();
 
@@ -784,7 +784,7 @@ mod symbol_table_tests {
         let program = complex_program();
 
         let mut lexer = Lexer::new(&program);
-        let tokens = lexer.tokenize();
+        let tokens = lexer.tokenize_with_locations();
         let mut parser = Parser::new(tokens);
         let ast = parser.parse();
 
@@ -795,17 +795,17 @@ mod symbol_table_tests {
         let function_count = prog
             .items
             .iter()
-            .filter(|item| matches!(item, windjammer::parser::Item::Function(_)))
+            .filter(|item| matches!(item, windjammer::parser::Item::Function { .. }))
             .count();
         let struct_count = prog
             .items
             .iter()
-            .filter(|item| matches!(item, windjammer::parser::Item::Struct(_)))
+            .filter(|item| matches!(item, windjammer::parser::Item::Struct { .. }))
             .count();
         let enum_count = prog
             .items
             .iter()
-            .filter(|item| matches!(item, windjammer::parser::Item::Enum(_)))
+            .filter(|item| matches!(item, windjammer::parser::Item::Enum { .. }))
             .count();
 
         assert!(function_count > 0, "Should have functions in symbol table");
@@ -818,7 +818,7 @@ mod symbol_table_tests {
         let program = simple_program();
 
         let mut lexer = Lexer::new(&program);
-        let tokens = lexer.tokenize();
+        let tokens = lexer.tokenize_with_locations();
         let mut parser = Parser::new(tokens);
         let ast = parser.parse();
 
@@ -827,14 +827,14 @@ mod symbol_table_tests {
         // Find specific symbols
         let prog = ast.unwrap();
         let greet_exists = prog.items.iter().any(|item| {
-            if let windjammer::parser::Item::Function(f) = item {
+            if let windjammer::parser::Item::Function { decl: f, .. } = item {
                 f.name == "greet"
             } else {
                 false
             }
         });
         let main_exists = prog.items.iter().any(|item| {
-            if let windjammer::parser::Item::Function(f) = item {
+            if let windjammer::parser::Item::Function { decl: f, .. } = item {
                 f.name == "main"
             } else {
                 false
@@ -859,7 +859,7 @@ fn main() {
 "#;
 
         let mut lexer = Lexer::new(program);
-        let tokens = lexer.tokenize();
+        let tokens = lexer.tokenize_with_locations();
         let mut parser = Parser::new(tokens);
         let ast = parser.parse();
 
@@ -885,7 +885,7 @@ mod performance_tests {
 
         let start = std::time::Instant::now();
         let mut lexer = Lexer::new(&large_program);
-        let tokens = lexer.tokenize();
+        let tokens = lexer.tokenize_with_locations();
         let mut parser = Parser::new(tokens);
         let ast = parser.parse();
         let elapsed = start.elapsed();
@@ -914,7 +914,7 @@ mod performance_tests {
         let start = std::time::Instant::now();
         for program in &programs {
             let mut lexer = Lexer::new(program);
-            let tokens = lexer.tokenize();
+            let tokens = lexer.tokenize_with_locations();
             let mut parser = Parser::new(tokens);
             let _ast = parser.parse();
         }
@@ -935,14 +935,14 @@ mod performance_tests {
 
         // Parse v1
         let mut lexer1 = Lexer::new(program_v1);
-        let tokens1 = lexer1.tokenize();
+        let tokens1 = lexer1.tokenize_with_locations();
         let mut parser1 = Parser::new(tokens1);
         let ast1 = parser1.parse();
         assert!(ast1.is_ok());
 
         // Parse v2 (should be fast due to caching in real LSP)
         let mut lexer2 = Lexer::new(program_v2);
-        let tokens2 = lexer2.tokenize();
+        let tokens2 = lexer2.tokenize_with_locations();
         let mut parser2 = Parser::new(tokens2);
         let ast2 = parser2.parse();
         assert!(ast2.is_ok());
@@ -962,7 +962,7 @@ mod edge_case_tests {
         let program = "";
 
         let mut lexer = Lexer::new(program);
-        let tokens = lexer.tokenize();
+        let tokens = lexer.tokenize_with_locations();
 
         // Empty file should tokenize successfully (returns empty vec)
         // Lexer doesn't crash on empty input
@@ -979,7 +979,7 @@ mod edge_case_tests {
         let program = "// Just a comment\n/* Block comment */";
 
         let mut lexer = Lexer::new(program);
-        let tokens = lexer.tokenize();
+        let tokens = lexer.tokenize_with_locations();
         let mut parser = Parser::new(tokens);
         let ast = parser.parse();
 
@@ -1001,7 +1001,7 @@ mod edge_case_tests {
         let program = "fn main() {";
 
         let mut lexer = Lexer::new(program);
-        let tokens = lexer.tokenize();
+        let tokens = lexer.tokenize_with_locations();
         let mut parser = Parser::new(tokens);
         let ast = parser.parse();
 
@@ -1020,7 +1020,7 @@ fn grüßen(名前: string) {
 "#;
 
         let mut lexer = Lexer::new(program);
-        let tokens = lexer.tokenize();
+        let tokens = lexer.tokenize_with_locations();
         let mut parser = Parser::new(tokens);
         let ast = parser.parse();
 
@@ -1030,7 +1030,7 @@ fn grüßen(名前: string) {
         // Verify function with unicode name exists
         let prog = ast.unwrap();
         let has_unicode_fn = prog.items.iter().any(|item| {
-            if let windjammer::parser::Item::Function(f) = item {
+            if let windjammer::parser::Item::Function { decl: f, .. } = item {
                 f.name == "grüßen"
             } else {
                 false

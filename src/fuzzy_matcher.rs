@@ -31,15 +31,12 @@ impl FuzzyMatcher {
 
     /// Add a symbol to the matcher
     pub fn add_symbol(&mut self, symbol_type: SymbolType, name: String) {
-        self.symbols
-            .entry(symbol_type)
-            .or_insert_with(Vec::new)
-            .push(name);
+        self.symbols.entry(symbol_type).or_default().push(name);
     }
 
     /// Add multiple symbols of the same type
     pub fn add_symbols(&mut self, symbol_type: SymbolType, names: Vec<String>) {
-        let entry = self.symbols.entry(symbol_type).or_insert_with(Vec::new);
+        let entry = self.symbols.entry(symbol_type).or_default();
         entry.extend(names);
     }
 
@@ -267,7 +264,7 @@ mod tests {
         assert!(result.is_some());
         let (suggestion, distance) = result.unwrap();
         assert_eq!(suggestion, "count");
-        assert_eq!(distance, 2);
+        assert_eq!(distance, 1); // Edit distance from "cont" to "count"
     }
 
     #[test]
