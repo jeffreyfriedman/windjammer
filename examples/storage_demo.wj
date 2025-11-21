@@ -1,0 +1,218 @@
+// Windjammer Storage API Demo
+// Demonstrates std::storage for persistent data
+// Works on both native and WASM!
+
+use std::storage::*
+
+@export
+fn main() {
+    println!("💾 Windjammer Storage API Demo")
+    println!("================================")
+    println!("")
+
+    // Example 1: Basic key-value storage
+    println!("Example 1: Basic Storage")
+    println!("------------------------")
+    
+    match set("username".to_string(), "alice".to_string()) {
+        Ok(_) => println!("✓ Stored username"),
+        Err(e) => println!("✗ Error: {}", e),
+    }
+    
+    match get("username".to_string()) {
+        Ok(Some(value)) => println!("✓ Retrieved username: {}", value),
+        Ok(None) => println!("✗ Username not found"),
+        Err(e) => println!("✗ Error: {}", e),
+    }
+    println!("")
+
+    // Example 2: Multiple values
+    println!("Example 2: Multiple Values")
+    println!("--------------------------")
+    
+    let _ = set("app_name".to_string(), "Windjammer Demo".to_string())
+    let _ = set("version".to_string(), "1.0.0".to_string())
+    let _ = set("theme".to_string(), "dark".to_string())
+    
+    println!("Stored 3 values")
+    
+    match keys() {
+        Ok(all_keys) => {
+            println!("All keys: {:?}", all_keys)
+            println!("Total keys: {}", all_keys.len())
+        },
+        Err(e) => println!("Error: {}", e),
+    }
+    println!("")
+
+    // Example 3: Check existence
+    println!("Example 3: Check Existence")
+    println!("--------------------------")
+    
+    if contains_key("theme".to_string()) {
+        println!("✓ 'theme' exists")
+    } else {
+        println!("✗ 'theme' does not exist")
+    }
+    
+    if contains_key("nonexistent".to_string()) {
+        println!("✓ 'nonexistent' exists")
+    } else {
+        println!("✗ 'nonexistent' does not exist (expected)")
+    }
+    println!("")
+
+    // Example 4: Update values
+    println!("Example 4: Update Values")
+    println!("------------------------")
+    
+    match get("version".to_string()) {
+        Ok(Some(old_version)) => {
+            println!("Old version: {}", old_version)
+            let _ = set("version".to_string(), "1.1.0".to_string())
+            match get("version".to_string()) {
+                Ok(Some(new_version)) => println!("New version: {}", new_version),
+                _ => println!("Error retrieving new version"),
+            }
+        },
+        _ => println!("Error retrieving old version"),
+    }
+    println!("")
+
+    // Example 5: Remove values
+    println!("Example 5: Remove Values")
+    println!("------------------------")
+    
+    println!("Before removal:")
+    match keys() {
+        Ok(all_keys) => println!("  Keys: {:?}", all_keys),
+        Err(e) => println!("  Error: {}", e),
+    }
+    
+    match remove("theme".to_string()) {
+        Ok(_) => println!("✓ Removed 'theme'"),
+        Err(e) => println!("✗ Error: {}", e),
+    }
+    
+    println!("After removal:")
+    match keys() {
+        Ok(all_keys) => println!("  Keys: {:?}", all_keys),
+        Err(e) => println!("  Error: {}", e),
+    }
+    println!("")
+
+    // Example 6: User preferences (structured data)
+    println!("Example 6: User Preferences")
+    println!("---------------------------")
+    
+    // Simulate structured data with a simple format
+    let prefs = "font_size:14,auto_save:true,line_numbers:true".to_string()
+    let _ = set("user_prefs".to_string(), prefs)
+    
+    match get("user_prefs".to_string()) {
+        Ok(Some(value)) => {
+            println!("User preferences: {}", value)
+            // In a real app, you'd parse this or use JSON
+        },
+        _ => println!("Error retrieving preferences"),
+    }
+    println!("")
+
+    // Example 7: Session data
+    println!("Example 7: Session Data")
+    println!("-----------------------")
+    
+    let _ = set("session_id".to_string(), "abc123xyz".to_string())
+    let _ = set("last_login".to_string(), "2025-11-11T10:30:00Z".to_string())
+    
+    match get("session_id".to_string()) {
+        Ok(Some(sid)) => println!("Session ID: {}", sid),
+        _ => println!("No session"),
+    }
+    
+    match get("last_login".to_string()) {
+        Ok(Some(timestamp)) => println!("Last login: {}", timestamp),
+        _ => println!("No login timestamp"),
+    }
+    println!("")
+
+    // Example 8: Clear all storage
+    println!("Example 8: Clear Storage")
+    println!("------------------------")
+    
+    println!("Before clear:")
+    match keys() {
+        Ok(all_keys) => println!("  Keys: {:?}", all_keys),
+        Err(e) => println!("  Error: {}", e),
+    }
+    
+    match clear() {
+        Ok(_) => println!("✓ Cleared all storage"),
+        Err(e) => println!("✗ Error: {}", e),
+    }
+    
+    println!("After clear:")
+    match keys() {
+        Ok(all_keys) => {
+            if all_keys.is_empty() {
+                println!("  Keys: [] (empty)")
+            } else {
+                println!("  Keys: {:?}", all_keys)
+            }
+        },
+        Err(e) => println!("  Error: {}", e),
+    }
+    println!("")
+
+    // Example 9: Application state persistence
+    println!("Example 9: Application State")
+    println!("----------------------------")
+    
+    // Simulate saving application state
+    let _ = set("window_width".to_string(), "1024".to_string())
+    let _ = set("window_height".to_string(), "768".to_string())
+    let _ = set("sidebar_visible".to_string(), "true".to_string())
+    let _ = set("current_file".to_string(), "/path/to/file.wj".to_string())
+    
+    println!("Application state saved!")
+    println!("")
+    println!("Simulating app restart...")
+    println!("")
+    
+    // Simulate loading application state
+    match get("window_width".to_string()) {
+        Ok(Some(w)) => println!("Window width: {}", w),
+        _ => println!("Using default width"),
+    }
+    
+    match get("window_height".to_string()) {
+        Ok(Some(h)) => println!("Window height: {}", h),
+        _ => println!("Using default height"),
+    }
+    
+    match get("sidebar_visible".to_string()) {
+        Ok(Some(visible)) => println!("Sidebar visible: {}", visible),
+        _ => println!("Using default sidebar state"),
+    }
+    
+    match get("current_file".to_string()) {
+        Ok(Some(file)) => println!("Current file: {}", file),
+        _ => println!("No file open"),
+    }
+    println!("")
+
+    println!("✅ All examples completed!")
+    println!("")
+    println!("Platform Notes:")
+    println!("  • Native:  Uses file-based storage (~/.windjammer/storage/)")
+    println!("  • WASM:    Uses browser localStorage")
+    println!("  • Same code works everywhere! 🎉")
+    println!("")
+    println!("Use Cases:")
+    println!("  • User preferences and settings")
+    println!("  • Application state persistence")
+    println!("  • Session management")
+    println!("  • Cache management")
+    println!("  • Offline data storage")
+}
+

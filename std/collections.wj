@@ -1,15 +1,15 @@
 // std/collections - Collection types (HashMap, HashSet, etc.)
 // Wraps Rust's std::collections with Windjammer-friendly APIs
 
-use std.collections.HashMap as RustHashMap
-use std.collections.HashSet as RustHashSet
-use std.collections.BTreeMap as RustBTreeMap
-use std.collections.BTreeSet as RustBTreeSet
-use std.collections.VecDeque as RustVecDeque
+use std::collections.HashMap as RustHashMap
+use std::collections.HashSet as RustHashSet
+use std::collections.BTreeMap as RustBTreeMap
+use std::collections.BTreeSet as RustBTreeSet
+use std::collections.VecDeque as RustVecDeque
 
 // HashMap - Hash table implementation
 pub struct HashMap<K, V> {
-    inner: RustHashMap<K, V>
+    inner: RustHashMap<K, V>,
 }
 
 impl<K, V> HashMap<K, V> {
@@ -56,7 +56,7 @@ impl<K, V> HashMap<K, V> {
 
 // HashSet - Hash set implementation
 pub struct HashSet<T> {
-    inner: RustHashSet<T>
+    inner: RustHashSet<T>,
 }
 
 impl<T> HashSet<T> {
@@ -95,7 +95,7 @@ impl<T> HashSet<T> {
 
 // BTreeMap - Sorted map implementation
 pub struct BTreeMap<K, V> {
-    inner: RustBTreeMap<K, V>
+    inner: RustBTreeMap<K, V>,
 }
 
 impl<K, V> BTreeMap<K, V> {
@@ -130,7 +130,7 @@ impl<K, V> BTreeMap<K, V> {
 
 // BTreeSet - Sorted set implementation
 pub struct BTreeSet<T> {
-    inner: RustBTreeSet<T>
+    inner: RustBTreeSet<T>,
 }
 
 impl<T> BTreeSet<T> {
@@ -161,7 +161,7 @@ impl<T> BTreeSet<T> {
 
 // VecDeque - Double-ended queue
 pub struct VecDeque<T> {
-    inner: RustVecDeque<T>
+    inner: RustVecDeque<T>,
 }
 
 impl<T> VecDeque<T> {

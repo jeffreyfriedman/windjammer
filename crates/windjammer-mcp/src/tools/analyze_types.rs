@@ -11,6 +11,7 @@ use windjammer_lsp::database::WindjammerDatabase;
 
 #[derive(Debug, Deserialize)]
 struct AnalyzeTypesRequest {
+    #[allow(dead_code)]
     code: String,
     cursor_position: Option<Position>,
 }

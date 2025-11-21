@@ -37,20 +37,35 @@ impl HoverProvider {
 
     fn check_item(&self, item: &Item, line: usize) -> Option<Hover> {
         match item {
-            Item::Function(func) => self.check_function(func, line),
-            Item::Struct(_) => {
+            Item::Function {
+                decl: func,
+                location: _,
+            } => self.check_function(func, line),
+            Item::Struct {
+                decl: _,
+                location: _,
+            } => {
                 // TODO: Add struct hover info
                 None
             }
-            Item::Enum(_) => {
+            Item::Enum {
+                decl: _,
+                location: _,
+            } => {
                 // TODO: Add enum hover info
                 None
             }
-            Item::Trait(_) => {
+            Item::Trait {
+                decl: _,
+                location: _,
+            } => {
                 // TODO: Add trait hover info
                 None
             }
-            Item::Impl(_) => {
+            Item::Impl {
+                block: _,
+                location: _,
+            } => {
                 // TODO: Add impl hover info
                 None
             }
@@ -139,6 +154,7 @@ impl HoverProvider {
         sig
     }
 
+    #[allow(clippy::only_used_in_recursion)]
     fn format_type(&self, ty: &Type) -> String {
         match ty {
             Type::Int => "int".to_string(),
@@ -180,6 +196,9 @@ impl HoverProvider {
             Type::Vec(inner) => {
                 format!("Vec<{}>", self.format_type(inner))
             }
+            Type::Array(inner, size) => {
+                format!("[{}; {}]", self.format_type(inner), size)
+            }
             Type::Reference(inner) => {
                 format!("&{}", self.format_type(inner))
             }
@@ -196,6 +215,18 @@ impl HoverProvider {
                 }
                 s.push(')');
                 s
+            }
+            Type::Infer => "_".to_string(),
+            Type::FunctionPointer {
+                params,
+                return_type,
+            } => {
+                let param_strs: Vec<String> = params.iter().map(|t| self.format_type(t)).collect();
+                if let Some(ret) = return_type {
+                    format!("fn({}) -> {}", param_strs.join(", "), self.format_type(ret))
+                } else {
+                    format!("fn({})", param_strs.join(", "))
+                }
             }
         }
     }

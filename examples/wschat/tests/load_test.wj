@@ -1,13 +1,13 @@
 // Load testing for wschat - Target: 10k concurrent connections
 
-use std.websocket
-use std.thread
-use std.time
-use std.log
-use std.collections.Vec
-use std.sync.{Arc, Mutex}
+use std::websocket
+use std::thread
+use std::time
+use std::log
+use std::collections::Vec
+use std::sync::{Arc, Mutex}
 
-@derive(Debug, Clone)]
+@derive(Debug, Clone)
 struct LoadTestConfig {
     server_url: string,
     target_connections: int,
@@ -16,7 +16,7 @@ struct LoadTestConfig {
     messages_per_connection: int,
 }
 
-@derive(Debug)]
+@derive(Debug)
 struct LoadTestResults {
     total_connections: int,
     successful_connections: int,
@@ -71,7 +71,7 @@ pub async fn run_load_test(config: LoadTestConfig) -> Result<LoadTestResults, Er
         let latencies = latencies.clone()
         let messages_to_send = config.messages_per_connection
         
-        let handle = thread.spawn(move || {
+        let handle = thread.spawn(|| {
             // Connect to server
             let start_connect = time.now_unix_nano()
             
@@ -104,13 +104,13 @@ pub async fn run_load_test(config: LoadTestConfig) -> Result<LoadTestResults, Er
                                         let mut r = results.lock()
                                         r.total_messages_sent += 1
                                         r.total_messages_received += 1
-                                    },
+                                    }
                                     Err(e) => {
                                         let mut r = results.lock()
                                         r.errors.push(format!("Receive error: {}", e))
                                     }
                                 }
-                            },
+                            }
                             Err(e) => {
                                 let mut r = results.lock()
                                 r.errors.push(format!("Send error: {}", e))
@@ -125,7 +125,7 @@ pub async fn run_load_test(config: LoadTestConfig) -> Result<LoadTestResults, Er
                     thread.sleep_seconds(config.test_duration_seconds)
                     
                     conn.close()
-                },
+                }
                 Err(e) => {
                     let mut r = results.lock()
                     r.failed_connections += 1
@@ -217,12 +217,11 @@ pub fn print_results(results: LoadTestResults) {
     println!("\n=========================\n")
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*
-    
-    #[test]
-    async fn test_100_connections() {
+// Tests module
+// TODO: Implement proper test framework support
+
+@test
+async fn test_100_connections() {
         let config = LoadTestConfig {
             server_url: "ws://localhost:8080/ws",
             target_connections: 100,
@@ -235,10 +234,10 @@ mod tests {
         
         assert!(results.successful_connections >= 95)  // At least 95% success
         assert!(results.p99_latency_ms < 100.0)  // p99 < 100ms
-    }
-    
-    #[test]
-    async fn test_1000_connections() {
+}
+
+@test
+async fn test_1000_connections() {
         let config = LoadTestConfig {
             server_url: "ws://localhost:8080/ws",
             target_connections: 1000,
@@ -251,7 +250,6 @@ mod tests {
         
         assert!(results.successful_connections >= 950)  // At least 95% success
         assert!(results.p99_latency_ms < 200.0)  // p99 < 200ms
-    }
 }
 
 // CLI entry point
@@ -271,7 +269,7 @@ fn main() -> Result<(), Error> {
     let config = LoadTestConfig {
         server_url: "ws://localhost:8080/ws",
         target_connections: connections,
-        ramp_up_seconds: connections / 100,  // 100 connections per second
+        ramp_up_seconds: connections / 100,  // 100 connections per second,
         test_duration_seconds: 60,
         messages_per_connection: 10,
     }

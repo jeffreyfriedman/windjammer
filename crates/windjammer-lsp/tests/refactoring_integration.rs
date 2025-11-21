@@ -9,7 +9,7 @@ use windjammer_lsp::refactoring::RefactoringEngine;
 #[test]
 fn test_extract_function_simple() {
     // Setup
-    let mut db = WindjammerDatabase::new();
+    let db = WindjammerDatabase::new();
     let engine = RefactoringEngine::new(&db);
 
     // Source code with a simple calculation
@@ -68,7 +68,7 @@ fn test_extract_function_simple() {
 
 #[test]
 fn test_extract_function_with_parameters() {
-    let mut db = WindjammerDatabase::new();
+    let db = WindjammerDatabase::new();
     let engine = RefactoringEngine::new(&db);
 
     let source = r#"fn process() {
@@ -102,7 +102,7 @@ fn test_extract_function_with_parameters() {
 
 #[test]
 fn test_extract_function_empty_selection() {
-    let mut db = WindjammerDatabase::new();
+    let db = WindjammerDatabase::new();
     let engine = RefactoringEngine::new(&db);
 
     let source = "fn main() {}\n";
@@ -132,7 +132,7 @@ fn test_extract_function_empty_selection() {
 
 #[test]
 fn test_extract_function_preserves_indentation() {
-    let mut db = WindjammerDatabase::new();
+    let db = WindjammerDatabase::new();
     let engine = RefactoringEngine::new(&db);
 
     let source = r#"fn outer() {
@@ -178,7 +178,7 @@ fn test_extract_function_preserves_indentation() {
 
 #[test]
 fn test_inline_variable_simple() {
-    let mut db = WindjammerDatabase::new();
+    let db = WindjammerDatabase::new();
     let engine = RefactoringEngine::new(&db);
 
     let source = r#"fn main() {
@@ -218,7 +218,7 @@ fn test_inline_variable_simple() {
 
 #[test]
 fn test_inline_variable_multiple_usages() {
-    let mut db = WindjammerDatabase::new();
+    let db = WindjammerDatabase::new();
     let engine = RefactoringEngine::new(&db);
 
     let source = r#"fn calculate() {
@@ -254,7 +254,7 @@ fn test_inline_variable_multiple_usages() {
 
 #[test]
 fn test_inline_variable_unsafe_side_effects() {
-    let mut db = WindjammerDatabase::new();
+    let db = WindjammerDatabase::new();
     let engine = RefactoringEngine::new(&db);
 
     let source = r#"fn process() {
@@ -285,7 +285,7 @@ fn test_inline_variable_unsafe_side_effects() {
 
 #[test]
 fn test_inline_variable_no_definition() {
-    let mut db = WindjammerDatabase::new();
+    let db = WindjammerDatabase::new();
     let engine = RefactoringEngine::new(&db);
 
     let source = r#"fn main() {
@@ -315,7 +315,7 @@ fn test_inline_variable_no_definition() {
 
 #[test]
 fn test_introduce_variable_simple() {
-    let mut db = WindjammerDatabase::new();
+    let db = WindjammerDatabase::new();
     let engine = RefactoringEngine::new(&db);
 
     let source = r#"fn main() {
@@ -362,7 +362,7 @@ fn test_introduce_variable_simple() {
 
 #[test]
 fn test_introduce_variable_with_duplicates() {
-    let mut db = WindjammerDatabase::new();
+    let db = WindjammerDatabase::new();
     let engine = RefactoringEngine::new(&db);
 
     let source = r#"fn calculate() {
@@ -403,7 +403,7 @@ fn test_introduce_variable_with_duplicates() {
 
 #[test]
 fn test_introduce_variable_suggested_names() {
-    let mut db = WindjammerDatabase::new();
+    let db = WindjammerDatabase::new();
     let engine = RefactoringEngine::new(&db);
 
     let source = r#"fn test() {
@@ -441,7 +441,7 @@ fn test_introduce_variable_suggested_names() {
 
 #[test]
 fn test_introduce_variable_reject_simple_variable() {
-    let mut db = WindjammerDatabase::new();
+    let db = WindjammerDatabase::new();
     let engine = RefactoringEngine::new(&db);
 
     let source = r#"fn main() {
@@ -481,7 +481,7 @@ fn test_introduce_variable_reject_simple_variable() {
 
 #[test]
 fn test_change_signature_add_parameter() {
-    let mut db = WindjammerDatabase::new();
+    let db = WindjammerDatabase::new();
     let engine = RefactoringEngine::new(&db);
 
     let source = r#"fn calculate(x: int) -> int {
@@ -532,7 +532,7 @@ fn main() {
 
 #[test]
 fn test_change_signature_remove_parameter() {
-    let mut db = WindjammerDatabase::new();
+    let db = WindjammerDatabase::new();
     let engine = RefactoringEngine::new(&db);
 
     let source = r#"fn add(x: int, y: int) -> int {
@@ -571,7 +571,7 @@ fn main() {
 
 #[test]
 fn test_change_signature_reorder_parameters() {
-    let mut db = WindjammerDatabase::new();
+    let db = WindjammerDatabase::new();
     let engine = RefactoringEngine::new(&db);
 
     let source = r#"fn divide(x: int, y: int) -> int {
@@ -604,12 +604,12 @@ fn main() {
     let edits = &edits_map[&uri];
 
     // Should reorder both signature and call site
-    assert!(edits.len() >= 1, "Should have at least 1 edit");
+    assert!(!edits.is_empty(), "Should have at least 1 edit");
 }
 
 #[test]
 fn test_change_signature_rename_parameter() {
-    let mut db = WindjammerDatabase::new();
+    let db = WindjammerDatabase::new();
     let engine = RefactoringEngine::new(&db);
 
     let source = r#"fn square(x: int) -> int {
@@ -651,7 +651,7 @@ fn main() {
 
 #[test]
 fn test_change_signature_multiple_call_sites() {
-    let mut db = WindjammerDatabase::new();
+    let db = WindjammerDatabase::new();
     let engine = RefactoringEngine::new(&db);
 
     let source = r#"fn add(x: int, y: int) -> int {
@@ -703,7 +703,7 @@ fn main() {
 
 #[test]
 fn test_move_with_import_auto_update() {
-    let mut db = WindjammerDatabase::new();
+    let db = WindjammerDatabase::new();
     let engine = RefactoringEngine::new(&db);
 
     let source_content = r#"fn helper(x: int) -> int {
@@ -757,7 +757,7 @@ fn main() {
 
 #[test]
 fn test_move_with_dependency_tracking() {
-    let mut db = WindjammerDatabase::new();
+    let db = WindjammerDatabase::new();
     let engine = RefactoringEngine::new(&db);
 
     let source_content = r#"fn multiply(x: int, y: int) -> int {
@@ -799,7 +799,7 @@ fn main() {
 
 #[test]
 fn test_move_circular_dependency_detection() {
-    let mut db = WindjammerDatabase::new();
+    let db = WindjammerDatabase::new();
     let engine = RefactoringEngine::new(&db);
 
     // Source imports from target (simulated)

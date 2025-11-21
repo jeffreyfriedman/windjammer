@@ -2,17 +2,17 @@
 //
 // Run with: wj test --bench
 
-use std.json
-use std.crypto
+use std::json
+use std::crypto
 
 // Import models
-use ../src/models/user
-use ../src/models/project
-use ../src/models/task
+use crate::models::user
+use crate::models::project
+use crate::models::task
 
 // Import auth functions
-use ../src/auth/password
-use ../src/auth/jwt
+use crate::auth::password
+use crate::auth::jwt
 
 struct RegisterRequest {
     username: string,

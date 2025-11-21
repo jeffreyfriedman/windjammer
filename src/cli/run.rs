@@ -23,7 +23,26 @@ pub fn execute(path: &Path, args: &[String], target_str: &str) -> Result<()> {
     // Check if target is JavaScript
     if target_str == "javascript" || target_str == "js" {
         // Build JavaScript to temp directory
-        crate::cli::build::execute(path, Some(output_dir), false, target_str)?;
+        crate::cli::build::execute(
+            path,
+            Some(output_dir),
+            false,
+            target_str,
+            crate::cli::build::BuildOptions {
+                minify: false,
+                tree_shake: false,
+                source_maps: false,
+                polyfills: false,
+                v8_optimize: false,
+            },
+            false, // check
+            false, // raw_errors
+            false, // fix
+            false, // verbose
+            false, // quiet
+            None,  // filter_file
+            None,  // filter_type
+        )?;
 
         // Run with Node.js
         let output_file = output_dir.join("output.js");
@@ -40,7 +59,7 @@ pub fn execute(path: &Path, args: &[String], target_str: &str) -> Result<()> {
 
     // Build to temp directory (build_project handles both files and directories)
     let target = match target_str.to_lowercase().as_str() {
-        "rust" => crate::CompilationTarget::Wasm,
+        "rust" => crate::CompilationTarget::Rust,
         "wasm" | "webassembly" => crate::CompilationTarget::Wasm,
         _ => bail!(
             "Unknown target: {}. Use 'rust', 'javascript', or 'wasm'",

@@ -1,0 +1,25 @@
+// Test HashMap string literal conversion
+
+use std::collections
+
+fn test_hashmap_insert_string_literals() {
+    let mut map = collections::HashMap::new()
+    map.insert("key1", "value1")
+    map.insert("key2", "value2")
+    
+    assert(map.get("key1").is_some())
+    assert(map.get("key2").is_some())
+}
+
+fn test_hashmap_insert_mixed() {
+    let mut map = collections::HashMap::new()
+    let key = "dynamic_key"
+    let value = "dynamic_value"
+    
+    map.insert(key, value)
+    map.insert("literal_key", "literal_value")
+    
+    assert(map.len() == 2)
+}
+
+

@@ -1,10 +1,10 @@
 // Prometheus metrics for wschat
 
-use std.http
-use std.json
-use std.time
+use std::http
+use std::json
+use std::time
 
-use ./server.ServerState
+use ./server::ServerState
 
 pub fn prometheus_metrics(state: ServerState) -> Response {
     let mut output = String::new()

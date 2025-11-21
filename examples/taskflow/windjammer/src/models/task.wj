@@ -1,6 +1,6 @@
 // Task model
 
-use std.time
+use std::time
 
 @derive(Debug, Clone, Serialize, Deserialize)
 pub struct Task {

@@ -1,0 +1,34 @@
+// Windjammer Standard Library - Process Operations
+// Platform-agnostic process management API
+// NO coupling to any specific platform
+
+// Process result type
+pub type ProcessResult<T> = Result<T, string>
+
+// Execute a command and return its output
+pub fn execute(command: string, args: Vec<string>) -> ProcessResult<string> {
+    // Compiler generates platform-specific implementation
+}
+
+// Execute a command in the background
+pub fn spawn(command: string, args: Vec<string>) -> ProcessResult<ProcessHandle> {
+    // Compiler generates platform-specific implementation
+}
+
+// Process handle for managing running processes
+pub struct ProcessHandle {
+    pub id: i32,
+}
+
+impl ProcessHandle {
+    // Wait for the process to complete
+    pub fn wait(self) -> ProcessResult<i32> {
+        // Compiler generates platform-specific implementation
+    }
+    
+    // Kill the process
+    pub fn kill(self) -> ProcessResult<()> {
+        // Compiler generates platform-specific implementation
+    }
+}
+

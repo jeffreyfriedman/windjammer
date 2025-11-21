@@ -1,0 +1,15 @@
+// Simple game test to verify compiler codegen
+use std::game::*
+
+fn main() {
+    // Test basic game types
+    let position = Vec3::new(0.0, 0.0, 0.0)
+    println("Position created: ({}, {}, {})", position.x, position.y, position.z)
+    
+    // Test Color
+    let color = Color::rgb(1.0, 0.0, 0.0)
+    println("Color created successfully!")
+    
+    println("All game framework types work!")
+}
+

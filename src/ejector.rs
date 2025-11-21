@@ -178,7 +178,7 @@ impl Ejector {
 
         // Lex
         let mut lexer = lexer::Lexer::new(&source);
-        let tokens = lexer.tokenize();
+        let tokens = lexer.tokenize_with_locations();
 
         // Parse
         let mut parser = parser::Parser::new(tokens);
@@ -196,7 +196,7 @@ impl Ejector {
         let mut inference_engine = inference::InferenceEngine::new();
         let mut inferred_bounds_map = HashMap::new();
         for item in &program.items {
-            if let parser::Item::Function(func) = item {
+            if let parser::Item::Function { decl: func, .. } = item {
                 let bounds = inference_engine.infer_function_bounds(func);
                 if !bounds.is_empty() {
                     inferred_bounds_map.insert(func.name.clone(), bounds);
@@ -264,9 +264,9 @@ impl Ejector {
         let mut modules = HashSet::new();
 
         for item in &program.items {
-            if let parser::Item::Use { path, alias: _ } = item {
-                let module_path = path.join(".");
-                if let Some(module) = module_path.strip_prefix("std.") {
+            if let parser::Item::Use { path, alias: _, .. } = item {
+                let module_path = path.join("::");
+                if let Some(module) = module_path.strip_prefix("std::") {
                     modules.insert(module.to_string());
                 }
             }

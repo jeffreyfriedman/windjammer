@@ -1,11 +1,12 @@
 // Output formatting for wjfind
 
-use std.io
-use std.json
-use std.time
+use std::io
+use std::json
+use std::time
 
-use ./config.Config
-use ./search.SearchResults
+use ./config::Config
+use ./search::SearchResults
+use ./search::Match
 
 // ANSI color codes
 const COLOR_RED: string = "\x1b[31m"
@@ -15,7 +16,7 @@ const COLOR_CYAN: string = "\x1b[36m"
 const COLOR_RESET: string = "\x1b[0m"
 const COLOR_BOLD: string = "\x1b[1m"
 
-pub fn print_results(results: SearchResults, config: Config, duration: Duration) {
+pub fn print_results(results: &SearchResults, config: &Config, duration: time::Duration) {
     if config.json {
         print_json(results, duration)
     } else if config.count_only {
@@ -27,7 +28,7 @@ pub fn print_results(results: SearchResults, config: Config, duration: Duration)
     }
 }
 
-fn print_json(results: SearchResults, duration: Duration) {
+fn print_json(results: &SearchResults, duration: time::Duration) {
     let output = json!({
         "matches": results.matches.iter().map(|m| {
             json!({
@@ -45,19 +46,19 @@ fn print_json(results: SearchResults, duration: Duration) {
         }
     })
     
-    println!("{}", json.stringify_pretty(output))
+    println!("{}", json::stringify_pretty(output).unwrap_or_else(|e| e))
 }
 
-fn print_count(results: SearchResults) {
+fn print_count(results: &SearchResults) {
     println!("{}", results.total_matches)
 }
 
-fn print_files_only(results: SearchResults, config: Config) {
+fn print_files_only(results: &SearchResults, config: &Config) {
     // Group matches by file
-    let mut files = std.collections.HashSet::new()
+    let mut files = std::collections::HashSet::new()
     
-    for m in results.matches {
-        files.insert(m.file)
+    for m in &results.matches {
+        files.insert(m.file.clone())
     }
     
     // Print unique files
@@ -70,15 +71,18 @@ fn print_files_only(results: SearchResults, config: Config) {
     }
 }
 
-fn print_default(results: SearchResults, config: Config) {
+fn print_default(results: &SearchResults, config: &Config) {
     // Group matches by file
-    let mut by_file = std.collections.HashMap::new()
+    let mut by_file = std::collections::HashMap::new()
     
-    for m in results.matches {
+    for m in &results.matches {
         by_file.entry(m.file.clone())
             .or_insert(vec![])
-            .push(m)
+            .push(m.clone())
     }
+    
+    // Save count before moving by_file
+    let file_count = by_file.len()
     
     // Print results grouped by file
     for (file, matches) in by_file {
@@ -91,7 +95,7 @@ fn print_default(results: SearchResults, config: Config) {
         
         // Print matches
         for m in matches {
-            print_match(m, config)
+            print_match(&m, config)
         }
         
         println!("")  // Blank line between files
@@ -102,24 +106,24 @@ fn print_default(results: SearchResults, config: Config) {
         println!("{}Found {} matches in {} files (searched {} files){}", 
             COLOR_CYAN,
             results.total_matches,
-            by_file.len(),
+            file_count,
             results.files_searched,
             COLOR_RESET)
     } else {
         println!("Found {} matches in {} files (searched {} files)", 
             results.total_matches,
-            by_file.len(),
+            file_count,
             results.files_searched)
     }
 }
 
-fn print_match(m: Match, config: Config) {
+fn print_match(m: &Match, config: &Config) {
     // Print context before if any
     if !m.context_before.is_empty() {
         let start_line = m.line_number - m.context_before.len() as int
         for (i, context_line) in m.context_before.iter().enumerate() {
             let line_num = start_line + i as int
-            print_context_line(line_num, context_line.clone(), config.clone())
+            print_context_line(line_num, context_line, config)
         }
     }
     
@@ -132,13 +136,13 @@ fn print_match(m: Match, config: Config) {
     
     // Highlight the match in the line
     let highlighted_line = if config.use_color {
-        highlight_match(m.line_text.clone(), m.match_text.clone(), m.column)
+        highlight_match(&m.line_text, &m.match_text, m.column)
     } else {
         m.line_text.clone()
     }
     
     if config.use_color {
-        println!("  {}{}{}{} {}", 
+        println!("  {}{}{} {}", 
             COLOR_BLUE, 
             line_num_str, 
             COLOR_RESET,
@@ -152,12 +156,12 @@ fn print_match(m: Match, config: Config) {
         let start_line = m.line_number + 1
         for (i, context_line) in m.context_after.iter().enumerate() {
             let line_num = start_line + i as int
-            print_context_line(line_num, context_line.clone(), config.clone())
+            print_context_line(line_num, context_line, config)
         }
     }
 }
 
-fn print_context_line(line_num: int, line: string, config: Config) {
+fn print_context_line(line_num: int, line: &string, config: &Config) {
     let line_num_str = if config.line_numbers {
         format!("{}-", line_num)  // Use '-' for context lines
     } else {
@@ -175,11 +179,11 @@ fn print_context_line(line_num: int, line: string, config: Config) {
     }
 }
 
-fn highlight_match(line: string, match_text: string, column: int) -> string {
-    let before = &line[0..(column - 1)]
-    let after = &line[(column - 1 + match_text.len())..]
+fn highlight_match(line: &string, match_text: &string, column: int) -> string {
+    let before = &line[0..(column - 1) as usize]
+    let after = &line[(column - 1 + match_text.len() as int) as usize..]
     
-    format!("{}{}{}{}{}", 
+    format!("{}{}{}{}{}{}", 
         before,
         COLOR_BOLD,
         COLOR_RED,

@@ -1,3 +1,4 @@
+#![allow(dead_code)] // Refactoring implementation - some parts planned for future versions
 //! Preview mode for refactorings
 //!
 //! Show diffs and changes before applying refactorings.
@@ -70,7 +71,7 @@ impl RefactoringPreview {
                 let file_name = uri
                     .path()
                     .split('/')
-                    .last()
+                    .next_back()
                     .unwrap_or("unknown")
                     .to_string();
 

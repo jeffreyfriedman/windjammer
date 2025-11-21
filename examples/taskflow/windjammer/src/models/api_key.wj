@@ -1,9 +1,9 @@
 // API Key authentication model
 
-use std.time
-use std.crypto
+use std::time
+use std::crypto
 
-@derive(Debug, Clone, Serialize, Deserialize)]
+@derive(Debug, Clone, Serialize, Deserialize)
 pub struct ApiKey {
     pub id: int,
     pub user_id: int,
@@ -15,13 +15,13 @@ pub struct ApiKey {
     pub revoked: bool,
 }
 
-@derive(Debug, Serialize, Deserialize)]
+@derive(Debug, Serialize, Deserialize)
 pub struct CreateApiKeyRequest {
     pub name: string,
     pub expires_in_days: Option<int>,
 }
 
-@derive(Debug, Serialize, Deserialize)]
+@derive(Debug, Serialize, Deserialize)
 pub struct ApiKeyResponse {
     pub id: int,
     pub name: string,
@@ -30,7 +30,7 @@ pub struct ApiKeyResponse {
     pub expires_at: Option<int>,
 }
 
-@derive(Debug, Serialize, Deserialize)]
+@derive(Debug, Serialize, Deserialize)
 pub struct ApiKeyListItem {
     pub id: int,
     pub name: string,

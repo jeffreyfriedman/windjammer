@@ -1,12 +1,12 @@
 // User presence tracking for wschat
 
-use std.sync
-use std.collections.HashMap
-use std.time
+use std::sync
+use std::collections::HashMap
+use std::time
 
-use ./message.PresenceStatus
+use ./message::PresenceStatus
 
-@derive(Debug, Clone)]
+@derive(Debug, Clone)
 struct PresenceInfo {
     pub user_id: string,
     pub status: PresenceStatus,

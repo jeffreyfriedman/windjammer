@@ -1,19 +1,19 @@
 // wjfind - Fast file search utility built in Windjammer
 // A production CLI tool to validate Windjammer's capabilities
 
-use std.cli
-use std.fs
-use std.io
-use std.env
-use std.time
-use std.log
+use std::cli
+use std::fs
+use std::io
+use std::env
+use std::time
+use std::log
 
 use ./config
 use ./search
 use ./output
 use ./gitignore
 
-@derive(Debug)]
+@derive(Debug)
 struct Args {
     pattern: string,
     paths: Vec<string>,
@@ -29,7 +29,7 @@ struct Args {
     max_count: Option<int>,
     threads: int,
     json: bool,
-    color: string,  // auto, always, never
+    color: string,  // auto, always, never,
     hidden: bool,
     no_ignore: bool,
 }
@@ -39,100 +39,103 @@ fn main() {
     let args = parse_args()
     
     // Initialize logging (only if verbose)
-    if env.var("WJFIND_LOG").is_ok() {
-        log.init("debug")
+    if env::var("WJFIND_LOG").is_ok() {
+        log::init()
     }
     
     // Create search configuration
-    let config = config.from_args(args)
+    let config = config::from_args(args).unwrap_or_else(|e| {
+        eprintln!("Error: {}", e)
+        std::process::exit(1)
+    })
     
     // Run search
-    let start = time.now()
-    let results = match search.run(config) {
+    let start = time::now()
+    let results = match search::run(config.clone()) {
         Ok(r) => r,
         Err(e) => {
-            eprintln!("Error: ${e}")
-            std.process.exit(1)
+            eprintln!("Error: {}", e)
+            std::process::exit(1)
         }
     }
-    let duration = time.now().duration_since(start)
+    let duration = time::now().duration_since(&start)
     
     // Output results
-    output.print_results(results, config, duration)
+    output::print_results(&results, &config, duration)
     
     // Exit with appropriate code
     let exit_code = if results.matches.is_empty() { 1 } else { 0 }
-    std.process.exit(exit_code)
+    std::process::exit(exit_code)
 }
 
 fn parse_args() -> Args {
-    let mut app = cli.new("wjfind")
+    let mut app = cli::new("wjfind")
         .version("0.1.0")
         .author("Windjammer Team")
         .about("Fast file search utility - like ripgrep, but in Windjammer!")
-        .arg(cli.arg("pattern")
+        .arg(cli::arg("pattern")
             .help("Pattern to search for (regex)")
             .required(true))
-        .arg(cli.arg("paths")
+        .arg(cli::arg("paths")
             .help("Paths to search (default: current directory)")
             .multiple(true)
             .default_value("."))
-        .arg(cli.flag("case-insensitive")
+        .arg(cli::flag("case-insensitive")
             .short("i")
             .help("Case-insensitive search"))
-        .arg(cli.flag("whole-word")
+        .arg(cli::flag("whole-word")
             .short("w")
             .help("Match whole words only"))
-        .arg(cli.flag("line-numbers")
+        .arg(cli::flag("line-numbers")
             .short("n")
             .help("Show line numbers"))
-        .arg(cli.flag("count")
+        .arg(cli::flag("count")
             .short("c")
             .help("Only show count of matches"))
-        .arg(cli.flag("files-with-matches")
+        .arg(cli::flag("files-with-matches")
             .short("l")
             .help("Only show files with matches"))
-        .arg(cli.option("context-before")
+        .arg(cli::option("context-before")
             .short("B")
             .help("Lines of context before match")
             .default_value("0"))
-        .arg(cli.option("context-after")
+        .arg(cli::option("context-after")
             .short("A")
             .help("Lines of context after match")
             .default_value("0"))
-        .arg(cli.option("context")
+        .arg(cli::option("context")
             .short("C")
             .help("Lines of context before and after match")
             .default_value("0"))
-        .arg(cli.option("type")
+        .arg(cli::option("type")
             .short("t")
             .help("Filter by file type (rust, js, py, etc.)")
             .multiple(true))
-        .arg(cli.option("exclude")
+        .arg(cli::option("exclude")
             .help("Exclude directories or files")
             .multiple(true))
-        .arg(cli.option("max-count")
+        .arg(cli::option("max-count")
             .short("m")
             .help("Maximum number of matches"))
-        .arg(cli.option("threads")
+        .arg(cli::option("threads")
             .short("j")
             .help("Number of threads")
             .default_value("0"))  // 0 = auto-detect
-        .arg(cli.flag("json")
+        .arg(cli::flag("json")
             .help("Output results as JSON"))
-        .arg(cli.option("color")
+        .arg(cli::option("color")
             .help("When to use colors (auto, always, never)")
             .default_value("auto"))
-        .arg(cli.flag("hidden")
+        .arg(cli::flag("hidden")
             .help("Search hidden files and directories"))
-        .arg(cli.flag("no-ignore")
+        .arg(cli::flag("no-ignore")
             .help("Don't respect .gitignore files"))
     
     let matches = app.get_matches()
     
     // Extract arguments
     let pattern = matches.value_of("pattern").unwrap()
-    let paths = matches.values_of("paths").unwrap_or(vec!["."])
+    let paths = matches.values_of("paths").unwrap_or(vec![".".to_string()])
     let case_insensitive = matches.is_present("case-insensitive")
     let whole_word = matches.is_present("whole-word")
     let line_numbers = matches.is_present("line-numbers")
@@ -162,7 +165,7 @@ fn parse_args() -> Args {
     // Threads (0 = auto-detect)
     let threads = matches.value_of("threads").unwrap().parse::<int>().unwrap_or(0)
     let threads = if threads == 0 {
-        std.thread.available_parallelism().unwrap_or(4)
+        std::thread::available_parallelism().unwrap_or(4)
     } else {
         threads
     }

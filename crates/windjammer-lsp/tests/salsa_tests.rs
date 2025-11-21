@@ -248,10 +248,10 @@ fn test_unicode_content() {
     let source = "fn greet() {}";
 
     let file = db.set_source_text(uri, source.to_string());
-    let program = db.get_program(file);
+    let _program = db.get_program(file);
 
     // Should parse successfully even with simple syntax
-    assert!(program.items.len() >= 0); // May be 0 or 1 depending on parser
+    // No assertion needed - just verify it doesn't panic
 }
 
 #[test]
@@ -389,5 +389,5 @@ fn test_comment_handling() {
     let program = db.get_program(file);
 
     // Should parse both functions
-    assert!(program.items.len() >= 1); // At least one parsed
+    assert!(!program.items.is_empty()); // At least one parsed
 }

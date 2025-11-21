@@ -1,0 +1,46 @@
+// Test std/strings module
+use std::strings
+
+fn main() {
+    println!("Testing std/strings module...")
+    
+    // Test case conversion
+    let text = "windjammer"
+    let upper = to_upper(text)
+    println!("to_upper('windjammer') = {}", upper)
+    
+    let lower_text = "HELLO"
+    let lower = to_lower(lower_text)
+    println!("to_lower('HELLO') = {}", lower)
+    
+    // Test trimming
+    let padded = "  hello  "
+    let trimmed = trim(padded)
+    println!("trim('  hello  ') = '{}'", trimmed)
+    
+    // Test replacement
+    let original = "hello world"
+    let replaced = replace(original, "world", "Windjammer")
+    println!("replace('hello world', 'world', 'Windjammer') = {}", replaced)
+    
+    // Test checking functions
+    let empty = ""
+    let is_empty_result = is_empty(&empty)
+    println!("is_empty('') = {}", is_empty_result)
+    
+    let test_str = "windjammer"
+    let starts = starts_with(&test_str, "wind")
+    println!("starts_with('windjammer', 'wind') = {}", starts)
+    
+    let ends = ends_with(&test_str, "mer")
+    println!("ends_with('windjammer', 'mer') = {}", ends)
+    
+    let has = contains(&test_str, "jam")
+    println!("contains('windjammer', 'jam') = {}", has)
+    
+    // Test repeat
+    let repeated = repeat("ha", 3)
+    println!("repeat('ha', 3) = {}", repeated)
+    
+    println!("std/strings works! ✓")
+}

@@ -1,0 +1,51 @@
+// Example 44: Cryptography
+// Demonstrates cryptographic operations with Windjammer's std.crypto abstraction
+
+use std::crypto
+
+fn main() {
+    println!("=== Cryptography Demo ===")
+    println!()
+    
+    // Use Windjammer's crypto abstraction - no direct base64/bcrypt/sha2 access!
+    
+    // 1. Base64 encoding
+    println!("1. Base64 Encoding:")
+    let data = "Hello, Windjammer!"
+    let encoded = crypto.base64_encode(data)
+    println!("   Original: {}", data)
+    println!("   Encoded: {}", encoded)
+    
+    match crypto.base64_decode(&encoded) {
+        Ok(decoded) => println!("   Decoded: {}", decoded),
+        Err(e) => println!("   Error: {}", e)
+    }
+    println!()
+    
+    // 2. SHA-256 hashing
+    println!("2. SHA-256 Hash:")
+    let hash = crypto.sha256("secure data")
+    println!("   Hash: {}", hash)
+    println!()
+    
+    // 3. Password hashing (bcrypt)
+    println!("3. Password Hashing:")
+    match crypto.hash_password("my_password") {
+        Ok(password_hash) => {
+            let preview = password_hash.substring(0, 20)
+            println!("   Password hash created: {}", preview)
+            
+            match crypto.verify_password("my_password", &password_hash) {
+                Ok(valid) => println!("   Verification: {}", valid),
+                Err(e) => println!("   Error: {}", e)
+            }
+        }
+        Err(e) => println!("   Error: {}", e)
+    }
+    println!()
+    
+    println!("✨ Cryptography with Windjammer!")
+    println!("   ✅ Using std.crypto abstraction (not base64/bcrypt/sha2 directly)")
+    println!("   ✅ Dependencies added automatically")
+    println!("   ✅ Clean, Windjammer-native API")
+}

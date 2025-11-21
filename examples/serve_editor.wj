@@ -1,0 +1,66 @@
+// Windjammer HTTP Server - Dogfooding!
+// Serves the WASM editor for browser testing
+// This demonstrates that Windjammer can serve its own editor!
+
+use std::http::*
+use std::fs::*
+
+fn main() {
+    println!("🚀 Windjammer HTTP Server (Pure Windjammer!)")
+    println!("Serving editor from: /tmp/windjammer_editor_wasm")
+    println!("")
+    println!("Starting server on http://localhost:8080")
+    println!("Open http://localhost:8080 in your browser")
+    println!("Press Ctrl+C to stop")
+    println!("")
+    
+    let server = Server::new("127.0.0.1".to_string(), 8080)
+    
+    match server.serve(|request| handle_request(request)) {
+        Ok(_) => println!("Server stopped"),
+        Err(e) => println!("Server error: {}", e)
+    }
+}
+
+fn handle_request(request: ServerRequest) -> ServerResponse {
+    let base_dir = "/tmp/windjammer_editor_wasm"
+    
+    let file_path = if request.path == "/" {
+        format!("{}/index.html", base_dir)
+    } else {
+        format!("{}{}", base_dir, request.path)
+    }
+    
+    match read_file(file_path.clone()) {
+        Ok(content) => {
+            let content_type = get_content_type(file_path.clone())
+            ServerResponse::new(200, content)
+                .header("Content-Type".to_string(), content_type)
+        },
+        Err(e) => {
+            ServerResponse::error(404, format!("File not found: {}", request.path))
+        }
+    }
+}
+
+fn get_content_type(path: string) -> string {
+    if path.ends_with(".html") {
+        "text/html".to_string()
+    } else if path.ends_with(".js") {
+        "application/javascript".to_string()
+    } else if path.ends_with(".wasm") {
+        "application/wasm".to_string()
+    } else if path.ends_with(".css") {
+        "text/css".to_string()
+    } else if path.ends_with(".json") {
+        "application/json".to_string()
+    } else if path.ends_with(".png") {
+        "image/png".to_string()
+    } else if path.ends_with(".jpg") || path.ends_with(".jpeg") {
+        "image/jpeg".to_string()
+    } else if path.ends_with(".svg") {
+        "image/svg+xml".to_string()
+    } else {
+        "application/octet-stream".to_string()
+    }
+}

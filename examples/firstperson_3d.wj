@@ -1,0 +1,183 @@
+// Simple 3D First-Person Demo
+// Demonstrates Windjammer's 3D game capabilities
+
+use std::game::*
+
+struct Cube {
+    x: float,
+    y: float,
+    z: float,
+    size: float,
+    r: float,
+    g: float,
+    b: float,
+}
+
+@game
+struct FirstPerson3D {
+    camera_x: float,
+    camera_y: float,
+    camera_z: float,
+    camera_yaw: float,
+    camera_pitch: float,
+    level: Vec<Cube>,
+    mouse_sensitivity: float,
+}
+
+@init
+fn init() -> FirstPerson3D {
+    FirstPerson3D {
+        camera_x: 0.0,
+        camera_y: 2.0,
+        camera_z: 10.0,
+        camera_yaw: 0.0,
+        camera_pitch: 0.0,
+        level: vec![
+            // Ground plane
+            Cube { x: 0.0, y: -0.5, z: 0.0, size: 30.0, r: 0.5, g: 0.5, b: 0.5 },
+            
+            // Walls (forming a room)
+            Cube { x: 15.0, y: 2.0, z: 0.0, size: 1.0, r: 0.7, g: 0.3, b: 0.3 },
+            Cube { x: -15.0, y: 2.0, z: 0.0, size: 1.0, r: 0.3, g: 0.7, b: 0.3 },
+            Cube { x: 0.0, y: 2.0, z: 15.0, size: 1.0, r: 0.3, g: 0.3, b: 0.7 },
+            Cube { x: 0.0, y: 2.0, z: -15.0, size: 1.0, r: 0.7, g: 0.7, b: 0.3 },
+            
+            // Some obstacles
+            Cube { x: 5.0, y: 1.0, z: 5.0, size: 2.0, r: 0.8, g: 0.4, b: 0.2 },
+            Cube { x: -5.0, y: 1.0, z: -5.0, size: 2.0, r: 0.2, g: 0.8, b: 0.8 },
+            Cube { x: 8.0, y: 1.0, z: -3.0, size: 1.5, r: 0.9, g: 0.2, b: 0.9 },
+            
+            // Pillars
+            Cube { x: 10.0, y: 3.0, z: 10.0, size: 1.0, r: 0.6, g: 0.6, b: 0.6 },
+            Cube { x: -10.0, y: 3.0, z: 10.0, size: 1.0, r: 0.6, g: 0.6, b: 0.6 },
+            Cube { x: 10.0, y: 3.0, z: -10.0, size: 1.0, r: 0.6, g: 0.6, b: 0.6 },
+            Cube { x: -10.0, y: 3.0, z: -10.0, size: 1.0, r: 0.6, g: 0.6, b: 0.6 },
+        ],
+        mouse_sensitivity: 0.1,
+    }
+}
+
+@update
+fn update(game: &mut FirstPerson3D, delta: float) {
+    let speed = 8.0;
+    
+    // Calculate forward and right vectors based on yaw
+    let forward_x = game.camera_yaw.to_radians().sin();
+    let forward_z = -game.camera_yaw.to_radians().cos();
+    let right_x = (game.camera_yaw + 90.0).to_radians().sin();
+    let right_z = -(game.camera_yaw + 90.0).to_radians().cos();
+    
+    // WASD movement
+    if input::is_key_down(Key::W) {
+        game.camera_x += forward_x * speed * delta;
+        game.camera_z += forward_z * speed * delta;
+    }
+    if input::is_key_down(Key::S) {
+        game.camera_x -= forward_x * speed * delta;
+        game.camera_z -= forward_z * speed * delta;
+    }
+    if input::is_key_down(Key::A) {
+        game.camera_x -= right_x * speed * delta;
+        game.camera_z -= right_z * speed * delta;
+    }
+    if input::is_key_down(Key::D) {
+        game.camera_x += right_x * speed * delta;
+        game.camera_z += right_z * speed * delta;
+    }
+    
+    // Vertical movement
+    if input::is_key_down(Key::Space) {
+        game.camera_y += speed * delta;
+    }
+    if input::is_key_down(Key::LShift) {
+        game.camera_y -= speed * delta;
+    }
+    
+    // Mouse look
+    let mouse_delta = input::mouse_delta();
+    game.camera_yaw += mouse_delta.x * game.mouse_sensitivity;
+    game.camera_pitch -= mouse_delta.y * game.mouse_sensitivity;
+    
+    // Clamp pitch to prevent flipping
+    if game.camera_pitch > 89.0 {
+        game.camera_pitch = 89.0;
+    }
+    if game.camera_pitch < -89.0 {
+        game.camera_pitch = -89.0;
+    }
+    
+    // Keep camera in bounds
+    if game.camera_x > 14.0 { game.camera_x = 14.0; }
+    if game.camera_x < -14.0 { game.camera_x = -14.0; }
+    if game.camera_z > 14.0 { game.camera_z = 14.0; }
+    if game.camera_z < -14.0 { game.camera_z = -14.0; }
+    if game.camera_y < 0.5 { game.camera_y = 0.5; }
+    if game.camera_y > 10.0 { game.camera_y = 10.0; }
+}
+
+@render
+fn render(game: &FirstPerson3D) {
+    // Set camera
+    camera::set_position(game.camera_x, game.camera_y, game.camera_z);
+    camera::set_rotation(game.camera_pitch, game.camera_yaw, 0.0);
+    camera::set_fov(60.0);
+    
+    // Sky gradient
+    draw::skybox_gradient(
+        Color::rgb(0.5, 0.7, 1.0),  // Top (light blue)
+        Color::rgb(0.8, 0.9, 1.0)   // Bottom (lighter blue)
+    );
+    
+    // Directional light (sun)
+    light::directional(
+        -0.3, -1.0, -0.5,  // Direction
+        1.0, 1.0, 0.9,     // Color (warm white)
+        1.0                // Intensity
+    );
+    
+    // Ambient light
+    light::ambient(0.3, 0.3, 0.4, 0.2);
+    
+    // Draw level
+    for cube in &game.level {
+        draw::cube(
+            cube.x, cube.y, cube.z,
+            cube.size,
+            Color::rgb(cube.r, cube.g, cube.b)
+        );
+    }
+    
+    // Draw crosshair (2D overlay)
+    let screen_center_x = 400.0; // Half of 800
+    let screen_center_y = 300.0; // Half of 600
+    draw::line(
+        screen_center_x - 10.0, screen_center_y,
+        screen_center_x + 10.0, screen_center_y,
+        2.0,
+        Color::rgba(1.0, 1.0, 1.0, 0.8)
+    );
+    draw::line(
+        screen_center_x, screen_center_y - 10.0,
+        screen_center_x, screen_center_y + 10.0,
+        2.0,
+        Color::rgba(1.0, 1.0, 1.0, 0.8)
+    );
+    
+    // Draw UI
+    draw::text(
+        format!("Position: ({:.1}, {:.1}, {:.1})", game.camera_x, game.camera_y, game.camera_z),
+        10.0, 10.0, 16.0,
+        Color::rgb(1.0, 1.0, 1.0)
+    );
+    draw::text(
+        format!("Rotation: Yaw {:.1}° Pitch {:.1}°", game.camera_yaw, game.camera_pitch),
+        10.0, 30.0, 16.0,
+        Color::rgb(1.0, 1.0, 1.0)
+    );
+    draw::text(
+        "Controls: WASD to move, Mouse to look, Space/Shift for up/down",
+        10.0, 580.0, 14.0,
+        Color::rgb(1.0, 1.0, 1.0)
+    );
+}
+

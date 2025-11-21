@@ -1,0 +1,21 @@
+# Dockerfile for testing Rust SDK examples
+FROM rust:1.91-slim
+
+WORKDIR /app
+
+# Install system dependencies
+RUN apt-get update && apt-get install -y \
+    git \
+    pkg-config \
+    libssl-dev \
+    && rm -rf /var/lib/apt/lists/*
+
+# Copy Rust SDK
+COPY sdks/rust /app/sdks/rust
+
+# Build and run examples
+WORKDIR /app/sdks/rust
+
+# Run tests
+CMD ["sh", "-c", "cargo run --example hello_world && cargo run --example sprite_demo && cargo run --example 3d_scene"]
+

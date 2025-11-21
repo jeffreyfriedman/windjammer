@@ -1,8 +1,8 @@
 // Health check endpoint
 
-use std.http
-use std.time
-use std.json
+use std::http
+use std::time
+use std::json
 
 @derive(Serialize, Debug)
 struct HealthStatus {
