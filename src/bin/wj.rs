@@ -359,7 +359,7 @@ fn main() -> anyhow::Result<()> {
         Commands::Update { check, force } => {
             windjammer::cli::update::execute(check, force)?;
         }
-        Commands::Stats { clear, verbose } => {
+        Commands::Stats { clear, verbose: _ } => {
             if clear {
                 let mut stats = windjammer::error_statistics::load_or_create_stats();
                 stats.clear();
@@ -367,11 +367,7 @@ fn main() -> anyhow::Result<()> {
                 println!("Statistics cleared!");
             } else {
                 let stats = windjammer::error_statistics::load_or_create_stats();
-                if verbose {
-                    println!("{}", stats.format());
-                } else {
-                    println!("{}", stats.format());
-                }
+                println!("{}", stats.format());
             }
         }
         Commands::Docs { output, format } => {
@@ -445,7 +441,6 @@ fn main() -> anyhow::Result<()> {
         }
         Commands::Errors { file, output } => {
             use colored::*;
-            use windjammer::error_tui::{ErrorTui, TuiAction};
 
             println!("Building and checking {}...", file.display());
 

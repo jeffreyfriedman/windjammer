@@ -17,7 +17,7 @@ fn test_basic_parse() {
     assert_eq!(program.items.len(), 1);
     assert!(matches!(
         &program.items[0],
-        windjammer::parser::Item::Function(_)
+        windjammer::parser::Item::Function { .. }
     ));
 }
 

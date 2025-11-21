@@ -429,29 +429,44 @@ mod tests {
     fn test_escape_analysis_basic() {
         // Test that non-escaping vec is optimized
         let program = Program {
-            items: vec![Item::Function(FunctionDecl {
-                name: "test".to_string(),
-                parameters: vec![],
-                return_type: None,
-                body: vec![Statement::Let {
-                    pattern: Pattern::Identifier("temp".to_string()),
-                    mutable: false,
-                    type_: None,
-                    value: Expression::MacroInvocation {
-                        name: "vec".to_string(),
-                        args: vec![
-                            Expression::Literal(Literal::Int(1)),
-                            Expression::Literal(Literal::Int(2)),
-                            Expression::Literal(Literal::Int(3)),
-                        ],
-                        delimiter: MacroDelimiter::Brackets,
-                    },
-                }],
-                type_params: vec![],
-                where_clause: vec![],
-                is_async: false,
-                decorators: vec![],
-            })],
+            items: vec![Item::Function {
+                decl: FunctionDecl {
+                    name: "test".to_string(),
+                    parameters: vec![],
+                    return_type: None,
+                    body: vec![Statement::Let {
+                        pattern: Pattern::Identifier("temp".to_string()),
+                        mutable: false,
+                        type_: None,
+                        value: Expression::MacroInvocation {
+                            name: "vec".to_string(),
+                            args: vec![
+                                Expression::Literal {
+                                    value: Literal::Int(1),
+                                    location: None,
+                                },
+                                Expression::Literal {
+                                    value: Literal::Int(2),
+                                    location: None,
+                                },
+                                Expression::Literal {
+                                    value: Literal::Int(3),
+                                    location: None,
+                                },
+                            ],
+                            delimiter: MacroDelimiter::Brackets,
+                            location: None,
+                        },
+                        location: None,
+                    }],
+                    type_params: vec![],
+                    where_clause: vec![],
+                    is_async: false,
+                    decorators: vec![],
+                    parent_type: None,
+                },
+                location: None,
+            }],
         };
 
         let (optimized, stats) = optimize_escape_analysis(&program);
@@ -459,7 +474,7 @@ mod tests {
         assert_eq!(stats.total_optimizations, 1);
 
         // Verify the optimization was applied
-        if let Item::Function(func) = &optimized.items[0] {
+        if let Item::Function { decl: func, .. } = &optimized.items[0] {
             if let Statement::Let {
                 value: Expression::MacroInvocation { name, .. },
                 ..
@@ -474,28 +489,43 @@ mod tests {
     fn test_escape_analysis_returned_var() {
         // Test that returned variables are not optimized
         let program = Program {
-            items: vec![Item::Function(FunctionDecl {
-                name: "test".to_string(),
-                parameters: vec![],
-                return_type: None,
-                body: vec![
-                    Statement::Let {
-                        pattern: Pattern::Identifier("temp".to_string()),
-                        mutable: false,
-                        type_: None,
-                        value: Expression::MacroInvocation {
-                            name: "vec".to_string(),
-                            args: vec![Expression::Literal(Literal::Int(1))],
-                            delimiter: MacroDelimiter::Brackets,
+            items: vec![Item::Function {
+                decl: FunctionDecl {
+                    name: "test".to_string(),
+                    parameters: vec![],
+                    return_type: None,
+                    body: vec![
+                        Statement::Let {
+                            pattern: Pattern::Identifier("temp".to_string()),
+                            mutable: false,
+                            type_: None,
+                            value: Expression::MacroInvocation {
+                                name: "vec".to_string(),
+                                args: vec![Expression::Literal {
+                                    value: Literal::Int(1),
+                                    location: None,
+                                }],
+                                delimiter: MacroDelimiter::Brackets,
+                                location: None,
+                            },
+                            location: None,
                         },
-                    },
-                    Statement::Return(Some(Expression::Identifier("temp".to_string()))),
-                ],
-                type_params: vec![],
-                where_clause: vec![],
-                is_async: false,
-                decorators: vec![],
-            })],
+                        Statement::Return {
+                            value: Some(Expression::Identifier {
+                                name: "temp".to_string(),
+                                location: None,
+                            }),
+                            location: None,
+                        },
+                    ],
+                    type_params: vec![],
+                    where_clause: vec![],
+                    is_async: false,
+                    decorators: vec![],
+                    parent_type: None,
+                },
+                location: None,
+            }],
         };
 
         let (_, stats) = optimize_escape_analysis(&program);

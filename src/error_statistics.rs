@@ -255,7 +255,7 @@ impl ErrorStatistics {
                 output.push_str(&format!("     {}\n", stats.message.dimmed()));
             }
         }
-        output.push_str("\n");
+        output.push('\n');
 
         // Top files
         output.push_str(&format!(
@@ -275,7 +275,7 @@ impl ErrorStatistics {
                 ));
             }
         }
-        output.push_str("\n");
+        output.push('\n');
 
         // Recent errors
         output.push_str(&format!("{}\n", "Recent Errors (last 5):".yellow().bold()));

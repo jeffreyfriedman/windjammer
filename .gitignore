@@ -5,6 +5,10 @@ Cargo.lock
 **/*.rs.bk
 *.pdb
 
+# Build directories (temp build artifacts)
+/build/
+/build_*/
+
 # Generated output
 /output/
 /test_output/

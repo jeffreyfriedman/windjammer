@@ -73,7 +73,7 @@ mod tests {
 
     #[test]
     fn test_highlighter_creation() {
-        let highlighter = SyntaxHighlighter::new();
+        let _highlighter = SyntaxHighlighter::new();
         assert!(SyntaxHighlighter::is_available());
     }
 

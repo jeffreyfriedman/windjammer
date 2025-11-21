@@ -15,6 +15,7 @@ pub struct BuildOptions {
     pub v8_optimize: bool,
 }
 
+#[allow(clippy::too_many_arguments)]
 pub fn execute(
     path: &Path,
     output: Option<&Path>,
@@ -81,14 +82,12 @@ pub fn execute(
             filter_file,
             filter_type,
         )?;
+    } else if target_str == "javascript" || target_str == "js" {
+        println!("Run your JavaScript project with:");
+        println!("  node {:?}/output.js", output_dir);
     } else {
-        if target_str == "javascript" || target_str == "js" {
-            println!("Run your JavaScript project with:");
-            println!("  node {:?}/output.js", output_dir);
-        } else {
-            println!("Run your project with:");
-            println!("  cd {:?} && cargo run", output_dir);
-        }
+        println!("Run your project with:");
+        println!("  cd {:?} && cargo run", output_dir);
     }
 
     Ok(())
@@ -224,10 +223,12 @@ fn check_with_cargo(
 
         if let Some(type_filter) = filter_type {
             let filter_lower = type_filter.to_lowercase();
-            wj_diagnostics.retain(|d| match (&d.level, filter_lower.as_str()) {
-                (crate::error_mapper::DiagnosticLevel::Error, "error") => true,
-                (crate::error_mapper::DiagnosticLevel::Warning, "warning") => true,
-                _ => false,
+            wj_diagnostics.retain(|d| {
+                matches!(
+                    (&d.level, filter_lower.as_str()),
+                    (crate::error_mapper::DiagnosticLevel::Error, "error")
+                        | (crate::error_mapper::DiagnosticLevel::Warning, "warning")
+                )
             });
         }
 

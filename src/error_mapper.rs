@@ -413,8 +413,8 @@ impl ErrorMapper {
             "()" => "void",
             _ => {
                 // Handle references
-                if rust_type.starts_with('&') {
-                    return format!("&{}", self.rust_type_to_windjammer(&rust_type[1..]));
+                if let Some(stripped) = rust_type.strip_prefix('&') {
+                    return format!("&{}", self.rust_type_to_windjammer(stripped));
                 }
                 // Handle Option
                 if rust_type.starts_with("Option<") {
@@ -436,7 +436,7 @@ impl ErrorMapper {
     }
 
     /// Extract text between two delimiters
-    fn extract_between<'a>(&self, text: &'a str, start: &str, end: &str) -> Option<String> {
+    fn extract_between(&self, text: &str, start: &str, end: &str) -> Option<String> {
         let start_idx = text.find(start)? + start.len();
         let remaining = &text[start_idx..];
         let end_idx = remaining.find(end)?;
@@ -469,15 +469,11 @@ impl WindjammerDiagnostic {
         match self.code.as_ref()?.as_str() {
             "E0384" | "E0596" => {
                 // Immutability error - suggest adding mut
-                if let Some(var_name) = extract_variable_from_message(&self.message) {
-                    Some(FixType::AddMut {
-                        file: self.location.file.clone(),
-                        line: self.location.line,
-                        variable_name: var_name,
-                    })
-                } else {
-                    None
-                }
+                extract_variable_from_message(&self.message).map(|var_name| FixType::AddMut {
+                    file: self.location.file.clone(),
+                    line: self.location.line,
+                    variable_name: var_name,
+                })
             }
             "E0308" => {
                 // Type mismatch - suggest conversion
@@ -692,6 +688,17 @@ impl WindjammerDiagnostic {
     }
 }
 
+/// Extract variable name from error message
+fn extract_variable_from_message(msg: &str) -> Option<String> {
+    // Look for patterns like "cannot assign twice to immutable variable `x`"
+    if let Some(start) = msg.find("`") {
+        if let Some(end) = msg[start + 1..].find("`") {
+            return Some(msg[start + 1..start + 1 + end].to_string());
+        }
+    }
+    None
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -834,15 +841,4 @@ mod tests {
         let found = mapper.extract_between(text, "found `", "`");
         assert_eq!(found, Some("&str".to_string()));
     }
-}
-
-/// Extract variable name from error message
-fn extract_variable_from_message(msg: &str) -> Option<String> {
-    // Look for patterns like "cannot assign twice to immutable variable `x`"
-    if let Some(start) = msg.find("`") {
-        if let Some(end) = msg[start + 1..].find("`") {
-            return Some(msg[start + 1..start + 1 + end].to_string());
-        }
-    }
-    None
 }

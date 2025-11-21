@@ -29,6 +29,7 @@ impl DiagnosticsEngine {
     }
 
     /// Publish Windjammer diagnostics (with error codes and rich information)
+    #[allow(dead_code)]
     pub async fn publish_windjammer(&self, uri: &Url, wj_diagnostics: Vec<WindjammerDiagnostic>) {
         let diagnostics: Vec<Diagnostic> = wj_diagnostics
             .into_iter()
@@ -39,6 +40,7 @@ impl DiagnosticsEngine {
     }
 
     /// Convert a Windjammer diagnostic to an LSP diagnostic
+    #[allow(dead_code)]
     fn convert_windjammer_diagnostic(&self, wj_diag: WindjammerDiagnostic) -> Diagnostic {
         // Convert severity
         let severity = match wj_diag.level {
@@ -137,6 +139,7 @@ impl DiagnosticsEngine {
     }
 
     /// Get contextual help for a diagnostic
+    #[allow(dead_code)]
     fn get_contextual_help(&self, wj_diag: &WindjammerDiagnostic) -> Option<String> {
         let msg = &wj_diag.message.to_lowercase();
 

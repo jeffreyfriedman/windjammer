@@ -5,10 +5,10 @@ use windjammer_game_framework::prelude::*;
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("=== Windjammer Dynamic Plugin Loading Example ===\n");
-    
+
     // Create application
     let mut app = App::new();
-    
+
     // Example 1: Load a C plugin
     #[cfg(feature = "dynamic_plugins")]
     {
@@ -22,7 +22,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 println!("  License: {}", plugin.license());
                 println!("  Category: {:?}", plugin.category());
                 println!("  Hot-reload: {}", plugin.supports_hot_reload());
-                
+
                 app.add_plugin(plugin)?;
             }
             Err(e) => {
@@ -32,7 +32,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
         println!();
     }
-    
+
     // Example 2: Load a C++ plugin
     #[cfg(feature = "dynamic_plugins")]
     {
@@ -43,7 +43,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 println!("  Version: {}", plugin.version());
                 println!("  Description: {}", plugin.description());
                 println!("  Dependencies: {:?}", plugin.dependencies());
-                
+
                 app.add_plugin(plugin)?;
             }
             Err(e) => {
@@ -53,7 +53,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
         println!();
     }
-    
+
     // Example 3: Load all plugins
     println!("Loading all registered plugins...");
     match app.load_plugins() {
@@ -65,14 +65,14 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
     }
     println!();
-    
+
     // Example 4: List loaded plugins
     println!("Loaded plugins:");
     for (name, state) in app.plugins().list_plugins() {
         println!("  - {} ({:?})", name, state);
     }
     println!();
-    
+
     // Example 5: Hot-reload (if supported)
     #[cfg(feature = "dynamic_plugins")]
     {
@@ -83,9 +83,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         println!("  3. Call plugin.reload(path)");
         println!();
     }
-    
+
     println!("=== Plugin Loading Complete ===");
-    
+
     Ok(())
 }
 
@@ -105,7 +105,7 @@ Build Instructions:
 
 Output:
    === Windjammer Dynamic Plugin Loading Example ===
-   
+
    Loading C plugin...
    ✓ Loaded plugin: example_plugin
      Version: 1.0.0
@@ -114,13 +114,13 @@ Output:
      License: MIT
      Category: Other
      Hot-reload: true
-   
+
    Loading C++ plugin...
    ✓ Loaded plugin: example_plugin_cpp
      Version: 1.0.0
      Description: Example C++ plugin demonstrating FFI with modern C++
      Dependencies: [PluginDependency { name: "core_systems", version: ^1.0.0 }]
-   
+
    Loading all registered plugins...
    [ExamplePlugin] Initializing...
    [ExamplePlugin] App handle: 0x7ffeefbff000
@@ -131,17 +131,16 @@ Output:
    [ExamplePlugin++] Initializing C++ plugin...
    [ExamplePlugin++] Initialized successfully!
    ✓ All plugins loaded successfully!
-   
+
    Loaded plugins:
      - example_plugin (Loaded)
      - example_plugin_cpp (Loaded)
-   
+
    Hot-reload is supported!
    To hot-reload a plugin:
      1. Modify the plugin source code
      2. Recompile the plugin
      3. Call plugin.reload(path)
-   
+
    === Plugin Loading Complete ===
 */
-

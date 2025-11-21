@@ -422,7 +422,11 @@ mod tests {
             pattern: windjammer::parser::Pattern::Identifier("x".to_string()),
             mutable: false,
             type_: None,
-            value: Expression::Literal(windjammer::parser::Literal::Int(10)),
+            value: Expression::Literal {
+                value: windjammer::parser::Literal::Int(10),
+                location: None,
+            },
+            location: None,
         }];
 
         // Selection: let y = x + 5;
@@ -436,8 +440,13 @@ mod tests {
                     location: None,
                 }),
                 op: BinaryOp::Add,
-                right: Box::new(Expression::Literal(windjammer::parser::Literal::Int(5))),
+                right: Box::new(Expression::Literal {
+                    value: windjammer::parser::Literal::Int(5),
+                    location: None,
+                }),
+                location: None,
             },
+            location: None,
         }];
 
         // After: (empty)
@@ -464,23 +473,31 @@ mod tests {
             pattern: windjammer::parser::Pattern::Identifier("result".to_string()),
             mutable: false,
             type_: None,
-            value: Expression::Literal(windjammer::parser::Literal::Int(42)),
+            value: Expression::Literal {
+                value: windjammer::parser::Literal::Int(42),
+                location: None,
+            },
+            location: None,
         }];
 
         // After: println(result);
-        let after = vec![Statement::Expression(Expression::Call {
-            function: Box::new(Expression::Identifier {
-                name: "println".to_string(),
-                location: None,
-            }),
-            arguments: vec![(
-                None,
-                Expression::Identifier {
-                    name: "result".to_string(),
+        let after = vec![Statement::Expression {
+            expr: Expression::Call {
+                function: Box::new(Expression::Identifier {
+                    name: "println".to_string(),
                     location: None,
-                },
-            )],
-        })];
+                }),
+                arguments: vec![(
+                    None,
+                    Expression::Identifier {
+                        name: "result".to_string(),
+                        location: None,
+                    },
+                )],
+                location: None,
+            },
+            location: None,
+        }];
 
         let analysis = analyzer.analyze(&before, &selected, &after);
 
@@ -498,7 +515,11 @@ mod tests {
             pattern: windjammer::parser::Pattern::Identifier("x".to_string()),
             mutable: false,
             type_: None,
-            value: Expression::Literal(windjammer::parser::Literal::Int(10)),
+            value: Expression::Literal {
+                value: windjammer::parser::Literal::Int(10),
+                location: None,
+            },
+            location: None,
         }];
 
         // Selection: let y = x * 2;
@@ -512,24 +533,33 @@ mod tests {
                     location: None,
                 }),
                 op: BinaryOp::Mul,
-                right: Box::new(Expression::Literal(windjammer::parser::Literal::Int(2))),
+                right: Box::new(Expression::Literal {
+                    value: windjammer::parser::Literal::Int(2),
+                    location: None,
+                }),
+                location: None,
             },
+            location: None,
         }];
 
         // After: use(y);
-        let after = vec![Statement::Expression(Expression::Call {
-            function: Box::new(Expression::Identifier {
-                name: "use".to_string(),
-                location: None,
-            }),
-            arguments: vec![(
-                None,
-                Expression::Identifier {
-                    name: "y".to_string(),
+        let after = vec![Statement::Expression {
+            expr: Expression::Call {
+                function: Box::new(Expression::Identifier {
+                    name: "use".to_string(),
                     location: None,
-                },
-            )],
-        })];
+                }),
+                arguments: vec![(
+                    None,
+                    Expression::Identifier {
+                        name: "y".to_string(),
+                        location: None,
+                    },
+                )],
+                location: None,
+            },
+            location: None,
+        }];
 
         let analysis = analyzer.analyze(&before, &selected, &after);
 

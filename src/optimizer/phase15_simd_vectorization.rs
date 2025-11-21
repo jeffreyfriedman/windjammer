@@ -396,39 +396,69 @@ mod tests {
     fn test_simd_reduction_pattern() {
         // Test: for i in 0..n { sum += array[i] }
         let program = Program {
-            items: vec![Item::Function(FunctionDecl {
-                name: "sum_array".to_string(),
-                parameters: vec![],
-                return_type: None,
-                body: vec![
-                    Statement::Let {
-                        pattern: Pattern::Identifier("sum".to_string()),
-                        mutable: true,
-                        type_: Some(Type::Custom("f64".to_string())),
-                        value: Expression::Literal(Literal::Float(0.0)),
-                    },
-                    Statement::For {
-                        pattern: Pattern::Identifier("i".to_string()),
-                        iterable: Expression::Range {
-                            start: Box::new(Expression::Literal(Literal::Int(0))),
-                            end: Box::new(Expression::Identifier("n".to_string())),
-                            inclusive: false,
+            items: vec![Item::Function {
+                decl: FunctionDecl {
+                    name: "sum_array".to_string(),
+                    parameters: vec![],
+                    return_type: None,
+                    body: vec![
+                        Statement::Let {
+                            pattern: Pattern::Identifier("sum".to_string()),
+                            mutable: true,
+                            type_: Some(Type::Custom("f64".to_string())),
+                            value: Expression::Literal {
+                                value: Literal::Float(0.0),
+                                location: None,
+                            },
+                            location: None,
                         },
-                        body: vec![Statement::Expression(Expression::Binary {
-                            left: Box::new(Expression::Identifier("sum".to_string())),
-                            op: BinaryOp::Add,
-                            right: Box::new(Expression::Index {
-                                object: Box::new(Expression::Identifier("array".to_string())),
-                                index: Box::new(Expression::Identifier("i".to_string())),
-                            }),
-                        })],
-                    },
-                ],
-                type_params: vec![],
-                where_clause: vec![],
-                is_async: false,
-                decorators: vec![],
-            })],
+                        Statement::For {
+                            pattern: Pattern::Identifier("i".to_string()),
+                            iterable: Expression::Range {
+                                start: Box::new(Expression::Literal {
+                                    value: Literal::Int(0),
+                                    location: None,
+                                }),
+                                end: Box::new(Expression::Identifier {
+                                    name: "n".to_string(),
+                                    location: None,
+                                }),
+                                inclusive: false,
+                                location: None,
+                            },
+                            body: vec![Statement::Expression {
+                                expr: Expression::Binary {
+                                    left: Box::new(Expression::Identifier {
+                                        name: "sum".to_string(),
+                                        location: None,
+                                    }),
+                                    op: BinaryOp::Add,
+                                    right: Box::new(Expression::Index {
+                                        object: Box::new(Expression::Identifier {
+                                            name: "array".to_string(),
+                                            location: None,
+                                        }),
+                                        index: Box::new(Expression::Identifier {
+                                            name: "i".to_string(),
+                                            location: None,
+                                        }),
+                                        location: None,
+                                    }),
+                                    location: None,
+                                },
+                                location: None,
+                            }],
+                            location: None,
+                        },
+                    ],
+                    type_params: vec![],
+                    where_clause: vec![],
+                    is_async: false,
+                    decorators: vec![],
+                    parent_type: None,
+                },
+                location: None,
+            }],
         };
 
         let (optimized, stats) = optimize_simd_vectorization(&program);
@@ -447,27 +477,46 @@ mod tests {
     fn test_simd_unsafe_loop() {
         // Test: loop with function call (should NOT vectorize)
         let program = Program {
-            items: vec![Item::Function(FunctionDecl {
-                name: "complex".to_string(),
-                parameters: vec![],
-                return_type: None,
-                body: vec![Statement::For {
-                    pattern: Pattern::Identifier("i".to_string()),
-                    iterable: Expression::Range {
-                        start: Box::new(Expression::Literal(Literal::Int(0))),
-                        end: Box::new(Expression::Literal(Literal::Int(10))),
-                        inclusive: false,
-                    },
-                    body: vec![Statement::Expression(Expression::Call {
-                        function: Box::new(Expression::Identifier("println".to_string())),
-                        arguments: vec![],
-                    })],
-                }],
-                type_params: vec![],
-                where_clause: vec![],
-                is_async: false,
-                decorators: vec![],
-            })],
+            items: vec![Item::Function {
+                decl: FunctionDecl {
+                    name: "complex".to_string(),
+                    parameters: vec![],
+                    return_type: None,
+                    body: vec![Statement::For {
+                        pattern: Pattern::Identifier("i".to_string()),
+                        iterable: Expression::Range {
+                            start: Box::new(Expression::Literal {
+                                value: Literal::Int(0),
+                                location: None,
+                            }),
+                            end: Box::new(Expression::Literal {
+                                value: Literal::Int(10),
+                                location: None,
+                            }),
+                            inclusive: false,
+                            location: None,
+                        },
+                        body: vec![Statement::Expression {
+                            expr: Expression::Call {
+                                function: Box::new(Expression::Identifier {
+                                    name: "println".to_string(),
+                                    location: None,
+                                }),
+                                arguments: vec![],
+                                location: None,
+                            },
+                            location: None,
+                        }],
+                        location: None,
+                    }],
+                    type_params: vec![],
+                    where_clause: vec![],
+                    is_async: false,
+                    decorators: vec![],
+                    parent_type: None,
+                },
+                location: None,
+            }],
         };
 
         let (_, stats) = optimize_simd_vectorization(&program);

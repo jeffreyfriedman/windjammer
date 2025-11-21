@@ -113,7 +113,7 @@ mod tests {
 
     #[test]
     fn test_now() {
-        let ts = now();
+        let ts = timestamp();
         assert!(ts > 1_600_000_000); // After 2020
     }
 
