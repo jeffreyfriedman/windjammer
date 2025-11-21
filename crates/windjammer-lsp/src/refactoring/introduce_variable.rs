@@ -1,3 +1,4 @@
+#![allow(dead_code)] // Refactoring implementation - some parts planned for future versions
 //! Introduce Variable refactoring
 //!
 //! Extracts an expression into a new variable with automatic naming.
@@ -186,7 +187,7 @@ impl<'a> IntroduceVariable<'a> {
     /// Find where to insert the variable declaration
     fn find_insert_position(
         &self,
-        source: &str,
+        _source: &str,
         selection_start: Position,
     ) -> Result<Position, String> {
         // Insert at the beginning of the line where the expression is

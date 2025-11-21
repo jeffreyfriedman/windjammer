@@ -450,7 +450,7 @@ fn main() {
     let (tx, rx) = mpsc.channel()
     
     // Spawn a goroutine (maps to tokio::spawn or std::thread)
-    go {
+    spawn {
         tx <- "Hello from thread"  // Go-style send!
     }
     
@@ -461,7 +461,7 @@ fn main() {
 // Traditional Rust syntax also works:
 fn alternative_example() {
     let (tx, rx) = mpsc.channel()
-    go {
+    spawn {
         tx.send("Hello").unwrap()
     }
     let msg = rx.recv().unwrap()

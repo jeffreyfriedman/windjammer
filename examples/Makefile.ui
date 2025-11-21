@@ -1,0 +1,18 @@
+.PHONY: ui-wasm game clean serve-ui
+
+ui-wasm:
+	@echo "Building UI counter example for WASM..."
+	@../target/release/wj build ui_counter_full.wj --target wasm
+	@cd ../build && wasm-pack build --target web --out-dir ../examples/pkg
+	@echo "WASM build complete"
+
+serve-ui: ui-wasm
+	@echo "Starting server..."
+	@../target/release/wj run serve_ui.wj
+
+clean:
+	@rm -rf pkg/
+	@rm -rf ../build/
+	@echo "Cleaned"
+
+

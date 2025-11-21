@@ -1,0 +1,123 @@
+{
+  "name": "windjammer",
+  "displayName": "Windjammer Language Support",
+  "description": "Language support for Windjammer - 80% of Rust's power, 20% of its complexity",
+  "version": "0.35.0",
+  "publisher": "windjammer",
+  "icon": "icon.png",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/jeffreyfriedman/windjammer"
+  },
+  "engines": {
+    "vscode": "^1.75.0"
+  },
+  "categories": [
+    "Programming Languages",
+    "Linters",
+    "Formatters",
+    "Debuggers"
+  ],
+  "keywords": [
+    "windjammer",
+    "rust",
+    "systems programming",
+    "memory safety",
+    "performance"
+  ],
+  "activationEvents": [
+    "onLanguage:windjammer"
+  ],
+  "main": "./out/extension.js",
+  "contributes": {
+    "languages": [
+      {
+        "id": "windjammer",
+        "aliases": [
+          "Windjammer",
+          "wj"
+        ],
+        "extensions": [
+          ".wj"
+        ],
+        "configuration": "./language-configuration.json"
+      }
+    ],
+    "grammars": [
+      {
+        "language": "windjammer",
+        "scopeName": "source.windjammer",
+        "path": "./syntaxes/windjammer.tmLanguage.json"
+      }
+    ],
+    "configuration": {
+      "type": "object",
+      "title": "Windjammer",
+      "properties": {
+        "windjammer.lsp.path": {
+          "type": "string",
+          "default": "windjammer-lsp",
+          "description": "Path to the windjammer-lsp executable"
+        },
+        "windjammer.lsp.trace.server": {
+          "type": "string",
+          "enum": [
+            "off",
+            "messages",
+            "verbose"
+          ],
+          "default": "off",
+          "description": "Traces the communication between VS Code and the language server"
+        },
+        "windjammer.diagnostics.enable": {
+          "type": "boolean",
+          "default": true,
+          "description": "Enable enhanced diagnostics with error codes"
+        },
+        "windjammer.inlayHints.enable": {
+          "type": "boolean",
+          "default": true,
+          "description": "Enable inlay hints for ownership modes"
+        },
+        "windjammer.autoFix.enable": {
+          "type": "boolean",
+          "default": true,
+          "description": "Enable auto-fix suggestions"
+        }
+      }
+    },
+    "commands": [
+      {
+        "command": "windjammer.restartServer",
+        "title": "Restart Windjammer Language Server",
+        "category": "Windjammer"
+      },
+      {
+        "command": "windjammer.explainError",
+        "title": "Explain Error Code",
+        "category": "Windjammer"
+      },
+      {
+        "command": "windjammer.showErrorCatalog",
+        "title": "Show Error Catalog",
+        "category": "Windjammer"
+      }
+    ]
+  },
+  "scripts": {
+    "vscode:prepublish": "npm run compile",
+    "compile": "tsc -p ./",
+    "watch": "tsc -watch -p ./",
+    "package": "vsce package"
+  },
+  "devDependencies": {
+    "@types/node": "^18.0.0",
+    "@types/vscode": "^1.75.0",
+    "@vscode/vsce": "^2.19.0",
+    "typescript": "^5.0.0"
+  },
+  "dependencies": {
+    "vscode-languageclient": "^8.1.0"
+  }
+}
+

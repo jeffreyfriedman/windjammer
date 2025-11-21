@@ -1,14 +1,14 @@
 // Enhanced task handlers with pagination, filtering, sorting, and RBAC
 
-use std.http
-use std.json
-use std.log
+use std::http
+use std::json
+use std::log
 
-use ../models.task
-use ../models.pagination
-use ../middleware.auth
-use ../utils.filtering
-use ../utils.sorting
+use crate::models::task
+use crate::models::pagination
+use crate::middleware::auth
+use crate::utils::filtering
+use crate::utils::sorting
 use ../db
 
 @async
@@ -63,7 +63,7 @@ pub fn list_with_filters(
         Err(e) => {
             log.error("Failed to fetch tasks: {}", e)
             return http.json_response(500, json!({
-                "error": "Failed to fetch tasks"
+                "erro": "Failed to fetch tasks"
             }))
         }
     }
@@ -105,7 +105,7 @@ pub fn create_with_rbac(
     if !auth_ctx.role.can_modify_task() {
         log.warn("User {} attempted to create task without permission", auth_ctx.user_id)
         return http.json_response(403, json!({
-            "error": "Insufficient permissions to create tasks"
+            "erro": "Insufficient permissions to create tasks"
         }))
     }
     
@@ -119,10 +119,10 @@ pub fn create_with_rbac(
     "
     
     match db.query_one(pool, access_query, vec![project_id, auth_ctx.user_id]).await {
-        Ok(_) => {},
+        Ok(_) => {}
         Err(_) => {
             return http.json_response(403, json!({
-                "error": "No access to this project"
+                "erro": "No access to this project"
             }))
         }
     }
@@ -134,7 +134,7 @@ pub fn create_with_rbac(
         Err(e) => {
             log.error("Failed to parse create request: {}", e)
             return http.json_response(400, json!({
-                "error": "Invalid request body"
+                "erro": "Invalid request body"
             }))
         }
     }
@@ -142,7 +142,7 @@ pub fn create_with_rbac(
     // Validate input
     if create_req.title.trim().is_empty() {
         return http.json_response(400, json!({
-            "error": "Task title is required"
+            "erro": "Task title is required"
         }))
     }
     
@@ -174,7 +174,7 @@ pub fn create_with_rbac(
         Err(e) => {
             log.error("Failed to create task: {}", e)
             return http.json_response(500, json!({
-                "error": "Failed to create task"
+                "erro": "Failed to create task"
             }))
         }
     }
@@ -216,7 +216,7 @@ pub fn soft_delete(
     // Check permissions
     if !auth_ctx.role.can_modify_task() {
         return http.json_response(403, json!({
-            "error": "Insufficient permissions"
+            "erro": "Insufficient permissions"
         }))
     }
     
@@ -232,7 +232,7 @@ pub fn soft_delete(
         Ok(r) => r,
         Err(_) => {
             return http.json_response(404, json!({
-                "error": "Task not found"
+                "erro": "Task not found"
             }))
         }
     }
@@ -245,7 +245,7 @@ pub fn soft_delete(
         && auth_ctx.user_id != owner_id 
         && auth_ctx.role != Role::Admin {
         return http.json_response(403, json!({
-            "error": "Only task creator or project owner can delete"
+            "erro": "Only task creator or project owner can delete"
         }))
     }
     
@@ -258,11 +258,11 @@ pub fn soft_delete(
     "
     
     match db.execute(pool, delete_query, vec![now, auth_ctx.user_id, task_id]).await {
-        Ok(_) => {},
+        Ok(_) => {}
         Err(e) => {
             log.error("Failed to delete task: {}", e)
             return http.json_response(500, json!({
-                "error": "Failed to delete task"
+                "erro": "Failed to delete task"
             }))
         }
     }

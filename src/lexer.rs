@@ -29,7 +29,7 @@ pub enum Token {
     Break,
     Continue,
     Use,
-    Go,
+    Thread,
     Async,
     Await,
     Defer,
@@ -151,10 +151,20 @@ impl std::hash::Hash for Token {
     }
 }
 
+/// Token with source location information for error reporting
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct TokenWithLocation {
+    pub token: Token,
+    pub line: usize,
+    pub column: usize,
+}
+
 pub struct Lexer {
     input: Vec<char>,
     position: usize,
     current_char: Option<char>,
+    line: usize,
+    column: usize,
 }
 
 impl Lexer {
@@ -166,10 +176,20 @@ impl Lexer {
             input: chars,
             position: 0,
             current_char,
+            line: 1,
+            column: 1,
         }
     }
 
     fn advance(&mut self) {
+        // Track newlines for line/column tracking
+        if self.current_char == Some('\n') {
+            self.line += 1;
+            self.column = 1;
+        } else {
+            self.column += 1;
+        }
+
         self.position += 1;
         self.current_char = self.input.get(self.position).copied();
     }
@@ -205,6 +225,9 @@ impl Lexer {
         while let Some(ch) = self.current_char {
             if ch.is_ascii_digit() {
                 num_str.push(ch);
+                self.advance();
+            } else if ch == '_' {
+                // Skip underscores in numeric literals (e.g., 1_000_000)
                 self.advance();
             } else if ch == '.' && !is_float && self.peek(1).is_some_and(|c| c.is_ascii_digit()) {
                 is_float = true;
@@ -306,6 +329,30 @@ impl Lexer {
         }
     }
 
+    fn read_raw_string(&mut self) -> Token {
+        // Skip r#"
+        self.advance(); // r
+        self.advance(); // #
+        self.advance(); // "
+
+        let mut content = String::new();
+
+        // Read until we find "#
+        while let Some(ch) = self.current_char {
+            if ch == '"' && self.peek(1) == Some('#') {
+                // Found closing "#
+                self.advance(); // "
+                self.advance(); // #
+                break;
+            } else {
+                content.push(ch);
+                self.advance();
+            }
+        }
+
+        Token::StringLiteral(content)
+    }
+
     fn read_char(&mut self) -> Token {
         self.advance(); // Skip opening quote
 
@@ -385,7 +432,7 @@ impl Lexer {
             "break" => Token::Break,
             "continue" => Token::Continue,
             "use" => Token::Use,
-            "go" => Token::Go,
+            "thread" => Token::Thread,
             "async" => Token::Async,
             "await" => Token::Await,
             "defer" => Token::Defer,
@@ -424,6 +471,10 @@ impl Lexer {
                 self.skip_comment();
                 return self.next_token();
             }
+            Some('r') if self.peek(1) == Some('#') && self.peek(2) == Some('"') => {
+                // Raw string literal: r#"..."#
+                self.read_raw_string()
+            }
             Some('"') => self.read_string(),
             Some('\'') => self.read_char(),
             Some(ch) if ch.is_ascii_digit() => self.read_number(),
@@ -432,8 +483,16 @@ impl Lexer {
                 self.advance();
                 if let Some(ch) = self.current_char {
                     if ch.is_alphabetic() || ch == '_' {
-                        // Read decorator name - don't treat as keyword
-                        let name = self.read_identifier_string();
+                        // Read decorator name - support paths like @tokio.main
+                        let mut name = String::new();
+                        while let Some(ch) = self.current_char {
+                            if ch.is_alphanumeric() || ch == '_' || ch == '.' {
+                                name.push(ch);
+                                self.advance();
+                            } else {
+                                break;
+                            }
+                        }
                         Token::Decorator(name)
                     } else {
                         Token::At
@@ -630,6 +689,18 @@ impl Lexer {
         token
     }
 
+    /// Get next token with its source location
+    pub fn next_token_with_location(&mut self) -> TokenWithLocation {
+        let line = self.line;
+        let column = self.column;
+        let token = self.next_token();
+        TokenWithLocation {
+            token,
+            line,
+            column,
+        }
+    }
+
     pub fn tokenize(&mut self) -> Vec<Token> {
         let mut tokens = Vec::new();
 
@@ -642,6 +713,28 @@ impl Lexer {
             // Skip newlines for now
             if token != Token::Newline {
                 tokens.push(token);
+            }
+        }
+
+        tokens
+    }
+
+    /// Tokenize the entire input with source locations
+    pub fn tokenize_with_locations(&mut self) -> Vec<TokenWithLocation> {
+        let mut tokens = Vec::new();
+
+        loop {
+            let token_with_loc = self.next_token_with_location();
+            let is_eof = token_with_loc.token == Token::Eof;
+            let is_newline = token_with_loc.token == Token::Newline;
+
+            if is_eof {
+                tokens.push(token_with_loc);
+                break;
+            }
+            // Skip newlines for now
+            if !is_newline {
+                tokens.push(token_with_loc);
             }
         }
 
@@ -675,11 +768,11 @@ mod tests {
     }
 
     #[test]
-    fn test_lexer_go_keyword() {
-        let mut lexer = Lexer::new("go async await");
+    fn test_lexer_spawn_keyword() {
+        let mut lexer = Lexer::new("thread async await");
         let tokens = lexer.tokenize();
 
-        assert_eq!(tokens[0], Token::Go);
+        assert_eq!(tokens[0], Token::Thread);
         assert_eq!(tokens[1], Token::Async);
         assert_eq!(tokens[2], Token::Await);
     }

@@ -1,0 +1,180 @@
+// Windjammer Game Editor
+// Written in PURE Windjammer - no Rust, no JavaScript, no Tauri!
+
+use std::ui::*
+
+fn main() {
+    // Create the editor app
+    let app = App::new(
+        "Windjammer Editor",
+        create_editor_ui()
+    )
+    
+    app.run()
+}
+
+fn create_editor_ui() -> UIElement {
+    // State
+    let mut current_file = ""
+    let mut code_content = get_default_code()
+    let mut errors = Vec::new()
+    
+    // Create the UI
+    UIElement::Container(
+        Container::new()
+            .max_width("100%")
+            .child(create_header())
+            .child(create_editor_body(code_content, errors))
+            .child(create_footer())
+    )
+}
+
+fn create_header() -> UIElement {
+    UIElement::Flex(
+        Flex::new()
+            .direction(FlexDirection::Row)
+            .gap("10px")
+            .child(UIElement::Text(
+                Text::new("Windjammer Editor")
+                    .size(TextSize::Large)
+                    .bold()
+            ))
+            .child(UIElement::Button(
+                Button::new("New Project")
+                    .variant(ButtonVariant::Primary)
+                    .on_click(|| {
+                        println("New project clicked!")
+                    })
+            ))
+            .child(UIElement::Button(
+                Button::new("Open")
+                    .variant(ButtonVariant::Secondary)
+                    .on_click(|| {
+                        println("Open clicked!")
+                    })
+            ))
+            .child(UIElement::Button(
+                Button::new("Save")
+                    .variant(ButtonVariant::Secondary)
+                    .on_click(|| {
+                        println("Save clicked!")
+                    })
+            ))
+            .child(UIElement::Button(
+                Button::new("Run")
+                    .variant(ButtonVariant::Primary)
+                    .on_click(|| {
+                        compile_and_run()
+                    })
+            ))
+    )
+}
+
+fn create_editor_body(code: string, errors: Vec<string>) -> UIElement {
+    UIElement::Flex(
+        Flex::new()
+            .direction(FlexDirection::Row)
+            .child(create_file_browser())
+            .child(create_code_editor(code))
+            .child(create_error_panel(errors))
+    )
+}
+
+fn create_file_browser() -> UIElement {
+    // Create file tree
+    let root = FileNode::new("project", "/", true)
+        .add_child(FileNode::new("main.wj", "/main.wj", false))
+        .add_child(FileNode::new("game.wj", "/game.wj", false))
+        .add_child(FileNode::new("README.md", "/README.md", false))
+    
+    UIElement::Panel(
+        Panel::new("Files")
+            .child(UIElement::FileTree(
+                FileTree::new(root)
+                    .on_select(|path| {
+                        println("Selected: " + path)
+                        load_file(path)
+                    })
+            ))
+    )
+}
+
+fn create_code_editor(code: string) -> UIElement {
+    UIElement::CodeEditor(
+        CodeEditor::new(code)
+            .language("windjammer")
+            .on_change(|new_code| {
+                println("Code changed!")
+                check_code(new_code)
+            })
+    )
+}
+
+fn create_error_panel(errors: Vec<string>) -> UIElement {
+    let mut panel = Panel::new("Errors")
+    
+    if errors.len() == 0 {
+        panel = panel.child(UIElement::Alert(
+            Alert::success("No errors! Code compiled successfully.")
+        ))
+    } else {
+        for error in errors {
+            panel = panel.child(UIElement::Alert(
+                Alert::error(error)
+            ))
+        }
+    }
+    
+    UIElement::Panel(panel)
+}
+
+fn create_footer() -> UIElement {
+    UIElement::Flex(
+        Flex::new()
+            .direction(FlexDirection::Row)
+            .child(UIElement::Text(
+                Text::new("Ready")
+                    .size(TextSize::Small)
+            ))
+    )
+}
+
+fn get_default_code() -> string {
+    return "// Welcome to Windjammer Editor!
+
+fn main() {
+    println(\"Hello, Windjammer!\")
+}
+
+@game
+struct MyGame {
+    score: int,
+}
+
+@init
+fn init(game: MyGame) {
+    game.score = 0
+}
+
+@update
+fn update(game: MyGame, delta: float) {
+    game.score += 1
+}
+"
+}
+
+fn load_file(path: string) {
+    println("Loading file: " + path)
+    // TODO: Implement file loading
+}
+
+fn check_code(code: string) {
+    println("Checking code...")
+    // TODO: Implement code checking
+}
+
+fn compile_and_run() {
+    println("Compiling and running...")
+    // TODO: Implement compilation
+}
+

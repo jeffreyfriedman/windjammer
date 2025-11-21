@@ -1,55 +1,56 @@
 // Directory traversal for wjfind
 
-use std.fs
-use std.path
-use std.collections.Vec
+use std::fs
+use std::path
+use std::path::Path
 
-use ./config.Config
-use ./gitignore.GitignoreCache
+use ./config::Config
+use ./config
+use ./gitignore::GitignoreCache
 
-pub fn collect_files(paths: Vec<string>, config: Config) -> Result<Vec<string>, Error> {
+pub fn collect_files(paths: Vec<string>, config: &Config) -> Result<Vec<string>, string> {
     let mut all_files = vec![]
     let mut gitignore_cache = GitignoreCache::new()
     
     for path in paths {
-        let files = walk_path(path, config.clone(), &mut gitignore_cache)?
+        let files = walk_path(path, config, &mut gitignore_cache)?
         all_files.extend(files)
     }
     
     Ok(all_files)
 }
 
-fn walk_path(path: string, config: Config, gitignore_cache: &mut GitignoreCache) -> Result<Vec<string>, Error> {
+fn walk_path(path: string, config: &Config, gitignore_cache: &mut GitignoreCache) -> Result<Vec<string>, string> {
     let mut files = vec![]
     
     // Check if path exists
-    if !fs.exists(path) {
+    if !fs::exists(&path) {
         return Err(format!("Path does not exist: {}", path))
     }
     
     // If it's a file, return it directly
-    if fs.is_file(path) {
-        if should_include_file(path.clone(), config, gitignore_cache) {
+    if fs::is_file(&path) {
+        if should_include_file(&path, config, gitignore_cache) {
             files.push(path)
         }
         return Ok(files)
     }
     
     // If it's a directory, walk it recursively
-    if fs.is_dir(path) {
+    if fs::is_dir(&path) {
         walk_dir(path, config, &mut files, gitignore_cache)?
     }
     
     Ok(files)
 }
 
-fn walk_dir(dir: string, config: Config, files: &mut Vec<string>, gitignore_cache: &mut GitignoreCache) -> Result<(), Error> {
+fn walk_dir(dir: string, config: &Config, files: &mut Vec<string>, gitignore_cache: &mut GitignoreCache) -> Result<(), string> {
     // Read directory entries
-    let entries = fs.read_dir(dir.clone())?
+    let entries = fs::read_dir(&dir)?
     
     // Load .gitignore rules for this directory if respecting ignore
     let gitignore_rules = if config.respect_ignore {
-        gitignore_cache.get_rules(dir.clone())
+        Some(gitignore_cache.get_rules(&dir))
     } else {
         None
     }
@@ -64,28 +65,28 @@ fn walk_dir(dir: string, config: Config, files: &mut Vec<string>, gitignore_cach
         }
         
         // Skip if excluded
-        if config.should_exclude(path.clone(), config.exclude_patterns.clone()) {
+        if config::should_exclude(&path, &config.exclude_patterns) {
             continue
         }
         
         // Skip common ignore patterns
-        if config.respect_ignore && is_ignored(file_name.clone()) {
+        if config.respect_ignore && is_ignored(&file_name) {
             continue
         }
         
         // Check .gitignore rules
         if config.respect_ignore && gitignore_rules.is_some() {
-            if gitignore_rules.unwrap().is_ignored(path.clone()) {
+            if gitignore_rules.as_ref().unwrap().is_ignored(&path) {
                 continue
             }
         }
         
         if entry.is_dir() {
             // Recurse into subdirectory
-            walk_dir(path, config.clone(), files, gitignore_cache)?
+            walk_dir(path, config, files, gitignore_cache)?
         } else if entry.is_file() {
             // Add file if it matches criteria
-            if should_include_file(path.clone(), config.clone(), gitignore_cache) {
+            if should_include_file(&path, config, gitignore_cache) {
                 files.push(path)
             }
         }
@@ -94,30 +95,33 @@ fn walk_dir(dir: string, config: Config, files: &mut Vec<string>, gitignore_cach
     Ok(())
 }
 
-fn should_include_file(path: string, config: Config, gitignore_cache: &mut GitignoreCache) -> bool {
+fn should_include_file(path: &string, config: &Config, gitignore_cache: &mut GitignoreCache) -> bool {
     // Check file type filter
-    if !config.matches_file_type(path.clone(), config.file_types.clone()) {
+    if !config::matches_file_type(path, &config.file_types) {
         return false
     }
     
     // Check .gitignore for this file if respecting ignore
     if config.respect_ignore {
-        let dir = path.parent(path.clone()).unwrap_or(".")
-        let gitignore_rules = gitignore_cache.get_rules(dir)
-        if gitignore_rules.is_ignored(path.clone()) {
+        let dir = path::parent(Path::new(path))
+            .and_then(|p| p.to_str())
+            .unwrap_or(".")
+            .to_string()
+        let gitignore_rules = gitignore_cache.get_rules(&dir)
+        if gitignore_rules.is_ignored(path) {
             return false
         }
     }
     
     // Check if binary file (skip binary files)
-    if is_likely_binary(path.clone()) {
+    if is_likely_binary(path) {
         return false
     }
     
     true
 }
 
-fn is_ignored(name: string) -> bool {
+fn is_ignored(name: &string) -> bool {
     // Common directories to ignore
     let ignored_dirs = vec![
         "target",
@@ -133,20 +137,20 @@ fn is_ignored(name: string) -> bool {
         "venv",
     ]
     
-    ignored_dirs.contains(&name)
+    ignored_dirs.contains(&name.as_ref())
 }
 
-fn is_likely_binary(path: string) -> bool {
+fn is_likely_binary(path: &string) -> bool {
     // Check by extension
     let binary_extensions = vec![
         "exe", "dll", "so", "dylib", "a", "o",
         "png", "jpg", "jpeg", "gif", "bmp", "ico",
-        "pdf", "zip", "tar", "gz", "bz2", "xz",
+        "pdf", "zip", "ta", "gz", "bz2", "xz",
         "mp3", "mp4", "avi", "mov", "mkv",
         "wasm", "class", "pyc",
     ]
     
-    let ext = path.extension(path).unwrap_or("")
-    binary_extensions.contains(&ext)
+    let ext = path::extension(path).unwrap_or("".to_string())
+    binary_extensions.contains(&ext.as_ref())
 }
 

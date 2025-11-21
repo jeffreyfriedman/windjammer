@@ -194,7 +194,7 @@ fn split(pattern: string, text: string) -> Result<Vec<string>, String> {
 
 // USAGE EXAMPLES:
 //
-// use std.regex
+// use std::regex
 //
 // fn main() {
 //     // Simple matching

@@ -1,3 +1,4 @@
+#![allow(dead_code)] // Symbol table infrastructure for future features
 use std::collections::HashMap;
 use tower_lsp::lsp_types::{Location, Position, Range, Url};
 use windjammer::parser::{Item, Program};
@@ -50,7 +51,10 @@ impl SymbolTable {
 
         for (idx, item) in program.items.iter().enumerate() {
             match item {
-                Item::Function(func) => {
+                Item::Function {
+                    decl: func,
+                    location: _,
+                } => {
                     // TODO: Get actual line number from AST
                     // For now, use item index as a heuristic
                     let location = Location {
@@ -76,7 +80,10 @@ impl SymbolTable {
                         },
                     );
                 }
-                Item::Struct(struct_decl) => {
+                Item::Struct {
+                    decl: struct_decl,
+                    location: _,
+                } => {
                     let location = Location {
                         uri: uri.clone(),
                         range: Range {
@@ -100,7 +107,10 @@ impl SymbolTable {
                         },
                     );
                 }
-                Item::Enum(enum_decl) => {
+                Item::Enum {
+                    decl: enum_decl,
+                    location: _,
+                } => {
                     let location = Location {
                         uri: uri.clone(),
                         range: Range {
@@ -150,7 +160,10 @@ impl SymbolTable {
                         );
                     }
                 }
-                Item::Trait(trait_decl) => {
+                Item::Trait {
+                    decl: trait_decl,
+                    location: _,
+                } => {
                     let location = Location {
                         uri: uri.clone(),
                         range: Range {
@@ -174,7 +187,10 @@ impl SymbolTable {
                         },
                     );
                 }
-                Item::Impl(impl_block) => {
+                Item::Impl {
+                    block: impl_block,
+                    location: _,
+                } => {
                     // For impl blocks, we could track methods
                     // TODO: Add method tracking
                     let _ = impl_block;
@@ -269,8 +285,7 @@ impl SymbolTable {
 
         // Search for each symbol in the source code
         for symbol_name in &symbol_names {
-            let mut line_num = 0;
-            for line in source.lines() {
+            for (line_num, line) in source.lines().enumerate() {
                 // Find all occurrences of the symbol name in this line
                 let mut start = 0;
                 while let Some(pos) = line[start..].find(symbol_name.as_str()) {
@@ -297,11 +312,11 @@ impl SymbolTable {
                                 uri: uri.clone(),
                                 range: Range {
                                     start: Position {
-                                        line: line_num,
+                                        line: line_num as u32,
                                         character: actual_pos as u32,
                                     },
                                     end: Position {
-                                        line: line_num,
+                                        line: line_num as u32,
                                         character: (actual_pos + symbol_name.len()) as u32,
                                     },
                                 },
@@ -310,14 +325,12 @@ impl SymbolTable {
 
                         self.references
                             .entry(symbol_name.clone())
-                            .or_insert_with(Vec::new)
+                            .or_default()
                             .push(reference);
                     }
 
                     start = actual_pos + 1;
                 }
-
-                line_num += 1;
             }
         }
     }

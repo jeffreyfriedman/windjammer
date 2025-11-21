@@ -1,0 +1,69 @@
+// 2D Platformer Demo
+// Demonstrates: ECS, Physics2D, Input, Rendering
+
+use std::game::*
+
+@game
+struct Platformer {
+    score: int,
+}
+
+@init
+fn init(game: Platformer) {
+    println!("🎮 2D Platformer Starting!")
+    println!("Controls: Arrow keys to move, Space to jump")
+    
+    game.score = 0
+    
+    // TODO: Create player, ground, and platforms using ECS
+    // For now, just initialize the game state
+}
+
+@update
+fn update(game: Platformer, delta: float, input: Input) {
+    // Player movement
+    let move_speed = 200.0
+    let jump_force = 400.0
+    
+    // Left/Right movement
+    if input.is_key_pressed(Key::Left) {
+        // TODO: Apply velocity to player
+        println!("Moving left")
+    }
+    
+    if input.is_key_pressed(Key::Right) {
+        // TODO: Apply velocity to player
+        println!("Moving right")
+    }
+    
+    // Jump
+    if input.is_key_just_pressed(Key::Space) {
+        // TODO: Apply jump force
+        println!("Jump!")
+        game.score += 1
+    }
+    
+    // TODO: Step physics simulation
+    
+    // Display score every 60 frames
+    if game.score > 0 && game.score % 10 == 0 {
+        println!("Score: {}", game.score)
+    }
+}
+
+@render
+fn render(game: Platformer, renderer: Renderer) {
+    // Clear to sky blue
+    renderer.clear(Color::rgb(0.5, 0.7, 1.0))
+    
+    // TODO: Draw player (green square)
+    renderer.draw_rect(100.0, 300.0, 50.0, 50.0, Color::green())
+    
+    // TODO: Draw ground (brown rectangle)
+    renderer.draw_rect(0.0, 550.0, 800.0, 50.0, Color::rgb(0.6, 0.4, 0.2))
+    
+    // TODO: Draw platforms
+    renderer.draw_rect(200.0, 450.0, 150.0, 20.0, Color::rgb(0.6, 0.4, 0.2))
+    renderer.draw_rect(400.0, 350.0, 150.0, 20.0, Color::rgb(0.6, 0.4, 0.2))
+    renderer.draw_rect(600.0, 250.0, 150.0, 20.0, Color::rgb(0.6, 0.4, 0.2))
+}

@@ -1,3 +1,4 @@
+#![allow(dead_code)] // Refactoring implementation - some parts planned for future versions
 //! Move Item refactoring
 //!
 //! Move functions, structs, and other items between files while
@@ -342,7 +343,7 @@ impl<'a> MoveItem<'a> {
     /// Find an enum at the cursor
     fn find_enum(
         &self,
-        source: &str,
+        _source: &str,
         _cursor_byte: usize,
     ) -> Result<(ItemType, String, Range, String), String> {
         // Simplified version - similar to struct
@@ -380,7 +381,7 @@ impl<'a> MoveItem<'a> {
     fn extract_module_name(&self, uri: &Url) -> String {
         uri.path()
             .split('/')
-            .last()
+            .next_back()
             .unwrap_or("unknown")
             .trim_end_matches(".wj")
             .to_string()
@@ -462,7 +463,7 @@ impl<'a> MoveItem<'a> {
         &self,
         analysis: &MoveAnalysis,
         source_content: &str,
-        target_module: &str,
+        _target_module: &str,
     ) -> bool {
         // Check if target module imports from source module
         let source_module = self.extract_module_name(&self.source_uri);
@@ -510,10 +511,10 @@ impl<'a> MoveItem<'a> {
             }
 
             // Check if this identifier is defined elsewhere in source
-            if self.is_external_dependency(source, item_text, word) {
-                if !dependencies.contains(&word.to_string()) {
-                    dependencies.push(word.to_string());
-                }
+            if self.is_external_dependency(source, item_text, word)
+                && !dependencies.contains(&word.to_string())
+            {
+                dependencies.push(word.to_string());
             }
         }
 

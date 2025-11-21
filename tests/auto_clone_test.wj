@@ -1,0 +1,39 @@
+// Test: Automatic clone insertion
+// This file should compile WITHOUT any manual .clone() calls
+// The compiler should automatically insert them where needed
+
+fn main() {
+    // Test 1: Simple move and reuse
+    let data = vec![1, 2, 3, 4, 5]
+    takes_ownership(data)  // Should auto-insert .clone() here
+    println!("Data length: {}", data.len())  // data still usable!
+    
+    // Test 2: Multiple uses after move
+    let message = "Hello, Windjammer!".to_string()
+    send_message(message)  // Should auto-insert .clone() here
+    log_message(message)   // Should auto-insert .clone() here
+    println!("Message: {}", message)  // message still usable!
+    
+    // Test 3: No clone needed (single use)
+    let temp = vec![10, 20, 30]
+    process_and_drop(temp)  // No .clone() needed, temp not used again
+    
+    println!("Auto-clone test complete!")
+}
+
+fn takes_ownership(v: Vec<int>) {
+    println!("Received vector with {} elements", v.len())
+}
+
+fn send_message(msg: string) {
+    println!("Sending: {}", msg)
+}
+
+fn log_message(msg: string) {
+    println!("Logging: {}", msg)
+}
+
+fn process_and_drop(v: Vec<int>) {
+    println!("Processing {} elements", v.len())
+}
+

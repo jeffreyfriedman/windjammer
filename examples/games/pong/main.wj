@@ -1,0 +1,172 @@
+// PONG - A classic game in pure Windjammer
+// This validates the game framework with decorators and automatic ownership inference
+
+@game
+@derive(Clone, Debug)
+struct PongGame {
+    // Paddle positions (Y coordinate)
+    left_paddle_y: float,
+    right_paddle_y: float,
+    
+    // Ball state
+    ball_x: float,
+    ball_y: float,
+    ball_vx: float,
+    ball_vy: float,
+    
+    // Scoring
+    score_left: int,
+    score_right: int,
+    
+    // Constants
+    paddle_speed: float,
+    ball_speed: float,
+}
+
+@init
+fn init(game: PongGame) {
+    // Initialize game state
+    game.left_paddle_y = 250.0
+    game.right_paddle_y = 250.0
+    
+    game.ball_x = 400.0
+    game.ball_y = 300.0
+    game.ball_vx = 200.0
+    game.ball_vy = 150.0
+    
+    game.score_left = 0
+    game.score_right = 0
+    
+    game.paddle_speed = 300.0
+    game.ball_speed = 200.0
+    
+    println("PONG initialized!")
+    println("Controls: W/S for left paddle, Up/Down for right paddle")
+}
+
+@update
+fn update(game: PongGame, delta: float, input: Input) {
+    // Update paddle positions based on input
+    // Left paddle (W/S keys)
+    if input.held(Key::W) {
+        game.left_paddle_y -= game.paddle_speed * delta
+        if game.left_paddle_y < 0.0 {
+            game.left_paddle_y = 0.0
+        }
+    }
+    if input.held(Key::S) {
+        game.left_paddle_y += game.paddle_speed * delta
+        if game.left_paddle_y > 500.0 {
+            game.left_paddle_y = 500.0
+        }
+    }
+    
+    // Right paddle (Up/Down keys)
+    if input.held(Key::Up) {
+        game.right_paddle_y -= game.paddle_speed * delta
+        if game.right_paddle_y < 0.0 {
+            game.right_paddle_y = 0.0
+        }
+    }
+    if input.held(Key::Down) {
+        game.right_paddle_y += game.paddle_speed * delta
+        if game.right_paddle_y > 500.0 {
+            game.right_paddle_y = 500.0
+        }
+    }
+    
+    // Update ball position
+    game.ball_x += game.ball_vx * delta
+    game.ball_y += game.ball_vy * delta
+    
+    // Ball collision with top/bottom walls
+    if game.ball_y <= 10.0 {
+        game.ball_y = 10.0
+        game.ball_vy = -game.ball_vy
+    }
+    if game.ball_y >= 590.0 {
+        game.ball_y = 590.0
+        game.ball_vy = -game.ball_vy
+    }
+    
+    // Ball collision with left paddle
+    if game.ball_x <= 30.0 && game.ball_x >= 10.0 {
+        if game.ball_y >= game.left_paddle_y && game.ball_y <= game.left_paddle_y + 100.0 {
+            game.ball_x = 30.0
+            game.ball_vx = -game.ball_vx
+        }
+    }
+    
+    // Ball collision with right paddle
+    if game.ball_x >= 770.0 && game.ball_x <= 790.0 {
+        if game.ball_y >= game.right_paddle_y && game.ball_y <= game.right_paddle_y + 100.0 {
+            game.ball_x = 770.0
+            game.ball_vx = -game.ball_vx
+        }
+    }
+    
+    // Scoring - left side
+    if game.ball_x <= 0.0 {
+        game.score_right += 1
+        println("Right scores! Score: {} - {}", game.score_left, game.score_right)
+        
+        // Reset ball
+        game.ball_x = 400.0
+        game.ball_y = 300.0
+        game.ball_vx = 200.0
+        game.ball_vy = 150.0
+    }
+    
+    // Scoring - right side
+    if game.ball_x >= 800.0 {
+        game.score_left += 1
+        println("Left scores! Score: {} - {}", game.score_left, game.score_right)
+        
+        // Reset ball
+        game.ball_x = 400.0
+        game.ball_y = 300.0
+        game.ball_vx = -200.0
+        game.ball_vy = 150.0
+    }
+}
+
+@render
+fn render(game: PongGame, renderer: Renderer) {
+    // Clear screen to black
+    renderer.clear(Color::black())
+    
+    // Draw left paddle (white)
+    renderer.draw_rect(10.0, game.left_paddle_y, 10.0, 100.0, Color::white())
+    
+    // Draw right paddle (white)
+    renderer.draw_rect(780.0, game.right_paddle_y, 10.0, 100.0, Color::white())
+    
+    // Draw ball (yellow)
+    renderer.draw_circle(game.ball_x, game.ball_y, 10.0, Color::yellow())
+    
+    // Draw center line (dashed)
+    let mut y = 0.0
+    while y < 600.0 {
+        renderer.draw_rect(395.0, y, 10.0, 20.0, Color::white())
+        y += 40.0
+    }
+}
+
+@input
+fn handle_input(game: PongGame, input: Input) {
+    // Example of one-shot input handling
+    // (Paddle movement is now in @update where we have delta time)
+    if input.pressed(Key::Escape) {
+        println("Game paused! (Press Escape again to resume)")
+    }
+}
+
+@cleanup
+fn cleanup(game: PongGame) {
+    println("Final Score: {} - {}", game.score_left, game.score_right)
+    println("Thanks for playing PONG!")
+}
+
+fn main() {
+    println("Starting PONG...")
+}

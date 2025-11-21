@@ -1,0 +1,33 @@
+trait Container {
+    type Item;
+    
+    fn get(&self) -> Self::Item { self.value }
+}
+
+struct Box<T> {
+    value: T,
+}
+
+impl<T> Container for Box<T> {
+    type Item = T;
+    
+    fn get(&self) -> Self::Item {
+        self.value
+    }
+}
+
+struct IntBox {
+    number: int,
+}
+
+impl Container for IntBox {
+    type Item = int;
+    
+    fn get(&self) -> Self::Item {
+        self.number
+    }
+}
+
+fn main() {
+    println!("test")
+}

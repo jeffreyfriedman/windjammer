@@ -1,15 +1,15 @@
 // Room management for wschat
 
-use std.sync
-use std.collections.HashMap
-use std.collections.HashSet
-use std.time
+use std::sync
+use std::collections::HashMap
+use std::collections::HashSet
+use std::time
 
 use ./message
 
 const MAX_HISTORY_SIZE: int = 100
 
-@derive(Debug, Clone)]
+@derive(Debug, Clone)
 pub struct Room {
     pub id: string,
     pub name: string,

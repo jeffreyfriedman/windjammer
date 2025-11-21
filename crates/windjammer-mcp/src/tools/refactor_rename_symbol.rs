@@ -11,7 +11,7 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::sync::Mutex;
 use windjammer::lexer::Lexer;
-use windjammer::parser::{Expression, Item, Parser, Statement};
+use windjammer::parser::Parser;
 use windjammer_lsp::database::WindjammerDatabase;
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -74,7 +74,7 @@ pub async fn handle(
 
     // Parse the source code
     let mut lexer = Lexer::new(&request.code);
-    let tokens = lexer.tokenize();
+    let tokens = lexer.tokenize_with_locations();
     let mut parser = Parser::new(tokens);
     let parse_result = parser.parse();
 
@@ -152,6 +152,7 @@ pub async fn handle(
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+#[allow(dead_code)]
 enum SymbolKind {
     Function,
     Variable,
@@ -235,6 +236,7 @@ fn is_valid_identifier(name: &str) -> bool {
 }
 
 /// Rename visitor to track and update symbol references
+#[allow(dead_code)]
 struct RenameVisitor {
     old_name: String,
     new_name: String,
@@ -243,6 +245,7 @@ struct RenameVisitor {
     scope_stack: Vec<HashMap<String, SymbolKind>>,
 }
 
+#[allow(dead_code)]
 impl RenameVisitor {
     fn new(old_name: String, new_name: String, symbol_kind: SymbolKind) -> Self {
         Self {

@@ -1,3 +1,4 @@
+#![allow(deprecated)]
 use dashmap::DashMap;
 use std::sync::{Arc, Mutex};
 use tower_lsp::jsonrpc::Result;
@@ -5,6 +6,7 @@ use tower_lsp::lsp_types::*;
 use tower_lsp::{Client, LanguageServer};
 
 use crate::analysis::AnalysisDatabase;
+use crate::cache::{CacheEntry, CacheManager};
 use crate::completion::CompletionProvider;
 use crate::database::{ParallelConfig, WindjammerDatabase};
 use crate::diagnostics::DiagnosticsEngine;
@@ -12,7 +14,6 @@ use crate::hover::HoverProvider;
 use crate::inlay_hints::InlayHintsProvider;
 use crate::refactoring::RefactoringEngine;
 use crate::semantic_tokens::SemanticTokensProvider;
-use windjammer_lsp::cache::CacheManager;
 
 /// The Windjammer Language Server
 ///
@@ -22,7 +23,8 @@ pub struct WindjammerLanguageServer {
     analysis_db: Arc<AnalysisDatabase>,
     /// Salsa incremental computation database (Mutex for Send + Sync)
     salsa_db: Arc<Mutex<WindjammerDatabase>>,
-    /// Parallel processing configuration
+    /// Parallel processing configuration (for future parallel analysis)
+    #[allow(dead_code)]
     parallel_config: ParallelConfig,
     /// Persistent disk cache for symbols
     cache_manager: Arc<Mutex<CacheManager>>,
@@ -84,7 +86,7 @@ impl WindjammerLanguageServer {
             tracing::debug!("Analyzing document: {}", uri);
 
             // Check cache for this file
-            let content_hash = windjammer_lsp::cache::calculate_content_hash(&content);
+            let content_hash = crate::cache::calculate_content_hash(&content);
             let cache_hit = {
                 let cache = self.cache_manager.lock().unwrap();
                 cache.is_valid(&uri, content_hash)
@@ -115,9 +117,9 @@ impl WindjammerLanguageServer {
                 let symbols = db.get_symbols(source_file);
 
                 // Convert symbols to cached format
-                let cached_symbols: Vec<windjammer_lsp::cache::CachedSymbol> = symbols
+                let cached_symbols: Vec<crate::cache::CachedSymbol> = symbols
                     .iter()
-                    .map(|s| windjammer_lsp::cache::CachedSymbol {
+                    .map(|s| crate::cache::CachedSymbol {
                         name: s.name.clone(),
                         kind: format!("{:?}", s.kind),
                         line: s.line,
@@ -128,7 +130,7 @@ impl WindjammerLanguageServer {
 
                 // Update cache with new symbols
                 let mut cache = self.cache_manager.lock().unwrap();
-                let entry = windjammer_lsp::cache::CacheEntry {
+                let entry = CacheEntry {
                     uri: uri.to_string(),
                     content_hash,
                     modified_time: std::time::SystemTime::now(),
@@ -187,6 +189,7 @@ impl WindjammerLanguageServer {
     ///
     /// This is useful for workspace-wide operations like "find all references"
     /// or initial workspace indexing.
+    #[allow(dead_code)] // Planned for future parallel analysis
     async fn process_files_parallel(&self, uris: Vec<Url>) {
         if uris.is_empty() {
             return;
@@ -224,6 +227,7 @@ impl WindjammerLanguageServer {
     }
 
     /// Helper to convert Type to string for display
+    #[allow(clippy::only_used_in_recursion)]
     fn type_to_string(&self, ty: &windjammer::parser::Type) -> String {
         use windjammer::parser::Type;
         match ty {
@@ -254,6 +258,7 @@ impl WindjammerLanguageServer {
                 )
             }
             Type::Vec(inner) => format!("Vec<{}>", self.type_to_string(inner)),
+            Type::Array(inner, size) => format!("[{}; {}]", self.type_to_string(inner), size),
             Type::Reference(inner) => format!("&{}", self.type_to_string(inner)),
             Type::MutableReference(inner) => format!("&mut {}", self.type_to_string(inner)),
             Type::Tuple(types) => {
@@ -263,6 +268,23 @@ impl WindjammerLanguageServer {
                     .collect::<Vec<_>>()
                     .join(", ");
                 format!("({})", types_str)
+            }
+            Type::Infer => "_".to_string(),
+            Type::FunctionPointer {
+                params,
+                return_type,
+            } => {
+                let param_strs: Vec<String> =
+                    params.iter().map(|t| self.type_to_string(t)).collect();
+                if let Some(ret) = return_type {
+                    format!(
+                        "fn({}) -> {}",
+                        param_strs.join(", "),
+                        self.type_to_string(ret)
+                    )
+                } else {
+                    format!("fn({})", param_strs.join(", "))
+                }
             }
         }
     }
@@ -681,10 +703,7 @@ impl LanguageServer for WindjammerLanguageServer {
                         new_text: new_name.clone(),
                     };
 
-                    changes
-                        .entry(location.uri)
-                        .or_insert_with(Vec::new)
-                        .push(text_edit);
+                    changes.entry(location.uri).or_default().push(text_edit);
                 }
 
                 let num_files = changes.len();
@@ -722,7 +741,7 @@ impl LanguageServer for WindjammerLanguageServer {
 
                         changes
                             .entry(reference.location.uri.clone())
-                            .or_insert_with(Vec::new)
+                            .or_default()
                             .push(text_edit);
                     }
 
@@ -735,7 +754,7 @@ impl LanguageServer for WindjammerLanguageServer {
 
                         changes
                             .entry(symbol_def.location.uri.clone())
-                            .or_insert_with(Vec::new)
+                            .or_default()
                             .push(text_edit);
                     }
 
@@ -779,7 +798,10 @@ impl LanguageServer for WindjammerLanguageServer {
         // Collect symbols from all items
         for item in &program.items {
             match item {
-                windjammer::parser::Item::Function(func) => {
+                windjammer::parser::Item::Function {
+                    decl: func,
+                    location: _,
+                } => {
                     symbols.push(SymbolInformation {
                         name: func.name.clone(),
                         kind: SymbolKind::FUNCTION,
@@ -801,7 +823,10 @@ impl LanguageServer for WindjammerLanguageServer {
                         container_name: None,
                     });
                 }
-                windjammer::parser::Item::Struct(s) => {
+                windjammer::parser::Item::Struct {
+                    decl: s,
+                    location: _,
+                } => {
                     symbols.push(SymbolInformation {
                         name: s.name.clone(),
                         kind: SymbolKind::STRUCT,
@@ -847,7 +872,10 @@ impl LanguageServer for WindjammerLanguageServer {
                         });
                     }
                 }
-                windjammer::parser::Item::Enum(e) => {
+                windjammer::parser::Item::Enum {
+                    decl: e,
+                    location: _,
+                } => {
                     symbols.push(SymbolInformation {
                         name: e.name.clone(),
                         kind: SymbolKind::ENUM,
@@ -893,7 +921,10 @@ impl LanguageServer for WindjammerLanguageServer {
                         });
                     }
                 }
-                windjammer::parser::Item::Trait(t) => {
+                windjammer::parser::Item::Trait {
+                    decl: t,
+                    location: _,
+                } => {
                     symbols.push(SymbolInformation {
                         name: t.name.clone(),
                         kind: SymbolKind::INTERFACE,
@@ -915,7 +946,10 @@ impl LanguageServer for WindjammerLanguageServer {
                         container_name: None,
                     });
                 }
-                windjammer::parser::Item::Impl(impl_block) => {
+                windjammer::parser::Item::Impl {
+                    block: impl_block,
+                    location: _,
+                } => {
                     // Add impl block methods
                     for method in &impl_block.functions {
                         symbols.push(SymbolInformation {
@@ -991,7 +1025,10 @@ impl LanguageServer for WindjammerLanguageServer {
                 // Search through all items
                 for item in &program.items {
                     match item {
-                        windjammer::parser::Item::Function(func) => {
+                        windjammer::parser::Item::Function {
+                            decl: func,
+                            location: _,
+                        } => {
                             if func.name.to_lowercase().contains(&query) {
                                 results.push(SymbolInformation {
                                     name: func.name.clone(),
@@ -1015,7 +1052,10 @@ impl LanguageServer for WindjammerLanguageServer {
                                 });
                             }
                         }
-                        windjammer::parser::Item::Struct(s) => {
+                        windjammer::parser::Item::Struct {
+                            decl: s,
+                            location: _,
+                        } => {
                             if s.name.to_lowercase().contains(&query) {
                                 results.push(SymbolInformation {
                                     name: s.name.clone(),
@@ -1039,7 +1079,10 @@ impl LanguageServer for WindjammerLanguageServer {
                                 });
                             }
                         }
-                        windjammer::parser::Item::Enum(e) => {
+                        windjammer::parser::Item::Enum {
+                            decl: e,
+                            location: _,
+                        } => {
                             if e.name.to_lowercase().contains(&query) {
                                 results.push(SymbolInformation {
                                     name: e.name.clone(),
@@ -1063,7 +1106,10 @@ impl LanguageServer for WindjammerLanguageServer {
                                 });
                             }
                         }
-                        windjammer::parser::Item::Trait(t) => {
+                        windjammer::parser::Item::Trait {
+                            decl: t,
+                            location: _,
+                        } => {
                             if t.name.to_lowercase().contains(&query) {
                                 results.push(SymbolInformation {
                                     name: t.name.clone(),
@@ -1218,14 +1264,18 @@ impl LanguageServer for WindjammerLanguageServer {
             // Simple heuristic: function name is the last word before '('
             let func_name = before_paren
                 .split(|c: char| !c.is_alphanumeric() && c != '_')
-                .last()
+                .next_back()
                 .unwrap_or("")
                 .to_string();
 
             if !func_name.is_empty() {
                 // Find this function in the program
                 for item in &program.items {
-                    if let windjammer::parser::Item::Function(func_decl) = item {
+                    if let windjammer::parser::Item::Function {
+                        decl: _func_decl,
+                        location: _,
+                    } = item
+                    {
                         // Get analyzed function for this declaration
                         let analyzed_funcs = self.analysis_db.get_analyzed_functions(&uri);
                         let func = analyzed_funcs.iter().find(|f| f.decl.name == func_name);

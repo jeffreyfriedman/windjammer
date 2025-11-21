@@ -1,0 +1,49 @@
+// Windjammer Standard Library - File System Operations
+// Platform-agnostic file system API
+// NO coupling to any specific platform (Tauri, native, etc.)
+
+// File system result type
+pub type FsResult<T> = Result<T, String>
+
+// Read a file from the filesystem
+pub fn read_file(path: string) -> FsResult<string> {
+    // Compiler generates platform-specific implementation
+}
+
+// Read a file as bytes (for binary files like WASM, images, etc.)
+pub fn read_bytes(path: string) -> FsResult<Vec<u8>> {
+    // Compiler generates platform-specific implementation
+}
+
+// Write a file to the filesystem
+pub fn write_file(path: string, content: string) -> FsResult<()> {
+    // Compiler generates platform-specific implementation
+}
+
+// List files in a directory
+pub fn list_directory(path: string) -> FsResult<Vec<FileEntry>> {
+    // Compiler generates platform-specific implementation
+}
+
+// File entry structure
+pub struct FileEntry {
+    pub name: string,
+    pub path: string,
+    pub is_directory: bool,
+}
+
+// Create a directory
+pub fn create_directory(path: string) -> FsResult<()> {
+    // Compiler generates platform-specific implementation
+}
+
+// Delete a file
+pub fn delete_file(path: string) -> FsResult<()> {
+    // Compiler generates platform-specific implementation
+}
+
+// Check if a file exists
+pub fn file_exists(path: string) -> bool {
+    // Compiler generates platform-specific implementation
+}
+

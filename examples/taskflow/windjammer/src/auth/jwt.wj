@@ -2,21 +2,20 @@
 // Note: This is a simplified implementation for demonstration
 // In production, use a proper JWT library
 
-use std.crypto
-use std.time
-use std.json
+use std::crypto
+use std::time
+use std::json
 
-@derive(Debug, Serialize, Deserialize)
 struct Claims {
-    pub sub: int,      // user_id
-    pub username: string,
-    pub role: string,
-    pub exp: int,      // expiration timestamp
-    pub iat: int,      // issued at timestamp
+    sub: int,      // user_id
+    username: string,
+    role: string,
+    exp: int,      // expiration timestamp
+    iat: int,      // issued at timestamp
 }
 
 pub fn generate_token(user_id: int, username: string, role: string, secret: string) -> Result<string, Error> {
-    let now = time.now().timestamp()
+    let now = time::now().timestamp()
     let expiration = now + (24 * 60 * 60)  // 24 hours from now
     
     let claims = Claims {
@@ -28,21 +27,21 @@ pub fn generate_token(user_id: int, username: string, role: string, secret: stri
     }
     
     // Serialize claims to JSON
-    let claims_json = json.stringify(&claims)?
+    let claims_json = json::stringify(&claims)?
     
     // Create token (simplified - just base64 encoding for demo)
     // In production, use proper HMAC-SHA256 signing
     let payload = format!("{}.{}", claims_json, secret)
-    let signature = crypto.sha256(&payload)
+    let signature = crypto::sha256(&payload)
     let token = format!("{}.{}", claims_json, signature)
     
     // Base64 encode (simplified)
-    Ok(crypto.base64_encode(&token))
+    Ok(crypto::base64_encode(&token))
 }
 
 pub fn verify_token(token: string, secret: string) -> Result<Claims, Error> {
     // Decode base64
-    let decoded = crypto.base64_decode(&token)?
+    let decoded = crypto::base64_decode(&token)?
     
     // Split token (simplified verification)
     let parts: Vec<string> = decoded.split('.').collect()
@@ -55,17 +54,17 @@ pub fn verify_token(token: string, secret: string) -> Result<Claims, Error> {
     
     // Verify signature
     let payload = format!("{}.{}", claims_json, secret)
-    let expected_signature = crypto.sha256(&payload)
+    let expected_signature = crypto::sha256(&payload)
     
     if signature != &expected_signature {
         return Err("Invalid token signature")
     }
     
     // Parse claims
-    let claims: Claims = json.parse(claims_json.clone())?
+    let claims: Claims = json::parse(claims_json.clone())?
     
     // Check expiration
-    let now = time.now().timestamp()
+    let now = time::now().timestamp()
     if claims.exp < now {
         return Err("Token expired")
     }
@@ -80,7 +79,7 @@ pub fn extract_user_id_from_token(token: string, secret: string) -> Result<int, 
 
 pub fn refresh_token(old_token: string, secret: string) -> Result<string, Error> {
     // Verify the old token (even if expired, we allow refresh within grace period)
-    let decoded = crypto.base64_decode(&old_token)?
+    let decoded = crypto::base64_decode(&old_token)?
     let parts: Vec<string> = decoded.split('.').collect()
     
     if parts.len() != 2 {
@@ -88,10 +87,10 @@ pub fn refresh_token(old_token: string, secret: string) -> Result<string, Error>
     }
     
     let claims_json = &parts[0]
-    let claims: Claims = json.parse(claims_json.clone())?
+    let claims: Claims = json::parse(claims_json.clone())?
     
     // Check if token is within refresh grace period (7 days after expiration)
-    let now = time.now().timestamp()
+    let now = time::now().timestamp()
     let grace_period = 7 * 24 * 60 * 60  // 7 days
     
     if claims.exp + grace_period < now {

@@ -1,0 +1,77 @@
+// Interactive Counter - Working Version with DOM Updates
+// This version manually updates the DOM to prove interactivity works
+// while we build the automatic reactivity system
+
+use std::ui::*
+
+@export
+fn start() {
+    println!("🔢 Starting Interactive Counter v2")
+    
+    // Create reactive state
+    let count = Signal::new(0)
+    
+    // Clone for different closures
+    let count_dec = count.clone()
+    let count_reset = count.clone()
+    let count_inc = count.clone()
+    let count_display = count.clone()
+    
+    // Build UI
+    let ui = Container::new()
+        .max_width("600px")
+        .child(Panel::new("Interactive Counter".to_string())
+            .child(
+                Flex::new()
+                    .direction(FlexDirection::Column)
+                    .gap("20px")
+                    .child(
+                        Text::new(format!("Count: {}", count_display.get()))
+                            .size(TextSize::XLarge)
+                    )
+                    .child(
+                        Flex::new()
+                            .direction(FlexDirection::Row)
+                            .gap("10px")
+                            .child(Button::new("- Decrement".to_string())
+                                .variant(ButtonVariant::Secondary)
+                                .on_click(move || {
+                                    let current = count_dec.get()
+                                    count_dec.set(current - 1)
+                                    println!("Decremented to: {}", current - 1)
+                                    update_count_display(current - 1)
+                                }))
+                            .child(Button::new("Reset".to_string())
+                                .variant(ButtonVariant::Danger)
+                                .on_click(move || {
+                                    count_reset.set(0)
+                                    println!("Reset to 0")
+                                    update_count_display(0)
+                                }))
+                            .child(Button::new("+ Increment".to_string())
+                                .variant(ButtonVariant::Primary)
+                                .on_click(move || {
+                                    let current = count_inc.get()
+                                    count_inc.set(current + 1)
+                                    println!("Incremented to: {}", current + 1)
+                                    update_count_display(current + 1)
+                                }))
+                    )
+                    .child(Alert::info("Click the buttons to see the count change!".to_string()))
+            )
+        )
+    
+    App::new("Interactive Counter".to_string(), ui.to_vnode()).run()
+}
+
+// Helper function to update the DOM directly (temporary solution)
+@export
+fn update_count_display(new_count: i32) {
+    // This will be implemented via JavaScript interop
+    println!("Updating display to: {}", new_count)
+}
+
+fn main() {
+    start()
+}
+

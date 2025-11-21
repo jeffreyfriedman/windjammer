@@ -3,7 +3,7 @@
 //! Transforms selected code into a new reusable function.
 
 use crate::error::{McpError, McpResult};
-use crate::protocol::{Position, Range, ToolCallResult};
+use crate::protocol::{Range, ToolCallResult};
 use crate::tools::text_response;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -11,9 +11,7 @@ use std::collections::HashSet;
 use std::sync::Arc;
 use tokio::sync::Mutex;
 use windjammer::lexer::Lexer;
-use windjammer::parser::{
-    Expression, FunctionDecl, OwnershipHint, Parameter, Parser, Statement, Type,
-};
+use windjammer::parser::{Expression, Parser, Statement, Type};
 use windjammer_lsp::database::WindjammerDatabase;
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -61,7 +59,7 @@ pub async fn handle(
 
     // Parse the source code
     let mut lexer = Lexer::new(&request.code);
-    let tokens = lexer.tokenize();
+    let tokens = lexer.tokenize_with_locations();
     let mut parser = Parser::new(tokens);
     let parse_result = parser.parse();
 
@@ -153,7 +151,9 @@ fn extract_statements_in_range(
 struct VariableAnalysis {
     parameters: Vec<(String, Type)>,
     return_type: Option<Type>,
+    #[allow(dead_code)]
     used_variables: HashSet<String>,
+    #[allow(dead_code)]
     defined_variables: HashSet<String>,
 }
 
@@ -190,24 +190,35 @@ fn collect_variable_usage(
     defined: &mut HashSet<String>,
 ) {
     match stmt {
-        Statement::Let { name, value, .. } => {
+        Statement::Let { pattern, value, .. } => {
             collect_expr_variables(value, used);
-            defined.insert(name.clone());
+            // Only handle simple identifier patterns
+            if let windjammer::parser::Pattern::Identifier(name) = pattern {
+                defined.insert(name.clone());
+            }
         }
-        Statement::Assignment { target, value } => {
+        Statement::Assignment {
+            target,
+            value,
+            location: _,
+        } => {
             collect_expr_variables(target, used);
             collect_expr_variables(value, used);
         }
-        Statement::Return(Some(expr)) => {
+        Statement::Return {
+            value: Some(expr),
+            location: _,
+        } => {
             collect_expr_variables(expr, used);
         }
-        Statement::Expression(expr) => {
+        Statement::Expression { expr, location: _ } => {
             collect_expr_variables(expr, used);
         }
         Statement::If {
             condition,
             then_block,
             else_block,
+            location: _,
         } => {
             collect_expr_variables(condition, used);
             for s in then_block {
@@ -220,23 +231,31 @@ fn collect_variable_usage(
             }
         }
         Statement::For {
-            variable,
+            pattern,
             iterable,
             body,
+            location: _,
         } => {
-            defined.insert(variable.clone());
+            // Extract identifier from pattern
+            if let windjammer::parser::Pattern::Identifier(var) = pattern {
+                defined.insert(var.clone());
+            }
             collect_expr_variables(iterable, used);
             for s in body {
                 collect_variable_usage(s, used, defined);
             }
         }
-        Statement::While { condition, body } => {
+        Statement::While {
+            condition,
+            body,
+            location: _,
+        } => {
             collect_expr_variables(condition, used);
             for s in body {
                 collect_variable_usage(s, used, defined);
             }
         }
-        Statement::Loop { body } => {
+        Statement::Loop { body, location: _ } => {
             for s in body {
                 collect_variable_usage(s, used, defined);
             }
@@ -248,7 +267,7 @@ fn collect_variable_usage(
 /// Collect variables from an expression
 fn collect_expr_variables(expr: &Expression, used: &mut HashSet<String>) {
     match expr {
-        Expression::Identifier(name) => {
+        Expression::Identifier { name, location: _ } => {
             used.insert(name.clone());
         }
         Expression::Binary { left, right, .. } => {
@@ -261,6 +280,7 @@ fn collect_expr_variables(expr: &Expression, used: &mut HashSet<String>) {
         Expression::Call {
             function,
             arguments,
+            location: _,
         } => {
             collect_expr_variables(function, used);
             for (_, arg) in arguments {
@@ -278,11 +298,18 @@ fn collect_expr_variables(expr: &Expression, used: &mut HashSet<String>) {
         Expression::FieldAccess { object, .. } => {
             collect_expr_variables(object, used);
         }
-        Expression::Index { object, index } => {
+        Expression::Index {
+            object,
+            index,
+            location: _,
+        } => {
             collect_expr_variables(object, used);
             collect_expr_variables(index, used);
         }
-        Expression::Block(stmts) => {
+        Expression::Block {
+            statements: stmts,
+            location: _,
+        } => {
             let mut defined = HashSet::new();
             for stmt in stmts {
                 collect_variable_usage(stmt, used, &mut defined);
@@ -296,14 +323,22 @@ fn collect_expr_variables(expr: &Expression, used: &mut HashSet<String>) {
 fn infer_return_type(statements: &[Statement]) -> Option<Type> {
     // Look for explicit return statements
     for stmt in statements {
-        if let Statement::Return(Some(_expr)) = stmt {
+        if let Statement::Return {
+            value: Some(_expr),
+            location: _,
+        } = stmt
+        {
             // TODO: Infer type from expression
             return Some(Type::String); // Placeholder type
         }
     }
 
     // Check if last statement is an expression (implicit return)
-    if let Some(Statement::Expression(_expr)) = statements.last() {
+    if let Some(Statement::Expression {
+        expr: _expr,
+        location: _,
+    }) = statements.last()
+    {
         // TODO: Infer type from expression
         return Some(Type::String); // Placeholder type
     }

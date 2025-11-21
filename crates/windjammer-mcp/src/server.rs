@@ -14,6 +14,7 @@ use windjammer_lsp::database::WindjammerDatabase;
 /// MCP server
 pub struct McpServer {
     /// Shared database with LSP (Salsa-powered incremental computation)
+    #[allow(dead_code)]
     db: Arc<Mutex<WindjammerDatabase>>,
 
     /// Tool registry

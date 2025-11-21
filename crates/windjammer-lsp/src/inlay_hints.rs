@@ -72,7 +72,8 @@ impl InlayHintsProvider {
         hints
     }
 
-    /// Get ownership summary for hover display
+    /// Get ownership summary for hover display (planned for hover improvements)
+    #[allow(dead_code)]
     pub fn get_ownership_summary(&self, function_name: &str) -> Option<String> {
         for func in &self.analyzed_functions {
             if func.decl.name == function_name {
