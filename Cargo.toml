@@ -4,13 +4,13 @@ members = [
     "crates/windjammer-lsp",
     "crates/windjammer-mcp",
     "crates/windjammer-runtime",
-    "crates/windjammer-ui-macro",
     # Removed: crates/windjammer-c-ffi (moved to game-host repo)
     # Removed: crates/windjammer-editor-desktop (moved to game-host repo)
     # Removed: crates/windjammer-editor-web (moved to game-host repo)
     # Removed: crates/game-host-editor (moved to game-host repo)
     # Removed: crates/game-host-framework (moved to game-host repo)
     # Removed: crates/windjammer-ui (moved to windjammer-ui repo)
+    # Removed: crates/windjammer-ui-macro (moved to windjammer-ui repo)
     # Removed: sdks/rust (moved to game-host repo)
     # Removed: tools/sdk-generator (no longer exists)
 ]
