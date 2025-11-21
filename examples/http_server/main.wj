@@ -1,0 +1,133 @@
+// HTTP Server Example - RESTful API with decorators
+use std::sync::Mutex
+use std::sync::Arc
+use axum::Router
+use axum::Json
+use axum::extract::Path
+use axum::extract::State
+use serde::Serialize
+use serde::Deserialize
+use tokio
+
+@derive(Clone, Serialize, Deserialize)
+struct User {
+    id: int,
+    name: string,
+    email: string,
+}
+
+@derive(Deserialize)
+struct CreateUserRequest {
+    name: string,
+    email: string,
+}
+
+// In-memory user store (in real app, use database)
+@derive(Clone)
+struct AppState {
+    users: Arc<Mutex<Vec<User>>>,
+    next_id: Arc<Mutex<int>>,
+}
+
+@get("/")
+async fn index() -> string {
+    "Welcome to Windjammer API!"
+}
+
+@get("/users")
+async fn list_users(state: State<AppState>) -> Json<Vec<User>> {
+    let users = state.users.lock().unwrap()
+    Json(users.clone())
+}
+
+@get("/users/:id")
+async fn get_user(state: State<AppState>, id: Path<int>) -> Result<Json<User>, StatusCode> {
+    let users = state.users.lock().unwrap()
+    
+    match users.iter().find(|u| u.id == *id) {
+        Some(user) => Ok(Json(user.clone())),
+        None => Err(StatusCode::NOT_FOUND),
+    }
+}
+
+@post("/users")
+@timing
+async fn create_user(state: State<AppState>, req: Json<CreateUserRequest>) -> Result<Json<User>, StatusCode> {
+    let mut users = state.users.lock().unwrap()
+    let mut next_id_guard = state.next_id.lock().unwrap()
+    let current_id = *next_id_guard
+    
+    let user = User {
+        id: current_id,
+        name: req.name.clone(),
+        email: req.email.clone(),
+    }
+    
+    let new_id = current_id + 1
+    *next_id_guard = new_id
+    users.push(user.clone())
+    
+    Ok(Json(user))
+}
+
+@delete("/users/:id")
+async fn delete_user(state: State<AppState>, id: Path<int>) -> Result<StatusCode, StatusCode> {
+    let mut users = state.users.lock().unwrap()
+    let original_len = users.len()
+    users.retain(|u| u.id != *id)
+    
+    if users.len() < original_len {
+        Ok(StatusCode::NO_CONTENT)
+    } else {
+        Err(StatusCode::NOT_FOUND)
+    }
+}
+
+// Middleware decorator
+@middleware
+async fn auth_middleware(req: Request, next: Next) -> Response {
+    // Simple API key check
+    match req.headers().get("X-API-Key") {
+        Some(key) if key == "secret-key" => next.run(req).await,
+        _ => Response::builder()
+            .status(401)
+            .body("Unauthorized")
+            .unwrap(),
+    }
+}
+
+async fn main() {
+    // Initialize app state with sample data
+    let users = Arc::new(Mutex::new(vec![
+        User {
+            id: 1,
+            name: "Alice".to_string(),
+            email: "alice@example.com".to_string(),
+        },
+        User {
+            id: 2,
+            name: "Bob".to_string(),
+            email: "bob@example.com".to_string(),
+        },
+    ]))
+    
+    let next_id = Arc::new(Mutex::new(3))
+    
+    let state = AppState {
+        users: users,
+        next_id: next_id,
+    }
+    
+    let app = Router::new()
+        .route("/", get(index))
+        .route("/users", get(list_users).post(create_user))
+        .route("/users/:id", get(get_user).delete(delete_user))
+        .with_state(state)
+    
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:3000").await.unwrap()
+    
+    println!("Server running on http://127.0.0.1:3000")
+    
+    axum::serve(listener, app).await.unwrap()
+}
+

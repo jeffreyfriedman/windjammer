@@ -1,0 +1,313 @@
+// Enhanced task handlers with pagination, filtering, sorting, and RBAC
+
+use std::http
+use std::json
+use std::log
+
+use crate::models::task
+use crate::models::pagination
+use crate::middleware::auth
+use crate::utils::filtering
+use crate::utils::sorting
+use ../db
+
+@async
+pub fn list_with_filters(
+    req: Request, 
+    pool: DbPool,
+    auth_ctx: AuthContext,
+) -> Response {
+    // Extract query parameters
+    let query_params = http.query_params(req)
+    
+    // Parse pagination
+    let cursor = query_params.get("cursor").cloned()
+    let limit = query_params.get("limit")
+        .and_then(|s| s.parse::<int>().ok())
+    let pagination = PaginationParams::from_query(cursor, limit)
+    
+    // Parse filters
+    let filters = FilterParams::from_query(query_params.clone())
+    
+    // Parse sorting
+    let sort = SortParams::from_query(query_params.get("sort").cloned())
+        .validate()
+        .unwrap_or_else(|_| SortParams::from_query(None))
+    
+    // Build query with filters
+    let (where_clause, params) = filters.to_sql_where()
+    let order_by = sort.to_sql_order_by()
+    
+    // Add user access control
+    let access_filter = format!(
+        "AND EXISTS (
+            SELECT 1 FROM projects p 
+            LEFT JOIN project_members pm ON p.id = pm.project_id 
+            WHERE p.id = tasks.project_id 
+            AND (p.owner_id = {} OR pm.user_id = {})
+        )",
+        auth_ctx.user_id, auth_ctx.user_id
+    )
+    
+    // Fetch tasks (limit + 1 to check if there are more)
+    let query = format!(
+        "SELECT * FROM tasks 
+         WHERE {} {} AND deleted_at IS NULL
+         ORDER BY {} 
+         LIMIT {}",
+        where_clause, access_filter, order_by, pagination.limit + 1
+    )
+    
+    let rows = match db.query_all(pool, query, params).await {
+        Ok(r) => r,
+        Err(e) => {
+            log.error("Failed to fetch tasks: {}", e)
+            return http.json_response(500, json!({
+                "erro": "Failed to fetch tasks"
+            }))
+        }
+    }
+    
+    // Convert to task responses
+    let mut tasks = vec![]
+    for row in rows {
+        let task = Task {
+            id: db.get_int(row, "id"),
+            project_id: db.get_int(row, "project_id"),
+            title: db.get_string(row, "title"),
+            description: db.get_string(row, "description"),
+            status: db.get_string(row, "status"),
+            priority: db.get_string(row, "priority"),
+            assigned_to: db.get_int_opt(row, "assigned_to"),
+            created_by: db.get_int(row, "created_by"),
+            created_at: db.get_int(row, "created_at"),
+            updated_at: db.get_int(row, "updated_at"),
+            due_date: db.get_int_opt(row, "due_date"),
+        }
+        tasks.push(task.to_response())
+    }
+    
+    // Create paginated response
+    let paginated = PaginatedResponse::new(tasks, pagination.limit, None)
+    
+    log.info("Tasks fetched: {} results", paginated.data.len())
+    http.json_response(200, paginated)
+}
+
+@async
+pub fn create_with_rbac(
+    req: Request,
+    pool: DbPool,
+    auth_ctx: AuthContext,
+    project_id: int,
+) -> Response {
+    // Check permissions
+    if !auth_ctx.role.can_modify_task() {
+        log.warn("User {} attempted to create task without permission", auth_ctx.user_id)
+        return http.json_response(403, json!({
+            "erro": "Insufficient permissions to create tasks"
+        }))
+    }
+    
+    // Verify project access
+    let access_query = "
+        SELECT 1 FROM projects p 
+        LEFT JOIN project_members pm ON p.id = pm.project_id 
+        WHERE p.id = $1 
+        AND (p.owner_id = $2 OR pm.user_id = $2)
+        AND p.deleted_at IS NULL
+    "
+    
+    match db.query_one(pool, access_query, vec![project_id, auth_ctx.user_id]).await {
+        Ok(_) => {}
+        Err(_) => {
+            return http.json_response(403, json!({
+                "erro": "No access to this project"
+            }))
+        }
+    }
+    
+    // Parse request body
+    let body = http.body(req)
+    let create_req = match json.parse_string::<CreateTaskRequest>(body) {
+        Ok(r) => r,
+        Err(e) => {
+            log.error("Failed to parse create request: {}", e)
+            return http.json_response(400, json!({
+                "erro": "Invalid request body"
+            }))
+        }
+    }
+    
+    // Validate input
+    if create_req.title.trim().is_empty() {
+        return http.json_response(400, json!({
+            "erro": "Task title is required"
+        }))
+    }
+    
+    // Insert task
+    let now = time.now().timestamp()
+    let query = "
+        INSERT INTO tasks (
+            project_id, title, description, status, priority, 
+            created_by, created_at, updated_at, due_date
+        ) VALUES ($1, $2, $3, 'open', $4, $5, $6, $7, $8) 
+        RETURNING id
+    "
+    
+    let task_id = match db.query_one(
+        pool, 
+        query, 
+        vec![
+            project_id, 
+            create_req.title, 
+            create_req.description,
+            create_req.priority, 
+            auth_ctx.user_id, 
+            now, 
+            now, 
+            create_req.due_date
+        ]
+    ).await {
+        Ok(row) => db.get_int(row, "id"),
+        Err(e) => {
+            log.error("Failed to create task: {}", e)
+            return http.json_response(500, json!({
+                "erro": "Failed to create task"
+            }))
+        }
+    }
+    
+    // Audit log
+    let _ = log_audit(
+        pool,
+        auth_ctx.user_id,
+        "task.create",
+        "task",
+        task_id,
+        req
+    ).await
+    
+    let response = TaskResponse {
+        id: task_id,
+        project_id: project_id,
+        title: create_req.title,
+        description: create_req.description,
+        status: "open".to_string(),
+        priority: create_req.priority,
+        assigned_to: None,
+        created_by: auth_ctx.user_id,
+        created_at: now,
+        due_date: create_req.due_date,
+    }
+    
+    log.info("Task created: {} by user {}", task_id, auth_ctx.user_id)
+    http.json_response(201, response)
+}
+
+@async
+pub fn soft_delete(
+    req: Request,
+    pool: DbPool,
+    auth_ctx: AuthContext,
+    task_id: int,
+) -> Response {
+    // Check permissions
+    if !auth_ctx.role.can_modify_task() {
+        return http.json_response(403, json!({
+            "erro": "Insufficient permissions"
+        }))
+    }
+    
+    // Verify ownership or admin
+    let check_query = "
+        SELECT t.created_by, p.owner_id 
+        FROM tasks t 
+        JOIN projects p ON t.project_id = p.id 
+        WHERE t.id = $1 AND t.deleted_at IS NULL
+    "
+    
+    let row = match db.query_one(pool, check_query, vec![task_id]).await {
+        Ok(r) => r,
+        Err(_) => {
+            return http.json_response(404, json!({
+                "erro": "Task not found"
+            }))
+        }
+    }
+    
+    let created_by = db.get_int(row, "created_by")
+    let owner_id = db.get_int(row, "owner_id")
+    
+    // Only creator, project owner, or admin can delete
+    if auth_ctx.user_id != created_by 
+        && auth_ctx.user_id != owner_id 
+        && auth_ctx.role != Role::Admin {
+        return http.json_response(403, json!({
+            "erro": "Only task creator or project owner can delete"
+        }))
+    }
+    
+    // Soft delete
+    let now = time.now().timestamp()
+    let delete_query = "
+        UPDATE tasks 
+        SET deleted_at = $1, deleted_by = $2 
+        WHERE id = $3
+    "
+    
+    match db.execute(pool, delete_query, vec![now, auth_ctx.user_id, task_id]).await {
+        Ok(_) => {}
+        Err(e) => {
+            log.error("Failed to delete task: {}", e)
+            return http.json_response(500, json!({
+                "erro": "Failed to delete task"
+            }))
+        }
+    }
+    
+    // Audit log
+    let _ = log_audit(
+        pool,
+        auth_ctx.user_id,
+        "task.delete",
+        "task",
+        task_id,
+        req
+    ).await
+    
+    log.info("Task {} soft deleted by user {}", task_id, auth_ctx.user_id)
+    http.json_response(200, json!({
+        "message": "Task deleted successfully"
+    }))
+}
+
+// Helper function to log audit events
+async fn log_audit(
+    pool: DbPool,
+    user_id: int,
+    action: string,
+    resource_type: string,
+    resource_id: int,
+    req: Request,
+) -> Result<(), Error> {
+    let request_id = http.get_context(req, "request_id").unwrap_or("unknown")
+    let ip_address = http.client_ip(req).unwrap_or("unknown")
+    let user_agent = http.get_header(req, "User-Agent")
+    let now = time.now().timestamp()
+    
+    let query = "
+        INSERT INTO audit_log (
+            user_id, action, resource_type, resource_id,
+            ip_address, user_agent, request_id, created_at
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+    "
+    
+    db.execute(
+        pool,
+        query,
+        vec![user_id, action, resource_type, resource_id, ip_address, user_agent, request_id, now]
+    ).await
+}
+

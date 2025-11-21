@@ -1,0 +1,201 @@
+// wjfind - Fast file search utility built in Windjammer
+// A production CLI tool to validate Windjammer's capabilities
+
+use std::cli
+use std::fs
+use std::io
+use std::env
+use std::time
+use std::log
+
+use ./config
+use ./search
+use ./output
+use ./gitignore
+
+@derive(Debug)
+struct Args {
+    pattern: string,
+    paths: Vec<string>,
+    case_insensitive: bool,
+    whole_word: bool,
+    line_numbers: bool,
+    count_only: bool,
+    files_with_matches: bool,
+    context_before: int,
+    context_after: int,
+    file_types: Vec<string>,
+    exclude: Vec<string>,
+    max_count: Option<int>,
+    threads: int,
+    json: bool,
+    color: string,  // auto, always, never,
+    hidden: bool,
+    no_ignore: bool,
+}
+
+fn main() {
+    // Parse command-line arguments
+    let args = parse_args()
+    
+    // Initialize logging (only if verbose)
+    if env::var("WJFIND_LOG").is_ok() {
+        log::init()
+    }
+    
+    // Create search configuration
+    let config = config::from_args(args).unwrap_or_else(|e| {
+        eprintln!("Error: {}", e)
+        std::process::exit(1)
+    })
+    
+    // Run search
+    let start = time::now()
+    let results = match search::run(config.clone()) {
+        Ok(r) => r,
+        Err(e) => {
+            eprintln!("Error: {}", e)
+            std::process::exit(1)
+        }
+    }
+    let duration = time::now().duration_since(&start)
+    
+    // Output results
+    output::print_results(&results, &config, duration)
+    
+    // Exit with appropriate code
+    let exit_code = if results.matches.is_empty() { 1 } else { 0 }
+    std::process::exit(exit_code)
+}
+
+fn parse_args() -> Args {
+    let mut app = cli::new("wjfind")
+        .version("0.1.0")
+        .author("Windjammer Team")
+        .about("Fast file search utility - like ripgrep, but in Windjammer!")
+        .arg(cli::arg("pattern")
+            .help("Pattern to search for (regex)")
+            .required(true))
+        .arg(cli::arg("paths")
+            .help("Paths to search (default: current directory)")
+            .multiple(true)
+            .default_value("."))
+        .arg(cli::flag("case-insensitive")
+            .short("i")
+            .help("Case-insensitive search"))
+        .arg(cli::flag("whole-word")
+            .short("w")
+            .help("Match whole words only"))
+        .arg(cli::flag("line-numbers")
+            .short("n")
+            .help("Show line numbers"))
+        .arg(cli::flag("count")
+            .short("c")
+            .help("Only show count of matches"))
+        .arg(cli::flag("files-with-matches")
+            .short("l")
+            .help("Only show files with matches"))
+        .arg(cli::option("context-before")
+            .short("B")
+            .help("Lines of context before match")
+            .default_value("0"))
+        .arg(cli::option("context-after")
+            .short("A")
+            .help("Lines of context after match")
+            .default_value("0"))
+        .arg(cli::option("context")
+            .short("C")
+            .help("Lines of context before and after match")
+            .default_value("0"))
+        .arg(cli::option("type")
+            .short("t")
+            .help("Filter by file type (rust, js, py, etc.)")
+            .multiple(true))
+        .arg(cli::option("exclude")
+            .help("Exclude directories or files")
+            .multiple(true))
+        .arg(cli::option("max-count")
+            .short("m")
+            .help("Maximum number of matches"))
+        .arg(cli::option("threads")
+            .short("j")
+            .help("Number of threads")
+            .default_value("0"))  // 0 = auto-detect
+        .arg(cli::flag("json")
+            .help("Output results as JSON"))
+        .arg(cli::option("color")
+            .help("When to use colors (auto, always, never)")
+            .default_value("auto"))
+        .arg(cli::flag("hidden")
+            .help("Search hidden files and directories"))
+        .arg(cli::flag("no-ignore")
+            .help("Don't respect .gitignore files"))
+    
+    let matches = app.get_matches()
+    
+    // Extract arguments
+    let pattern = matches.value_of("pattern").unwrap()
+    let paths = matches.values_of("paths").unwrap_or(vec![".".to_string()])
+    let case_insensitive = matches.is_present("case-insensitive")
+    let whole_word = matches.is_present("whole-word")
+    let line_numbers = matches.is_present("line-numbers")
+    let count_only = matches.is_present("count")
+    let files_with_matches = matches.is_present("files-with-matches")
+    
+    // Context
+    let context = matches.value_of("context").unwrap().parse::<int>().unwrap_or(0)
+    let context_before = if context > 0 {
+        context
+    } else {
+        matches.value_of("context-before").unwrap().parse::<int>().unwrap_or(0)
+    }
+    let context_after = if context > 0 {
+        context
+    } else {
+        matches.value_of("context-after").unwrap().parse::<int>().unwrap_or(0)
+    }
+    
+    // File types and exclusions
+    let file_types = matches.values_of("type").unwrap_or(vec![])
+    let exclude = matches.values_of("exclude").unwrap_or(vec![])
+    
+    // Max count
+    let max_count = matches.value_of("max-count").map(|s| s.parse::<int>().unwrap())
+    
+    // Threads (0 = auto-detect)
+    let threads = matches.value_of("threads").unwrap().parse::<int>().unwrap_or(0)
+    let threads = if threads == 0 {
+        std::thread::available_parallelism().unwrap_or(4)
+    } else {
+        threads
+    }
+    
+    // Output format
+    let json = matches.is_present("json")
+    let color = matches.value_of("color").unwrap()
+    
+    // Hidden and ignore
+    let hidden = matches.is_present("hidden")
+    let no_ignore = matches.is_present("no-ignore")
+    
+    Args {
+        pattern: pattern,
+        paths: paths,
+        case_insensitive: case_insensitive,
+        whole_word: whole_word,
+        line_numbers: line_numbers,
+        count_only: count_only,
+        files_with_matches: files_with_matches,
+        context_before: context_before,
+        context_after: context_after,
+        file_types: file_types,
+        exclude: exclude,
+        max_count: max_count,
+        threads: threads,
+        json: json,
+        color: color,
+        hidden: hidden,
+        no_ignore: no_ignore,
+    }
+}
+

@@ -1,0 +1,153 @@
+// Database operations for users
+
+use std::db
+use std::log
+use ../models/user::{User, RegisterRequest}
+
+// Create a new user
+pub async fn create(conn: Connection, req: RegisterRequest, password_hash: string) -> Result<User, Error> {
+    log.debug_with("Creating use", "username", &req.username)
+    
+    let query = r#"
+        INSERT INTO users (username, email, password_hash, full_name, role)
+        VALUES ($1, $2, $3, $4, 'user')
+        RETURNING id, username, email, full_name, role, 
+                  created_at::text, updated_at::text
+    "#
+    
+    let result = conn.query(query)
+        .bind(&req.username)
+        .bind(&req.email)
+        .bind(&password_hash)
+        .bind(&req.full_name.unwrap_or("".to_string()))
+        .fetch_one()
+        .await?
+    
+    Ok(User {
+        id: result.get("id")?,
+        username: result.get("username")?,
+        email: result.get("email")?,
+        full_name: result.get("full_name")?,
+        role: result.get("role")?,
+        created_at: result.get("created_at")?,
+        updated_at: result.get("updated_at")?,
+    })
+}
+
+// Find user by username
+pub async fn find_by_username(conn: Connection, username: string) -> Result<Option<UserWithPassword>, Error> {
+    log.debug_with("Finding user by username", "username", &username)
+    
+    let query = r#"
+        SELECT id, username, email, password_hash, full_name, role,
+               created_at::text, updated_at::text
+        FROM users
+        WHERE username = $1
+    "#
+    
+    let result = conn.query(query)
+        .bind(&username)
+        .fetch_optional()
+        .await?
+    
+    match result {
+        Some(row) => {
+            Ok(Some(UserWithPassword {
+                id: row.get("id")?,
+                username: row.get("username")?,
+                email: row.get("email")?,
+                password_hash: row.get("password_hash")?,
+                full_name: row.get("full_name")?,
+                role: row.get("role")?,
+                created_at: row.get("created_at")?,
+                updated_at: row.get("updated_at")?,
+            }))
+        }
+        None => Ok(None)
+    }
+}
+
+// Find user by ID
+pub async fn find_by_id(conn: Connection, user_id: int) -> Result<Option<User>, Error> {
+    log.debug_with("Finding user by ID", "id", &user_id.to_string())
+    
+    let query = r#"
+        SELECT id, username, email, full_name, role,
+               created_at::text, updated_at::text
+        FROM users
+        WHERE id = $1
+    "#
+    
+    let result = conn.query(query)
+        .bind(user_id)
+        .fetch_optional()
+        .await?
+    
+    match result {
+        Some(row) => {
+            Ok(Some(User {
+                id: row.get("id")?,
+                username: row.get("username")?,
+                email: row.get("email")?,
+                full_name: row.get("full_name")?,
+                role: row.get("role")?,
+                created_at: row.get("created_at")?,
+                updated_at: row.get("updated_at")?,
+            }))
+        }
+        None => Ok(None)
+    }
+}
+
+// Check if username exists
+pub async fn username_exists(conn: Connection, username: string) -> Result<bool, Error> {
+    let query = "SELECT COUNT(*) as count FROM users WHERE username = $1"
+    
+    let result = conn.query(query)
+        .bind(&username)
+        .fetch_one()
+        .await?
+    
+    let count: int = result.get("count")?
+    Ok(count > 0)
+}
+
+// Check if email exists
+pub async fn email_exists(conn: Connection, email: string) -> Result<bool, Error> {
+    let query = "SELECT COUNT(*) as count FROM users WHERE email = $1"
+    
+    let result = conn.query(query)
+        .bind(&email)
+        .fetch_one()
+        .await?
+    
+    let count: int = result.get("count")?
+    Ok(count > 0)
+}
+
+// User with password hash (internal use only)
+@derive(Debug)
+struct UserWithPassword {
+    pub id: int,
+    pub username: string,
+    pub email: string,
+    pub password_hash: string,
+    pub full_name: Option<string>,
+    pub role: string,
+    pub created_at: string,
+    pub updated_at: string,
+}
+
+impl UserWithPassword {
+    pub fn to_user(self) -> User {
+        User {
+            id: self.id,
+            username: self.username,
+            email: self.email,
+            full_name: self.full_name,
+            role: self.role,
+            created_at: self.created_at,
+            updated_at: self.updated_at,
+        }
+    }
+}

@@ -1,0 +1,52 @@
+// Simple working ECS demo
+use std::game
+
+fn main() {
+    println!("=== Windjammer ECS Demo ===\n")
+    
+    // Create world
+    let mut world = game::World::new()
+    
+    // Create player
+    let player = world.create_entity()
+    world.add_component(player, game::Transform::new(game::Vec3::new(0.0, 0.0, 0.0)))
+    world.add_component(player, game::Player::new())
+    println!("Created player")
+    
+    // Create 3 enemies
+    let enemy1 = world.create_entity()
+    world.add_component(enemy1, game::Transform::new(game::Vec3::new(10.0, 0.0, 0.0)))
+    
+    let enemy2 = world.create_entity()
+    world.add_component(enemy2, game::Transform::new(game::Vec3::new(20.0, 0.0, 0.0)))
+    
+    let enemy3 = world.create_entity()
+    world.add_component(enemy3, game::Transform::new(game::Vec3::new(30.0, 0.0, 0.0)))
+    
+    println!("Created 3 enemies")
+    
+    // Create goal
+    let goal = world.create_entity()
+    world.add_component(goal, game::Transform::new(game::Vec3::new(100.0, 0.0, 0.0)))
+    world.add_component(goal, game::Goal::new())
+    println!("Created goal\n")
+    
+    // Query system
+    let players = world.query::<game::Player>()
+    let goals = world.query::<game::Goal>()
+    let transforms = world.query::<game::Transform>()
+    
+    println!("=== Entity Counts ===")
+    println!("Players: {}", players.len())
+    println!("Goals: {}", goals.len())
+    println!("Transforms: {}", transforms.len())
+    println!("Total entities: {}", players.len() + goals.len() + 3)
+    
+    println!("\n✨ ECS System Working!")
+    println!("Demonstrated:")
+    println!("  • Entity creation")
+    println!("  • Component attachment")
+    println!("  • Query system")
+    println!("  • Type-safe component access")
+}
+

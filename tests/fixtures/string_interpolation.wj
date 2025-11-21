@@ -1,0 +1,11 @@
+// Test string interpolation
+fn main() {
+    let name = "Alice"
+    let age = 30
+    println!("Hello, ${name}! You are ${age} years old.")
+    
+    let x = 5
+    let y = 10
+    println!("${x} + ${y} = ${x + y}")
+}
+

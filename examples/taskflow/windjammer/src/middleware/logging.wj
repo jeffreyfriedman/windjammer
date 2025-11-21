@@ -1,0 +1,52 @@
+// Structured logging middleware
+
+use std::http
+use std::log
+use std::time
+use std::json
+
+@derive(Debug, Serialize)
+struct RequestLog {
+    request_id: string,
+    method: string,
+    path: string,
+    status: int,
+    duration_ms: int,
+    user_id: Option<int>,
+    ip_address: string,
+    user_agent: Option<string>,
+}
+
+pub fn log_request(req: Request, res: Response, duration_ms: int) {
+    let request_id = http.get_context(req, "request_id").unwrap_or("unknown")
+    let user_id = http.get_context(req, "user_id").map(|id| id.parse::<int>().ok()).flatten()
+    
+    let log_entry = RequestLog {
+        request_id: request_id,
+        method: http.method(req),
+        path: http.path(req),
+        status: http.status(res),
+        duration_ms: duration_ms,
+        user_id: user_id,
+        ip_address: http.client_ip(req).unwrap_or("unknown"),
+        user_agent: http.get_header(req, "User-Agent"),
+    }
+    
+    // Log as structured JSON
+    let log_json = json.stringify(&log_entry).unwrap_or("{}".to_string())
+    
+    // Log at appropriate level based on status code
+    if http.status(res) >= 500 {
+        log.error("Request failed: {}", log_json)
+    } else if http.status(res) >= 400 {
+        log.warn("Client error: {}", log_json)
+    } else {
+        log.info("Request completed: {}", log_json)
+    }
+}
+
+pub fn log_error(req: Request, error: Error) {
+    let request_id = http.get_context(req, "request_id").unwrap_or("unknown")
+    log.error("Request {} failed: {}", request_id, error)
+}
+

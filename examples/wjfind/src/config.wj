@@ -1,0 +1,125 @@
+// Configuration for wjfind search
+
+use std::regex
+use std::path
+use std::io
+use ./main::Args
+
+@derive(Debug, Clone)
+pub struct Config {
+    pub pattern: Regex,
+    pub paths: Vec<string>,
+    pub case_insensitive: bool,
+    pub whole_word: bool,
+    pub line_numbers: bool,
+    pub count_only: bool,
+    pub files_with_matches: bool,
+    pub context_before: int,
+    pub context_after: int,
+    pub file_types: Vec<string>,
+    pub exclude_patterns: Vec<string>,
+    pub max_count: Option<int>,
+    pub threads: int,
+    pub json: bool,
+    pub use_color: bool,
+    pub search_hidden: bool,
+    pub respect_ignore: bool,
+}
+
+pub fn from_args(args: Args) -> Result<Config, string> {
+    // Build regex pattern
+    let pattern_str = if args.whole_word {
+        let escaped = regex::escape(&args.pattern)
+        "\\b" + &escaped + "\\b"
+    } else {
+        args.pattern
+    }
+    
+    let pattern = if args.case_insensitive {
+        let flags = "i"
+        regex::compile_with_flags(&pattern_str, flags)?
+    } else {
+        regex::compile(&pattern_str)?
+    }
+    
+    // Determine color usage
+    let use_color = match args.color.as_str() {
+        "always" => true,
+        "never" => false,
+        _ => io::is_terminal(),  // auto
+    }
+    
+    Ok(Config {
+        pattern: pattern,
+        paths: args.paths,
+        case_insensitive: args.case_insensitive,
+        whole_word: args.whole_word,
+        line_numbers: args.line_numbers,
+        count_only: args.count_only,
+        files_with_matches: args.files_with_matches,
+        context_before: args.context_before,
+        context_after: args.context_after,
+        file_types: args.file_types,
+        exclude_patterns: args.exclude,
+        max_count: args.max_count,
+        threads: args.threads,
+        json: args.json,
+        use_color: use_color,
+        search_hidden: args.hidden,
+        respect_ignore: !args.no_ignore,
+    })
+}
+
+// File type mappings
+pub fn get_file_extensions(file_type: string) -> Vec<string> {
+    match file_type {
+        "rust" => vec!["rs".to_string()],
+        "windjammer" | "wj" => vec!["wj".to_string()],
+        "python" | "py" => vec!["py".to_string(), "pyw".to_string()],
+        "javascript" | "js" => vec!["js".to_string(), "jsx".to_string(), "mjs".to_string()],
+        "typescript" | "ts" => vec!["ts".to_string(), "tsx".to_string()],
+        "go" => vec!["go".to_string()],
+        "c" => vec!["c".to_string(), "h".to_string()],
+        "cpp" | "c++" => vec!["cpp".to_string(), "cc".to_string(), "cxx".to_string(), "hpp".to_string(), "hxx".to_string()],
+        "java" => vec!["java".to_string()],
+        "markdown" | "md" => vec!["md".to_string(), "markdown".to_string()],
+        "json" => vec!["json".to_string()],
+        "yaml" | "yml" => vec!["yaml".to_string(), "yml".to_string()],
+        "toml" => vec!["toml".to_string()],
+        "xml" => vec!["xml".to_string()],
+        "html" => vec!["html".to_string(), "htm".to_string()],
+        "css" => vec!["css".to_string(), "scss".to_string(), "sass".to_string()],
+        "sql" => vec!["sql".to_string()],
+        "shell" | "sh" => vec!["sh".to_string(), "bash".to_string(), "zsh".to_string()],
+        _ => vec![],
+    }
+}
+
+// Check if file matches type filters
+pub fn matches_file_type(path: &string, file_types: &Vec<string>) -> bool {
+    if file_types.is_empty() {
+        return true
+    }
+    
+    let ext = path::extension(path).unwrap_or("".to_string())
+    
+    for file_type in file_types {
+        let extensions = get_file_extensions(file_type.clone())
+        if extensions.contains(&ext.to_string()) {
+            return true
+        }
+    }
+    
+    false
+}
+
+// Check if path should be excluded
+pub fn should_exclude(path: &string, exclude_patterns: &Vec<string>) -> bool {
+    for pattern in exclude_patterns {
+        if path.contains(pattern) {
+            return true
+        }
+    }
+    false
+}
+

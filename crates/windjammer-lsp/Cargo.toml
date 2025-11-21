@@ -1,0 +1,80 @@
+[package]
+name = "windjammer-lsp"
+version.workspace = true  # 0.31.0
+edition.workspace = true
+authors.workspace = true
+description = "Language Server Protocol implementation for Windjammer"
+license.workspace = true
+
+[lib]
+name = "windjammer_lsp"
+path = "src/lib.rs"
+
+[[bin]]
+name = "windjammer-lsp"
+path = "src/main.rs"
+
+[dependencies]
+# Windjammer compiler
+windjammer = { path = "../.." }
+
+# LSP
+tower-lsp = "0.20"
+# lsp-types exported from tower-lsp
+tower = "0.4"
+tokio = { version = "1.35", features = ["full"] }
+
+# Incremental computation with Salsa
+salsa = "0.24"
+dashmap = "5.5"
+
+# Parallel processing
+rayon = "1.8"
+
+# Regex for inline refactoring
+regex = "1.10"
+
+# File watching
+notify = "6.1"
+notify-debouncer-full = "0.3"
+
+# Serialization
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+bincode = "1.3"  # Efficient binary serialization for cache
+
+# Logging
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+
+# Path handling
+pathdiff = "0.2"
+path-absolutize = "3.1"
+
+# Error handling
+anyhow = "1.0"
+thiserror = "1.0"
+
+# Text manipulation
+ropey = "1.6"  # Efficient rope data structure for text
+text-size = "1.1"
+
+# Async utilities
+futures = "0.3"
+async-trait = "0.1"
+
+# Workspace support
+cargo_metadata = "0.18"
+
+[dev-dependencies]
+# Testing
+assert_cmd = "2.0"
+predicates = "3.0"
+tempfile = "3.8"
+
+# Benchmarking
+criterion = { version = "0.5", features = ["html_reports"] }
+
+[[bench]]
+name = "salsa_performance"
+harness = false

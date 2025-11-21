@@ -1,0 +1,100 @@
+// Example 4: Traits and Interfaces
+
+// Define a trait (Windjammer traits need default implementations)
+trait Drawable {
+    fn draw(&self) -> string {
+        "drawable"
+    }
+    fn area(&self) -> int {
+        0
+    }
+}
+
+// Define another trait
+trait Movable {
+    fn move_by(&mut self, dx: int, dy: int) {
+        // Default: do nothing
+    }
+}
+
+@auto
+struct Circle {
+    x: int,
+    y: int,
+    radius: int,
+}
+
+@auto
+struct Square {
+    x: int,
+    y: int,
+    side: int,
+}
+
+// Implement Drawable for Circle
+impl Drawable for Circle {
+    fn draw(&self) -> string {
+        "Circle at (${self.x}, ${self.y}) with radius ${self.radius}"
+    }
+    
+    fn area(&self) -> int {
+        3 * self.radius * self.radius  // π ≈ 3
+    }
+}
+
+// Implement Movable for Circle
+impl Movable for Circle {
+    fn move_by(&mut self, dx: int, dy: int) {
+        self.x = self.x + dx
+        self.y = self.y + dy
+    }
+}
+
+// Implement Drawable for Square
+impl Drawable for Square {
+    fn draw(&self) -> string {
+        "Square at (${self.x}, ${self.y}) with side ${self.side}"
+    }
+    
+    fn area(&self) -> int {
+        self.side * self.side
+    }
+}
+
+// Implement Movable for Square
+impl Movable for Square {
+    fn move_by(&mut self, dx: int, dy: int) {
+        self.x = self.x + dx
+        self.y = self.y + dy
+    }
+}
+
+fn main() {
+    // Create shapes
+    let mut circle = Circle {
+        x: 0,
+        y: 0,
+        radius: 5,
+    }
+    
+    let mut square = Square {
+        x: 10,
+        y: 10,
+        side: 4,
+    }
+    
+    // Use Drawable trait
+    println!("${circle.draw()}")
+    println!("Circle area: ${circle.area()}")
+    
+    println!("${square.draw()}")
+    println!("Square area: ${square.area()}")
+    
+    // Use Movable trait
+    circle.move_by(3, 4)
+    println!("After moving: ${circle.draw()}")
+    
+    square.move_by(-5, -5)
+    println!("After moving: ${square.draw()}")
+}
+

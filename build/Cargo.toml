@@ -1,0 +1,30 @@
+[package]
+name = "windjammer-app"
+version = "0.1.0"
+edition = "2021"
+
+# Prevent this from being treated as part of parent workspace
+[workspace]
+
+[dependencies]
+pollster = "0.3"
+smallvec = "1.13"
+winit = "0.29"
+serde = { version = "1.0", features = ["derive"] }
+game-host-framework = { path = "/home/user/src/windjammer/crates/game-host-framework" }
+windjammer-runtime = { path = "/home/user/src/windjammer/crates/windjammer-runtime" }
+
+[[bin]]
+name = "platformer_2d_physics"
+path = "platformer_2d_physics.rs"
+
+[[bin]]
+name = "test_ecs_game"
+path = "test_ecs_game.rs"
+
+[[bin]]
+name = "platformer_2d"
+path = "platformer_2d.rs"
+
+[profile.release]
+opt-level = 3

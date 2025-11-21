@@ -1,0 +1,89 @@
+// Example 3: Enums and Pattern Matching
+
+// Simple enum
+enum Color {
+    Red,
+    Green,
+    Blue,
+}
+
+// Enum with data (single parameter only)
+enum Shape {
+    Circle(int),     // radius
+    Square(int),     // side length
+}
+
+// Option-like enum
+enum Maybe {
+    Some(int),
+    None,
+}
+
+impl Shape {
+    fn area(&self) -> int {
+        match self {
+            Shape.Circle(r) => 3 * r * r,  // Approximate π as 3
+            Shape.Square(s) => s * s,
+        }
+    }
+    
+    fn describe(&self) -> string {
+        match self {
+            Shape.Circle(r) => "Circle with radius ${r}",
+            Shape.Square(s) => "Square with side ${s}",
+        }
+    }
+}
+
+fn color_to_string(c: Color) -> string {
+    match c {
+        Color.Red => "red",
+        Color.Green => "green",
+        Color.Blue => "blue",
+    }
+}
+
+fn maybe_add_ten(m: Maybe) -> Maybe {
+    match m {
+        Maybe.Some(n) => Maybe.Some(n + 10),
+        Maybe.None => Maybe.None,
+    }
+}
+
+// OR patterns
+fn is_primary_color(c: Color) -> bool {
+    match c {
+        Color.Red | Color.Green | Color.Blue => true,
+    }
+}
+
+fn main() {
+    // Simple enum matching
+    let color = Color.Red
+    println!("Color: ${color_to_string(color)}")
+    
+    println!("Is primary color: ${is_primary_color(color)}")
+    
+    // Enum with data
+    let circle = Shape.Circle(5)
+    let square = Shape.Square(4)
+    
+    println!("${circle.describe()}")
+    println!("Area: ${circle.area()}")
+    
+    println!("${square.describe()}")
+    println!("Area: ${square.area()}")
+    
+    // Option-like enum
+    let some_val = Maybe.Some(42)
+    let none_val = Maybe.None
+    
+    let result1 = maybe_add_ten(some_val)
+    let result2 = maybe_add_ten(none_val)
+    
+    match result1 {
+        Maybe.Some(n) => println!("Result 1: ${n}"),
+        Maybe.None => println!("Result 1: None"),
+    }
+}
+

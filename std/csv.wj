@@ -1,0 +1,94 @@
+// std/csv - CSV parsing and writing
+// Thin wrapper over the csv crate for clean Windjammer APIs
+
+use csv
+
+// Read CSV from string, returns vector of string records
+fn parse(data: &str) -> Result<Vec<Vec<String>>, csv.Error> {
+    let mut reader = csv.Reader.from_reader(data.as_bytes())
+    let mut records = Vec.new()
+    
+    for result in reader.records() {
+        let record = result?
+        let row: Vec<String> = record.iter().map(|field| field.to_string()).collect()
+        records.push(row)
+    }
+    
+    Ok(records)
+}
+
+// Read CSV with headers, returns headers and data separately
+fn parse_with_headers(data: &str) -> Result<(Vec<String>, Vec<Vec<String>>), csv.Error> {
+    let mut reader = csv.Reader.from_reader(data.as_bytes())
+    
+    // Get headers
+    let headers = reader.headers()?.iter()
+        .map(|h| h.to_string())
+        .collect()
+    
+    // Get records
+    let mut records = Vec.new()
+    for result in reader.records() {
+        let record = result?
+        let row: Vec<String> = record.iter().map(|field| field.to_string()).collect()
+        records.push(row)
+    }
+    
+    Ok((headers, records))
+}
+
+// Write CSV from vector of records
+fn write(records: &[Vec<String>]) -> Result<String, csv.Error> {
+    let mut writer = csv.Writer.from_writer(vec![])
+    
+    for record in records {
+        writer.write_record(record)?
+    }
+    
+    let data = writer.into_inner()?
+    Ok(String.from_utf8(data).unwrap())
+}
+
+// Write CSV with headers
+fn write_with_headers(headers: &[String], records: &[Vec<String>]) -> Result<String, csv.Error> {
+    let mut writer = csv.Writer.from_writer(vec![])
+    
+    // Write headers
+    writer.write_record(headers)?
+    
+    // Write records
+    for record in records {
+        writer.write_record(record)?
+    }
+    
+    let data = writer.into_inner()?
+    Ok(String.from_utf8(data).unwrap())
+}
+
+// Parse CSV from bytes
+fn parse_bytes(data: &[u8]) -> Result<Vec<Vec<String>>, csv.Error> {
+    let mut reader = csv.Reader.from_reader(data)
+    let mut records = Vec.new()
+    
+    for result in reader.records() {
+        let record = result?
+        let row: Vec<String> = record.iter().map(|field| field.to_string()).collect()
+        records.push(row)
+    }
+    
+    Ok(records)
+}
+
+// Create a CSV reader with custom delimiter
+fn reader_with_delimiter(data: &str, delimiter: u8) -> csv.ReaderBuilder {
+    csv.ReaderBuilder.new()
+        .delimiter(delimiter)
+        .from_reader(data.as_bytes())
+}
+
+// Create a CSV writer with custom delimiter
+fn writer_with_delimiter(delimiter: u8) -> csv.WriterBuilder {
+    csv.WriterBuilder.new()
+        .delimiter(delimiter)
+        .from_writer(vec![])
+}

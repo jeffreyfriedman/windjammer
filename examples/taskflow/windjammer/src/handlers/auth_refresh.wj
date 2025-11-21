@@ -1,0 +1,64 @@
+// Token refresh endpoint
+
+use std::http
+use std::json
+use std::log
+
+use crate::auth::jwt
+use ../config
+
+@derive(Debug, Serialize, Deserialize)
+struct RefreshRequest {
+    refresh_token: string,
+}
+
+@derive(Debug, Serialize, Deserialize)
+struct RefreshResponse {
+    access_token: string,
+    expires_at: int,
+}
+
+@async
+pub fn refresh(req: Request, cfg: Config) -> Response {
+    // Parse request body
+    let body = http.body(req)
+    let refresh_req = match json.parse_string::<RefreshRequest>(body) {
+        Ok(r) => r,
+        Err(e) => {
+            log.error("Failed to parse refresh request: {}", e)
+            return http.json_response(400, json!({
+                "erro": "Invalid request body"
+            }))
+        }
+    }
+    
+    // Refresh the token
+    let new_token = match jwt.refresh_token(refresh_req.refresh_token, cfg.jwt_secret) {
+        Ok(token) => token,
+        Err(e) => {
+            log.warn("Token refresh failed: {}", e)
+            return http.json_response(401, json!({
+                "erro": "Invalid or expired refresh token"
+            }))
+        }
+    }
+    
+    // Get expiration time
+    let expires_at = match jwt.get_token_expiration(new_token.clone(), cfg.jwt_secret) {
+        Ok(exp) => exp,
+        Err(_) => {
+            return http.json_response(500, json!({
+                "erro": "Failed to get token expiration"
+            }))
+        }
+    }
+    
+    let response = RefreshResponse {
+        access_token: new_token,
+        expires_at: expires_at,
+    }
+    
+    log.info("Token refreshed successfully")
+    http.json_response(200, response)
+}
+

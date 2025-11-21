@@ -1,0 +1,174 @@
+// std/time - Time and date utilities with proper abstraction
+// Implementation: chrono (hidden from users)
+
+// PUBLIC API - Users interact with these types only
+
+struct DateTime {
+    // Private: Wraps chrono::DateTime<Utc> or chrono::DateTime<Local>
+}
+
+struct Duration {
+    // Private: Wraps chrono::Duration
+}
+
+// Current Time
+
+fn now() -> DateTime {
+    // Implementation wraps: Local::now()
+    DateTime {}
+}
+
+fn utc_now() -> DateTime {
+    // Implementation wraps: Utc::now()
+    DateTime {}
+}
+
+// Parsing
+
+fn parse(s: string, format: string) -> Result<DateTime, String> {
+    // Implementation wraps: DateTime::parse_from_str(s, format)
+    Err("Time parsing requires chrono (auto-added)")
+}
+
+fn parse_rfc3339(s: string) -> Result<DateTime, String> {
+    // Implementation wraps: DateTime::parse_from_rfc3339(s)
+    Err("Time parsing requires chrono (auto-added)")
+}
+
+// DateTime Methods
+
+impl DateTime {
+    fn timestamp(self) -> i64 {
+        // Wraps: datetime.timestamp()
+        0
+    }
+    
+    fn timestamp_millis(self) -> i64 {
+        // Wraps: datetime.timestamp_millis()
+        0
+    }
+    
+    fn format(self, fmt: string) -> string {
+        // Wraps: datetime.format(fmt).to_string()
+        ""
+    }
+    
+    fn to_rfc3339(self) -> string {
+        // Wraps: datetime.to_rfc3339()
+        ""
+    }
+    
+    fn year(self) -> int {
+        // Wraps: datetime.year()
+        0
+    }
+    
+    fn month(self) -> int {
+        // Wraps: datetime.month()
+        0
+    }
+    
+    fn day(self) -> int {
+        // Wraps: datetime.day()
+        0
+    }
+    
+    fn hour(self) -> int {
+        // Wraps: datetime.hour()
+        0
+    }
+    
+    fn minute(self) -> int {
+        // Wraps: datetime.minute()
+        0
+    }
+    
+    fn second(self) -> int {
+        // Wraps: datetime.second()
+        0
+    }
+    
+    fn add_days(self, days: int) -> DateTime {
+        // Wraps: datetime + Duration::days(days)
+        self
+    }
+    
+    fn add_hours(self, hours: int) -> DateTime {
+        // Wraps: datetime + Duration::hours(hours)
+        self
+    }
+    
+    fn add_minutes(self, minutes: int) -> DateTime {
+        // Wraps: datetime + Duration::minutes(minutes)
+        self
+    }
+    
+    fn add_seconds(self, seconds: int) -> DateTime {
+        // Wraps: datetime + Duration::seconds(seconds)
+        self
+    }
+}
+
+// Duration Methods
+
+fn duration_days(days: int) -> Duration {
+    // Wraps: Duration::days(days)
+    Duration {}
+}
+
+fn duration_hours(hours: int) -> Duration {
+    // Wraps: Duration::hours(hours)
+    Duration {}
+}
+
+fn duration_minutes(minutes: int) -> Duration {
+    // Wraps: Duration::minutes(minutes)
+    Duration {}
+}
+
+fn duration_seconds(seconds: int) -> Duration {
+    // Wraps: Duration::seconds(seconds)
+    Duration {}
+}
+
+impl Duration {
+    fn as_seconds(self) -> i64 {
+        // Wraps: duration.num_seconds()
+        0
+    }
+    
+    fn as_millis(self) -> i64 {
+        // Wraps: duration.num_milliseconds()
+        0
+    }
+}
+
+// USAGE EXAMPLES (what users should write):
+//
+// use std::time
+//
+// fn main() {
+//     // Windjammer API - no chrono exposed! ✅
+//     let now = time.now()
+//     println!("Current time: {}", now.format("%Y-%m-%d %H:%M:%S"))
+//     println!("Timestamp: {}", now.timestamp())
+//     
+//     // Parse time
+//     let dt = time.parse("2025-10-08 15:30:00", "%Y-%m-%d %H:%M:%S")?
+//     println!("Year: {}", dt.year())
+//     
+//     // Add duration
+//     let tomorrow = now.add_days(1)
+//     println!("Tomorrow: {}", tomorrow.format("%Y-%m-%d"))
+//     
+//     // UTC time
+//     let utc = time.utc_now()
+//     println!("UTC: {}", utc.to_rfc3339())
+// }
+//
+// NOT THIS (chrono exposed): ❌
+// let now = chrono::Local::now()
+// let utc = chrono::Utc::now()
+
+// NOTE: Full implementation coming in v0.14.0
+// chrono is auto-added as a dependency

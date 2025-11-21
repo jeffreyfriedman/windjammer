@@ -1,0 +1,303 @@
+// std/fs - File system operations with proper abstraction
+// Implementation: Rust std::fs and std::path (wrapped for clean API)
+
+// PUBLIC API - Users interact with these types only
+
+//===============================================
+// FILE OPERATIONS
+//===============================================
+
+// Read entire file as string
+fn read_to_string(path: string) -> Result<string, String> {
+    // Wraps: std::fs::read_to_string(path)
+    Err("File system operation failed")
+}
+
+// Read entire file as bytes
+fn read(path: string) -> Result<Vec<u8>, String> {
+    // Wraps: std::fs::read(path)
+    Err("File system operation failed")
+}
+
+// Write string to file (creates or truncates)
+fn write(path: string, contents: string) -> Result<(), String> {
+    // Wraps: std::fs::write(path, contents)
+    Err("File system operation failed")
+}
+
+// Write bytes to file (creates or truncates)
+fn write_bytes(path: string, contents: Vec<u8>) -> Result<(), String> {
+    // Wraps: std::fs::write(path, contents)
+    Err("File system operation failed")
+}
+
+// Append string to file
+fn append(path: string, contents: string) -> Result<(), String> {
+    // Wraps: OpenOptions::new().append(true).write().open() + write_all
+    Err("File system operation failed")
+}
+
+// Copy file from source to destination
+fn copy(from: string, to: string) -> Result<(), String> {
+    // Wraps: std::fs::copy(from, to)
+    Err("File system operation failed")
+}
+
+// Move/rename file
+fn rename(from: string, to: string) -> Result<(), String> {
+    // Wraps: std::fs::rename(from, to)
+    Err("File system operation failed")
+}
+
+// Delete file
+fn remove_file(path: string) -> Result<(), String> {
+    // Wraps: std::fs::remove_file(path)
+    Err("File system operation failed")
+}
+
+// Check if file exists
+fn exists(path: string) -> bool {
+    // Wraps: Path::new(path).exists()
+    false
+}
+
+// Check if path is a file
+fn is_file(path: string) -> bool {
+    // Wraps: Path::new(path).is_file()
+    false
+}
+
+// Check if path is a directory
+fn is_dir(path: string) -> bool {
+    // Wraps: Path::new(path).is_dir()
+    false
+}
+
+//===============================================
+// DIRECTORY OPERATIONS
+//===============================================
+
+// Create directory (fails if parent doesn't exist)
+fn create_dir(path: string) -> Result<(), String> {
+    // Wraps: std::fs::create_dir(path)
+    Err("Directory operation failed")
+}
+
+// Create directory and all parent directories
+fn create_dir_all(path: string) -> Result<(), String> {
+    // Wraps: std::fs::create_dir_all(path)
+    Err("Directory operation failed")
+}
+
+// Remove empty directory
+fn remove_dir(path: string) -> Result<(), String> {
+    // Wraps: std::fs::remove_dir(path)
+    Err("Directory operation failed")
+}
+
+// Remove directory and all contents
+fn remove_dir_all(path: string) -> Result<(), String> {
+    // Wraps: std::fs::remove_dir_all(path)
+    Err("Directory operation failed")
+}
+
+// List directory contents
+fn read_dir(path: string) -> Result<Vec<DirEntry>, String> {
+    // Wraps: std::fs::read_dir(path) and collect
+    Err("Directory operation failed")
+}
+
+// Get current working directory
+fn current_dir() -> Result<string, String> {
+    // Wraps: std::env::current_dir()
+    Err("Directory operation failed")
+}
+
+// Set current working directory
+fn set_current_dir(path: string) -> Result<(), String> {
+    // Wraps: std::env::set_current_dir(path)
+    Err("Directory operation failed")
+}
+
+//===============================================
+// METADATA
+//===============================================
+
+struct Metadata {
+    size: int,
+    is_file: bool,
+    is_dir: bool,
+    is_readonly: bool,
+    // Private: Wraps std::fs::Metadata
+}
+
+struct DirEntry {
+    name: string,
+    path: string,
+    is_file: bool,
+    is_dir: bool,
+    // Private: Wraps std::fs::DirEntry
+}
+
+// Get file/directory metadata
+fn metadata(path: string) -> Result<Metadata, String> {
+    // Wraps: std::fs::metadata(path)
+    Err("Metadata operation failed")
+}
+
+impl Metadata {
+    fn size(self) -> int {
+        // Wraps: metadata.len()
+        self.size
+    }
+    
+    fn is_file(self) -> bool {
+        // Wraps: metadata.is_file()
+        self.is_file
+    }
+    
+    fn is_dir(self) -> bool {
+        // Wraps: metadata.is_dir()
+        self.is_dir
+    }
+    
+    fn is_readonly(self) -> bool {
+        // Wraps: metadata.permissions().readonly()
+        self.is_readonly
+    }
+}
+
+impl DirEntry {
+    fn name(self) -> string {
+        // Wraps: entry.file_name().to_string_lossy()
+        self.name
+    }
+    
+    fn path(self) -> string {
+        // Wraps: entry.path().to_string_lossy()
+        self.path
+    }
+    
+    fn is_file(self) -> bool {
+        // Wraps: entry.file_type().is_file()
+        self.is_file
+    }
+    
+    fn is_dir(self) -> bool {
+        // Wraps: entry.file_type().is_dir()
+        self.is_dir
+    }
+    
+    fn metadata(self) -> Result<Metadata, String> {
+        // Wraps: entry.metadata()
+        Err("Metadata operation failed")
+    }
+}
+
+//===============================================
+// PATH UTILITIES
+//===============================================
+
+// Join path components
+fn join(base: string, component: string) -> string {
+    // Wraps: Path::new(base).join(component).to_string_lossy()
+    format!("{}/{}", base, component)
+}
+
+// Get file extension
+fn extension(path: string) -> Option<string> {
+    // Wraps: Path::new(path).extension()
+    None
+}
+
+// Get file name (last component)
+fn file_name(path: string) -> Option<string> {
+    // Wraps: Path::new(path).file_name()
+    None
+}
+
+// Get file stem (name without extension)
+fn file_stem(path: string) -> Option<string> {
+    // Wraps: Path::new(path).file_stem()
+    None
+}
+
+// Get parent directory
+fn parent(path: string) -> Option<string> {
+    // Wraps: Path::new(path).parent()
+    None
+}
+
+// Convert to absolute path
+fn canonicalize(path: string) -> Result<string, String> {
+    // Wraps: std::fs::canonicalize(path)
+    Err("Path operation failed")
+}
+
+// Check if path is absolute
+fn is_absolute(path: string) -> bool {
+    // Wraps: Path::new(path).is_absolute()
+    false
+}
+
+// Check if path is relative
+fn is_relative(path: string) -> bool {
+    // Wraps: Path::new(path).is_relative()
+    true
+}
+
+// USAGE EXAMPLES:
+//
+// use std::fs
+//
+// fn main() {
+//     // Read file
+//     let contents = fs.read_to_string("config.txt")?
+//     println!("Contents: {}", contents)
+//     
+//     // Write file
+//     fs.write("output.txt", "Hello, World!")?
+//     
+//     // Append to file
+//     fs.append("log.txt", "New log entry\n")?
+//     
+//     // Copy file
+//     fs.copy("source.txt", "dest.txt")?
+//     
+//     // Check existence
+//     if fs.exists("data.json") {
+//         println!("File exists!")
+//     }
+//     
+//     // Create directory
+//     fs.create_dir_all("path/to/dir")?
+//     
+//     // List directory
+//     let entries = fs.read_dir(".")?
+//     for entry in entries {
+//         println!("{} ({})", 
+//             entry.name(),
+//             if entry.is_dir() { "dir" } else { "file" }
+//         )
+//     }
+//     
+//     // File metadata
+//     let meta = fs.metadata("file.txt")?
+//     println!("Size: {} bytes", meta.size())
+//     println!("Read-only: {}", meta.is_readonly())
+//     
+//     // Path operations
+//     let full_path = fs.join("dir", "file.txt")  // "dir/file.txt"
+//     let absolute = fs.canonicalize(full_path)?
+//     
+//     let name = fs.file_name("/path/to/file.txt")?  // "file.txt"
+//     let ext = fs.extension("file.txt")?             // "txt"
+//     let stem = fs.file_stem("file.txt")?            // "file"
+// }
+//
+// NOT THIS (std::fs exposed): ❌
+// let contents = std::fs::read_to_string("file.txt")?
+// std::fs::create_dir_all("path")?
+//
+// NOTE: All file system operations use Rust std::fs under the hood
+//       No additional dependencies needed!

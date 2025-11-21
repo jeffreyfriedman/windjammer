@@ -1,0 +1,20 @@
+// Test user-defined modules with relative imports
+use ./utils
+
+fn main() {
+    println!("Testing user-defined modules!")
+    
+    // Use functions from local module
+    let x = 5
+    let doubled = utils.double(x)
+    let tripled = utils.triple(x)
+    
+    println!("{} doubled is {}", x, doubled)
+    println!("{} tripled is {}", x, tripled)
+    
+    // Test string function
+    let message = utils.greet("Windjammer")
+    println!("{}", message)
+    
+    println!("User modules work! ✓")
+}

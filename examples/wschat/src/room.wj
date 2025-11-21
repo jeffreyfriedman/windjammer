@@ -1,0 +1,188 @@
+// Room management for wschat
+
+use std::sync
+use std::collections::HashMap
+use std::collections::HashSet
+use std::time
+
+use ./message
+
+const MAX_HISTORY_SIZE: int = 100
+
+@derive(Debug, Clone)
+pub struct Room {
+    pub id: string,
+    pub name: string,
+    pub members: HashSet<string>,
+    pub message_history: Vec<InternalMessage>,
+    pub created_at: int,
+}
+
+impl Room {
+    pub fn new(id: string, name: string) -> Self {
+        Room {
+            id: id.clone(),
+            name: name,
+            members: HashSet::new(),
+            message_history: vec![],
+            created_at: time.now_unix(),
+        }
+    }
+    
+    pub fn add_member(mut self, user_id: string) -> bool {
+        self.members.insert(user_id)
+    }
+    
+    pub fn remove_member(mut self, user_id: string) -> bool {
+        self.members.remove(&user_id)
+    }
+    
+    pub fn has_member(self, user_id: string) -> bool {
+        self.members.contains(&user_id)
+    }
+    
+    pub fn member_count(self) -> int {
+        self.members.len()
+    }
+    
+    pub fn add_message(mut self, msg: InternalMessage) {
+        self.message_history.push(msg)
+        
+        // Trim history if too large
+        if self.message_history.len() > MAX_HISTORY_SIZE {
+            self.message_history = self.message_history
+                .into_iter()
+                .skip(self.message_history.len() - MAX_HISTORY_SIZE)
+                .collect()
+        }
+    }
+    
+    pub fn get_history(self, limit: Option<int>) -> Vec<HistoryMessage> {
+        let limit = limit.unwrap_or(50).min(MAX_HISTORY_SIZE)
+        
+        self.message_history
+            .iter()
+            .rev()
+            .take(limit)
+            .rev()
+            .map(|msg| msg.clone().to_history_message())
+            .collect()
+    }
+}
+
+// Thread-safe room manager
+pub struct RoomManager {
+    rooms: Arc<Mutex<HashMap<string, Room>>>,
+}
+
+impl RoomManager {
+    pub fn new() -> Self {
+        RoomManager {
+            rooms: Arc::new(Mutex::new(HashMap::new())),
+        }
+    }
+    
+    pub async fn create_room(self, room_id: string, room_name: string) -> Room {
+        let mut rooms = self.rooms.lock().await
+        
+        if let Some(room) = rooms.get(&room_id) {
+            return room.clone()
+        }
+        
+        let room = Room::new(room_id.clone(), room_name)
+        rooms.insert(room_id, room.clone())
+        room
+    }
+    
+    pub async fn get_room(self, room_id: string) -> Option<Room> {
+        let rooms = self.rooms.lock().await
+        rooms.get(&room_id).cloned()
+    }
+    
+    pub async fn get_or_create_room(self, room_id: string) -> Room {
+        if let Some(room) = self.get_room(room_id.clone()).await {
+            return room
+        }
+        
+        self.create_room(room_id.clone(), room_id).await
+    }
+    
+    pub async fn join_room(self, room_id: string, user_id: string) -> Result<Room, Error> {
+        let mut rooms = self.rooms.lock().await
+        
+        if let Some(room) = rooms.get_mut(&room_id) {
+            room.add_member(user_id)
+            Ok(room.clone())
+        } else {
+            // Create room if it doesn't exist
+            let mut room = Room::new(room_id.clone(), room_id.clone())
+            room.add_member(user_id)
+            rooms.insert(room_id, room.clone())
+            Ok(room)
+        }
+    }
+    
+    pub async fn leave_room(self, room_id: string, user_id: string) -> Result<bool, Error> {
+        let mut rooms = self.rooms.lock().await
+        
+        if let Some(room) = rooms.get_mut(&room_id) {
+            room.remove_member(user_id)
+            
+            // Remove empty rooms
+            if room.member_count() == 0 {
+                rooms.remove(&room_id)
+                return Ok(true)  // Room deleted
+            }
+            
+            Ok(false)  // Room still exists
+        } else {
+            Err("Room not found")
+        }
+    }
+    
+    pub async fn add_message(self, room_id: string, msg: InternalMessage) -> Result<(), Error> {
+        let mut rooms = self.rooms.lock().await
+        
+        if let Some(room) = rooms.get_mut(&room_id) {
+            room.add_message(msg)
+            Ok(())
+        } else {
+            Err("Room not found")
+        }
+    }
+    
+    pub async fn get_history(
+        self, 
+        room_id: string, 
+        limit: Option<int>
+    ) -> Result<Vec<HistoryMessage>, Error> {
+        let rooms = self.rooms.lock().await
+        
+        if let Some(room) = rooms.get(&room_id) {
+            Ok(room.get_history(limit))
+        } else {
+            Err("Room not found")
+        }
+    }
+    
+    pub async fn get_members(self, room_id: string) -> Result<Vec<string>, Error> {
+        let rooms = self.rooms.lock().await
+        
+        if let Some(room) = rooms.get(&room_id) {
+            Ok(room.members.iter().cloned().collect())
+        } else {
+            Err("Room not found")
+        }
+    }
+    
+    pub async fn get_room_count(self) -> int {
+        let rooms = self.rooms.lock().await
+        rooms.len()
+    }
+    
+    pub async fn get_total_members(self) -> int {
+        let rooms = self.rooms.lock().await
+        rooms.values().map(|r| r.member_count()).sum()
+    }
+}
+

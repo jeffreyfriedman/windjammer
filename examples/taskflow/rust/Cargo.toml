@@ -1,0 +1,57 @@
+[package]
+name = "taskflow-api"
+version = "0.1.0"
+edition = "2021"
+
+# This is a standalone example, not part of the Windjammer workspace
+[workspace]
+
+[dependencies]
+# Web framework
+axum = { version = "0.7", features = ["macros"] }
+axum-extra = { version = "0.9", features = ["typed-header"] }
+tokio = { version = "1", features = ["full"] }
+tower = "0.4"
+tower-http = { version = "0.5", features = ["trace", "cors"] }
+headers = "0.4"
+
+# Database
+sqlx = { version = "0.7", features = ["runtime-tokio-native-tls", "postgres", "chrono"] }
+
+# Serialization
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+
+# Authentication
+bcrypt = "0.15"
+jsonwebtoken = "9.2"
+
+# Logging
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+
+# Error handling
+anyhow = "1.0"
+thiserror = "1.0"
+
+# Time
+chrono = { version = "0.4", features = ["serde"] }
+
+# Environment
+dotenv = "0.15"
+
+[dev-dependencies]
+criterion = { version = "0.5", features = ["html_reports"] }
+smallvec = "1.13.0"
+
+[[bench]]
+name = "api_benchmarks"
+harness = false
+
+[[bench]]
+name = "optimization_comparison"
+harness = false
+
+[lib]
+name = "taskflow_api"
+path = "src/lib.rs"

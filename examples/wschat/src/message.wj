@@ -1,0 +1,124 @@
+// Message types for wschat
+
+use std::time
+
+// Client → Server messages
+@derive(Debug, Serialize, Deserialize)
+pub enum ClientMessage {
+    Auth { token: string }
+    Join { room: string }
+    Leave { room: string }
+    Message { room: string, text: string }
+    DirectMessage { to: string, text: string }
+    Typing { room: string, status: bool }
+    ListUsers { room: string }
+    History { room: string, limit: Option<int> }
+    Ping,
+}
+
+// Server → Client messages
+@derive(Debug, Serialize, Deserialize)
+pub enum ServerMessage {
+    Welcome { user_id: string, username: string }
+    Joined { room: string, users: Vec<UserInfo> }
+    Left { room: string }
+    Message { 
+        room: string, 
+        from: string, 
+        text: string, 
+        timestamp: int,
+    }
+    DirectMessage { 
+        from: string, 
+        text: string, 
+        timestamp: int,
+    }
+    Presence { 
+        room: string, 
+        user: string, 
+        status: PresenceStatus,
+    }
+    Typing { 
+        room: string, 
+        user: string, 
+        status: bool,
+    }
+    UserList { 
+        room: string, 
+        users: Vec<UserInfo>,
+    }
+    History { 
+        room: string, 
+        messages: Vec<HistoryMessage>,
+    }
+    Error { message: string }
+    Pong,
+}
+
+@derive(Debug, Clone, Serialize, Deserialize)
+pub struct UserInfo {
+    pub user_id: string,
+    pub username: string,
+    pub status: PresenceStatus,
+}
+
+@derive(Debug, Clone, Serialize, Deserialize)
+pub enum PresenceStatus {
+    Online,
+    Away,
+    Offline,
+}
+
+@derive(Debug, Clone, Serialize, Deserialize)
+pub struct HistoryMessage {
+    pub from: string,
+    pub text: string,
+    pub timestamp: int,
+}
+
+@derive(Debug, Clone)
+pub struct InternalMessage {
+    pub from_user: string,
+    pub to_room: string,
+    pub text: string,
+    pub timestamp: int,
+}
+
+impl InternalMessage {
+    pub fn new(from: string, room: string, text: string) -> Self {
+        InternalMessage {
+            from_user: from,
+            to_room: room,
+            text: text,
+            timestamp: time.now_unix(),
+        }
+    }
+    
+    pub fn to_server_message(self) -> ServerMessage {
+        ServerMessage::Message {
+            room: self.to_room,
+            from: self.from_user,
+            text: self.text,
+            timestamp: self.timestamp,
+        }
+    }
+    
+    pub fn to_history_message(self) -> HistoryMessage {
+        HistoryMessage {
+            from: self.from_user,
+            text: self.text,
+            timestamp: self.timestamp,
+        }
+    }
+}
+
+// Parse client message from JSON text
+pub fn parse_client_message(text: string) -> Result<ClientMessage, Error> {
+    json.parse::<ClientMessage>(text)
+}
+
+// Serialize server message to JSON text
+pub fn serialize_server_message(msg: ServerMessage) -> Result<string, Error> {
+    json.stringify(msg)
+}
+

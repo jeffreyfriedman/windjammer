@@ -1,0 +1,108 @@
+{
+  "name": "windjammer",
+  "displayName": "Windjammer",
+  "description": "Language support for Windjammer - 80% of Rust's power with 20% of the complexity",
+  "version": "0.19.0",
+  "publisher": "windjammer",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/jeffreyfriedman/windjammer"
+  },
+  "engines": {
+    "vscode": "^1.75.0"
+  },
+  "categories": [
+    "Programming Languages",
+    "Linters",
+    "Snippets"
+  ],
+  "keywords": [
+    "windjammer",
+    "rust",
+    "systems programming",
+    "ownership",
+    "transpiler"
+  ],
+  "activationEvents": [
+    "onLanguage:windjammer"
+  ],
+  "main": "./out/extension.js",
+  "contributes": {
+    "languages": [
+      {
+        "id": "windjammer",
+        "aliases": [
+          "Windjammer",
+          "windjammer"
+        ],
+        "extensions": [
+          ".wj"
+        ],
+        "configuration": "./language-configuration.json",
+        "icon": {
+          "light": "./icons/windjammer-light.png",
+          "dark": "./icons/windjammer-dark.png"
+        }
+      }
+    ],
+    "grammars": [
+      {
+        "language": "windjammer",
+        "scopeName": "source.windjammer",
+        "path": "./syntaxes/windjammer.tmLanguage.json"
+      }
+    ],
+    "snippets": [
+      {
+        "language": "windjammer",
+        "path": "./snippets/windjammer.json"
+      }
+    ],
+    "configuration": {
+      "type": "object",
+      "title": "Windjammer",
+      "properties": {
+        "windjammer.lsp.serverPath": {
+          "type": "string",
+          "default": "windjammer-lsp",
+          "description": "Path to the Windjammer LSP server binary"
+        },
+        "windjammer.lsp.trace.server": {
+          "type": "string",
+          "enum": [
+            "off",
+            "messages",
+            "verbose"
+          ],
+          "default": "off",
+          "description": "Traces the communication between VS Code and the Windjammer language server"
+        },
+        "windjammer.inlayHints.enable": {
+          "type": "boolean",
+          "default": true,
+          "description": "Enable inlay hints for ownership inference (shows inferred &, &mut, owned)"
+        },
+        "windjammer.completion.enable": {
+          "type": "boolean",
+          "default": true,
+          "description": "Enable auto-completion"
+        }
+      }
+    }
+  },
+  "scripts": {
+    "vscode:prepublish": "npm run compile",
+    "compile": "tsc -p ./",
+    "watch": "tsc -watch -p ./",
+    "package": "vsce package"
+  },
+  "devDependencies": {
+    "@types/node": "^18.x",
+    "@types/vscode": "^1.75.0",
+    "@vscode/vsce": "^2.19.0",
+    "typescript": "^5.0.0"
+  },
+  "dependencies": {
+    "vscode-languageclient": "^8.1.0"
+  }
+}

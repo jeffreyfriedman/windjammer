@@ -1,0 +1,33 @@
+// Test std/math module
+use std::math
+
+fn main() {
+    println!("Testing std/math module...")
+    
+    // Test basic math functions (using direct calls from glob import)
+    let x = 16.0
+    let root = sqrt(x)
+    println!("sqrt(16.0) = {}", root)
+    
+    let y = -5.5
+    let abs_y = abs_f64(y)
+    println!("abs(-5.5) = {}", abs_y)
+    
+    let z = 2.0
+    let exp = 3.0
+    let power = pow(z, exp)
+    println!("pow(2.0, 3.0) = {}", power)
+    
+    // Test rounding
+    let pi = 3.14159
+    let rounded = round(pi)
+    println!("round(3.14159) = {}", rounded)
+    
+    let floored = floor(pi)
+    println!("floor(3.14159) = {}", floored)
+    
+    let ceiled = ceil(pi)
+    println!("ceil(3.14159) = {}", ceiled)
+    
+    println!("std/math works! ✓")
+}

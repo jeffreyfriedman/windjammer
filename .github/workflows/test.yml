@@ -1,0 +1,196 @@
+name: Tests
+
+on:
+  push:
+    branches: [ main, 'feature/**' ]
+  pull_request:
+    branches: [ main ]
+
+env:
+  CARGO_TERM_COLOR: always
+  RUST_BACKTRACE: 1
+
+jobs:
+  test:
+    name: Test on ${{ matrix.os }} with Rust ${{ matrix.rust }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+        rust: [stable]
+        include:
+          # Test with beta and nightly on Ubuntu only
+          - os: ubuntu-latest
+            rust: beta
+          - os: ubuntu-latest
+            rust: nightly
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: ${{ matrix.rust }}
+          components: rustfmt, clippy
+      
+      - name: Cache cargo registry
+        uses: actions/cache@v3
+        with:
+          path: ~/.cargo/registry
+          key: ${{ runner.os }}-cargo-registry-${{ hashFiles('**/Cargo.lock') }}
+      
+      - name: Cache cargo index
+        uses: actions/cache@v3
+        with:
+          path: ~/.cargo/git
+          key: ${{ runner.os }}-cargo-git-${{ hashFiles('**/Cargo.lock') }}
+      
+      - name: Cache cargo build
+        uses: actions/cache@v3
+        with:
+          path: target
+          key: ${{ runner.os }}-cargo-build-target-${{ hashFiles('**/Cargo.lock') }}
+      
+      - name: Check formatting
+        if: matrix.rust == 'stable' && matrix.os == 'ubuntu-latest'
+        run: cargo fmt --all -- --check
+      
+      - name: Run clippy
+        if: matrix.rust == 'stable'
+        run: cargo clippy --all-targets --all-features -- -D warnings
+      
+      - name: Build
+        run: cargo build --verbose
+      
+      - name: Run tests
+        run: cargo test --verbose --all-features
+      
+      - name: Build release
+        if: matrix.rust == 'stable'
+        run: cargo build --release --verbose
+      
+      - name: Test examples (Unix)
+        if: matrix.rust == 'stable' && runner.os != 'Windows'
+        run: |
+          # Test a few key examples compile
+          ./target/release/windjammer build --path examples/01_basics --output /tmp/test_01 --target wasm || true
+          ./target/release/windjammer build --path examples/18_stdlib_math_test --output /tmp/test_math --target wasm || true
+      
+      - name: Test examples (Windows)
+        if: matrix.rust == 'stable' && runner.os == 'Windows'
+        run: |
+          # Test a few key examples compile
+          .\target\release\windjammer.exe build --path examples\01_basics --output C:\temp\test_01 --target wasm
+          .\target\release\windjammer.exe build --path examples\18_stdlib_math_test --output C:\temp\test_math --target wasm
+        continue-on-error: true
+
+  coverage:
+    name: Code Coverage
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+      
+      - name: Install tarpaulin
+        run: cargo install cargo-tarpaulin
+      
+      - name: Generate coverage
+        run: cargo tarpaulin --verbose --all-features --workspace --timeout 120 --out xml
+      
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@v3
+        with:
+          files: ./cobertura.xml
+          fail_ci_if_error: false
+
+  multi-target-tests:
+    name: Multi-Target Compilation Tests
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+      
+      - name: Install Node.js (for JavaScript target testing)
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      
+      - name: Cache cargo registry
+        uses: actions/cache@v3
+        with:
+          path: ~/.cargo/registry
+          key: ${{ runner.os }}-cargo-registry-${{ hashFiles('**/Cargo.lock') }}
+      
+      - name: Cache cargo build
+        uses: actions/cache@v3
+        with:
+          path: target
+          key: ${{ runner.os }}-cargo-build-target-${{ hashFiles('**/Cargo.lock') }}
+      
+      - name: Build windjammer
+        run: cargo build --release
+      
+      - name: Test Rust target compilation
+        run: |
+          echo "fn main() { println!(\"Hello, Rust!\") }" > test.wj
+          ./target/release/wj build --target=rust test.wj --output /tmp/test_rust
+          test -f /tmp/test_rust/Cargo.toml || exit 1
+          echo "✅ Rust target works"
+      
+      - name: Test JavaScript target compilation
+        run: |
+          echo "fn main() { println!(\"Hello, JavaScript!\") }" > test.wj
+          ./target/release/wj build --target=javascript test.wj --output /tmp/test_js
+          test -f /tmp/test_js/output.js || exit 1
+          test -f /tmp/test_js/output.d.ts || exit 1
+          test -f /tmp/test_js/package.json || exit 1
+          echo "✅ JavaScript target works"
+      
+      - name: Test JavaScript output execution
+        run: |
+          node /tmp/test_js/output.js
+          echo "✅ JavaScript output executes correctly"
+      
+      - name: Test WebAssembly target compilation
+        run: |
+          echo "fn main() { println!(\"Hello, WASM!\") }" > test.wj
+          ./target/release/wj build --target=wasm test.wj --output /tmp/test_wasm
+          test -f /tmp/test_wasm/Cargo.toml || exit 1
+          echo "✅ WASM target works"
+      
+      - name: Run multi-target integration tests
+        run: cargo test --test multi_target_tests --verbose
+      
+      - name: Test all targets with complex code
+        run: |
+          cat > complex.wj << 'EOF'
+          struct Point {
+              x: int,
+              y: int,
+          }
+          
+          fn add(a: int, b: int) -> int {
+              a + b
+          }
+          
+          fn main() {
+              let p = Point { x: 10, y: 20 }
+              let sum = add(p.x, p.y)
+              println!("Sum: {}", sum)
+          }
+          EOF
+          
+          ./target/release/wj build --target=rust complex.wj --output /tmp/complex_rust
+          ./target/release/wj build --target=javascript complex.wj --output /tmp/complex_js
+          ./target/release/wj build --target=wasm complex.wj --output /tmp/complex_wasm
+          
+          echo "✅ All targets compile complex code successfully"

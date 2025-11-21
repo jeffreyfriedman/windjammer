@@ -1,0 +1,23 @@
+// Test structs and impl blocks
+struct Point {
+    x: int,
+    y: int,
+}
+
+impl Point {
+    fn new(x: int, y: int) -> Point {
+        Point { x, y }
+    }
+    
+    fn distance(&self) -> f64 {
+        let dx = self.x as f64
+        let dy = self.y as f64
+        (dx * dx + dy * dy).sqrt()
+    }
+}
+
+fn main() {
+    let p = Point { x: 3, y: 4 }
+    println!("Point: ({}, {})", p.x, p.y)
+}
+

@@ -1,0 +1,15 @@
+// User-defined module: utils
+// Demonstrates how to create your own modules
+
+pub fn double(x: int) -> int {
+    x * 2
+}
+
+pub fn triple(x: int) -> int {
+    x * 3
+}
+
+pub fn greet(name: string) -> string {
+    let greeting = "Hello"
+    "${greeting}, ${name}!"
+}

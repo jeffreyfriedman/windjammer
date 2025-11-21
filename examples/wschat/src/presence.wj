@@ -1,0 +1,96 @@
+// User presence tracking for wschat
+
+use std::sync
+use std::collections::HashMap
+use std::time
+
+use ./message::PresenceStatus
+
+@derive(Debug, Clone)
+struct PresenceInfo {
+    pub user_id: string,
+    pub status: PresenceStatus,
+    pub last_seen: int,
+    pub rooms: Vec<string>,
+}
+
+pub struct PresenceTracker {
+    presence: Arc<Mutex<HashMap<string, PresenceInfo>>>,
+}
+
+impl PresenceTracker {
+    pub fn new() -> Self {
+        PresenceTracker {
+            presence: Arc::new(Mutex::new(HashMap::new())),
+        }
+    }
+    
+    pub async fn set_online(self, user_id: string, room: string) {
+        let mut presence = self.presence.lock().await
+        
+        presence
+            .entry(user_id.clone())
+            .and_modify(|p| {
+                p.status = PresenceStatus::Online
+                p.last_seen = time.now_unix()
+                if !p.rooms.contains(&room) {
+                    p.rooms.push(room.clone())
+                }
+            })
+            .or_insert(PresenceInfo {
+                user_id: user_id,
+                status: PresenceStatus::Online,
+                last_seen: time.now_unix(),
+                rooms: vec![room],
+            })
+    }
+    
+    pub async fn set_offline(self, user_id: string, room: string) {
+        let mut presence = self.presence.lock().await
+        
+        if let Some(p) = presence.get_mut(&user_id) {
+            p.rooms.retain(|r| r != &room)
+            
+            // If user is in no rooms, mark as offline
+            if p.rooms.is_empty() {
+                p.status = PresenceStatus::Offline
+            }
+            
+            p.last_seen = time.now_unix()
+        }
+    }
+    
+    pub async fn set_away(self, user_id: string) {
+        let mut presence = self.presence.lock().await
+        
+        if let Some(p) = presence.get_mut(&user_id) {
+            p.status = PresenceStatus::Away
+            p.last_seen = time.now_unix()
+        }
+    }
+    
+    pub async fn get_status(self, user_id: string) -> Option<PresenceStatus> {
+        let presence = self.presence.lock().await
+        presence.get(&user_id).map(|p| p.status.clone())
+    }
+    
+    pub async fn get_users_in_room(self, room: string) -> Vec<string> {
+        let presence = self.presence.lock().await
+        
+        presence
+            .values()
+            .filter(|p| p.rooms.contains(&room))
+            .map(|p| p.user_id.clone())
+            .collect()
+    }
+    
+    pub async fn cleanup_stale(self, timeout_seconds: int) {
+        let mut presence = self.presence.lock().await
+        let now = time.now_unix()
+        
+        presence.retain(|_, p| {
+            now - p.last_seen < timeout_seconds
+        })
+    }
+}
+

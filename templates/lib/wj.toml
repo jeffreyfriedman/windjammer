@@ -1,0 +1,17 @@
+[package]
+name = "{{PROJECT_NAME}}"
+version = "0.1.0"
+edition = "2025"
+
+[lib]
+# This is a library crate
+
+[dependencies]
+# Add your dependencies here
+
+[dev-dependencies]
+
+[profile.release]
+opt-level = 3
+lto = true
+

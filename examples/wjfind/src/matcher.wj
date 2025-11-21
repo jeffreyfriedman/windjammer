@@ -1,0 +1,53 @@
+// Pattern matching for wjfind
+
+use std::regex
+
+use ./config::Config
+use ./search::Match
+
+pub fn find_match(line: &string, line_num: int, file: &string, config: &Config) -> Option<Match> {
+    // Try to find a match in the line
+    let captures = config.pattern.captures(line)?
+    
+    // Get the match
+    let match_obj = captures.get(0)?
+    let match_text = match_obj.as_str()
+    let column = (match_obj.start() + 1) as int  // 1-indexed
+    
+    Some(Match {
+        file: file.to_string(),
+        line_number: line_num,
+        column: column,
+        line_text: line.to_string(),
+        match_text: match_text.to_string(),
+        context_before: Vec::new(),
+        context_after: Vec::new(),
+    })
+}
+
+pub fn find_all_matches(line: &string, line_num: int, file: &string, config: &Config) -> Vec<Match> {
+    let mut matches = vec![]
+    
+    for capture in config.pattern.captures_iter(line) {
+        match capture.get(0) {
+            Some(match_obj) => {
+                let match_text = match_obj.as_str()
+                let column = (match_obj.start() + 1) as int
+                
+                matches.push(Match {
+                    file: file.to_string(),
+                    line_number: line_num,
+                    column: column,
+                    line_text: line.to_string(),
+                    match_text: match_text.to_string(),
+                    context_before: Vec::new(),
+                    context_after: Vec::new(),
+                })
+            },
+            None => {}
+        }
+    }
+    
+    matches
+}
+

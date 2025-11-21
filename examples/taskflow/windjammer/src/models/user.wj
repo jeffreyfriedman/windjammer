@@ -1,0 +1,45 @@
+// User model
+
+use std::time
+
+@derive(Debug, Clone, Serialize, Deserialize)
+pub struct User {
+    pub id: int,
+    pub username: string,
+    pub email: string,
+    pub password_hash: string,
+    pub created_at: int,
+    pub updated_at: int,
+}
+
+@derive(Debug, Serialize, Deserialize)
+pub struct CreateUserRequest {
+    pub username: string,
+    pub email: string,
+    pub password: string,
+}
+
+@derive(Debug, Serialize, Deserialize)
+pub struct UpdateUserRequest {
+    pub username: Option<string>,
+    pub email: Option<string>,
+}
+
+@derive(Debug, Serialize, Deserialize)
+pub struct UserResponse {
+    pub id: int,
+    pub username: string,
+    pub email: string,
+    pub created_at: int,
+}
+
+impl User {
+    pub fn to_response(self) -> UserResponse {
+        UserResponse {
+            id: self.id,
+            username: self.username,
+            email: self.email,
+            created_at: self.created_at,
+        }
+    }
+}

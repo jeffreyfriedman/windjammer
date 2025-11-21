@@ -1,0 +1,167 @@
+// Simple .gitignore parser for wjfind
+
+use std::fs
+use std::path
+use std::path::Path
+use std::collections::HashSet
+
+@derive(Clone)
+pub struct GitignoreRules {
+    patterns: Vec<string>,
+}
+
+impl GitignoreRules {
+    pub fn new() -> Self {
+        GitignoreRules {
+            patterns: vec![],
+        }
+    }
+    
+    pub fn load_from_directory(dir: string) -> Result<Self, string> {
+        let gitignore_path = path::join(Path::new(&dir), ".gitignore")
+        
+        if !fs::exists(&gitignore_path) {
+            return Ok(GitignoreRules::new())
+        }
+        
+        let contents = fs::read_to_string(&gitignore_path)?
+        let mut pattern_list = vec![]
+        
+        for line in contents.lines() {
+            let trimmed = line.trim()
+            
+            // Skip empty lines and comments
+            if trimmed.is_empty() || trimmed.starts_with("#") {
+                continue
+            }
+            
+            pattern_list.push(trimmed.to_string())
+        }
+        
+        Ok(GitignoreRules {
+            patterns: pattern_list,
+        })
+    }
+    
+    pub fn is_ignored(&self, path: &string) -> bool {
+        // Get the file/dir name from the path
+        let name = path::file_name(Path::new(path))
+            .unwrap_or(path.as_ref())
+            .to_string()
+        
+        for pattern in self.patterns.iter() {
+            if self.matches_pattern(&name, pattern) 
+                || self.matches_pattern(path, pattern) {
+                return true
+            }
+        }
+        
+        false
+    }
+    
+    fn matches_pattern(&self, name: &string, pattern: &string) -> bool {
+        // Simple matching (not full gitignore spec, but good enough)
+        
+        // Exact match
+        if name == pattern {
+            return true
+        }
+        
+        // Directory match (ends with /)
+        if pattern.ends_with("/") {
+            let dir_pattern = pattern.trim_end_matches("/")
+            if name == dir_pattern {
+                return true
+            }
+        }
+        
+        // Wildcard match (*)
+        if pattern.contains("*") {
+            return self.wildcard_match(name, pattern)
+        }
+        
+        // Extension match (*.ext)
+        if pattern.starts_with("*.") {
+            let ext = pattern.trim_start_matches("*.")
+            if name.ends_with(&format!(".{}", ext)) {
+                return true
+            }
+        }
+        
+        // Path contains pattern
+        if name.contains(pattern) {
+            return true
+        }
+        
+        false
+    }
+    
+    fn wildcard_match(&self, name: &string, pattern: &string) -> bool {
+        // Simple wildcard matching (* matches any characters)
+        let parts: Vec<&str> = pattern.split('*').collect()
+        
+        if parts.is_empty() {
+            return false
+        }
+        
+        // Check first part
+        if !parts[0].is_empty() && !name.starts_with(parts[0]) {
+            return false
+        }
+        
+        // Check last part
+        if parts.len() > 1 {
+            let last = &parts[parts.len() - 1]
+            if !last.is_empty() && !name.ends_with(last) {
+                return false
+            }
+        }
+        
+        // Check middle parts (simplified - just check they exist in order)
+        let mut pos = 0
+        for (i, part) in parts.iter().enumerate() {
+            if part.is_empty() {
+                continue
+            }
+            
+            if i == 0 {
+                pos = part.len()
+                continue
+            }
+            
+            if let Some(idx) = name[pos..].find(part) {
+                pos += idx + part.len()
+            } else {
+                return false
+            }
+        }
+        
+        true
+    }
+}
+
+// Global cache of gitignore rules per directory
+pub struct GitignoreCache {
+    cache: std::collections::HashMap<string, GitignoreRules>,
+}
+
+impl GitignoreCache {
+    pub fn new() -> Self {
+        GitignoreCache {
+            cache: std::collections::HashMap::new(),
+        }
+    }
+    
+    pub fn get_rules(&mut self, dir: &string) -> GitignoreRules {
+        if let Some(rules) = self.cache.get(dir) {
+            return rules.clone()
+        }
+        
+        let rules = GitignoreRules::load_from_directory(dir.to_string())
+            .unwrap_or_else(|_| GitignoreRules::new())
+        
+        self.cache.insert(dir.to_string(), rules.clone())
+        rules
+    }
+}
+

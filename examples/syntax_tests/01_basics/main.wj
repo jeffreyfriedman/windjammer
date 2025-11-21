@@ -1,0 +1,70 @@
+// Example 1: Basics - Functions, variables, control flow
+
+// Simple function
+fn greet(name: string) -> string {
+    "Hello, " + name + "!"
+}
+
+// Function with multiple parameters
+fn add(x: int, y: int) -> int {
+    x + y
+}
+
+// Function that returns incremented value
+fn increment(counter: int) -> int {
+    counter + 1
+}
+
+// Using if/else expression
+fn sign(x: int) -> string {
+    if x >= 0 { "positive" } else { "negative" }
+}
+
+// Pattern matching
+fn describe_number(x: int) -> string {
+    match x {
+        0 => "zero",
+        1 => "one",
+        n if n < 0 => "negative",
+        n if n > 100 => "large",
+        _ => "other",
+    }
+}
+
+// If-else expressions
+fn abs(x: int) -> int {
+    if x < 0 {
+        -x
+    } else {
+        x
+    }
+}
+
+fn main() {
+    // Simple function call
+    let name = "World"
+    print(greet(name))
+    
+    // Multiple parameters
+    let x = 5
+    let y = 10
+    let sum = add(x, y)
+    print(sum)
+    
+    // Function call with return value
+    let count = 0
+    let new_count = increment(count)
+    print(new_count)
+    
+    // If/else expression
+    print(sign(5))
+    print(sign(-3))
+    
+    // Pattern matching in loop
+    for i in 0..5 {
+        print(describe_number(i))
+    }
+    
+    // If-else
+    print(abs(-42))
+}

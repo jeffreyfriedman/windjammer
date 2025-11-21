@@ -1,0 +1,368 @@
+#![allow(dead_code)] // Refactoring implementation - some parts planned for future versions
+//! Preview mode for refactorings
+//!
+//! Show diffs and changes before applying refactorings.
+
+use tower_lsp::lsp_types::*;
+
+/// A preview of changes that would be made by a refactoring
+#[derive(Debug, Clone)]
+pub struct RefactoringPreview {
+    /// Title of the refactoring
+    pub title: String,
+    /// Description of what will change
+    pub description: String,
+    /// File changes
+    pub changes: Vec<FileChange>,
+    /// Whether it's safe to apply
+    pub is_safe: bool,
+    /// Warnings or issues
+    pub warnings: Vec<String>,
+}
+
+/// A change to a single file
+#[derive(Debug, Clone)]
+pub struct FileChange {
+    /// URI of the file
+    pub uri: Url,
+    /// File name for display
+    pub file_name: String,
+    /// Individual edits
+    pub edits: Vec<EditPreview>,
+    /// Summary of changes
+    pub summary: String,
+}
+
+/// Preview of a single edit
+#[derive(Debug, Clone)]
+pub struct EditPreview {
+    /// Range being edited
+    pub range: Range,
+    /// Original text
+    pub original: String,
+    /// New text
+    pub replacement: String,
+    /// Type of edit
+    pub edit_type: EditType,
+}
+
+/// Type of edit being performed
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum EditType {
+    Insert,
+    Delete,
+    Replace,
+    Move,
+}
+
+impl RefactoringPreview {
+    /// Create a preview from a workspace edit
+    pub fn from_workspace_edit(
+        title: String,
+        description: String,
+        workspace_edit: &WorkspaceEdit,
+        source_content: &std::collections::HashMap<Url, String>,
+    ) -> Self {
+        let mut file_changes = vec![];
+        let mut warnings = vec![];
+
+        if let Some(changes) = &workspace_edit.changes {
+            for (uri, edits) in changes {
+                let file_name = uri
+                    .path()
+                    .split('/')
+                    .next_back()
+                    .unwrap_or("unknown")
+                    .to_string();
+
+                let source = source_content.get(uri);
+                let edit_previews: Vec<EditPreview> = edits
+                    .iter()
+                    .map(|edit| {
+                        let original = if let Some(src) = source {
+                            Self::extract_text(src, &edit.range)
+                        } else {
+                            String::new()
+                        };
+
+                        let edit_type = if edit.new_text.is_empty() {
+                            EditType::Delete
+                        } else if original.is_empty() {
+                            EditType::Insert
+                        } else {
+                            EditType::Replace
+                        };
+
+                        EditPreview {
+                            range: edit.range,
+                            original,
+                            replacement: edit.new_text.clone(),
+                            edit_type,
+                        }
+                    })
+                    .collect();
+
+                let summary = Self::generate_summary(&edit_previews);
+
+                file_changes.push(FileChange {
+                    uri: uri.clone(),
+                    file_name,
+                    edits: edit_previews,
+                    summary,
+                });
+            }
+        }
+
+        // Check for potential issues
+        let is_safe = Self::check_safety(&file_changes, &mut warnings);
+
+        RefactoringPreview {
+            title,
+            description,
+            changes: file_changes,
+            is_safe,
+            warnings,
+        }
+    }
+
+    /// Extract text from source at given range
+    fn extract_text(source: &str, range: &Range) -> String {
+        let lines: Vec<&str> = source.lines().collect();
+        let start_line = range.start.line as usize;
+        let end_line = range.end.line as usize;
+
+        if start_line >= lines.len() {
+            return String::new();
+        }
+
+        if start_line == end_line {
+            // Single line
+            if let Some(line) = lines.get(start_line) {
+                let start_char = range.start.character as usize;
+                let end_char = range.end.character as usize;
+                if start_char < line.len() {
+                    return line[start_char..end_char.min(line.len())].to_string();
+                }
+            }
+        } else {
+            // Multiple lines
+            let mut result = vec![];
+            for (i, line) in lines.iter().enumerate().skip(start_line) {
+                if i > end_line {
+                    break;
+                }
+                if i == start_line {
+                    result.push(&line[range.start.character as usize..]);
+                } else if i == end_line {
+                    result.push(&line[..range.end.character as usize]);
+                } else {
+                    result.push(line);
+                }
+            }
+            return result.join("\n");
+        }
+
+        String::new()
+    }
+
+    /// Generate a summary of edits
+    fn generate_summary(edits: &[EditPreview]) -> String {
+        let inserts = edits
+            .iter()
+            .filter(|e| e.edit_type == EditType::Insert)
+            .count();
+        let deletes = edits
+            .iter()
+            .filter(|e| e.edit_type == EditType::Delete)
+            .count();
+        let replaces = edits
+            .iter()
+            .filter(|e| e.edit_type == EditType::Replace)
+            .count();
+
+        let mut parts = vec![];
+        if inserts > 0 {
+            parts.push(format!(
+                "{} insertion{}",
+                inserts,
+                if inserts == 1 { "" } else { "s" }
+            ));
+        }
+        if deletes > 0 {
+            parts.push(format!(
+                "{} deletion{}",
+                deletes,
+                if deletes == 1 { "" } else { "s" }
+            ));
+        }
+        if replaces > 0 {
+            parts.push(format!(
+                "{} replacement{}",
+                replaces,
+                if replaces == 1 { "" } else { "s" }
+            ));
+        }
+
+        if parts.is_empty() {
+            "No changes".to_string()
+        } else {
+            parts.join(", ")
+        }
+    }
+
+    /// Check if changes are safe to apply
+    fn check_safety(file_changes: &[FileChange], warnings: &mut Vec<String>) -> bool {
+        let is_safe = true;
+
+        // Check for large deletions
+        for file_change in file_changes {
+            let large_deletes = file_change
+                .edits
+                .iter()
+                .filter(|e| e.edit_type == EditType::Delete && e.original.lines().count() > 50)
+                .count();
+
+            if large_deletes > 0 {
+                warnings.push(format!(
+                    "{}: {} large deletion(s) detected",
+                    file_change.file_name, large_deletes
+                ));
+            }
+        }
+
+        // Check for multiple file modifications
+        if file_changes.len() > 5 {
+            warnings.push(format!(
+                "Modifying {} files - consider breaking into smaller refactorings",
+                file_changes.len()
+            ));
+        }
+
+        is_safe
+    }
+
+    /// Format as a diff-style preview
+    pub fn format_diff(&self) -> String {
+        let mut output = vec![];
+
+        output.push(format!("=== {} ===", self.title));
+        output.push(self.description.clone());
+        output.push(String::new());
+
+        if !self.warnings.is_empty() {
+            output.push("⚠️  Warnings:".to_string());
+            for warning in &self.warnings {
+                output.push(format!("  - {}", warning));
+            }
+            output.push(String::new());
+        }
+
+        for file_change in &self.changes {
+            output.push(format!(
+                "📄 {} ({})",
+                file_change.file_name, file_change.summary
+            ));
+            output.push(String::new());
+
+            for edit in &file_change.edits {
+                match edit.edit_type {
+                    EditType::Insert => {
+                        output.push(format!("+ INSERT at line {}", edit.range.start.line + 1));
+                        for line in edit.replacement.lines() {
+                            output.push(format!("+   {}", line));
+                        }
+                    }
+                    EditType::Delete => {
+                        output.push(format!("- DELETE at line {}", edit.range.start.line + 1));
+                        for line in edit.original.lines() {
+                            output.push(format!("-   {}", line));
+                        }
+                    }
+                    EditType::Replace => {
+                        output.push(format!("~ REPLACE at line {}", edit.range.start.line + 1));
+                        for line in edit.original.lines() {
+                            output.push(format!("-   {}", line));
+                        }
+                        for line in edit.replacement.lines() {
+                            output.push(format!("+   {}", line));
+                        }
+                    }
+                    EditType::Move => {
+                        output.push(format!("→ MOVE from line {}", edit.range.start.line + 1));
+                    }
+                }
+                output.push(String::new());
+            }
+        }
+
+        if self.is_safe {
+            output.push("✅ Safe to apply".to_string());
+        } else {
+            output.push("❌ Not safe to apply - review warnings".to_string());
+        }
+
+        output.join("\n")
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_preview_creation() {
+        let mut changes = std::collections::HashMap::new();
+        let uri = Url::parse("file:///test.wj").unwrap();
+
+        let edits = vec![TextEdit {
+            range: Range {
+                start: Position {
+                    line: 0,
+                    character: 0,
+                },
+                end: Position {
+                    line: 0,
+                    character: 5,
+                },
+            },
+            new_text: "hello".to_string(),
+        }];
+
+        changes.insert(uri.clone(), edits);
+
+        let workspace_edit = WorkspaceEdit {
+            changes: Some(changes),
+            document_changes: None,
+            change_annotations: None,
+        };
+
+        let mut source_content = std::collections::HashMap::new();
+        source_content.insert(uri, "world".to_string());
+
+        let preview = RefactoringPreview::from_workspace_edit(
+            "Test Refactoring".to_string(),
+            "Testing preview".to_string(),
+            &workspace_edit,
+            &source_content,
+        );
+
+        assert_eq!(preview.title, "Test Refactoring");
+        assert_eq!(preview.changes.len(), 1);
+        assert!(preview.is_safe);
+    }
+
+    #[test]
+    fn test_diff_formatting() {
+        let preview = RefactoringPreview {
+            title: "Extract Function".to_string(),
+            description: "Extract code into new function".to_string(),
+            changes: vec![],
+            is_safe: true,
+            warnings: vec![],
+        };
+
+        let diff = preview.format_diff();
+        assert!(diff.contains("Extract Function"));
+        assert!(diff.contains("✅ Safe to apply"));
+    }
+}

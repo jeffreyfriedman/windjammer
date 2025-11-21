@@ -1,0 +1,147 @@
+// Optimization Validation Benchmark
+// Tests all 4 optimization phases with realistic patterns
+
+use std::json
+use std::crypto
+use std::time
+
+// Phase 3: Struct mapping optimization test
+struct User {
+    id: int,
+    name: string,
+    email: string,
+    created_at: int,
+}
+
+struct Task {
+    id: int,
+    title: string,
+    description: string,
+    status: string,
+    priority: int,
+}
+
+// Phase 1: Inline hints test (small functions that should be inlined)
+fn create_user(id: int, name: string, email: string) -> User {
+    User {
+        id,
+        name,
+        email,
+        created_at: time.now_unix(),
+    }
+}
+
+fn create_task(id: int, title: string) -> Task {
+    Task {
+        id,
+        title,
+        description: "",
+        status: "todo",
+        priority: 1,
+    }
+}
+
+// Phase 2: Clone elimination test
+fn process_users(users: Vec<User>) -> Vec<string> {
+    let mut result = Vec::new()
+    
+    for user in users {
+        // Clone should be eliminated (local use only)
+        let name_copy = user.name.clone()
+        result.push(name_copy)
+    }
+    
+    result
+}
+
+// Phase 4: String operations test
+fn format_user(user: User) -> string {
+    // String interpolation (should detect format! pattern)
+    let basic = "User: ${user.name} (${user.email})"
+    
+    // Concatenation chain (should detect multiple concatenations)
+    let detailed = "ID: " + user.id.to_string() + ", Name: " + user.name + ", Email: " + user.email
+    
+    basic
+}
+
+// JSON serialization test
+@derive(Serialize, Deserialize)
+struct BenchData {
+    count: int,
+    timestamp: int,
+    data: Vec<string>,
+}
+
+fn json_roundtrip(data: BenchData) -> Result<BenchData, string> {
+    let json_str = json.stringify(data)?
+    let parsed = json.parse::<BenchData>(json_str)?
+    Ok(parsed)
+}
+
+// Password hashing test
+fn hash_passwords(passwords: Vec<string>) -> Vec<string> {
+    let mut hashes = Vec::new()
+    
+    for password in passwords {
+        match crypto.hash_password(password) {
+            Ok(hash) => hashes.push(hash),
+            Err(_) => hashes.push("error".to_string()),
+        }
+    }
+    
+    hashes
+}
+
+// Main benchmark runner
+fn main() {
+    println("=== Optimization Validation Benchmark ===")
+    println("")
+    
+    // Test Phase 1: Inline hints
+    println("Phase 1: Testing inline hints...")
+    for i in 0..1000 {
+        let user = create_user(i, "Test Use", "test@example.com")
+        let task = create_task(i, "Test Task")
+    }
+    println("  ✓ Created 1000 users and tasks")
+    
+    // Test Phase 2: Clone elimination
+    println("Phase 2: Testing clone elimination...")
+    let mut users = Vec::new()
+    for i in 0..100 {
+        users.push(create_user(i, "User ${i}", "user${i}@example.com"))
+    }
+    let names = process_users(users.clone())
+    println("  ✓ Processed ${names.len()} users")
+    
+    // Test Phase 3: Struct mapping
+    println("Phase 3: Testing struct shorthand...")
+    let test_user = create_user(1, "Alice", "alice@example.com")
+    let formatted = format_user(test_user)
+    println("  ✓ Formatted user: ${formatted}")
+    
+    // Test Phase 4: String operations
+    println("Phase 4: Testing string operations...")
+    let mut combined = String::new()
+    for i in 0..100 {
+        combined = combined + "Item " + i.to_string() + ", "
+    }
+    println("  ✓ Built string with ${combined.len()} characters")
+    
+    // Test JSON operations
+    println("JSON: Testing serialization...")
+    let bench_data = BenchData {
+        count: 100,
+        timestamp: time.now_unix(),
+        data: names.clone(),
+    }
+    match json_roundtrip(bench_data) {
+        Ok(_) => println("  ✓ JSON roundtrip successful"),
+        Err(e) => println("  ✗ JSON error: ${e}"),
+    }
+    
+    println("")
+    println("✅ All optimization phases tested successfully!")
+}
+

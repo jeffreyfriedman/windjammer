@@ -1,0 +1,108 @@
+// std/testing - Testing utilities and assertions
+// Simple testing framework for Windjammer
+
+// Assert that a condition is true
+pub fn assert(condition: bool) {
+    if !condition {
+        panic!("Assertion failed")
+    }
+}
+
+// Assert with custom message
+pub fn assert_with_message(condition: bool, message: string) {
+    if !condition {
+        panic!("{}", message)
+    }
+}
+
+// Assert equality
+pub fn assert_eq<T: PartialEq + Debug>(left: T, right: T) {
+    if left != right {
+        panic!("Assertion failed: {:?} != {:?}", left, right)
+    }
+}
+
+// Assert inequality
+pub fn assert_ne<T: PartialEq + Debug>(left: T, right: T) {
+    if left == right {
+        panic!("Assertion failed: {:?} == {:?}", left, right)
+    }
+}
+
+// Explicitly fail a test
+pub fn fail(message: string) {
+    panic!("{}", message)
+}
+
+// Assert that value is Some
+pub fn assert_some<T>(value: Option<T>) -> T {
+    match value {
+        Some(v) => v,
+        None => {
+            panic!("Expected Some, got None")
+        }
+    }
+}
+
+// Assert that value is None
+pub fn assert_none<T>(value: Option<T>) {
+    match value {
+        Some(_) => panic!("Expected None, got Some"),
+        None => {}
+    }
+}
+
+// Assert that value is Ok
+pub fn assert_ok<T, E: Debug>(value: Result<T, E>) -> T {
+    match value {
+        Ok(v) => v,
+        Err(e) => {
+            panic!("Expected Ok, got Err: {:?}", e)
+        }
+    }
+}
+
+// Assert that value is Err
+pub fn assert_err<T, E>(value: Result<T, E>) -> E {
+    match value {
+        Ok(_) => panic!("Expected Err, got Ok"),
+        Err(e) => e
+    }
+}
+
+// Assert that two floats are approximately equal
+pub fn assert_approx_eq(left: float, right: float, epsilon: float) {
+    let diff = if left > right { left - right } else { right - left }
+    if diff > epsilon {
+        panic!("Assertion failed: {} not approximately equal to {} (epsilon: {})", left, right, epsilon)
+    }
+}
+
+// Assert that a value is greater than another
+pub fn assert_gt<T: PartialOrd + Debug>(left: T, right: T) {
+    if !(left > right) {
+        panic!("Assertion failed: {:?} not > {:?}", left, right)
+    }
+}
+
+// Assert that a value is less than another
+pub fn assert_lt<T: PartialOrd + Debug>(left: T, right: T) {
+    if !(left < right) {
+        panic!("Assertion failed: {:?} not < {:?}", left, right)
+    }
+}
+
+// Assert that a value is greater than or equal to another
+pub fn assert_ge<T: PartialOrd + Debug>(left: T, right: T) {
+    if !(left >= right) {
+        panic!("Assertion failed: {:?} not >= {:?}", left, right)
+    }
+}
+
+// Assert that a value is less than or equal to another
+pub fn assert_le<T: PartialOrd + Debug>(left: T, right: T) {
+    if !(left <= right) {
+        panic!("Assertion failed: {:?} not <= {:?}", left, right)
+    }
+}
+

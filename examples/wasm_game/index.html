@@ -1,0 +1,219 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <title>Windjammer Conway's Game of Life</title>
+    <style>
+        body {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+            margin: 0;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            background: #1a1a1a;
+            color: #fff;
+        }
+        h1 {
+            margin-bottom: 10px;
+        }
+        #game-canvas {
+            border: 2px solid #444;
+            cursor: pointer;
+            image-rendering: pixelated;
+            image-rendering: crisp-edges;
+        }
+        .controls {
+            margin-top: 20px;
+        }
+        button {
+            background: #0066cc;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            margin: 0 5px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 14px;
+        }
+        button:hover {
+            background: #0052a3;
+        }
+        button:active {
+            background: #003d7a;
+        }
+        .stats {
+            margin-top: 10px;
+            font-size: 14px;
+            color: #aaa;
+        }
+        .status {
+            padding: 10px;
+            margin: 10px;
+            border-radius: 4px;
+            background: #d4edda;
+            color: #155724;
+        }
+    </style>
+</head>
+<body>
+    <h1>🦀 Conway's Game of Life</h1>
+    <p style="color: #888; margin-top: 0;">Built with Windjammer (transpiles to Rust → WASM)</p>
+    <div id="status" class="status">Loading WASM module...</div>
+    <canvas id="game-canvas" style="display:none;"></canvas>
+    <div class="controls" style="display:none;" id="controls">
+        <button id="play-pause">⏸️ Pause</button>
+        <button id="step">⏭️ Step</button>
+        <button id="reset">🔄 Reset</button>
+        <button id="randomize">🎲 Randomize</button>
+    </div>
+    <div class="stats" style="display:none;" id="stats">
+        <span id="fps">FPS: 0</span> | 
+        <span id="generation">Generation: 0</span>
+    </div>
+
+    <script type="module">
+        import init, * as wasm from './pkg/wasm_game_of_life.js';
+
+        async function run() {
+            try {
+                await init();
+                const { Universe } = wasm;
+
+                const canvas = document.getElementById('game-canvas');
+                const ctx = canvas.getContext('2d');
+                const playPauseButton = document.getElementById('play-pause');
+                const stepButton = document.getElementById('step');
+                const resetButton = document.getElementById('reset');
+                const randomizeButton = document.getElementById('randomize');
+
+                const CELL_SIZE = 8; // pixels
+                const DEAD_COLOR = "#000";
+                const ALIVE_COLOR = "#0f0";
+
+                let universe = Universe.new();
+                const width = universe.width();
+                const height = universe.height();
+
+                canvas.width = width * CELL_SIZE;
+                canvas.height = height * CELL_SIZE;
+
+                // Show UI
+                document.getElementById('status').textContent = '✅ WASM loaded! Click cells to toggle.';
+                canvas.style.display = 'block';
+                document.getElementById('controls').style.display = 'block';
+                document.getElementById('stats').style.display = 'block';
+
+                let animationId = null;
+                let generation = 0;
+                let lastFrameTime = performance.now();
+
+                const drawCells = () => {
+                    ctx.beginPath();
+
+                    // Draw each cell by checking its state via get_cell method
+                    for (let row = 0; row < height; row++) {
+                        for (let col = 0; col < width; col++) {
+                            const isAlive = universe.get_cell(row, col);
+                            
+                            ctx.fillStyle = isAlive ? ALIVE_COLOR : DEAD_COLOR;
+                            ctx.fillRect(
+                                col * CELL_SIZE,
+                                row * CELL_SIZE,
+                                CELL_SIZE,
+                                CELL_SIZE
+                            );
+                        }
+                    }
+
+                    ctx.stroke();
+                };
+
+                const renderLoop = () => {
+                    const now = performance.now();
+                    const delta = now - lastFrameTime;
+                    const fps = Math.round(1000 / delta);
+                    
+                    universe.tick();
+                    generation++;
+
+                    drawCells();
+
+                    // Update stats
+                    document.getElementById('fps').textContent = `FPS: ${fps}`;
+                    document.getElementById('generation').textContent = `Generation: ${generation}`;
+                    
+                    lastFrameTime = now;
+                    animationId = requestAnimationFrame(renderLoop);
+                };
+
+                const play = () => {
+                    playPauseButton.textContent = '⏸️ Pause';
+                    renderLoop();
+                };
+
+                const pause = () => {
+                    playPauseButton.textContent = '▶️ Play';
+                    cancelAnimationFrame(animationId);
+                    animationId = null;
+                };
+
+                playPauseButton.addEventListener('click', () => {
+                    if (animationId === null) {
+                        play();
+                    } else {
+                        pause();
+                    }
+                });
+
+                stepButton.addEventListener('click', () => {
+                    universe.tick();
+                    generation++;
+                    drawCells();
+                    document.getElementById('generation').textContent = `Generation: ${generation}`;
+                });
+
+                resetButton.addEventListener('click', () => {
+                    universe.reset();
+                    generation = 0;
+                    drawCells();
+                    document.getElementById('generation').textContent = `Generation: ${generation}`;
+                });
+
+                randomizeButton.addEventListener('click', () => {
+                    universe.randomize();
+                    generation = 0;
+                    drawCells();
+                    document.getElementById('generation').textContent = `Generation: ${generation}`;
+                });
+
+                canvas.addEventListener('click', (event) => {
+                    const boundingRect = canvas.getBoundingClientRect();
+
+                    const scaleX = canvas.width / boundingRect.width;
+                    const scaleY = canvas.height / boundingRect.height;
+
+                    const canvasLeft = (event.clientX - boundingRect.left) * scaleX;
+                    const canvasTop = (event.clientY - boundingRect.top) * scaleY;
+
+                    const row = Math.min(Math.floor(canvasTop / CELL_SIZE), height - 1);
+                    const col = Math.min(Math.floor(canvasLeft / CELL_SIZE), width - 1);
+
+                    universe.toggle_cell(row, col);
+                    drawCells();
+                });
+
+                // Initial render
+                drawCells();
+                play();
+            } catch (e) {
+                console.error('Failed to initialize WASM:', e);
+                document.getElementById('status').textContent = `❌ Failed: ${e.message}`;
+            }
+        }
+
+        run();
+    </script>
+</body>
+</html>

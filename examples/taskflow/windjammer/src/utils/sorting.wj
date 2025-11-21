@@ -1,0 +1,87 @@
+// Query sorting utilities
+
+@derive(Debug, Clone)
+pub struct SortParams {
+    pub fields: Vec<SortField>,
+}
+
+@derive(Debug, Clone)
+pub struct SortField {
+    pub name: string,
+    pub descending: bool,
+}
+
+impl SortParams {
+    pub fn from_query(sort_param: Option<string>) -> SortParams {
+        let mut fields = vec![]
+        
+        if let Some(sort_str) = sort_param {
+            // Parse sort parameter: "field1,-field2,field3"
+            // "-" prefix means descending order
+            for field_str in sort_str.split(',') {
+                let trimmed = field_str.trim()
+                
+                if trimmed.starts_with('-') {
+                    fields.push(SortField {
+                        name: trimmed[1..].to_string(),
+                        descending: true,
+                    })
+                } else {
+                    fields.push(SortField {
+                        name: trimmed.to_string(),
+                        descending: false,
+                    })
+                }
+            }
+        }
+        
+        // Default sort if none specified
+        if fields.is_empty() {
+            fields.push(SortField {
+                name: "created_at".to_string(),
+                descending: true,
+            })
+        }
+        
+        SortParams { fields: fields }
+    }
+    
+    pub fn to_sql_order_by(self) -> string {
+        let allowed_fields = vec![
+            "id", "title", "status", "priority", 
+            "created_at", "updated_at", "due_date"
+        ]
+        
+        let mut order_clauses = vec![]
+        
+        for field in self.fields {
+            // Validate field name to prevent SQL injection
+            if allowed_fields.contains(&field.name.as_str()) {
+                let direction = if field.descending { "DESC" } else { "ASC" }
+                order_clauses.push(format!("{} {}", field.name, direction))
+            }
+        }
+        
+        if order_clauses.is_empty() {
+            "created_at DESC".to_string()
+        } else {
+            order_clauses.join(", ")
+        }
+    }
+    
+    pub fn validate(self) -> Result<SortParams, Error> {
+        let allowed_fields = vec![
+            "id", "title", "status", "priority", 
+            "created_at", "updated_at", "due_date"
+        ]
+        
+        for field in &self.fields {
+            if !allowed_fields.contains(&field.name.as_str()) {
+                return Err(format!("Invalid sort field: {}", field.name))
+            }
+        }
+        
+        Ok(self)
+    }
+}
+

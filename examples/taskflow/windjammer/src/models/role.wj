@@ -1,0 +1,61 @@
+// Role-based access control models
+
+@derive(Debug, Clone, Serialize, Deserialize, PartialEq)
+pub enum Role {
+    Admin,
+    Member,
+    Viewer,
+}
+
+impl Role {
+    pub fn from_string(s: string) -> Option<Role> {
+        match s.as_str() {
+            "admin" => Some(Role::Admin),
+            "member" => Some(Role::Member),
+            "viewer" => Some(Role::Viewer),
+            _ => None,
+        }
+    }
+    
+    pub fn to_string(self) -> string {
+        match self {
+            Role::Admin => "admin".to_string(),
+            Role::Member => "member".to_string(),
+            Role::Viewer => "viewer".to_string(),
+        }
+    }
+    
+    pub fn can_create_project(self) -> bool {
+        match self {
+            Role::Admin | Role::Member => true,
+            Role::Viewer => false,
+        }
+    }
+    
+    pub fn can_delete_project(self) -> bool {
+        match self {
+            Role::Admin => true,
+            _ => false,
+        }
+    }
+    
+    pub fn can_modify_task(self) -> bool {
+        match self {
+            Role::Admin | Role::Member => true,
+            Role::Viewer => false,
+        }
+    }
+    
+    pub fn can_view(self) -> bool {
+        true  // All roles can view
+    }
+}
+
+@derive(Debug, Serialize, Deserialize)
+pub struct UserRole {
+    pub user_id: int,
+    pub role: Role,
+    pub granted_at: int,
+    pub granted_by: int,
+}
+
