@@ -1,0 +1,35 @@
+// Test smart @auto derive with inference
+
+// All fields are Copy - should derive everything
+@auto
+struct Point {
+    x: int,
+    y: int,
+}
+
+// String is not Copy - should not derive Copy
+@auto
+struct User {
+    name: string,
+    age: int,
+}
+
+// Vec is not Hash - should not derive Hash
+@auto
+struct Container {
+    items: Vec<int>,
+}
+
+// Explicit control still works
+@auto(Debug, Clone, Serialize, Deserialize)
+struct Config {
+    host: string,
+    port: int,
+}
+
+fn main() {
+    let p = Point { x: 1, y: 2 }
+    let u = User { name: "Alice", age: 30 }
+    println!("Point: ({}, {})", p.x, p.y)
+}
+

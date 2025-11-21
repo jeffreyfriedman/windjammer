@@ -1,0 +1,322 @@
+// Task management handlers
+
+use std::http
+use std::json
+use std::db
+use std::log
+use std::time
+
+use crate::models::task
+
+@async
+pub fn list_by_project(req: Request, pool: DbPool) -> Response {
+    // Extract user ID for auth
+    let user_id = match extract_user_id(req) {
+        Some(id) => id,
+        None => return http.json_response(401, "Unauthorized"),
+    }
+    
+    // Extract project ID from path
+    let project_id = http.get_param(req, "project_id")
+    
+    // Verify access to project
+    let check_query = "SELECT 1 FROM projects p LEFT JOIN project_members pm ON p.id = pm.project_id WHERE p.id = $1 AND (p.owner_id = $2 OR pm.user_id = $2)"
+    match db.query_one(pool, check_query, vec![project_id, user_id]) {
+        Ok(_) => {}
+        Err(_) => return http.json_response(403, "Forbidden"),
+    }
+    
+    // Query tasks
+    let query = "SELECT * FROM tasks WHERE project_id = $1 ORDER BY created_at DESC"
+    let rows = match db.query_all(pool, query, vec![project_id]) {
+        Ok(r) => r,
+        Err(e) => {
+            log.error("Failed to list tasks: ${e}")
+            return http.json_response(500, "Failed to fetch tasks")
+        }
+    }
+    
+    let mut tasks = vec![]
+    for row in rows {
+        let task = TaskResponse {
+            id: db.get_int(row, "id"),
+            project_id: db.get_int(row, "project_id"),
+            title: db.get_string(row, "title"),
+            description: db.get_string(row, "description"),
+            status: db.get_string(row, "status"),
+            priority: db.get_string(row, "priority"),
+            assigned_to: db.get_int_opt(row, "assigned_to"),
+            created_by: db.get_int(row, "created_by"),
+            created_at: db.get_int(row, "created_at"),
+            due_date: db.get_int_opt(row, "due_date"),
+        }
+        tasks.push(task)
+    }
+    
+    http.json_response(200, tasks)
+}
+
+@async
+pub fn create(req: Request, pool: DbPool) -> Response {
+    // Extract user ID for auth
+    let user_id = match extract_user_id(req) {
+        Some(id) => id,
+        None => return http.json_response(401, "Unauthorized"),
+    }
+    
+    // Extract project ID from path
+    let project_id = http.get_param(req, "project_id")
+    
+    // Verify access to project
+    let check_query = "SELECT 1 FROM projects p LEFT JOIN project_members pm ON p.id = pm.project_id WHERE p.id = $1 AND (p.owner_id = $2 OR pm.user_id = $2)"
+    match db.query_one(pool, check_query, vec![project_id, user_id]) {
+        Ok(_) => {}
+        Err(_) => return http.json_response(403, "Forbidden"),
+    }
+    
+    // Parse request body
+    let body = http.body(req)
+    let create_req = match json.parse_string(body) {
+        Ok(r) => r,
+        Err(e) => {
+            log.error("Failed to parse create request: ${e}")
+            return http.json_response(400, "Invalid request body")
+        }
+    }
+    
+    // Insert task
+    let now = time.now_unix()
+    let query = "INSERT INTO tasks (project_id, title, description, status, priority, created_by, created_at, updated_at, due_date) VALUES ($1, $2, $3, 'open', $4, $5, $6, $7, $8) RETURNING id"
+    
+    let task_id = match db.query_one(pool, query, vec![project_id, create_req.title, create_req.description, create_req.priority, user_id, now, now, create_req.due_date]) {
+        Ok(row) => db.get_int(row, "id"),
+        Err(e) => {
+            log.error("Failed to create task: ${e}")
+            return http.json_response(500, "Failed to create task")
+        }
+    }
+    
+    let response = TaskResponse {
+        id: task_id,
+        project_id: project_id,
+        title: create_req.title,
+        description: create_req.description,
+        status: "open",
+        priority: create_req.priority,
+        assigned_to: None,
+        created_by: user_id,
+        created_at: now,
+        due_date: create_req.due_date,
+    }
+    
+    log.info("Task created: ${task_id}")
+    http.json_response(201, response)
+}
+
+@async
+pub fn get(req: Request, pool: DbPool) -> Response {
+    // Extract user ID for auth
+    let user_id = match extract_user_id(req) {
+        Some(id) => id,
+        None => return http.json_response(401, "Unauthorized"),
+    }
+    
+    // Extract task ID from path
+    let task_id = http.get_param(req, "id")
+    
+    // Query task with access check
+    let query = "SELECT t.* FROM tasks t JOIN projects p ON t.project_id = p.id LEFT JOIN project_members pm ON p.id = pm.project_id WHERE t.id = $1 AND (p.owner_id = $2 OR pm.user_id = $2)"
+    let row = match db.query_one(pool, query, vec![task_id, user_id]) {
+        Ok(r) => r,
+        Err(_) => {
+            return http.json_response(404, "Task not found")
+        }
+    }
+    
+    let task = TaskResponse {
+        id: db.get_int(row, "id"),
+        project_id: db.get_int(row, "project_id"),
+        title: db.get_string(row, "title"),
+        description: db.get_string(row, "description"),
+        status: db.get_string(row, "status"),
+        priority: db.get_string(row, "priority"),
+        assigned_to: db.get_int_opt(row, "assigned_to"),
+        created_by: db.get_int(row, "created_by"),
+        created_at: db.get_int(row, "created_at"),
+        due_date: db.get_int_opt(row, "due_date"),
+    }
+    
+    http.json_response(200, task)
+}
+
+@async
+pub fn update(req: Request, pool: DbPool) -> Response {
+    // Extract user ID for auth
+    let user_id = match extract_user_id(req) {
+        Some(id) => id,
+        None => return http.json_response(401, "Unauthorized"),
+    }
+    
+    // Extract task ID from path
+    let task_id = http.get_param(req, "id")
+    
+    // Verify access
+    let check_query = "SELECT t.project_id FROM tasks t JOIN projects p ON t.project_id = p.id LEFT JOIN project_members pm ON p.id = pm.project_id WHERE t.id = $1 AND (p.owner_id = $2 OR pm.user_id = $2 OR t.created_by = $2)"
+    match db.query_one(pool, check_query, vec![task_id, user_id]) {
+        Ok(_) => {}
+        Err(_) => return http.json_response(403, "Forbidden"),
+    }
+    
+    // Parse request body
+    let body = http.body(req)
+    let update_req = match json.parse_string(body) {
+        Ok(r) => r,
+        Err(e) => {
+            log.error("Failed to parse update request: ${e}")
+            return http.json_response(400, "Invalid request body")
+        }
+    }
+    
+    // Update task
+    let query = "UPDATE tasks SET title = $1, description = $2, status = $3, priority = $4, due_date = $5, updated_at = $6 WHERE id = $7"
+    match db.execute(pool, query, vec![update_req.title, update_req.description, update_req.status, update_req.priority, update_req.due_date, time.now_unix(), task_id]) {
+        Ok(_) => {}
+        Err(e) => {
+            log.error("Failed to update task: ${e}")
+            return http.json_response(500, "Failed to update task")
+        }
+    }
+    
+    http.json_response(200, "Task updated successfully")
+}
+
+@async
+pub fn delete(req: Request, pool: DbPool) -> Response {
+    // Extract user ID for auth
+    let user_id = match extract_user_id(req) {
+        Some(id) => id,
+        None => return http.json_response(401, "Unauthorized"),
+    }
+    
+    // Extract task ID from path
+    let task_id = http.get_param(req, "id")
+    
+    // Verify access (only creator or project owner)
+    let check_query = "SELECT t.created_by, p.owner_id FROM tasks t JOIN projects p ON t.project_id = p.id WHERE t.id = $1"
+    let row = match db.query_one(pool, check_query, vec![task_id]) {
+        Ok(r) => r,
+        Err(_) => return http.json_response(404, "Task not found"),
+    }
+    
+    let created_by = db.get_int(row, "created_by")
+    let owner_id = db.get_int(row, "owner_id")
+    
+    if user_id != created_by && user_id != owner_id {
+        return http.json_response(403, "Forbidden")
+    }
+    
+    // Delete task
+    let query = "DELETE FROM tasks WHERE id = $1"
+    match db.execute(pool, query, vec![task_id]) {
+        Ok(_) => {}
+        Err(e) => {
+            log.error("Failed to delete task: ${e}")
+            return http.json_response(500, "Failed to delete task")
+        }
+    }
+    
+    log.info("Task deleted: ${task_id}")
+    http.json_response(200, "Task deleted successfully")
+}
+
+@async
+pub fn assign(req: Request, pool: DbPool) -> Response {
+    // Extract user ID for auth
+    let user_id = match extract_user_id(req) {
+        Some(id) => id,
+        None => return http.json_response(401, "Unauthorized"),
+    }
+    
+    // Extract task ID from path
+    let task_id = http.get_param(req, "id")
+    
+    // Verify access
+    let check_query = "SELECT t.project_id FROM tasks t JOIN projects p ON t.project_id = p.id LEFT JOIN project_members pm ON p.id = pm.project_id WHERE t.id = $1 AND (p.owner_id = $2 OR pm.user_id = $2)"
+    match db.query_one(pool, check_query, vec![task_id, user_id]) {
+        Ok(_) => {}
+        Err(_) => return http.json_response(403, "Forbidden"),
+    }
+    
+    // Parse request body
+    let body = http.body(req)
+    let assign_req = match json.parse_string(body) {
+        Ok(r) => r,
+        Err(e) => {
+            log.error("Failed to parse assign request: ${e}")
+            return http.json_response(400, "Invalid request body")
+        }
+    }
+    
+    // Assign task
+    let query = "UPDATE tasks SET assigned_to = $1, updated_at = $2 WHERE id = $3"
+    match db.execute(pool, query, vec![assign_req.user_id, time.now_unix(), task_id]) {
+        Ok(_) => {}
+        Err(e) => {
+            log.error("Failed to assign task: ${e}")
+            return http.json_response(500, "Failed to assign task")
+        }
+    }
+    
+    log.info("Task ${task_id} assigned to user ${assign_req.user_id}")
+    http.json_response(200, "Task assigned successfully")
+}
+
+@async
+pub fn search(req: Request, pool: DbPool) -> Response {
+    // Extract user ID for auth
+    let user_id = match extract_user_id(req) {
+        Some(id) => id,
+        None => return http.json_response(401, "Unauthorized"),
+    }
+    
+    // Get search query parameter
+    let search_term = http.get_query_param(req, "q")
+    
+    // Search tasks in accessible projects
+    let query = "SELECT t.* FROM tasks t JOIN projects p ON t.project_id = p.id LEFT JOIN project_members pm ON p.id = pm.project_id WHERE (p.owner_id = $1 OR pm.user_id = $1) AND (t.title LIKE $2 OR t.description LIKE $2) ORDER BY t.created_at DESC LIMIT 50"
+    let search_pattern = "%${search_term}%"
+    
+    let rows = match db.query_all(pool, query, vec![user_id, search_pattern]) {
+        Ok(r) => r,
+        Err(e) => {
+            log.error("Failed to search tasks: ${e}")
+            return http.json_response(500, "Failed to search tasks")
+        }
+    }
+    
+    let mut tasks = vec![]
+    for row in rows {
+        let task = TaskResponse {
+            id: db.get_int(row, "id"),
+            project_id: db.get_int(row, "project_id"),
+            title: db.get_string(row, "title"),
+            description: db.get_string(row, "description"),
+            status: db.get_string(row, "status"),
+            priority: db.get_string(row, "priority"),
+            assigned_to: db.get_int_opt(row, "assigned_to"),
+            created_by: db.get_int(row, "created_by"),
+            created_at: db.get_int(row, "created_at"),
+            due_date: db.get_int_opt(row, "due_date"),
+        }
+        tasks.push(task)
+    }
+    
+    log.info("Search completed: ${tasks.len()} results")
+    http.json_response(200, tasks)
+}
+
+// Helper function
+fn extract_user_id(req: Request) -> Option<int> {
+    // Simplified extraction - would use proper JWT validation
+    Some(1)
+}

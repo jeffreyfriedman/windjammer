@@ -1,0 +1,270 @@
+// Todo App - Full CRUD with Reactive Lists
+// Demonstrates:
+// - List rendering
+// - Adding/removing items
+// - Toggling state
+// - Filtering
+// - Local state management
+
+use std::ui::*
+
+// Todo item data structure
+struct Todo {
+    id: i32,
+    text: string,
+    completed: bool,
+}
+
+impl Todo {
+    fn new(id: i32, text: string) -> Todo {
+        Todo {
+            id: id,
+            text: text,
+            completed: false,
+        }
+    }
+}
+
+// App state
+struct TodoState {
+    todos: Signal<Vec<Todo>>,
+    input: Signal<string>,
+    filter: Signal<string>,
+    next_id: Signal<i32>,
+}
+
+impl TodoState {
+    fn new() -> TodoState {
+        let initial_todos = vec![
+            Todo::new(1, "Learn Windjammer".to_string()),
+            Todo::new(2, "Build amazing UIs".to_string()),
+            Todo::new(3, "Deploy to production".to_string()),
+        ]
+        
+        TodoState {
+            todos: Signal::new(initial_todos),
+            input: Signal::new("".to_string()),
+            filter: Signal::new("all".to_string()),
+            next_id: Signal::new(4),
+        }
+    }
+    
+    fn add_todo(self) {
+        let text = self.input.get()
+        if text != "" {
+            let id = self.next_id.get()
+            let mut todos = self.todos.get()
+            todos.push(Todo::new(id, text))
+            self.todos.set(todos)
+            self.next_id.set(id + 1)
+            self.input.set("".to_string())
+        }
+    }
+    
+    fn toggle_todo(self, id: i32) {
+        let mut todos = self.todos.get()
+        let mut i = 0
+        while i < todos.len() {
+            if todos[i].id == id {
+                todos[i].completed = !todos[i].completed
+            }
+            i = i + 1
+        }
+        self.todos.set(todos)
+    }
+    
+    fn delete_todo(self, id: i32) {
+        let todos = self.todos.get()
+        let mut new_todos = Vec::new()
+        let mut i = 0
+        while i < todos.len() {
+            if todos[i].id != id {
+                new_todos.push(todos[i].clone())
+            }
+            i = i + 1
+        }
+        self.todos.set(new_todos)
+    }
+    
+    fn get_filtered_todos(self) -> Vec<Todo> {
+        let todos = self.todos.get()
+        let filter = self.filter.get()
+        
+        if filter == "active" {
+            let mut result = Vec::new()
+            let mut i = 0
+            while i < todos.len() {
+                if !todos[i].completed {
+                    result.push(todos[i].clone())
+                }
+                i = i + 1
+            }
+            result
+        } else if filter == "completed" {
+            let mut result = Vec::new()
+            let mut i = 0
+            while i < todos.len() {
+                if todos[i].completed {
+                    result.push(todos[i].clone())
+                }
+                i = i + 1
+            }
+            result
+        } else {
+            todos
+        }
+    }
+    
+    fn count_active(self) -> i32 {
+        let todos = self.todos.get()
+        let mut count = 0
+        let mut i = 0
+        while i < todos.len() {
+            if !todos[i].completed {
+                count = count + 1
+            }
+            i = i + 1
+        }
+        count
+    }
+}
+
+// Render functions
+fn render_todo_app(state: TodoState) -> Container {
+    Container::new()
+        .max_width("600px")
+        .child(Panel::new("Todo App".to_string())
+            .child(
+                Flex::new()
+                    .direction(FlexDirection::Column)
+                    .gap("20px")
+                    .child(render_header())
+                    .child(render_input(state.clone()))
+                    .child(render_filters(state.clone()))
+                    .child(render_todo_list(state.clone()))
+                    .child(render_footer(state.clone()))
+            )
+        )
+}
+
+fn render_header() -> Text {
+    Text::new("📝 Windjammer Todo App".to_string())
+        .size(TextSize::XLarge)
+}
+
+fn render_input(state: TodoState) -> Flex {
+    let state_input = state.clone()
+    let state_add = state.clone()
+    
+    Flex::new()
+        .direction(FlexDirection::Row)
+        .gap("10px")
+        .child(Input::new("Add a new todo...".to_string(), state.input.clone())
+            .on_change(move |value| {
+                state_input.input.set(value)
+            }))
+        .child(Button::new("Add".to_string())
+            .variant(ButtonVariant::Primary)
+            .on_click(move || {
+                state_add.add_todo()
+            }))
+}
+
+fn render_filters(state: TodoState) -> Flex {
+    let state_all = state.clone()
+    let state_active = state.clone()
+    let state_completed = state.clone()
+    let current_filter = state.filter.get()
+    
+    Flex::new()
+        .direction(FlexDirection::Row)
+        .gap("10px")
+        .child(Button::new("All".to_string())
+            .variant(if current_filter == "all" { ButtonVariant::Primary } else { ButtonVariant::Secondary })
+            .on_click(move || {
+                state_all.filter.set("all".to_string())
+            }))
+        .child(Button::new("Active".to_string())
+            .variant(if current_filter == "active" { ButtonVariant::Primary } else { ButtonVariant::Secondary })
+            .on_click(move || {
+                state_active.filter.set("active".to_string())
+            }))
+        .child(Button::new("Completed".to_string())
+            .variant(if current_filter == "completed" { ButtonVariant::Primary } else { ButtonVariant::Secondary })
+            .on_click(move || {
+                state_completed.filter.set("completed".to_string())
+            }))
+}
+
+fn render_todo_list(state: TodoState) -> Flex {
+    let todos = state.get_filtered_todos()
+    let list = Flex::new()
+        .direction(FlexDirection::Column)
+        .gap("10px")
+    
+    if todos.len() == 0 {
+        list.child(Text::new("No todos to show!".to_string()))
+    } else {
+        let mut i = 0
+        let mut result = list
+        while i < todos.len() {
+            result = result.child(render_todo_item(state.clone(), todos[i].clone()))
+            i = i + 1
+        }
+        result
+    }
+}
+
+fn render_todo_item(state: TodoState, todo: Todo) -> Flex {
+    let state_toggle = state.clone()
+    let state_delete = state.clone()
+    let todo_id = todo.id
+    let todo_id_delete = todo.id
+    
+    let checkbox_text = if todo.completed { "✓" } else { "○" }
+    let text_style = if todo.completed { "text-decoration: line-through; opacity: 0.6;" } else { "" }
+    
+    Flex::new()
+        .direction(FlexDirection::Row)
+        .gap("10px")
+        .child(Button::new(checkbox_text.to_string())
+            .variant(if todo.completed { ButtonVariant::Primary } else { ButtonVariant::Ghost })
+            .on_click(move || {
+                state_toggle.toggle_todo(todo_id)
+            }))
+        .child(Text::new(todo.text))
+        .child(Button::new("Delete".to_string())
+            .variant(ButtonVariant::Danger)
+            .size(ButtonSize::Small)
+            .on_click(move || {
+                state_delete.delete_todo(todo_id_delete)
+            }))
+}
+
+fn render_footer(state: TodoState) -> Text {
+    let active_count = state.count_active()
+    let text = if active_count == 1 {
+        "1 item left".to_string()
+    } else {
+        format!("{} items left", active_count)
+    }
+    Text::new(text).size(TextSize::Small)
+}
+
+@export
+fn start() {
+    println!("📝 Starting Todo App")
+    
+    let state = TodoState::new()
+    
+    let render = move || {
+        render_todo_app(state.clone()).to_vnode()
+    }
+    
+    ReactiveApp::new("Todo App".to_string(), render).run()
+}
+
+fn main() {
+    start()
+}
+

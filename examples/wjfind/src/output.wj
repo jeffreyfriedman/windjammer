@@ -1,0 +1,194 @@
+// Output formatting for wjfind
+
+use std::io
+use std::json
+use std::time
+
+use ./config::Config
+use ./search::SearchResults
+use ./search::Match
+
+// ANSI color codes
+const COLOR_RED: string = "\x1b[31m"
+const COLOR_GREEN: string = "\x1b[32m"
+const COLOR_BLUE: string = "\x1b[34m"
+const COLOR_CYAN: string = "\x1b[36m"
+const COLOR_RESET: string = "\x1b[0m"
+const COLOR_BOLD: string = "\x1b[1m"
+
+pub fn print_results(results: &SearchResults, config: &Config, duration: time::Duration) {
+    if config.json {
+        print_json(results, duration)
+    } else if config.count_only {
+        print_count(results)
+    } else if config.files_with_matches {
+        print_files_only(results, config)
+    } else {
+        print_default(results, config)
+    }
+}
+
+fn print_json(results: &SearchResults, duration: time::Duration) {
+    let output = json!({
+        "matches": results.matches.iter().map(|m| {
+            json!({
+                "file": m.file,
+                "line": m.line_number,
+                "column": m.column,
+                "text": m.line_text,
+                "match": m.match_text
+            })
+        }).collect::<Vec<_>>(),
+        "stats": {
+            "files_searched": results.files_searched,
+            "matches_found": results.total_matches,
+            "duration_ms": duration.as_millis()
+        }
+    })
+    
+    println!("{}", json::stringify_pretty(output).unwrap_or_else(|e| e))
+}
+
+fn print_count(results: &SearchResults) {
+    println!("{}", results.total_matches)
+}
+
+fn print_files_only(results: &SearchResults, config: &Config) {
+    // Group matches by file
+    let mut files = std::collections::HashSet::new()
+    
+    for m in &results.matches {
+        files.insert(m.file.clone())
+    }
+    
+    // Print unique files
+    for file in files {
+        if config.use_color {
+            println!("{}{}{}", COLOR_GREEN, file, COLOR_RESET)
+        } else {
+            println!("{}", file)
+        }
+    }
+}
+
+fn print_default(results: &SearchResults, config: &Config) {
+    // Group matches by file
+    let mut by_file = std::collections::HashMap::new()
+    
+    for m in &results.matches {
+        by_file.entry(m.file.clone())
+            .or_insert(vec![])
+            .push(m.clone())
+    }
+    
+    // Save count before moving by_file
+    let file_count = by_file.len()
+    
+    // Print results grouped by file
+    for (file, matches) in by_file {
+        // Print file header
+        if config.use_color {
+            println!("{}{}{}{}", COLOR_BOLD, COLOR_GREEN, file, COLOR_RESET)
+        } else {
+            println!("{}", file)
+        }
+        
+        // Print matches
+        for m in matches {
+            print_match(&m, config)
+        }
+        
+        println!("")  // Blank line between files
+    }
+    
+    // Print summary
+    if config.use_color {
+        println!("{}Found {} matches in {} files (searched {} files){}", 
+            COLOR_CYAN,
+            results.total_matches,
+            file_count,
+            results.files_searched,
+            COLOR_RESET)
+    } else {
+        println!("Found {} matches in {} files (searched {} files)", 
+            results.total_matches,
+            file_count,
+            results.files_searched)
+    }
+}
+
+fn print_match(m: &Match, config: &Config) {
+    // Print context before if any
+    if !m.context_before.is_empty() {
+        let start_line = m.line_number - m.context_before.len() as int
+        for (i, context_line) in m.context_before.iter().enumerate() {
+            let line_num = start_line + i as int
+            print_context_line(line_num, context_line, config)
+        }
+    }
+    
+    // Print the match line
+    let line_num_str = if config.line_numbers {
+        format!("{}:", m.line_number)
+    } else {
+        "".to_string()
+    }
+    
+    // Highlight the match in the line
+    let highlighted_line = if config.use_color {
+        highlight_match(&m.line_text, &m.match_text, m.column)
+    } else {
+        m.line_text.clone()
+    }
+    
+    if config.use_color {
+        println!("  {}{}{} {}", 
+            COLOR_BLUE, 
+            line_num_str, 
+            COLOR_RESET,
+            highlighted_line)
+    } else {
+        println!("  {}{}", line_num_str, highlighted_line)
+    }
+    
+    // Print context after if any
+    if !m.context_after.is_empty() {
+        let start_line = m.line_number + 1
+        for (i, context_line) in m.context_after.iter().enumerate() {
+            let line_num = start_line + i as int
+            print_context_line(line_num, context_line, config)
+        }
+    }
+}
+
+fn print_context_line(line_num: int, line: &string, config: &Config) {
+    let line_num_str = if config.line_numbers {
+        format!("{}-", line_num)  // Use '-' for context lines
+    } else {
+        "".to_string()
+    }
+    
+    if config.use_color {
+        println!("  {}{}{} {}", 
+            COLOR_CYAN,  // Different color for context
+            line_num_str,
+            COLOR_RESET,
+            line)
+    } else {
+        println!("  {}{}", line_num_str, line)
+    }
+}
+
+fn highlight_match(line: &string, match_text: &string, column: int) -> string {
+    let before = &line[0..(column - 1) as usize]
+    let after = &line[(column - 1 + match_text.len() as int) as usize..]
+    
+    format!("{}{}{}{}{}{}", 
+        before,
+        COLOR_BOLD,
+        COLOR_RED,
+        match_text,
+        COLOR_RESET,
+        after)
+}
+

@@ -1,0 +1,63 @@
+// Windjammer Development Server for WASM Apps
+// Serves static files with proper MIME types for WASM/JS/HTML
+
+use std::fs
+use std::http
+use std::mime
+use std::collections::HashMap
+
+fn main() {
+    let port = 8080
+    let dir = "."
+    
+    print("🚀 Windjammer Dev Server")
+    print("📂 Serving: ${dir}")
+    print("🌐 Listening on: http://localhost:${port}")
+    print("Press Ctrl+C to stop")
+    
+    http::serve(port, handle_request)
+}
+
+fn handle_request(req: http::Request) -> http::Response {
+    // Get the requested path
+    let mut path = req.path()
+    
+    // Default to index.html for root
+    if path == "/" {
+        path = "/index.html"
+    }
+    
+    // Remove leading slash
+    if path.starts_with("/") {
+        path = path.substring(1, path.len())
+    }
+    
+    // Try to read the file
+    let result = fs::read_to_string(path)
+    
+    if result.is_ok() {
+        let content = result.unwrap()
+        let mime_type = mime::from_path(path)
+        
+        let mut headers = HashMap::new()
+        headers.insert("Content-Type", mime_type)
+        headers.insert("Cache-Control", "no-cache")
+        
+        http::Response {
+            status: 200,
+            headers: headers,
+            body: content
+        }
+    } else {
+        // File not found
+        let mut headers = HashMap::new()
+        headers.insert("Content-Type", "text/html")
+        
+        http::Response {
+            status: 404,
+            headers: headers,
+            body: "<h1>404 Not Found</h1><p>File not found: ${path}</p>"
+        }
+    }
+}
+

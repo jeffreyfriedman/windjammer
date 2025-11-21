@@ -1,0 +1,17 @@
+// Test automatic reference insertion
+fn double(x: int) -> int {
+    x * 2
+}
+
+fn greet(name: string) {
+    println!("Hello, {}", name)
+}
+
+fn main() {
+    let x = 5
+    let result = double(x)
+    
+    let name = "Alice"
+    greet(name)
+}
+

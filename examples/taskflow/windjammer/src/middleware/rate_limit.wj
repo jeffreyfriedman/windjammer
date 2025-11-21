@@ -1,0 +1,98 @@
+// Rate limiting middleware using token bucket algorithm
+
+use std::time
+use std::http
+
+// Simple in-memory rate limiter (for demo - use Redis in production)
+struct RateLimiter {
+    requests_per_minute: int,
+    buckets: HashMap<string, TokenBucket>,
+}
+
+struct TokenBucket {
+    tokens: int,
+    last_refill: int,
+}
+
+impl RateLimiter {
+    pub fn new(requests_per_minute: int) -> RateLimiter {
+        RateLimiter {
+            requests_per_minute: requests_per_minute,
+            buckets: HashMap::new(),
+        }
+    }
+    
+    pub fn check_rate_limit(mut self, key: string) -> Result<(), RateLimitError> {
+        let now = time.now().timestamp()
+        
+        // Get or create bucket for this key
+        let bucket = self.buckets.entry(key.clone()).or_insert(TokenBucket {
+            tokens: self.requests_per_minute,
+            last_refill: now,
+        })
+        
+        // Refill tokens based on time elapsed
+        let seconds_elapsed = now - bucket.last_refill
+        if seconds_elapsed > 0 {
+            let tokens_to_add = (seconds_elapsed * self.requests_per_minute) / 60
+            bucket.tokens = (bucket.tokens + tokens_to_add).min(self.requests_per_minute)
+            bucket.last_refill = now
+        }
+        
+        // Check if we have tokens available
+        if bucket.tokens > 0 {
+            bucket.tokens -= 1
+            Ok(())
+        } else {
+            // Calculate retry after time
+            let retry_after = 60 / self.requests_per_minute
+            Err(RateLimitError {
+                retry_after: retry_after,
+                limit: self.requests_per_minute,
+            })
+        }
+    }
+}
+
+@derive(Debug)
+pub struct RateLimitError {
+    pub retry_after: int,
+    pub limit: int,
+}
+
+// Rate limit by user ID
+pub fn rate_limit_by_user(req: Request, limiter: RateLimiter) -> Result<Request, RateLimitError> {
+    let user_id = http.get_context(req, "user_id").unwrap_or("anonymous")
+    let key = format!("user:{}", user_id)
+    
+    limiter.check_rate_limit(key)?
+    Ok(req)
+}
+
+// Rate limit by IP address
+pub fn rate_limit_by_ip(req: Request, limiter: RateLimiter) -> Result<Request, RateLimitError> {
+    let ip = http.client_ip(req).unwrap_or("unknown")
+    let key = format!("ip:{}", ip)
+    
+    limiter.check_rate_limit(key)?
+    Ok(req)
+}
+
+// Rate limit by API key
+pub fn rate_limit_by_api_key(req: Request, limiter: RateLimiter) -> Result<Request, RateLimitError> {
+    let api_key = http.get_header(req, "X-API-Key").unwrap_or("none")
+    let key = format!("apikey:{}", api_key)
+    
+    limiter.check_rate_limit(key)?
+    Ok(req)
+}
+
+// Add rate limit headers to response
+pub fn add_rate_limit_headers(res: Response, remaining: int, limit: int, reset_at: int) -> Response {
+    let mut response = res
+    response = http.set_header(response, "X-RateLimit-Limit", limit.to_string())
+    response = http.set_header(response, "X-RateLimit-Remaining", remaining.to_string())
+    response = http.set_header(response, "X-RateLimit-Reset", reset_at.to_string())
+    response
+}
+

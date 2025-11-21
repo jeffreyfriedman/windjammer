@@ -1,0 +1,23 @@
+# Dockerfile for testing JavaScript/TypeScript SDK examples
+FROM node:20-slim
+
+WORKDIR /app
+
+# Install system dependencies
+RUN apt-get update && apt-get install -y \
+    git \
+    && rm -rf /var/lib/apt/lists/*
+
+# Copy JavaScript SDK
+COPY sdks/javascript /app/sdks/javascript
+
+# Install dependencies
+WORKDIR /app/sdks/javascript
+RUN npm install
+
+# Build TypeScript
+RUN npm run build
+
+# Run tests
+CMD ["sh", "-c", "npm run build && node dist/examples/hello-world.js && node dist/examples/sprite-demo.js && node dist/examples/3d-scene.js"]
+

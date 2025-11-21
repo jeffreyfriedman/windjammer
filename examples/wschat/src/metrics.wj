@@ -1,0 +1,62 @@
+// Prometheus metrics for wschat
+
+use std::http
+use std::json
+use std::time
+
+use ./server::ServerState
+
+pub fn prometheus_metrics(state: ServerState) -> Response {
+    let mut output = String::new()
+    
+    // Connection count
+    let conn_count = {
+        let connections = state.connections.lock().await
+        connections.len()
+    }
+    
+    output.push_str("# HELP wschat_connections_total Total number of active WebSocket connections\n")
+    output.push_str("# TYPE wschat_connections_total gauge\n")
+    output.push_str(&format!("wschat_connections_total {}\n\n", conn_count))
+    
+    // Room count
+    let room_count = state.room_manager.get_room_count().await
+    
+    output.push_str("# HELP wschat_rooms_total Total number of active rooms\n")
+    output.push_str("# TYPE wschat_rooms_total gauge\n")
+    output.push_str(&format!("wschat_rooms_total {}\n\n", room_count))
+    
+    // Total members across all rooms
+    let total_members = state.room_manager.get_total_members().await
+    
+    output.push_str("# HELP wschat_room_members_total Total number of room memberships\n")
+    output.push_str("# TYPE wschat_room_members_total gauge\n")
+    output.push_str(&format!("wschat_room_members_total {}\n\n", total_members))
+    
+    // Server uptime (placeholder)
+    output.push_str("# HELP wschat_uptime_seconds Server uptime in seconds\n")
+    output.push_str("# TYPE wschat_uptime_seconds gauge\n")
+    output.push_str(&format!("wschat_uptime_seconds {}\n\n", 0))
+    
+    http.text_response(200, output, "text/plain; version=0.0.4")
+}
+
+pub fn json_metrics(state: ServerState) -> Response {
+    let conn_count = {
+        let connections = state.connections.lock().await
+        connections.len()
+    }
+    
+    let room_count = state.room_manager.get_room_count().await
+    let total_members = state.room_manager.get_total_members().await
+    
+    let metrics = json!({
+        "connections": conn_count,
+        "rooms": room_count,
+        "total_memberships": total_members,
+        "timestamp": time.now_unix()
+    })
+    
+    http.json_response(200, metrics)
+}
+

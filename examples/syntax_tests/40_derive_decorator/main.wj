@@ -1,0 +1,40 @@
+// Example 40: @derive Decorator
+// Use @derive for explicit trait derivation
+
+@derive(Clone, Debug, PartialEq)
+struct Point {
+    x: int,
+    y: int,
+}
+
+@derive(Clone, Debug, PartialEq, Eq, Hash)
+struct User {
+    id: int,
+    name: string,
+}
+
+fn main() {
+    println!("=== @derive Decorator Demo ===")
+    println!()
+    
+    let p1 = Point { x: 10, y: 20 }
+    let p2 = p1.clone() // Clone trait
+    
+    println!("1. Point with @derive(Clone, Debug, PartialEq):")
+    println!("   p1: {:?}", p1) // Debug trait
+    println!("   p2: {:?}", p2)
+    println!("   p1 == p2: {}", p1 == p2) // PartialEq trait
+    println!()
+    
+    let u1 = User { id: 1, name: "Alice".to_string() }
+    let u2 = User { id: 2, name: "Bob".to_string() }
+    
+    println!("2. User with @derive(Clone, Debug, PartialEq, Eq, Hash):")
+    println!("   u1: {:?}", u1)
+    println!("   u2: {:?}", u2)
+    println!("   u1 == u2: {}", u1 == u2)
+    println!()
+    
+    println!("✨ @derive provides explicit control over trait derivation!")
+}
+

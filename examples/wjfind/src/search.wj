@@ -1,0 +1,187 @@
+// Core search logic for wjfind
+
+use std::fs
+use std::io
+use std::path
+use std::sync
+use std::thread
+
+use ./config::Config
+use ./walker
+use ./matcher
+
+@derive(Debug)
+pub struct SearchResults {
+    pub matches: Vec<Match>,
+    pub files_searched: int,
+    pub total_matches: int,
+}
+
+@derive(Debug, Clone)
+pub struct Match {
+    pub file: string,
+    pub line_number: int,
+    pub column: int,
+    pub line_text: string,
+    pub match_text: string,
+    pub context_before: Vec<string>,
+    pub context_after: Vec<string>,
+}
+
+pub fn run(config: Config) -> Result<SearchResults, string> {
+    // Collect all files to search
+    let files = walker::collect_files(config.paths.clone(), &config)?
+    
+    // Search files in parallel
+    let matches = search_files_parallel(files.clone(), &config)?
+    
+    // Apply max count if specified
+    let matches = if let Some(max) = config.max_count {
+        matches.into_iter().take(max as usize).collect()
+    } else {
+        matches
+    }
+    
+    Ok(SearchResults {
+        total_matches: matches.len() as int,
+        files_searched: files.len() as int,
+        matches: matches,
+    })
+}
+
+fn search_files_parallel(files: Vec<string>, config: &Config) -> Result<Vec<Match>, string> {
+    let num_threads = config.threads as usize
+    let chunk_size = (files.len() + num_threads - 1) / num_threads
+    
+    // Split files into chunks
+    let mut chunks = vec![]
+    for i in 0..num_threads {
+        let start = i * chunk_size
+        let end = std::cmp::min(start + chunk_size, files.len())
+        if start < files.len() {
+            let chunk: Vec<string> = files[start..end].to_vec()
+            chunks.push(chunk)
+        }
+    }
+    
+    // Spawn threads
+    let (tx, rx) = sync::channel()
+    let mut handles = vec![]
+    
+    for chunk in chunks {
+        let tx = tx.clone();
+        let config = config.clone();
+        
+        let handle = thread {
+            for file in chunk {
+                match search_file(file.clone(), config.clone()) {
+                    Ok(matches) => {
+                        for m in matches {
+                            tx.send(m).unwrap()
+                        }
+                    }
+                    Err(_) => {
+                        // Skip files we can't read
+                    }
+                }
+            }
+        }
+        
+        handles.push(handle)
+    }
+    
+    // Drop original sender so receiver knows when all threads are done
+    drop(tx)
+    
+    // Collect results
+    let mut all_matches = vec![]
+    while let Ok(m) = rx.recv() {
+        all_matches.push(m)
+        
+        // Early termination if max count reached
+        if let Some(max) = config.max_count {
+            if all_matches.len() >= max as usize {
+                break
+            }
+        }
+    }
+    
+    // Wait for all threads
+    for handle in handles {
+        handle.join().unwrap()
+    }
+    
+    Ok(all_matches)
+}
+
+fn search_file(path: string, config: &Config) -> Result<Vec<Match>, string> {
+    // Read file contents
+    let contents = fs::read_to_string(&path)?
+    
+    // Collect all lines for context lookup
+    let all_lines: Vec<string> = contents.lines().map(|s| s.to_string()).collect()
+    
+    // Search line by line
+    let mut matches = vec![]
+    
+    for (line_num, line) in all_lines.iter().enumerate() {
+        match matcher::find_match(line, (line_num + 1) as int, &path, config) {
+            Some(mut m) => {
+                // Add context lines if requested
+                if config.context_before > 0 || config.context_after > 0 {
+                    m = add_context(m, &all_lines, config.context_before, config.context_after)
+                }
+                
+                matches.push(m)
+                
+                // Early termination if max count reached
+                match config.max_count {
+                    Some(max) => {
+                        if matches.len() >= max as usize {
+                            break
+                        }
+                    },
+                    None => {}
+                }
+            },
+            None => {}
+        }
+    }
+    
+    Ok(matches)
+}
+
+fn add_context(
+    mut match_obj: Match,
+    all_lines: &Vec<string>,
+    lines_before: int,
+    lines_after: int
+) -> Match {
+    let line_idx = (match_obj.line_number - 1) as usize
+    
+    // Collect context before
+    let start_before = if line_idx >= lines_before as usize {
+        line_idx - lines_before as usize
+    } else {
+        0
+    }
+    
+    let before_lines: Vec<string> = match all_lines.get(start_before..line_idx) {
+        Some(slice) => slice.iter().map(|s| s.clone()).collect(),
+        None => vec![],
+    }
+    match_obj.context_before = before_lines
+    
+    // Collect context after
+    let start_after = line_idx + 1
+    let end_after = std::cmp::min(start_after + lines_after as usize, all_lines.len())
+    
+    let after_lines: Vec<string> = match all_lines.get(start_after..end_after) {
+        Some(slice) => slice.iter().map(|s| s.clone()).collect(),
+        None => vec![],
+    }
+    match_obj.context_after = after_lines
+    
+    match_obj
+}
+

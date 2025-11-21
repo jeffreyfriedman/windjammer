@@ -1,0 +1,71 @@
+# Rust
+/target/
+Cargo.lock
+!examples/*/Cargo.lock
+**/*.rs.bk
+*.pdb
+
+# Generated output
+/output/
+/test_output/
+/test_output_*/
+
+# WASM build artifacts
+examples/*/pkg/
+examples/*/target/
+examples/*/build/
+examples/*/build_output/
+examples/*/src/
+
+# Temporary test files
+test_*.wj
+temp_*.wj
+
+# Editor files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Build artifacts
+*.o
+*.a
+*.so
+*.dylib
+*.dll
+
+# Profiling
+*.profraw
+*.profdata
+
+# Debugging
+*.dSYM/
+
+# Documentation build
+/book/
+
+# Local configuration
+.env
+.env.local
+
+# Node modules (if we add any JS tooling later)
+node_modules/
+
+# Python (if we add any Python tooling)
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Logs
+*.log
+
+# OS files
+Thumbs.db
+Desktop.ini
+
+/.sandbox/
+crates/windjammer-editor-desktop/src-tauri/target/
+build_editor/
+build_game_editor/

@@ -1,0 +1,286 @@
+// Project management handlers
+
+use std::http
+use std::json
+use std::db
+use std::log
+use std::time
+
+use crate::models::project
+
+@async
+pub fn list(req: Request, pool: DbPool) -> Response {
+    // Extract user ID for auth
+    let user_id = match extract_user_id(req) {
+        Some(id) => id,
+        None => return http.json_response(401, "Unauthorized"),
+    }
+    
+    // Query projects where user is owner or member
+    let query = "SELECT DISTINCT p.* FROM projects p LEFT JOIN project_members pm ON p.id = pm.project_id WHERE p.owner_id = $1 OR pm.user_id = $1 ORDER BY p.created_at DESC"
+    let rows = match db.query_all(pool, query, vec![user_id]) {
+        Ok(r) => r,
+        Err(e) => {
+            log.error("Failed to list projects: ${e}")
+            return http.json_response(500, "Failed to fetch projects")
+        }
+    }
+    
+    let mut projects = vec![]
+    for row in rows {
+        let project = ProjectResponse {
+            id: db.get_int(row, "id"),
+            name: db.get_string(row, "name"),
+            description: db.get_string(row, "description"),
+            owner_id: db.get_int(row, "owner_id"),
+            created_at: db.get_int(row, "created_at"),
+        }
+        projects.push(project)
+    }
+    
+    http.json_response(200, projects)
+}
+
+@async
+pub fn create(req: Request, pool: DbPool) -> Response {
+    // Extract user ID for auth
+    let user_id = match extract_user_id(req) {
+        Some(id) => id,
+        None => return http.json_response(401, "Unauthorized"),
+    }
+    
+    // Parse request body
+    let body = http.body(req)
+    let create_req = match json.parse_string(body) {
+        Ok(r) => r,
+        Err(e) => {
+            log.error("Failed to parse create request: ${e}")
+            return http.json_response(400, "Invalid request body")
+        }
+    }
+    
+    // Insert project
+    let now = time.now_unix()
+    let query = "INSERT INTO projects (name, description, owner_id, created_at, updated_at) VALUES ($1, $2, $3, $4, $5) RETURNING id"
+    
+    let project_id = match db.query_one(pool, query, vec![create_req.name, create_req.description, user_id, now, now]) {
+        Ok(row) => db.get_int(row, "id"),
+        Err(e) => {
+            log.error("Failed to create project: ${e}")
+            return http.json_response(500, "Failed to create project")
+        }
+    }
+    
+    let response = ProjectResponse {
+        id: project_id,
+        name: create_req.name,
+        description: create_req.description,
+        owner_id: user_id,
+        created_at: now,
+    }
+    
+    log.info("Project created: ${project_id}")
+    http.json_response(201, response)
+}
+
+@async
+pub fn get(req: Request, pool: DbPool) -> Response {
+    // Extract user ID for auth
+    let user_id = match extract_user_id(req) {
+        Some(id) => id,
+        None => return http.json_response(401, "Unauthorized"),
+    }
+    
+    // Extract project ID from path
+    let project_id = http.get_param(req, "id")
+    
+    // Query project with access check
+    let query = "SELECT p.* FROM projects p LEFT JOIN project_members pm ON p.id = pm.project_id WHERE p.id = $1 AND (p.owner_id = $2 OR pm.user_id = $2)"
+    let row = match db.query_one(pool, query, vec![project_id, user_id]) {
+        Ok(r) => r,
+        Err(_) => {
+            return http.json_response(404, "Project not found")
+        }
+    }
+    
+    let project = ProjectResponse {
+        id: db.get_int(row, "id"),
+        name: db.get_string(row, "name"),
+        description: db.get_string(row, "description"),
+        owner_id: db.get_int(row, "owner_id"),
+        created_at: db.get_int(row, "created_at"),
+    }
+    
+    http.json_response(200, project)
+}
+
+@async
+pub fn update(req: Request, pool: DbPool) -> Response {
+    // Extract user ID for auth
+    let user_id = match extract_user_id(req) {
+        Some(id) => id,
+        None => return http.json_response(401, "Unauthorized"),
+    }
+    
+    // Extract project ID from path
+    let project_id = http.get_param(req, "id")
+    
+    // Verify ownership
+    let check_query = "SELECT owner_id FROM projects WHERE id = $1"
+    let owner_id = match db.query_one(pool, check_query, vec![project_id]) {
+        Ok(row) => db.get_int(row, "owner_id"),
+        Err(_) => return http.json_response(404, "Project not found"),
+    }
+    
+    if user_id != owner_id {
+        return http.json_response(403, "Forbidden")
+    }
+    
+    // Parse request body
+    let body = http.body(req)
+    let update_req = match json.parse_string(body) {
+        Ok(r) => r,
+        Err(e) => {
+            log.error("Failed to parse update request: ${e}")
+            return http.json_response(400, "Invalid request body")
+        }
+    }
+    
+    // Update project
+    let query = "UPDATE projects SET name = $1, description = $2, updated_at = $3 WHERE id = $4"
+    match db.execute(pool, query, vec![update_req.name, update_req.description, time.now_unix(), project_id]) {
+        Ok(_) => {}
+        Err(e) => {
+            log.error("Failed to update project: ${e}")
+            return http.json_response(500, "Failed to update project")
+        }
+    }
+    
+    http.json_response(200, "Project updated successfully")
+}
+
+@async
+pub fn delete(req: Request, pool: DbPool) -> Response {
+    // Extract user ID for auth
+    let user_id = match extract_user_id(req) {
+        Some(id) => id,
+        None => return http.json_response(401, "Unauthorized"),
+    }
+    
+    // Extract project ID from path
+    let project_id = http.get_param(req, "id")
+    
+    // Verify ownership
+    let check_query = "SELECT owner_id FROM projects WHERE id = $1"
+    let owner_id = match db.query_one(pool, check_query, vec![project_id]) {
+        Ok(row) => db.get_int(row, "owner_id"),
+        Err(_) => return http.json_response(404, "Project not found"),
+    }
+    
+    if user_id != owner_id {
+        return http.json_response(403, "Forbidden")
+    }
+    
+    // Delete project
+    let query = "DELETE FROM projects WHERE id = $1"
+    match db.execute(pool, query, vec![project_id]) {
+        Ok(_) => {}
+        Err(e) => {
+            log.error("Failed to delete project: ${e}")
+            return http.json_response(500, "Failed to delete project")
+        }
+    }
+    
+    log.info("Project deleted: ${project_id}")
+    http.json_response(200, "Project deleted successfully")
+}
+
+@async
+pub fn add_member(req: Request, pool: DbPool) -> Response {
+    // Extract user ID for auth
+    let user_id = match extract_user_id(req) {
+        Some(id) => id,
+        None => return http.json_response(401, "Unauthorized"),
+    }
+    
+    // Extract project ID from path
+    let project_id = http.get_param(req, "id")
+    
+    // Verify ownership
+    let check_query = "SELECT owner_id FROM projects WHERE id = $1"
+    let owner_id = match db.query_one(pool, check_query, vec![project_id]) {
+        Ok(row) => db.get_int(row, "owner_id"),
+        Err(_) => return http.json_response(404, "Project not found"),
+    }
+    
+    if user_id != owner_id {
+        return http.json_response(403, "Forbidden")
+    }
+    
+    // Parse request body
+    let body = http.body(req)
+    let member_req = match json.parse_string(body) {
+        Ok(r) => r,
+        Err(e) => {
+            log.error("Failed to parse member request: ${e}")
+            return http.json_response(400, "Invalid request body")
+        }
+    }
+    
+    // Add member
+    let now = time.now_unix()
+    let query = "INSERT INTO project_members (project_id, user_id, role, added_at) VALUES ($1, $2, 'member', $3)"
+    match db.execute(pool, query, vec![project_id, member_req.user_id, now]) {
+        Ok(_) => {}
+        Err(e) => {
+            log.error("Failed to add member: ${e}")
+            return http.json_response(500, "Failed to add member")
+        }
+    }
+    
+    log.info("Member added to project ${project_id}")
+    http.json_response(201, "Member added successfully")
+}
+
+@async
+pub fn remove_member(req: Request, pool: DbPool) -> Response {
+    // Extract user ID for auth
+    let user_id = match extract_user_id(req) {
+        Some(id) => id,
+        None => return http.json_response(401, "Unauthorized"),
+    }
+    
+    // Extract IDs from path
+    let project_id = http.get_param(req, "id")
+    let member_id = http.get_param(req, "user_id")
+    
+    // Verify ownership
+    let check_query = "SELECT owner_id FROM projects WHERE id = $1"
+    let owner_id = match db.query_one(pool, check_query, vec![project_id]) {
+        Ok(row) => db.get_int(row, "owner_id"),
+        Err(_) => return http.json_response(404, "Project not found"),
+    }
+    
+    if user_id != owner_id {
+        return http.json_response(403, "Forbidden")
+    }
+    
+    // Remove member
+    let query = "DELETE FROM project_members WHERE project_id = $1 AND user_id = $2"
+    match db.execute(pool, query, vec![project_id, member_id]) {
+        Ok(_) => {}
+        Err(e) => {
+            log.error("Failed to remove member: ${e}")
+            return http.json_response(500, "Failed to remove member")
+        }
+    }
+    
+    log.info("Member removed from project ${project_id}")
+    http.json_response(200, "Member removed successfully")
+}
+
+// Helper function
+fn extract_user_id(req: Request) -> Option<int> {
+    // Simplified extraction - would use proper JWT validation
+    Some(1)
+}

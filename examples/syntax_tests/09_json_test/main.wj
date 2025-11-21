@@ -1,0 +1,50 @@
+// Test std.json module
+
+use std::json
+
+fn main() {
+    println!("=== JSON Module Test ===\n")
+    
+    // Test parse and stringify
+    let json_str = "{\"name\": \"Alice\", \"age\": 30, \"active\": true}"
+    
+    println!("Original JSON:")
+    println!("{}", json_str)
+    println!("")
+    
+    // Parse the JSON
+    match json.parse(json_str) {
+        Ok(value) => {
+            println!("Parsed successfully!")
+            
+            // Check types
+            println!("Is object: {}", json.is_object(&value))
+            println!("Is array: {}", json.is_array(&value))
+            println!("")
+            
+            // Try to get a field
+            if let Some(name_val) = json.get(&value, "name") {
+                if let Some(name) = json.as_str(name_val) {
+                    println!("Name: {}", name)
+                }
+            }
+            
+            if let Some(age_val) = json.get(&value, "age") {
+                if let Some(age) = json.as_i64(age_val) {
+                    println!("Age: {}", age)
+                }
+            }
+            
+            if let Some(active_val) = json.get(&value, "active") {
+                if let Some(active) = json.as_bool(active_val) {
+                    println!("Active: {}", active)
+                }
+            }
+        }
+        Err(e) => {
+            println!("Parse error: {}", e)
+        }
+    }
+    
+    println!("\n✅ JSON test complete!")
+}

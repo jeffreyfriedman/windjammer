@@ -1,0 +1,11 @@
+// Test mutable borrowing inference
+fn increment(x: int) {
+    x = x + 1
+}
+
+fn main() {
+    let mut counter = 0
+    increment(counter)
+    println!("Counter: {}", counter)
+}
+

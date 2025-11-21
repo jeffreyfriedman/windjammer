@@ -1,0 +1,54 @@
+// Project model
+
+use std::time
+
+@derive(Debug, Clone, Serialize, Deserialize)
+pub struct Project {
+    pub id: int,
+    pub name: string,
+    pub description: string,
+    pub owner_id: int,
+    pub created_at: int,
+    pub updated_at: int,
+}
+
+@derive(Debug, Serialize, Deserialize)
+pub struct CreateProjectRequest {
+    pub name: string,
+    pub description: string,
+}
+
+@derive(Debug, Serialize, Deserialize)
+pub struct UpdateProjectRequest {
+    pub name: Option<string>,
+    pub description: Option<string>,
+}
+
+@derive(Debug, Serialize, Deserialize)
+pub struct ProjectResponse {
+    pub id: int,
+    pub name: string,
+    pub description: string,
+    pub owner_id: int,
+    pub created_at: int,
+}
+
+@derive(Debug, Serialize, Deserialize)
+pub struct ProjectMember {
+    pub project_id: int,
+    pub user_id: int,
+    pub role: string,
+    pub added_at: int,
+}
+
+impl Project {
+    pub fn to_response(self) -> ProjectResponse {
+        ProjectResponse {
+            id: self.id,
+            name: self.name,
+            description: self.description,
+            owner_id: self.owner_id,
+            created_at: self.created_at,
+        }
+    }
+}

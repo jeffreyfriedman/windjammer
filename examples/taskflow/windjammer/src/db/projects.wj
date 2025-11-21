@@ -1,0 +1,242 @@
+// Database operations for projects
+
+use std::db
+use std::log
+use ../models/project::{Project, CreateProjectRequest, ProjectMember}
+
+// Create a new project
+pub async fn create(conn: Connection, req: CreateProjectRequest, owner_id: int) -> Result<Project, Error> {
+    log.debug_with("Creating project", "name", &req.name)
+    
+    let query = r#"
+        INSERT INTO projects (owner_id, name, description)
+        VALUES ($1, $2, $3)
+        RETURNING id, owner_id, name, description,
+                  created_at::text, updated_at::text
+    "#
+    
+    let result = conn.query(query)
+        .bind(owner_id)
+        .bind(&req.name)
+        .bind(&req.description.unwrap_or("".to_string()))
+        .fetch_one()
+        .await?
+    
+    Ok(Project {
+        id: result.get("id")?,
+        owner_id: result.get("owner_id")?,
+        name: result.get("name")?,
+        description: result.get("description")?,
+        created_at: result.get("created_at")?,
+        updated_at: result.get("updated_at")?,
+    })
+}
+
+// Find project by ID
+pub async fn find_by_id(conn: Connection, project_id: int) -> Result<Option<Project>, Error> {
+    log.debug_with("Finding project by ID", "id", &project_id.to_string())
+    
+    let query = r#"
+        SELECT id, owner_id, name, description,
+               created_at::text, updated_at::text
+        FROM projects
+        WHERE id = $1
+    "#
+    
+    let result = conn.query(query)
+        .bind(project_id)
+        .fetch_optional()
+        .await?
+    
+    match result {
+        Some(row) => {
+            Ok(Some(Project {
+                id: row.get("id")?,
+                owner_id: row.get("owner_id")?,
+                name: row.get("name")?,
+                description: row.get("description")?,
+                created_at: row.get("created_at")?,
+                updated_at: row.get("updated_at")?,
+            }))
+        }
+        None => Ok(None)
+    }
+}
+
+// List projects for a user (owned or member of)
+pub async fn list_for_user(conn: Connection, user_id: int) -> Result<Vec<Project>, Error> {
+    log.debug_with("Listing projects for use", "user_id", &user_id.to_string())
+    
+    let query = r#"
+        SELECT DISTINCT p.id, p.owner_id, p.name, p.description,
+               p.created_at::text, p.updated_at::text
+        FROM projects p
+        LEFT JOIN project_members pm ON p.id = pm.project_id
+        WHERE p.owner_id = $1 OR pm.user_id = $1
+        ORDER BY p.updated_at DESC
+    "#
+    
+    let results = conn.query(query)
+        .bind(user_id)
+        .fetch_all()
+        .await?
+    
+    let mut projects = Vec::new()
+    for row in results {
+        projects.push(Project {
+            id: row.get("id")?,
+            owner_id: row.get("owner_id")?,
+            name: row.get("name")?,
+            description: row.get("description")?,
+            created_at: row.get("created_at")?,
+            updated_at: row.get("updated_at")?,
+        })
+    }
+    
+    Ok(projects)
+}
+
+// Update project
+pub async fn update(conn: Connection, project_id: int, name: Option<string>, description: Option<string>) -> Result<Project, Error> {
+    log.debug_with("Updating project", "id", &project_id.to_string())
+    
+    let query = r#"
+        UPDATE projects
+        SET name = COALESCE($2, name),
+            description = COALESCE($3, description),
+            updated_at = NOW()
+        WHERE id = $1
+        RETURNING id, owner_id, name, description,
+                  created_at::text, updated_at::text
+    "#
+    
+    let result = conn.query(query)
+        .bind(project_id)
+        .bind(&name.unwrap_or("".to_string()))
+        .bind(&description.unwrap_or("".to_string()))
+        .fetch_one()
+        .await?
+    
+    Ok(Project {
+        id: result.get("id")?,
+        owner_id: result.get("owner_id")?,
+        name: result.get("name")?,
+        description: result.get("description")?,
+        created_at: result.get("created_at")?,
+        updated_at: result.get("updated_at")?,
+    })
+}
+
+// Delete project
+pub async fn delete(conn: Connection, project_id: int) -> Result<(), Error> {
+    log.debug_with("Deleting project", "id", &project_id.to_string())
+    
+    let query = "DELETE FROM projects WHERE id = $1"
+    
+    conn.execute(query)
+        .bind(project_id)
+        .await?
+    
+    Ok(())
+}
+
+// Check if user has access to project (owner or member)
+pub async fn user_has_access(conn: Connection, project_id: int, user_id: int) -> Result<bool, Error> {
+    let query = r#"
+        SELECT EXISTS(
+            SELECT 1 FROM projects WHERE id = $1 AND owner_id = $2
+            UNION
+            SELECT 1 FROM project_members WHERE project_id = $1 AND user_id = $2
+        ) as has_access
+    "#
+    
+    let result = conn.query(query)
+        .bind(project_id)
+        .bind(user_id)
+        .fetch_one()
+        .await?
+    
+    Ok(result.get("has_access")?)
+}
+
+// Check if user is project owner
+pub async fn is_owner(conn: Connection, project_id: int, user_id: int) -> Result<bool, Error> {
+    let query = "SELECT EXISTS(SELECT 1 FROM projects WHERE id = $1 AND owner_id = $2) as is_owner"
+    
+    let result = conn.query(query)
+        .bind(project_id)
+        .bind(user_id)
+        .fetch_one()
+        .await?
+    
+    Ok(result.get("is_owner")?)
+}
+
+// Add member to project
+pub async fn add_member(conn: Connection, project_id: int, user_id: int, role: string) -> Result<ProjectMember, Error> {
+    log.debug_with("Adding member to project", "project_id", &project_id.to_string())
+    
+    let query = r#"
+        INSERT INTO project_members (project_id, user_id, role)
+        VALUES ($1, $2, $3)
+        RETURNING project_id, user_id, role, created_at::text
+    "#
+    
+    let result = conn.query(query)
+        .bind(project_id)
+        .bind(user_id)
+        .bind(&role)
+        .fetch_one()
+        .await?
+    
+    Ok(ProjectMember {
+        project_id: result.get("project_id")?,
+        user_id: result.get("user_id")?,
+        role: result.get("role")?,
+        created_at: result.get("created_at")?,
+    })
+}
+
+// Remove member from project
+pub async fn remove_member(conn: Connection, project_id: int, user_id: int) -> Result<(), Error> {
+    log.debug_with("Removing member from project", "project_id", &project_id.to_string())
+    
+    let query = "DELETE FROM project_members WHERE project_id = $1 AND user_id = $2"
+    
+    conn.execute(query)
+        .bind(project_id)
+        .bind(user_id)
+        .await?
+    
+    Ok(())
+}
+
+// List members of a project
+pub async fn list_members(conn: Connection, project_id: int) -> Result<Vec<ProjectMember>, Error> {
+    log.debug_with("Listing project members", "project_id", &project_id.to_string())
+    
+    let query = r#"
+        SELECT project_id, user_id, role, created_at::text
+        FROM project_members
+        WHERE project_id = $1
+        ORDER BY created_at
+    "#
+    
+    let results = conn.query(query)
+        .bind(project_id)
+        .fetch_all()
+        .await?
+    
+    let mut members = Vec::new()
+    for row in results {
+        members.push(ProjectMember {
+            project_id: row.get("project_id")?,
+            user_id: row.get("user_id")?,
+            role: row.get("role")?,
+            created_at: row.get("created_at")?,
+        })
+    }
+    
+    Ok(members)
+}
+

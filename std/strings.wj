@@ -1,0 +1,84 @@
+// std/strings - String manipulation utilities
+// Simplified version without closures/iterators for v0.6.0
+
+// === CASE CONVERSION ===
+
+// Convert to uppercase
+fn to_upper(s: &string) -> string {
+    s.to_uppercase()
+}
+
+// Convert to lowercase
+fn to_lower(s: &string) -> string {
+    s.to_lowercase()
+}
+
+// === WHITESPACE ===
+
+// Trim whitespace from both ends
+fn trim(s: &string) -> string {
+    s.trim().to_string()
+}
+
+// Trim whitespace from start
+fn trim_start(s: &string) -> string {
+    s.trim_start().to_string()
+}
+
+// Trim whitespace from end
+fn trim_end(s: &string) -> string {
+    s.trim_end().to_string()
+}
+
+// === CHECKING ===
+
+// Check if string is empty
+fn is_empty(s: &string) -> bool {
+    s.is_empty()
+}
+
+// Check if string starts with prefix
+fn starts_with(s: &string, prefix: &string) -> bool {
+    s.starts_with(prefix)
+}
+
+// Check if string ends with suffix
+fn ends_with(s: &string, suffix: &string) -> bool {
+    s.ends_with(suffix)
+}
+
+// Check if string contains substring
+fn contains(s: &string, substring: &string) -> bool {
+    s.contains(substring)
+}
+
+// === REPLACEMENT ===
+
+// Replace all occurrences
+fn replace(s: &string, from: &string, to: &string) -> string {
+    s.replace(from, to)
+}
+
+// Replace first N occurrences
+fn replacen(s: &string, from: &string, to: &string, count: usize) -> string {
+    s.replacen(from, to, count)
+}
+
+// === LENGTH ===
+
+// Get string length in bytes
+fn len(s: &string) -> usize {
+    s.len()
+}
+
+// Get string length in characters
+fn char_count(s: &string) -> usize {
+    s.chars().count()
+}
+
+// === REPEAT ===
+
+// Repeat string N times
+fn repeat(s: &string, n: usize) -> string {
+    s.repeat(n)
+}

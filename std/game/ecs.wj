@@ -1,0 +1,152 @@
+// Pure Windjammer ECS API
+// 
+// This module defines the ECS types that Windjammer developers use.
+// The compiler generates Rust code that uses the windjammer-game-framework ECS.
+
+/// Entity: A unique identifier for a game object
+/// 
+/// Entities are just IDs - all data lives in components.
+/// 
+/// Example:
+/// ```
+/// let player = world.spawn()
+///     .with(Transform::at(0, 0, 0))
+///     .with(Mesh::cube())
+/// ```
+struct Entity {
+    // Internal: Generated as windjammer_game_framework::ecs::Entity
+}
+
+/// World: The ECS container
+/// 
+/// Manages all entities and components.
+/// 
+/// Example:
+/// ```
+/// let world = World::new()
+/// 
+/// let entity = world.spawn()
+///     .with(Position { x: 0, y: 0, z: 0 })
+///     .build()
+/// 
+/// world.despawn(entity)
+/// ```
+struct World {
+    // Internal: Generated as windjammer_game_framework::ecs::World
+}
+
+impl World {
+    /// Create a new world
+    fn new() -> World {
+        // Generated: windjammer_game_framework::ecs::World::new()
+    }
+    
+    /// Spawn a new entity
+    /// 
+    /// Returns an EntityBuilder for adding components.
+    fn spawn() -> EntityBuilder {
+        // Generated: self.world.spawn()
+    }
+    
+    /// Despawn an entity
+    /// 
+    /// Removes the entity and all its components.
+    fn despawn(entity: Entity) -> bool {
+        // Generated: self.world.despawn(entity)
+    }
+    
+    /// Check if an entity is alive
+    fn is_alive(entity: Entity) -> bool {
+        // Generated: self.world.is_alive(entity)
+    }
+    
+    /// Get the number of entities
+    fn entity_count() -> int {
+        // Generated: self.world.entity_count()
+    }
+    
+    /// Add a component to an entity
+    fn add_component<T>(entity: Entity, component: T) {
+        // Generated: self.world.add_component(entity, component)
+    }
+    
+    /// Remove a component from an entity
+    fn remove_component<T>(entity: Entity) -> Option<T> {
+        // Generated: self.world.remove_component::<T>(entity)
+    }
+    
+    /// Get a component from an entity
+    fn get_component<T>(entity: Entity) -> Option<T> {
+        // Generated: self.world.get_component::<T>(entity)
+    }
+    
+    /// Check if an entity has a component
+    fn has_component<T>(entity: Entity) -> bool {
+        // Generated: self.world.has_component::<T>(entity)
+    }
+}
+
+/// EntityBuilder: Fluent API for building entities
+/// 
+/// Example:
+/// ```
+/// let entity = world.spawn()
+///     .with(Transform::at(0, 0, 0))
+///     .with(Velocity::new(1, 0, 0))
+///     .with(Mesh::cube())
+///     .build()
+/// ```
+struct EntityBuilder {
+    // Internal: Generated as windjammer_game_framework::ecs::EntityBuilder
+}
+
+impl EntityBuilder {
+    /// Add a component to the entity
+    fn with<T>(component: T) -> EntityBuilder {
+        // Generated: self.with(component)
+    }
+    
+    /// Build and return the entity
+    fn build() -> Entity {
+        // Generated: self.build()
+    }
+}
+
+/// Query: Iterate over entities with specific components
+/// 
+/// Example:
+/// ```
+/// // Read-only query
+/// for (entity, transform) in world.query<Transform>() {
+///     println!("Entity {entity} at {transform.position}")
+/// }
+/// 
+/// // Mutable query
+/// for (entity, transform, velocity) in world.query_mut<(Transform, Velocity)>() {
+///     transform.position += velocity.value * delta
+/// }
+/// ```
+struct Query<T> {
+    // Internal: Generated as windjammer_game_framework::ecs::Query
+}
+
+/// System: Function that operates on components
+/// 
+/// Systems are automatically detected by the @system decorator.
+/// 
+/// Example:
+/// ```
+/// @system
+/// fn move_system(world: World, delta: float) {
+///     for (entity, transform, velocity) in world.query_mut<(Transform, Velocity)>() {
+///         transform.position += velocity.value * delta
+///     }
+/// }
+/// ```
+/// 
+/// The compiler generates:
+/// ```rust
+/// fn move_system(world: &mut windjammer_game_framework::ecs::World, delta: f32) {
+///     // ... generated code ...
+/// }
+/// ```

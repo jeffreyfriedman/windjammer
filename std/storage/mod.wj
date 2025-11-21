@@ -1,0 +1,118 @@
+// std/storage - Persistent storage with proper abstraction
+// Implementation: Files (native), localStorage/IndexedDB (browser)
+
+// PUBLIC API - Users interact with these functions only
+
+pub type StorageResult<T> = Result<T, string>
+
+/// Storage backend types
+pub enum StorageBackend {
+    Local,      // localStorage (browser) or local file (native)
+    Session,    // sessionStorage (browser) or temp file (native)
+    Persistent, // IndexedDB (browser) or database (native)
+}
+
+/// Store a key-value pair
+pub fn set(key: string, value: string) -> StorageResult<()> {
+    set_with_backend(key, value, StorageBackend::Local)
+}
+
+/// Get a value by key
+pub fn get(key: string) -> StorageResult<Option<string>> {
+    get_with_backend(key, StorageBackend::Local)
+}
+
+/// Remove a key
+pub fn remove(key: string) -> StorageResult<()> {
+    remove_with_backend(key, StorageBackend::Local)
+}
+
+/// Clear all storage
+pub fn clear() -> StorageResult<()> {
+    clear_with_backend(StorageBackend::Local)
+}
+
+/// List all keys
+pub fn keys() -> StorageResult<Vec<string>> {
+    keys_with_backend(StorageBackend::Local)
+}
+
+/// Check if a key exists
+pub fn has(key: string) -> bool {
+    get(key).unwrap_or(None).is_some()
+}
+
+// Backend-specific functions
+
+/// Store with specific backend
+pub fn set_with_backend(key: string, value: string, backend: StorageBackend) -> StorageResult<()> {
+    // Compiler will generate platform-specific code
+    Err("Not implemented".to_string())
+}
+
+/// Get with specific backend
+pub fn get_with_backend(key: string, backend: StorageBackend) -> StorageResult<Option<string>> {
+    // Compiler will generate platform-specific code
+    Ok(None)
+}
+
+/// Remove with specific backend
+pub fn remove_with_backend(key: string, backend: StorageBackend) -> StorageResult<()> {
+    // Compiler will generate platform-specific code
+    Err("Not implemented".to_string())
+}
+
+/// Clear with specific backend
+pub fn clear_with_backend(backend: StorageBackend) -> StorageResult<()> {
+    // Compiler will generate platform-specific code
+    Err("Not implemented".to_string())
+}
+
+/// Keys with specific backend
+pub fn keys_with_backend(backend: StorageBackend) -> StorageResult<Vec<string>> {
+    // Compiler will generate platform-specific code
+    Ok(vec![])
+}
+
+// Structured storage (JSON)
+
+/// Store a JSON-serializable value
+pub fn set_json<T>(key: string, value: T) -> StorageResult<()> {
+    // Compiler will generate platform-specific code
+    Err("Not implemented".to_string())
+}
+
+/// Get a JSON-serializable value
+pub fn get_json<T>(key: string) -> StorageResult<Option<T>> {
+    // Compiler will generate platform-specific code
+    Ok(None)
+}
+
+// Binary storage
+
+/// Store binary data
+pub fn set_bytes(key: string, data: Vec<u8>) -> StorageResult<()> {
+    // Compiler will generate platform-specific code
+    Err("Not implemented".to_string())
+}
+
+/// Get binary data
+pub fn get_bytes(key: string) -> StorageResult<Option<Vec<u8>>> {
+    // Compiler will generate platform-specific code
+    Ok(None)
+}
+
+// Cache management
+
+/// Set with expiration (seconds)
+pub fn set_with_ttl(key: string, value: string, ttl: int) -> StorageResult<()> {
+    // Compiler will generate platform-specific code
+    Err("Not implemented".to_string())
+}
+
+/// Get with automatic expiration check
+pub fn get_with_ttl(key: string) -> StorageResult<Option<string>> {
+    // Compiler will generate platform-specific code
+    Ok(None)
+}
+

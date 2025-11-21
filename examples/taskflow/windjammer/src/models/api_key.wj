@@ -1,0 +1,81 @@
+// API Key authentication model
+
+use std::time
+use std::crypto
+
+@derive(Debug, Clone, Serialize, Deserialize)
+pub struct ApiKey {
+    pub id: int,
+    pub user_id: int,
+    pub key_hash: string,
+    pub name: string,
+    pub last_used_at: Option<int>,
+    pub created_at: int,
+    pub expires_at: Option<int>,
+    pub revoked: bool,
+}
+
+@derive(Debug, Serialize, Deserialize)
+pub struct CreateApiKeyRequest {
+    pub name: string,
+    pub expires_in_days: Option<int>,
+}
+
+@derive(Debug, Serialize, Deserialize)
+pub struct ApiKeyResponse {
+    pub id: int,
+    pub name: string,
+    pub key: string,  // Only returned on creation
+    pub created_at: int,
+    pub expires_at: Option<int>,
+}
+
+@derive(Debug, Serialize, Deserialize)
+pub struct ApiKeyListItem {
+    pub id: int,
+    pub name: string,
+    pub last_used_at: Option<int>,
+    pub created_at: int,
+    pub expires_at: Option<int>,
+    pub revoked: bool,
+}
+
+impl ApiKey {
+    pub fn generate_key() -> string {
+        // Generate a secure random API key
+        let random_bytes = crypto.random_bytes(32)
+        let key = format!("wj_{}", crypto.base64_encode(&random_bytes))
+        key
+    }
+    
+    pub fn hash_key(key: string) -> string {
+        crypto.sha256(&key)
+    }
+    
+    pub fn is_valid(self) -> bool {
+        if self.revoked {
+            return false
+        }
+        
+        if let Some(expires_at) = self.expires_at {
+            let now = time.now().timestamp()
+            if now > expires_at {
+                return false
+            }
+        }
+        
+        true
+    }
+    
+    pub fn to_list_item(self) -> ApiKeyListItem {
+        ApiKeyListItem {
+            id: self.id,
+            name: self.name,
+            last_used_at: self.last_used_at,
+            created_at: self.created_at,
+            expires_at: self.expires_at,
+            revoked: self.revoked,
+        }
+    }
+}
+

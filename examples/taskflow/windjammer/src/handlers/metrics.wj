@@ -1,0 +1,150 @@
+// Prometheus metrics endpoint
+
+use std::http
+use std::time
+
+// Global metrics storage (in production, use a proper metrics library)
+static mut REQUEST_COUNT: HashMap<string, int> = HashMap::new()
+static mut REQUEST_DURATION_SUM: HashMap<string, int> = HashMap::new()
+static mut ERROR_COUNT: HashMap<string, int> = HashMap::new()
+static START_TIME: int = time.now().timestamp()
+
+// Prometheus metrics endpoint
+@async
+pub fn metrics(req: Request) -> Response {
+    let mut output = String::new()
+    
+    // Process uptime
+    let now = time.now().timestamp()
+    let uptime = now - START_TIME
+    output.push_str(&format!("# HELP process_uptime_seconds Process uptime in seconds\n"))
+    output.push_str(&format!("# TYPE process_uptime_seconds gauge\n"))
+    output.push_str(&format!("process_uptime_seconds {}\n\n", uptime))
+    
+    // Request count by endpoint
+    output.push_str(&format!("# HELP http_requests_total Total number of HTTP requests\n"))
+    output.push_str(&format!("# TYPE http_requests_total counter\n"))
+    
+    unsafe {
+        for (endpoint, count) in REQUEST_COUNT.iter() {
+            output.push_str(&format!("http_requests_total{{endpoint=\"{}\"}} {}\n", endpoint, count))
+        }
+    }
+    output.push_str("\n")
+    
+    // Request duration
+    output.push_str(&format!("# HELP http_request_duration_seconds HTTP request duration in seconds\n"))
+    output.push_str(&format!("# TYPE http_request_duration_seconds summary\n"))
+    
+    unsafe {
+        for (endpoint, duration_sum) in REQUEST_DURATION_SUM.iter() {
+            let count = REQUEST_COUNT.get(endpoint).unwrap_or(&0)
+            if *count > 0 {
+                let avg_duration = (*duration_sum as f64) / (*count as f64) / 1000.0
+                output.push_str(&format!("http_request_duration_seconds_sum{{endpoint=\"{}\"}} {:.3}\n", endpoint, avg_duration))
+                output.push_str(&format!("http_request_duration_seconds_count{{endpoint=\"{}\"}} {}\n", endpoint, count))
+            }
+        }
+    }
+    output.push_str("\n")
+    
+    // Error count
+    output.push_str(&format!("# HELP http_errors_total Total number of HTTP errors\n"))
+    output.push_str(&format!("# TYPE http_errors_total counter\n"))
+    
+    unsafe {
+        for (endpoint, count) in ERROR_COUNT.iter() {
+            output.push_str(&format!("http_errors_total{{endpoint=\"{}\"}} {}\n", endpoint, count))
+        }
+    }
+    output.push_str("\n")
+    
+    // Active connections (placeholder)
+    output.push_str(&format!("# HELP http_active_connections Current number of active connections\n"))
+    output.push_str(&format!("# TYPE http_active_connections gauge\n"))
+    output.push_str(&format!("http_active_connections 0\n\n"))
+    
+    // Database connection pool (placeholder)
+    output.push_str(&format!("# HELP db_connections_active Active database connections\n"))
+    output.push_str(&format!("# TYPE db_connections_active gauge\n"))
+    output.push_str(&format!("db_connections_active 5\n\n"))
+    
+    http.text_response(200, output, "text/plain; version=0.0.4")
+}
+
+// Record a request for metrics
+pub fn record_request(endpoint: string, duration_ms: int, status_code: int) {
+    unsafe {
+        // Increment request count
+        let mut current_count = REQUEST_COUNT.get(&endpoint).unwrap_or(&0).clone()
+        current_count += 1
+        REQUEST_COUNT.insert(endpoint.clone(), current_count)
+        
+        // Add to duration sum
+        let mut current_duration = REQUEST_DURATION_SUM.get(&endpoint).unwrap_or(&0).clone()
+        current_duration += duration_ms
+        REQUEST_DURATION_SUM.insert(endpoint.clone(), current_duration)
+        
+        // Increment error count if error status
+        if status_code >= 400 {
+            let mut current_errors = ERROR_COUNT.get(&endpoint).unwrap_or(&0).clone()
+            current_errors += 1
+            ERROR_COUNT.insert(endpoint.clone(), current_errors)
+        }
+    }
+}
+
+// Metrics middleware - wraps handlers to collect metrics
+pub fn metrics_middleware(req: Request, handler: fn(Request) -> Response) -> Response {
+    let start = time.now().timestamp_millis()
+    let endpoint = http.path(req)
+    
+    // Call the handler
+    let response = handler(req)
+    
+    // Record metrics
+    let duration = time.now().timestamp_millis() - start
+    let status = http.status(response)
+    record_request(endpoint, duration as int, status)
+    
+    response
+}
+
+// Get current metrics as JSON (for debugging)
+@async
+pub fn metrics_json(req: Request) -> Response {
+    let now = time.now().timestamp()
+    let uptime = now - START_TIME
+    
+    let mut metrics = json!({
+        "uptime_seconds": uptime,
+        "timestamp": now,
+        "requests": {},
+        "errors": {},
+        "durations": {}
+    })
+    
+    unsafe {
+        // Add request counts
+        for (endpoint, count) in REQUEST_COUNT.iter() {
+            metrics["requests"][endpoint] = json!(count)
+        }
+        
+        // Add error counts
+        for (endpoint, count) in ERROR_COUNT.iter() {
+            metrics["errors"][endpoint] = json!(count)
+        }
+        
+        // Add average durations
+        for (endpoint, duration_sum) in REQUEST_DURATION_SUM.iter() {
+            let count = REQUEST_COUNT.get(endpoint).unwrap_or(&0)
+            if *count > 0 {
+                let avg_duration = (*duration_sum as f64) / (*count as f64)
+                metrics["durations"][endpoint] = json!(avg_duration)
+            }
+        }
+    }
+    
+    http.json_response(200, metrics)
+}
+

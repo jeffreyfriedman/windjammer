@@ -1,0 +1,129 @@
+[workspace]
+members = [
+    ".",
+    "crates/windjammer-lsp",
+    "crates/windjammer-mcp",
+    "crates/windjammer-runtime",
+    "crates/windjammer-ui-macro",
+    # Removed: crates/windjammer-c-ffi (moved to windjammer-game repo)
+    # Removed: crates/windjammer-editor-desktop (moved to windjammer-game repo)
+    # Removed: crates/windjammer-editor-web (moved to windjammer-game repo)
+    # Removed: crates/windjammer-game-editor (moved to windjammer-game repo)
+    # Removed: crates/windjammer-game-framework (moved to windjammer-game repo)
+    # Removed: crates/windjammer-ui (moved to windjammer-ui repo)
+    # Removed: sdks/rust (moved to windjammer-game repo)
+    # Removed: tools/sdk-generator (no longer exists)
+]
+
+[workspace.package]
+version = "0.34.0"
+edition = "2021"
+authors = ["Jeffrey Friedman <jeffrey@example.com>", "Windjammer Contributors"]
+license = "MIT OR Apache-2.0"
+rust-version = "1.90"
+
+[package]
+name = "windjammer"
+version.workspace = true
+edition.workspace = true
+default-run = "wj"
+authors.workspace = true
+license.workspace = true
+description = "A simple language inspired by Go, Ruby, and Elixir that transpiles to Rust - 80% of Rust's power with 20% of the complexity"
+repository = "https://github.com/jeffreyfriedman/windjammer"
+homepage = "https://github.com/jeffreyfriedman/windjammer"
+documentation = "https://github.com/jeffreyfriedman/windjammer/blob/main/docs/GUIDE.md"
+keywords = ["compiler", "transpiler", "rust", "go", "language"]
+categories = ["development-tools", "compilers"]
+readme = "README.md"
+rust-version.workspace = true
+# Disable automatic binary target from src/main.rs
+autobins = false
+exclude = [
+    "test_output_*",
+    "examples/*/build_output",
+    "examples/*/pkg",
+    "examples/*/target",
+    "examples/taskflow/rust",
+    "examples/taskflow/windjammer",
+    ".github",
+    "docs/*.md"
+]
+
+[lib]
+name = "windjammer"
+path = "src/main.rs"
+
+[[bin]]
+name = "wj"
+path = "src/bin/wj.rs"
+
+[features]
+default = []
+
+[dependencies]
+# Parser combinator library
+nom = "7.1"
+# CLI argument parsing
+clap = { version = "4.5", features = ["derive"] }
+# Error handling
+anyhow = "1.0"
+thiserror = "1.0"
+# Code generation
+indoc = "2.0"
+# Pretty printing
+colored = "2.1"
+# JSON parsing for rustc diagnostics
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+# Syntax highlighting for error snippets
+syntect = "5.2"
+
+# Terminal UI for interactive error navigation
+ratatui = "0.28"
+crossterm = "0.28"
+# TOML parsing for wj.toml
+toml = "0.8"
+# Temporary directories for wj run
+tempfile = "3.8"
+# Incremental compilation with Salsa
+salsa = "0.24"
+
+[dev-dependencies]
+# Benchmarking
+criterion = { version = "0.5", features = ["html_reports"] }
+smallvec = "1.13.0"
+
+[[bench]]
+name = "compilation"
+harness = false
+
+[[bench]]
+name = "runtime"
+harness = false
+
+[[bench]]
+name = "defer_drop_bench"
+harness = false
+
+[[bench]]
+name = "smallvec_bench"
+harness = false
+
+[[bench]]
+name = "cow_bench"
+harness = false
+
+# Note: defer_drop_latency is a benchmark, not a standalone binary
+[[bench]]
+name = "defer_drop_latency"
+harness = false
+
+[[bench]]
+name = "incremental_compilation"
+harness = false
+
+[[bench]]
+name = "regression_benchmarks"
+harness = false
+

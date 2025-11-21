@@ -1,0 +1,75 @@
+// Example 33: Generic Enums
+// Demonstrates generic enum types with type parameters
+
+// Basic generic enum with one type parameter
+enum Option<T> {
+    Some(T),
+    None
+}
+
+// Generic enum with two type parameters
+enum Result<T, E> {
+    Ok(T),
+    Err(E)
+}
+
+// Generic container enum
+enum Container<T> {
+    Value(T),
+    Empty,
+    Multiple(Vec<T>)
+}
+
+fn safe_divide(a: int, b: int) -> Result<int, string> {
+    if b == 0 {
+        Result::Err("division by zero")
+    } else {
+        Result::Ok(a / b)
+    }
+}
+
+fn find_first(vec: Vec<int>) -> Option<int> {
+    if vec.is_empty() {
+        Option::None
+    } else {
+        Option::Some(vec[0])
+    }
+}
+
+fn main() {
+    // Test Option<T>
+    let some_value = Option::Some(42)
+    let no_value: Option<int> = Option::None
+    
+    match some_value {
+        Some(x) => println!("Found value: {}", x),
+        None => println!("No value")
+    }
+    
+    // Test Result<T, E>
+    let success = Result::Ok(100)
+    let failure: Result<int, string> = Result::Err("error occurred")
+    
+    match safe_divide(10, 2) {
+        Ok(value) => println!("Result: {}", value),
+        Err(msg) => println!("Error: {}", msg)
+    }
+    
+    match safe_divide(10, 0) {
+        Ok(value) => println!("Result: {}", value),
+        Err(msg) => println!("Error: {}", msg)
+    }
+    
+    // Test Container<T>
+    let single = Container::Value(123)
+    let empty: Container<int> = Container::Empty
+    
+    match single {
+        Value(x) => println!("Container has: {}", x),
+        Empty => println!("Container is empty"),
+        Multiple(vec) => println!("Container has {} items", vec.len())
+    }
+    
+    println!("All generic enum examples working!")
+}
+

@@ -1,0 +1,14 @@
+# Dockerfile for testing Kotlin SDK examples
+FROM gradle:8.5-jdk17
+
+WORKDIR /app
+
+# Copy Kotlin SDK
+COPY sdks/kotlin /app/sdks/kotlin
+
+# Build SDK
+WORKDIR /app/sdks/kotlin
+RUN gradle build -x test
+
+# Run examples
+CMD ["sh", "-c", "gradle run -PmainClass=dev.windjammer.examples.HelloWorld && gradle run -PmainClass=dev.windjammer.examples.HelloWorldDSL && gradle run -PmainClass=dev.windjammer.examples.SpriteDemo && gradle run -PmainClass=dev.windjammer.examples.Scene3D"]

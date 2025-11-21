@@ -1,0 +1,449 @@
+// std/http - HTTP client and server with proper abstraction
+// Client implementation: reqwest + tokio (hidden from users)
+// Server implementation: axum + tokio (hidden from users)
+
+// PUBLIC API - Users interact with these types only
+
+//===============================================
+// CLIENT TYPES
+//===============================================
+
+struct Response {
+    status: int,
+}
+
+struct RequestBuilder {
+    // Private: Wraps reqwest::RequestBuilder
+}
+
+struct Headers {
+    // Private: Wraps reqwest::header::HeaderMap
+}
+
+// Simple HTTP Methods
+
+@async
+fn get(url: string) -> Result<Response, String> {
+    // Implementation wraps: reqwest::get(url).await
+    Err("HTTP client requires reqwest (auto-added)")
+}
+
+@async
+fn post(url: string) -> RequestBuilder {
+    // Implementation wraps: reqwest::Client::new().post(url)
+    RequestBuilder {}
+}
+
+@async
+fn put(url: string) -> RequestBuilder {
+    // Implementation wraps: reqwest::Client::new().put(url)
+    RequestBuilder {}
+}
+
+@async
+fn delete(url: string) -> RequestBuilder {
+    // Implementation wraps: reqwest::Client::new().delete(url)
+    RequestBuilder {}
+}
+
+// Response Methods
+
+impl Response {
+    @async
+    fn text(self) -> Result<string, String> {
+        // Wraps: response.text().await
+        Err("Not yet implemented")
+    }
+    
+    @async
+    fn json<T>(self) -> Result<T, String> {
+        // Wraps: response.json::<T>().await
+        Err("Not yet implemented")
+    }
+    
+    @async
+    fn bytes(self) -> Result<Vec<u8>, String> {
+        // Wraps: response.bytes().await
+        Err("Not yet implemented")
+    }
+    
+    fn status_code(self) -> int {
+        // Wraps: response.status().as_u16()
+        self.status
+    }
+    
+    fn headers(self) -> Headers {
+        // Wraps: response.headers()
+        Headers {}
+    }
+    
+    fn is_success(self) -> bool {
+        // Wraps: response.status().is_success()
+        self.status >= 200 && self.status < 300
+    }
+}
+
+// Request Builder Methods
+
+impl RequestBuilder {
+    fn header(self, key: string, value: string) -> RequestBuilder {
+        // Wraps: builder.header(key, value)
+        self
+    }
+    
+    fn json<T>(self, body: T) -> RequestBuilder {
+        // Wraps: builder.json(&body)
+        self
+    }
+    
+    fn body(self, body: string) -> RequestBuilder {
+        // Wraps: builder.body(body)
+        self
+    }
+    
+    fn bearer_auth(self, token: string) -> RequestBuilder {
+        // Wraps: builder.bearer_auth(token)
+        self
+    }
+    
+    fn basic_auth(self, username: string, password: Option<string>) -> RequestBuilder {
+        // Wraps: builder.basic_auth(username, password)
+        self
+    }
+    
+    fn query<T>(self, params: T) -> RequestBuilder {
+        // Wraps: builder.query(&params)
+        self
+    }
+    
+    fn timeout_secs(self, secs: int) -> RequestBuilder {
+        // Wraps: builder.timeout(Duration::from_secs(secs))
+        self
+    }
+    
+    @async
+    fn send(self) -> Result<Response, String> {
+        // Wraps: builder.send().await
+        Err("Not yet implemented")
+    }
+}
+
+// Headers Methods
+
+impl Headers {
+    fn get(self, key: string) -> Option<string> {
+        // Wraps: headers.get(key).and_then(|v| v.to_str())
+        None
+    }
+    
+    fn contains(self, key: string) -> bool {
+        // Wraps: headers.contains_key(key)
+        false
+    }
+}
+
+// USAGE EXAMPLES (what users should write):
+//
+// use std::http
+//
+// @async
+// fn main() {
+//     // Simple GET - Windjammer API! ✅
+//     let response = http.get("https://api.example.com/users").await?
+//     println!("Status: {}", response.status_code())
+//     let body = response.text().await?
+//     println!("Body: {}", body)
+//     
+//     // POST with JSON
+//     let user = User { name: "Alice", email: "alice@example.com" }
+//     let response = http.post("https://api.example.com/users")
+//         .header("Content-Type", "application/json")
+//         .json(user)
+//         .send()
+//         .await?
+//     
+//     if response.is_success() {
+//         println!("User created!")
+//     }
+//     
+//     // With authentication
+//     let response = http.get("https://api.example.com/protected")
+//         .bearer_auth("my_token")
+//         .send()
+//         .await?
+// }
+//
+// NOT THIS (reqwest exposed): ❌
+// let response = reqwest::get("https://api.example.com").await?
+// let client = reqwest::Client::new()
+
+//===============================================
+// SERVER TYPES (v0.15.0+)
+//===============================================
+
+struct Request {
+    method: string,
+    path: string,
+    // Private: Wraps axum::extract::Request
+}
+
+struct Router {
+    // Private: Wraps axum::Router
+}
+
+struct ServerResponse {
+    status: int,
+    body: string,
+    // Private: Wraps axum::response::Response
+}
+
+// Server - Main Entry Point
+
+@async
+fn serve(addr: string, router: Router) -> Result<(), String> {
+    // Implementation wraps: axum::Server::bind(addr).serve(router.into_make_service())
+    Err("HTTP server requires axum (auto-added)")
+}
+
+// Simple server with handler function
+@async
+fn serve_fn<F>(addr: string, handler: F) -> Result<(), String> {
+    // Implementation wraps a simple axum router with one handler
+    Err("HTTP server requires axum (auto-added)")
+}
+
+// Router - Routing Builder
+
+impl Router {
+    fn new() -> Router {
+        // Wraps: axum::Router::new()
+        Router {}
+    }
+    
+    fn get(self, path: string, handler: fn(Request) -> ServerResponse) -> Router {
+        // Wraps: router.route(path, get(handler))
+        self
+    }
+    
+    fn post(self, path: string, handler: fn(Request) -> ServerResponse) -> Router {
+        // Wraps: router.route(path, post(handler))
+        self
+    }
+    
+    fn put(self, path: string, handler: fn(Request) -> ServerResponse) -> Router {
+        // Wraps: router.route(path, put(handler))
+        self
+    }
+    
+    fn delete(self, path: string, handler: fn(Request) -> ServerResponse) -> Router {
+        // Wraps: router.route(path, delete(handler))
+        self
+    }
+    
+    fn patch(self, path: string, handler: fn(Request) -> ServerResponse) -> Router {
+        // Wraps: router.route(path, patch(handler))
+        self
+    }
+    
+    fn any(self, path: string, handler: fn(Request) -> ServerResponse) -> Router {
+        // Wraps: router.route(path, any(handler))
+        self
+    }
+    
+    fn nest(self, path: string, router: Router) -> Router {
+        // Wraps: router.nest(path, router)
+        self
+    }
+}
+
+// Request - Extract Data from Requests
+
+impl Request {
+    fn method(self) -> string {
+        // Wraps: request.method().as_str()
+        self.method
+    }
+    
+    fn path(self) -> string {
+        // Wraps: request.uri().path()
+        self.path
+    }
+    
+    fn query(self, key: string) -> Option<string> {
+        // Wraps: request.uri().query() parsing
+        None
+    }
+    
+    fn header(self, key: string) -> Option<string> {
+        // Wraps: request.headers().get(key)
+        None
+    }
+    
+    @async
+    fn body_string(self) -> Result<string, String> {
+        // Wraps: String::from_utf8(body.to_bytes())
+        Err("Not yet implemented")
+    }
+    
+    @async
+    fn body_json<T>(self) -> Result<T, String> {
+        // Wraps: axum::Json::from_request()
+        Err("Not yet implemented")
+    }
+    
+    fn path_param(self, key: string) -> Option<string> {
+        // Wraps: axum::extract::Path parsing
+        None
+    }
+}
+
+// ServerResponse - Build Responses
+
+impl ServerResponse {
+    fn ok(body: string) -> ServerResponse {
+        // Wraps: (StatusCode::OK, body)
+        ServerResponse {
+            status: 200,
+            body: body,
+        }
+    }
+    
+    fn json<T>(data: T) -> ServerResponse {
+        // Wraps: axum::Json(data)
+        ServerResponse {
+            status: 200,
+            body: "".to_string(),
+        }
+    }
+    
+    fn created(body: string) -> ServerResponse {
+        ServerResponse {
+            status: 201,
+            body: body,
+        }
+    }
+    
+    fn no_content() -> ServerResponse {
+        ServerResponse {
+            status: 204,
+            body: "".to_string(),
+        }
+    }
+    
+    fn bad_request(body: string) -> ServerResponse {
+        ServerResponse {
+            status: 400,
+            body: body,
+        }
+    }
+    
+    fn unauthorized(body: string) -> ServerResponse {
+        ServerResponse {
+            status: 401,
+            body: body,
+        }
+    }
+    
+    fn forbidden(body: string) -> ServerResponse {
+        ServerResponse {
+            status: 403,
+            body: body,
+        }
+    }
+    
+    fn not_found() -> ServerResponse {
+        ServerResponse {
+            status: 404,
+            body: "Not Found".to_string(),
+        }
+    }
+    
+    fn internal_error(body: string) -> ServerResponse {
+        ServerResponse {
+            status: 500,
+            body: body,
+        }
+    }
+    
+    fn with_status(status: int, body: string) -> ServerResponse {
+        ServerResponse {
+            status: status,
+            body: body,
+        }
+    }
+    
+    fn with_header(self, key: string, value: string) -> ServerResponse {
+        // Wraps: response with custom header
+        self
+    }
+}
+
+// USAGE EXAMPLES:
+//
+// SERVER EXAMPLE:
+//
+// use std::http
+//
+// fn handle_index(req: Request) -> ServerResponse {
+//     ServerResponse::ok("Hello, World!")
+// }
+//
+// fn handle_user(req: Request) -> ServerResponse {
+//     let id = req.path_param("id")?
+//     ServerResponse::json(User { id: id, name: "Alice" })
+// }
+//
+// @async
+// fn main() {
+//     let router = Router::new()
+//         .get("/", handle_index)
+//         .get("/users/:id", handle_user)
+//         .post("/users", create_user)
+//     
+//     println!("Server running on http://0.0.0.0:3000")
+//     http.serve("0.0.0.0:3000", router).await?
+// }
+//
+// Simple server:
+// @async
+// fn main() {
+//     http.serve_fn("0.0.0.0:3000", |req| {
+//         ServerResponse::ok("Hello!")
+//     }).await?
+// }
+//
+// CLIENT EXAMPLE:
+// use std::http
+//
+// @async
+// fn main() {
+//     // Simple GET - Windjammer API! ✅
+//     let response = http.get("https://api.example.com/users").await?
+//     println!("Status: {}", response.status_code())
+//     let body = response.text().await?
+//     println!("Body: {}", body)
+//     
+//     // POST with JSON
+//     let user = User { name: "Alice", email: "alice@example.com" }
+//     let response = http.post("https://api.example.com/users")
+//         .header("Content-Type", "application/json")
+//         .json(user)
+//         .send()
+//         .await?
+//     
+//     if response.is_success() {
+//         println!("User created!")
+//     }
+//     
+//     // With authentication
+//     let response = http.get("https://api.example.com/protected")
+//         .bearer_auth("my_token")
+//         .send()
+//         .await?
+// }
+//
+// NOT THIS (crates exposed): ❌
+// let response = reqwest::get("https://api.example.com").await?
+// let app = axum::Router::new().route("/", get(handler))
+//
+// NOTE: reqwest, axum, and tokio are auto-added as dependencies

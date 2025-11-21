@@ -1,0 +1,78 @@
+// Pagination models for cursor-based pagination
+
+use std::crypto
+
+@derive(Debug, Serialize, Deserialize)
+pub struct PaginationParams {
+    pub cursor: Option<string>,
+    pub limit: int,
+}
+
+@derive(Debug, Serialize, Deserialize)
+pub struct PaginatedResponse<T> {
+    pub data: Vec<T>,
+    pub next_cursor: Option<string>,
+    pub has_more: bool,
+    pub total_count: Option<int>,
+}
+
+impl PaginationParams {
+    pub fn from_query(cursor: Option<string>, limit: Option<int>) -> PaginationParams {
+        let default_limit = 50
+        let max_limit = 100
+        
+        let actual_limit = match limit {
+            Some(l) => {
+                if l > max_limit {
+                    max_limit
+                } else if l < 1 {
+                    default_limit
+                } else {
+                    l
+                }
+            }
+            None => default_limit,
+        }
+        
+        PaginationParams {
+            cursor: cursor,
+            limit: actual_limit,
+        }
+    }
+    
+    pub fn decode_cursor(cursor: string) -> Result<int, Error> {
+        // Decode base64 cursor to get the ID
+        let decoded = crypto.base64_decode(&cursor)?
+        let id = decoded.parse::<int>()?
+        Ok(id)
+    }
+    
+    pub fn encode_cursor(id: int) -> string {
+        let id_str = id.to_string()
+        crypto.base64_encode(&id_str)
+    }
+}
+
+impl<T> PaginatedResponse<T> {
+    pub fn new(data: Vec<T>, limit: int, total_count: Option<int>) -> PaginatedResponse<T> {
+        let has_more = data.len() as int > limit
+        let mut result_data = data
+        
+        // Remove the extra item we fetched to check if there's more
+        let next_cursor = if has_more {
+            result_data.pop()
+            // In a real implementation, extract the ID from the last item
+            Some(PaginationParams::encode_cursor(0))  // Placeholder
+        } else {
+            None
+        }
+        
+        PaginatedResponse {
+            data: result_data,
+            next_cursor: next_cursor,
+            has_more: has_more,
+            total_count: total_count,
+        }
+    }
+}
+

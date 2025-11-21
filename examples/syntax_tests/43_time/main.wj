@@ -1,0 +1,35 @@
+// Example 43: Time and Date  
+// Demonstrates time/date handling with Windjammer's std.time abstraction
+
+use std::time
+
+fn main() {
+    println!("=== Time and Date Demo ===")
+    println!()
+    
+    // Use Windjammer's time abstraction - no direct chrono access!
+    println!("1. Current Time:")
+    let now = time.now()
+    println!("   Local time: {}", now.format("%Y-%m-%d %H:%M:%S"))
+    println!("   Timestamp: {}", now.timestamp())
+    println!()
+    
+    println!("2. UTC Time:")
+    let utc_now = time.utc_now()
+    println!("   UTC: {}", utc_now.format("%Y-%m-%d %H:%M:%S UTC"))
+    println!("   Timestamp (ms): {}", utc_now.timestamp_millis())
+    println!()
+    
+    println!("3. Time Components:")
+    println!("   Year: {}", now.year())
+    println!("   Month: {}", now.month())
+    println!("   Day: {}", now.day())
+    println!("   Hour: {}", now.hour())
+    println!("   Minute: {}", now.minute())
+    println!()
+    
+    println!("✨ Time and date handling with Windjammer!")
+    println!("   ✅ Using std.time abstraction (not chrono directly)")
+    println!("   ✅ Dependencies added automatically")
+    println!("   ✅ Clean, Windjammer-native API")
+}

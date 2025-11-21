@@ -1,0 +1,192 @@
+// std/mime - MIME type constants and utilities
+// Provides common MIME types and helper functions for web servers
+
+// Common text MIME types
+pub const TEXT_HTML: string = "text/html; charset=utf-8"
+pub const TEXT_PLAIN: string = "text/plain; charset=utf-8"
+pub const TEXT_CSS: string = "text/css; charset=utf-8"
+pub const TEXT_XML: string = "text/xml; charset=utf-8"
+pub const TEXT_CSV: string = "text/csv; charset=utf-8"
+
+// Application MIME types
+pub const APPLICATION_JSON: string = "application/json; charset=utf-8"
+pub const APPLICATION_JAVASCRIPT: string = "application/javascript; charset=utf-8"
+pub const APPLICATION_WASM: string = "application/wasm"
+pub const APPLICATION_PDF: string = "application/pdf"
+pub const APPLICATION_ZIP: string = "application/zip"
+pub const APPLICATION_OCTET_STREAM: string = "application/octet-stream"
+pub const APPLICATION_XML: string = "application/xml; charset=utf-8"
+
+// Image MIME types
+pub const IMAGE_PNG: string = "image/png"
+pub const IMAGE_JPEG: string = "image/jpeg"
+pub const IMAGE_GIF: string = "image/gif"
+pub const IMAGE_SVG: string = "image/svg+xml"
+pub const IMAGE_WEBP: string = "image/webp"
+pub const IMAGE_ICO: string = "image/x-icon"
+
+// Audio MIME types
+pub const AUDIO_MPEG: string = "audio/mpeg"
+pub const AUDIO_OGG: string = "audio/ogg"
+pub const AUDIO_WAV: string = "audio/wav"
+pub const AUDIO_WEBM: string = "audio/webm"
+
+// Video MIME types
+pub const VIDEO_MP4: string = "video/mp4"
+pub const VIDEO_WEBM: string = "video/webm"
+pub const VIDEO_OGG: string = "video/ogg"
+
+// Font MIME types
+pub const FONT_WOFF: string = "font/woff"
+pub const FONT_WOFF2: string = "font/woff2"
+pub const FONT_TTF: string = "font/ttf"
+pub const FONT_OTF: string = "font/otf"
+
+// TypeScript/Source map types
+pub const APPLICATION_TYPESCRIPT: string = "application/x-typescript"
+pub const APPLICATION_SOURCEMAP: string = "application/json"
+
+/// Get MIME type from file extension
+/// Returns the appropriate MIME type constant or APPLICATION_OCTET_STREAM as fallback
+pub fn from_extension(ext: string) -> string {
+    match ext {
+        // Text formats
+        "html" => TEXT_HTML,
+        "htm" => TEXT_HTML,
+        "txt" => TEXT_PLAIN,
+        "css" => TEXT_CSS,
+        "xml" => TEXT_XML,
+        "csv" => TEXT_CSV,
+        
+        // Application formats
+        "js" => APPLICATION_JAVASCRIPT,
+        "mjs" => APPLICATION_JAVASCRIPT,
+        "json" => APPLICATION_JSON,
+        "wasm" => APPLICATION_WASM,
+        "pdf" => APPLICATION_PDF,
+        "zip" => APPLICATION_ZIP,
+        
+        // Images
+        "png" => IMAGE_PNG,
+        "jpg" => IMAGE_JPEG,
+        "jpeg" => IMAGE_JPEG,
+        "gif" => IMAGE_GIF,
+        "svg" => IMAGE_SVG,
+        "webp" => IMAGE_WEBP,
+        "ico" => IMAGE_ICO,
+        
+        // Audio
+        "mp3" => AUDIO_MPEG,
+        "ogg" => AUDIO_OGG,
+        "wav" => AUDIO_WAV,
+        
+        // Video
+        "mp4" => VIDEO_MP4,
+        "webm" => VIDEO_WEBM,
+        "ogv" => VIDEO_OGG,
+        
+        // Fonts
+        "woff" => FONT_WOFF,
+        "woff2" => FONT_WOFF2,
+        "ttf" => FONT_TTF,
+        "otf" => FONT_OTF,
+        
+        // TypeScript and source maps
+        "ts" => APPLICATION_TYPESCRIPT,
+        "map" => APPLICATION_SOURCEMAP,
+        
+        // Default fallback
+        _ => APPLICATION_OCTET_STREAM
+    }
+}
+
+/// Get MIME type from file path
+/// Extracts extension and returns appropriate MIME type
+pub fn from_path(path: string) -> string {
+    // Check each extension directly (avoids string manipulation issues)
+    if path.ends_with(".html") || path.ends_with(".htm") {
+        return TEXT_HTML
+    }
+    if path.ends_with(".js") || path.ends_with(".mjs") {
+        return APPLICATION_JAVASCRIPT
+    }
+    if path.ends_with(".wasm") {
+        return APPLICATION_WASM
+    }
+    if path.ends_with(".css") {
+        return TEXT_CSS
+    }
+    if path.ends_with(".json") {
+        return APPLICATION_JSON
+    }
+    if path.ends_with(".png") {
+        return IMAGE_PNG
+    }
+    if path.ends_with(".jpg") || path.ends_with(".jpeg") {
+        return IMAGE_JPEG
+    }
+    if path.ends_with(".gif") {
+        return IMAGE_GIF
+    }
+    if path.ends_with(".svg") {
+        return IMAGE_SVG
+    }
+    if path.ends_with(".webp") {
+        return IMAGE_WEBP
+    }
+    if path.ends_with(".ico") {
+        return IMAGE_ICO
+    }
+    if path.ends_with(".pdf") {
+        return APPLICATION_PDF
+    }
+    if path.ends_with(".zip") {
+        return APPLICATION_ZIP
+    }
+    if path.ends_with(".mp3") {
+        return AUDIO_MPEG
+    }
+    if path.ends_with(".mp4") {
+        return VIDEO_MP4
+    }
+    if path.ends_with(".webm") {
+        return VIDEO_WEBM
+    }
+    if path.ends_with(".woff") {
+        return FONT_WOFF
+    }
+    if path.ends_with(".woff2") {
+        return FONT_WOFF2
+    }
+    if path.ends_with(".ttf") {
+        return FONT_TTF
+    }
+    if path.ends_with(".ts") {
+        return APPLICATION_TYPESCRIPT
+    }
+    
+    APPLICATION_OCTET_STREAM
+}
+
+/// Check if MIME type is text-based
+pub fn is_text(mime_type: string) -> bool {
+    mime_type.starts_with("text/") || 
+    mime_type.starts_with("application/json") ||
+    mime_type.starts_with("application/javascript") ||
+    mime_type.starts_with("application/xml")
+}
+
+/// Check if MIME type is an image
+pub fn is_image(mime_type: string) -> bool {
+    mime_type.starts_with("image/")
+}
+
+/// Check if MIME type is audio
+pub fn is_audio(mime_type: string) -> bool {
+    mime_type.starts_with("audio/")
+}
+
+/// Check if MIME type is video
+pub fn is_video(mime_type: string) -> bool {
+    mime_type.starts_with("video/")
+}

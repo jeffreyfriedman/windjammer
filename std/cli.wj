@@ -1,0 +1,35 @@
+// std/cli - Command-line argument parsing
+// This file is for API documentation only.
+// Actual implementation is in windjammer-runtime/src/cli.rs
+
+// CLI application builder
+pub struct CliApp {}
+
+// Parsed command-line matches
+pub struct CliMatches {}
+
+// Create a new CLI application
+pub fn app(name: string, version: string, about: string) -> CliApp
+
+impl CliApp {
+    // Add an argument
+    pub fn arg(self, name: string, short: Option<char>, long: Option<string>, help: string, required: bool) -> CliApp
+    
+    // Add a flag (boolean)
+    pub fn flag(self, name: string, short: Option<char>, long: Option<string>, help: string) -> CliApp
+    
+    // Parse command-line arguments
+    pub fn parse(self) -> CliMatches
+}
+
+impl CliMatches {
+    // Get argument value as string
+    pub fn get(self, name: string) -> Option<string>
+    
+    // Check if flag is present
+    pub fn is_present(self, name: string) -> bool
+    
+    // Get multiple values
+    pub fn get_many(self, name: string) -> Vec<string>
+}
+

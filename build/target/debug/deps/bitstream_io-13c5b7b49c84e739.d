@@ -1,0 +1,10 @@
+/Users/jeffreyfriedman/src/windjammer/build/target/debug/deps/bitstream_io-13c5b7b49c84e739.d: /Users/jeffreyfriedman/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/bitstream-io-2.6.0/src/lib.rs /Users/jeffreyfriedman/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/bitstream-io-2.6.0/src/huffman.rs /Users/jeffreyfriedman/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/bitstream-io-2.6.0/src/read.rs /Users/jeffreyfriedman/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/bitstream-io-2.6.0/src/write.rs
+
+/Users/jeffreyfriedman/src/windjammer/build/target/debug/deps/libbitstream_io-13c5b7b49c84e739.rlib: /Users/jeffreyfriedman/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/bitstream-io-2.6.0/src/lib.rs /Users/jeffreyfriedman/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/bitstream-io-2.6.0/src/huffman.rs /Users/jeffreyfriedman/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/bitstream-io-2.6.0/src/read.rs /Users/jeffreyfriedman/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/bitstream-io-2.6.0/src/write.rs
+
+/Users/jeffreyfriedman/src/windjammer/build/target/debug/deps/libbitstream_io-13c5b7b49c84e739.rmeta: /Users/jeffreyfriedman/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/bitstream-io-2.6.0/src/lib.rs /Users/jeffreyfriedman/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/bitstream-io-2.6.0/src/huffman.rs /Users/jeffreyfriedman/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/bitstream-io-2.6.0/src/read.rs /Users/jeffreyfriedman/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/bitstream-io-2.6.0/src/write.rs
+
+/Users/jeffreyfriedman/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/bitstream-io-2.6.0/src/lib.rs:
+/Users/jeffreyfriedman/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/bitstream-io-2.6.0/src/huffman.rs:
+/Users/jeffreyfriedman/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/bitstream-io-2.6.0/src/read.rs:
+/Users/jeffreyfriedman/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/bitstream-io-2.6.0/src/write.rs:

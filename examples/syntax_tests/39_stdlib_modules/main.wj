@@ -1,0 +1,39 @@
+// Example 39: Stdlib Modules
+// Demonstrates stdlib functionality
+
+use std::fs
+use std::collections::HashMap
+
+fn main() {
+    println!("=== Stdlib Demo ===")
+    println!()
+    
+    // 1. File system operations
+    println!("1. File System:")
+    match fs::read_to_string("README.md") {
+        Ok(content) => {
+            let lines = content.lines().count()
+            println!("   README.md has {} lines", lines)
+        },
+        Err(_) => println!("   README.md not found")
+    }
+    println!()
+    
+    // 2. Collections
+    println!("2. Collections:")
+    let mut map: HashMap<string, int> = HashMap::new()
+    map.insert("apples", 5)
+    map.insert("oranges", 3)
+    println!("   HashMap size: {}", map.len())
+    println!()
+    
+    // 3. Vectors
+    println!("3. Vectors:")
+    let numbers = vec![1, 2, 3, 4, 5]
+    let sum = numbers.iter().sum()
+    println!("   Sum of [1,2,3,4,5]: {}", sum)
+    println!()
+    
+    println!("✨ Stdlib makes common tasks easy!")
+}
+
