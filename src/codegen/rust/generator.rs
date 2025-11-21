@@ -260,6 +260,7 @@ impl CodeGenerator {
     // ============================================================================
 
     /// Check if an expression is a UI component that needs .to_vnode()
+    #[allow(dead_code, clippy::only_used_in_recursion)]
     fn is_ui_component_expr(&self, expr: &Expression) -> bool {
         // List of UI components that implement ToVNode
         const UI_COMPONENTS: &[&str] = &[
@@ -291,7 +292,7 @@ impl CodeGenerator {
         match expr {
             // Button::new(...) -> check if Button is a UI component
             Expression::Call { function, .. } => {
-                if let Expression::FieldAccess { object, field, .. } = &**function {
+                if let Expression::FieldAccess { object, .. } = &**function {
                     // Type::method() pattern - check the object (Button), not the method (new)
                     if let Expression::Identifier { name, .. } = &**object {
                         return UI_COMPONENTS.contains(&name.as_str());
@@ -306,6 +307,7 @@ impl CodeGenerator {
     }
 
     /// Check if a method is a builder method that returns Self (for chaining)
+    #[allow(dead_code)]
     fn is_builder_method(&self, method: &str) -> bool {
         // Common builder methods that return Self
         const BUILDER_METHODS: &[&str] = &[
@@ -352,9 +354,7 @@ impl CodeGenerator {
         }
 
         // If no @game struct, this isn't a game
-        if game_struct.is_none() {
-            return None;
-        }
+        game_struct.as_ref()?;
 
         // Find decorated functions
         let mut is_3d = false;
@@ -475,22 +475,31 @@ impl CodeGenerator {
         output.push_str("    world: windjammer_game_framework::ecs::World,\n");
         output.push_str("    game_entity: windjammer_game_framework::ecs::Entity,\n");
         output.push_str("}\n\n");
-        
+
         output.push_str("impl GameWorld {\n");
         output.push_str("    fn new() -> Self {\n");
         output.push_str("        use windjammer_game_framework::ecs::*;\n");
         output.push_str("        let mut world = World::new();\n");
         output.push_str("        \n");
         output.push_str("        // Spawn game entity with game component\n");
-        output.push_str(&format!("        let game_entity = world.spawn()\n"));
-        output.push_str(&format!("            .with({}::default())\n", info.game_struct));
+        output.push_str("        let game_entity = world.spawn()\n");
+        output.push_str(&format!(
+            "            .with({}::default())\n",
+            info.game_struct
+        ));
         output.push_str("            .build();\n");
         output.push_str("        \n");
         output.push_str("        Self { world, game_entity }\n");
         output.push_str("    }\n");
         output.push_str("    \n");
-        output.push_str(&format!("    fn game_mut(&mut self) -> &mut {} {{\n", info.game_struct));
-        output.push_str(&format!("        self.world.get_component_mut::<{}>(self.game_entity).unwrap()\n", info.game_struct));
+        output.push_str(&format!(
+            "    fn game_mut(&mut self) -> &mut {} {{\n",
+            info.game_struct
+        ));
+        output.push_str(&format!(
+            "        self.world.get_component_mut::<{}>(self.game_entity).unwrap()\n",
+            info.game_struct
+        ));
         output.push_str("    }\n");
         output.push_str("}\n\n");
 
@@ -500,23 +509,23 @@ impl CodeGenerator {
         output.push_str("    use winit::event::{Event, WindowEvent};\n");
         output.push_str("    use winit::event_loop::{ControlFlow, EventLoop};\n");
         output.push_str("    use winit::window::WindowBuilder;\n");
-        output.push_str("\n");
+        output.push('\n');
         output.push_str("    // Create event loop and window\n");
         output.push_str("    let event_loop = EventLoop::new()?;\n");
         output.push_str("    let window = WindowBuilder::new()\n");
         output.push_str("        .with_title(\"Windjammer Game\")\n");
         output.push_str("        .with_inner_size(winit::dpi::LogicalSize::new(800, 600))\n");
         output.push_str("        .build(&event_loop)?;\n");
-        output.push_str("\n");
+        output.push('\n');
         output.push_str("    // Initialize ECS world\n");
         output.push_str("    let mut game_world = GameWorld::new();\n");
-        output.push_str("\n");
+        output.push('\n');
 
         // Call init function if present
         if let Some(init_fn) = &info.init_fn {
             output.push_str("    // Call init function\n");
             output.push_str(&format!("    {}(game_world.game_mut());\n", init_fn));
-            output.push_str("\n");
+            output.push('\n');
         }
 
         output.push_str("    // Initialize renderer\n");
@@ -531,13 +540,13 @@ impl CodeGenerator {
                 "    let mut renderer = pollster::block_on(renderer::Renderer::new(window_ref))?;\n",
             );
         }
-        output.push_str("\n");
+        output.push('\n');
         output.push_str("    // Initialize input\n");
         output.push_str("    let mut input = input::Input::new();\n");
-        output.push_str("\n");
+        output.push('\n');
         output.push_str("    // Game loop\n");
         output.push_str("    let mut last_time = std::time::Instant::now();\n");
-        output.push_str("\n");
+        output.push('\n');
         output.push_str("    event_loop.run(move |event, elwt| {\n");
         output.push_str("        match event {\n");
         output.push_str("            Event::WindowEvent { event, .. } => match event {\n");
@@ -545,7 +554,10 @@ impl CodeGenerator {
 
         // Call cleanup function if present
         if let Some(cleanup_fn) = &info.cleanup_fn {
-            output.push_str(&format!("                    {}(game_world.game_mut());\n", cleanup_fn));
+            output.push_str(&format!(
+                "                    {}(game_world.game_mut());\n",
+                cleanup_fn
+            ));
         }
 
         output.push_str("                    elwt.exit();\n");
@@ -555,7 +567,7 @@ impl CodeGenerator {
         output.push_str("                    let now = std::time::Instant::now();\n");
         output.push_str("                    let delta = (now - last_time).as_secs_f64();\n");
         output.push_str("                    last_time = now;\n");
-        output.push_str("\n");
+        output.push('\n');
 
         // Call update function if present
         if let Some(update_fn) = &info.update_fn {
@@ -564,10 +576,12 @@ impl CodeGenerator {
                 "                    {}(game_world.game_mut(), delta, &input);\n",
                 update_fn
             ));
-            output.push_str("\n");
+            output.push('\n');
             output.push_str("                    // Update ECS systems (scene graph, etc.)\n");
-            output.push_str("                    SceneGraph::update_transforms(&mut game_world.world);\n");
-            output.push_str("\n");
+            output.push_str(
+                "                    SceneGraph::update_transforms(&mut game_world.world);\n",
+            );
+            output.push('\n');
         }
 
         // Call render function if present
@@ -588,7 +602,7 @@ impl CodeGenerator {
         }
 
         output.push_str("                    renderer.present();\n");
-        output.push_str("\n");
+        output.push('\n');
         output.push_str("                    // Clear input frame state\n");
         output.push_str("                    input.clear_frame_state();\n");
         output.push_str("                }\n");
@@ -628,7 +642,7 @@ impl CodeGenerator {
         output.push_str("            _ => {}\n");
         output.push_str("        }\n");
         output.push_str("    })?;\n");
-        output.push_str("\n");
+        output.push('\n');
         output.push_str("    Ok(())\n");
         output.push_str("}\n");
 
@@ -2602,7 +2616,7 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
                 let loop_var = self.extract_pattern_identifier(pattern);
                 let needs_mut = loop_var
                     .as_ref()
-                    .map_or(false, |var| self.loop_body_modifies_variable(body, var));
+                    .is_some_and(|var| self.loop_body_modifies_variable(body, var));
 
                 if needs_mut {
                     output.push_str("mut ");
@@ -2884,24 +2898,19 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
     /// Extract a field access, method call, or index expression path from an expression
     /// (e.g., "config.paths", "source.get_items()", "items[0]")
     /// This matches the logic in auto_clone.rs
+    #[allow(clippy::only_used_in_recursion)]
     fn extract_field_access_path(&self, expr: &Expression) -> Option<String> {
         match expr {
             Expression::Identifier { name, .. } => Some(name.clone()),
             Expression::FieldAccess { object, field, .. } => {
                 // Recursively build the path: object.field
-                if let Some(base_path) = self.extract_field_access_path(object) {
-                    Some(format!("{}.{}", base_path, field))
-                } else {
-                    None
-                }
+                self.extract_field_access_path(object)
+                    .map(|base_path| format!("{}.{}", base_path, field))
             }
             Expression::MethodCall { object, method, .. } => {
                 // Build path for method calls: object.method()
-                if let Some(base_path) = self.extract_field_access_path(object) {
-                    Some(format!("{}.{}()", base_path, method))
-                } else {
-                    None
-                }
+                self.extract_field_access_path(object)
+                    .map(|base_path| format!("{}.{}()", base_path, method))
             }
             Expression::Index { object, index, .. } => {
                 // Build path for index expressions: object[index]
@@ -3401,7 +3410,7 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
                 // TODO: Make this more conservative - only remove clone when we can prove
                 // the value is Copy or when it's the last use
                 // if method == "clone" && arguments.is_empty() {
-                //     if let Expression::Identifier(ref var_name) = **object {
+                //     if let Expression::Identifier { name: ref var_name, location: None } = **object {
                 //         if self.clone_optimizations.contains(var_name) {
                 //             // Skip the .clone(), just return the variable (or borrow if needed)
                 //             return obj_str;
@@ -4277,7 +4286,7 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
             // Field access on a variable (e.g., game.walls)
             Expression::FieldAccess { object, .. } => {
                 // Check if the object is a simple identifier
-                if let Expression::Identifier { name, .. } = &**object {
+                if let Expression::Identifier { .. } = &**object {
                     // Check if this is a parameter in the current function
                     // For game decorator functions, the first parameter is always borrowed
                     // For impl methods, self is borrowed
@@ -4323,7 +4332,7 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
                 then_block
                     .iter()
                     .any(|s| self.statement_modifies_variable(s, var_name))
-                    || else_block.as_ref().map_or(false, |block| {
+                    || else_block.as_ref().is_some_and(|block| {
                         block
                             .iter()
                             .any(|s| self.statement_modifies_variable(s, var_name))
@@ -4337,6 +4346,7 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
     }
 
     /// Check if an expression references a variable or its fields
+    #[allow(clippy::only_used_in_recursion)]
     fn expression_references_variable_or_field(&self, expr: &Expression, var_name: &str) -> bool {
         match expr {
             Expression::Identifier { name, .. } => name == var_name,
@@ -4363,9 +4373,9 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
                 } = &**object
                 {
                     // Check if the field is accessed on self or a borrowed parameter
-                    if let Expression::Identifier { name, .. } = &**field_obj {
+                    if let Expression::Identifier { .. } = &**field_obj {
                         // For now, assume self and first parameter are borrowed
-                        return name == "self" || true; // Conservative: always borrow index access
+                        return true; // Conservative: always borrow index access (including self)
                     }
                 }
                 false
@@ -4589,7 +4599,7 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
 
         output.push_str("        }\n");
         output.push_str("    }\n");
-        output.push_str("}");
+        output.push('}');
 
         output
     }

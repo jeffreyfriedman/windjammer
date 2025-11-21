@@ -375,7 +375,7 @@ x = 20  // Works! x is mutable"#.to_string(),
             for cause in &error.causes {
                 md.push_str(&format!("- {}\n", cause));
             }
-            md.push_str("\n");
+            md.push('\n');
         }
 
         if !error.solutions.is_empty() {
@@ -383,7 +383,7 @@ x = 20  // Works! x is mutable"#.to_string(),
             for solution in &error.solutions {
                 md.push_str(&format!("- {}\n", solution));
             }
-            md.push_str("\n");
+            md.push('\n');
         }
 
         if !error.examples.is_empty() {

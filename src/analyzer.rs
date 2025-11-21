@@ -1761,7 +1761,7 @@ impl Analyzer {
                 then_block
                     .iter()
                     .any(|s| self.statement_modifies_self_fields(s))
-                    || else_block.as_ref().map_or(false, |block| {
+                    || else_block.as_ref().is_some_and(|block| {
                         block.iter().any(|s| self.statement_modifies_self_fields(s))
                     })
             }
@@ -1827,7 +1827,7 @@ impl Analyzer {
                     || then_block
                         .iter()
                         .any(|s| self.statement_accesses_self_fields(s))
-                    || else_block.as_ref().map_or(false, |block| {
+                    || else_block.as_ref().is_some_and(|block| {
                         block.iter().any(|s| self.statement_accesses_self_fields(s))
                     })
             }
@@ -1846,6 +1846,7 @@ impl Analyzer {
     }
 
     /// Check if expression accesses self fields
+    #[allow(clippy::only_used_in_recursion)]
     fn expression_accesses_self_fields(&self, expr: &Expression) -> bool {
         match expr {
             Expression::FieldAccess { object, .. } => {

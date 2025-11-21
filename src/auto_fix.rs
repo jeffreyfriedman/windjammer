@@ -84,11 +84,19 @@ impl FixType {
 
 pub struct FixDetector {
     /// Map of error codes to fix detection functions
+    #[allow(clippy::type_complexity)]
     detectors: HashMap<String, Box<dyn Fn(&str, &str) -> Option<FixType>>>,
+}
+
+impl Default for FixDetector {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl FixDetector {
     pub fn new() -> Self {
+        #[allow(clippy::type_complexity)]
         let mut detectors: HashMap<String, Box<dyn Fn(&str, &str) -> Option<FixType>>> =
             HashMap::new();
 
@@ -97,16 +105,11 @@ impl FixDetector {
             "E0384".to_string(),
             Box::new(|error_msg: &str, _file_content: &str| {
                 // Extract variable name from error message
-                if let Some(var_name) = extract_variable_name(error_msg) {
-                    // TODO: Extract file and line from error
-                    Some(FixType::AddMut {
-                        file: PathBuf::from("unknown"),
-                        line: 0,
-                        variable_name: var_name,
-                    })
-                } else {
-                    None
-                }
+                extract_variable_name(error_msg).map(|var_name| FixType::AddMut {
+                    file: PathBuf::from("unknown"),
+                    line: 0,
+                    variable_name: var_name,
+                })
             }),
         );
 
@@ -163,6 +166,12 @@ impl FixDetector {
 // ============================================================================
 
 pub struct FixApplicator;
+
+impl Default for FixApplicator {
+    fn default() -> Self {
+        Self::new()
+    }
+}
 
 impl FixApplicator {
     pub fn new() -> Self {

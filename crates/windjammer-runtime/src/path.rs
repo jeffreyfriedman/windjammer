@@ -132,7 +132,7 @@ mod tests {
 
         assert_eq!(file_name(path), Some("baz.txt"));
         assert_eq!(file_stem(path), Some("baz"));
-        assert_eq!(extension(path), Some("txt"));
+        assert_eq!(extension(path), Some("txt".to_string()));
         assert!(is_absolute(path));
 
         let relative = new("foo/bar.txt");

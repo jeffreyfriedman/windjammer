@@ -105,7 +105,7 @@ impl WjConfig {
             output.push_str(&format!("authors = {:?}\n", self.package.authors));
         }
 
-        output.push_str("\n");
+        output.push('\n');
 
         // Dependencies
         if !self.dependencies.is_empty() {
@@ -146,7 +146,7 @@ impl WjConfig {
                     }
                 }
             }
-            output.push_str("\n");
+            output.push('\n');
         }
 
         // Dev dependencies

@@ -1221,31 +1221,31 @@ fn create_cargo_toml_with_deps(
                     {
                         current.join("crates/windjammer-ui-macro")
                     } else {
-                            // Search upward (up to 5 levels)
-                            for _ in 0..5 {
-                                if let Some(parent) = current.parent() {
-                                    if parent
-                                        .join("crates/windjammer-ui-macro/Cargo.toml")
-                                        .exists()
-                                    {
-                                        current = parent.to_path_buf();
-                                        found = true;
-                                        break;
-                                    }
+                        // Search upward (up to 5 levels)
+                        for _ in 0..5 {
+                            if let Some(parent) = current.parent() {
+                                if parent
+                                    .join("crates/windjammer-ui-macro/Cargo.toml")
+                                    .exists()
+                                {
                                     current = parent.to_path_buf();
-                                } else {
+                                    found = true;
                                     break;
                                 }
-                            }
-
-                            if found {
-                                current.join("crates/windjammer-ui-macro")
+                                current = parent.to_path_buf();
                             } else {
-                                // Fallback: assume we're in the root
-                                PathBuf::from("./crates/windjammer-ui-macro")
+                                break;
                             }
                         }
-                    };
+
+                        if found {
+                            current.join("crates/windjammer-ui-macro")
+                        } else {
+                            // Fallback: assume we're in the root
+                            PathBuf::from("./crates/windjammer-ui-macro")
+                        }
+                    }
+                };
 
                 external_deps.push(format!(
                     "windjammer-ui-macro = {{ path = \"{}\" }}",
@@ -1257,41 +1257,41 @@ fn create_cargo_toml_with_deps(
                 // Always search for workspace root, don't trust CARGO_MANIFEST_DIR
                 let windjammer_game_framework_path = {
                     // Start from current directory and search upward
-                        let mut current = env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
-                        let mut found = false;
+                    let mut current = env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
+                    let mut found = false;
 
-                        // Try current directory first
-                        if current
-                            .join("crates/windjammer-game-framework/Cargo.toml")
-                            .exists()
-                        {
-                            current.join("crates/windjammer-game-framework")
-                        } else {
-                            // Search upward (up to 5 levels)
-                            for _ in 0..5 {
-                                if let Some(parent) = current.parent() {
-                                    if parent
-                                        .join("crates/windjammer-game-framework/Cargo.toml")
-                                        .exists()
-                                    {
-                                        current = parent.to_path_buf();
-                                        found = true;
-                                        break;
-                                    }
+                    // Try current directory first
+                    if current
+                        .join("crates/windjammer-game-framework/Cargo.toml")
+                        .exists()
+                    {
+                        current.join("crates/windjammer-game-framework")
+                    } else {
+                        // Search upward (up to 5 levels)
+                        for _ in 0..5 {
+                            if let Some(parent) = current.parent() {
+                                if parent
+                                    .join("crates/windjammer-game-framework/Cargo.toml")
+                                    .exists()
+                                {
                                     current = parent.to_path_buf();
-                                } else {
+                                    found = true;
                                     break;
                                 }
-                            }
-
-                            if found {
-                                current.join("crates/windjammer-game-framework")
+                                current = parent.to_path_buf();
                             } else {
-                                // Fallback: assume we're in the root
-                                PathBuf::from("./crates/windjammer-game-framework")
+                                break;
                             }
                         }
-                    };
+
+                        if found {
+                            current.join("crates/windjammer-game-framework")
+                        } else {
+                            // Fallback: assume we're in the root
+                            PathBuf::from("./crates/windjammer-game-framework")
+                        }
+                    }
+                };
 
                 external_deps.push(format!(
                     "windjammer-game-framework = {{ path = \"{}\" }}",
@@ -2024,7 +2024,7 @@ fn eject_project(
 }
 
 /// Run a Windjammer file (build + cargo run)
-fn run_file(file: &Path, mut target: CompilationTarget, args: &[String]) -> Result<()> {
+fn run_file(file: &Path, target: CompilationTarget, args: &[String]) -> Result<()> {
     use colored::*;
     use std::fs;
     use std::process::Command;
