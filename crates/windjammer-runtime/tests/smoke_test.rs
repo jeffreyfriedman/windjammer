@@ -69,7 +69,7 @@ fn test_all_modules_exist_and_work() {
 
     // std::time
     let _timestamp = time::now(); // Returns Instant, not i64
-    // assert!(timestamp > 0); // Type mismatch - Instant is not comparable to int
+                                  // assert!(timestamp > 0); // Type mismatch - Instant is not comparable to int
 }
 
 // Async test disabled - requires tokio which isn't a dev-dependency
