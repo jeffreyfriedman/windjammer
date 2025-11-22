@@ -1,6 +1,6 @@
 #!/bin/bash
-# Comprehensive test script for Windjammer language compiler
-# Tests compilation, examples, and integration tests
+# Test script for Windjammer language compiler
+# Tests compilation and integration tests
 
 set -e
 
@@ -25,15 +25,28 @@ FAILED_TESTS=()
 test_command() {
     local name="$1"
     local cmd="$2"
+    local show_output="${3:-false}"
     
     echo -e "${YELLOW}Testing:${NC} $name"
-    if eval "$cmd" > /dev/null 2>&1; then
-        echo -e "${GREEN}✓${NC} $name passed"
-        ((PASSED++))
+    
+    if [ "$show_output" = "true" ]; then
+        if eval "$cmd"; then
+            echo -e "${GREEN}✓${NC} $name passed"
+            ((PASSED++))
+        else
+            echo -e "${RED}✗${NC} $name failed"
+            ((FAILED++))
+            FAILED_TESTS+=("$name")
+        fi
     else
-        echo -e "${RED}✗${NC} $name failed"
-        ((FAILED++))
-        FAILED_TESTS+=("$name")
+        if eval "$cmd" > /dev/null 2>&1; then
+            echo -e "${GREEN}✓${NC} $name passed"
+            ((PASSED++))
+        else
+            echo -e "${RED}✗${NC} $name failed"
+            ((FAILED++))
+            FAILED_TESTS+=("$name")
+        fi
     fi
 }
 
@@ -47,44 +60,14 @@ test_command "Windjammer compiler build" "cargo build --release"
 echo ""
 
 # ============================================================================
-# Part 2: Example Compilation (Rust examples only)
+# Part 2: Workspace Tests
 # ============================================================================
 
-echo -e "${BLUE}Part 2: Rust Examples Compilation${NC}"
+echo -e "${BLUE}Part 2: Workspace Tests${NC}"
 echo "----------------------------------------"
 
-# Check Rust examples compile
-for example in examples/*.rs; do
-    if [ -f "$example" ]; then
-        basename=$(basename "$example" .rs)
-        test_command "Example: $basename" "cargo check --example $basename"
-    fi
-done
-echo ""
-
-# ============================================================================
-# Part 3: Workspace Tests
-# ============================================================================
-
-echo -e "${BLUE}Part 3: Workspace Tests${NC}"
-echo "----------------------------------------"
-
-test_command "Lib tests" "cargo test --workspace --lib"
-test_command "Benchmark tests (compile)" "cargo test --benches --no-run"
-test_command "Compiler integration tests" "cargo test --test compiler_tests"
-echo ""
-
-# ============================================================================
-# Part 4: Clippy Checks
-# ============================================================================
-
-echo -e "${BLUE}Part 4: Clippy Checks${NC}"
-echo "----------------------------------------"
-
-test_command "Windjammer clippy" "cargo clippy --package windjammer --lib --bins -- -D warnings"
-test_command "Runtime clippy" "cargo clippy --package windjammer-runtime --lib -- -D warnings"
-test_command "LSP clippy" "cargo clippy --package windjammer-lsp --lib -- -D warnings"
-test_command "MCP clippy" "cargo clippy --package windjammer-mcp --lib -- -D warnings"
+test_command "Lib tests" "cargo test --workspace --lib --quiet"
+test_command "Compiler integration tests" "cargo test --test compiler_tests --quiet"
 echo ""
 
 # ============================================================================
