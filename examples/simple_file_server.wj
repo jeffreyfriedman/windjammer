@@ -1,0 +1,15 @@
+// Simple Static File Server for Windjammer UI QA
+// Serves HTML, JS, and WASM files from the current directory
+
+use std::http
+
+@async
+fn main() {
+    println!("🚀 Windjammer Static File Server")
+    println!("Starting on http://localhost:8080")
+    println!("Serving files from current directory")
+    println!("Press Ctrl+C to stop\n")
+    
+    http.serve_static("0.0.0.0:8080", ".").await
+}
+

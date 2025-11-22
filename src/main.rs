@@ -28,6 +28,7 @@ pub mod syntax_highlighter; // Syntax highlighting for error snippets
 
 // UI component compilation
 pub mod component;
+pub mod ui; // Windjammer UI compilation (desktop + web)
 
 use anyhow::Result;
 use clap::{Parser, Subcommand, ValueEnum};
@@ -1056,33 +1057,67 @@ fn create_cargo_toml_with_deps(
             let mut current = env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
             let mut found = false;
 
-            // Try current directory first
+            // Try current directory first (if we're in windjammer repo)
             if current
                 .join("crates/windjammer-runtime/Cargo.toml")
                 .exists()
             {
                 current.join("crates/windjammer-runtime")
-            } else {
-                // Search upward (up to 5 levels)
-                for _ in 0..5 {
-                    if let Some(parent) = current.parent() {
-                        if parent.join("crates/windjammer-runtime/Cargo.toml").exists() {
+            }
+            // Check if windjammer is a sibling directory (e.g., we're in windjammer-ui)
+            else if let Some(parent) = current.parent() {
+                if parent
+                    .join("windjammer/crates/windjammer-runtime/Cargo.toml")
+                    .exists()
+                {
+                    parent.join("windjammer/crates/windjammer-runtime")
+                } else {
+                    // Search upward (up to 5 levels)
+                    for _ in 0..5 {
+                        if let Some(parent) = current.parent() {
+                            // Check for windjammer/crates/windjammer-runtime (sibling repo)
+                            if parent
+                                .join("windjammer/crates/windjammer-runtime/Cargo.toml")
+                                .exists()
+                            {
+                                found = true;
+                                current = parent.to_path_buf();
+                                break;
+                            }
+                            // Check for crates/windjammer-runtime (legacy path)
+                            if parent.join("crates/windjammer-runtime/Cargo.toml").exists() {
+                                current = parent.to_path_buf();
+                                found = true;
+                                break;
+                            }
                             current = parent.to_path_buf();
-                            found = true;
+                        } else {
                             break;
                         }
-                        current = parent.to_path_buf();
+                    }
+
+                    if found {
+                        if current
+                            .join("windjammer/crates/windjammer-runtime/Cargo.toml")
+                            .exists()
+                        {
+                            current.join("windjammer/crates/windjammer-runtime")
+                        } else {
+                            current.join("crates/windjammer-runtime")
+                        }
                     } else {
-                        break;
+                        // Fallback: try sibling first, then legacy path
+                        let sibling_path = PathBuf::from("../windjammer/crates/windjammer-runtime");
+                        if sibling_path.join("Cargo.toml").exists() {
+                            sibling_path
+                        } else {
+                            PathBuf::from("./crates/windjammer-runtime")
+                        }
                     }
                 }
-
-                if found {
-                    current.join("crates/windjammer-runtime")
-                } else {
-                    // Fallback: assume we're in the root
-                    PathBuf::from("./crates/windjammer-runtime")
-                }
+            } else {
+                // Fallback when no parent
+                PathBuf::from("../windjammer/crates/windjammer-runtime")
             }
         };
 
@@ -1169,36 +1204,68 @@ fn create_cargo_toml_with_deps(
         match crate_name.as_str() {
             "windjammer_ui" => {
                 // Use absolute path to the workspace crate
-                // Always search for workspace root, don't trust CARGO_MANIFEST_DIR
+                // windjammer-ui is now a separate repository (sibling to windjammer)
                 let windjammer_ui_path = {
                     // Start from current directory and search upward
                     let mut current = env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
                     let mut found = false;
 
-                    // Try current directory first
-                    if current.join("crates/windjammer-ui/Cargo.toml").exists() {
-                        current.join("crates/windjammer-ui")
-                    } else {
-                        // Search upward (up to 5 levels)
-                        for _ in 0..5 {
-                            if let Some(parent) = current.parent() {
-                                if parent.join("crates/windjammer-ui/Cargo.toml").exists() {
-                                    current = parent.to_path_buf();
-                                    found = true;
-                                    break;
-                                }
-                                current = parent.to_path_buf();
+                    // Try current directory first (if we're in windjammer-ui repo)
+                    if current.join("Cargo.toml").exists()
+                        && current.file_name().and_then(|n| n.to_str()) == Some("windjammer-ui")
+                    {
+                        current.clone()
+                    }
+                    // Check if windjammer-ui is a sibling directory
+                    else if let Some(parent) = current.parent() {
+                        if parent.join("windjammer-ui/Cargo.toml").exists() {
+                            parent.join("windjammer-ui")
+                        } else {
+                            // Legacy path: check for windjammer/crates/windjammer-ui (backwards compat)
+                            if current.join("crates/windjammer-ui/Cargo.toml").exists() {
+                                current.join("crates/windjammer-ui")
                             } else {
-                                break;
+                                // Search upward (up to 5 levels)
+                                for _ in 0..5 {
+                                    if let Some(parent) = current.parent() {
+                                        // Check for sibling windjammer-ui
+                                        if parent.join("windjammer-ui/Cargo.toml").exists() {
+                                            found = true;
+                                            current = parent.to_path_buf();
+                                            break;
+                                        }
+                                        // Check for legacy crates/windjammer-ui
+                                        if parent.join("crates/windjammer-ui/Cargo.toml").exists() {
+                                            current = parent.to_path_buf();
+                                            found = true;
+                                            break;
+                                        }
+                                        current = parent.to_path_buf();
+                                    } else {
+                                        break;
+                                    }
+                                }
+
+                                if found {
+                                    if current.join("windjammer-ui/Cargo.toml").exists() {
+                                        current.join("windjammer-ui")
+                                    } else {
+                                        current.join("crates/windjammer-ui")
+                                    }
+                                } else {
+                                    // Fallback: try sibling first, then legacy path
+                                    let sibling_path = PathBuf::from("../windjammer-ui");
+                                    if sibling_path.join("Cargo.toml").exists() {
+                                        sibling_path
+                                    } else {
+                                        PathBuf::from("./crates/windjammer-ui")
+                                    }
+                                }
                             }
                         }
-
-                        if found {
-                            current.join("crates/windjammer-ui")
-                        } else {
-                            // Fallback: assume we're in the root
-                            PathBuf::from("./crates/windjammer-ui")
-                        }
+                    } else {
+                        // Fallback when no parent
+                        PathBuf::from("../windjammer-ui")
                     }
                 };
 
@@ -1208,41 +1275,55 @@ fn create_cargo_toml_with_deps(
                 ));
 
                 // Also add the macro crate (needed for #[component], #[derive(Props)])
-                // Always search for workspace root, don't trust CARGO_MANIFEST_DIR
+                // The macro is inside windjammer-ui repo at windjammer-ui-macro/
                 let windjammer_ui_macro_path = {
-                    // Start from current directory and search upward
-                    let mut current = env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
-                    let mut found = false;
-
-                    // Try current directory first
-                    if current
+                    // If we found windjammer-ui as a sibling, macro is inside it at windjammer-ui-macro/
+                    if windjammer_ui_path
+                        .join("windjammer-ui-macro/Cargo.toml")
+                        .exists()
+                    {
+                        windjammer_ui_path.join("windjammer-ui-macro")
+                    }
+                    // Legacy: check for crates/windjammer-ui-macro (old structure)
+                    else if windjammer_ui_path
                         .join("crates/windjammer-ui-macro/Cargo.toml")
                         .exists()
                     {
-                        current.join("crates/windjammer-ui-macro")
+                        windjammer_ui_path.join("crates/windjammer-ui-macro")
                     } else {
-                        // Search upward (up to 5 levels)
-                        for _ in 0..5 {
-                            if let Some(parent) = current.parent() {
-                                if parent
-                                    .join("crates/windjammer-ui-macro/Cargo.toml")
-                                    .exists()
-                                {
-                                    current = parent.to_path_buf();
-                                    found = true;
-                                    break;
-                                }
-                                current = parent.to_path_buf();
-                            } else {
-                                break;
-                            }
-                        }
+                        // Fallback: search in current tree
+                        let mut current = env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
+                        let mut found = false;
 
-                        if found {
+                        if current
+                            .join("crates/windjammer-ui-macro/Cargo.toml")
+                            .exists()
+                        {
                             current.join("crates/windjammer-ui-macro")
                         } else {
-                            // Fallback: assume we're in the root
-                            PathBuf::from("./crates/windjammer-ui-macro")
+                            // Search upward (up to 5 levels)
+                            for _ in 0..5 {
+                                if let Some(parent) = current.parent() {
+                                    if parent
+                                        .join("crates/windjammer-ui-macro/Cargo.toml")
+                                        .exists()
+                                    {
+                                        current = parent.to_path_buf();
+                                        found = true;
+                                        break;
+                                    }
+                                    current = parent.to_path_buf();
+                                } else {
+                                    break;
+                                }
+                            }
+
+                            if found {
+                                current.join("crates/windjammer-ui-macro")
+                            } else {
+                                // Ultimate fallback: assume relative to windjammer-ui path
+                                windjammer_ui_path.join("windjammer-ui-macro")
+                            }
                         }
                     }
                 };
