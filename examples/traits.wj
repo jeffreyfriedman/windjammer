@@ -1,0 +1,69 @@
+// Traits Example - Defining behavior with traits (like Rust traits/interfaces)
+
+// Define a trait for types that can be displayed
+trait Display {
+    fn display(&self) -> String
+}
+
+// Define a trait for types that can be compared
+trait Comparable {
+    fn compare(&self, other: &Self) -> int
+}
+
+// A struct that implements both traits
+struct Person {
+    name: String,
+    age: int
+}
+
+impl Display for Person {
+    fn display(&self) -> String {
+        "Person { name: ${self.name}, age: ${self.age} }"
+    }
+}
+
+impl Comparable for Person {
+    fn compare(&self, other: &Person) -> int {
+        self.age - other.age
+    }
+}
+
+// Generic function that works with any type implementing Display
+fn print_displayable<T: Display>(item: &T) {
+    println!(item.display())
+}
+
+// Generic function with multiple trait bounds
+fn print_and_compare<T: Display + Comparable>(a: &T, b: &T) {
+    println!("First: ${a.display()}")
+    println!("Second: ${b.display()}")
+    
+    let comparison = a.compare(b)
+    if comparison < 0 {
+        println!("First is less than second")
+    } else if comparison > 0 {
+        println!("First is greater than second")
+    } else {
+        println!("They are equal")
+    }
+}
+
+fn main() {
+    let alice = Person { name: "Alice".to_string(), age: 30 }
+    let bob = Person { name: "Bob".to_string(), age: 25 }
+    
+    // Use trait methods directly
+    println!("Alice: ${alice.display()}")
+    println!("Bob: ${bob.display()}")
+    
+    // Use generic functions
+    print_displayable(&alice)
+    print_and_compare(&alice, &bob)
+    
+    // Trait objects (dynamic dispatch)
+    let people: Vec<&dyn Display> = vec![&alice, &bob]
+    for person in people {
+        println!(person.display())
+    }
+}
+
