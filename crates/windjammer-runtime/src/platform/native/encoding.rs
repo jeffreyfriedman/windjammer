@@ -16,11 +16,15 @@ pub fn base64_encode_string(data: String) -> String {
 }
 
 pub fn base64_decode(data: String) -> Result<Vec<u8>, String> {
-    general_purpose::STANDARD.decode(&data).map_err(|e| e.to_string())
+    general_purpose::STANDARD
+        .decode(&data)
+        .map_err(|e| e.to_string())
 }
 
 pub fn base64_decode_string(data: String) -> Result<String, String> {
-    let bytes = general_purpose::STANDARD.decode(&data).map_err(|e| e.to_string())?;
+    let bytes = general_purpose::STANDARD
+        .decode(&data)
+        .map_err(|e| e.to_string())?;
     String::from_utf8(bytes).map_err(|e| e.to_string())
 }
 
