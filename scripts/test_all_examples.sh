@@ -32,19 +32,19 @@ test_command() {
     if [ "$show_output" = "true" ]; then
         if eval "$cmd"; then
             echo -e "${GREEN}✓${NC} $name passed"
-            ((PASSED++))
+            PASSED=$((PASSED + 1))
         else
             echo -e "${RED}✗${NC} $name failed"
-            ((FAILED++))
+            FAILED=$((FAILED + 1))
             FAILED_TESTS+=("$name")
         fi
     else
         if eval "$cmd" > /dev/null 2>&1; then
             echo -e "${GREEN}✓${NC} $name passed"
-            ((PASSED++))
+            PASSED=$((PASSED + 1))
         else
             echo -e "${RED}✗${NC} $name failed"
-            ((FAILED++))
+            FAILED=$((FAILED + 1))
             FAILED_TESTS+=("$name")
         fi
     fi
