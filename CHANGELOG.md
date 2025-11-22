@@ -7,7 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-## [0.34.1] - 2025-11-22
+## [0.34.2] - 2025-11-22
 
 ### Fixed
 - Updated windjammer-ui dependency paths to support separated repository structure

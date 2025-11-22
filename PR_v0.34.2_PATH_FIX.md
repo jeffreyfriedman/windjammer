@@ -1,4 +1,4 @@
-# Fix Dependency Path Resolution for Separated Repositories (v0.34.1)
+# Fix Dependency Path Resolution for Separated Repositories (v0.34.2)
 
 ## 🎯 Summary
 
