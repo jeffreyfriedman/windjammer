@@ -96,7 +96,7 @@ fn test_http_post_json() {
     // assert!(result.is_ok(), "HTTP POST failed: {:?}", result);
     // let response = result.unwrap();
     // assert!(response.is_success());
-    
+
     // Test disabled - http module needs proper import
     let _ = data; // Use data to avoid unused warning
 }
@@ -680,7 +680,7 @@ fn test_testing_should_panic() {
 #[test]
 fn test_time_now() {
     let _instant = time::now(); // Returns Instant, not i64
-    // Instant doesn't implement PartialOrd<i64>, use now_millis() instead
+                                // Instant doesn't implement PartialOrd<i64>, use now_millis() instead
     let timestamp = time::now_millis();
     assert!(timestamp > 0);
 }
