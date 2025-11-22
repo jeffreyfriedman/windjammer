@@ -2,24 +2,25 @@
 //!
 //! Re-exports the existing windjammer-runtime encoding module.
 
+use base64::{engine::general_purpose, Engine as _};
+
 // Re-export all functions from the parent encoding module
-pub use crate::encoding::*;
 
 // Add any additional functions needed by std::encoding API
 pub fn base64_encode(data: Vec<u8>) -> String {
-    base64::encode(&data)
+    general_purpose::STANDARD.encode(&data)
 }
 
 pub fn base64_encode_string(data: String) -> String {
-    base64::encode(data.as_bytes())
+    general_purpose::STANDARD.encode(data.as_bytes())
 }
 
 pub fn base64_decode(data: String) -> Result<Vec<u8>, String> {
-    base64::decode(&data).map_err(|e| e.to_string())
+    general_purpose::STANDARD.decode(&data).map_err(|e| e.to_string())
 }
 
 pub fn base64_decode_string(data: String) -> Result<String, String> {
-    let bytes = base64::decode(&data).map_err(|e| e.to_string())?;
+    let bytes = general_purpose::STANDARD.decode(&data).map_err(|e| e.to_string())?;
     String::from_utf8(bytes).map_err(|e| e.to_string())
 }
 

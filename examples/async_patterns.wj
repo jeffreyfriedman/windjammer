@@ -1,0 +1,218 @@
+// Async Patterns Example - Concurrency with channels and goroutines
+
+use std::chan
+use std::thread
+use std::time
+
+// Pattern 1: Simple channel communication
+fn basic_channel_example() {
+    println!("=== Basic Channel Example ===")
+    
+    let ch = chan::new()
+    
+    // Spawn a goroutine to send data
+    go {
+        thread::sleep(Duration::from_millis(100))
+        ch.send("Hello from goroutine!")
+    }
+    
+    // Receive data on main thread
+    let msg = ch.recv()
+    println!("Received: ${msg}")
+}
+
+// Pattern 2: Worker pool with multiple goroutines
+fn worker_pool_example() {
+    println!("\n=== Worker Pool Example ===")
+    
+    let jobs = chan::new()
+    let results = chan::new()
+    let num_workers = 3
+    
+    // Spawn worker goroutines
+    for id in 0..num_workers {
+        let jobs_rx = jobs.clone()
+        let results_tx = results.clone()
+        
+        go {
+            loop {
+                match jobs_rx.try_recv() {
+                    Some(job) => {
+                        let result = process_job(id, job)
+                        results_tx.send(result)
+                    }
+                    None => break
+                }
+            }
+        }
+    }
+    
+    // Send jobs
+    for i in 1..=9 {
+        jobs.send(i)
+    }
+    jobs.close()
+    
+    // Collect results
+    for _ in 1..=9 {
+        let result = results.recv()
+        println!("Result: ${result}")
+    }
+}
+
+fn process_job(worker_id: int, job: int) -> String {
+    thread::sleep(Duration::from_millis(100))
+    "Worker ${worker_id} processed job ${job}"
+}
+
+// Pattern 3: Select statement (waiting on multiple channels)
+fn select_example() {
+    println!("\n=== Select Example ===")
+    
+    let ch1 = chan::new()
+    let ch2 = chan::new()
+    
+    // Goroutine 1
+    go {
+        thread::sleep(Duration::from_millis(100))
+        ch1.send("Message from channel 1")
+    }
+    
+    // Goroutine 2
+    go {
+        thread::sleep(Duration::from_millis(50))
+        ch2.send("Message from channel 2")
+    }
+    
+    // Select from multiple channels
+    for _ in 0..2 {
+        select! {
+            msg = ch1.recv() => println!("Channel 1: ${msg}"),
+            msg = ch2.recv() => println!("Channel 2: ${msg}"),
+        }
+    }
+}
+
+// Pattern 4: Pipeline pattern
+fn pipeline_example() {
+    println!("\n=== Pipeline Example ===")
+    
+    // Stage 1: Generate numbers
+    fn generator(max: int) -> chan::Receiver<int> {
+        let ch = chan::new()
+        go {
+            for i in 1..=max {
+                ch.send(i)
+            }
+            ch.close()
+        }
+        ch
+    }
+    
+    // Stage 2: Square numbers
+    fn squarer(input: chan::Receiver<int>) -> chan::Receiver<int> {
+        let ch = chan::new()
+        go {
+            loop {
+                match input.try_recv() {
+                    Some(n) => ch.send(n * n),
+                    None => {
+                        ch.close()
+                        break
+                    }
+                }
+            }
+        }
+        ch
+    }
+    
+    // Stage 3: Sum numbers
+    fn summer(input: chan::Receiver<int>) -> int {
+        let mut sum = 0
+        loop {
+            match input.try_recv() {
+                Some(n) => sum += n,
+                None => break
+            }
+        }
+        sum
+    }
+    
+    // Build and run pipeline
+    let numbers = generator(10)
+    let squares = squarer(numbers)
+    let result = summer(squares)
+    
+    println!("Sum of squares 1-10: ${result}")
+}
+
+// Pattern 5: Timeout pattern
+fn timeout_example() {
+    println!("\n=== Timeout Example ===")
+    
+    let ch = chan::new()
+    
+    // Spawn a slow operation
+    go {
+        thread::sleep(Duration::from_secs(2))
+        ch.send("Finally done!")
+    }
+    
+    // Wait with timeout
+    select! {
+        msg = ch.recv() => println!("Received: ${msg}"),
+        _ = chan::after(Duration::from_millis(500)) => {
+            println!("Timeout! Operation took too long.")
+        }
+    }
+}
+
+// Pattern 6: Fan-out/Fan-in
+fn fan_out_in_example() {
+    println!("\n=== Fan-Out/Fan-In Example ===")
+    
+    let input = chan::new()
+    let output = chan::new()
+    let num_workers = 5
+    
+    // Fan-out: Multiple workers processing from same channel
+    for id in 0..num_workers {
+        let input_rx = input.clone()
+        let output_tx = output.clone()
+        
+        go {
+            loop {
+                match input_rx.try_recv() {
+                    Some(job) => {
+                        let result = "Worker ${id}: ${job * 2}"
+                        output_tx.send(result)
+                    }
+                    None => break
+                }
+            }
+        }
+    }
+    
+    // Send work
+    for i in 1..=10 {
+        input.send(i)
+    }
+    input.close()
+    
+    // Fan-in: Collect results
+    for _ in 1..=10 {
+        println!(output.recv())
+    }
+}
+
+fn main() {
+    basic_channel_example()
+    worker_pool_example()
+    select_example()
+    pipeline_example()
+    timeout_example()
+    fan_out_in_example()
+    
+    println!("\n✅ All async patterns demonstrated!")
+}
+
