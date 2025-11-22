@@ -1,0 +1,106 @@
+// Macros Example - Declarative macros for code generation
+
+// Simple macro for creating a vector
+macro_rules! vec {
+    ($($x:expr),*) => {
+        {
+            let mut temp_vec = Vec::new()
+            $(temp_vec.push($x);)*
+            temp_vec
+        }
+    }
+}
+
+// Macro for asserting equality with custom message
+macro_rules! assert_eq {
+    ($left:expr, $right:expr) => {
+        {
+            let left_val = $left
+            let right_val = $right
+            if left_val != right_val {
+                panic!("Assertion failed: ${left_val} != ${right_val}")
+            }
+        }
+    };
+    ($left:expr, $right:expr, $($arg:tt)*) => {
+        {
+            let left_val = $left
+            let right_val = $right
+            if left_val != right_val {
+                panic!("Assertion failed: ${left_val} != ${right_val}: $($arg)*")
+            }
+        }
+    }
+}
+
+// Macro for building a hash map
+macro_rules! hashmap {
+    ($($key:expr => $value:expr),*) => {
+        {
+            let mut map = HashMap::new()
+            $(map.insert($key, $value);)*
+            map
+        }
+    }
+}
+
+// Macro for timing code execution
+macro_rules! time_it {
+    ($name:expr, $code:block) => {
+        {
+            let start = std::time::Instant::now()
+            let result = $code
+            let elapsed = start.elapsed()
+            println!("${name} took: ${elapsed.as_millis()}ms")
+            result
+        }
+    }
+}
+
+// Macro for repeating code
+macro_rules! repeat {
+    ($n:expr, $code:block) => {
+        for _ in 0..$n {
+            $code
+        }
+    }
+}
+
+fn main() {
+    // Using vec! macro
+    let numbers = vec![1, 2, 3, 4, 5]
+    println!("Numbers: ${numbers:?}")
+    
+    // Using assert_eq! macro
+    assert_eq!(2 + 2, 4)
+    assert_eq!(2 + 2, 4, "Math is broken!")
+    
+    // Using hashmap! macro
+    let scores = hashmap![
+        "Alice" => 95,
+        "Bob" => 87,
+        "Charlie" => 92
+    ]
+    println!("Scores: ${scores:?}")
+    
+    // Using time_it! macro
+    let result = time_it!("Fibonacci calculation", {
+        fibonacci(35)
+    })
+    println!("Result: ${result}")
+    
+    // Using repeat! macro
+    println!("Repeating 3 times:")
+    repeat!(3, {
+        println!("  Hello from macro!")
+    })
+}
+
+fn fibonacci(n: int) -> int {
+    if n <= 1 {
+        n
+    } else {
+        fibonacci(n - 1) + fibonacci(n - 2)
+    }
+}
+

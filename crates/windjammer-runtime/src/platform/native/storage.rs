@@ -1,7 +1,5 @@
-/// Native implementation of std::storage using files
-use std::collections::HashMap;
 use std::fs;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 use std::time::{SystemTime, UNIX_EPOCH};
 
 pub type StorageResult<T> = Result<T, String>;
