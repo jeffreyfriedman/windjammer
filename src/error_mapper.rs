@@ -716,6 +716,9 @@ mod tests {
 
     #[test]
     fn test_diagnostic_format() {
+        // Disable colors for deterministic test output
+        colored::control::set_override(false);
+
         let diag = WindjammerDiagnostic {
             message: "Type mismatch".to_string(),
             level: DiagnosticLevel::Error,
@@ -731,9 +734,24 @@ mod tests {
         };
 
         let formatted = diag.format();
-        assert!(formatted.contains("error[E0308]"));
-        assert!(formatted.contains("test.wj:10:5"));
-        assert!(formatted.contains("help: Try using .parse()"));
+        assert!(
+            formatted.contains("error[E0308]"),
+            "Expected 'error[E0308]' in:\n{}",
+            formatted
+        );
+        assert!(
+            formatted.contains("test.wj:10:5"),
+            "Expected 'test.wj:10:5' in:\n{}",
+            formatted
+        );
+        assert!(
+            formatted.contains("help: Try using .parse()"),
+            "Expected 'help: Try using .parse()' in:\n{}",
+            formatted
+        );
+
+        // Re-enable colors for other tests
+        colored::control::unset_override();
     }
 
     #[test]
