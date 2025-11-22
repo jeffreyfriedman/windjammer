@@ -30,6 +30,17 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
       
+      - name: Debug - Check if Cargo.lock exists
+        run: |
+          pwd
+          ls -la | head -20
+          if [ -f "Cargo.lock" ]; then
+            echo "✅ Cargo.lock exists"
+            wc -l Cargo.lock
+          else
+            echo "❌ Cargo.lock NOT FOUND"
+          fi
+      
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@master
         with:
@@ -40,6 +51,7 @@ jobs:
         run: cargo generate-lockfile
       
       - name: Cache cargo dependencies
+        continue-on-error: true
         uses: actions/cache@v4
         with:
           path: |
