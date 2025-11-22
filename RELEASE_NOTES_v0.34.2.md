@@ -1,4 +1,4 @@
-# Windjammer v0.34.1 - Repository Cleanup & CI Fixes
+# Windjammer v0.34.2 - Repository Cleanup & CI Fixes
 
 **Release Date:** November 22, 2025  
 **Type:** Patch Release (Bug Fixes & Cleanup)
