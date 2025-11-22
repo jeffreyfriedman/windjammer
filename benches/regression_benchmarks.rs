@@ -67,7 +67,7 @@ fn bench_lexer_throughput(c: &mut Criterion) {
         group.bench_with_input(BenchmarkId::from_parameter(name), source, |b, &source| {
             b.iter(|| {
                 let mut lexer = Lexer::new(source);
-                black_box(lexer.tokenize());
+                black_box(lexer.tokenize_with_locations());
             });
         });
     }
@@ -81,7 +81,7 @@ fn bench_parser_throughput(c: &mut Criterion) {
 
     for (name, source) in &[("small", SMALL_PROGRAM), ("medium", MEDIUM_PROGRAM)] {
         let mut lexer = Lexer::new(source);
-        let tokens = lexer.tokenize();
+        let tokens = lexer.tokenize_with_locations();
 
         group.throughput(Throughput::Elements(tokens.len() as u64));
         group.bench_with_input(BenchmarkId::from_parameter(name), &tokens, |b, tokens| {
@@ -101,7 +101,7 @@ fn bench_codegen_throughput(c: &mut Criterion) {
 
     for (name, source) in &[("small", SMALL_PROGRAM), ("medium", MEDIUM_PROGRAM)] {
         let mut lexer = Lexer::new(source);
-        let tokens = lexer.tokenize();
+        let tokens = lexer.tokenize_with_locations();
         let mut parser = Parser::new(tokens);
 
         if let Ok(program) = parser.parse() {
@@ -129,7 +129,7 @@ fn bench_e2e_compilation(c: &mut Criterion) {
         group.bench_with_input(BenchmarkId::from_parameter(name), source, |b, &source| {
             b.iter(|| {
                 let mut lexer = Lexer::new(source);
-                let tokens = lexer.tokenize();
+                let tokens = lexer.tokenize_with_locations();
 
                 let mut parser = Parser::new(tokens);
                 if let Ok(program) = parser.parse() {
@@ -155,7 +155,7 @@ fn bench_scaling(c: &mut Criterion) {
         group.bench_with_input(BenchmarkId::from_parameter(size), &source, |b, source| {
             b.iter(|| {
                 let mut lexer = Lexer::new(source);
-                let tokens = lexer.tokenize();
+                let tokens = lexer.tokenize_with_locations();
                 let mut parser = Parser::new(tokens);
                 let _ = black_box(parser.parse());
             });

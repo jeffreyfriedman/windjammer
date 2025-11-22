@@ -247,7 +247,6 @@ impl WebSocket {
 
 use std::io::{Read, Write};
 use std::net::{TcpListener, TcpStream};
-use std::path::Path;
 
 /// HTTP Server Request (received by server)
 #[derive(Debug, Clone)]

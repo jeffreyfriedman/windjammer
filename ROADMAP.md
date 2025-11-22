@@ -1,8 +1,17 @@
 # Windjammer Roadmap 🗺️
 
-*Last Updated: October 16, 2025*
+*Last Updated: November 22, 2025*
 
 This roadmap outlines our vision for making Windjammer the **ultimate systems programming language** with a complete ecosystem, zero lock-in, and world-class developer experience.
+
+## 🎯 Repository Focus (Post v0.34.0)
+
+As of v0.34.0, Windjammer has been restructured into focused repositories:
+- **windjammer** (this repo) - Core language compiler and tooling
+- **windjammer-ui** - Cross-platform UI framework (separate repo)
+- **windjammer-game** - Game development framework (private)
+
+This roadmap now focuses on **core language features** and **developer tooling**.
 
 ---
 

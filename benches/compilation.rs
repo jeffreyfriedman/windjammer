@@ -113,7 +113,7 @@ fn benchmark_lexer(c: &mut Criterion) {
         |b, source| {
             b.iter(|| {
                 let mut lexer = lexer::Lexer::new(black_box(source));
-                lexer.tokenize()
+                lexer.tokenize_with_locations()
             });
         },
     );
@@ -124,7 +124,7 @@ fn benchmark_lexer(c: &mut Criterion) {
         |b, source| {
             b.iter(|| {
                 let mut lexer = lexer::Lexer::new(black_box(source));
-                lexer.tokenize()
+                lexer.tokenize_with_locations()
             });
         },
     );
@@ -135,7 +135,7 @@ fn benchmark_lexer(c: &mut Criterion) {
         |b, source| {
             b.iter(|| {
                 let mut lexer = lexer::Lexer::new(black_box(source));
-                lexer.tokenize()
+                lexer.tokenize_with_locations()
             });
         },
     );
@@ -208,7 +208,7 @@ fn benchmark_full_compilation(c: &mut Criterion) {
             b.iter(|| {
                 // Lex
                 let mut lexer = lexer::Lexer::new(black_box(source));
-                let tokens = lexer.tokenize();
+                let tokens = lexer.tokenize_with_locations();
 
                 // Parse
                 let mut parser = parser::Parser::new(tokens);
@@ -232,7 +232,7 @@ fn benchmark_full_compilation(c: &mut Criterion) {
         |b, source| {
             b.iter(|| {
                 let mut lexer = lexer::Lexer::new(black_box(source));
-                let tokens = lexer.tokenize();
+                let tokens = lexer.tokenize_with_locations();
                 let mut parser = parser::Parser::new(tokens);
                 let program = parser.parse().unwrap();
                 let mut analyzer = analyzer::Analyzer::new();
@@ -250,7 +250,7 @@ fn benchmark_full_compilation(c: &mut Criterion) {
         |b, source| {
             b.iter(|| {
                 let mut lexer = lexer::Lexer::new(black_box(source));
-                let tokens = lexer.tokenize();
+                let tokens = lexer.tokenize_with_locations();
                 let mut parser = parser::Parser::new(tokens);
                 let program = parser.parse().unwrap();
                 let mut analyzer = analyzer::Analyzer::new();
