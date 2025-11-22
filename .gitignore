@@ -14,12 +14,13 @@ Cargo.lock
 /test_output/
 /test_output_*/
 
-# WASM build artifacts
-examples/*/pkg/
-examples/*/target/
-examples/*/build/
-examples/*/build_output/
-examples/*/src/
+# WASM build artifacts (match at any depth)
+examples/**/pkg/
+examples/**/target/
+examples/**/build/
+examples/**/build_output/
+examples/**/src/
+**/build/target/
 
 # Temporary test files
 test_*.wj
