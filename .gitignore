@@ -73,3 +73,4 @@ Desktop.ini
 crates/windjammer-editor-desktop/src-tauri/target/
 build_editor/
 build_game_editor/
+*.bak
