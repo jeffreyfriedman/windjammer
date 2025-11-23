@@ -42,6 +42,8 @@ pub fn execute(path: &Path, args: &[String], target_str: &str) -> Result<()> {
             false, // quiet
             None,  // filter_file
             None,  // filter_type
+            false, // library
+            false, // module_file
         )?;
 
         // Run with Node.js

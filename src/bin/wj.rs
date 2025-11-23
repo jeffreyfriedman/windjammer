@@ -110,6 +110,14 @@ enum Commands {
         /// Filter errors by type (error, warning)
         #[arg(long, value_name = "TYPE")]
         filter_type: Option<String>,
+
+        /// Library mode: exclude test main() functions from output
+        #[arg(long)]
+        library: bool,
+
+        /// Auto-generate mod.rs with pub mod declarations and re-exports
+        #[arg(long)]
+        module_file: bool,
     },
 
     /// Compile and run a Windjammer file
@@ -278,6 +286,8 @@ fn main() -> anyhow::Result<()> {
             quiet,
             filter_file,
             filter_type,
+            library,
+            module_file,
         } => {
             // TODO: Pass defer_drop config to compiler
             // For now, just ignore these flags - defer drop is always auto
@@ -301,6 +311,8 @@ fn main() -> anyhow::Result<()> {
                 quiet,
                 filter_file.as_deref(),
                 filter_type.as_deref(),
+                library,
+                module_file,
             )?;
         }
         Commands::Run {
@@ -466,6 +478,8 @@ fn main() -> anyhow::Result<()> {
                 true,  // quiet - suppress normal output
                 None,  // filter_file
                 None,  // filter_type
+                false, // library
+                false, // module_file
             )
             .ok(); // Ignore errors, we'll get them from the TUI
 
