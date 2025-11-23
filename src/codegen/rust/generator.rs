@@ -3863,7 +3863,7 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
 
                     while let Some(ch) = chars.next() {
                         if ch == '{' {
-                            // Check if it's {variable} pattern
+                            // Check if it's {variable} pattern or {} placeholder
                             let mut var_name = String::new();
                             let mut is_variable = true;
 
@@ -3882,16 +3882,19 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
                             }
 
                             if is_variable && !var_name.is_empty() {
-                                // It's a variable interpolation
+                                // It's a variable interpolation: {count} -> {}, count
                                 format_str.push_str("{}");
                                 args.push(var_name);
+                            } else if is_variable && var_name.is_empty() {
+                                // It's an empty placeholder: {} -> keep as-is (format! placeholder)
+                                format_str.push_str("{}");
                             } else {
                                 // Not a variable, escape the literal brace
                                 format_str.push_str("{{");
                                 format_str.push_str(&var_name);
                             }
                         } else if ch == '}' {
-                            // Escape literal closing brace
+                            // Escape literal closing brace (not part of a placeholder)
                             format_str.push_str("}}");
                         } else {
                             format_str.push(ch);
