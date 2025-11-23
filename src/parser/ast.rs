@@ -120,6 +120,7 @@ pub struct StructField {
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct StructDecl {
     pub name: String,
+    pub is_pub: bool,                // Whether this struct has pub visibility
     pub type_params: Vec<TypeParam>, // Generic type parameters with optional bounds: <T: Clone>
     pub where_clause: Vec<(String, Vec<String>)>, // Where clause: [(type_param, [trait_bounds])]
     pub fields: Vec<StructField>,
@@ -139,6 +140,7 @@ pub struct EnumVariant {
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct EnumDecl {
     pub name: String,
+    pub is_pub: bool,                // Whether this enum has pub visibility
     pub type_params: Vec<TypeParam>, // Generic type parameters: enum Option<T>, enum Result<T, E>
     pub variants: Vec<EnumVariant>,
 }
