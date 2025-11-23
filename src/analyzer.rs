@@ -228,7 +228,11 @@ pub struct Analyzer {
     // Track variable ownership modes (reserved for future use)
     #[allow(dead_code)]
     variables: HashMap<String, OwnershipMode>,
+    // Track enum definitions to determine if they're Copy
+    copy_enums: HashSet<String>,
 }
+
+use std::collections::HashSet;
 
 impl Default for Analyzer {
     fn default() -> Self {
@@ -240,6 +244,7 @@ impl Analyzer {
     pub fn new() -> Self {
         Analyzer {
             variables: HashMap::new(),
+            copy_enums: HashSet::new(),
         }
     }
 
@@ -249,6 +254,17 @@ impl Analyzer {
     ) -> Result<(Vec<AnalyzedFunction>, SignatureRegistry), String> {
         let mut analyzed = Vec::new();
         let mut registry = SignatureRegistry::new();
+
+        // First pass: Collect all enum definitions to determine Copy types
+        for item in &program.items {
+            if let Item::Enum { decl, .. } = item {
+                // Fieldless enums (unit variants only) are Copy by default
+                let is_copy = decl.variants.iter().all(|v| v.data.is_none());
+                if is_copy {
+                    self.copy_enums.insert(decl.name.clone());
+                }
+            }
+        }
 
         for item in &program.items {
             match item {
@@ -633,6 +649,10 @@ impl Analyzer {
             Type::MutableReference(_) => false,
             Type::Tuple(types) => types.iter().all(|t| self.is_copy_type(t)),
             Type::Custom(name) => {
+                // Check if it's a known Copy enum
+                if self.copy_enums.contains(name) {
+                    return true;
+                }
                 // Recognize common Rust primitive types by name
                 matches!(
                     name.as_str(),
