@@ -942,6 +942,7 @@ mod tests {
             items: vec![Item::Function {
                 decl: FunctionDecl {
                     name: "greet".to_string(),
+                    is_pub: false,
                     parameters: vec![],
                     return_type: None,
                     body: vec![],

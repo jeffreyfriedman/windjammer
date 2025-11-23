@@ -80,6 +80,14 @@ enum Commands {
         /// Show raw Rust errors instead of translated Windjammer errors
         #[arg(long)]
         raw_errors: bool,
+
+        /// Library mode: exclude test main() functions from output
+        #[arg(long)]
+        library: bool,
+
+        /// Auto-generate mod.rs with pub mod declarations and re-exports
+        #[arg(long)]
+        module_file: bool,
     },
     /// Check a Windjammer project for errors (transpile + cargo check)
     Check {
@@ -212,8 +220,17 @@ fn main() -> Result<()> {
             target,
             check,
             raw_errors,
+            library,
+            module_file,
         } => {
             build_project(&path, &output, target)?;
+            // TODO: Implement library and module_file functionality
+            if library {
+                eprintln!("Note: --library flag is recognized but not yet fully implemented");
+            }
+            if module_file {
+                eprintln!("Note: --module-file flag is recognized but not yet fully implemented");
+            }
             if check {
                 check_with_cargo(&output, raw_errors)?;
             }
