@@ -581,6 +581,41 @@ impl Analyzer {
                         }
                     }
                 }
+                Statement::Assignment {
+                    target: Expression::FieldAccess { object, .. },
+                    value,
+                    ..
+                } => {
+                    // Check for field assignments: self.field = param
+                    if matches!(&**object, Expression::Identifier { name: id, .. } if id == "self")
+                        && self.expression_uses_identifier(name, value)
+                    {
+                        return true;
+                    }
+                }
+                Statement::Expression {
+                    expr:
+                        Expression::MethodCall {
+                            object, arguments, ..
+                        },
+                    ..
+                } => {
+                    // Check for method calls on fields: self.field.method(param)
+                    if let Expression::FieldAccess {
+                        object: field_obj, ..
+                    } = &**object
+                    {
+                        if matches!(&**field_obj, Expression::Identifier { name: id, .. } if id == "self")
+                        {
+                            // Check if any argument uses the parameter
+                            for (_label, arg) in arguments {
+                                if self.expression_uses_identifier(name, arg) {
+                                    return true;
+                                }
+                            }
+                        }
+                    }
+                }
                 _ => {}
             }
         }
