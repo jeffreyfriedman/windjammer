@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.34.3] - 2025-11-23
+
+### Fixed
+- Fixed GitHub Actions permissions for release creation
+- Fixed cargo publish workflow to not modify Cargo.lock during CI
+- Removed duplicate testing in publish workflow (tests already run in test job)
+- Added continue-on-error to cache steps to prevent intermittent hashFiles failures from blocking CI
+- Removed unnecessary --allow-dirty flags (proper fix: don't modify Cargo.lock during publish)
+
 ## [0.34.2] - 2025-11-22
 
 ### Fixed
