@@ -4370,7 +4370,7 @@ checksum = "712e227841d057c1ee1cd2fb22fa7e5a5461ae8e48fa2ca79ec42cfc1931183f"
 
 [[package]]
 name = "windjammer"
-version = "0.35.1"
+version = "0.35.2"
 dependencies = [
  "anyhow",
  "clap",
@@ -4392,7 +4392,7 @@ dependencies = [
 
 [[package]]
 name = "windjammer-lsp"
-version = "0.35.1"
+version = "0.35.2"
 dependencies = [
  "anyhow",
  "assert_cmd",
@@ -4426,7 +4426,7 @@ dependencies = [
 
 [[package]]
 name = "windjammer-mcp"
-version = "0.31.0"
+version = "0.35.2"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -4460,7 +4460,7 @@ dependencies = [
 
 [[package]]
 name = "windjammer-runtime"
-version = "0.34.1"
+version = "0.35.2"
 dependencies = [
  "anyhow",
  "async-trait",
