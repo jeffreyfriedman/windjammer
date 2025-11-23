@@ -16,7 +16,7 @@ path = "src/main.rs"
 
 [dependencies]
 # Windjammer compiler
-windjammer = { path = "../.." }
+windjammer = { path = "../..", version = "0.35.0" }
 
 # LSP
 tower-lsp = "0.20"

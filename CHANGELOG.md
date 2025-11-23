@@ -7,6 +7,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.35.0] - 2025-11-23
+
+### Breaking Changes
+- **Removed UI stdlib** - `std::ui` module removed from compiler stdlib
+  - UI functionality should now be provided by the separate `windjammer-ui` crate
+  - Clean separation: compiler no longer depends on or references UI framework
+  - Users who need UI should explicitly add `windjammer-ui` to their `Cargo.toml`
+  
+- **Removed Game stdlib** - `std::game` module removed from compiler stdlib
+  - Game functionality should now be provided by the separate `windjammer-game` crate
+  - Clean separation: compiler no longer depends on or references game framework
+  - Users who need game features should explicitly add `windjammer-game` to their `Cargo.toml`
+
+### Fixed
+- Fixed cargo publish issue: added version requirement to `windjammer` dependency in `windjammer-lsp`
+- All workspace crates now properly specify version requirements for publishing to crates.io
+
+### Removed
+- `std/ui/` directory and all UI stdlib code
+- `std/game/` directory and all game stdlib code
+- `windjammer-runtime/src/ui.rs` runtime implementation
+- `windjammer-runtime/src/game.rs` runtime implementation
+- Game runtime implementations (ECS, physics, rendering)
+
 ## [0.34.3] - 2025-11-23
 
 ### Fixed
