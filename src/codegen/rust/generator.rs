@@ -1465,7 +1465,11 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
         }
 
         // Add struct declaration with type parameters
-        let pub_prefix = if self.is_module { "pub " } else { "" };
+        let pub_prefix = if s.is_pub || self.is_module {
+            "pub "
+        } else {
+            ""
+        };
         output.push_str(&format!("{}struct ", pub_prefix));
         output.push_str(&s.name);
         if !s.type_params.is_empty() {
@@ -1547,7 +1551,12 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
     }
 
     fn generate_enum(&self, e: &EnumDecl) -> String {
-        let mut output = format!("enum {}", e.name);
+        let pub_prefix = if e.is_pub || self.is_module {
+            "pub "
+        } else {
+            ""
+        };
+        let mut output = format!("{}enum {}", pub_prefix, e.name);
 
         // Generate generic parameters: enum Option<T>, enum Result<T, E>
         if !e.type_params.is_empty() {
