@@ -14,7 +14,7 @@ All platform builds failing at the `strip` step:
 
 ### 2. Publish Workflow Dry-Run Failure
 ```
-error: failed to select a version for the requirement `windjammer = "^0.35.0"`
+error: failed to select a version for the requirement `windjammer = ww"^0.35.0"`
 candidate versions found which didn't match: 0.30.0, 0.29.0, 0.28.0, ...
 location searched: crates.io index
 required by package `windjammer-lsp v0.35.0`
@@ -67,12 +67,23 @@ Changed dry-run to only validate core crates:
 - Dependent crates (`windjammer-lsp`, `windjammer-mcp`) will be validated during **actual publish** after their dependencies are already live on crates.io
 - Publish order: `windjammer` → wait 30s → `windjammer-runtime` → wait 30s → `windjammer-lsp` → `windjammer-mcp`
 
-### 3. Test Workflow: Add Publish Dry-Run (Pre-merge Validation)
-Added a new `publish-dryrun` job to the test workflow:
+### 3. Test Workflow: Add Lockfile Validation + Publish Dry-Run
+Added two new jobs to enforce best practices:
+
+**Job 1: `lockfile-check`** - Validates Cargo.lock
+```yaml
+lockfile-check:
+  steps:
+    - name: Check Cargo.lock exists
+      # Fails if Cargo.lock is not committed
+    - name: Verify Cargo.lock is up-to-date
+      # Fails if Cargo.lock is out of sync with Cargo.toml
+```
+
+**Job 2: `publish-dryrun`** - Validates publishing
 ```yaml
 publish-dryrun:
-  name: Publish Dry-Run (Pre-merge Validation)
-  runs-on: ubuntu-latest
+  needs: lockfile-check  # Only runs if lockfile is valid
   steps:
     - name: Dry-run publish (core crates only)
       run: |
@@ -81,9 +92,11 @@ publish-dryrun:
 ```
 
 **Benefits**:
-- Catches publish issues **before merge** (not after tag is created)
-- Runs on every PR, ensuring we can always publish
-- Fast feedback loop (fails in CI, not during manual release)
+- ✅ Enforces that `Cargo.lock` is always committed (catches `--no-verify` bypasses)
+- ✅ Enforces that `Cargo.lock` is always up-to-date
+- ✅ Catches publish issues **before merge** (not after tag is created)
+- ✅ No `--allow-dirty` needed (lockfile is guaranteed to be committed)
+- ✅ Fast feedback loop (fails in CI, not during manual release)
 
 ---
 
