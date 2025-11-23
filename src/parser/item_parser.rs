@@ -763,6 +763,7 @@ impl Parser {
 
         Ok(StructDecl {
             name,
+            is_pub: false, // Will be set by parse_item() if pub keyword present
             type_params,
             where_clause,
             fields,
@@ -842,6 +843,7 @@ impl Parser {
 
         Ok(EnumDecl {
             name,
+            is_pub: false, // Will be set by parse_item() if pub keyword present
             type_params,
             variants,
         })
