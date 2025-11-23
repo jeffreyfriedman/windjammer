@@ -92,17 +92,16 @@ jobs:
           
           echo "✓ CHANGELOG.md has proper entry for $VERSION"
 
-      - name: Dry run publish (all crates)
+      - name: Dry run publish (windjammer core only)
         run: |
           echo "Dry run: windjammer (core)"
           cargo publish --dry-run
           echo "Dry run: windjammer-runtime"
           cargo publish --dry-run -p windjammer-runtime
-          echo "Dry run: windjammer-lsp"
-          cargo publish --dry-run -p windjammer-lsp
-          echo "Dry run: windjammer-mcp"
-          cargo publish --dry-run -p windjammer-mcp
-          # Note: windjammer-ui and windjammer-game-framework will be published from separate repos
+          # Skip dry-run for windjammer-lsp and windjammer-mcp
+          # They depend on windjammer = "0.35.0" which isn't on crates.io yet
+          # Dry-run would fail, but actual publish will work after windjammer is published
+          echo "✓ Core crates validated, dependent crates will be validated during publish"
 
       - name: Publish windjammer (core) to crates.io
         env:
