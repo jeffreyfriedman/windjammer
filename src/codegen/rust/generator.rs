@@ -3424,15 +3424,9 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
                 // }
 
                 // UI FRAMEWORK: Check if we need to add .to_vnode() for .child() methods
-                let processed_args = if method == "child" && !arguments.is_empty() {
-                    // Always wrap the first argument with .to_vnode() for .child() methods
-                    // The ToVNode trait will handle the conversion
-                    let mut new_args = vec![format!("({}).to_vnode()", args[0])];
-                    new_args.extend_from_slice(&args[1..]);
-                    new_args
-                } else {
-                    args
-                };
+                // DISABLED: Too aggressive - needs type checking to determine if parameter expects VNode
+                // TODO: Re-enable with proper type checking when VNode type bindings are implemented
+                let processed_args = args;
 
                 let base_expr = format!(
                     "{}{}{}{}({})",
