@@ -31,6 +31,7 @@ jobs:
         uses: actions/checkout@v4
       
       - name: Debug - Check if Cargo.lock exists
+        shell: bash
         run: |
           pwd
           ls -la | head -20
