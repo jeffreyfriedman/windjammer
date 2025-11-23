@@ -1,6 +1,6 @@
 [package]
 name = "windjammer-lsp"
-version.workspace = true  # 0.31.0
+version = "0.35.2"
 edition.workspace = true
 authors.workspace = true
 description = "Language Server Protocol implementation for Windjammer"
