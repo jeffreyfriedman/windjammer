@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.35.1] - 2025-11-23
+
+### Fixed
+- Fixed release workflow: Added binary verification step to debug cross-compilation issues
+- Fixed publish workflow: Skip dry-run for dependent crates (they depend on not-yet-published windjammer)
+- Dry-run now only validates core crates (windjammer, windjammer-runtime)
+
 ## [0.35.0] - 2025-11-23
 
 ### Breaking Changes
