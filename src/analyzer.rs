@@ -548,16 +548,40 @@ impl Analyzer {
     fn is_stored(&self, name: &str, statements: &[Statement]) -> bool {
         // Check if the parameter is stored in a struct field or collection
         for stmt in statements {
-            if let Statement::Let {
-                value: Expression::StructLiteral { fields, .. },
-                ..
-            } = stmt
-            {
-                for (_, field_expr) in fields {
-                    if self.expression_uses_identifier(name, field_expr) {
-                        return true;
+            match stmt {
+                Statement::Let {
+                    value: Expression::StructLiteral { fields, .. },
+                    ..
+                } => {
+                    for (_, field_expr) in fields {
+                        if self.expression_uses_identifier(name, field_expr) {
+                            return true;
+                        }
                     }
                 }
+                Statement::Return {
+                    value: Some(Expression::StructLiteral { fields, .. }),
+                    ..
+                } => {
+                    // Check if parameter is used in a returned struct literal
+                    for (_, field_expr) in fields {
+                        if self.expression_uses_identifier(name, field_expr) {
+                            return true;
+                        }
+                    }
+                }
+                Statement::Expression {
+                    expr: Expression::StructLiteral { fields, .. },
+                    ..
+                } => {
+                    // Check if parameter is used in a struct literal expression (implicit return)
+                    for (_, field_expr) in fields {
+                        if self.expression_uses_identifier(name, field_expr) {
+                            return true;
+                        }
+                    }
+                }
+                _ => {}
             }
         }
         false
