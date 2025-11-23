@@ -14,6 +14,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Fixed publish workflow: Skip dry-run for dependent crates (they depend on not-yet-published windjammer)
 - Dry-run now only validates core crates (windjammer, windjammer-runtime)
 
+### Changed
+- Added publish dry-run job to test workflow for pre-merge validation
+- Catches publish issues in CI before merge, not after tagging
+
 ## [0.35.0] - 2025-11-23
 
 ### Breaking Changes

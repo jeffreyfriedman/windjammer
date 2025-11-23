@@ -196,3 +196,46 @@ jobs:
           ./target/release/wj build --target=wasm complex.wj --output /tmp/complex_wasm
           
           echo "✅ All targets compile complex code successfully"
+  
+  # Validate that crates can be published (dry-run)
+  publish-dryrun:
+    name: Publish Dry-Run (Pre-merge Validation)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+      
+      - name: Generate Cargo.lock
+        shell: bash
+        run: cargo generate-lockfile
+      
+      - name: Cache Cargo registry and build artifacts
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: ${{ runner.os }}-cargo-publish-${{ hashFiles('Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-cargo-publish-
+            ${{ runner.os }}-cargo-
+      
+      - name: Dry-run publish (core crates only)
+        run: |
+          echo "🧪 Validating core crates can be published..."
+          echo ""
+          echo "📦 Dry-run: windjammer (core)"
+          cargo publish --dry-run
+          echo ""
+          echo "📦 Dry-run: windjammer-runtime"
+          cargo publish --dry-run -p windjammer-runtime
+          echo ""
+          echo "ℹ️  Note: Dependent crates (windjammer-lsp, windjammer-mcp) are NOT dry-run tested here"
+          echo "   because they depend on the new version which isn't on crates.io yet."
+          echo "   They will be validated during actual publish after dependencies are live."
+          echo ""
+          echo "✅ Core crates are ready to publish!"
