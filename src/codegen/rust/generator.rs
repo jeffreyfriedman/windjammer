@@ -2055,6 +2055,11 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
                 continue;
             }
 
+            // Skip @export - it's used to determine visibility but doesn't map to a Rust attribute for native targets
+            if decorator.name == "export" && self.target != CompilationTarget::Wasm {
+                continue;
+            }
+
             // Skip game framework decorators - they're handled by the game loop
             if matches!(
                 decorator.name.as_str(),

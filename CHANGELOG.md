@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.34.2] - 2025-11-22
+
+### Fixed
+- Updated windjammer-ui dependency paths to support separated repository structure
+- Fixed Cargo.toml generation to search for sibling windjammer-ui directory
+- Version consistency across workspace crates
+
 ### Added - UI Framework (v0.34.0 Complete)
 - ✅ **Reactive State System** - Signal-based reactivity with automatic updates
 - ✅ **DOM Manipulation** - Full web-sys integration for browser APIs
