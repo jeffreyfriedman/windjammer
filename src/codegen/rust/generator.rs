@@ -1821,6 +1821,98 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
         false
     }
 
+    fn function_modifies_self(&self, func: &FunctionDecl) -> bool {
+        // Check if the function body modifies self (specifically for self parameters)
+        for stmt in &func.body {
+            if self.statement_modifies_self(stmt) {
+                return true;
+            }
+        }
+        false
+    }
+
+    fn statement_modifies_self(&self, stmt: &Statement) -> bool {
+        match stmt {
+            Statement::Assignment { target, .. } => {
+                // Check if target is self.field
+                self.expression_is_self_field_modification(target)
+            }
+            Statement::Expression { expr, .. } => {
+                // Check for mutating method calls like self.field.push()
+                self.expression_modifies_self(expr)
+            }
+            Statement::If {
+                then_block,
+                else_block,
+                ..
+            } => {
+                then_block.iter().any(|s| self.statement_modifies_self(s))
+                    || else_block
+                        .as_ref()
+                        .is_some_and(|block| block.iter().any(|s| self.statement_modifies_self(s)))
+            }
+            Statement::While { body, .. } | Statement::For { body, .. } => {
+                body.iter().any(|s| self.statement_modifies_self(s))
+            }
+            Statement::Match { arms, .. } => arms.iter().any(|arm| {
+                // Match arms have a body expression, check if it contains modifications
+                self.expression_modifies_self(&arm.body)
+            }),
+            _ => false,
+        }
+    }
+
+    fn expression_is_self_field_modification(&self, expr: &Expression) -> bool {
+        match expr {
+            Expression::FieldAccess { object, .. } => {
+                matches!(&**object, Expression::Identifier { name, .. } if name == "self")
+            }
+            _ => false,
+        }
+    }
+
+    fn expression_modifies_self(&self, expr: &Expression) -> bool {
+        match expr {
+            Expression::Block { statements, .. } => {
+                statements.iter().any(|s| self.statement_modifies_self(s))
+            }
+            Expression::MethodCall { object, method, .. } => {
+                // Check if this is a mutating method call on self.field
+                // Common mutating methods: push, pop, remove, insert, clear, etc.
+                let is_mutating_method = matches!(
+                    method.as_str(),
+                    "push"
+                        | "pop"
+                        | "remove"
+                        | "insert"
+                        | "clear"
+                        | "append"
+                        | "extend"
+                        | "drain"
+                        | "truncate"
+                        | "resize"
+                        | "swap_remove"
+                        | "retain"
+                );
+
+                if is_mutating_method {
+                    // Check if the object is self.field
+                    if let Expression::FieldAccess {
+                        object: field_obj, ..
+                    } = &**object
+                    {
+                        if matches!(&**field_obj, Expression::Identifier { name, .. } if name == "self")
+                        {
+                            return true;
+                        }
+                    }
+                }
+                false
+            }
+            _ => false,
+        }
+    }
+
     fn statement_accesses_fields(&self, stmt: &Statement) -> bool {
         match stmt {
             Statement::Expression { expr, .. }
@@ -2081,9 +2173,9 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
             output.push_str(&format!("#[{}]\n", rust_attr));
         }
 
-        // Add `pub` if we're in a #[wasm_bindgen] impl block OR compiling a module OR has @export decorator
+        // Add `pub` if function is marked pub OR we're in a #[wasm_bindgen] impl block OR compiling a module OR has @export decorator
         let has_export = func.decorators.iter().any(|d| d.name == "export");
-        if self.in_wasm_bindgen_impl || self.is_module || has_export {
+        if func.is_pub || self.in_wasm_bindgen_impl || self.is_module || has_export {
             output.push_str("pub ");
         }
 
@@ -2165,11 +2257,23 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
                                 match ownership_mode {
                                     OwnershipMode::MutBorrowed => return "&mut self".to_string(),
                                     OwnershipMode::Borrowed => return "&self".to_string(),
-                                    OwnershipMode::Owned => return "mut self".to_string(),
+                                    OwnershipMode::Owned => {
+                                        // Check if function actually modifies self
+                                        // Only add 'mut' if it does
+                                        if self.function_modifies_self(&analyzed.decl) {
+                                            return "mut self".to_string();
+                                        } else {
+                                            return "self".to_string();
+                                        }
+                                    }
                                 }
                             }
-                            // Default: owned self is mutable
-                            return "mut self".to_string();
+                            // Default: check if function modifies self
+                            if self.function_modifies_self(&analyzed.decl) {
+                                return "mut self".to_string();
+                            } else {
+                                return "self".to_string();
+                            }
                         }
                         // Owned parameters are always mutable in Windjammer
                         return format!("mut {}: {}", param.name, self.type_to_rust(&param.type_));

@@ -170,9 +170,12 @@ impl Parser {
             }
 
             // Parse function (pub optional)
-            if self.current_token() == &Token::Pub {
+            let is_pub = if self.current_token() == &Token::Pub {
                 self.advance();
-            }
+                true
+            } else {
+                false
+            };
 
             let is_async = if self.current_token() == &Token::Async {
                 self.advance();
@@ -183,6 +186,7 @@ impl Parser {
 
             self.expect(Token::Fn)?;
             let mut func = self.parse_function()?;
+            func.is_pub = is_pub;
             func.is_async = is_async;
             func.decorators = decorators;
             func.parent_type = Some(type_name.clone()); // Track which impl block this function belongs to
@@ -575,6 +579,7 @@ impl Parser {
 
         Ok(FunctionDecl {
             name,
+            is_pub: false,          // Set by parse_item if pub keyword present
             type_params,            // Parsed generic type parameters
             where_clause,           // Parsed where clause
             decorators: Vec::new(), // Set by parse_item
