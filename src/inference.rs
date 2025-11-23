@@ -464,6 +464,7 @@ mod tests {
 
         let func = FunctionDecl {
             name: "duplicate".to_string(),
+            is_pub: false,
             decorators: vec![],
             type_params: vec![TypeParam {
                 name: "T".to_string(),
@@ -506,6 +507,7 @@ mod tests {
         let mut engine = InferenceEngine::new();
 
         let func = FunctionDecl {
+            is_pub: false,
             name: "add".to_string(),
             decorators: vec![],
             type_params: vec![TypeParam {

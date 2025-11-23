@@ -175,6 +175,7 @@ impl Parser {
                 self.advance(); // Consume the Fn token
                 let mut func = self.parse_function()?;
                 func.decorators = decorators.clone();
+                func.is_pub = is_pub;
                 // Check if @async decorator is present
                 if decorators.iter().any(|d| d.name == "async") {
                     func.is_async = true;
@@ -189,6 +190,7 @@ impl Parser {
                 self.expect(Token::Fn)?;
                 let mut func = self.parse_function()?;
                 func.is_async = true;
+                func.is_pub = is_pub;
                 func.decorators = decorators;
                 Ok(Item::Function {
                     decl: func,

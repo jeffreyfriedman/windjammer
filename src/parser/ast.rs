@@ -95,6 +95,7 @@ pub struct Decorator {
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct FunctionDecl {
     pub name: String,
+    pub is_pub: bool,                // Whether this function has pub visibility
     pub type_params: Vec<TypeParam>, // Generic type parameters with optional bounds: <T: Display, U>
     pub where_clause: Vec<(String, Vec<String>)>, // Where clause: [(type_param, [trait_bounds])]
     pub decorators: Vec<Decorator>,

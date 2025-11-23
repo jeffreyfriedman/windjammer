@@ -262,6 +262,7 @@ mod tests {
                 Item::Function {
                     decl: FunctionDecl {
                         name: "main".to_string(),
+                        is_pub: false,
                         type_params: vec![],
                         where_clause: vec![],
                         decorators: vec![],
@@ -286,6 +287,7 @@ mod tests {
                 Item::Function {
                     decl: FunctionDecl {
                         name: "used".to_string(),
+                        is_pub: false,
                         type_params: vec![],
                         where_clause: vec![],
                         decorators: vec![],
@@ -300,6 +302,7 @@ mod tests {
                 Item::Function {
                     decl: FunctionDecl {
                         name: "unused".to_string(),
+                        is_pub: false,
                         type_params: vec![],
                         where_clause: vec![],
                         decorators: vec![],
@@ -328,6 +331,7 @@ mod tests {
                 Item::Function {
                     decl: FunctionDecl {
                         name: "main".to_string(),
+                        is_pub: false,
                         type_params: vec![],
                         where_clause: vec![],
                         decorators: vec![],
@@ -342,6 +346,7 @@ mod tests {
                 Item::Function {
                     decl: FunctionDecl {
                         name: "unused".to_string(),
+                        is_pub: false,
                         type_params: vec![],
                         where_clause: vec![],
                         decorators: vec![],

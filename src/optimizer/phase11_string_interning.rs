@@ -714,6 +714,7 @@ mod tests {
     fn create_test_function(name: &str, body_stmts: Vec<Statement>) -> Item {
         Item::Function {
             decl: FunctionDecl {
+                is_pub: false,
                 name: name.to_string(),
                 type_params: vec![],
                 where_clause: vec![],
