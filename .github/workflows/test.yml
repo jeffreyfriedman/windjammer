@@ -49,6 +49,7 @@ jobs:
           components: rustfmt, clippy
       
       - name: Generate Cargo.lock if missing
+        shell: bash
         run: cargo generate-lockfile
       
       - name: Cache cargo dependencies
@@ -134,6 +135,7 @@ jobs:
           node-version: '20'
       
       - name: Generate Cargo.lock if missing
+        shell: bash
         run: cargo generate-lockfile
       
       - name: Cache cargo dependencies
