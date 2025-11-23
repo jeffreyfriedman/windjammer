@@ -16,9 +16,9 @@ members = [
 ]
 
 [workspace.package]
-version = "0.35.1"
+version = "0.35.2"
 edition = "2021"
-authors = ["Jeffrey Friedman <jeffrey@example.com>", "Windjammer Contributors"]
+authors = ["Jeffrey Friedman <20387583+jeffreyfriedman@users.noreply.github.com>", "Windjammer Contributors"]
 license = "MIT OR Apache-2.0"
 rust-version = "1.90"
 
