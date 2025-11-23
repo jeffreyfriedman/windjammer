@@ -3886,10 +3886,13 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
                                 format_str.push_str("{}");
                                 args.push(var_name);
                             } else {
-                                // Not a variable, keep the braces
-                                format_str.push('{');
+                                // Not a variable, escape the literal brace
+                                format_str.push_str("{{");
                                 format_str.push_str(&var_name);
                             }
+                        } else if ch == '}' {
+                            // Escape literal closing brace
+                            format_str.push_str("}}");
                         } else {
                             format_str.push(ch);
                         }
