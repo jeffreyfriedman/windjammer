@@ -15,8 +15,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Dry-run now only validates core crates (windjammer, windjammer-runtime)
 
 ### Changed
-- Added publish dry-run job to test workflow for pre-merge validation
-- Catches publish issues in CI before merge, not after tagging
+- Added `lockfile-check` job to test workflow: enforces Cargo.lock is committed and up-to-date
+- Added `publish-dryrun` job to test workflow: validates crates can be published before merge
+- Catches lockfile and publish issues in CI before merge, not after tagging
+- No longer relies on pre-commit hooks (which can be bypassed with --no-verify)
 
 ## [0.35.0] - 2025-11-23
 
