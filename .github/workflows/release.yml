@@ -90,6 +90,19 @@ jobs:
       - name: Build release binary
         run: cargo build --release --target ${{ matrix.target }} --verbose
       
+      - name: Verify binary exists
+        shell: bash
+        run: |
+          if [ -f "target/${{ matrix.target }}/release/${{ matrix.artifact_name }}" ]; then
+            echo "✅ Binary found at target/${{ matrix.target }}/release/${{ matrix.artifact_name }}"
+            ls -lh "target/${{ matrix.target }}/release/${{ matrix.artifact_name }}"
+          else
+            echo "❌ Binary NOT found at target/${{ matrix.target }}/release/${{ matrix.artifact_name }}"
+            echo "Contents of target/${{ matrix.target }}/release/:"
+            ls -la "target/${{ matrix.target }}/release/" || echo "Directory doesn't exist"
+            exit 1
+          fi
+      
       - name: Strip binary (Unix)
         if: runner.os != 'Windows'
         run: strip target/${{ matrix.target }}/release/${{ matrix.artifact_name }}
