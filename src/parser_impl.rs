@@ -199,6 +199,7 @@ impl Parser {
                 self.advance();
                 let mut struct_decl = self.parse_struct()?;
                 struct_decl.decorators = decorators;
+                struct_decl.is_pub = is_pub;
                 Ok(Item::Struct {
                     decl: struct_decl,
                     location: self.current_location(),
@@ -206,8 +207,10 @@ impl Parser {
             }
             Token::Enum => {
                 self.advance();
+                let mut enum_decl = self.parse_enum()?;
+                enum_decl.is_pub = is_pub;
                 Ok(Item::Enum {
-                    decl: self.parse_enum()?,
+                    decl: enum_decl,
                     location: self.current_location(),
                 })
             }

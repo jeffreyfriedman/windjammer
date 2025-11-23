@@ -180,6 +180,7 @@ mod tests {
     fn test_generate_interface() {
         let struct_def = StructDecl {
             name: "Point".to_string(),
+            is_pub: true, // Test struct is public
             fields: vec![
                 StructField {
                     name: "x".to_string(),
