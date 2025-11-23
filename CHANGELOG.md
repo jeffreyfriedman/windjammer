@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.35.2] - 2025-11-23
+
+### Fixed
+- **Version alignment**: All workspace crates now use version 0.35.2
+  - `windjammer-runtime`: `0.34.1` → `0.35.2` (was published as wrong version)
+  - `windjammer-mcp`: `0.31.0` → `0.35.2` (was published as wrong version)
+  - `windjammer-lsp`: updated dependency versions to `0.35.2`
+
+### Changed
+- Added `version-check` CI job to enforce version alignment across all workspace crates
+  - Prevents publishing with mismatched versions
+  - Fails fast in PR CI, not during release
+
 ## [0.35.1] - 2025-11-23
 
 ### Fixed
