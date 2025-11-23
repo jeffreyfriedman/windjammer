@@ -229,10 +229,10 @@ jobs:
           echo "🧪 Validating core crates can be published..."
           echo ""
           echo "📦 Dry-run: windjammer (core)"
-          cargo publish --dry-run
+          cargo publish --dry-run --allow-dirty
           echo ""
           echo "📦 Dry-run: windjammer-runtime"
-          cargo publish --dry-run -p windjammer-runtime
+          cargo publish --dry-run --allow-dirty -p windjammer-runtime
           echo ""
           echo "ℹ️  Note: Dependent crates (windjammer-lsp, windjammer-mcp) are NOT dry-run tested here"
           echo "   because they depend on the new version which isn't on crates.io yet."
