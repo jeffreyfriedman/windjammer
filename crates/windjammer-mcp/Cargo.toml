@@ -19,8 +19,8 @@ path = "src/main.rs"
 
 [dependencies]
 # Core Windjammer dependencies
-windjammer = { path = "../..", version = "0.34.2" }
-windjammer-lsp = { path = "../windjammer-lsp", version = "0.34.2" }
+windjammer = { path = "../..", version = "0.34.3" }
+windjammer-lsp = { path = "../windjammer-lsp", version = "0.34.3" }
 
 # JSON-RPC and MCP protocol
 serde = { version = "1.0", features = ["derive"] }
