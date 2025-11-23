@@ -19,6 +19,7 @@ jobs:
         toolchain: stable
     
     - name: Generate Cargo.lock if missing
+      shell: bash
       run: cargo generate-lockfile
     
     - name: Cache cargo dependencies
