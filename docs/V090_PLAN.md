@@ -131,7 +131,7 @@ Wrapper for Rust's `std::collections` with Windjammer-friendly APIs:
 
 ```windjammer
 // HashMap
-use std.collections
+use std::collections
 
 fn main() {
     let mut map = HashMap::new()
@@ -164,7 +164,7 @@ fn main() {
 Simple testing utilities:
 
 ```windjammer
-use std.testing
+use std::testing
 
 @test
 fn test_addition() {

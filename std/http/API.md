@@ -1,4 +1,4 @@
-# std.http - HTTP Client
+# std::http - HTTP Client
 
 Ergonomic HTTP client wrapping `reqwest` with Windjammer conveniences.
 
@@ -7,7 +7,7 @@ Ergonomic HTTP client wrapping `reqwest` with Windjammer conveniences.
 ### Simple Requests
 
 ```windjammer
-use std.http
+use std::http
 
 // GET request
 fn get(url: string) -> Result<Response, Error>
@@ -62,14 +62,14 @@ impl Response {
 ### Simple GET Request
 
 ```windjammer
-use std.http
-use std.json
+use std::http
+use std::json
 
 fn fetch_users() -> Result<Vec<User>, Error> {
-    let response = http.get("https://api.example.com/users")?
+    let response = http::get("https://api.example.com/users")?
     
     if response.is_success() {
-        let users = json.parse(response.body)?
+        let users = json::parse(response.body)?
         Ok(users)
     } else {
         Err(Error::new("Failed to fetch users"))
@@ -80,21 +80,21 @@ fn fetch_users() -> Result<Vec<User>, Error> {
 ### POST with JSON
 
 ```windjammer
-use std.http
-use std.json
+use std::http
+use std::json
 
 fn create_user(name: string, email: string) -> Result<User, Error> {
-    let user_data = json.object([
+    let user_data = json::object([
         ("name", name),
         ("email", email),
     ])
     
-    let response = http.post(
+    let response = http::post(
         "https://api.example.com/users",
-        json.stringify(user_data)
+        json::stringify(user_data)
     )?
     
-    let user = json.parse(response.body)?
+    let user = json::parse(response.body)?
     Ok(user)
 }
 ```
@@ -102,7 +102,7 @@ fn create_user(name: string, email: string) -> Result<User, Error> {
 ### Advanced Request with Headers
 
 ```windjammer
-use std.http
+use std::http
 
 fn authenticated_request(token: string) -> Result<Response, Error> {
     http.request()
@@ -120,7 +120,7 @@ fn authenticated_request(token: string) -> Result<Response, Error> {
 ```windjammer
 fn fetch_and_process() -> Result<Vec<ProcessedData>, Error> {
     "https://api.example.com/data"
-        |> http.get?
+        |> http::get?
         |> Response.json?
         |> process_data
         |> Ok
@@ -130,7 +130,7 @@ fn fetch_and_process() -> Result<Vec<ProcessedData>, Error> {
 ### Error Handling
 
 ```windjammer
-match http.get("https://api.example.com/data") {
+match http::get("https://api.example.com/data") {
     Ok(response) => {
         println!("Status: ${response.status}")
         println!("Body: ${response.body}")
