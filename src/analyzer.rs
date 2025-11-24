@@ -228,7 +228,11 @@ pub struct Analyzer {
     // Track variable ownership modes (reserved for future use)
     #[allow(dead_code)]
     variables: HashMap<String, OwnershipMode>,
+    // Track enum definitions to determine if they're Copy
+    copy_enums: HashSet<String>,
 }
+
+use std::collections::HashSet;
 
 impl Default for Analyzer {
     fn default() -> Self {
@@ -240,6 +244,7 @@ impl Analyzer {
     pub fn new() -> Self {
         Analyzer {
             variables: HashMap::new(),
+            copy_enums: HashSet::new(),
         }
     }
 
@@ -249,6 +254,17 @@ impl Analyzer {
     ) -> Result<(Vec<AnalyzedFunction>, SignatureRegistry), String> {
         let mut analyzed = Vec::new();
         let mut registry = SignatureRegistry::new();
+
+        // First pass: Collect all enum definitions to determine Copy types
+        for item in &program.items {
+            if let Item::Enum { decl, .. } = item {
+                // Fieldless enums (unit variants only) are Copy by default
+                let is_copy = decl.variants.iter().all(|v| v.data.is_none());
+                if is_copy {
+                    self.copy_enums.insert(decl.name.clone());
+                }
+            }
+        }
 
         for item in &program.items {
             match item {
@@ -532,16 +548,75 @@ impl Analyzer {
     fn is_stored(&self, name: &str, statements: &[Statement]) -> bool {
         // Check if the parameter is stored in a struct field or collection
         for stmt in statements {
-            if let Statement::Let {
-                value: Expression::StructLiteral { fields, .. },
-                ..
-            } = stmt
-            {
-                for (_, field_expr) in fields {
-                    if self.expression_uses_identifier(name, field_expr) {
+            match stmt {
+                Statement::Let {
+                    value: Expression::StructLiteral { fields, .. },
+                    ..
+                } => {
+                    for (_, field_expr) in fields {
+                        if self.expression_uses_identifier(name, field_expr) {
+                            return true;
+                        }
+                    }
+                }
+                Statement::Return {
+                    value: Some(Expression::StructLiteral { fields, .. }),
+                    ..
+                } => {
+                    // Check if parameter is used in a returned struct literal
+                    for (_, field_expr) in fields {
+                        if self.expression_uses_identifier(name, field_expr) {
+                            return true;
+                        }
+                    }
+                }
+                Statement::Expression {
+                    expr: Expression::StructLiteral { fields, .. },
+                    ..
+                } => {
+                    // Check if parameter is used in a struct literal expression (implicit return)
+                    for (_, field_expr) in fields {
+                        if self.expression_uses_identifier(name, field_expr) {
+                            return true;
+                        }
+                    }
+                }
+                Statement::Assignment {
+                    target: Expression::FieldAccess { object, .. },
+                    value,
+                    ..
+                } => {
+                    // Check for field assignments: self.field = param
+                    if matches!(&**object, Expression::Identifier { name: id, .. } if id == "self")
+                        && self.expression_uses_identifier(name, value)
+                    {
                         return true;
                     }
                 }
+                Statement::Expression {
+                    expr:
+                        Expression::MethodCall {
+                            object, arguments, ..
+                        },
+                    ..
+                } => {
+                    // Check for method calls on fields: self.field.method(param)
+                    if let Expression::FieldAccess {
+                        object: field_obj, ..
+                    } = &**object
+                    {
+                        if matches!(&**field_obj, Expression::Identifier { name: id, .. } if id == "self")
+                        {
+                            // Check if any argument uses the parameter
+                            for (_label, arg) in arguments {
+                                if self.expression_uses_identifier(name, arg) {
+                                    return true;
+                                }
+                            }
+                        }
+                    }
+                }
+                _ => {}
             }
         }
         false
@@ -633,6 +708,10 @@ impl Analyzer {
             Type::MutableReference(_) => false,
             Type::Tuple(types) => types.iter().all(|t| self.is_copy_type(t)),
             Type::Custom(name) => {
+                // Check if it's a known Copy enum
+                if self.copy_enums.contains(name) {
+                    return true;
+                }
                 // Recognize common Rust primitive types by name
                 matches!(
                     name.as_str(),
