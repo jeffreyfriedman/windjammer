@@ -416,6 +416,7 @@ mod tests {
 
         let func = FunctionDecl {
             name: "print".to_string(),
+            is_pub: false,
             decorators: vec![],
             type_params: vec![TypeParam {
                 name: "T".to_string(),
