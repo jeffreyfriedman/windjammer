@@ -1465,7 +1465,11 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
         }
 
         // Add struct declaration with type parameters
-        let pub_prefix = if self.is_module { "pub " } else { "" };
+        let pub_prefix = if s.is_pub || self.is_module {
+            "pub "
+        } else {
+            ""
+        };
         output.push_str(&format!("{}struct ", pub_prefix));
         output.push_str(&s.name);
         if !s.type_params.is_empty() {
@@ -1547,7 +1551,12 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
     }
 
     fn generate_enum(&self, e: &EnumDecl) -> String {
-        let mut output = format!("enum {}", e.name);
+        let pub_prefix = if e.is_pub || self.is_module {
+            "pub "
+        } else {
+            ""
+        };
+        let mut output = format!("{}enum {}", pub_prefix, e.name);
 
         // Generate generic parameters: enum Option<T>, enum Result<T, E>
         if !e.type_params.is_empty() {
@@ -1812,6 +1821,98 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
         false
     }
 
+    fn function_modifies_self(&self, func: &FunctionDecl) -> bool {
+        // Check if the function body modifies self (specifically for self parameters)
+        for stmt in &func.body {
+            if self.statement_modifies_self(stmt) {
+                return true;
+            }
+        }
+        false
+    }
+
+    fn statement_modifies_self(&self, stmt: &Statement) -> bool {
+        match stmt {
+            Statement::Assignment { target, .. } => {
+                // Check if target is self.field
+                self.expression_is_self_field_modification(target)
+            }
+            Statement::Expression { expr, .. } => {
+                // Check for mutating method calls like self.field.push()
+                self.expression_modifies_self(expr)
+            }
+            Statement::If {
+                then_block,
+                else_block,
+                ..
+            } => {
+                then_block.iter().any(|s| self.statement_modifies_self(s))
+                    || else_block
+                        .as_ref()
+                        .is_some_and(|block| block.iter().any(|s| self.statement_modifies_self(s)))
+            }
+            Statement::While { body, .. } | Statement::For { body, .. } => {
+                body.iter().any(|s| self.statement_modifies_self(s))
+            }
+            Statement::Match { arms, .. } => arms.iter().any(|arm| {
+                // Match arms have a body expression, check if it contains modifications
+                self.expression_modifies_self(&arm.body)
+            }),
+            _ => false,
+        }
+    }
+
+    fn expression_is_self_field_modification(&self, expr: &Expression) -> bool {
+        match expr {
+            Expression::FieldAccess { object, .. } => {
+                matches!(&**object, Expression::Identifier { name, .. } if name == "self")
+            }
+            _ => false,
+        }
+    }
+
+    fn expression_modifies_self(&self, expr: &Expression) -> bool {
+        match expr {
+            Expression::Block { statements, .. } => {
+                statements.iter().any(|s| self.statement_modifies_self(s))
+            }
+            Expression::MethodCall { object, method, .. } => {
+                // Check if this is a mutating method call on self.field
+                // Common mutating methods: push, pop, remove, insert, clear, etc.
+                let is_mutating_method = matches!(
+                    method.as_str(),
+                    "push"
+                        | "pop"
+                        | "remove"
+                        | "insert"
+                        | "clear"
+                        | "append"
+                        | "extend"
+                        | "drain"
+                        | "truncate"
+                        | "resize"
+                        | "swap_remove"
+                        | "retain"
+                );
+
+                if is_mutating_method {
+                    // Check if the object is self.field
+                    if let Expression::FieldAccess {
+                        object: field_obj, ..
+                    } = &**object
+                    {
+                        if matches!(&**field_obj, Expression::Identifier { name, .. } if name == "self")
+                        {
+                            return true;
+                        }
+                    }
+                }
+                false
+            }
+            _ => false,
+        }
+    }
+
     fn statement_accesses_fields(&self, stmt: &Statement) -> bool {
         match stmt {
             Statement::Expression { expr, .. }
@@ -2072,9 +2173,9 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
             output.push_str(&format!("#[{}]\n", rust_attr));
         }
 
-        // Add `pub` if we're in a #[wasm_bindgen] impl block OR compiling a module OR has @export decorator
+        // Add `pub` if function is marked pub OR we're in a #[wasm_bindgen] impl block OR compiling a module OR has @export decorator
         let has_export = func.decorators.iter().any(|d| d.name == "export");
-        if self.in_wasm_bindgen_impl || self.is_module || has_export {
+        if func.is_pub || self.in_wasm_bindgen_impl || self.is_module || has_export {
             output.push_str("pub ");
         }
 
@@ -2156,11 +2257,23 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
                                 match ownership_mode {
                                     OwnershipMode::MutBorrowed => return "&mut self".to_string(),
                                     OwnershipMode::Borrowed => return "&self".to_string(),
-                                    OwnershipMode::Owned => return "mut self".to_string(),
+                                    OwnershipMode::Owned => {
+                                        // Check if function actually modifies self
+                                        // Only add 'mut' if it does
+                                        if self.function_modifies_self(&analyzed.decl) {
+                                            return "mut self".to_string();
+                                        } else {
+                                            return "self".to_string();
+                                        }
+                                    }
                                 }
                             }
-                            // Default: owned self is mutable
-                            return "mut self".to_string();
+                            // Default: check if function modifies self
+                            if self.function_modifies_self(&analyzed.decl) {
+                                return "mut self".to_string();
+                            } else {
+                                return "self".to_string();
+                            }
                         }
                         // Owned parameters are always mutable in Windjammer
                         return format!("mut {}: {}", param.name, self.type_to_rust(&param.type_));
@@ -3424,15 +3537,9 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
                 // }
 
                 // UI FRAMEWORK: Check if we need to add .to_vnode() for .child() methods
-                let processed_args = if method == "child" && !arguments.is_empty() {
-                    // Always wrap the first argument with .to_vnode() for .child() methods
-                    // The ToVNode trait will handle the conversion
-                    let mut new_args = vec![format!("({}).to_vnode()", args[0])];
-                    new_args.extend_from_slice(&args[1..]);
-                    new_args
-                } else {
-                    args
-                };
+                // DISABLED: Too aggressive - needs type checking to determine if parameter expects VNode
+                // TODO: Re-enable with proper type checking when VNode type bindings are implemented
+                let processed_args = args;
 
                 let base_expr = format!(
                     "{}{}{}{}({})",
@@ -3863,7 +3970,7 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
 
                     while let Some(ch) = chars.next() {
                         if ch == '{' {
-                            // Check if it's {variable} pattern
+                            // Check if it's {variable} pattern or {} placeholder
                             let mut var_name = String::new();
                             let mut is_variable = true;
 
@@ -3882,14 +3989,20 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
                             }
 
                             if is_variable && !var_name.is_empty() {
-                                // It's a variable interpolation
+                                // It's a variable interpolation: {count} -> {}, count
                                 format_str.push_str("{}");
                                 args.push(var_name);
+                            } else if is_variable && var_name.is_empty() {
+                                // It's an empty placeholder: {} -> keep as-is (format! placeholder)
+                                format_str.push_str("{}");
                             } else {
-                                // Not a variable, keep the braces
-                                format_str.push('{');
+                                // Not a variable, escape the literal brace
+                                format_str.push_str("{{");
                                 format_str.push_str(&var_name);
                             }
+                        } else if ch == '}' {
+                            // Escape literal closing brace (not part of a placeholder)
+                            format_str.push_str("}}");
                         } else {
                             format_str.push(ch);
                         }

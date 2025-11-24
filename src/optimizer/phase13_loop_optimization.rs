@@ -100,6 +100,7 @@ fn optimize_loops_in_item(
             Item::Function {
                 decl: FunctionDecl {
                     name: func.name.clone(),
+                    is_pub: func.is_pub,
                     type_params: func.type_params.clone(),
                     where_clause: func.where_clause.clone(),
                     decorators: func.decorators.clone(),
@@ -121,6 +122,7 @@ fn optimize_loops_in_item(
                 .iter()
                 .map(|func| FunctionDecl {
                     name: func.name.clone(),
+                    is_pub: func.is_pub,
                     type_params: func.type_params.clone(),
                     where_clause: func.where_clause.clone(),
                     decorators: func.decorators.clone(),
@@ -850,6 +852,7 @@ mod tests {
         let program = Program {
             items: vec![Item::Function {
                 decl: FunctionDecl {
+                    is_pub: false,
                     name: "test".to_string(),
                     type_params: vec![],
                     where_clause: vec![],
@@ -910,6 +913,7 @@ mod tests {
         let program = Program {
             items: vec![Item::Function {
                 decl: FunctionDecl {
+                    is_pub: false,
                     name: "test".to_string(),
                     type_params: vec![],
                     where_clause: vec![],
@@ -987,6 +991,7 @@ mod tests {
         let program = Program {
             items: vec![Item::Function {
                 decl: FunctionDecl {
+                    is_pub: false,
                     name: "test".to_string(),
                     type_params: vec![],
                     where_clause: vec![],
@@ -1025,6 +1030,7 @@ mod tests {
         let program = Program {
             items: vec![Item::Function {
                 decl: FunctionDecl {
+                    is_pub: false,
                     name: "test".to_string(),
                     type_params: vec![],
                     where_clause: vec![],
@@ -1078,6 +1084,7 @@ mod tests {
         let program = Program {
             items: vec![Item::Function {
                 decl: FunctionDecl {
+                    is_pub: false,
                     name: "test".to_string(),
                     type_params: vec![],
                     where_clause: vec![],
