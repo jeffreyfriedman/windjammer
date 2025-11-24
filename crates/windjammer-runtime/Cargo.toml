@@ -42,7 +42,7 @@ url = "2.5"
 # Additional stdlib modules
 clap = { version = "4.5", features = ["derive"] }
 sha2 = "0.10"
-bcrypt = "0.15"
+bcrypt = "0.17"
 base64 = "0.21"
 hex = "0.4"
 urlencoding = "2.1"
