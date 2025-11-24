@@ -133,17 +133,6 @@ fn convert_to_axum_response(response: HttpServerResponse) -> AxumResponse {
     let status = StatusCode::from_u16(response.status as u16)
         .unwrap_or(StatusCode::INTERNAL_SERVER_ERROR);
     
-    // Build headers
-    let mut header_map = HeaderMap::new();
-    for (key, value) in response.headers {
-        if let (Ok(header_name), Ok(header_value)) = (
-            HeaderName::from_str(&key),
-            HeaderValue::from_str(&value),
-        ) {
-            header_map.insert(header_name, header_value);
-        }
-    }
-    
     // Build body
     let body = if let Some(binary) = response.binary_body {
         Body::from(binary)
@@ -151,12 +140,21 @@ fn convert_to_axum_response(response: HttpServerResponse) -> AxumResponse {
         Body::from(response.body)
     };
     
-    // Build response
-    AxumResponse::builder()
-        .status(status)
-        .body(body)
-        .unwrap_or_else(|e| {
-            eprintln!("❌ Failed to build response: {}", e);
-            (StatusCode::INTERNAL_SERVER_ERROR, "Internal server error").into_response()
-        })
+    // Build response with proper headers
+    let mut builder = AxumResponse::builder().status(status);
+    
+    // Add all custom headers
+    for (key, value) in response.headers {
+        if let (Ok(header_name), Ok(header_value)) = (
+            HeaderName::from_str(&key),
+            HeaderValue::from_str(&value),
+        ) {
+            builder = builder.header(header_name, header_value);
+        }
+    }
+    
+    builder.body(body).unwrap_or_else(|e| {
+        eprintln!("❌ Failed to build response: {}", e);
+        (StatusCode::INTERNAL_SERVER_ERROR, "Internal server error").into_response()
+    })
 }
