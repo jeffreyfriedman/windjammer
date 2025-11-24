@@ -104,6 +104,7 @@ mod tests {
 
     fn create_test_component(body: Vec<Statement>) -> FunctionDecl {
         FunctionDecl {
+            is_pub: false,
             name: "TestComponent".to_string(),
             type_params: vec![],
             where_clause: vec![],
