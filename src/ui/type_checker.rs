@@ -59,6 +59,7 @@ mod tests {
     #[test]
     fn test_validate_return_type() {
         let valid = FunctionDecl {
+            is_pub: false,
             name: "MyComponent".to_string(),
             type_params: vec![],
             where_clause: vec![],
@@ -79,6 +80,7 @@ mod tests {
     #[test]
     fn test_validate_props() {
         let valid = FunctionDecl {
+            is_pub: false,
             name: "Greeting".to_string(),
             type_params: vec![],
             where_clause: vec![],
@@ -101,6 +103,7 @@ mod tests {
         assert!(validate_props(&valid).is_ok());
 
         let invalid = FunctionDecl {
+            is_pub: false,
             name: "BadComponent".to_string(),
             type_params: vec![],
             where_clause: vec![],
