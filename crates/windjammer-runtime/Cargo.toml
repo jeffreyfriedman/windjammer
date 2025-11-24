@@ -9,14 +9,14 @@ repository = "https://github.com/jeffreyfriedman/windjammer"
 
 [features]
 default = []
-server = ["axum", "tokio", "tower", "tower-http"]
-db = ["sqlx", "tokio"]
+server = ["tower", "tower-http"]
+db = ["sqlx"]
 wasm = ["wasm-bindgen", "web-sys", "js-sys", "console_error_panic_hook", "wasm-bindgen-futures"]
 
 [dependencies]
-# HTTP Client & Server (axum/tokio are optional)
-axum = { version = "0.7", features = ["macros"], optional = true }
-tokio = { version = "1", features = ["full"], optional = true }
+# HTTP Client & Server (axum/tokio always included for std::http server)
+axum = { version = "0.7", features = ["macros"] }
+tokio = { version = "1", features = ["full"] }
 tower = { version = "0.4", optional = true }
 tower-http = { version = "0.5", features = ["fs", "trace"], optional = true }
 

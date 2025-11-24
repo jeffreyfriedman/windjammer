@@ -164,6 +164,8 @@ mod tests {
             return_type: None,
             body: vec![],
             decorators: vec![],
+            is_pub: false,
+            is_pub: false,
             is_async: false,
             type_params: vec![],
             where_clause: vec![],

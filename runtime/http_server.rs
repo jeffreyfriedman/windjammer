@@ -23,6 +23,9 @@ pub struct HttpServerRequest {
     pub body: String,
 }
 
+/// Type alias for compatibility with std::http
+pub type ServerRequest = HttpServerRequest;
+
 /// HTTP Server Response (matches std::http::ServerResponse)
 #[derive(Debug, Clone)]
 pub struct HttpServerResponse {
@@ -30,6 +33,89 @@ pub struct HttpServerResponse {
     pub headers: Vec<(String, String)>,
     pub body: String,
     pub binary_body: Option<Vec<u8>>,
+}
+
+/// Type alias for compatibility with std::http
+pub type ServerResponse = HttpServerResponse;
+
+impl HttpServerResponse {
+    /// Create a new response
+    pub fn new(status: i64, body: String) -> Self {
+        Self {
+            status,
+            headers: vec![],
+            body,
+            binary_body: None,
+        }
+    }
+    
+    /// Create an HTML response
+    pub fn html(body: String) -> Self {
+        Self {
+            status: 200,
+            headers: vec![("Content-Type".to_string(), "text/html; charset=utf-8".to_string())],
+            body,
+            binary_body: None,
+        }
+    }
+    
+    /// Create a JSON response
+    pub fn json(body: String) -> Self {
+        Self {
+            status: 200,
+            headers: vec![("Content-Type".to_string(), "application/json".to_string())],
+            body,
+            binary_body: None,
+        }
+    }
+    
+    /// Create a binary response
+    pub fn binary(status: i64, data: Vec<u8>) -> Self {
+        Self {
+            status,
+            headers: vec![],
+            body: String::new(),
+            binary_body: Some(data),
+        }
+    }
+    
+    /// Create an error response
+    pub fn error(status: i64, message: String) -> Self {
+        Self {
+            status,
+            headers: vec![("Content-Type".to_string(), "text/plain; charset=utf-8".to_string())],
+            body: message,
+            binary_body: None,
+        }
+    }
+    
+    /// Add a header
+    pub fn header(mut self, key: String, value: String) -> Self {
+        self.headers.push((key, value));
+        self
+    }
+}
+
+/// HTTP Server (matches std::http::Server)
+#[derive(Debug, Clone)]
+pub struct Server {
+    pub address: String,
+    pub port: i64,
+}
+
+impl Server {
+    /// Create a new server
+    pub fn new(address: String, port: i64) -> Self {
+        Self { address, port }
+    }
+    
+    /// Start the server with a request handler
+    pub fn serve<F>(self, handler: F) -> Result<(), String>
+    where
+        F: Fn(ServerRequest) -> ServerResponse + Send + Sync + 'static,
+    {
+        windjammer_http_serve(self.address, self.port, handler)
+    }
 }
 
 /// Start HTTP server using axum - called by generated Windjammer code
