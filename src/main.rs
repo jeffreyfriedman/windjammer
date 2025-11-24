@@ -80,6 +80,14 @@ enum Commands {
         /// Show raw Rust errors instead of translated Windjammer errors
         #[arg(long)]
         raw_errors: bool,
+
+        /// Library mode: exclude test main() functions from output
+        #[arg(long)]
+        library: bool,
+
+        /// Auto-generate mod.rs with pub mod declarations and re-exports
+        #[arg(long)]
+        module_file: bool,
     },
     /// Check a Windjammer project for errors (transpile + cargo check)
     Check {
@@ -212,8 +220,21 @@ fn main() -> Result<()> {
             target,
             check,
             raw_errors,
+            library,
+            module_file,
         } => {
             build_project(&path, &output, target)?;
+
+            // Generate mod.rs if requested
+            if module_file {
+                generate_mod_file(&output)?;
+            }
+
+            // Strip main() functions if library mode
+            if library {
+                strip_main_functions(&output)?;
+            }
+
             if check {
                 check_with_cargo(&output, raw_errors)?;
             }
@@ -2539,6 +2560,157 @@ fn copy_dir_recursive(src: &Path, dst: &Path) -> std::io::Result<()> {
         } else {
             std::fs::copy(&src_path, &dst_path)?;
         }
+    }
+
+    Ok(())
+}
+
+/// Generate mod.rs file with pub mod declarations and re-exports
+pub fn generate_mod_file(output_dir: &Path) -> Result<()> {
+    use colored::*;
+    use std::fs;
+
+    // Find all .rs files (excluding mod.rs itself) and extract their public types
+    let mut modules = Vec::new();
+    let mut type_exports: std::collections::HashMap<String, Vec<String>> =
+        std::collections::HashMap::new();
+
+    for entry in fs::read_dir(output_dir)? {
+        let entry = entry?;
+        let path = entry.path();
+
+        if path.is_file() {
+            if let Some(file_name) = path.file_name().and_then(|n| n.to_str()) {
+                if file_name.ends_with(".rs") && file_name != "mod.rs" && file_name != "main.rs" {
+                    // Get module name (strip .rs extension)
+                    if let Some(module_name) = file_name.strip_suffix(".rs") {
+                        modules.push(module_name.to_string());
+
+                        // Parse the file to extract public struct/enum names
+                        let content = fs::read_to_string(&path)?;
+                        let mut exports = Vec::new();
+
+                        for line in content.lines() {
+                            let trimmed = line.trim();
+                            if trimmed.starts_with("pub struct ") {
+                                if let Some(name) = trimmed
+                                    .strip_prefix("pub struct ")
+                                    .and_then(|s| s.split_whitespace().next())
+                                {
+                                    exports.push(name.to_string());
+                                }
+                            } else if trimmed.starts_with("pub enum ") {
+                                if let Some(name) = trimmed
+                                    .strip_prefix("pub enum ")
+                                    .and_then(|s| s.split_whitespace().next())
+                                {
+                                    exports.push(name.to_string());
+                                }
+                            }
+                        }
+
+                        if !exports.is_empty() {
+                            type_exports.insert(module_name.to_string(), exports);
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    if modules.is_empty() {
+        println!(
+            "{} No modules found to generate mod.rs",
+            "Warning:".yellow().bold()
+        );
+        return Ok(());
+    }
+
+    modules.sort();
+
+    // Generate mod.rs content
+    let mut content = String::from("// Auto-generated mod.rs by Windjammer CLI\n");
+    content.push_str("// DO NOT EDIT MANUALLY - regenerate with: wj build --module-file\n\n");
+
+    // Add pub mod declarations
+    for module in &modules {
+        content.push_str(&format!("pub mod {};\n", module));
+    }
+
+    content.push_str("\n// Re-export all public items for convenience\n");
+    for module in &modules {
+        if let Some(exports) = type_exports.get(module) {
+            let exports_str = exports.join(", ");
+            content.push_str(&format!("pub use {}::{{{}}};\n", module, exports_str));
+        } else {
+            // Fallback to wildcard import
+            content.push_str(&format!("pub use {}::*;\n", module));
+        }
+    }
+
+    // Write mod.rs
+    let mod_file_path = output_dir.join("mod.rs");
+    fs::write(&mod_file_path, content)?;
+
+    println!(
+        "{} Generated mod.rs with {} modules",
+        "✓".green(),
+        modules.len()
+    );
+
+    Ok(())
+}
+
+/// Strip main() functions from generated Rust files (library mode)
+pub fn strip_main_functions(output_dir: &Path) -> Result<()> {
+    use colored::*;
+    use std::fs;
+
+    let mut stripped_count = 0;
+
+    for entry in fs::read_dir(output_dir)? {
+        let entry = entry?;
+        let path = entry.path();
+
+        if path.is_file() {
+            if let Some(file_name) = path.file_name().and_then(|n| n.to_str()) {
+                if file_name.ends_with(".rs") && file_name != "mod.rs" {
+                    let content = fs::read_to_string(&path)?;
+
+                    // Simpler approach: find fn main() and remove everything from there to the end of file
+                    // (main() is always the last function in generated files)
+                    let mut new_lines = Vec::new();
+                    let mut found_main = false;
+
+                    for line in content.lines() {
+                        let trimmed = line.trim();
+
+                        if trimmed.starts_with("fn main()") || trimmed.starts_with("pub fn main()")
+                        {
+                            found_main = true;
+                            stripped_count += 1;
+                            break; // Stop processing, discard everything from here
+                        }
+
+                        new_lines.push(line);
+                    }
+
+                    if found_main {
+                        // Rebuild content without main()
+                        let new_content = new_lines.join("\n") + "\n";
+                        fs::write(&path, new_content)?;
+                    }
+                }
+            }
+        }
+    }
+
+    if stripped_count > 0 {
+        println!(
+            "{} Stripped {} main() functions (library mode)",
+            "✓".green(),
+            stripped_count
+        );
     }
 
     Ok(())
