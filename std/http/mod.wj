@@ -193,12 +193,23 @@ impl Server {
     /// The handler is called for each incoming request
     pub fn serve<F>(self, handler: F) -> HttpResult<()>
     where
-        F: Fn(ServerRequest) -> ServerResponse
+        F: Fn(ServerRequest) -> ServerResponse + Send + Sync + 'static
     {
-        // Compiler will generate platform-specific code
-        // Native: Use std::net::TcpListener
-        // Browser: Not supported (servers can't run in browsers)
-        Err("Not implemented".to_string())
+        // Implementation: Use custom HTTP server
+        __windjammer_http_serve(self.address, self.port, handler)
     }
+}
+
+// Internal implementation hook - compiler will generate this
+fn __windjammer_http_serve<F>(
+    address: string,
+    port: int,
+    handler: F,
+) -> HttpResult<()>
+where
+    F: Fn(ServerRequest) -> ServerResponse + Send + Sync + 'static
+{
+    // This will be replaced by the compiler with actual implementation
+    Err("HTTP server not available in this build".to_string())
 }
 
