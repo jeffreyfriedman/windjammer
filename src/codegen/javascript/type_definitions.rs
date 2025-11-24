@@ -164,6 +164,7 @@ mod tests {
             return_type: None,
             body: vec![],
             decorators: vec![],
+            is_pub: false,
             is_async: false,
             type_params: vec![],
             where_clause: vec![],
@@ -180,6 +181,7 @@ mod tests {
     fn test_generate_interface() {
         let struct_def = StructDecl {
             name: "Point".to_string(),
+            is_pub: true, // Test struct is public
             fields: vec![
                 StructField {
                     name: "x".to_string(),
