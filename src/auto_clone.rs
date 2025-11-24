@@ -407,6 +407,7 @@ mod tests {
 
         let func = FunctionDecl {
             name: "test".to_string(),
+            is_pub: false,
             parameters: vec![],
             return_type: None,
             type_params: vec![],
@@ -488,6 +489,7 @@ mod tests {
 
         let func = FunctionDecl {
             name: "test".to_string(),
+            is_pub: false,
             parameters: vec![],
             return_type: None,
             type_params: vec![],
