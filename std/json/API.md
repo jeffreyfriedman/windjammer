@@ -7,7 +7,7 @@ Simple, ergonomic JSON parsing and serialization wrapping `serde_json`.
 ### Parsing
 
 ```windjammer
-use std.json
+use std::json
 
 // Parse JSON string to value
 fn parse(text: string) -> Result<Value, Error>
@@ -66,11 +66,11 @@ impl Value {
 ### Simple Parsing
 
 ```windjammer
-use std.json
+use std::json
 
 fn parse_config() -> Result<(), Error> {
     let text = "{\"name\": \"Alice\", \"age\": 30}"
-    let value = json.parse(text)?
+    let value = json::parse(text)?
     
     if let Some(name) = value.get("name").as_str() {
         println!("Name: ${name}")
@@ -83,7 +83,7 @@ fn parse_config() -> Result<(), Error> {
 ### Parsing to Struct
 
 ```windjammer
-use std.json
+use std::json
 
 @auto(Debug, Deserialize, Serialize)
 struct User {
@@ -93,8 +93,8 @@ struct User {
 }
 
 fn load_users() -> Result<Vec<User>, Error> {
-    let text = fs.read_to_string("users.json")?
-    let users = json.parse_to<Vec<User>>(text)?
+    let text = fs::read_to_string("users.json")?
+    let users = json::parse_to<Vec<User>>(text)?
     Ok(users)
 }
 ```
@@ -102,7 +102,7 @@ fn load_users() -> Result<Vec<User>, Error> {
 ### Creating JSON
 
 ```windjammer
-use std.json
+use std::json
 
 @auto(Serialize)
 struct Config {
@@ -118,8 +118,8 @@ fn save_config() -> Result<(), Error> {
         debug: true,
     }
     
-    let json_text = json.stringify_pretty(&config)?
-    fs.write("config.json", json_text)?
+    let json_text = json::stringify_pretty(&config)?
+    fs::write("config.json", json_text)?
     
     Ok(())
 }
@@ -128,10 +128,10 @@ fn save_config() -> Result<(), Error> {
 ### Working with Dynamic JSON
 
 ```windjammer
-use std.json
+use std::json
 
 fn process_api_response(response: string) -> Result<(), Error> {
-    let data = json.parse(response)?
+    let data = json::parse(response)?
     
     // Access nested data
     if let Some(users) = data.get("users").as_array() {
@@ -149,8 +149,8 @@ fn process_api_response(response: string) -> Result<(), Error> {
 ### Using with HTTP
 
 ```windjammer
-use std.http
-use std.json
+use std::http
+use std::json
 
 @auto(Deserialize)
 struct ApiResponse {
@@ -159,8 +159,8 @@ struct ApiResponse {
 }
 
 fn fetch_items() -> Result<Vec<Item>, Error> {
-    let response = http.get("https://api.example.com/items")?
-    let api_response = json.parse_to<ApiResponse>(response.body)?
+    let response = http::get("https://api.example.com/items")?
+    let api_response = json::parse_to<ApiResponse>(response.body)?
     Ok(api_response.data)
 }
 ```
@@ -169,8 +169,8 @@ fn fetch_items() -> Result<Vec<Item>, Error> {
 
 ```windjammer
 fn load_and_process() -> Result<(), Error> {
-    fs.read_to_string("data.json")?
-        |> json.parse?
+    fs::read_to_string("data.json")?
+        |> json::parse?
         |> extract_relevant_data
         |> process_data
         |> save_results
@@ -196,7 +196,7 @@ fn create_json_object() -> Value {
 ### Error Handling
 
 ```windjammer
-match json.parse(text) {
+match json::parse(text) {
     Ok(value) => {
         println!("Parsed successfully")
     }
@@ -221,7 +221,7 @@ struct Product {
     tags: Vec<string>,
 }
 
-// Automatically works with json.parse_to and json.stringify
+// Automatically works with json::parse_to and json::stringify
 let product = Product {
     id: 1,
     name: "Widget",
@@ -230,7 +230,7 @@ let product = Product {
     tags: vec!["gadget", "useful"],
 }
 
-let json_text = json.stringify(&product)?
+let json_text = json::stringify(&product)?
 // Output: {"id":1,"name":"Widget","price":29.99,"in_stock":true,"tags":["gadget","useful"]}
 ```
 

@@ -578,7 +578,7 @@ fn parse_function(db: &dyn Db, file: SourceFile, offset: usize) -> Function {
 ```rust
 #[salsa::tracked]
 fn resolve_import(db: &dyn Db, file: SourceFile, import: &str) -> Option<SourceFile> {
-    // Resolve "use std.fs" to actual file
+    // Resolve "use std::fs" to actual file
     // Dependency tracking across files!
 }
 
