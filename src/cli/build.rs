@@ -29,6 +29,8 @@ pub fn execute(
     quiet: bool,
     filter_file: Option<&Path>,
     filter_type: Option<&str>,
+    library: bool,
+    module_file: bool,
 ) -> Result<()> {
     let output_dir = output.unwrap_or_else(|| Path::new("./build"));
 
@@ -68,6 +70,16 @@ pub fn execute(
     };
 
     crate::build_project(path, output_dir, target)?;
+
+    // Generate mod.rs if requested
+    if module_file {
+        crate::generate_mod_file(output_dir)?;
+    }
+
+    // Strip main() functions if library mode
+    if library {
+        crate::strip_main_functions(output_dir)?;
+    }
 
     println!("\n{} Build complete!", "Success!".green().bold());
 

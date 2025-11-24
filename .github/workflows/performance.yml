@@ -214,7 +214,7 @@ jobs:
           path: current-results
       
       - name: Download baseline results
-        uses: dawidd6/action-download-artifact@v3
+        uses: dawidd6/action-download-artifact@v6
         continue-on-error: true
         with:
           workflow: performance.yml
