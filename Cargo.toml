@@ -81,7 +81,7 @@ syntect = "5.2"
 
 # Terminal UI for interactive error navigation
 ratatui = "0.28"
-crossterm = "0.28"
+crossterm = "0.29"
 # TOML parsing for wj.toml
 toml = "0.8"
 # Temporary directories for wj run
