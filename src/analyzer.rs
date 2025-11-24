@@ -338,11 +338,18 @@ impl Analyzer {
         for (i, param) in func.parameters.iter().enumerate() {
             let mode = match param.ownership {
                 OwnershipHint::Owned => {
-                    // Special case: 'self' parameter in impl methods should be borrowed if it modifies fields
+                    // Special case: 'self' parameter in impl methods
                     if param.name == "self" {
                         // Check if this method modifies any fields
                         let modifies_fields = self.function_modifies_self_fields(func);
-                        if modifies_fields {
+                        let returns_self = self.function_returns_self(func);
+
+                        if modifies_fields && returns_self {
+                            // Builder pattern: consumes self, modifies, returns self
+                            // Use `mut self` (Owned), not `&mut self` (MutBorrowed)
+                            OwnershipMode::Owned
+                        } else if modifies_fields {
+                            // Mutating method that doesn't return self: use `&mut self`
                             OwnershipMode::MutBorrowed
                         } else {
                             // Check if it accesses fields (read-only)
