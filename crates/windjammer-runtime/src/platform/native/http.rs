@@ -1,6 +1,14 @@
-/// Native implementation of std::http
-use std::io::{Read, Write};
-use std::net::{TcpListener, TcpStream};
+/// Native implementation of std::http using axum
+use axum::{
+    body::Body,
+    extract::Request as AxumRequest,
+    http::{HeaderName, HeaderValue, StatusCode},
+    response::{IntoResponse, Response as AxumResponse},
+    Router,
+};
+use std::net::SocketAddr;
+use std::str::FromStr;
+use std::sync::Arc;
 
 pub type HttpResult<T> = Result<T, String>;
 
@@ -34,7 +42,7 @@ pub fn delete(url: String) -> HttpResult<Response> {
 }
 
 // ============================================================================
-// HTTP SERVER IMPLEMENTATION
+// HTTP SERVER IMPLEMENTATION (axum-based)
 // ============================================================================
 
 /// HTTP Server Request (received by server)
@@ -49,14 +57,14 @@ pub struct ServerRequest {
 /// HTTP Server Response (sent by server)
 #[derive(Debug, Clone)]
 pub struct ServerResponse {
-    pub status: i32,
+    pub status: i64,
     pub headers: Vec<(String, String)>,
     pub body: String,
     pub binary_body: Option<Vec<u8>>,
 }
 
 impl ServerResponse {
-    pub fn new(status: i32, body: String) -> Self {
+    pub fn new(status: i64, body: String) -> Self {
         Self {
             status,
             headers: Vec::new(),
@@ -65,7 +73,7 @@ impl ServerResponse {
         }
     }
 
-    pub fn binary(status: i32, data: Vec<u8>) -> Self {
+    pub fn binary(status: i64, data: Vec<u8>) -> Self {
         Self {
             status,
             headers: Vec::new(),
@@ -77,7 +85,10 @@ impl ServerResponse {
     pub fn html(body: String) -> Self {
         Self {
             status: 200,
-            headers: vec![("Content-Type".to_string(), "text/html".to_string())],
+            headers: vec![(
+                "Content-Type".to_string(),
+                "text/html; charset=utf-8".to_string(),
+            )],
             body,
             binary_body: None,
         }
@@ -92,17 +103,20 @@ impl ServerResponse {
         }
     }
 
-    pub fn error(status: i32, message: String) -> Self {
+    pub fn error(status: i64, message: String) -> Self {
         Self {
             status,
-            headers: vec![("Content-Type".to_string(), "text/plain".to_string())],
+            headers: vec![(
+                "Content-Type".to_string(),
+                "text/plain; charset=utf-8".to_string(),
+            )],
             body: message,
             binary_body: None,
         }
     }
 
-    pub fn header(mut self, key: String, value: String) -> Self {
-        self.headers.push((key, value));
+    pub fn header(mut self, key: impl Into<String>, value: impl Into<String>) -> Self {
+        self.headers.push((key.into(), value.into()));
         self
     }
 }
@@ -111,145 +125,144 @@ impl ServerResponse {
 #[derive(Debug, Clone)]
 pub struct Server {
     pub address: String,
-    pub port: i32,
+    pub port: i64,
 }
 
 impl Server {
-    pub fn new(address: String, port: i32) -> Self {
+    pub fn new(address: String, port: i64) -> Self {
         Self { address, port }
     }
 
     pub fn serve<F>(self, handler: F) -> HttpResult<()>
     where
-        F: Fn(ServerRequest) -> ServerResponse + Send + Sync + 'static,
+        F: Fn(&ServerRequest) -> ServerResponse + Send + Sync + 'static,
     {
-        let addr = format!("{}:{}", self.address, self.port);
-        let listener =
-            TcpListener::bind(&addr).map_err(|e| format!("Failed to bind to {}: {}", addr, e))?;
+        // Use tokio runtime to run the async server
+        let runtime = tokio::runtime::Runtime::new()
+            .map_err(|e| format!("Failed to create Tokio runtime: {}", e))?;
 
-        println!("🚀 Server listening on http://{}", addr);
-
-        for stream in listener.incoming() {
-            match stream {
-                Ok(stream) => {
-                    if let Err(e) = handle_connection(stream, &handler) {
-                        eprintln!("❌ Error handling connection: {}", e);
-                    }
-                }
-                Err(e) => {
-                    eprintln!("❌ Error accepting connection: {}", e);
-                }
-            }
-        }
-
-        Ok(())
+        runtime.block_on(async { serve_with_axum(self.address, self.port, handler).await })
     }
 }
 
-fn handle_connection<F>(mut stream: TcpStream, handler: &F) -> HttpResult<()>
+async fn serve_with_axum<F>(address: String, port: i64, handler: F) -> HttpResult<()>
 where
-    F: Fn(ServerRequest) -> ServerResponse,
+    F: Fn(&ServerRequest) -> ServerResponse + Send + Sync + 'static,
 {
-    let mut buffer = [0; 4096];
-    let size = stream
-        .read(&mut buffer)
-        .map_err(|e| format!("Failed to read from stream: {}", e))?;
+    let handler = Arc::new(handler);
 
-    let request_str = String::from_utf8_lossy(&buffer[..size]);
+    // Create a catch-all router that handles all methods and paths
+    let app = Router::new().fallback(move |req: AxumRequest| {
+        let handler = handler.clone();
+        async move { handle_request(req, handler).await }
+    });
 
-    // Parse request
-    let request = parse_request(&request_str)?;
+    // Parse address
+    let addr = format!("{}:{}", address, port);
+    let socket_addr: SocketAddr = addr
+        .parse()
+        .map_err(|e| format!("Invalid address {}: {}", addr, e))?;
 
-    println!("📄 {} {}", request.method, request.path);
+    println!("🚀 Windjammer server (axum) listening on http://{}", addr);
+    println!("📍 Press Ctrl+C to stop");
 
-    // Call handler
-    let response = handler(request);
+    // Start axum server
+    let listener = tokio::net::TcpListener::bind(socket_addr)
+        .await
+        .map_err(|e| format!("Failed to bind to {}: {}", addr, e))?;
 
-    // Send response
-    send_response(&mut stream, response)?;
+    axum::serve(listener, app)
+        .await
+        .map_err(|e| format!("Server error: {}", e))?;
 
     Ok(())
 }
 
-fn parse_request(request_str: &str) -> HttpResult<ServerRequest> {
-    let mut lines = request_str.lines();
+async fn handle_request<F>(axum_req: AxumRequest, handler: Arc<F>) -> impl IntoResponse
+where
+    F: Fn(&ServerRequest) -> ServerResponse,
+{
+    // Convert axum request to Windjammer request
+    let method = axum_req.method().to_string();
+    let path = axum_req.uri().path().to_string();
 
-    // Parse request line
-    let first_line = lines.next().ok_or("Empty request")?;
-    let parts: Vec<&str> = first_line.split_whitespace().collect();
-
-    if parts.len() < 2 {
-        return Err("Invalid request line".to_string());
-    }
-
-    let method = parts[0].to_string();
-    let path = parts[1].to_string();
-
-    // Parse headers
+    // Extract headers
     let mut headers = Vec::new();
-    for line in lines {
-        if line.is_empty() {
-            break;
-        }
-        if let Some((key, value)) = line.split_once(':') {
-            headers.push((key.trim().to_string(), value.trim().to_string()));
+    for (key, value) in axum_req.headers() {
+        if let Ok(value_str) = value.to_str() {
+            headers.push((key.to_string(), value_str.to_string()));
         }
     }
 
-    Ok(ServerRequest {
-        method,
-        path,
-        headers,
-        body: String::new(),
-    })
-}
-
-fn send_response(stream: &mut TcpStream, response: ServerResponse) -> HttpResult<()> {
-    let status_text = match response.status {
-        200 => "OK",
-        404 => "Not Found",
-        500 => "Internal Server Error",
-        _ => "Unknown",
+    // Extract body
+    let body_bytes = match axum::body::to_bytes(axum_req.into_body(), usize::MAX).await {
+        Ok(bytes) => bytes,
+        Err(e) => {
+            eprintln!("❌ Failed to read request body: {}", e);
+            return (
+                StatusCode::BAD_REQUEST,
+                format!("Failed to read body: {}", e),
+            )
+                .into_response();
+        }
     };
 
-    let mut response_str = format!("HTTP/1.1 {} {}\r\n", response.status, status_text);
+    let body = String::from_utf8_lossy(&body_bytes).to_string();
 
-    // Add headers
-    for (key, value) in &response.headers {
-        response_str.push_str(&format!("{}: {}\r\n", key, value));
-    }
+    // Create Windjammer request
+    let req = ServerRequest {
+        method: method.clone(),
+        path: path.clone(),
+        headers,
+        body,
+    };
 
-    // Handle binary or text body
-    if let Some(binary_data) = &response.binary_body {
-        // Binary response (WASM, images, etc.)
-        response_str.push_str(&format!("Content-Length: {}\r\n", binary_data.len()));
-        response_str.push_str("Access-Control-Allow-Origin: *\r\n");
-        response_str.push_str("\r\n");
+    // Call user's handler (pass by reference to match Windjammer's API)
+    let response = handler(&req);
 
-        // Write headers
-        stream
-            .write_all(response_str.as_bytes())
-            .map_err(|e| format!("Failed to write response headers: {}", e))?;
-
-        // Write binary body
-        stream
-            .write_all(binary_data)
-            .map_err(|e| format!("Failed to write binary body: {}", e))?;
+    // Log the request
+    let status_emoji = if response.status >= 200 && response.status < 300 {
+        "✅"
+    } else if response.status >= 400 {
+        "❌"
     } else {
-        // Text response
-        response_str.push_str(&format!("Content-Length: {}\r\n", response.body.len()));
-        response_str.push_str("Access-Control-Allow-Origin: *\r\n");
-        response_str.push_str("\r\n");
-        response_str.push_str(&response.body);
+        "📤"
+    };
+    println!(
+        "{} {} {} -> {}",
+        status_emoji, method, path, response.status
+    );
 
-        stream
-            .write_all(response_str.as_bytes())
-            .map_err(|e| format!("Failed to write response: {}", e))?;
+    // Convert Windjammer response to axum response
+    convert_to_axum_response(response)
+}
+
+fn convert_to_axum_response(response: ServerResponse) -> AxumResponse {
+    // Map status code
+    let status =
+        StatusCode::from_u16(response.status as u16).unwrap_or(StatusCode::INTERNAL_SERVER_ERROR);
+
+    // Build body
+    let body = if let Some(binary) = response.binary_body {
+        Body::from(binary)
+    } else {
+        Body::from(response.body)
+    };
+
+    // Build response with proper headers
+    let mut builder = AxumResponse::builder().status(status);
+
+    // Add all custom headers
+    for (key, value) in response.headers {
+        if let (Ok(header_name), Ok(header_value)) =
+            (HeaderName::from_str(&key), HeaderValue::from_str(&value))
+        {
+            builder = builder.header(header_name, header_value);
+        }
     }
 
-    stream
-        .flush()
-        .map_err(|e| format!("Failed to flush stream: {}", e))?;
-
-    Ok(())
+    builder.body(body).unwrap_or_else(|e| {
+        eprintln!("❌ Failed to build response: {}", e);
+        (StatusCode::INTERNAL_SERVER_ERROR, "Internal server error").into_response()
+    })
 }
