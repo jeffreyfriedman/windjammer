@@ -240,8 +240,8 @@ fn main() {
 }
 
 // Multiple imports
-use std.collections.HashMap as Map
-use std.collections.HashSet as Set
+use std::collections.HashMap as Map
+use std::collections.HashSet as Set
 
 fn demo() {
     let m = Map::new()

@@ -22,7 +22,7 @@ Windjammer will adopt a **call-site explicit async model** that combines the bes
 ```windjammer
 // Function declares it's async
 async fn fetch_data(url: string) -> Result<Data> {
-    http.get(url)
+    http::get(url)
 }
 
 // Caller must handle async
@@ -481,7 +481,7 @@ Automatically:
 
 ```windjammer
 fn fetch_data(url: string) -> Result<Data> {
-    http.get(url)
+    http::get(url)
 }
 
 fn main() {
@@ -570,7 +570,7 @@ fn main() {
 ```windjammer
 // Library provides ONE function
 pub fn read_config(path: string) -> Result<Config> {
-    fs.read_to_string(path).map(|s| parse_config(s))
+    fs::read_to_string(path).map(|s| parse_config(s))
 }
 
 // Users choose execution mode:

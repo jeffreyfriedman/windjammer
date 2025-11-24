@@ -7,7 +7,7 @@ Thin wrapper around Rust's `std::fs` with Windjammer ergonomics.
 ### Reading Files
 
 ```windjammer
-use std.fs
+use std::fs
 
 // Read entire file as string
 fn read_to_string(path: string) -> Result<string, Error>
@@ -73,11 +73,11 @@ fn read_dir(path: string) -> Result<Vec<DirEntry>, Error>
 ## Example Usage
 
 ```windjammer
-use std.fs
+use std::fs
 
 fn backup_config() -> Result<(), Error> {
     // Read
-    let config = fs.read_to_string("config.toml")?
+    let config = fs::read_to_string("config.toml")?
     
     // Process with pipe operator
     let processed = config
@@ -85,7 +85,7 @@ fn backup_config() -> Result<(), Error> {
         |> add_timestamp
     
     // Write
-    fs.write("config.backup.toml", processed)?
+    fs::write("config.backup.toml", processed)?
     
     println!("Backup created successfully")
     Ok(())
@@ -93,11 +93,11 @@ fn backup_config() -> Result<(), Error> {
 
 fn process_logs() -> Result<(), Error> {
     // Read all log files
-    let entries = fs.read_dir("logs")?
+    let entries = fs::read_dir("logs")?
     
     for entry in entries {
         if entry.name.ends_with(".log") {
-            let content = fs.read_to_string(entry.path)?
+            let content = fs::read_to_string(entry.path)?
             println!("Processing: ${entry.name}")
             analyze_log(content)
         }
@@ -137,7 +137,7 @@ Common errors:
 - IO errors
 
 ```windjammer
-match fs.read_to_string("data.txt") {
+match fs::read_to_string("data.txt") {
     Ok(content) => println!("Read ${content.len()} bytes"),
     Err(e) => println!("Error: ${e}"),
 }
