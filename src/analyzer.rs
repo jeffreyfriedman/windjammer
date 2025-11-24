@@ -367,9 +367,16 @@ impl Analyzer {
                         // Special case: @render3d functions take &mut for camera parameter (3rd param)
                         OwnershipMode::MutBorrowed
                     } else if param.name == "self" {
-                        // Infer ownership for self based on field access
+                        // Infer ownership for self based on field access and return type
                         let modifies_fields = self.function_modifies_self_fields(func);
-                        if modifies_fields {
+                        let returns_self = self.function_returns_self(func);
+
+                        if modifies_fields && returns_self {
+                            // Builder pattern: consumes self, modifies, returns self
+                            // Use `mut self` (Owned), not `&mut self` (MutBorrowed)
+                            OwnershipMode::Owned
+                        } else if modifies_fields {
+                            // Mutating method that doesn't return self: use `&mut self`
                             OwnershipMode::MutBorrowed
                         } else {
                             let accesses_fields = self.function_accesses_self_fields(func);
@@ -1869,6 +1876,19 @@ impl Analyzer {
                     return true;
                 }
                 false
+            }
+            _ => false,
+        }
+    }
+
+    /// Check if a function returns Self (for builder pattern detection)
+    fn function_returns_self(&self, func: &FunctionDecl) -> bool {
+        use crate::parser::Type;
+        match &func.return_type {
+            Some(Type::Custom(_)) => {
+                // Returns a custom type (likely Self or the struct type)
+                // This indicates a builder pattern
+                true
             }
             _ => false,
         }
