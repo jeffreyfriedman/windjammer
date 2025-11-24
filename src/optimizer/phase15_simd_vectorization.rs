@@ -398,6 +398,7 @@ mod tests {
         let program = Program {
             items: vec![Item::Function {
                 decl: FunctionDecl {
+                    is_pub: false,
                     name: "sum_array".to_string(),
                     parameters: vec![],
                     return_type: None,
@@ -479,6 +480,7 @@ mod tests {
         let program = Program {
             items: vec![Item::Function {
                 decl: FunctionDecl {
+                    is_pub: false,
                     name: "complex".to_string(),
                     parameters: vec![],
                     return_type: None,

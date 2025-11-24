@@ -28,6 +28,7 @@ mod tests {
 
     fn create_test_component(name: &str, body: Vec<Statement>) -> FunctionDecl {
         FunctionDecl {
+            is_pub: false,
             name: name.to_string(),
             type_params: vec![],
             where_clause: vec![],

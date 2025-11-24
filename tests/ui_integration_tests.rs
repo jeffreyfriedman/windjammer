@@ -26,6 +26,7 @@ fn assert_code_contains(code: &str, patterns: &[&str]) {
 fn create_simple_counter_component() -> FunctionDecl {
     FunctionDecl {
         name: "Counter".to_string(),
+        is_pub: false,
         type_params: vec![],
         where_clause: vec![],
         decorators: vec![Decorator {
@@ -102,6 +103,7 @@ fn create_simple_counter_component() -> FunctionDecl {
 fn create_component_with_props() -> FunctionDecl {
     FunctionDecl {
         name: "Greeting".to_string(),
+        is_pub: false,
         type_params: vec![],
         where_clause: vec![],
         decorators: vec![Decorator {
@@ -162,6 +164,7 @@ fn test_component_detection() {
 fn test_non_component_function() {
     let regular_func = FunctionDecl {
         name: "regular_function".to_string(),
+        is_pub: false,
         type_params: vec![],
         where_clause: vec![],
         decorators: vec![],
@@ -183,6 +186,7 @@ fn test_component_return_type_validation() {
 
     let invalid_component = FunctionDecl {
         name: "BadComponent".to_string(),
+        is_pub: false,
         type_params: vec![],
         where_clause: vec![],
         decorators: vec![Decorator {
@@ -215,6 +219,7 @@ fn test_type_checker_validates_props() {
 fn test_type_checker_rejects_inferred_props() {
     let bad_component = FunctionDecl {
         name: "BadComponent".to_string(),
+        is_pub: false,
         type_params: vec![],
         where_clause: vec![],
         decorators: vec![Decorator {

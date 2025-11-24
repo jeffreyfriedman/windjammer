@@ -7,6 +7,45 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.36.0] - 2025-11-24
+
+### Added
+- **HTTP Server Integration**: Production-grade web server using axum + tokio
+  - `std::http::Server` API for building web applications
+  - Automatic UTF-8 encoding for HTML/JSON responses
+  - Ergonomic API with `impl Into<String>` for headers
+  - Comprehensive documentation (469 lines)
+- **CLI Improvements**:
+  - `--library` flag for `wj build` to strip `main()` functions
+  - `--module-file` flag to auto-generate `mod.rs` with re-exports
+- **Builder Pattern Support**: Fixed 10 critical compiler bugs
+  - Correct `mut self` inference for builder methods
+  - Proper `pub` visibility keyword generation
+  - Copy type inference for user-defined enums
+  - Owned parameter inference for stored values
+
+### Fixed
+- **Bug #1**: Copy type inference for fieldless enums
+- **Bug #2**: Parameter ownership inference for stored values
+- **Bug #3**: Format string placeholder escaping
+- **Bug #4**: Owned parameter inference for `Vec<T>`
+- **Bug #5**: Missing `pub` visibility keywords
+- **Bug #6**: Incorrect `self` mutability in builder patterns
+- **Bug #7**: Constructors getting unwanted `&self` parameter
+- **Bug #8**: `render` methods getting unwanted `mut`
+- **Bug #9**: Incorrect argument count in method calls
+- **Bug #10**: `pub fn` in `impl` blocks not generated
+
+### Changed
+- Made `axum` and `tokio` always-available dependencies in `windjammer-runtime`
+- Updated `sqlx` from 0.7.4 to 0.8.1 (security fix for RUSTSEC-2024-0363)
+- Updated `dawidd6/action-download-artifact` from v3 to v6
+- Added security permissions to GitHub workflows
+
+### Security
+- Added `permissions: contents: read` to test workflows (least privilege)
+- Updated `sqlx` to address RUSTSEC-2024-0363
+
 ## [0.35.2] - 2025-11-23
 
 ### Fixed
