@@ -36,7 +36,7 @@ regex = "1.10"
 
 # File watching
 notify = "6.1"
-notify-debouncer-full = "0.3"
+notify-debouncer-full = "0.6"
 
 # Serialization
 serde = { version = "1.0", features = ["derive"] }
