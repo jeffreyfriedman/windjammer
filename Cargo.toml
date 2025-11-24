@@ -83,7 +83,7 @@ syntect = "5.2"
 ratatui = "0.28"
 crossterm = "0.28"
 # TOML parsing for wj.toml
-toml = "0.8"
+toml = "0.9"
 # Temporary directories for wj run
 tempfile = "3.8"
 # Incremental compilation with Salsa
