@@ -852,6 +852,7 @@ mod tests {
         let program = Program {
             items: vec![Item::Function {
                 decl: FunctionDecl {
+                    is_pub: false,
                     name: "test".to_string(),
                     type_params: vec![],
                     where_clause: vec![],
@@ -912,6 +913,7 @@ mod tests {
         let program = Program {
             items: vec![Item::Function {
                 decl: FunctionDecl {
+                    is_pub: false,
                     name: "test".to_string(),
                     type_params: vec![],
                     where_clause: vec![],
@@ -989,6 +991,7 @@ mod tests {
         let program = Program {
             items: vec![Item::Function {
                 decl: FunctionDecl {
+                    is_pub: false,
                     name: "test".to_string(),
                     type_params: vec![],
                     where_clause: vec![],
@@ -1027,6 +1030,7 @@ mod tests {
         let program = Program {
             items: vec![Item::Function {
                 decl: FunctionDecl {
+                    is_pub: false,
                     name: "test".to_string(),
                     type_params: vec![],
                     where_clause: vec![],
@@ -1080,6 +1084,7 @@ mod tests {
         let program = Program {
             items: vec![Item::Function {
                 decl: FunctionDecl {
+                    is_pub: false,
                     name: "test".to_string(),
                     type_params: vec![],
                     where_clause: vec![],
