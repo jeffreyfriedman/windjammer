@@ -1,6 +1,6 @@
 [package]
 name = "windjammer-mcp"
-version = "0.36.0"
+version = "0.36.1"
 edition = "2021"
 authors = ["Jeffrey Friedman <jeff@example.com>"]
 description = "Model Context Protocol (MCP) server for Windjammer - AI-powered development"
