@@ -9,12 +9,12 @@ Windjammer features a comprehensive module system that allows you to organize co
 Use the `use` keyword to import modules:
 
 ```windjammer
-use std.fs
-use std.json
+use std::fs
+use std::json
 
 fn main() {
     // Use imported modules
-    let data = fs.read_to_string("file.txt")
+    let data = fs::read_to_string("file.txt")
     println!("{:?}", data)
 }
 ```
@@ -55,7 +55,7 @@ Unlike many languages where the standard library is implemented in a different l
 
 When you write:
 ```windjammer
-use std.fs
+use std::fs
 
 fn main() {
     fs.exists("/tmp")
@@ -88,17 +88,17 @@ fn main() {
 ### Reading Files
 
 ```windjammer
-use std.fs
+use std::fs
 
 fn main() {
     // Read entire file as string
-    match fs.read_to_string("config.txt") {
+    match fs::read_to_string("config.txt") {
         Ok(content) => println!("File content: {}", content),
         Err(e) => println!("Error: {}", e),
     }
     
     // Read as bytes
-    match fs.read("data.bin") {
+    match fs::read("data.bin") {
         Ok(bytes) => println!("Read {} bytes", bytes.len()),
         Err(e) => println!("Error: {}", e),
     }
@@ -108,25 +108,25 @@ fn main() {
 ### Writing Files
 
 ```windjammer
-use std.fs
+use std::fs
 
 fn main() {
     // Write string to file
-    match fs.write("output.txt", "Hello, World!") {
+    match fs::write("output.txt", "Hello, World!") {
         Ok(_) => println!("File written successfully"),
         Err(e) => println!("Error: {}", e),
     }
     
     // Write bytes
     let data: Vec<u8> = vec![0, 1, 2, 3]
-    fs.write_bytes("output.bin", &data)
+    fs::write_bytes("output.bin", &data)
 }
 ```
 
 ### File System Queries
 
 ```windjammer
-use std.fs
+use std::fs
 
 fn main() {
     // Check if path exists
@@ -148,7 +148,7 @@ fn main() {
 ### Directory Operations
 
 ```windjammer
-use std.fs
+use std::fs
 
 fn main() {
     // Create directory (including parents)
@@ -174,13 +174,13 @@ fn main() {
 ## Using the JSON Module
 
 ```windjammer
-use std.json
+use std::json
 
 fn main() {
     // Parse JSON string
     let json_str = "{\"name\": \"Alice\", \"age\": 30}"
     
-    match json.parse(json_str) {
+    match json::parse(json_str) {
         Ok(value) => {
             // Check type
             if json.is_object(&value) {
@@ -211,13 +211,13 @@ fn main() {
 You can import and use multiple modules together:
 
 ```windjammer
-use std.fs
-use std.json
+use std::fs
+use std::json
 
 fn load_config(path: &str) -> Option<serde_json.Value> {
-    match fs.read_to_string(path) {
+    match fs::read_to_string(path) {
         Ok(content) => {
-            match json.parse(&content) {
+            match json::parse(&content) {
                 Ok(value) => Some(value),
                 Err(e) => {
                     println!("JSON parse error: {}", e)
@@ -251,9 +251,9 @@ export WINDJAMMER_STDLIB=/path/to/custom/stdlib
 
 ### Import Syntax
 
-- **Standard library**: `use std.module_name`
-- **Submodules** (future): `use std.http.client`
-- **Qualified imports** (future): `use std.fs as filesystem`
+- **Standard library**: `use std::module_name`
+- **Submodules** (future): `use std::http.client`
+- **Qualified imports** (future): `use std::fs as filesystem`
 
 Currently, only `std.*` imports are supported. User modules and relative imports will be added in future versions.
 
@@ -262,29 +262,29 @@ Currently, only `std.*` imports are supported. User modules and relative imports
 ### 1. Import What You Need
 ```windjammer
 // Good: Only import what you use
-use std.fs
+use std::fs
 
 fn main() {
-    fs.read_to_string("file.txt")
+    fs::read_to_string("file.txt")
 }
 
 // Avoid: Importing unused modules
-use std.json  // Not used
-use std.http  // Not used
+use std::json  // Not used
+use std::http  // Not used
 ```
 
 ### 2. Handle Errors Properly
 ```windjammer
-use std.fs
+use std::fs
 
 // Good: Handle errors explicitly
 fn read_config() -> Result<String, std::io::Error> {
-    fs.read_to_string("config.txt")
+    fs::read_to_string("config.txt")
 }
 
 // Better: Provide context
 fn read_config_safe() -> String {
-    match fs.read_to_string("config.txt") {
+    match fs::read_to_string("config.txt") {
         Ok(content) => content,
         Err(_) => {
             println!("Using default config")
@@ -296,13 +296,13 @@ fn read_config_safe() -> String {
 
 ### 3. Keep Module Usage Clean
 ```windjammer
-use std.fs
-use std.json
+use std::fs
+use std::json
 
 // Good: Clear module prefixes
 fn process_data() {
-    let data = fs.read_to_string("data.json").unwrap()
-    let parsed = json.parse(&data).unwrap()
+    let data = fs::read_to_string("data.json").unwrap()
+    let parsed = json::parse(&data).unwrap()
     // ...
 }
 ```
@@ -314,12 +314,12 @@ The module system will be expanded in future versions:
 ### v0.6.0
 - User-defined modules (not just stdlib)
 - Relative imports (`use ./my_module`)
-- Module aliases (`use std.fs as filesystem`)
+- Module aliases (`use std::fs as filesystem`)
 - Re-exports (`pub use`)
 
 ### v0.7.0
-- Submodule imports (`use std.http.client`)
-- Selective imports (`use std.fs.{read, write}`)
+- Submodule imports (`use std::http.client`)
+- Selective imports (`use std::fs.{read, write}`)
 - Private vs public module items
 - Cross-module visibility control
 
