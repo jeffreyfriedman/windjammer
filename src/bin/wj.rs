@@ -118,6 +118,10 @@ enum Commands {
         /// Auto-generate mod.rs with pub mod declarations and re-exports
         #[arg(long)]
         module_file: bool,
+
+        /// Skip cargo build after transpilation (transpile only)
+        #[arg(long)]
+        no_cargo: bool,
     },
 
     /// Compile and run a Windjammer file
@@ -288,6 +292,7 @@ fn main() -> anyhow::Result<()> {
             filter_type,
             library,
             module_file,
+            no_cargo,
         } => {
             // TODO: Pass defer_drop config to compiler
             // For now, just ignore these flags - defer drop is always auto
@@ -313,6 +318,7 @@ fn main() -> anyhow::Result<()> {
                 filter_type.as_deref(),
                 library,
                 module_file,
+                !no_cargo, // run_cargo = !no_cargo
             )?;
         }
         Commands::Run {
@@ -480,6 +486,7 @@ fn main() -> anyhow::Result<()> {
                 None,  // filter_type
                 false, // library
                 false, // module_file
+                false, // run_cargo - not needed when check=true
             )
             .ok(); // Ignore errors, we'll get them from the TUI
 
