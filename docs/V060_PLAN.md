@@ -13,11 +13,11 @@ Building on the successful v0.5.0 module system, v0.6.0 will extend modules to s
 2. **Test Remaining Stdlib Modules** - Runtime validation of json, csv, http, etc.
 3. **User-Defined Modules** - Allow developers to create their own modules
 4. **Relative Imports** - Import local modules with `use ./my_module`
-5. **Module Aliases** - `use std.fs as filesystem`
+5. **Module Aliases** - `use std::fs as filesystem`
 6. **Basic Generics** - Generic functions and structs
 
 ### Secondary Goals
-7. **Selective Imports** - `use std.fs.{read, write}`
+7. **Selective Imports** - `use std::fs.{read, write}`
 8. **Re-exports** - `pub use` for module composition
 9. **Performance Benchmarks** - Compare Windjammer vs Rust vs Go
 10. **Better Error Messages** - Map Rust errors back to Windjammer source
@@ -34,8 +34,8 @@ Building on the successful v0.5.0 module system, v0.6.0 will extend modules to s
 **Design**:
 When user imports stdlib modules, automatically add required crates:
 ```windjammer
-use std.json
-use std.http
+use std::json
+use std::http
 ```
 
 Generated Cargo.toml should include:
@@ -127,8 +127,8 @@ use ./utils/helpers      // Subdirectory
 
 **Syntax**:
 ```windjammer
-use std.fs as filesystem
-use std.json as j
+use std::fs as filesystem
+use std::json as j
 
 fn main() {
     filesystem.read_to_string("file.txt")
@@ -182,7 +182,7 @@ enum Option<T> {
 
 **Syntax**:
 ```windjammer
-use std.fs.{read, write, exists}
+use std::fs.{read, write, exists}
 
 fn main() {
     read("file.txt")  // No fs. prefix needed

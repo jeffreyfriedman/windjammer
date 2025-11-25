@@ -186,7 +186,7 @@ $ wj lint                 # Lint code
 ### Database Example
 
 ```windjammer
-use std.db
+use std::db
 
 @derive(Serialize, Deserialize)
 struct User {
@@ -456,7 +456,7 @@ wj fmt
 
 **After:**
 ```windjammer
-use std.db
+use std::db
 // SQLite works automatically!
 ```
 

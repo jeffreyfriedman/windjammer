@@ -7,7 +7,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-## [0.36.0] - 2025-11-24
+## [0.36.1] - 2024-11-24
+
+### Fixed
+- **Critical Bug**: Builder pattern methods now correctly generate `mut self` instead of `&mut self`
+  - Methods that modify fields AND return Self use owned `mut self`
+  - Fixes type errors: `expected Accordion, found &mut Accordion`
+  - Affects all builder pattern code (common in UI libraries)
+
+### Added
+- **DX Roadmap**: Comprehensive plan for Windjammer developer experience improvements
+  - Phase 1: Smart Build (auto-detect project type, integrated cargo)
+  - Phase 2: Testing (`wj test` command)
+  - Phase 3: Watch Mode (`wj watch` for auto-rebuild)
+  - Phase 4: Pure Windjammer Projects (no Cargo.toml required)
+  - Phase 5: Advanced Features (LSP, debugger, profiler)
+
+## [0.36.0] - 2024-11-24
 
 ### Added
 - **HTTP Server Integration**: Production-grade web server using axum + tokio

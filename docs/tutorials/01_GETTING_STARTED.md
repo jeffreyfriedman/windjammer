@@ -213,7 +213,7 @@ let numbers = vec![1, 2, 3, 4, 5]
 numbers.push(6)
 
 // HashMap
-use std.collections.HashMap
+use std::collections.HashMap
 
 let mut scores = HashMap::new()
 scores.insert("Alice", 100)
@@ -299,13 +299,13 @@ Windjammer has a **comprehensive standard library** with proper abstractions:
 ### File I/O
 
 ```windjammer
-use std.fs
+use std::fs
 
 // Read a file
-let contents = fs.read_to_string("data.txt")?
+let contents = fs::read_to_string("data.txt")?
 
 // Write a file
-fs.write("output.txt", "Hello, world!")?
+fs::write("output.txt", "Hello, world!")?
 
 // Check if file exists
 if fs.exists("config.json") {
@@ -316,7 +316,7 @@ if fs.exists("config.json") {
 ### JSON
 
 ```windjammer
-use std.json
+use std::json
 
 @derive(Serialize, Deserialize)]
 struct Config {
@@ -326,20 +326,20 @@ struct Config {
 
 // Serialize
 let config = Config { host: "localhost", port: 8080 }
-let json = json.stringify(&config)?
+let json = json::stringify(&config)?
 
 // Deserialize
-let config: Config = json.parse(json_string)?
+let config: Config = json::parse(json_string)?
 ```
 
 ### HTTP Client
 
 ```windjammer
-use std.http
+use std::http
 
 @async
 fn fetch_data() -> Result<string, Error> {
-    let response = http.get("https://api.example.com/data").await?
+    let response = http::get("https://api.example.com/data").await?
     Ok(response.text().await?)
 }
 ```
@@ -347,7 +347,7 @@ fn fetch_data() -> Result<string, Error> {
 ### HTTP Server
 
 ```windjammer
-use std.http
+use std::http
 
 @async
 fn main() {
@@ -458,9 +458,9 @@ Don't import crates directly when stdlib has it:
 
 ```windjammer
 // ✅ Good - uses stdlib
-use std.http
-use std.json
-use std.db
+use std::http
+use std::json
+use std::db
 
 // ❌ Avoid - crate leakage
 use axum::Router
