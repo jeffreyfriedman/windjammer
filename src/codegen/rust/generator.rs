@@ -1986,7 +1986,12 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
 
     fn expression_accesses_fields(&self, expr: &Expression) -> bool {
         match expr {
-            Expression::Identifier { name, .. } => self.current_struct_fields.contains(name),
+            Expression::Identifier { name, .. } => {
+                // Check if this is a field name, but NOT a parameter name
+                // Parameters shadow fields, so if it's a parameter, it's not a field access
+                let is_param = self.current_function_params.iter().any(|p| p.name == *name);
+                !is_param && self.current_struct_fields.contains(name)
+            }
             Expression::FieldAccess { object, .. } => {
                 // Check for self.field or nested field access
                 if let Expression::Identifier { name: obj_name, .. } = &**object {
