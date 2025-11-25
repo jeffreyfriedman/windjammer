@@ -36,8 +36,8 @@
 - **Problem:** Explicit `@derive(Serialize, Deserialize)` on every model
 - **Solution:** Infer serialization needs from usage
 - **Logic:**
-  - If struct used in `json.stringify()` → add `Serialize`
-  - If struct used in `json.parse()` → add `Deserialize`
+  - If struct used in `json::stringify()` → add `Serialize`
+  - If struct used in `json::parse()` → add `Deserialize`
   - If struct used in HTTP responses → add both
 
 #### C. Method Call Optimization

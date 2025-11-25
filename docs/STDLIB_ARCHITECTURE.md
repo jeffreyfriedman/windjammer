@@ -20,7 +20,7 @@
 ### Bad Example (Leaking Implementation)
 
 ```windjammer
-use std.http
+use std::http
 
 // ❌ BAD: Exposing reqwest directly
 let response = reqwest::get("https://api.example.com").await?
@@ -35,10 +35,10 @@ let response = reqwest::get("https://api.example.com").await?
 ### Good Example (Proper Abstraction)
 
 ```windjammer
-use std.http
+use std::http
 
 // ✅ GOOD: Windjammer API
-let response = http.get("https://api.example.com").await?
+let response = http::get("https://api.example.com").await?
 ```
 
 **Benefits:**
@@ -115,9 +115,9 @@ impl Value {
 
 **Usage:**
 ```windjammer
-use std.json
+use std::json
 
-let data = json.parse("{\"name\": \"Alice\"}")?
+let data = json::parse("{\"name\": \"Alice\"}")?
 let name = data.get("name")?.as_string()?
 println!("Name: {}", name)
 ```
@@ -169,11 +169,11 @@ impl RequestBuilder {
 
 **Usage:**
 ```windjammer
-use std.http
+use std::http
 
 @async
 fn main() {
-    let response = http.get("https://api.example.com").await?
+    let response = http::get("https://api.example.com").await?
     println!("Status: {}", response.status)
     let body = response.text().await?
 }
@@ -231,7 +231,7 @@ impl Row {
 
 **Usage:**
 ```windjammer
-use std.db
+use std::db
 
 @async
 fn main() {
@@ -287,7 +287,7 @@ fn parse(s: string, format: string) -> Result<DateTime, TimeError>
 
 **Usage:**
 ```windjammer
-use std.time
+use std::time
 
 fn main() {
     let now = time.now()
@@ -318,7 +318,7 @@ fn sha256(data: string) -> string
 
 **Usage:**
 ```windjammer
-use std.crypto
+use std::crypto
 
 fn main() {
     let encoded = crypto.base64_encode("Hello, World!")
@@ -348,7 +348,7 @@ fn choice<T>(list: Vec<T>) -> Option<T>
 
 **Usage:**
 ```windjammer
-use std.random
+use std::random
 
 fn main() {
     let num = random.range(1, 100)
@@ -388,7 +388,7 @@ For each module:
 For users who need direct access to underlying crates:
 
 ```windjammer
-use std.db
+use std::db
 
 // Standard abstraction (recommended)
 let conn = db.connect("...").await?
@@ -436,7 +436,7 @@ let now = chrono::Utc::now()
 
 **New (v0.14.0):**
 ```windjammer
-let response = http.get("...").await?
+let response = http::get("...").await?
 let conn = db.connect("...").await?
 let now = time.utc_now()
 ```

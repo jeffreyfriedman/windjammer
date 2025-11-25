@@ -44,10 +44,10 @@ std/
 
 ### Explicit Import (Recommended)
 ```windjammer
-use std.json
+use std::json
 
 fn main() {
-    let data = json.parse("{\"name\": \"Alice\"}")
+    let data = json::parse("{\"name\": \"Alice\"}")
     println!("{:?}", data)
 }
 ```
@@ -56,7 +56,7 @@ fn main() {
 ```windjammer
 // No import needed for common stdlib modules
 fn main() {
-    let data = json.parse("{\"name\": \"Alice\"}")
+    let data = json::parse("{\"name\": \"Alice\"}")
 }
 ```
 
@@ -111,8 +111,8 @@ When a user imports a stdlib module, the compiler automatically:
 
 Example:
 ```windjammer
-use std.json  // Compiler adds serde_json to dependencies
-use std.http  // Compiler adds reqwest to dependencies
+use std::json  // Compiler adds serde_json to dependencies
+use std::http  // Compiler adds reqwest to dependencies
 ```
 
 ### Manual Override
