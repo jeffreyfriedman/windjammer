@@ -1,0 +1,12 @@
+blank_issues_enabled: true
+contact_links:
+  - name: 💬 Discussions
+    url: https://github.com/jeffreyfriedman/windjammer/discussions
+    about: Ask questions, share ideas, and discuss Windjammer with the community
+  - name: 📖 Documentation
+    url: https://github.com/jeffreyfriedman/windjammer/tree/main/docs
+    about: Read the official Windjammer documentation
+  - name: 🚀 Examples
+    url: https://github.com/jeffreyfriedman/windjammer/tree/main/examples
+    about: Browse example projects and code samples
+
