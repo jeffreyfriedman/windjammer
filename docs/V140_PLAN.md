@@ -21,7 +21,7 @@
 
 **v0.14.0 fixes this with proper abstractions:**
 - ✅ Users call `db.connect()` (Windjammer API)
-- ✅ Users call `http.get()` (Windjammer API)
+- ✅ Users call `http::get()` (Windjammer API)
 - ✅ Users call `time.utc_now()` (Windjammer API)
 - ✅ Can swap underlying crates without breaking user code
 - ✅ Windjammer controls API contracts and stability
@@ -50,12 +50,12 @@
 
 #### std/json ✅
 - [x] Abstract over `serde_json`
-- [x] Public API: `json.parse()`, `json.stringify()`, `json.pretty()`, `Value` type
+- [x] Public API: `json::parse()`, `json::stringify()`, `json::pretty()`, `Value` type
 - [x] Users never see `serde_json::` in their code
 
 #### std/http ✅
 - [x] Abstract over `reqwest`
-- [x] Public API: `http.get()`, `http.post()`, `Response`, `RequestBuilder`
+- [x] Public API: `http::get()`, `http::post()`, `Response`, `RequestBuilder`
 - [x] Users never see `reqwest::` in their code
 
 #### std/time ✅
@@ -229,8 +229,8 @@ All examples must use **only Windjammer APIs**, not underlying crates.
 
 #### Examples to Update:
 
-- [ ] `examples/41_json/main.wj` - Use `json.parse()`, not `serde_json::`
-- [ ] `examples/42_http_client/main.wj` - Use `http.get()`, not `reqwest::`
+- [ ] `examples/41_json/main.wj` - Use `json::parse()`, not `serde_json::`
+- [ ] `examples/42_http_client/main.wj` - Use `http::get()`, not `reqwest::`
 - [ ] `examples/43_time/main.wj` - Use `time.now()`, not `chrono::`
 - [ ] `examples/44_crypto/main.wj` - Use `crypto.sha256()`, not `sha2::`
 - [ ] `examples/45_database/main.wj` - Use `db.connect()`, not `sqlx::`
@@ -282,8 +282,8 @@ templates/cli/
 
 **main.wj**:
 ```windjammer
-use std.env
-use std.process
+use std::env
+use std::process
 
 fn main() {
     let args = env.args()
@@ -308,8 +308,8 @@ templates/web/
 
 **main.wj**:
 ```windjammer
-use std.http
-use std.json
+use std::http
+use std::json
 
 @derive(Serialize, Deserialize)
 struct User {
@@ -454,7 +454,7 @@ let now = chrono::Utc::now()
 **New (v0.14.0):**
 ```windjammer
 let conn = db.connect("...").await?
-let response = http.get("...").await?
+let response = http::get("...").await?
 let now = time.utc_now()
 ```
 

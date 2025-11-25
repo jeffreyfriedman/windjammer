@@ -3062,7 +3062,12 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
                 // Qualified paths use :: from parser (e.g., std::fs::read)
                 // Simple identifiers: variable_name -> variable_name
                 // Check if this is a struct field and we're in an impl block
-                let base_name = if self.in_impl_block && self.current_struct_fields.contains(name) {
+                // BUT: Don't apply implicit field access if this is a parameter name!
+                let is_parameter = self.current_function_params.iter().any(|p| p.name == *name);
+                let base_name = if self.in_impl_block
+                    && !is_parameter
+                    && self.current_struct_fields.contains(name)
+                {
                     format!("self.{}", name)
                 } else {
                     name.clone()

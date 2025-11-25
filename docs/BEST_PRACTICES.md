@@ -62,8 +62,8 @@ my_app/
 
 ```windjammer
 // handlers/users.wj
-use std.http
-use std.db
+use std::http
+use std::db
 
 use ../models.user
 use ../middleware.auth
@@ -157,8 +157,8 @@ for row in rows {
 
 ```windjammer
 fn load_config(path: string) -> Result<Config, Error> {
-    let contents = fs.read_to_string(path)?
-    let config = json.parse(contents)?
+    let contents = fs::read_to_string(path)?
+    let config = json::parse(contents)?
     Ok(config)
 }
 ```
@@ -167,7 +167,7 @@ fn load_config(path: string) -> Result<Config, Error> {
 
 ```windjammer
 fn load_config(path: string) -> Config {
-    fs.read_to_string(path).unwrap()  // Will crash!
+    fs::read_to_string(path).unwrap()  // Will crash!
 }
 ```
 
@@ -228,10 +228,10 @@ let user = user_repo.find_by_id(id).ok().flatten().unwrap()
 **✅ Good - No crate leakage:**
 
 ```windjammer
-use std.http     // Not: use axum::
-use std.json     // Not: use serde_json::
-use std.db       // Not: use sqlx::
-use std.log      // Not: use tracing::
+use std::http     // Not: use axum::
+use std::json     // Not: use serde_json::
+use std::db       // Not: use sqlx::
+use std::log      // Not: use tracing::
 ```
 
 **Why?**
@@ -246,29 +246,29 @@ use std.log      // Not: use tracing::
 
 ```windjammer
 // File operations (wjfind)
-use std.fs
-let contents = fs.read_to_string(path)?
-fs.write(output_path, data)?
+use std::fs
+let contents = fs::read_to_string(path)?
+fs::write(output_path, data)?
 
 // HTTP server (TaskFlow)
-use std.http
+use std::http
 http.serve("0.0.0.0:8080", |req| {
     // Handle request
 }).await
 
 // Database (TaskFlow, wschat)
-use std.db
+use std::db
 let pool = db.connect(db_url)?
 let rows = db.query_all(pool, query, params)?
 
 // Parallel processing (wjfind)
-use std.thread
+use std::thread
 let results = thread.parallel_map(files, |file| {
     search_file(file)
 })
 
 // Logging (all apps)
-use std.log
+use std::log
 log.info("Server started", { "port": 8080 })
 log.error("Request failed", { "error": e.to_string() })
 ```
@@ -329,7 +329,7 @@ fn process(text: string, uppercase: bool) -> string {
 **From wjfind - 80% less code than Rust+Rayon:**
 
 ```windjammer
-use std.thread
+use std::thread
 
 // Parallel file search
 let results = thread.parallel_flat_map(files, |file| {
@@ -399,8 +399,8 @@ mod tests {
 
 ```windjammer
 // tests/api_tests.wj
-use std.http
-use std.test
+use std::http
+use std::test
 
 @test
 async fn test_user_registration_flow() {
@@ -545,7 +545,7 @@ let query = format!("SELECT * FROM users WHERE email = '{}'", email)  // DANGERO
 **✅ Good - Use bcrypt:**
 
 ```windjammer
-use std.crypto
+use std::crypto
 
 // Hash on registration
 let hashed = crypto.hash_password(password)?
@@ -587,7 +587,7 @@ impl RateLimiter {
 **✅ Good - JWT with proper validation:**
 
 ```windjammer
-use std.crypto
+use std::crypto
 
 // Generate token
 let claims = Claims {
@@ -618,7 +618,7 @@ match jwt.decode(token, secret) {
 
 ```windjammer
 pub fn authenticate(req: Request, next: fn(Request) -> Response) -> Response {
-    let auth_header = http.get_header(req, "Authorization")
+    let auth_header = http::get_header(req, "Authorization")
     
     match auth_header {
         Some(token) if token.starts_with("Bearer ") => {
