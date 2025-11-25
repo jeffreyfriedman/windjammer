@@ -43,6 +43,17 @@ if grep -q "cargo install windjammer --version" README.md; then
     echo "✅ Updated installation command in README.md"
 fi
 
+# Update sub-crate versions in their Cargo.toml files
+for crate_toml in crates/*/Cargo.toml; do
+    if [ -f "$crate_toml" ]; then
+        # Check if crate has explicit version (not using workspace = true)
+        if grep -q '^version = "[0-9]' "$crate_toml"; then
+            sed -i '' "s/^version = \"[0-9][0-9]*\.[0-9][0-9]*\.[0-9][0-9]*\"/version = \"$VERSION\"/" "$crate_toml"
+            echo "✅ Updated $crate_toml"
+        fi
+    fi
+done
+
 # Update crate READMEs
 for crate_readme in crates/*/README.md; do
     if [ -f "$crate_readme" ]; then
