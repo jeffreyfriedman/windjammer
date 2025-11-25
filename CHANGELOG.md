@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.36.2] - 2024-11-25
+
+### Fixed
+- **Critical Bug**: Static factory methods no longer get implicit `&self` parameter
+  - Methods without `self` parameter (e.g., `Spacer::horizontal(width)`) now generate correctly
+  - Fixes false positive field access detection when parameter names match field names
+  - Parameters now correctly shadow fields in codegen analysis
+  - Affects all static factory methods in impl blocks
+
 ## [0.36.1] - 2024-11-24
 
 ### Fixed
