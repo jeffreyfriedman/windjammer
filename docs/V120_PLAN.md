@@ -29,11 +29,11 @@
 First-class JSON support for web APIs and configuration.
 
 ```windjammer
-use std.json
+use std::json
 
 fn main() {
     // Parse JSON
-    let data = json.parse("{\"name\": \"Alice\", \"age\": 30}")
+    let data = json::parse("{\"name\": \"Alice\", \"age\": 30}")
     match data {
         Ok(value) => println!("Parsed: {:?}", value),
         Err(err) => eprintln!("Error: {}", err)
@@ -41,10 +41,10 @@ fn main() {
     
     // Serialize to JSON
     let user = User { name: "Bob", age: 25 }
-    let json_str = json.stringify(user)
+    let json_str = json::stringify(user)
     
     // Pretty print
-    let pretty = json.pretty(user)
+    let pretty = json::pretty(user)
 }
 ```
 
@@ -68,12 +68,12 @@ fn main() {
 Simple HTTP requests for APIs and web scraping.
 
 ```windjammer
-use std.http
+use std::http
 
 @async
 fn main() {
     // GET request
-    match http.get("https://api.example.com/users").await {
+    match http::get("https://api.example.com/users").await {
         Ok(response) => {
             println!("Status: {}", response.status)
             println!("Body: {}", response.text)
@@ -83,13 +83,13 @@ fn main() {
     
     // POST with JSON
     let data = json!({ "name": "Alice" })
-    let response = http.post("https://api.example.com/users")
+    let response = http::post("https://api.example.com/users")
         .json(data)
         .send()
         .await?
     
     // Headers
-    let response = http.get("https://api.example.com/data")
+    let response = http::get("https://api.example.com/data")
         .header("Authorization", "Bearer token")
         .send()
         .await?
@@ -121,7 +121,7 @@ fn main() {
 Simple database queries with connection pooling.
 
 ```windjammer
-use std.db
+use std::db
 
 @async
 fn main() {
@@ -174,7 +174,7 @@ fn main() {
 Ergonomic time and date handling.
 
 ```windjammer
-use std.time
+use std::time
 
 fn main() {
     // Current time
@@ -221,7 +221,7 @@ fn main() {
 Common cryptographic operations.
 
 ```windjammer
-use std.crypto
+use std::crypto
 
 fn main() {
     // Hash
@@ -316,30 +316,30 @@ match value {
 
 ### JSON Tests
 ```windjammer
-use std.json
+use std::json
 
 @test
 fn test_parse_json() {
-    let result = json.parse("{\"name\": \"Alice\"}")
+    let result = json::parse("{\"name\": \"Alice\"}")
     assert!(result.is_ok())
 }
 
 @test
 fn test_stringify() {
     let user = User { name: "Bob" }
-    let json = json.stringify(user)
+    let json = json::stringify(user)
     assert!(json.contains("Bob"))
 }
 ```
 
 ### HTTP Tests (integration)
 ```windjammer
-use std.http
+use std::http
 
 @async
 @test
 fn test_http_get() {
-    let response = http.get("https://httpbin.org/get").await?
+    let response = http::get("https://httpbin.org/get").await?
     assert_eq!(response.status, 200)
 }
 ```
