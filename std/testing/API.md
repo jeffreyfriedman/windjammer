@@ -7,7 +7,7 @@ Integrated testing framework with assertions, benchmarking, and test organizatio
 ### Test Annotations
 
 ```windjammer
-use std.testing
+use std::testing
 
 // Mark function as a test
 @test
@@ -73,8 +73,8 @@ fn assert_len<T>(collection: Vec<T>, expected: int)
 ```windjammer
 // Test module
 mod tests {
-    use super.*
-    use std.testing
+    use super::*
+    use std::testing
     
     @test
     fn test_feature_a() {
@@ -102,7 +102,7 @@ fn teardown() {
 ### Benchmarking
 
 ```windjammer
-use std.testing
+use std::testing
 
 @bench
 fn bench_algorithm() {
@@ -121,7 +121,7 @@ fn bench_with_iterations() {
 ### Basic Tests
 
 ```windjammer
-use std.testing
+use std::testing
 
 @test
 fn test_string_concatenation() {
@@ -169,7 +169,7 @@ fn test_user_creation() {
 ```windjammer
 @test
 fn test_file_operations() {
-    let result = fs.read_to_string("test.txt")
+    let result = fs::read_to_string("test.txt")
     
     match result {
         Ok(content) => {
@@ -184,7 +184,7 @@ fn test_file_operations() {
 // Or more concisely
 @test
 fn test_file_read() {
-    let content = assert_ok(fs.read_to_string("test.txt"))
+    let content = assert_ok(fs::read_to_string("test.txt"))
     assert_contains(content, "expected")
 }
 ```

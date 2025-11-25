@@ -66,9 +66,9 @@ fn greet(name: string) -> string { ... }
 
 **Proposed Option 2 - Windjammer Namespaces**:
 ```windjammer
-use std.wasm     // Windjammer's WASM abstraction
-use std.web      // Web APIs (maps to web_sys)
-use std.js       // JavaScript interop (maps to js_sys)
+use std::wasm     // Windjammer's WASM abstraction
+use std::web      // Web APIs (maps to web_sys)
+use std::js       // JavaScript interop (maps to js_sys)
 ```
 
 **Rationale**:
@@ -291,7 +291,7 @@ impl Counter {
 
 **Or with explicit imports (if preferred)**:
 ```windjammer
-use std.wasm  // Brings in @export and WASM utilities
+use std::wasm  // Brings in @export and WASM utilities
 
 @export
 fn greet(name: string) -> string {
@@ -333,7 +333,7 @@ fn greet(name: string) -> string {
 ## Questions for Discussion
 
 1. Should we support `@wasm_bindgen` indefinitely for Rust interop power users?
-2. Should stdlib modules be opt-in (`use std.http`) or auto-imported?
+2. Should stdlib modules be opt-in (`use std::http`) or auto-imported?
 3. Do we need a way to "escape" to raw Rust attributes when needed?
 4. Should `@export` be the default for top-level functions in WASM projects?
 
