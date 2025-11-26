@@ -6,8 +6,9 @@
 //
 // Expected result: Cow should be faster when modification is conditional
 
-use criterion::{black_box, criterion_group, criterion_main, Criterion};
+use criterion::{criterion_group, criterion_main, Criterion};
 use std::borrow::Cow;
+use std::hint::black_box;
 
 // Scenario 1: Read-only path (no modification)
 fn process_string_readonly(s: String) -> String {

@@ -9,7 +9,8 @@
 //! - Hot builds: < 100ms
 //! - Incremental builds: 10-20x faster than cold builds
 
-use criterion::{black_box, criterion_group, criterion_main, Criterion};
+use criterion::{criterion_group, criterion_main, Criterion};
+use std::hint::black_box;
 use windjammer::compiler_database::*;
 
 const SAMPLE_CODE: &str = r#"
