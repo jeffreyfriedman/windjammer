@@ -44,6 +44,7 @@ pub fn execute(path: &Path, args: &[String], target_str: &str) -> Result<()> {
             None,  // filter_type
             false, // library
             false, // module_file
+            false, // run_cargo - run.rs handles execution itself
         )?;
 
         // Run with Node.js
