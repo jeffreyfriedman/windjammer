@@ -21,7 +21,8 @@
 //! - End-to-end compilation time
 //! - Memory usage
 
-use criterion::{black_box, criterion_group, criterion_main, BenchmarkId, Criterion, Throughput};
+use criterion::{criterion_group, criterion_main, BenchmarkId, Criterion, Throughput};
+use std::hint::black_box;
 use windjammer::analyzer::SignatureRegistry;
 use windjammer::codegen::CodeGenerator;
 use windjammer::lexer::Lexer;
