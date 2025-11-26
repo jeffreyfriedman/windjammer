@@ -332,7 +332,7 @@ impl Router {
     /// Add a GET route
     pub fn get<F>(self, path: &str, handler: F) -> Self
     where
-        F: Fn(Request) -> ServerResponse + Clone + Send + 'static,
+        F: Fn(Request) -> ServerResponse + Clone + Send + Sync + 'static,
     {
         let path = path.to_string();
         Self {
@@ -352,7 +352,7 @@ impl Router {
     /// Add a POST route
     pub fn post<F>(self, path: &str, handler: F) -> Self
     where
-        F: Fn(Request) -> ServerResponse + Clone + Send + 'static,
+        F: Fn(Request) -> ServerResponse + Clone + Send + Sync + 'static,
     {
         let path = path.to_string();
         Self {
@@ -372,7 +372,7 @@ impl Router {
     /// Add a PUT route
     pub fn put<F>(self, path: &str, handler: F) -> Self
     where
-        F: Fn(Request) -> ServerResponse + Clone + Send + 'static,
+        F: Fn(Request) -> ServerResponse + Clone + Send + Sync + 'static,
     {
         let path = path.to_string();
         Self {
@@ -392,7 +392,7 @@ impl Router {
     /// Add a DELETE route
     pub fn delete<F>(self, path: &str, handler: F) -> Self
     where
-        F: Fn(Request) -> ServerResponse + Clone + Send + 'static,
+        F: Fn(Request) -> ServerResponse + Clone + Send + Sync + 'static,
     {
         let path = path.to_string();
         Self {
@@ -412,7 +412,7 @@ impl Router {
     /// Add a PATCH route
     pub fn patch<F>(self, path: &str, handler: F) -> Self
     where
-        F: Fn(Request) -> ServerResponse + Clone + Send + 'static,
+        F: Fn(Request) -> ServerResponse + Clone + Send + Sync + 'static,
     {
         let path = path.to_string();
         Self {
