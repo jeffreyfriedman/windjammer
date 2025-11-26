@@ -31,6 +31,7 @@ pub fn execute(
     filter_type: Option<&str>,
     library: bool,
     module_file: bool,
+    run_cargo: bool,
 ) -> Result<()> {
     let output_dir = output.unwrap_or_else(|| Path::new("./build"));
 
@@ -81,7 +82,7 @@ pub fn execute(
         crate::strip_main_functions(output_dir)?;
     }
 
-    println!("\n{} Build complete!", "Success!".green().bold());
+    println!("\n{} Transpilation complete!", "Success!".green().bold());
 
     // Run cargo check if requested
     if check {
@@ -94,12 +95,59 @@ pub fn execute(
             filter_file,
             filter_type,
         )?;
+    }
+
+    // Run cargo build automatically for Rust target (unless disabled)
+    if (target_str == "rust") && run_cargo && !check {
+        println!("\n{} Running cargo build...", "⚙️".bold());
+
+        let cargo_status = std::process::Command::new("cargo")
+            .arg("build")
+            .current_dir(output_dir)
+            .status();
+
+        match cargo_status {
+            Ok(status) if status.success() => {
+                println!("{} Cargo build complete!", "✅".green().bold());
+                println!(
+                    "\n{} Your Windjammer project is ready!",
+                    "Success!".green().bold()
+                );
+                println!("Run your project with:");
+                println!("  cd {:?} && cargo run", output_dir);
+            }
+            Ok(status) => {
+                println!(
+                    "{} Cargo build failed with exit code: {:?}",
+                    "❌".red().bold(),
+                    status.code()
+                );
+                println!("\nYou can:");
+                println!("  • Fix the errors and run: cargo build");
+                println!("  • Or use: wj build --no-run-cargo to skip cargo build");
+                return Err(anyhow::anyhow!("Cargo build failed"));
+            }
+            Err(e) => {
+                println!("{} Failed to run cargo: {}", "❌".red().bold(), e);
+                println!("\nMake sure cargo is installed:");
+                println!("  curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh");
+                return Err(anyhow::anyhow!("Failed to execute cargo: {}", e));
+            }
+        }
     } else if target_str == "javascript" || target_str == "js" {
-        println!("Run your JavaScript project with:");
-        println!("  node {:?}/output.js", output_dir);
-    } else {
+        println!(
+            "\n{} Your JavaScript project is ready!",
+            "Success!".green().bold()
+        );
         println!("Run your project with:");
-        println!("  cd {:?} && cargo run", output_dir);
+        println!("  node {:?}/output.js", output_dir);
+    } else if !run_cargo && target_str == "rust" {
+        println!(
+            "\n{} Transpilation complete (cargo build skipped)!",
+            "Success!".green().bold()
+        );
+        println!("Run cargo build manually:");
+        println!("  cd {:?} && cargo build", output_dir);
     }
 
     Ok(())

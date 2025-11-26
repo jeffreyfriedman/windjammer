@@ -42,6 +42,7 @@ fn compile_and_check(source: &str, expected_patterns: &[&str]) -> String {
             "--output",
             output_dir.to_str().unwrap(),
             temp_file.to_str().unwrap(),
+            "--no-cargo", // Skip cargo build in tests
         ])
         .output()
         .expect("Failed to run compiler");
