@@ -15,7 +15,7 @@ wasm = ["wasm-bindgen", "web-sys", "js-sys", "console_error_panic_hook", "wasm-b
 
 [dependencies]
 # HTTP Client & Server (axum/tokio always included for std::http server)
-axum = { version = "0.7", features = ["macros"] }
+axum = { version = "0.8", features = ["macros"] }
 tokio = { version = "1", features = ["full"] }
 tower = { version = "0.4", optional = true }
 tower-http = { version = "0.5", features = ["fs", "trace"], optional = true }
@@ -42,7 +42,7 @@ url = "2.5"
 # Additional stdlib modules
 clap = { version = "4.5", features = ["derive"] }
 sha2 = "0.10"
-bcrypt = "0.15"
+bcrypt = "0.17"
 base64 = "0.21"
 hex = "0.4"
 urlencoding = "2.1"
@@ -93,4 +93,4 @@ console_error_panic_hook = { version = "0.1", optional = true }
 
 # Platform-specific dependencies
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
-reqwest = { version = "0.11", features = ["json", "blocking"] }
+reqwest = { version = "0.12", features = ["json", "blocking"] }
