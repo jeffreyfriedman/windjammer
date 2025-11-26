@@ -494,7 +494,7 @@ pub fn serve(addr: &str, router: Router) -> Result<(), String> {
 /// Start a simple HTTP server with a single handler function
 pub fn serve_fn<F>(addr: &str, handler: F) -> Result<(), String>
 where
-    F: Fn(&Request) -> ServerResponse + Clone + Send + 'static,
+    F: Fn(&Request) -> ServerResponse + Clone + Send + Sync + 'static,
 {
     let router = Router::new().get("/*path", move |req: Request| handler(&req));
     serve(addr, router)
