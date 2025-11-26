@@ -1,6 +1,6 @@
 [package]
 name = "windjammer-runtime"
-version = "0.37.1"
+version = "0.37.2"
 edition = "2021"
 authors = ["Windjammer Contributors"]
 description = "Runtime library for Windjammer standard library implementations"
