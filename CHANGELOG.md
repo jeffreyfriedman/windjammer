@@ -7,6 +7,32 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.37.0] - 2025-11-25
+
+### Added
+- **Major DX Improvement**: `wj build` now automatically runs `cargo build` after transpilation
+  - Developers use `wj build` as primary command (not `cargo build`)
+  - Pure Windjammer workflow - no need to know about Rust toolchain
+  - Transpiles `.wj` → `.rs` then automatically compiles with cargo
+  - Only for Rust target (JavaScript target unchanged)
+- **New `--no-cargo` flag**: Skip cargo build for transpile-only mode
+  - Useful for build.rs integration or custom workflows
+  - Restores previous behavior if needed
+
+### Changed
+- **Breaking (Workflow)**: `wj build` now does more by default
+  - Old: Transpile only, user runs `cargo build` manually
+  - New: Transpile + cargo build automatically
+  - Use `--no-cargo` to get old behavior
+- Better output messages showing transpilation and build progress
+- Clear success/failure messages with helpful next steps
+
+### Why This Matters
+- ✅ Windjammer-first workflow (not Rust-first)
+- ✅ Zero backend leakage
+- ✅ One command to build everything
+- ✅ Matches expectations from Go, TypeScript, etc.
+
 ## [0.36.2] - 2024-11-25
 
 ### Fixed

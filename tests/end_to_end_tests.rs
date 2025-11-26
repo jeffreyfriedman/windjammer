@@ -127,6 +127,7 @@ fn compile_to_target(source: &str, target: &str, temp_dir: &TempDir) -> Result<P
         .arg(&source_file)
         .arg("--output")
         .arg(&output_dir)
+        .arg("--no-cargo") // Skip cargo build in tests to avoid conflicts
         .output()
         .map_err(|e| format!("Failed to run wj: {}", e))?;
 
