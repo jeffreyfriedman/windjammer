@@ -7,6 +7,37 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.37.1] - 2025-11-26
+
+### Changed
+- **Dependencies**: Updated all dependencies to latest versions
+  - ratatui: 0.28 → 0.29
+  - crossterm: 0.28 → 0.29
+  - toml: 0.8 → 0.9
+  - criterion: 0.5 → 0.7
+  - axum: 0.7 → 0.8
+  - bcrypt: 0.15 → 0.17
+  - reqwest: 0.11 → 0.12
+  - notify-debouncer-full: 0.3 → 0.6
+  - cargo_metadata: 0.18 → 0.23
+  - sqlx: 0.7 → 0.8 (examples)
+- **GitHub Actions**: Updated all actions to latest versions (v5/v6)
+
+### Fixed
+- **Axum 0.8 Compatibility**: Added `Sync` bound to all HTTP handler functions
+  - Router methods: `get()`, `post()`, `put()`, `delete()`, `patch()`
+  - Helper function: `serve_fn()`
+  - Required by axum 0.8's stricter multi-threading requirements
+- **Criterion 0.7 Compatibility**: Replaced deprecated `criterion::black_box` with `std::hint::black_box`
+  - Fixed in all 7 benchmark files
+- **Pre-commit Hook**: Now checks benchmarks (`--benches` flag) to catch deprecation warnings
+- **Performance Workflow**: Fixed benchmark output parsing for GitHub Actions
+
+### Maintenance
+- Addresses all 16 open Dependabot PRs
+- Improved code quality and CI reliability
+- Enhanced pre-commit hooks for better coverage
+
 ## [0.37.0] - 2025-11-25
 
 ### Added
