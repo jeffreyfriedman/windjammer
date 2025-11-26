@@ -60,7 +60,7 @@ rand = "0.8"
 
 # LSP support
 tower-lsp = "0.20"
-lsp-types = "0.94"
+lsp-types = "0.97"
 url = "2.5"
 
 [dev-dependencies]
