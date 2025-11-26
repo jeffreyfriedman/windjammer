@@ -7,7 +7,8 @@
 //
 // Expected speedup: 10,000x for large collections (e.g., HashMap with 1M entries)
 
-use criterion::{black_box, criterion_group, criterion_main, Criterion};
+use criterion::{criterion_group, criterion_main, Criterion};
+use std::hint::black_box;
 use std::collections::HashMap;
 use std::thread;
 
