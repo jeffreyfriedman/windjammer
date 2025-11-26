@@ -1,24 +1,31 @@
 # Multi-stage build for Windjammer
-FROM rust:1.75 as builder
+FROM rust:1.75 AS builder
 
 WORKDIR /app
 
-# Copy dependency files first for better caching
+# Copy workspace and dependency files first for better caching
 COPY Cargo.toml Cargo.lock ./
+COPY crates/windjammer-lsp/Cargo.toml ./crates/windjammer-lsp/
+COPY crates/windjammer-mcp/Cargo.toml ./crates/windjammer-mcp/
+COPY crates/windjammer-runtime/Cargo.toml ./crates/windjammer-runtime/
 
-# Create a dummy main.rs to build dependencies
-RUN mkdir src && \
+# Create dummy source files to build dependencies
+RUN mkdir -p src crates/windjammer-lsp/src crates/windjammer-mcp/src crates/windjammer-runtime/src && \
     echo "fn main() {}" > src/main.rs && \
+    echo "pub fn dummy() {}" > crates/windjammer-lsp/src/lib.rs && \
+    echo "pub fn dummy() {}" > crates/windjammer-mcp/src/lib.rs && \
+    echo "pub fn dummy() {}" > crates/windjammer-runtime/src/lib.rs && \
     cargo build --release && \
-    rm -rf src
+    rm -rf src crates/*/src
 
 # Copy the actual source code
 COPY src ./src
+COPY crates ./crates
 COPY std ./std
 COPY examples ./examples
 
 # Build the actual binary
-RUN cargo build --release
+RUN cargo build --release --bin wj
 
 # Runtime stage - use slim Debian image
 FROM debian:bookworm-slim
@@ -32,7 +39,10 @@ RUN apt-get update && \
     rm -rf /var/lib/apt/lists/*
 
 # Copy the binary from builder
-COPY --from=builder /app/target/release/windjammer /usr/local/bin/windjammer
+COPY --from=builder /app/target/release/wj /usr/local/bin/wj
+
+# Create symlink for backwards compatibility
+RUN ln -s /usr/local/bin/wj /usr/local/bin/windjammer
 
 # Copy the standard library
 COPY --from=builder /app/std /usr/local/lib/windjammer/std
@@ -44,7 +54,7 @@ ENV WINDJAMMER_STDLIB=/usr/local/lib/windjammer/std
 WORKDIR /workspace
 
 # Default command
-ENTRYPOINT ["windjammer"]
+ENTRYPOINT ["wj"]
 CMD ["--help"]
 
 # Metadata
