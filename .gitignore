@@ -2,7 +2,8 @@
 /target/
 # Note: Cargo.lock IS committed for binary crates (like this compiler)
 # Only library-only crates should gitignore Cargo.lock
-!examples/*/Cargo.lock
+# Keep Cargo.lock files in examples (at any depth)
+!examples/**/Cargo.lock
 **/*.rs.bk
 *.pdb
 
