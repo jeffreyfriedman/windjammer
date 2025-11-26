@@ -105,7 +105,21 @@ jobs:
       
       - name: Strip binary (Unix)
         if: runner.os != 'Windows'
-        run: strip target/${{ matrix.target }}/release/${{ matrix.artifact_name }}
+        shell: bash
+        run: |
+          # Use target-specific strip for cross-compilation
+          if [ "${{ matrix.target }}" = "aarch64-unknown-linux-gnu" ]; then
+            aarch64-linux-gnu-strip target/${{ matrix.target }}/release/${{ matrix.artifact_name }}
+          elif [ "${{ matrix.target }}" = "aarch64-apple-darwin" ] && [ "$(uname)" = "Darwin" ]; then
+            # macOS strip works for both x86_64 and aarch64 on macOS
+            strip target/${{ matrix.target }}/release/${{ matrix.artifact_name }}
+          elif [ "${{ matrix.target }}" = "x86_64-apple-darwin" ] && [ "$(uname)" = "Darwin" ]; then
+            strip target/${{ matrix.target }}/release/${{ matrix.artifact_name }}
+          elif [ "${{ matrix.target }}" = "x86_64-unknown-linux-gnu" ]; then
+            strip target/${{ matrix.target }}/release/${{ matrix.artifact_name }}
+          else
+            echo "⚠️ Skipping strip for unsupported cross-compilation target: ${{ matrix.target }}"
+          fi
       
       - name: Create tarball (Unix)
         if: runner.os != 'Windows'
