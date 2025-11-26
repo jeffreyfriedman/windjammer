@@ -522,7 +522,7 @@ impl ModuleCompiler {
                 .split("::") // Take first segment
                 .next()
                 .unwrap()
-                .to_string();
+                .replace('_', "-"); // Convert underscores to hyphens for Cargo.toml
 
             // Add to external crates if not already present
             if !self.external_crates.contains(&crate_name) {
