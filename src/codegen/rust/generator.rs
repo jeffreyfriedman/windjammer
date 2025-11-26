@@ -3402,9 +3402,9 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
                 let obj_str = self.generate_expression_with_precedence(object);
 
                 // Special handling for methods that commonly need String arguments
-                // Only apply to push/push_str/set, not insert (which can have different types)
-                let needs_string_conversion =
-                    matches!(method.as_str(), "push" | "push_str" | "set");
+                // Note: push_str takes &str, NOT String, so we should NOT convert for it
+                // Only convert for push (Vec<String>::push) and set
+                let needs_string_conversion = matches!(method.as_str(), "push" | "set");
 
                 let args: Vec<String> = arguments
                     .iter()
@@ -3412,6 +3412,7 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
                         let mut arg_str = self.generate_expression(arg);
 
                         // Auto-convert string literals to String for methods that need it
+                        // This is for Vec<String>::push() which needs String, not &str
                         if needs_string_conversion
                             && matches!(
                                 arg,
