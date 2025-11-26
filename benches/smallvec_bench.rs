@@ -6,8 +6,9 @@
 //
 // Expected result: SmallVec should be faster for small collections (< 8 elements)
 
-use criterion::{black_box, criterion_group, criterion_main, Criterion};
+use criterion::{criterion_group, criterion_main, Criterion};
 use smallvec::{smallvec, SmallVec};
+use std::hint::black_box;
 
 fn bench_vec_creation(c: &mut Criterion) {
     // Small vec (3 elements)
