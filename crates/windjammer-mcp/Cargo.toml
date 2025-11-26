@@ -36,7 +36,7 @@ anyhow = "1.0"
 thiserror = "1.0"
 
 # Validation
-validator = { version = "0.16", features = ["derive"] }
+validator = { version = "0.20", features = ["derive"] }
 
 # Logging
 tracing = "0.1"
