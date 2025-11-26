@@ -1,6 +1,6 @@
 [package]
 name = "windjammer-lsp"
-version = "0.37.0"
+version = "0.37.1"
 edition.workspace = true
 authors.workspace = true
 description = "Language Server Protocol implementation for Windjammer"
@@ -16,7 +16,7 @@ path = "src/main.rs"
 
 [dependencies]
 # Windjammer compiler
-windjammer = { path = "../..", version = "0.37.0" }
+windjammer = { path = "../..", version = "0.37.1" }
 
 # LSP
 tower-lsp = "0.20"
