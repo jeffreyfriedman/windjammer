@@ -106,12 +106,16 @@ jobs:
       - name: Analyze results
         id: analyze
         run: |
-          # Extract RPS
-          RPS=$(grep "Requests/sec:" benchmarks/results/rust_health.txt | awk '{print $2}')
+          # Extract RPS (remove any non-numeric characters except decimal point)
+          RPS=$(grep "Requests/sec:" benchmarks/results/rust_health.txt | awk '{print $2}' | tr -cd '0-9.')
+          # Extract P99 latency (keep the unit)
           P99=$(grep "99%" benchmarks/results/rust_health.txt | awk '{print $2}')
           
-          echo "rps=$RPS" >> $GITHUB_OUTPUT
-          echo "p99=$P99" >> $GITHUB_OUTPUT
+          # Use multiline string format for GitHub Actions output
+          {
+            echo "rps=${RPS}"
+            echo "p99=${P99}"
+          } >> "$GITHUB_OUTPUT"
           
           echo "## Performance Results" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
