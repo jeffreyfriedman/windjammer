@@ -107,7 +107,7 @@ cargo test --test smoke_test
 ## Version Alignment
 
 `windjammer-runtime` versions are **synchronized with Windjammer**:
-- Windjammer v0.37.1 → windjammer-runtime v0.34.0
+- Windjammer v0.37.2 → windjammer-runtime v0.34.0
 - Breaking changes increment major version for both
 
 ## Contributing

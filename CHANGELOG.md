@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.37.2] - 2025-11-26
+
+### Fixed
+- **Codegen Bug**: Fixed string literals incorrectly getting `.to_string()` appended when passed to `push_str()`, which expects `&str`, not `String`
+  - Removed `push_str` from methods that auto-convert string literals
+  - Only `push` (Vec<String>) and `set` now perform conversion
+  - Fixes: `html.push_str("text".to_string())` → `html.push_str("text")`
+- **Analyzer Bug**: Fixed method self parameter inference defaulting to `self` instead of `&self` for read-only methods
+  - Read-only methods that don't modify fields now correctly infer `&self`
+  - Prevents ownership/move errors when calling multiple helper methods
+  - Builder patterns still correctly infer `mut self`
+  - Fixes: `fn helper(self)` → `fn helper(&self)`
+
 ## [0.37.1] - 2025-11-26
 
 ### Changed
