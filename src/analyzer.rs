@@ -480,16 +480,8 @@ impl Analyzer {
         // Start with regular analysis
         let mut analyzed = self.analyze_function(func)?;
 
-        eprintln!(
-            "DEBUG analyze_trait_impl: trait_name={}, func={}, trait_defs={:?}",
-            trait_name,
-            func.name,
-            self.trait_definitions.keys().collect::<Vec<_>>()
-        );
-
         // Look up the trait definition
         if let Some(trait_decl) = self.trait_definitions.get(trait_name) {
-            eprintln!("DEBUG: Found trait definition for {}", trait_name);
             // Find the matching trait method
             if let Some(trait_method) = trait_decl.methods.iter().find(|m| m.name == func.name) {
                 // Override self parameter to match trait signature
