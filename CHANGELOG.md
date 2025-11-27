@@ -7,11 +7,18 @@ All notable changes to Windjammer will be documented in this file.
 ### Fixed
 - **Build Script Cross-File Traits**: Build scripts now properly share trait registry across all files in a directory
 - **Trait Resolution**: Traits defined in one file can now be used for impl analysis in other files without workarounds
+- **Docker Build**: Fixed missing dummy bench files causing Docker build failures
 
 ### Changed
 - `build_project()` now uses a single shared `ModuleCompiler` instance for all files
 - Added `compile_file_with_compiler()` for shared compiler support
 - Each file registers its traits into the global registry before compilation
+- Dockerfile now creates dummy files for all benchmarks during dependency caching
+
+### Dependencies Updated
+- **lsp-types**: 0.94.1 → 0.97.0 (latest LSP protocol types)
+- **axum**: 0.7.9 → 0.8.7 (web framework security fixes and features)
+- **criterion**: 0.5.1 → 0.7.0 (benchmarking framework improvements)
 
 **Impact**: Eliminates the need for workarounds when using traits across files in build scripts
 
