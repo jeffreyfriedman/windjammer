@@ -2,6 +2,19 @@
 
 All notable changes to Windjammer will be documented in this file.
 
+## [0.38.1] - 2025-11-27
+
+### Fixed
+- **Build Script Cross-File Traits**: Build scripts now properly share trait registry across all files in a directory
+- **Trait Resolution**: Traits defined in one file can now be used for impl analysis in other files without workarounds
+
+### Changed
+- `build_project()` now uses a single shared `ModuleCompiler` instance for all files
+- Added `compile_file_with_compiler()` for shared compiler support
+- Each file registers its traits into the global registry before compilation
+
+**Impact**: Eliminates the need for workarounds when using traits across files in build scripts
+
 ## [0.38.0] - 2025-11-27
 
 ### Fixed
