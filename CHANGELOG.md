@@ -2,6 +2,17 @@
 
 All notable changes to Windjammer will be documented in this file.
 
+## [0.38.2] - 2025-11-27
+
+### Fixed
+- **Two-Pass Compilation**: Implemented proper two-pass compilation for cross-file trait resolution
+  - Pass 1: Parse all files to register trait definitions
+  - Pass 2: Compile all files with traits available
+  - No filename conventions required - works regardless of file order
+- **Docker Build**: Added missing `mcp_tools_benchmarks.rs` dummy file and benches directory for windjammer-mcp
+
+**Impact**: Cross-file trait resolution is now robust and doesn't rely on filename conventions
+
 ## [0.38.1] - 2025-11-27
 
 ### Fixed
