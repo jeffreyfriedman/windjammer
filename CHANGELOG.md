@@ -15,8 +15,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Uses `mut self` instead of `&mut self` for builder methods
   - Detects mutating method calls (push, insert, etc.) on fields
   - Improved `function_returns_self` to check actual return expression, not just return type
-  - Reduced `windjammer-ui` build errors from 157 to 34
   - Enables proper builder pattern support for UI components and other fluent APIs
+- **Parameter Ownership**: Fixed parameter ownership inference for struct literals
+  - Added `StructLiteral` case to `expression_uses_identifier()`
+  - Now correctly detects when parameters are stored in struct fields
+  - Fixes patterns like `self.items.push(Item { label, href })` to infer owned parameters
+  - Combined with builder pattern fix, reduced `windjammer-ui` build errors from 157 to 0
 
 ## [0.37.2] - 2025-11-26
 
