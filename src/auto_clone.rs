@@ -18,6 +18,9 @@ pub struct AutoCloneAnalysis {
     /// Key: (variable_name, statement_index)
     /// Value: reason for clone
     pub clone_sites: HashMap<(String, usize), CloneReason>,
+    /// Variables that are bound to string literals (don't need .clone())
+    /// These are Copy types (references) so .clone() is a no-op
+    pub string_literal_vars: std::collections::HashSet<String>,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -42,12 +45,16 @@ impl AutoCloneAnalysis {
     pub fn new() -> Self {
         AutoCloneAnalysis {
             clone_sites: HashMap::new(),
+            string_literal_vars: std::collections::HashSet::new(),
         }
     }
 
     /// Analyze a function to determine where clones should be inserted
     pub fn analyze_function(func: &FunctionDecl) -> Self {
         let mut analysis = AutoCloneAnalysis::new();
+
+        // Track variables bound to string literals (don't need .clone())
+        analysis.find_string_literal_vars(&func.body);
 
         // Track all variable usages
         let usage_map = Self::build_usage_map(&func.body);
@@ -376,7 +383,73 @@ impl AutoCloneAnalysis {
 
     /// Check if a variable needs to be cloned at a specific statement
     pub fn needs_clone(&self, var_name: &str, statement_idx: usize) -> Option<&CloneReason> {
+        // Don't clone string literal variables (they're just &str references)
+        if self.string_literal_vars.contains(var_name) {
+            return None;
+        }
         self.clone_sites.get(&(var_name.to_string(), statement_idx))
+    }
+
+    /// Find variables that are bound to string literals
+    /// These don't need .clone() because they're just &str references
+    fn find_string_literal_vars(&mut self, statements: &[Statement]) {
+        for stmt in statements {
+            match stmt {
+                Statement::Let {
+                    pattern: Pattern::Identifier(var_name),
+                    value,
+                    ..
+                } => {
+                    // Check if value is a string literal or a match/if that returns string literals
+                    if Self::expr_returns_string_literal(value) {
+                        self.string_literal_vars.insert(var_name.clone());
+                    }
+                }
+                Statement::Let { .. } => {
+                    // Non-identifier patterns (tuple, wildcard, etc.)
+                }
+                Statement::If {
+                    then_block,
+                    else_block,
+                    ..
+                } => {
+                    self.find_string_literal_vars(then_block);
+                    if let Some(else_b) = else_block {
+                        self.find_string_literal_vars(else_b);
+                    }
+                }
+                Statement::While { body, .. }
+                | Statement::For { body, .. }
+                | Statement::Loop { body, .. } => {
+                    self.find_string_literal_vars(body);
+                }
+                Statement::Match { .. } => {
+                    // Match arms are expressions, handled in expr_returns_string_literal
+                }
+                _ => {}
+            }
+        }
+    }
+
+    /// Check if an expression returns a string literal
+    /// This includes direct literals, match expressions with all string literal arms, etc.
+    fn expr_returns_string_literal(expr: &Expression) -> bool {
+        match expr {
+            Expression::Literal {
+                value: crate::parser::Literal::String(_),
+                ..
+            } => true,
+            Expression::Block { statements, .. } => {
+                // Check if the block ends with a match statement that returns string literals
+                if let Some(Statement::Match { arms, .. }) = statements.last() {
+                    arms.iter()
+                        .all(|arm| Self::expr_returns_string_literal(&arm.body))
+                } else {
+                    false
+                }
+            }
+            _ => false,
+        }
     }
 }
 
