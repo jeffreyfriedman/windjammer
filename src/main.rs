@@ -316,12 +316,28 @@ fn build_project(path: &Path, output: &Path, target: CompilationTarget) -> Resul
     println!("Target: {:?}", target);
 
     // Find all .wj files
-    let wj_files = find_wj_files(path)?;
+    let mut wj_files = find_wj_files(path)?;
 
     if wj_files.is_empty() {
         println!("{} No .wj files found", "Warning:".yellow().bold());
         return Ok(());
     }
+
+    // Sort files to ensure trait definitions are compiled first
+    // This enables cross-file trait resolution
+    wj_files.sort_by(|a, b| {
+        let a_name = a.file_name().and_then(|n| n.to_str()).unwrap_or("");
+        let b_name = b.file_name().and_then(|n| n.to_str()).unwrap_or("");
+
+        let a_is_trait = a_name.starts_with("trait");
+        let b_is_trait = b_name.starts_with("trait");
+
+        match (a_is_trait, b_is_trait) {
+            (true, false) => std::cmp::Ordering::Less, // traits first
+            (false, true) => std::cmp::Ordering::Greater, // traits first
+            _ => a_name.cmp(b_name),                   // otherwise alphabetical
+        }
+    });
 
     println!("Found {} file(s)", wj_files.len());
 
