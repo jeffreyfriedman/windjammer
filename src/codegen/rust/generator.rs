@@ -2654,12 +2654,17 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
 
                 // Check if any arm has a string literal pattern
                 // If so, add .as_str() to the match value for String types
+                // BUT: Don't add .as_str() if the match value is a tuple (tuple patterns handle their own string matching)
                 let has_string_literal = arms
                     .iter()
                     .any(|arm| self.pattern_has_string_literal(&arm.pattern));
 
+                let is_tuple_match = arms
+                    .iter()
+                    .any(|arm| matches!(arm.pattern, Pattern::Tuple(_)));
+
                 let value_str = self.generate_expression(value);
-                if has_string_literal {
+                if has_string_literal && !is_tuple_match {
                     // Add .as_str() if the value doesn't already end with it
                     if !value_str.ends_with(".as_str()") {
                         output.push_str(&format!("{}.as_str()", value_str));
@@ -3856,12 +3861,17 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
                         let mut output = String::from("match ");
 
                         // Check if any arm has a string literal pattern
+                        // BUT: Don't add .as_str() if the match value is a tuple
                         let has_string_literal = arms
                             .iter()
                             .any(|arm| self.pattern_has_string_literal(&arm.pattern));
 
+                        let is_tuple_match = arms
+                            .iter()
+                            .any(|arm| matches!(arm.pattern, Pattern::Tuple(_)));
+
                         let value_str = self.generate_expression(value);
-                        if has_string_literal {
+                        if has_string_literal && !is_tuple_match {
                             // Add .as_str() if the value doesn't already end with it
                             if !value_str.ends_with(".as_str()") {
                                 output.push_str(&format!("{}.as_str()", value_str));
