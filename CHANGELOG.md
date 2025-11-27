@@ -8,10 +8,15 @@ All notable changes to Windjammer will be documented in this file.
 - **Trait Signatures**: Trait method signatures no longer emit `mut` keyword (Rust doesn't allow it)
 - **Trait Impl Matching**: Trait implementation methods now correctly match trait method signatures for self parameters
 - **Builder Patterns**: Builder pattern methods with generic parameters correctly infer `mut self`
+- **Cross-File Traits**: Trait definitions are now tracked across module compilations
+- **Docker Build**: Fixed missing dummy bench files causing Docker build failures
+- **Trait Visibility**: Traits now correctly emit `pub` keyword in generated Rust code
 
 ### Added
 - Trait definition tracking in analyzer for impl block validation
 - `analyze_trait_impl_function()` method to respect trait method signatures
+- `register_traits_from_program()` method for cross-file trait resolution
+- Global trait registry in `ModuleCompiler` for cross-module trait tracking
 - Comprehensive regression tests for trait support (`tests/test_traits.rs`)
 - Documentation: `docs/TRAITS_AND_GENERICS.md` - Philosophy and design
 - Documentation: `docs/COMPILER_BUGS_TRAITS.md` - Technical details
@@ -19,8 +24,9 @@ All notable changes to Windjammer will be documented in this file.
 ### Changed
 - Analyzer now performs two-pass analysis: first collecting traits, then analyzing impls
 - Impl block analysis now checks if implementing a trait and uses trait signatures
+- Dockerfile now creates dummy files for all benchmarks during dependency caching
 
-**Impact**: Enables no-stuttering generic UI components in `windjammer-ui` v0.4.0
+**Impact**: Enables no-stuttering generic UI components in `windjammer-ui` v0.3.0
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
