@@ -230,6 +230,8 @@ pub struct Analyzer {
     variables: HashMap<String, OwnershipMode>,
     // Track enum definitions to determine if they're Copy
     copy_enums: HashSet<String>,
+    // Track trait definitions for impl block analysis
+    trait_definitions: HashMap<String, TraitDecl>,
 }
 
 use std::collections::HashSet;
@@ -245,6 +247,7 @@ impl Analyzer {
         Analyzer {
             variables: HashMap::new(),
             copy_enums: HashSet::new(),
+            trait_definitions: HashMap::new(),
         }
     }
 
@@ -256,13 +259,22 @@ impl Analyzer {
         let mut registry = SignatureRegistry::new();
 
         // First pass: Collect all enum definitions to determine Copy types
+        // and collect all trait definitions for impl block analysis
         for item in &program.items {
-            if let Item::Enum { decl, .. } = item {
-                // Fieldless enums (unit variants only) are Copy by default
-                let is_copy = decl.variants.iter().all(|v| v.data.is_none());
-                if is_copy {
-                    self.copy_enums.insert(decl.name.clone());
+            match item {
+                Item::Enum { decl, .. } => {
+                    // Fieldless enums (unit variants only) are Copy by default
+                    let is_copy = decl.variants.iter().all(|v| v.data.is_none());
+                    if is_copy {
+                        self.copy_enums.insert(decl.name.clone());
+                    }
                 }
+                Item::Trait { decl, .. } => {
+                    // Store trait definition for later lookup
+                    self.trait_definitions
+                        .insert(decl.name.clone(), decl.clone());
+                }
+                _ => {}
             }
         }
 
@@ -290,7 +302,14 @@ impl Analyzer {
                 } => {
                     // Analyze methods in impl blocks
                     for func in &impl_block.functions {
-                        let mut analyzed_func = self.analyze_function(func)?;
+                        // Check if this is a trait implementation
+                        let mut analyzed_func = if let Some(trait_name) = &impl_block.trait_name {
+                            // This is a trait impl - use trait method signatures
+                            self.analyze_trait_impl_function(func, trait_name)?
+                        } else {
+                            // Regular impl - infer as usual
+                            self.analyze_function(func)?
+                        };
 
                         // PHASE 7: Detect const/static optimizations
                         analyzed_func.const_static_optimizations =
@@ -437,6 +456,44 @@ impl Analyzer {
             smallvec_optimizations,
             cow_optimizations,
         })
+    }
+
+    /// Analyze a function that implements a trait method
+    /// Use the trait's method signature instead of inferring
+    fn analyze_trait_impl_function(
+        &mut self,
+        func: &FunctionDecl,
+        trait_name: &str,
+    ) -> Result<AnalyzedFunction, String> {
+        // Start with regular analysis
+        let mut analyzed = self.analyze_function(func)?;
+
+        // Look up the trait definition
+        if let Some(trait_decl) = self.trait_definitions.get(trait_name) {
+            // Find the matching trait method
+            if let Some(trait_method) = trait_decl.methods.iter().find(|m| m.name == func.name) {
+                // Override self parameter to match trait signature
+                if let Some(trait_self_param) = trait_method.parameters.first() {
+                    if trait_self_param.name == "self" {
+                        // Find self parameter in inferred ownership
+                        if let Some(inferred_mode) = analyzed.inferred_ownership.get_mut("self") {
+                            // Convert trait's OwnershipHint to OwnershipMode
+                            let trait_mode = match &trait_self_param.ownership {
+                                OwnershipHint::Owned => OwnershipMode::Owned,
+                                OwnershipHint::Ref => OwnershipMode::Borrowed,
+                                OwnershipHint::Mut => OwnershipMode::MutBorrowed,
+                                OwnershipHint::Inferred => OwnershipMode::Borrowed, // Default
+                            };
+
+                            // Use trait's ownership mode
+                            *inferred_mode = trait_mode;
+                        }
+                    }
+                }
+            }
+        }
+
+        Ok(analyzed)
     }
 
     fn infer_parameter_ownership(
