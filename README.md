@@ -304,6 +304,94 @@ Windjammer compiles through multiple stages:
 
 ---
 
+## Using Windjammer from Rust
+
+Windjammer libraries (like `windjammer-runtime`) are published to [crates.io](https://crates.io) and can be used directly in Rust projects!
+
+### Windjammer Runtime
+
+The Windjammer runtime provides essential functionality that Windjammer programs depend on:
+
+```toml
+[dependencies]
+windjammer-runtime = "0.37"
+```
+
+```rust
+use windjammer_runtime::http::Server;
+
+fn main() {
+    let server = Server::new("127.0.0.1:8080");
+    server.route("/", |_req| {
+        "Hello from Rust using Windjammer runtime!"
+    });
+    server.listen();
+}
+```
+
+### Windjammer Standard Library
+
+Windjammer's standard library modules compile to idiomatic Rust code:
+
+```windjammer
+// Windjammer code
+use std::http
+
+fn main() {
+    let server = http::Server::new("127.0.0.1:8080")
+    server.route("/", fn(req) {
+        "Hello World"
+    })
+    server.listen()
+}
+```
+
+Compiles to Rust that you can use in any Rust project:
+
+```bash
+wj build myapp.wj --target rust
+# Generates: build/myapp.rs
+```
+
+### Benefits for Rust Developers
+
+- ✅ **Faster prototyping**: Write Windjammer, compile to Rust
+- ✅ **Simpler syntax**: No explicit lifetimes or borrowing
+- ✅ **Same performance**: Compiles to idiomatic Rust code
+- ✅ **Gradual adoption**: Mix Windjammer and Rust in the same project
+- ✅ **No runtime overhead**: Pure compile-time transpilation
+
+### Example: Using Windjammer UI in Rust
+
+```toml
+[dependencies]
+windjammer-ui = "0.3"
+```
+
+```rust
+use windjammer_ui::components::{Button, Container, Text};
+use windjammer_ui::core::Style;
+
+fn main() {
+    let app = Container::new()
+        .child(Text::new("Hello from Rust!").render())
+        .child(
+            Button::new("Click me")
+                .on_click(|| println!("Clicked!"))
+                .render()
+        )
+        .style(Style::new().padding("16px"))
+        .render();
+    
+    // Render to desktop, web, or mobile
+    windjammer_ui::run(app);
+}
+```
+
+See [windjammer-ui documentation](https://docs.rs/windjammer-ui) for more details.
+
+---
+
 ## Examples
 
 See the [examples/](examples/) directory for more:
