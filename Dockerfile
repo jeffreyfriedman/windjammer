@@ -10,13 +10,14 @@ COPY crates/windjammer-mcp/Cargo.toml ./crates/windjammer-mcp/
 COPY crates/windjammer-runtime/Cargo.toml ./crates/windjammer-runtime/
 
 # Create dummy source files to build dependencies
-RUN mkdir -p src crates/windjammer-lsp/src crates/windjammer-mcp/src crates/windjammer-runtime/src && \
+RUN mkdir -p src crates/windjammer-lsp/src crates/windjammer-lsp/benches crates/windjammer-mcp/src crates/windjammer-runtime/src && \
     echo "fn main() {}" > src/main.rs && \
     echo "pub fn dummy() {}" > crates/windjammer-lsp/src/lib.rs && \
+    echo "fn main() {}" > crates/windjammer-lsp/benches/salsa_performance.rs && \
     echo "pub fn dummy() {}" > crates/windjammer-mcp/src/lib.rs && \
     echo "pub fn dummy() {}" > crates/windjammer-runtime/src/lib.rs && \
     cargo build --release && \
-    rm -rf src crates/*/src
+    rm -rf src crates/*/src crates/*/benches
 
 # Copy the actual source code
 COPY src ./src
