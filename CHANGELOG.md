@@ -2,6 +2,14 @@
 
 All notable changes to Windjammer will be documented in this file.
 
+## [0.38.3] - 2025-11-27
+
+### Fixed
+- **Trait Implementation Methods**: Removed `pub` visibility modifier from trait implementation methods (Rust doesn't allow visibility modifiers on trait impl methods)
+- **Debug Output**: Removed debug output from analyzer
+
+**Impact**: Generated code now compiles correctly for all trait implementations
+
 ## [0.38.2] - 2025-11-27
 
 ### Fixed

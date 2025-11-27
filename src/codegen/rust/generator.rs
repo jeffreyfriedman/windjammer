@@ -39,6 +39,7 @@ pub struct CodeGenerator {
     indent_level: usize,
     signature_registry: SignatureRegistry,
     in_wasm_bindgen_impl: bool,
+    in_trait_impl: bool, // true if currently generating code for a trait implementation
     needs_wasm_imports: bool,
     needs_web_imports: bool,
     needs_js_imports: bool,
@@ -87,6 +88,7 @@ impl CodeGenerator {
             indent_level: 0,
             signature_registry: registry,
             in_wasm_bindgen_impl: false,
+            in_trait_impl: false,
             needs_wasm_imports: false,
             needs_web_imports: false,
             needs_js_imports: false,
@@ -1773,9 +1775,11 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
             output.push('\n');
         }
 
-        // Store the wasm export flag for use in generate_function
+        // Store the wasm export flag and trait impl flag for use in generate_function
         let old_in_wasm_impl = self.in_wasm_bindgen_impl;
+        let old_in_trait_impl = self.in_trait_impl;
         self.in_wasm_bindgen_impl = has_wasm_export;
+        self.in_trait_impl = impl_block.trait_name.is_some();
 
         for func in &impl_block.functions {
             // Find the analyzed version of this function
@@ -1790,6 +1794,7 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
         }
 
         self.in_wasm_bindgen_impl = old_in_wasm_impl;
+        self.in_trait_impl = old_in_trait_impl;
 
         self.indent_level -= 1;
         output.push('}');
@@ -2251,8 +2256,11 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
         }
 
         // Add `pub` if function is marked pub OR we're in a #[wasm_bindgen] impl block OR compiling a module OR has @export decorator
+        // BUT NOT if we're in a trait implementation (trait methods cannot have visibility modifiers)
         let has_export = func.decorators.iter().any(|d| d.name == "export");
-        if func.is_pub || self.in_wasm_bindgen_impl || self.is_module || has_export {
+        if !self.in_trait_impl
+            && (func.is_pub || self.in_wasm_bindgen_impl || self.is_module || has_export)
+        {
             output.push_str("pub ");
         }
 
