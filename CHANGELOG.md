@@ -2,16 +2,41 @@
 
 All notable changes to Windjammer will be documented in this file.
 
+## [0.38.1] - 2025-11-27
+
+### Fixed
+- **Build Script Cross-File Traits**: Build scripts now properly share trait registry across all files in a directory
+- **Trait Resolution**: Traits defined in one file can now be used for impl analysis in other files without workarounds
+- **Docker Build**: Fixed missing dummy bench files causing Docker build failures
+
+### Changed
+- `build_project()` now uses a single shared `ModuleCompiler` instance for all files
+- Added `compile_file_with_compiler()` for shared compiler support
+- Each file registers its traits into the global registry before compilation
+- Dockerfile now creates dummy files for all benchmarks during dependency caching
+
+### Dependencies Updated
+- **lsp-types**: 0.94.1 → 0.97.0 (latest LSP protocol types)
+- **axum**: 0.7.9 → 0.8.7 (web framework security fixes and features)
+- **criterion**: 0.5.1 → 0.7.0 (benchmarking framework improvements)
+
+**Impact**: Eliminates the need for workarounds when using traits across files in build scripts
+
 ## [0.38.0] - 2025-11-27
 
 ### Fixed
 - **Trait Signatures**: Trait method signatures no longer emit `mut` keyword (Rust doesn't allow it)
 - **Trait Impl Matching**: Trait implementation methods now correctly match trait method signatures for self parameters
 - **Builder Patterns**: Builder pattern methods with generic parameters correctly infer `mut self`
+- **Cross-File Traits**: Trait definitions are now tracked across module compilations
+- **Docker Build**: Fixed missing dummy bench files causing Docker build failures
+- **Trait Visibility**: Traits now correctly emit `pub` keyword in generated Rust code
 
 ### Added
 - Trait definition tracking in analyzer for impl block validation
 - `analyze_trait_impl_function()` method to respect trait method signatures
+- `register_traits_from_program()` method for cross-file trait resolution
+- Global trait registry in `ModuleCompiler` for cross-module trait tracking
 - Comprehensive regression tests for trait support (`tests/test_traits.rs`)
 - Documentation: `docs/TRAITS_AND_GENERICS.md` - Philosophy and design
 - Documentation: `docs/COMPILER_BUGS_TRAITS.md` - Technical details
@@ -19,8 +44,9 @@ All notable changes to Windjammer will be documented in this file.
 ### Changed
 - Analyzer now performs two-pass analysis: first collecting traits, then analyzing impls
 - Impl block analysis now checks if implementing a trait and uses trait signatures
+- Dockerfile now creates dummy files for all benchmarks during dependency caching
 
-**Impact**: Enables no-stuttering generic UI components in `windjammer-ui` v0.4.0
+**Impact**: Enables no-stuttering generic UI components in `windjammer-ui` v0.3.0
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
