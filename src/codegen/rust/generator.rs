@@ -1589,7 +1589,11 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
     }
 
     fn generate_trait(&mut self, trait_decl: &crate::parser::TraitDecl) -> String {
-        let mut output = String::from("trait ");
+        let mut output = String::new();
+
+        // TODO: Add is_pub field to TraitDecl and check it properly
+        // For now, always emit pub for traits (the common case)
+        output.push_str("pub trait ");
         output.push_str(&trait_decl.name);
 
         // Generate generic parameters: trait From<T> { ... }
