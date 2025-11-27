@@ -333,11 +333,14 @@ fn build_project(path: &Path, output: &Path, target: CompilationTarget) -> Resul
     let mut all_external_crates = Vec::new();
     let mut is_component_project = false;
 
+    // Create a single ModuleCompiler for all files to share trait registry
+    let mut module_compiler = ModuleCompiler::new(target);
+
     for file in &wj_files {
         let file_name = file.file_name().unwrap().to_str().unwrap();
         print!("  Compiling {:?}... ", file_name);
 
-        match compile_file(file, output, target) {
+        match compile_file_with_compiler(file, output, &mut module_compiler) {
             Ok((stdlib_modules, external_crates)) => {
                 println!("{}", "✓".green());
                 // If both are empty, this might be a component (which handles its own Cargo.toml)
@@ -791,12 +794,23 @@ impl ModuleCompiler {
 }
 
 #[allow(dead_code)]
+/// Compile a single file (creates its own ModuleCompiler)
 fn compile_file(
     input_path: &Path,
     output_dir: &Path,
     target: CompilationTarget,
 ) -> Result<(HashSet<String>, Vec<String>)> {
     let mut module_compiler = ModuleCompiler::new(target);
+    compile_file_with_compiler(input_path, output_dir, &mut module_compiler)
+}
+
+/// Compile a file with a provided ModuleCompiler (for shared trait registry)
+fn compile_file_with_compiler(
+    input_path: &Path,
+    output_dir: &Path,
+    module_compiler: &mut ModuleCompiler,
+) -> Result<(HashSet<String>, Vec<String>)> {
+    let target = module_compiler.target;
 
     // Read source file
     let source = std::fs::read_to_string(input_path)?;
@@ -924,8 +938,28 @@ fn compile_file(
         }
     }
 
-    // Analyze
+    // Register traits from this program into the global registry
+    for item in &program.items {
+        if let parser::Item::Trait { decl, .. } = item {
+            module_compiler
+                .trait_registry
+                .insert(decl.name.clone(), decl.clone());
+        }
+    }
+
+    // Analyze with access to all registered traits
     let mut analyzer = analyzer::Analyzer::new();
+    // Load all registered traits into the analyzer
+    for trait_decl in module_compiler.trait_registry.values() {
+        let dummy_program = parser::Program {
+            items: vec![parser::Item::Trait {
+                decl: trait_decl.clone(),
+                location: parser::SourceLocation::default(),
+            }],
+        };
+        analyzer.register_traits_from_program(&dummy_program);
+    }
+
     let (analyzed, signatures) = analyzer
         .analyze_program(&program)
         .map_err(|e| anyhow::anyhow!("Analysis error: {}", e))?;
@@ -1051,8 +1085,8 @@ fn compile_file(
 
     // Return the set of imported stdlib modules and external crates for Cargo.toml generation
     Ok((
-        module_compiler.imported_stdlib_modules,
-        module_compiler.external_crates,
+        module_compiler.imported_stdlib_modules.clone(),
+        module_compiler.external_crates.clone(),
     ))
 }
 
