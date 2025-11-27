@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.37.3] - 2025-11-27
+
+### Fixed
+- **Builder Pattern**: Fixed builder pattern return type inference for implicit `self` parameters
+  - Detects builder pattern in codegen (methods that modify fields AND return self)
+  - Uses `mut self` instead of `&mut self` for builder methods
+  - Detects mutating method calls (push, insert, etc.) on fields
+  - Improved `function_returns_self` to check actual return expression, not just return type
+  - Reduced `windjammer-ui` build errors from 157 to 34
+  - Enables proper builder pattern support for UI components and other fluent APIs
+
 ## [0.37.2] - 2025-11-26
 
 ### Fixed
