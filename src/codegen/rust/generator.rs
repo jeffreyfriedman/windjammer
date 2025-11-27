@@ -1364,18 +1364,23 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
         if let Some(alias_name) = alias {
             format!("use {} as {};\n", rust_path, alias_name)
         } else {
-            // Check if the last segment looks like a type (starts with uppercase)
-            let last_segment = rust_path.split("::").last().unwrap_or("");
-            if last_segment
-                .chars()
-                .next()
-                .is_some_and(|c| c.is_uppercase())
-            {
-                // Likely a type, don't add ::*
+            // Check if already a glob import (ends with ::*)
+            if rust_path.ends_with("::*") {
                 format!("use {};\n", rust_path)
             } else {
-                // Likely a module, add ::*
-                format!("use {}::*;\n", rust_path)
+                // Check if the last segment looks like a type (starts with uppercase)
+                let last_segment = rust_path.split("::").last().unwrap_or("");
+                if last_segment
+                    .chars()
+                    .next()
+                    .is_some_and(|c| c.is_uppercase())
+                {
+                    // Likely a type, don't add ::*
+                    format!("use {};\n", rust_path)
+                } else {
+                    // Likely a module, add ::*
+                    format!("use {}::*;\n", rust_path)
+                }
             }
         }
     }
