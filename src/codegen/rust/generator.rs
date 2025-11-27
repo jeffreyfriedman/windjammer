@@ -3089,8 +3089,11 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
                         .needs_clone(name, self.current_statement_idx)
                         .is_some()
                     {
-                        // Automatically insert .clone() - this is the magic!
-                        return format!("{}.clone()", base_name);
+                        // Skip .clone() for string literal variables (they're &str, clone is a no-op)
+                        if !analysis.string_literal_vars.contains(name) {
+                            // Automatically insert .clone() - this is the magic!
+                            return format!("{}.clone()", base_name);
+                        }
                     }
                 }
 
