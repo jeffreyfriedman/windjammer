@@ -251,6 +251,18 @@ impl Analyzer {
         }
     }
 
+    /// Register trait definitions from an external program (e.g., imported module)
+    /// This allows the analyzer to use trait signatures when analyzing impl blocks
+    /// in files that import traits from other modules.
+    pub fn register_traits_from_program(&mut self, program: &Program) {
+        for item in &program.items {
+            if let Item::Trait { decl, .. } = item {
+                self.trait_definitions
+                    .insert(decl.name.clone(), decl.clone());
+            }
+        }
+    }
+
     pub fn analyze_program(
         &mut self,
         program: &Program,
