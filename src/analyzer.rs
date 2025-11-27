@@ -658,6 +658,12 @@ impl Analyzer {
             }
             Expression::FieldAccess { object, .. } => self.expression_uses_identifier(name, object),
             Expression::TryOp { expr: inner, .. } => self.expression_uses_identifier(name, inner),
+            Expression::StructLiteral { fields, .. } => {
+                // Check if parameter is used in any field of the struct literal
+                fields.iter().any(|(_field_name, field_expr)| {
+                    self.expression_uses_identifier(name, field_expr)
+                })
+            }
             _ => false,
         }
     }
@@ -1890,14 +1896,33 @@ impl Analyzer {
 
     /// Check if a function returns Self (for builder pattern detection)
     fn function_returns_self(&self, func: &FunctionDecl) -> bool {
-        use crate::parser::Type;
-        match &func.return_type {
-            Some(Type::Custom(_)) => {
-                // Returns a custom type (likely Self or the struct type)
-                // This indicates a builder pattern
-                true
+        use crate::parser::{Expression, Statement, Type};
+
+        // First check if return type is a custom type (struct type)
+        let returns_custom_type = matches!(&func.return_type, Some(Type::Custom(_)));
+
+        if !returns_custom_type {
+            return false;
+        }
+
+        // Now check if the function body actually returns `self`
+        // Check the last statement in the body
+        if let Some(last_stmt) = func.body.last() {
+            match last_stmt {
+                Statement::Return {
+                    value: Some(expr), ..
+                } => {
+                    // Explicit return self
+                    matches!(expr, Expression::Identifier { name, .. } if name == "self")
+                }
+                Statement::Expression { expr, .. } => {
+                    // Implicit return self (last expression)
+                    matches!(expr, Expression::Identifier { name, .. } if name == "self")
+                }
+                _ => false,
             }
-            _ => false,
+        } else {
+            false
         }
     }
 

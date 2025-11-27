@@ -1364,18 +1364,23 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
         if let Some(alias_name) = alias {
             format!("use {} as {};\n", rust_path, alias_name)
         } else {
-            // Check if the last segment looks like a type (starts with uppercase)
-            let last_segment = rust_path.split("::").last().unwrap_or("");
-            if last_segment
-                .chars()
-                .next()
-                .is_some_and(|c| c.is_uppercase())
-            {
-                // Likely a type, don't add ::*
+            // Check if already a glob import (ends with ::*)
+            if rust_path.ends_with("::*") {
                 format!("use {};\n", rust_path)
             } else {
-                // Likely a module, add ::*
-                format!("use {}::*;\n", rust_path)
+                // Check if the last segment looks like a type (starts with uppercase)
+                let last_segment = rust_path.split("::").last().unwrap_or("");
+                if last_segment
+                    .chars()
+                    .next()
+                    .is_some_and(|c| c.is_uppercase())
+                {
+                    // Likely a type, don't add ::*
+                    format!("use {};\n", rust_path)
+                } else {
+                    // Likely a module, add ::*
+                    format!("use {}::*;\n", rust_path)
+                }
             }
         }
     }
@@ -1821,6 +1826,38 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
         false
     }
 
+    fn function_returns_self_type(&self, func: &FunctionDecl) -> bool {
+        // Check if the function returns Self (for builder pattern detection)
+        use crate::parser::{Expression, Statement, Type};
+
+        // First check if return type is a custom type (struct type)
+        let returns_custom_type = matches!(&func.return_type, Some(Type::Custom(_)));
+
+        if !returns_custom_type {
+            return false;
+        }
+
+        // Now check if the function body actually returns `self`
+        // Check the last statement in the body
+        if let Some(last_stmt) = func.body.last() {
+            match last_stmt {
+                Statement::Return {
+                    value: Some(expr), ..
+                } => {
+                    // Explicit return self
+                    matches!(expr, Expression::Identifier { name, .. } if name == "self")
+                }
+                Statement::Expression { expr, .. } => {
+                    // Implicit return self (last expression)
+                    matches!(expr, Expression::Identifier { name, .. } if name == "self")
+                }
+                _ => false,
+            }
+        } else {
+            false
+        }
+    }
+
     fn function_modifies_self(&self, func: &FunctionDecl) -> bool {
         // Check if the function body modifies self (specifically for self parameters)
         for stmt in &func.body {
@@ -1961,6 +1998,10 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
                 // Check if we're assigning to a field: self.field = ...
                 self.expression_is_field_access(target)
             }
+            Statement::Expression { expr, .. } => {
+                // Check for mutating method calls on fields: self.field.push(...)
+                self.expression_mutates_fields(expr)
+            }
             Statement::If {
                 then_block,
                 else_block,
@@ -2072,6 +2113,35 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
             Expression::Block { statements, .. } => {
                 // Check if any statement in the block mutates fields
                 statements.iter().any(|s| self.statement_mutates_fields(s))
+            }
+            Expression::MethodCall { object, method, .. } => {
+                // Check if this is a mutating method call on a field: self.field.push(...)
+                if self.expression_is_field_access(object) {
+                    // Common mutating methods
+                    matches!(
+                        method.as_str(),
+                        "push"
+                            | "pop"
+                            | "insert"
+                            | "remove"
+                            | "clear"
+                            | "append"
+                            | "extend"
+                            | "push_str"
+                            | "truncate"
+                            | "drain"
+                            | "retain"
+                            | "sort"
+                            | "reverse"
+                            | "dedup"
+                            | "swap"
+                            | "fill"
+                            | "rotate_left"
+                            | "rotate_right"
+                    )
+                } else {
+                    false
+                }
             }
             _ => false,
         }
@@ -2228,7 +2298,15 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
         if self.in_impl_block && !has_explicit_self && !self.current_struct_fields.is_empty() {
             // Check if function body mutates any struct fields
             if self.function_mutates_fields(func) {
-                params.push("&mut self".to_string());
+                // Check if this is a builder pattern (modifies fields AND returns Self)
+                let returns_self = self.function_returns_self_type(func);
+                if returns_self {
+                    // Builder pattern: use `mut self` (consuming)
+                    params.push("mut self".to_string());
+                } else {
+                    // Regular mutating method: use `&mut self` (borrowing)
+                    params.push("&mut self".to_string());
+                }
             } else if self.function_accesses_fields(func) {
                 // Only read access needed
                 params.push("&self".to_string());
