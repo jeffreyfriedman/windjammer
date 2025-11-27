@@ -2,7 +2,8 @@
 //!
 //! Run with: cargo bench --package windjammer-mcp
 
-use criterion::{black_box, criterion_group, criterion_main, Criterion};
+use criterion::{criterion_group, criterion_main, Criterion};
+use std::hint::black_box;
 use std::sync::Arc;
 use tokio::sync::Mutex;
 use windjammer_lsp::database::WindjammerDatabase;
