@@ -1631,6 +1631,8 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
             output.push('(');
 
             // Generate parameters
+            // NOTE: Trait method signatures cannot have 'mut' keyword in Rust
+            // Only implementations can have 'mut self' or 'mut param'
             let params: Vec<String> = method
                 .parameters
                 .iter()
@@ -1639,15 +1641,11 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
                     let type_str = match &param.ownership {
                         OwnershipHint::Owned => {
                             if param.name == "self" {
-                                // Owned self is always mutable in Windjammer
-                                return "mut self".to_string();
+                                // Trait signatures: just 'self' (no 'mut')
+                                return "self".to_string();
                             }
-                            // Owned parameters are always mutable in Windjammer
-                            return format!(
-                                "mut {}: {}",
-                                param.name,
-                                self.type_to_rust(&param.type_)
-                            );
+                            // Trait signatures: no 'mut' for parameters
+                            return format!("{}: {}", param.name, self.type_to_rust(&param.type_));
                         }
                         OwnershipHint::Ref => {
                             if param.name == "self" {
