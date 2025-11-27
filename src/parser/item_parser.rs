@@ -524,13 +524,7 @@ impl Parser {
 
         // For now, return the path as a single-element vector
         // This preserves the relative path structure
-        path.push(path_str.clone());
-
-        // DEBUG: Print path
-        eprintln!(
-            "DEBUG parse_use: path_str = {:?}, path = {:?}",
-            path_str, path
-        );
+        path.push(path_str);
 
         // Check for optional "as alias" syntax
         let alias = if self.current_token() == &Token::As {
