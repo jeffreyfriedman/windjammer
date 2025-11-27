@@ -658,6 +658,12 @@ impl Analyzer {
             }
             Expression::FieldAccess { object, .. } => self.expression_uses_identifier(name, object),
             Expression::TryOp { expr: inner, .. } => self.expression_uses_identifier(name, inner),
+            Expression::StructLiteral { fields, .. } => {
+                // Check if parameter is used in any field of the struct literal
+                fields.iter().any(|(_field_name, field_expr)| {
+                    self.expression_uses_identifier(name, field_expr)
+                })
+            }
             _ => false,
         }
     }
