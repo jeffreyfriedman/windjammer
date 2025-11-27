@@ -2785,3 +2785,81 @@ pub fn strip_main_functions(output_dir: &Path) -> Result<()> {
 
     Ok(())
 }
+
+#[cfg(test)]
+mod tests {
+    use std::path::PathBuf;
+
+    #[test]
+    fn test_trait_files_sorted_first() {
+        // Create test file paths
+        let mut files = [
+            PathBuf::from("html_elements.wj"),
+            PathBuf::from("traits.wj"),
+            PathBuf::from("button.wj"),
+            PathBuf::from("trait_helpers.wj"),
+            PathBuf::from("accordion.wj"),
+        ];
+
+        // Sort using the same logic as build_project
+        files.sort_by(|a, b| {
+            let a_name = a.file_name().and_then(|n| n.to_str()).unwrap_or("");
+            let b_name = b.file_name().and_then(|n| n.to_str()).unwrap_or("");
+
+            let a_is_trait = a_name.starts_with("trait");
+            let b_is_trait = b_name.starts_with("trait");
+
+            match (a_is_trait, b_is_trait) {
+                (true, false) => std::cmp::Ordering::Less,
+                (false, true) => std::cmp::Ordering::Greater,
+                _ => a_name.cmp(b_name),
+            }
+        });
+
+        // Verify trait files come first
+        assert_eq!(
+            files[0].file_name().unwrap().to_str().unwrap(),
+            "trait_helpers.wj"
+        );
+        assert_eq!(files[1].file_name().unwrap().to_str().unwrap(), "traits.wj");
+
+        // Verify non-trait files are alphabetically sorted after traits
+        assert_eq!(
+            files[2].file_name().unwrap().to_str().unwrap(),
+            "accordion.wj"
+        );
+        assert_eq!(files[3].file_name().unwrap().to_str().unwrap(), "button.wj");
+        assert_eq!(
+            files[4].file_name().unwrap().to_str().unwrap(),
+            "html_elements.wj"
+        );
+    }
+
+    #[test]
+    fn test_trait_sorting_with_no_trait_files() {
+        let mut files = [
+            PathBuf::from("zebra.wj"),
+            PathBuf::from("apple.wj"),
+            PathBuf::from("button.wj"),
+        ];
+
+        files.sort_by(|a, b| {
+            let a_name = a.file_name().and_then(|n| n.to_str()).unwrap_or("");
+            let b_name = b.file_name().and_then(|n| n.to_str()).unwrap_or("");
+
+            let a_is_trait = a_name.starts_with("trait");
+            let b_is_trait = b_name.starts_with("trait");
+
+            match (a_is_trait, b_is_trait) {
+                (true, false) => std::cmp::Ordering::Less,
+                (false, true) => std::cmp::Ordering::Greater,
+                _ => a_name.cmp(b_name),
+            }
+        });
+
+        // Should be alphabetically sorted
+        assert_eq!(files[0].file_name().unwrap().to_str().unwrap(), "apple.wj");
+        assert_eq!(files[1].file_name().unwrap().to_str().unwrap(), "button.wj");
+        assert_eq!(files[2].file_name().unwrap().to_str().unwrap(), "zebra.wj");
+    }
+}
