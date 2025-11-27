@@ -1,6 +1,6 @@
 [package]
 name = "windjammer-lsp"
-version = "0.38.0"
+version = "0.38.1"
 edition.workspace = true
 authors.workspace = true
 description = "Language Server Protocol implementation for Windjammer"
@@ -16,7 +16,7 @@ path = "src/main.rs"
 
 [dependencies]
 # Windjammer compiler
-windjammer = { path = "../..", version = "0.38.0" }
+windjammer = { path = "../..", version = "0.38.1" }
 
 # LSP
 tower-lsp = "0.20"
@@ -73,7 +73,7 @@ predicates = "3.0"
 tempfile = "3.8"
 
 # Benchmarking
-criterion = { version = "0.5", features = ["html_reports"] }
+criterion = { version = "0.7", features = ["html_reports"] }
 
 [[bench]]
 name = "salsa_performance"
