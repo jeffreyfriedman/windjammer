@@ -461,6 +461,7 @@ struct ModuleCompiler {
     stdlib_path: PathBuf,
     imported_stdlib_modules: HashSet<String>, // Track which stdlib modules are used
     external_crates: Vec<String>,             // Track external crates (e.g., windjammer_ui)
+    trait_registry: HashMap<String, parser::TraitDecl>, // Global trait registry for cross-file trait resolution
 }
 
 #[allow(dead_code)]
@@ -477,6 +478,7 @@ impl ModuleCompiler {
             stdlib_path,
             imported_stdlib_modules: HashSet::new(),
             external_crates: Vec::new(),
+            trait_registry: HashMap::new(),
         }
     }
 
@@ -590,8 +592,26 @@ impl ModuleCompiler {
             }
         }
 
-        // Analyze
+        // Register traits from this program into the global registry
+        for item in &program.items {
+            if let parser::Item::Trait { decl, .. } = item {
+                self.trait_registry.insert(decl.name.clone(), decl.clone());
+            }
+        }
+
+        // Analyze with access to all registered traits
         let mut analyzer = analyzer::Analyzer::new();
+        // Load all registered traits into the analyzer
+        for trait_decl in self.trait_registry.values() {
+            let dummy_program = parser::Program {
+                items: vec![parser::Item::Trait {
+                    decl: trait_decl.clone(),
+                    location: parser::SourceLocation::default(),
+                }],
+            };
+            analyzer.register_traits_from_program(&dummy_program);
+        }
+
         let (analyzed, signatures) = analyzer
             .analyze_program(&program)
             .map_err(|e| anyhow::anyhow!("Analysis error: {}", e))?;
