@@ -2,6 +2,14 @@
 
 All notable changes to Windjammer will be documented in this file.
 
+## [0.38.2] - 2025-11-27
+
+### Fixed
+- **File Compilation Order**: Files starting with "trait" are now compiled first to ensure trait definitions are available for cross-file trait resolution
+- **Docker Build**: Added missing `mcp_tools_benchmarks.rs` dummy file and benches directory for windjammer-mcp
+
+**Impact**: Cross-file trait resolution now works correctly regardless of alphabetical file ordering
+
 ## [0.38.1] - 2025-11-27
 
 ### Fixed
