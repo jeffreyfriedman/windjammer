@@ -675,11 +675,19 @@ impl Analyzer {
                     value,
                     ..
                 } => {
-                    // Check for field assignments: self.field = param
-                    if matches!(&**object, Expression::Identifier { name: id, .. } if id == "self")
-                        && self.expression_uses_identifier(name, value)
-                    {
-                        return true;
+                    // CRITICAL FIX: Only consider it "stored" if the parameter is DIRECTLY assigned
+                    // to a field (self.field = param), not if it's just used in a calculation
+                    // (self.field = self.field * param).
+                    //
+                    // Direct assignment: self.field = param
+                    // Calculation: self.field = self.field * param (or any other expression)
+                    //
+                    // We check if the value is JUST the identifier, not part of a larger expression.
+                    if matches!(&**object, Expression::Identifier { name: id, .. } if id == "self") {
+                        // Only return true if the value is EXACTLY the parameter identifier
+                        if matches!(value, Expression::Identifier { name: id, .. } if id == name) {
+                            return true;
+                        }
                     }
                 }
                 Statement::Expression {
