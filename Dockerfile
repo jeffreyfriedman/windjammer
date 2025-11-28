@@ -1,5 +1,5 @@
 # Multi-stage build for Windjammer
-FROM rust:1.75 AS builder
+FROM rust:1.90 AS builder
 
 WORKDIR /app
 
@@ -10,9 +10,10 @@ COPY crates/windjammer-mcp/Cargo.toml ./crates/windjammer-mcp/
 COPY crates/windjammer-runtime/Cargo.toml ./crates/windjammer-runtime/
 
 # Create dummy source files to build dependencies
-RUN mkdir -p src benches crates/windjammer-lsp/src crates/windjammer-lsp/benches crates/windjammer-mcp/src crates/windjammer-mcp/benches crates/windjammer-runtime/src && \
+RUN mkdir -p src/bin benches crates/windjammer-lsp/src crates/windjammer-lsp/benches crates/windjammer-mcp/src crates/windjammer-mcp/benches crates/windjammer-runtime/src && \
     echo "fn main() {}" > src/main.rs && \
     echo "pub fn dummy() {}" > src/lib.rs && \
+    echo "fn main() {}" > src/bin/wj.rs && \
     echo "fn main() {}" > benches/compilation.rs && \
     echo "fn main() {}" > benches/runtime.rs && \
     echo "fn main() {}" > benches/defer_drop_bench.rs && \
@@ -32,6 +33,7 @@ RUN mkdir -p src benches crates/windjammer-lsp/src crates/windjammer-lsp/benches
 # Copy the actual source code
 COPY src ./src
 COPY crates ./crates
+COPY benches ./benches
 COPY std ./std
 COPY examples ./examples
 
