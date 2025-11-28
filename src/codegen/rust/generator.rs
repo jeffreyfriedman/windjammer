@@ -951,26 +951,24 @@ impl CodeGenerator {
         let uses_game_import = self.detect_game_import(program);
 
         if uses_game_decorators || uses_game_import {
+            // Use windjammer_game (the actual crate name)
             if let Some(ref info) = game_framework_info {
                 if info.is_3d {
-                    implicit_imports.push_str(
-                        "use windjammer_game_framework::renderer3d::{Renderer3D, Camera3D};\n",
-                    );
-                    implicit_imports.push_str("use windjammer_game_framework::renderer::Color;\n");
+                    implicit_imports
+                        .push_str("use windjammer_game::renderer3d::{Renderer3D, Camera3D};\n");
+                    implicit_imports.push_str("use windjammer_game::renderer::Color;\n");
                 } else {
                     implicit_imports
-                        .push_str("use windjammer_game_framework::renderer::{Renderer, Color};\n");
+                        .push_str("use windjammer_game::renderer::{Renderer, Color};\n");
                 }
             } else {
                 // Default to 2D renderer if no decorator info
-                implicit_imports
-                    .push_str("use windjammer_game_framework::renderer::{Renderer, Color};\n");
+                implicit_imports.push_str("use windjammer_game::renderer::{Renderer, Color};\n");
             }
-            implicit_imports
-                .push_str("use windjammer_game_framework::input::{Input, Key, MouseButton};\n");
-            implicit_imports.push_str("use windjammer_game_framework::math::{Vec3, Mat4};\n");
-            implicit_imports.push_str("use windjammer_game_framework::ecs::*;\n");
-            implicit_imports.push_str("use windjammer_game_framework::game_app::GameApp;\n");
+            implicit_imports.push_str("use windjammer_game::input::{Input, Key, MouseButton};\n");
+            implicit_imports.push_str("use windjammer_game::math::{Vec3, Mat4};\n");
+            implicit_imports.push_str("use windjammer_game::ecs::*;\n");
+            implicit_imports.push_str("use windjammer_game::game_app::GameApp;\n");
         }
 
         // Add UI framework imports if using std::ui
@@ -2217,7 +2215,15 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
 
     fn expression_is_field_access(&self, expr: &Expression) -> bool {
         match expr {
-            Expression::Identifier { name, .. } => self.current_struct_fields.contains(name),
+            Expression::Identifier { .. } => {
+                // CRITICAL FIX: Check if this is a field name, but NOT a local variable or parameter
+                // Local variables and parameters shadow fields
+                // We need to track local variables to avoid false positives
+                // For now, we can't distinguish between local variables and fields without full scope tracking
+                // So we require explicit `self.field` syntax for field mutations
+                // This is safer and more explicit
+                false
+            }
             Expression::FieldAccess { object, .. } => {
                 if let Expression::Identifier { name: obj_name, .. } = &**object {
                     obj_name == "self"
@@ -2420,20 +2426,34 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
         let has_explicit_self = func.parameters.iter().any(|p| p.name == "self");
 
         if self.in_impl_block && !has_explicit_self && !self.current_struct_fields.is_empty() {
-            // Check if function body mutates any struct fields
-            if self.function_mutates_fields(func) {
-                // Check if this is a builder pattern (modifies fields AND returns Self)
-                let returns_self = self.function_returns_self_type(func);
-                if returns_self {
-                    // Builder pattern: use `mut self` (consuming)
-                    params.push("mut self".to_string());
-                } else {
-                    // Regular mutating method: use `&mut self` (borrowing)
-                    params.push("&mut self".to_string());
+            // CRITICAL FIX: Don't add implicit self for constructors
+            // A constructor is a function that:
+            // 1. Doesn't have a self parameter (already checked via !has_explicit_self)
+            // 2. Returns the struct type (or any type, really - if no self param, it's likely a constructor)
+            //
+            // We can't reliably distinguish constructors from other functions by checking field access
+            // because constructors often reference field names in struct literals (e.g., `Foo { field: value }`)
+            //
+            // The safest heuristic: if a function has no self parameter and returns a value,
+            // it's probably a constructor or factory function, so don't add implicit self.
+            let is_constructor = func.return_type.is_some();
+
+            if !is_constructor {
+                // Check if function body mutates any struct fields
+                if self.function_mutates_fields(func) {
+                    // Check if this is a builder pattern (modifies fields AND returns Self)
+                    let returns_self = self.function_returns_self_type(func);
+                    if returns_self {
+                        // Builder pattern: use `mut self` (consuming)
+                        params.push("mut self".to_string());
+                    } else {
+                        // Regular mutating method: use `&mut self` (borrowing)
+                        params.push("&mut self".to_string());
+                    }
+                } else if self.function_accesses_fields(func) {
+                    // Only read access needed
+                    params.push("&self".to_string());
                 }
-            } else if self.function_accesses_fields(func) {
-                // Only read access needed
-                params.push("&self".to_string());
             }
         }
 
