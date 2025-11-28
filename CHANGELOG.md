@@ -2,6 +2,16 @@
 
 All notable changes to Windjammer will be documented in this file.
 
+## [0.38.4] - 2025-11-28
+
+### Fixed
+- **Duplicate `mut self` Parameter**: Fixed code generation bug where methods with explicit `mut self` parameters would generate `mut mut self: Self` in the output
+  - Added filter to skip explicit self parameters when already added implicitly
+  - Ensures self is only added once (either implicitly or explicitly)
+  - Discovered through dogfooding windjammer-ui in game editor
+
+**Impact**: Generated code now compiles correctly for builder pattern methods with owned self
+
 ## [0.38.3] - 2025-11-27
 
 ### Fixed
