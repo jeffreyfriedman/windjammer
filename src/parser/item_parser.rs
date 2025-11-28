@@ -646,9 +646,14 @@ impl Parser {
                     // Extract a name from the pattern for backward compatibility
                     let name = Self::pattern_to_name(&pattern);
 
-                    // Let the analyzer infer ownership based on usage
-                    // (References are already explicit in the type)
-                    let ownership = OwnershipHint::Inferred;
+                    // CRITICAL FIX: Determine ownership from the type annotation
+                    // If the type is explicitly &T or &mut T, use that.
+                    // Otherwise, treat it as owned (pass by value).
+                    let ownership = match &type_ {
+                        Type::Reference(_) => OwnershipHint::Ref,
+                        Type::MutableReference(_) => OwnershipHint::Mut,
+                        _ => OwnershipHint::Owned, // Explicit owned type
+                    };
 
                     params.push(Parameter {
                         name,
@@ -678,9 +683,15 @@ impl Parser {
                     self.expect(Token::Colon)?;
                     let type_ = self.parse_type()?;
 
-                    // Let the analyzer infer ownership based on usage
-                    // (References are already explicit in the type)
-                    let ownership = OwnershipHint::Inferred;
+                    // CRITICAL FIX: Determine ownership from the type annotation
+                    // If the type is explicitly &T or &mut T, use that.
+                    // Otherwise, treat it as owned (pass by value).
+                    // The code generator will then apply Copy type optimization if applicable.
+                    let ownership = match &type_ {
+                        Type::Reference(_) => OwnershipHint::Ref,
+                        Type::MutableReference(_) => OwnershipHint::Mut,
+                        _ => OwnershipHint::Owned, // Explicit owned type (e.g., f32, String, Vec<T>)
+                    };
 
                     params.push(Parameter {
                         name,
