@@ -3,18 +3,6 @@ use crate::analyzer::*;
 use crate::parser::*;
 use crate::CompilationTarget;
 
-/// Information about game framework decorators
-#[derive(Debug, Clone)]
-struct GameFrameworkInfo {
-    game_struct: String,
-    init_fn: Option<String>,
-    update_fn: Option<String>,
-    render_fn: Option<String>,
-    input_fn: Option<String>,
-    cleanup_fn: Option<String>,
-    is_3d: bool, // True if using @render3d
-}
-
 /// Information about UI framework usage
 #[derive(Debug, Clone)]
 struct UIFrameworkInfo {
@@ -337,59 +325,6 @@ impl CodeGenerator {
     // ============================================================================
 
     /// Detect if this program uses game framework decorators
-    fn detect_game_framework(&self, program: &Program) -> Option<GameFrameworkInfo> {
-        let mut game_struct = None;
-        let mut init_fn = None;
-        let mut update_fn = None;
-        let mut render_fn = None;
-        let mut input_fn = None;
-        let mut cleanup_fn = None;
-
-        // Find @game struct
-        for item in &program.items {
-            if let Item::Struct { decl: s, .. } = item {
-                if s.decorators.iter().any(|d| d.name == "game") {
-                    game_struct = Some(s.name.clone());
-                    break;
-                }
-            }
-        }
-
-        // If no @game struct, this isn't a game
-        game_struct.as_ref()?;
-
-        // Find decorated functions
-        let mut is_3d = false;
-        for item in &program.items {
-            if let Item::Function { decl: func, .. } = item {
-                for decorator in &func.decorators {
-                    match decorator.name.as_str() {
-                        "init" => init_fn = Some(func.name.clone()),
-                        "update" => update_fn = Some(func.name.clone()),
-                        "render" => render_fn = Some(func.name.clone()),
-                        "render3d" => {
-                            render_fn = Some(func.name.clone());
-                            is_3d = true; // Mark as 3D rendering
-                        }
-                        "input" => input_fn = Some(func.name.clone()),
-                        "cleanup" => cleanup_fn = Some(func.name.clone()),
-                        _ => {}
-                    }
-                }
-            }
-        }
-
-        Some(GameFrameworkInfo {
-            game_struct: game_struct.unwrap(),
-            init_fn,
-            update_fn,
-            render_fn,
-            input_fn,
-            cleanup_fn,
-            is_3d,
-        })
-    }
-
     // ============================================================================
     // UI FRAMEWORK SUPPORT
     // ============================================================================
@@ -453,6 +388,15 @@ impl CodeGenerator {
         apis
     }
 
+    // ============================================================================
+    // DEPRECATED: @game DECORATOR SUPPORT
+    // ============================================================================
+    // TODO: Remove this entire section in v0.40+
+    // The @game decorator violates separation of concerns (compiler shouldn't
+    // know about game libraries). Use explicit GameApp API instead.
+    // See: docs/DECORATOR_SYSTEM_DESIGN.md for future decorator system design.
+    // ============================================================================
+
     /// Detect if this program imports std::game (for non-decorator game usage)
     fn detect_game_import(&self, program: &Program) -> bool {
         // Check for use std::game::* or use std::game
@@ -474,13 +418,13 @@ impl CodeGenerator {
         // Generate GameWorld wrapper struct
         output.push_str("// Generated: ECS world wrapper\n");
         output.push_str("struct GameWorld {\n");
-        output.push_str("    world: windjammer_game_framework::ecs::World,\n");
-        output.push_str("    game_entity: windjammer_game_framework::ecs::Entity,\n");
+        output.push_str("    world: windjammer_game::ecs::World,\n");
+        output.push_str("    game_entity: windjammer_game::ecs::Entity,\n");
         output.push_str("}\n\n");
 
         output.push_str("impl GameWorld {\n");
         output.push_str("    fn new() -> Self {\n");
-        output.push_str("        use windjammer_game_framework::ecs::*;\n");
+        output.push_str("        use windjammer_game::ecs::*;\n");
         output.push_str("        let mut world = World::new();\n");
         output.push_str("        \n");
         output.push_str("        // Spawn game entity with game component\n");
@@ -506,8 +450,8 @@ impl CodeGenerator {
         output.push_str("}\n\n");
 
         output.push_str("fn main() -> Result<(), Box<dyn std::error::Error>> {\n");
-        output.push_str("    use windjammer_game_framework::*;\n");
-        output.push_str("    use windjammer_game_framework::ecs::*;\n");
+        output.push_str("    use windjammer_game::*;\n");
+        output.push_str("    use windjammer_game::ecs::*;\n");
         output.push_str("    use winit::event::{Event, WindowEvent};\n");
         output.push_str("    use winit::event_loop::{ControlFlow, EventLoop};\n");
         output.push_str("    use winit::window::WindowBuilder;\n");
