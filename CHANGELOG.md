@@ -2,6 +2,17 @@
 
 All notable changes to Windjammer will be documented in this file.
 
+## [0.38.5] - 2025-11-28
+
+### Added
+- **Automatic Trait Derivation**: Enums now automatically derive `Clone`, `Debug`, and `PartialEq` when safe
+  - Compiler analyzes enum definitions and auto-generates derives
+  - Zero syntax required - just works!
+  - Follows Windjammer philosophy: hide complexity in compiler, not syntax
+  - Eliminates need for manual `#[derive]` attributes
+
+**Impact**: Makes Windjammer more sustainable and scalable by removing manual boilerplate from generated code
+
 ## [0.38.4] - 2025-11-28
 
 ### Fixed
