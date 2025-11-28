@@ -1,6 +1,6 @@
 [package]
 name = "windjammer-mcp"
-version = "0.38.8"
+version = "0.38.6"
 edition = "2021"
 authors = ["Jeffrey Friedman <jeff@example.com>"]
 description = "Model Context Protocol (MCP) server for Windjammer - AI-powered development"
@@ -19,7 +19,7 @@ path = "src/main.rs"
 
 [dependencies]
 # Core Windjammer dependencies
-windjammer = { path = "../..", version = "0.38.8" }
+windjammer = { path = "../..", version = "0.38.6" }
 windjammer-lsp = { path = "../windjammer-lsp", version = "0.38.3" }
 
 # JSON-RPC and MCP protocol

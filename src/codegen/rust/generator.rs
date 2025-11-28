@@ -2510,8 +2510,24 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
                                 return "self".to_string();
                             }
                         }
-                        // Owned parameters are always mutable in Windjammer
-                        return format!("mut {}: {}", param.name, self.type_to_rust(&param.type_));
+                        
+                        // CRITICAL FIX: Only add 'mut' if the parameter is actually mutated
+                        // For Copy types that are only read, we don't need 'mut'
+                        let rust_type = self.type_to_rust(&param.type_);
+                        
+                        // Check if the analyzer inferred that this parameter is mutated
+                        if let Some(ownership_mode) = analyzed.inferred_ownership.get(&param.name) {
+                            if ownership_mode == &OwnershipMode::MutBorrowed {
+                                // Parameter is mutated, needs 'mut'
+                                rust_type // Will be formatted as "mut name: type" below
+                            } else {
+                                // Parameter is not mutated, no 'mut' needed
+                                rust_type
+                            }
+                        } else {
+                            // No inference available, assume not mutated
+                            rust_type
+                        }
                     }
                     OwnershipHint::Ref => {
                         if param.name == "self" {
