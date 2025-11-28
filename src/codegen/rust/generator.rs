@@ -2326,6 +2326,14 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
         let additional_params: Vec<String> = func
             .parameters
             .iter()
+            .filter(|param| {
+                // Skip self parameter if we already added it implicitly (when has_explicit_self is false)
+                // In other words, only process explicit self if has_explicit_self is true
+                if param.name == "self" {
+                    return has_explicit_self;
+                }
+                true
+            })
             .map(|param| {
                 // PHASE 9 OPTIMIZATION: Check if this parameter should use Cow<'_, T>
                 if self.cow_optimizations.contains(&param.name) {
