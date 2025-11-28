@@ -16,7 +16,7 @@ members = [
 ]
 
 [workspace.package]
-version = "0.38.7"
+version = "0.38.8"
 edition = "2021"
 authors = ["Jeffrey Friedman <20387583+jeffreyfriedman@users.noreply.github.com>", "Windjammer Contributors"]
 license = "MIT OR Apache-2.0"
