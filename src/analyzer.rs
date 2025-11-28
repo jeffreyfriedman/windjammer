@@ -375,9 +375,12 @@ impl Analyzer {
                         let modifies_fields = self.function_modifies_self_fields(func);
                         let returns_self = self.function_returns_self(func);
 
-                        if modifies_fields && returns_self {
-                            // Builder pattern: consumes self, modifies, returns self
-                            // Use `mut self` (Owned), not `&mut self` (MutBorrowed)
+                        // CRITICAL FIX: Check returns_self FIRST!
+                        // If a function returns Self, it's a builder pattern and should always consume self (Owned)
+                        // This is true even if it doesn't directly modify fields (it creates a new struct instead)
+                        if returns_self {
+                            // Builder pattern: consumes self, returns Self (either `self` or a new struct literal)
+                            // Use `mut self` (Owned), not `&self` (Borrowed)
                             OwnershipMode::Owned
                         } else if modifies_fields {
                             // Mutating method that doesn't return self: use `&mut self`
@@ -409,9 +412,12 @@ impl Analyzer {
                         let modifies_fields = self.function_modifies_self_fields(func);
                         let returns_self = self.function_returns_self(func);
 
-                        if modifies_fields && returns_self {
-                            // Builder pattern: consumes self, modifies, returns self
-                            // Use `mut self` (Owned), not `&mut self` (MutBorrowed)
+                        // CRITICAL FIX: Check returns_self FIRST!
+                        // If a function returns Self, it's a builder pattern and should always consume self (Owned)
+                        // This is true even if it doesn't directly modify fields (it creates a new struct instead)
+                        if returns_self {
+                            // Builder pattern: consumes self, returns Self (either `self` or a new struct literal)
+                            // Use `mut self` (Owned), not `&self` (Borrowed)
                             OwnershipMode::Owned
                         } else if modifies_fields {
                             // Mutating method that doesn't return self: use `&mut self`
@@ -636,7 +642,7 @@ impl Analyzer {
                     value: Expression::StructLiteral { fields, .. },
                     ..
                 } => {
-                    for (_, field_expr) in fields {
+                    for (_field_name, field_expr) in fields {
                         if self.expression_uses_identifier(name, field_expr) {
                             return true;
                         }
@@ -693,6 +699,18 @@ impl Analyzer {
                             // Check if any argument uses the parameter
                             for (_label, arg) in arguments {
                                 if self.expression_uses_identifier(name, arg) {
+                                    return true;
+                                }
+                            }
+                        }
+                    }
+
+                    // Also check for method calls on local variables: props.push(Property { name, ... })
+                    // The parameter might be used in a struct literal passed as an argument
+                    for (_label, arg) in arguments {
+                        if let Expression::StructLiteral { fields, .. } = arg {
+                            for (_field_name, field_expr) in fields {
+                                if self.expression_uses_identifier(name, field_expr) {
                                     return true;
                                 }
                             }
@@ -1965,33 +1983,41 @@ impl Analyzer {
 
     /// Check if a function returns Self (for builder pattern detection)
     fn function_returns_self(&self, func: &FunctionDecl) -> bool {
-        use crate::parser::{Expression, Statement, Type};
+        use crate::parser::{Statement, Type};
 
         // First check if return type is a custom type (struct type)
-        let returns_custom_type = matches!(&func.return_type, Some(Type::Custom(_)));
+        let return_type_name = match &func.return_type {
+            Some(Type::Custom(name)) => name,
+            _ => return false,
+        };
 
-        if !returns_custom_type {
-            return false;
-        }
-
-        // Now check if the function body actually returns `self`
+        // Now check if the function body actually returns `self` or a struct literal of the same type
         // Check the last statement in the body
         if let Some(last_stmt) = func.body.last() {
             match last_stmt {
                 Statement::Return {
                     value: Some(expr), ..
                 } => {
-                    // Explicit return self
-                    matches!(expr, Expression::Identifier { name, .. } if name == "self")
+                    // Explicit return self or struct literal
+                    self.expression_returns_self_type(expr, return_type_name)
                 }
                 Statement::Expression { expr, .. } => {
-                    // Implicit return self (last expression)
-                    matches!(expr, Expression::Identifier { name, .. } if name == "self")
+                    // Implicit return self or struct literal (last expression)
+                    self.expression_returns_self_type(expr, return_type_name)
                 }
                 _ => false,
             }
         } else {
             false
+        }
+    }
+
+    /// Check if an expression returns the Self type (either `self` or a struct literal of the same type)
+    fn expression_returns_self_type(&self, expr: &Expression, type_name: &str) -> bool {
+        match expr {
+            Expression::Identifier { name, .. } if name == "self" => true,
+            Expression::StructLiteral { name, .. } if name == type_name => true,
+            _ => false,
         }
     }
 
