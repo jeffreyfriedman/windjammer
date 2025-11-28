@@ -2,6 +2,14 @@
 
 All notable changes to Windjammer will be documented in this file.
 
+## [0.38.8] - 2025-11-28
+
+### Fixed
+- **Constructor Ownership Inference**: Fixed critical bug where functions without `self` parameter were incorrectly getting implicit `&self` added, breaking constructors like `new()`.
+- **Field Access Detection**: Fixed false positives where bare identifiers (local variables) were confused with struct field access. Now requires explicit `self.field` syntax for field mutations.
+
+**Impact**: Enables proper static constructors and factory functions in impl blocks. Critical for game engine API where constructors are common.
+
 ## [0.38.7] - 2025-11-28
 
 ### Added
