@@ -2,32 +2,27 @@
 
 All notable changes to Windjammer will be documented in this file.
 
-## [0.38.8] - 2025-11-28
-
-### Fixed
-- **Constructor Ownership Inference**: Fixed critical bug where functions without `self` parameter were incorrectly getting implicit `&self` added, breaking constructors like `new()`.
-- **Field Access Detection**: Fixed false positives where bare identifiers (local variables) were confused with struct field access. Now requires explicit `self.field` syntax for field mutations.
-
-**Impact**: Enables proper static constructors and factory functions in impl blocks. Critical for game engine API where constructors are common.
-
-## [0.38.7] - 2025-11-28
-
-### Added
-- **Automatic Trait Derivation for Structs**: Compiler now automatically derives `Clone`, `Debug`, and `PartialEq` for simple structs (structs with only simple-typed fields).
-  - Extends the auto-derive feature from enums to structs
-  - Recognizes `String` (Rust type) as a simple type
-  - Skips auto-derive for structs with generic parameters or conflicting decorators
-  - Zero syntax required - just works!
-  
-**Impact**: Eliminates manual `#[derive]` boilerplate for structs, completing the auto-derive feature. Aligns with Windjammer philosophy: hide complexity in the compiler.
-
 ## [0.38.6] - 2025-11-28
 
 ### Fixed
+- **Parameter Mutability Over-Inference** (CRITICAL): Fixed bug where explicit type annotations like `delta: f32` were incorrectly generated as `delta: &mut f32`.
+  - **Parser Fix**: Now correctly sets `OwnershipHint::Owned` for parameters with explicit non-reference types
+  - **Code Generator Fix**: Only adds `mut` to owned parameters if they're actually mutated (checked via analyzer)
+  - **Analyzer Fix**: Refined `is_stored()` to distinguish between direct assignment (`self.field = param`) and usage in calculations (`self.field = self.field * param`)
+  - **Impact**: Enables correct code generation for game loops and numeric parameters. Critical blocker for game engine development.
+
 - **Builder Pattern Ownership Inference**: Fixed critical bug where builder pattern methods were incorrectly inferred as `&self` instead of `self` (consuming).
   - Now correctly detects when a method returns `Self` (either the `self` identifier or a struct literal of the same type)
   - Builder pattern methods that return `Self` are now always inferred as consuming `self` (Owned), not borrowing
   - Fixed parameter ownership inference to detect parameters used in struct literals passed as method arguments (e.g., `vec.push(Struct { field: param })`)
+
+- **Constructor Ownership Inference**: Fixed critical bug where functions without `self` parameter were incorrectly getting implicit `&self` added, breaking constructors like `new()`.
+  - Field access detection refined to avoid false positives with local variables
+
+- **Automatic Trait Derivation for Structs**: Compiler now automatically derives `Clone`, `Debug`, and `PartialEq` for simple structs (structs with only simple-typed fields).
+  - Extends the auto-derive feature from enums to structs
+  - Recognizes `String` (Rust type) as a simple type
+  - Zero syntax required - just works!
   
 **Impact**: Builder patterns now work correctly without manual ownership annotations. This was blocking 60% of dogfooding panels from compiling.
 
