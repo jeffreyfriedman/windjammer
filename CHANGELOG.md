@@ -2,6 +2,27 @@
 
 All notable changes to Windjammer will be documented in this file.
 
+## [0.38.5] - 2025-11-28
+
+### Added
+- **Automatic Trait Derivation**: Enums now automatically derive `Clone`, `Debug`, and `PartialEq` when safe
+  - Compiler analyzes enum definitions and auto-generates derives
+  - Zero syntax required - just works!
+  - Follows Windjammer philosophy: hide complexity in compiler, not syntax
+  - Eliminates need for manual `#[derive]` attributes
+
+**Impact**: Makes Windjammer more sustainable and scalable by removing manual boilerplate from generated code
+
+## [0.38.4] - 2025-11-28
+
+### Fixed
+- **Duplicate `mut self` Parameter**: Fixed code generation bug where methods with explicit `mut self` parameters would generate `mut mut self: Self` in the output
+  - Added filter to skip explicit self parameters when already added implicitly
+  - Ensures self is only added once (either implicitly or explicitly)
+  - Discovered through dogfooding windjammer-ui in game editor
+
+**Impact**: Generated code now compiles correctly for builder pattern methods with owned self
+
 ## [0.38.3] - 2025-11-27
 
 ### Fixed
