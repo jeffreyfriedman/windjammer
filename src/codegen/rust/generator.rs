@@ -1558,12 +1558,20 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
     }
 
     fn generate_enum(&self, e: &EnumDecl) -> String {
+        let mut output = String::new();
+
+        // Automatic trait derivation - analyze if the enum can safely derive common traits
+        let can_auto_derive = self.can_auto_derive_enum(e);
+        if can_auto_derive {
+            output.push_str("#[derive(Clone, Debug, PartialEq)]\n");
+        }
+
         let pub_prefix = if e.is_pub || self.is_module {
             "pub "
         } else {
             ""
         };
-        let mut output = format!("{}enum {}", pub_prefix, e.name);
+        output.push_str(&format!("{}enum {}", pub_prefix, e.name));
 
         // Generate generic parameters: enum Option<T>, enum Result<T, E>
         if !e.type_params.is_empty() {
@@ -1588,6 +1596,74 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
 
         output.push('}');
         output
+    }
+
+    /// Determine if an enum can safely auto-derive Clone, Debug, PartialEq
+    fn can_auto_derive_enum(&self, e: &EnumDecl) -> bool {
+        // Don't auto-derive if the enum has generic parameters
+        // (we'd need to add trait bounds, which is complex)
+        if !e.type_params.is_empty() {
+            return false;
+        }
+
+        // Check if all variants are simple (no data or only simple types)
+        for variant in &e.variants {
+            if let Some(data) = &variant.data {
+                // Check if the data type is a simple type that implements Clone, Debug, PartialEq
+                if !self.is_simple_type(data) {
+                    return false;
+                }
+            }
+        }
+
+        true
+    }
+
+    /// Check if a type is "simple" (implements Clone, Debug, PartialEq automatically)
+    #[allow(clippy::only_used_in_recursion)]
+    fn is_simple_type(&self, type_: &Type) -> bool {
+        match type_ {
+            // Primitive types are always simple
+            Type::Int | Type::Int32 | Type::Uint | Type::Float | Type::Bool | Type::String => true,
+
+            // References are simple if the inner type is simple
+            Type::Reference(inner) | Type::MutableReference(inner) => self.is_simple_type(inner),
+
+            // Vec, Option, Result are simple if their inner types are simple
+            Type::Vec(inner) | Type::Option(inner) => self.is_simple_type(inner),
+            Type::Result(ok, err) => self.is_simple_type(ok) && self.is_simple_type(err),
+
+            // Custom types - assume they might not be simple
+            Type::Custom(_) => false,
+
+            // Tuples are simple if all elements are simple
+            Type::Tuple(types) => types.iter().all(|t| self.is_simple_type(t)),
+
+            // Arrays are simple if the element type is simple
+            Type::Array(inner, _) => self.is_simple_type(inner),
+
+            // Generic types - be conservative and say no
+            Type::Generic(_) => false,
+
+            // Parameterized types - check the base type
+            Type::Parameterized(name, params) => {
+                // Common generic types that are Clone + Debug + PartialEq if their params are
+                let is_common_generic = matches!(
+                    name.as_str(),
+                    "Vec" | "Option" | "Result" | "Box" | "Rc" | "Arc" | "HashMap" | "HashSet"
+                );
+                is_common_generic && params.iter().all(|t| self.is_simple_type(t))
+            }
+
+            // Associated types, trait objects - be conservative
+            Type::Associated(_, _) | Type::TraitObject(_) => false,
+
+            // Function pointers are not simple
+            Type::FunctionPointer { .. } => false,
+
+            // Infer type - be conservative
+            Type::Infer => false,
+        }
     }
 
     fn generate_trait(&mut self, trait_decl: &crate::parser::TraitDecl) -> String {
