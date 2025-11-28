@@ -2,6 +2,17 @@
 
 All notable changes to Windjammer will be documented in this file.
 
+## [0.38.7] - 2025-11-28
+
+### Added
+- **Automatic Trait Derivation for Structs**: Compiler now automatically derives `Clone`, `Debug`, and `PartialEq` for simple structs (structs with only simple-typed fields).
+  - Extends the auto-derive feature from enums to structs
+  - Recognizes `String` (Rust type) as a simple type
+  - Skips auto-derive for structs with generic parameters or conflicting decorators
+  - Zero syntax required - just works!
+  
+**Impact**: Eliminates manual `#[derive]` boilerplate for structs, completing the auto-derive feature. Aligns with Windjammer philosophy: hide complexity in the compiler.
+
 ## [0.38.6] - 2025-11-28
 
 ### Fixed
