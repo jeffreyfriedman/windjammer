@@ -1471,6 +1471,12 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
             }
         }
 
+        // Automatically derive common traits for simple structs (if not already derived)
+        // This follows the Windjammer philosophy: hide complexity in the compiler
+        if self.can_auto_derive_struct(s) && !output.contains("#[derive(") {
+            output.push_str("#[derive(Clone, Debug, PartialEq)]\n");
+        }
+
         // Add struct declaration with type parameters
         let pub_prefix = if s.is_pub || self.is_module {
             "pub "
@@ -1619,6 +1625,35 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
         true
     }
 
+    /// Determine if a struct can safely auto-derive Clone, Debug, PartialEq
+    fn can_auto_derive_struct(&self, s: &StructDecl) -> bool {
+        // Don't auto-derive if the struct has generic parameters
+        // (we'd need to add trait bounds, which is complex)
+        if !s.type_params.is_empty() {
+            return false;
+        }
+
+        // Don't auto-derive if the struct has decorators that might conflict
+        // (e.g., @component, @game, @command which have their own derives)
+        for decorator in &s.decorators {
+            if matches!(
+                decorator.name.as_str(),
+                "component" | "game" | "command" | "derive" | "auto"
+            ) {
+                return false;
+            }
+        }
+
+        // Check if all fields are simple types that implement Clone, Debug, PartialEq
+        for field in &s.fields {
+            if !self.is_simple_type(&field.field_type) {
+                return false;
+            }
+        }
+
+        true
+    }
+
     /// Check if a type is "simple" (implements Clone, Debug, PartialEq automatically)
     #[allow(clippy::only_used_in_recursion)]
     fn is_simple_type(&self, type_: &Type) -> bool {
@@ -1633,8 +1668,11 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
             Type::Vec(inner) | Type::Option(inner) => self.is_simple_type(inner),
             Type::Result(ok, err) => self.is_simple_type(ok) && self.is_simple_type(err),
 
-            // Custom types - assume they might not be simple
-            Type::Custom(_) => false,
+            // Custom types - check if they're actually Rust std types that are simple
+            Type::Custom(name) => {
+                // String (capitalized) is the Rust type, which is Clone + Debug + PartialEq
+                matches!(name.as_str(), "String")
+            }
 
             // Tuples are simple if all elements are simple
             Type::Tuple(types) => types.iter().all(|t| self.is_simple_type(t)),
