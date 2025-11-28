@@ -411,188 +411,13 @@ impl CodeGenerator {
         false
     }
 
-    /// Generate game loop main function
-    fn generate_game_main(&mut self, info: &GameFrameworkInfo) -> String {
-        let mut output = String::new();
-
-        // Generate GameWorld wrapper struct
-        output.push_str("// Generated: ECS world wrapper\n");
-        output.push_str("struct GameWorld {\n");
-        output.push_str("    world: windjammer_game::ecs::World,\n");
-        output.push_str("    game_entity: windjammer_game::ecs::Entity,\n");
-        output.push_str("}\n\n");
-
-        output.push_str("impl GameWorld {\n");
-        output.push_str("    fn new() -> Self {\n");
-        output.push_str("        use windjammer_game::ecs::*;\n");
-        output.push_str("        let mut world = World::new();\n");
-        output.push_str("        \n");
-        output.push_str("        // Spawn game entity with game component\n");
-        output.push_str("        let game_entity = world.spawn()\n");
-        output.push_str(&format!(
-            "            .with({}::default())\n",
-            info.game_struct
-        ));
-        output.push_str("            .build();\n");
-        output.push_str("        \n");
-        output.push_str("        Self { world, game_entity }\n");
-        output.push_str("    }\n");
-        output.push_str("    \n");
-        output.push_str(&format!(
-            "    fn game_mut(&mut self) -> &mut {} {{\n",
-            info.game_struct
-        ));
-        output.push_str(&format!(
-            "        self.world.get_component_mut::<{}>(self.game_entity).unwrap()\n",
-            info.game_struct
-        ));
-        output.push_str("    }\n");
-        output.push_str("}\n\n");
-
-        output.push_str("fn main() -> Result<(), Box<dyn std::error::Error>> {\n");
-        output.push_str("    use windjammer_game::*;\n");
-        output.push_str("    use windjammer_game::ecs::*;\n");
-        output.push_str("    use winit::event::{Event, WindowEvent};\n");
-        output.push_str("    use winit::event_loop::{ControlFlow, EventLoop};\n");
-        output.push_str("    use winit::window::WindowBuilder;\n");
-        output.push('\n');
-        output.push_str("    // Create event loop and window\n");
-        output.push_str("    let event_loop = EventLoop::new()?;\n");
-        output.push_str("    let window = WindowBuilder::new()\n");
-        output.push_str("        .with_title(\"Windjammer Game\")\n");
-        output.push_str("        .with_inner_size(winit::dpi::LogicalSize::new(800, 600))\n");
-        output.push_str("        .build(&event_loop)?;\n");
-        output.push('\n');
-        output.push_str("    // Initialize ECS world\n");
-        output.push_str("    let mut game_world = GameWorld::new();\n");
-        output.push('\n');
-
-        // Call init function if present
-        if let Some(init_fn) = &info.init_fn {
-            output.push_str("    // Call init function\n");
-            output.push_str(&format!("    {}(game_world.game_mut());\n", init_fn));
-            output.push('\n');
-        }
-
-        output.push_str("    // Initialize renderer\n");
-        output.push_str("    let window_ref: &'static winit::window::Window = unsafe { std::mem::transmute(&window) };\n");
-        if info.is_3d {
-            output.push_str(
-                "    let mut renderer = pollster::block_on(renderer3d::Renderer3D::new(window_ref))?;\n",
-            );
-            output.push_str("    let mut camera = renderer3d::Camera3D::new();\n");
-        } else {
-            output.push_str(
-                "    let mut renderer = pollster::block_on(renderer::Renderer::new(window_ref))?;\n",
-            );
-        }
-        output.push('\n');
-        output.push_str("    // Initialize input\n");
-        output.push_str("    let mut input = input::Input::new();\n");
-        output.push('\n');
-        output.push_str("    // Game loop\n");
-        output.push_str("    let mut last_time = std::time::Instant::now();\n");
-        output.push('\n');
-        output.push_str("    event_loop.run(move |event, elwt| {\n");
-        output.push_str("        match event {\n");
-        output.push_str("            Event::WindowEvent { event, .. } => match event {\n");
-        output.push_str("                WindowEvent::CloseRequested => {\n");
-
-        // Call cleanup function if present
-        if let Some(cleanup_fn) = &info.cleanup_fn {
-            output.push_str(&format!(
-                "                    {}(game_world.game_mut());\n",
-                cleanup_fn
-            ));
-        }
-
-        output.push_str("                    elwt.exit();\n");
-        output.push_str("                }\n");
-        output.push_str("                WindowEvent::RedrawRequested => {\n");
-        output.push_str("                    // Calculate delta time\n");
-        output.push_str("                    let now = std::time::Instant::now();\n");
-        output.push_str("                    let delta = (now - last_time).as_secs_f64();\n");
-        output.push_str("                    last_time = now;\n");
-        output.push('\n');
-
-        // Call update function if present
-        if let Some(update_fn) = &info.update_fn {
-            output.push_str("                    // Update game logic\n");
-            output.push_str(&format!(
-                "                    {}(game_world.game_mut(), delta, &input);\n",
-                update_fn
-            ));
-            output.push('\n');
-            output.push_str("                    // Update ECS systems (scene graph, etc.)\n");
-            output.push_str(
-                "                    SceneGraph::update_transforms(&mut game_world.world);\n",
-            );
-            output.push('\n');
-        }
-
-        // Call render function if present
-        if let Some(render_fn) = &info.render_fn {
-            output.push_str("                    // Render\n");
-            if info.is_3d {
-                output.push_str("                    renderer.set_camera(&camera);\n");
-                output.push_str(&format!(
-                    "                    {}(game_world.game_mut(), &mut renderer, &mut camera);\n",
-                    render_fn
-                ));
-            } else {
-                output.push_str(&format!(
-                    "                    {}(game_world.game_mut(), &mut renderer);\n",
-                    render_fn
-                ));
-            }
-        }
-
-        output.push_str("                    renderer.present();\n");
-        output.push('\n');
-        output.push_str("                    // Clear input frame state\n");
-        output.push_str("                    input.clear_frame_state();\n");
-        output.push_str("                }\n");
-
-        // Handle input if input function present
-        if let Some(input_fn) = &info.input_fn {
-            output.push_str("                WindowEvent::KeyboardInput { event, .. } => {\n");
-            output.push_str("                    input.update_from_winit(&event);\n");
-            output.push_str(&format!(
-                "                    {}(game_world.game_mut(), &input);\n",
-                input_fn
-            ));
-            output.push_str("                }\n");
-
-            // Handle mouse button input
-            output.push_str("                WindowEvent::MouseInput { state, button, .. } => {\n");
-            output.push_str(
-                "                    input.update_mouse_button_from_winit(state, button);\n",
-            );
-            output.push_str(&format!(
-                "                    {}(game_world.game_mut(), &input);\n",
-                input_fn
-            ));
-            output.push_str("                }\n");
-
-            // Handle mouse movement
-            output.push_str("                WindowEvent::CursorMoved { position, .. } => {\n");
-            output.push_str("                    input.update_mouse_position_from_winit(position.x, position.y);\n");
-            output.push_str("                }\n");
-        }
-
-        output.push_str("                _ => {}\n");
-        output.push_str("            },\n");
-        output.push_str("            Event::AboutToWait => {\n");
-        output.push_str("                window.request_redraw();\n");
-        output.push_str("            }\n");
-        output.push_str("            _ => {}\n");
-        output.push_str("        }\n");
-        output.push_str("    })?;\n");
-        output.push('\n');
-        output.push_str("    Ok(())\n");
-        output.push_str("}\n");
-
-        output
+    /// DEPRECATED: Game loop main function generation (removed for separation of concerns)
+    /// Users should use the GameApp API directly instead.
+    #[allow(dead_code)]
+    fn generate_game_main_deprecated(&mut self) -> String {
+        // This function is deprecated and should not be used.
+        // Users should use the GameApp API directly.
+        String::new()
     }
 
     fn generate_block(&mut self, stmts: &[Statement]) -> String {
@@ -654,9 +479,6 @@ impl CodeGenerator {
     pub fn generate_program(&mut self, program: &Program, analyzed: &[AnalyzedFunction]) -> String {
         let mut imports = String::new();
         let mut body = String::new();
-
-        // Detect game framework decorators
-        let game_framework_info = self.detect_game_framework(program);
 
         // Detect UI framework usage
         let ui_framework_info = self.detect_ui_framework(program);
@@ -830,49 +652,11 @@ impl CodeGenerator {
             }
         }
 
-        // Collect game-decorated function names to skip them
-        let mut game_functions = std::collections::HashSet::new();
-        if let Some(ref info) = game_framework_info {
-            if let Some(ref fn_name) = info.init_fn {
-                game_functions.insert(fn_name.clone());
-            }
-            if let Some(ref fn_name) = info.update_fn {
-                game_functions.insert(fn_name.clone());
-            }
-            if let Some(ref fn_name) = info.render_fn {
-                game_functions.insert(fn_name.clone());
-            }
-            if let Some(ref fn_name) = info.input_fn {
-                game_functions.insert(fn_name.clone());
-            }
-            if let Some(ref fn_name) = info.cleanup_fn {
-                game_functions.insert(fn_name.clone());
-            }
-        }
-
-        // Generate game-decorated functions FIRST (before main)
-        if game_framework_info.is_some() {
-            for analyzed_func in analyzed {
-                if game_functions.contains(&analyzed_func.decl.name) {
-                    body.push_str(&self.generate_function(analyzed_func));
-                    body.push_str("\n\n");
-                }
-            }
-        }
-
-        // Generate top-level functions (skip impl methods and game-decorated functions)
+        // Generate top-level functions (skip impl methods)
         for analyzed_func in analyzed {
             if !impl_methods.contains(&analyzed_func.decl.name) {
                 // Skip main() function in modules - it should only be in the entry point
                 if self.is_module && analyzed_func.decl.name == "main" {
-                    continue;
-                }
-                // Skip main() if this is a game (we'll generate our own)
-                if game_framework_info.is_some() && analyzed_func.decl.name == "main" {
-                    continue;
-                }
-                // Skip game-decorated functions (they were already generated above)
-                if game_functions.contains(&analyzed_func.decl.name) {
                     continue;
                 }
                 // Generate the function
@@ -881,34 +665,16 @@ impl CodeGenerator {
             }
         }
 
-        // Generate game main function if this is a game
-        if let Some(ref info) = game_framework_info {
-            body.push_str(&self.generate_game_main(info));
-            body.push_str("\n\n");
-        }
-
         // Inject implicit imports if needed
         let mut implicit_imports = String::new();
 
-        // Add game framework imports if this is a game (via decorators or std::game import)
-        let uses_game_decorators = game_framework_info.is_some();
+        // Add game framework imports if this is a game (via std::game import)
         let uses_game_import = self.detect_game_import(program);
 
-        if uses_game_decorators || uses_game_import {
+        if uses_game_import {
             // Use windjammer_game (the actual crate name)
-            if let Some(ref info) = game_framework_info {
-                if info.is_3d {
-                    implicit_imports
-                        .push_str("use windjammer_game::renderer3d::{Renderer3D, Camera3D};\n");
-                    implicit_imports.push_str("use windjammer_game::renderer::Color;\n");
-                } else {
-                    implicit_imports
-                        .push_str("use windjammer_game::renderer::{Renderer, Color};\n");
-                }
-            } else {
-                // Default to 2D renderer if no decorator info
-                implicit_imports.push_str("use windjammer_game::renderer::{Renderer, Color};\n");
-            }
+            // Default to 2D renderer
+            implicit_imports.push_str("use windjammer_game::renderer::{Renderer, Color};\n");
             implicit_imports.push_str("use windjammer_game::input::{Input, Key, MouseButton};\n");
             implicit_imports.push_str("use windjammer_game::math::{Vec3, Mat4};\n");
             implicit_imports.push_str("use windjammer_game::ecs::*;\n");
