@@ -33,6 +33,7 @@ RUN mkdir -p src/bin benches crates/windjammer-lsp/src crates/windjammer-lsp/ben
 # Copy the actual source code
 COPY src ./src
 COPY crates ./crates
+COPY benches ./benches
 COPY std ./std
 COPY examples ./examples
 
