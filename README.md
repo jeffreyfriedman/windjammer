@@ -279,7 +279,7 @@ Windjammer compiles through multiple stages:
 
 ## Project Status
 
-**Current Version:** 0.38.7  
+**Current Version:** 0.38.8  
 **Status:** Production-ready for early adopters
 
 **What's Complete:**
