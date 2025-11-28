@@ -2,6 +2,16 @@
 
 All notable changes to Windjammer will be documented in this file.
 
+## [0.38.6] - 2025-11-28
+
+### Fixed
+- **Builder Pattern Ownership Inference**: Fixed critical bug where builder pattern methods were incorrectly inferred as `&self` instead of `self` (consuming).
+  - Now correctly detects when a method returns `Self` (either the `self` identifier or a struct literal of the same type)
+  - Builder pattern methods that return `Self` are now always inferred as consuming `self` (Owned), not borrowing
+  - Fixed parameter ownership inference to detect parameters used in struct literals passed as method arguments (e.g., `vec.push(Struct { field: param })`)
+  
+**Impact**: Builder patterns now work correctly without manual ownership annotations. This was blocking 60% of dogfooding panels from compiling.
+
 ## [0.38.5] - 2025-11-28
 
 ### Added
