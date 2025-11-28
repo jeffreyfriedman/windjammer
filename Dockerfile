@@ -1,5 +1,5 @@
 # Multi-stage build for Windjammer
-FROM rust:1.75 AS builder
+FROM rust:1.90 AS builder
 
 WORKDIR /app
 
