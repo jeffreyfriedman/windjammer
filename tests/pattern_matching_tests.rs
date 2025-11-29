@@ -517,6 +517,15 @@ fn test_param_mutability_inference() {
     compile_and_check_rust_compiles("param_mutability_inference.wj", "param_mutability_inference");
 }
 
+#[test]
+fn test_trait_impl_stdlib() {
+    // Test that trait implementations match trait signatures exactly
+    // Bug: fn add(self, other: Point) was generating other: &Point
+    // Expected: Trait method parameters should NOT be inferred, use trait signature
+    
+    compile_and_check_rust_compiles("trait_impl_stdlib.wj", "trait_impl_stdlib");
+}
+
 // ============================================================================
 // MAIN TEST RUNNER
 // ============================================================================

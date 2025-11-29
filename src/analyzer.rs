@@ -248,12 +248,68 @@ impl Default for Analyzer {
 
 impl Analyzer {
     pub fn new() -> Self {
-        Analyzer {
+        let mut analyzer = Analyzer {
             variables: HashMap::new(),
             copy_enums: HashSet::new(),
             trait_definitions: HashMap::new(),
             mutated_variables: HashSet::new(),
-        }
+        };
+        
+        // Pre-register standard library traits so the analyzer knows their signatures
+        analyzer.register_stdlib_traits();
+        
+        analyzer
+    }
+    
+    /// Pre-register standard library traits (Add, Sub, Mul, Div, etc.)
+    /// This allows the analyzer to correctly handle trait implementations
+    /// for stdlib traits without needing to parse Rust's stdlib.
+    fn register_stdlib_traits(&mut self) {
+        use crate::parser::ast::{TraitDecl, TraitMethod, Parameter, Type, OwnershipHint, AssociatedType};
+        
+        // Helper to create a binary operator trait (Add, Sub, Mul, Div, etc.)
+        let create_binary_op_trait = |name: &str, method: &str| -> TraitDecl {
+            TraitDecl {
+                name: name.to_string(),
+                generics: vec!["Rhs".to_string()],
+                supertraits: vec![],
+                methods: vec![
+                    TraitMethod {
+                        name: method.to_string(),
+                        parameters: vec![
+                            Parameter {
+                                name: "self".to_string(),
+                                pattern: None,
+                                type_: Type::Custom("Self".to_string()),
+                                ownership: OwnershipHint::Owned,
+                            },
+                            Parameter {
+                                name: "rhs".to_string(),
+                                pattern: None,
+                                type_: Type::Custom("Rhs".to_string()),
+                                ownership: OwnershipHint::Owned,
+                            },
+                        ],
+                        return_type: Some(Type::Custom("Output".to_string())),
+                        is_async: false,
+                        body: None,
+                    },
+                ],
+                associated_types: vec![
+                    AssociatedType {
+                        name: "Output".to_string(),
+                        concrete_type: None,
+                    },
+                ],
+            }
+        };
+        
+        // Register common operator traits
+        self.trait_definitions.insert("Add".to_string(), create_binary_op_trait("Add", "add"));
+        self.trait_definitions.insert("Sub".to_string(), create_binary_op_trait("Sub", "sub"));
+        self.trait_definitions.insert("Mul".to_string(), create_binary_op_trait("Mul", "mul"));
+        self.trait_definitions.insert("Div".to_string(), create_binary_op_trait("Div", "div"));
+        self.trait_definitions.insert("Rem".to_string(), create_binary_op_trait("Rem", "rem"));
     }
 
     /// Register trait definitions from an external program (e.g., imported module)
