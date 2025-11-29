@@ -465,7 +465,7 @@ impl Parser {
                 path_str.push_str(&name);
                 self.advance();
 
-                // Check for :: or / as separator (. is NOT supported - use :: for modules)
+                // Check for :: as separator (. and / are NOT supported - use :: for modules)
                 if self.current_token() == &Token::ColonColon {
                     path_str.push_str("::");
                     self.advance();
@@ -477,8 +477,9 @@ impl Parser {
                         break;
                     }
                 } else if self.current_token() == &Token::Slash {
-                    path_str.push('/');
-                    self.advance();
+                    // ERROR: / is not allowed for absolute module paths, use :: instead
+                    // Note: / is still valid for relative imports like ./module or ../module
+                    return Err("Use '::' for module paths, not '/'. Example: 'use std::fs' not 'use std/fs'".to_string());
                 } else if self.current_token() == &Token::Dot {
                     // ERROR: . is not allowed for module paths, use :: instead
                     return Err("Use '::' for module paths, not '.'. Example: 'use std::fs' not 'use std.fs'".to_string());
