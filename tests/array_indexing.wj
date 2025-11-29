@@ -1,0 +1,19 @@
+// Test: Array indexing with int type
+// Bug: Windjammer's 'int' maps to i64, but Rust needs usize for indexing
+// This should compile without errors
+
+fn get_element(arr: Vec<i32>, index: int) -> i32 {
+    return arr[index]
+}
+
+fn get_element_with_cast(arr: Vec<i32>, index: i64) -> i32 {
+    // Explicit cast should also work
+    return arr[index as int]
+}
+
+fn test_array_access() -> i32 {
+    let numbers = vec![10, 20, 30, 40, 50]
+    let idx = 2
+    return numbers[idx]
+}
+
