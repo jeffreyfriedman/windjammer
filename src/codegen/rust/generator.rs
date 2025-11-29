@@ -1101,26 +1101,48 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
         // treat it as a source_root import
         if segments.len() == 2 {
             let module_name = segments[0];
-            let type_name = segments[1];
+            let item_name = segments[1];  // Could be a type (uppercase) or function (lowercase)
             
             // Check if module_name is a simple lowercase identifier (source_root module)
             // vs a crate name like windjammer_game (has underscore)
             if !module_name.contains('_') 
                 && module_name.chars().all(|c| c.is_lowercase() || c.is_ascii_digit())
-                && type_name.chars().next().is_some_and(|c| c.is_uppercase())
             {
-                // Source root import: math::Vec2 -> use super::vec2::Vec2;
-                // Convert module name to lowercase file name (math -> vec2 is wrong, need actual file)
-                // Actually, we need to convert the TYPE name to lowercase to get the file name
-                // Vec2 -> vec2, RigidBody2D -> rigidbody2d
-                let file_name = type_name.chars()
-                    .map(|c| c.to_lowercase().to_string())
-                    .collect::<String>();
+                // Determine the actual file name:
+                // - If module_name is a common directory name (math, physics, rendering, etc.),
+                //   AND item_name starts with uppercase (it's a type),
+                //   convert item_name to snake_case to get the file name
+                // - Otherwise, use module_name as the file name (it's already a file)
+                
+                let common_directories = ["math", "physics", "rendering", "audio", "world", "effects", "ui", "input", "network"];
+                let is_type = item_name.chars().next().map_or(false, |c| c.is_uppercase());
+                
+                let file_name = if common_directories.contains(&module_name) && is_type {
+                    // Directory module with type: math::Vec2 -> vec2.wj
+                    // Convert type name to snake_case
+                    let mut snake = String::new();
+                    for (i, ch) in item_name.chars().enumerate() {
+                        if ch.is_uppercase() && i > 0 {
+                            // Don't add underscore before uppercase if previous char was also uppercase
+                            // (handles cases like "Vec2D" -> "vec2d" not "vec2_d")
+                            let prev_was_upper = item_name.chars().nth(i - 1).map_or(false, |c| c.is_uppercase());
+                            if !prev_was_upper {
+                                snake.push('_');
+                            }
+                        }
+                        snake.push(ch.to_lowercase().next().unwrap());
+                    }
+                    snake
+                } else {
+                    // File module: rigidbody2d::Collider2D -> rigidbody2d.wj
+                    // OR: collision2d::check_collision -> collision2d.wj
+                    module_name.to_string()
+                };
                 
                 if let Some(alias_name) = alias {
-                    return format!("use super::{}::{} as {};\n", file_name, type_name, alias_name);
+                    return format!("use super::{}::{} as {};\n", file_name, item_name, alias_name);
                 } else {
-                    return format!("use super::{}::{};\n", file_name, type_name);
+                    return format!("use super::{}::{};\n", file_name, item_name);
                 }
             }
         }
