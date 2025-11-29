@@ -1090,10 +1090,44 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
             }
         }
 
+        // Handle imports from source_roots (e.g., math::Vec2, physics::RigidBody2D)
+        // These should use super:: to reference sibling modules in the generated code
+        // Check if this looks like a source_root import (module::Type pattern, not a crate)
+        let rust_path = full_path.replace('.', "::");
+        let segments: Vec<&str> = rust_path.split("::").collect();
+        
+        // If it's a simple module::Type pattern (2 segments, last is uppercase),
+        // and the first segment is lowercase (not a crate name with underscores),
+        // treat it as a source_root import
+        if segments.len() == 2 {
+            let module_name = segments[0];
+            let type_name = segments[1];
+            
+            // Check if module_name is a simple lowercase identifier (source_root module)
+            // vs a crate name like windjammer_game (has underscore)
+            if !module_name.contains('_') 
+                && module_name.chars().all(|c| c.is_lowercase() || c.is_ascii_digit())
+                && type_name.chars().next().is_some_and(|c| c.is_uppercase())
+            {
+                // Source root import: math::Vec2 -> use super::vec2::Vec2;
+                // Convert module name to lowercase file name (math -> vec2 is wrong, need actual file)
+                // Actually, we need to convert the TYPE name to lowercase to get the file name
+                // Vec2 -> vec2, RigidBody2D -> rigidbody2d
+                let file_name = type_name.chars()
+                    .map(|c| c.to_lowercase().to_string())
+                    .collect::<String>();
+                
+                if let Some(alias_name) = alias {
+                    return format!("use super::{}::{} as {};\n", file_name, type_name, alias_name);
+                } else {
+                    return format!("use super::{}::{};\n", file_name, type_name);
+                }
+            }
+        }
+        
         // Convert Windjammer's Go-style imports to Rust imports
         // Heuristic: If the last segment starts with an uppercase letter, it's likely a type/struct
         // Otherwise, it's a module and we should add ::*
-        let rust_path = full_path.replace('.', "::");
         if let Some(alias_name) = alias {
             format!("use {} as {};\n", rust_path, alias_name)
         } else {
