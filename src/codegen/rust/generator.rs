@@ -1448,32 +1448,48 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
         output.push_str(" {\n");
 
         for variant in &e.variants {
-            if let Some(types) = &variant.data {
-                if types.is_empty() {
-                    // Empty tuple variant: Variant()
-                    output.push_str(&format!("    {}(),\n", variant.name));
-                } else if types.len() == 1 {
-                    // Single-field variant: Variant(Type)
-                    output.push_str(&format!(
-                        "    {}({}),\n",
-                        variant.name,
-                        self.type_to_rust(&types[0])
-                    ));
-                } else {
-                    // Multi-field tuple variant: Variant(Type1, Type2, Type3)
-                    let type_strs: Vec<String> = types
+            use crate::parser::ast::EnumVariantData;
+            match &variant.data {
+                EnumVariantData::Unit => {
+                    // Unit variant: Variant
+                    output.push_str(&format!("    {},\n", variant.name));
+                }
+                EnumVariantData::Tuple(types) => {
+                    if types.is_empty() {
+                        // Empty tuple variant: Variant()
+                        output.push_str(&format!("    {}(),\n", variant.name));
+                    } else if types.len() == 1 {
+                        // Single-field variant: Variant(Type)
+                        output.push_str(&format!(
+                            "    {}({}),\n",
+                            variant.name,
+                            self.type_to_rust(&types[0])
+                        ));
+                    } else {
+                        // Multi-field tuple variant: Variant(Type1, Type2, Type3)
+                        let type_strs: Vec<String> = types
+                            .iter()
+                            .map(|t| self.type_to_rust(t))
+                            .collect();
+                        output.push_str(&format!(
+                            "    {}({}),\n",
+                            variant.name,
+                            type_strs.join(", ")
+                        ));
+                    }
+                }
+                EnumVariantData::Struct(fields) => {
+                    // Struct variant: Variant { field1: Type1, field2: Type2 }
+                    let field_strs: Vec<String> = fields
                         .iter()
-                        .map(|t| self.type_to_rust(t))
+                        .map(|(name, ty)| format!("{}: {}", name, self.type_to_rust(ty)))
                         .collect();
                     output.push_str(&format!(
-                        "    {}({}),\n",
+                        "    {} {{ {} }},\n",
                         variant.name,
-                        type_strs.join(", ")
+                        field_strs.join(", ")
                     ));
                 }
-            } else {
-                // Unit variant: Variant
-                output.push_str(&format!("    {},\n", variant.name));
             }
         }
 
@@ -1490,12 +1506,27 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
         }
 
         // Check if all variants are simple (no data or only simple types)
+        use crate::parser::ast::EnumVariantData;
         for variant in &e.variants {
-            if let Some(types) = &variant.data {
-                // Check if all data types are simple types that implement Clone, Debug, PartialEq
-                for type_ in types {
-                    if !self.is_simple_type(type_) {
-                        return false;
+            match &variant.data {
+                EnumVariantData::Unit => {
+                    // Unit variants are always simple
+                    continue;
+                }
+                EnumVariantData::Tuple(types) => {
+                    // Check if all tuple data types are simple
+                    for type_ in types {
+                        if !self.is_simple_type(type_) {
+                            return false;
+                        }
+                    }
+                }
+                EnumVariantData::Struct(fields) => {
+                    // Check if all struct field types are simple
+                    for (_name, type_) in fields {
+                        if !self.is_simple_type(type_) {
+                            return false;
+                        }
                     }
                 }
             }
@@ -1513,16 +1544,30 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
         }
 
         // Check if all variants are Copy-able
+        use crate::parser::ast::EnumVariantData;
         for variant in &e.variants {
-            if let Some(types) = &variant.data {
-                // Check if all data types implement Copy
-                for type_ in types {
-                    if !self.is_copyable_type(type_) {
-                        return false;
+            match &variant.data {
+                EnumVariantData::Unit => {
+                    // Unit variants are always Copy
+                    continue;
+                }
+                EnumVariantData::Tuple(types) => {
+                    // Check if all tuple data types implement Copy
+                    for type_ in types {
+                        if !self.is_copyable_type(type_) {
+                            return false;
+                        }
+                    }
+                }
+                EnumVariantData::Struct(fields) => {
+                    // Check if all struct field types implement Copy
+                    for (_name, type_) in fields {
+                        if !self.is_copyable_type(type_) {
+                            return false;
+                        }
                     }
                 }
             }
-            // Unit variants are always Copy
         }
 
         true
@@ -2635,6 +2680,13 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
                             .collect();
                         format!("{}({})", variant, rust_patterns.join(", "))
                     }
+                    EnumPatternBinding::Struct(fields) => {
+                        let field_strs: Vec<String> = fields
+                            .iter()
+                            .map(|(name, pattern)| format!("{}: {}", name, self.pattern_to_rust(pattern)))
+                            .collect();
+                        format!("{} {{ {} }}", variant, field_strs.join(", "))
+                    }
                 }
             }
             Pattern::Literal(lit) => self.generate_literal(lit),
@@ -3151,6 +3203,13 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
                             .map(|p| self.generate_pattern(p))
                             .collect();
                         format!("{}({})", name, pattern_strs.join(", "))
+                    }
+                    EnumPatternBinding::Struct(fields) => {
+                        let field_strs: Vec<String> = fields
+                            .iter()
+                            .map(|(field_name, pattern)| format!("{}: {}", field_name, self.generate_pattern(pattern)))
+                            .collect();
+                        format!("{} {{ {} }}", name, field_strs.join(", "))
                     }
                 }
             }
