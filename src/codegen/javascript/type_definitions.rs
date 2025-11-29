@@ -166,6 +166,7 @@ mod tests {
             decorators: vec![],
             is_pub: false,
             is_async: false,
+            is_extern: false,
             type_params: vec![],
             where_clause: vec![],
             parent_type: None,

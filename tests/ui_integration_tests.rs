@@ -34,6 +34,7 @@ fn create_simple_counter_component() -> FunctionDecl {
             arguments: vec![],
         }],
         is_async: false,
+        is_extern: false,
         parameters: vec![],
         return_type: Some(Type::Custom("UI".to_string())),
         body: vec![
@@ -111,6 +112,7 @@ fn create_component_with_props() -> FunctionDecl {
             arguments: vec![],
         }],
         is_async: false,
+        is_extern: false,
         parameters: vec![
             Parameter {
                 name: "name".to_string(),
@@ -169,6 +171,7 @@ fn test_non_component_function() {
         where_clause: vec![],
         decorators: vec![],
         is_async: false,
+        is_extern: false,
         parameters: vec![],
         return_type: Some(Type::Int),
         body: vec![],
@@ -194,6 +197,7 @@ fn test_component_return_type_validation() {
             arguments: vec![],
         }],
         is_async: false,
+        is_extern: false,
         parameters: vec![],
         return_type: Some(Type::Int),
         body: vec![],
@@ -227,6 +231,7 @@ fn test_type_checker_rejects_inferred_props() {
             arguments: vec![],
         }],
         is_async: false,
+        is_extern: false,
         parameters: vec![Parameter {
             name: "value".to_string(),
             pattern: None,
