@@ -250,10 +250,16 @@ impl Default for Analyzer {
 
 impl Analyzer {
     pub fn new() -> Self {
+        Self::new_with_copy_structs(HashSet::new())
+    }
+
+    /// Create a new Analyzer with a pre-populated set of Copy structs from global registry
+    /// This enables proper Copy type detection across multiple files
+    pub fn new_with_copy_structs(global_copy_structs: HashSet<String>) -> Self {
         let mut analyzer = Analyzer {
             variables: HashMap::new(),
             copy_enums: HashSet::new(),
-            copy_structs: HashSet::new(),
+            copy_structs: global_copy_structs, // Use global Copy structs from all files
             trait_definitions: HashMap::new(),
             mutated_variables: HashSet::new(),
         };
@@ -1067,17 +1073,15 @@ impl Analyzer {
                     return true;
                 }
                 // Check if it's a known Copy struct (detected via @derive(Copy))
-                // This works when all files are compiled together
+                // This now works properly via the global copy_structs registry which is
+                // populated from all files in PASS 0 before any individual file compilation
                 if self.copy_structs.contains(name) {
                     return true;
                 }
-                // Recognize common Rust primitive types and standard math types by name
-                // Note: Vec2/Vec3/Vec4/Mat4/Quat are part of the standard library and are always Copy
-                // They're hardcoded here because files are compiled individually, so the
-                // copy_structs registry doesn't persist across compilations
+                // Recognize Rust primitive types by name
                 matches!(
                     name.as_str(),
-                    // Primitives
+                    // Primitives (the only truly hardcoded types)
                     "i8" | "i16"
                         | "i32"
                         | "i64"
@@ -1093,12 +1097,6 @@ impl Analyzer {
                         | "f64"
                         | "bool"
                         | "char"
-                        // Standard library math types (always Copy)
-                        | "Vec2"
-                        | "Vec3"
-                        | "Vec4"
-                        | "Mat4"
-                        | "Quat"
                 )
             }
             _ => false,

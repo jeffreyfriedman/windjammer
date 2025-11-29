@@ -385,6 +385,43 @@ fn build_project(path: &Path, output: &Path, target: CompilationTarget) -> Resul
         eprintln!("Note: No windjammer.toml found. Module imports will only work with relative paths (./module) or std:: prefix.");
     }
 
+    // PASS 0: Quick parse all files to register Copy structs
+    // This ensures Copy type detection works across all files
+    let mut global_copy_structs = HashSet::new();
+    for file in &wj_files {
+        let source = match std::fs::read_to_string(file) {
+            Ok(s) => s,
+            Err(_) => continue,
+        };
+
+        let mut lexer = lexer::Lexer::new(&source);
+        let tokens = lexer.tokenize_with_locations();
+        let mut parser = parser_impl::Parser::new(tokens);
+
+        if let Ok(program) = parser.parse() {
+            for item in &program.items {
+                if let parser::Item::Struct { decl, .. } = item {
+                    // Check if struct has @derive(Copy)
+                    let has_copy = decl.decorators.iter().any(|d| {
+                        d.name == "derive" && d.arguments.iter().any(|(_, arg)| {
+                            if let parser::Expression::Identifier { name, .. } = arg {
+                                name == "Copy"
+                            } else {
+                                false
+                            }
+                        })
+                    });
+                    if has_copy {
+                        global_copy_structs.insert(decl.name.clone());
+                    }
+                }
+            }
+        }
+    }
+
+    // Transfer Copy structs to ModuleCompiler's registry
+    module_compiler.copy_structs_registry = global_copy_structs;
+
     // PASS 1: Quick parse all files to register trait definitions
     // This ensures all traits are available before any file compilation
     for file in &wj_files {
@@ -541,6 +578,7 @@ struct ModuleCompiler {
     imported_stdlib_modules: HashSet<String>, // Track which stdlib modules are used
     external_crates: Vec<String>, // Track external crates (e.g., windjammer_ui)
     trait_registry: HashMap<String, parser::TraitDecl>, // Global trait registry for cross-file trait resolution
+    copy_structs_registry: HashSet<String>, // Global Copy struct registry for proper Copy detection across files
 }
 
 #[allow(dead_code)]
@@ -559,6 +597,7 @@ impl ModuleCompiler {
             imported_stdlib_modules: HashSet::new(),
             external_crates: Vec::new(),
             trait_registry: HashMap::new(),
+            copy_structs_registry: HashSet::new(),
         }
     }
 
@@ -696,8 +735,8 @@ impl ModuleCompiler {
             }
         }
 
-        // Analyze with access to all registered traits
-        let mut analyzer = analyzer::Analyzer::new();
+        // Analyze with access to all registered traits AND global Copy structs
+        let mut analyzer = analyzer::Analyzer::new_with_copy_structs(self.copy_structs_registry.clone());
         // Load all registered traits into the analyzer
         for trait_decl in self.trait_registry.values() {
             let dummy_program = parser::Program {
@@ -1064,8 +1103,8 @@ fn compile_file_with_compiler(
         }
     }
 
-    // Analyze with access to all registered traits
-    let mut analyzer = analyzer::Analyzer::new();
+    // Analyze with access to all registered traits AND global Copy structs
+    let mut analyzer = analyzer::Analyzer::new_with_copy_structs(module_compiler.copy_structs_registry.clone());
     // Load all registered traits into the analyzer
     for trait_decl in module_compiler.trait_registry.values() {
         let dummy_program = parser::Program {
