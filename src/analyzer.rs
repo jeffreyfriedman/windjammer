@@ -281,7 +281,8 @@ impl Analyzer {
             match item {
                 Item::Enum { decl, .. } => {
                     // Fieldless enums (unit variants only) are Copy by default
-                    let is_copy = decl.variants.iter().all(|v| v.data.is_none());
+                    use crate::parser::ast::EnumVariantData;
+                    let is_copy = decl.variants.iter().all(|v| matches!(v.data, EnumVariantData::Unit));
                     if is_copy {
                         self.copy_enums.insert(decl.name.clone());
                     }

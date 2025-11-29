@@ -291,8 +291,8 @@ if (import.meta.url === `file://${process.argv[1]}`) {
                 // JavaScript doesn't have pattern matching like Rust, simplify
                 match binding {
                     EnumPatternBinding::Single(bind) => bind.clone(),
-                    EnumPatternBinding::Tuple(_) => {
-                        // For tuple patterns in JS, just use the variant name
+                    EnumPatternBinding::Tuple(_) | EnumPatternBinding::Struct(_) => {
+                        // For tuple/struct patterns in JS, just use the variant name
                         // JS doesn't have native pattern matching, so this is best effort
                         variant.clone()
                     }
@@ -843,8 +843,8 @@ if (import.meta.url === `file://${process.argv[1]}`) {
                     EnumPatternBinding::Single(var) => {
                         format!("{} === {}.{}", match_value, name, var)
                     }
-                    EnumPatternBinding::Tuple(_) => {
-                        // For tuple patterns, just check the variant name
+                    EnumPatternBinding::Tuple(_) | EnumPatternBinding::Struct(_) => {
+                        // For tuple/struct patterns, just check the variant name
                         format!("{} === {}", match_value, name)
                     }
                     EnumPatternBinding::Wildcard | EnumPatternBinding::None => {
