@@ -442,6 +442,21 @@ fn test_module_import_resolution() {
     );
 }
 
+#[test]
+fn test_operator_precedence_negation() {
+    // Test that !(a || b) generates correct Rust with parentheses preserved
+    // Bug: Compiler was generating !a || b instead of !(a || b)
+    
+    compile_and_check_generated_rust(
+        "operator_precedence.wj",
+        &[
+            "!(a || b)",  // Must have parentheses around the OR
+            "!(a && b)",  // Must have parentheses around the AND
+        ],
+        "operator_precedence"
+    );
+}
+
 // ============================================================================
 // MAIN TEST RUNNER
 // ============================================================================
