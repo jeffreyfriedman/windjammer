@@ -904,6 +904,11 @@ impl Analyzer {
                         return true;
                     }
                 }
+                Statement::Assignment { value, .. } => {
+                    if self.expr_uses_in_binary_op(name, value) {
+                        return true;
+                    }
+                }
                 _ => {}
             }
         }
