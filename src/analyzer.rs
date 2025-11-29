@@ -2185,7 +2185,12 @@ impl Analyzer {
     fn expression_is_self_field_access(&self, expr: &Expression) -> bool {
         match expr {
             Expression::FieldAccess { object, .. } => {
-                matches!(&**object, Expression::Identifier { name, .. } if name == "self")
+                // Check if the object is 'self' OR if it's a nested field access starting with 'self'
+                match &**object {
+                    Expression::Identifier { name, .. } if name == "self" => true,
+                    Expression::FieldAccess { .. } => self.expression_is_self_field_access(object),
+                    _ => false,
+                }
             }
             _ => false,
         }
