@@ -229,6 +229,81 @@ impl Lexer {
         let mut num_str = String::new();
         let mut is_float = false;
 
+        // Check for hex, binary, or octal prefix
+        if self.current_char == Some('0') {
+            if let Some(prefix) = self.peek(1) {
+                match prefix {
+                    'x' | 'X' => {
+                        // Hexadecimal: 0xFF, 0xDEADBEEF
+                        self.advance(); // skip '0'
+                        self.advance(); // skip 'x'
+                        
+                        let mut hex_str = String::new();
+                        while let Some(ch) = self.current_char {
+                            if ch.is_ascii_hexdigit() {
+                                hex_str.push(ch);
+                                self.advance();
+                            } else if ch == '_' {
+                                self.advance(); // skip underscore separator
+                            } else {
+                                break;
+                            }
+                        }
+                        
+                        let value = i64::from_str_radix(&hex_str, 16)
+                            .expect("Invalid hex literal");
+                        return Token::IntLiteral(value);
+                    }
+                    'b' | 'B' => {
+                        // Binary: 0b1010, 0b1111_0000
+                        self.advance(); // skip '0'
+                        self.advance(); // skip 'b'
+                        
+                        let mut bin_str = String::new();
+                        while let Some(ch) = self.current_char {
+                            if ch == '0' || ch == '1' {
+                                bin_str.push(ch);
+                                self.advance();
+                            } else if ch == '_' {
+                                self.advance(); // skip underscore separator
+                            } else {
+                                break;
+                            }
+                        }
+                        
+                        let value = i64::from_str_radix(&bin_str, 2)
+                            .expect("Invalid binary literal");
+                        return Token::IntLiteral(value);
+                    }
+                    'o' | 'O' => {
+                        // Octal: 0o755, 0o644
+                        self.advance(); // skip '0'
+                        self.advance(); // skip 'o'
+                        
+                        let mut oct_str = String::new();
+                        while let Some(ch) = self.current_char {
+                            if ch >= '0' && ch <= '7' {
+                                oct_str.push(ch);
+                                self.advance();
+                            } else if ch == '_' {
+                                self.advance(); // skip underscore separator
+                            } else {
+                                break;
+                            }
+                        }
+                        
+                        let value = i64::from_str_radix(&oct_str, 8)
+                            .expect("Invalid octal literal");
+                        return Token::IntLiteral(value);
+                    }
+                    _ => {
+                        // Regular decimal number starting with 0
+                    }
+                }
+            }
+        }
+
+        // Regular decimal number (or float)
         while let Some(ch) = self.current_char {
             if ch.is_ascii_digit() {
                 num_str.push(ch);
