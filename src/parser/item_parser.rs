@@ -872,11 +872,30 @@ impl Parser {
             };
 
             let data = if self.current_token() == &Token::LParen {
-                // Tuple-style variant: Variant(Type)
+                // Tuple-style variant: Variant(Type1, Type2, Type3)
                 self.advance();
-                let type_ = self.parse_type()?;
+                
+                let mut types = Vec::new();
+                
+                // Parse types separated by commas
+                if self.current_token() != &Token::RParen {
+                    loop {
+                        types.push(self.parse_type()?);
+                        
+                        if self.current_token() == &Token::Comma {
+                            self.advance();
+                            // Allow trailing comma
+                            if self.current_token() == &Token::RParen {
+                                break;
+                            }
+                        } else {
+                            break;
+                        }
+                    }
+                }
+                
                 self.expect(Token::RParen)?;
-                Some(type_)
+                Some(types)
             } else if self.current_token() == &Token::LBrace {
                 // Struct-style variant: Variant { field1: Type1, field2: Type2 }
                 // For now, we'll parse this as a tuple containing a struct type

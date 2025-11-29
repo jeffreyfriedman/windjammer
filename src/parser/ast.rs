@@ -136,7 +136,7 @@ pub struct StructDecl {
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct EnumVariant {
     pub name: String,
-    pub data: Option<Type>,
+    pub data: Option<Vec<Type>>,  // Changed from Option<Type> to Option<Vec<Type>> for tuple variants
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]

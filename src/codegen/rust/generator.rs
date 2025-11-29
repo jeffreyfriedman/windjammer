@@ -1448,13 +1448,31 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
         output.push_str(" {\n");
 
         for variant in &e.variants {
-            if let Some(data) = &variant.data {
-                output.push_str(&format!(
-                    "    {}({}),\n",
-                    variant.name,
-                    self.type_to_rust(data)
-                ));
+            if let Some(types) = &variant.data {
+                if types.is_empty() {
+                    // Empty tuple variant: Variant()
+                    output.push_str(&format!("    {}(),\n", variant.name));
+                } else if types.len() == 1 {
+                    // Single-field variant: Variant(Type)
+                    output.push_str(&format!(
+                        "    {}({}),\n",
+                        variant.name,
+                        self.type_to_rust(&types[0])
+                    ));
+                } else {
+                    // Multi-field tuple variant: Variant(Type1, Type2, Type3)
+                    let type_strs: Vec<String> = types
+                        .iter()
+                        .map(|t| self.type_to_rust(t))
+                        .collect();
+                    output.push_str(&format!(
+                        "    {}({}),\n",
+                        variant.name,
+                        type_strs.join(", ")
+                    ));
+                }
             } else {
+                // Unit variant: Variant
                 output.push_str(&format!("    {},\n", variant.name));
             }
         }
@@ -1473,10 +1491,12 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
 
         // Check if all variants are simple (no data or only simple types)
         for variant in &e.variants {
-            if let Some(data) = &variant.data {
-                // Check if the data type is a simple type that implements Clone, Debug, PartialEq
-                if !self.is_simple_type(data) {
-                    return false;
+            if let Some(types) = &variant.data {
+                // Check if all data types are simple types that implement Clone, Debug, PartialEq
+                for type_ in types {
+                    if !self.is_simple_type(type_) {
+                        return false;
+                    }
                 }
             }
         }
@@ -1494,10 +1514,12 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
 
         // Check if all variants are Copy-able
         for variant in &e.variants {
-            if let Some(data) = &variant.data {
-                // Check if the data type implements Copy
-                if !self.is_copyable_type(data) {
-                    return false;
+            if let Some(types) = &variant.data {
+                // Check if all data types implement Copy
+                for type_ in types {
+                    if !self.is_copyable_type(type_) {
+                        return false;
+                    }
                 }
             }
             // Unit variants are always Copy
