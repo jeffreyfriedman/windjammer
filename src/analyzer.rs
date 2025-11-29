@@ -476,7 +476,7 @@ impl Analyzer {
 
                         // CRITICAL FIX: Check returns_self FIRST!
                         // If a function returns Self, it's a builder pattern and should always consume self (Owned)
-                        // This is true even if it doesn't directly modify fields (it creates a new struct instead)
+                        // This is true even if it doesn't directly modify fields (it creates a new struct literal)
                         if returns_self {
                             // Builder pattern: consumes self, returns Self (either `self` or a new struct literal)
                             // Use `mut self` (Owned), not `&self` (Borrowed)
@@ -485,11 +485,18 @@ impl Analyzer {
                             // Mutating method that doesn't return self: use `&mut self`
                             OwnershipMode::MutBorrowed
                         } else {
-                            let accesses_fields = self.function_accesses_self_fields(func);
-                            if accesses_fields {
-                                OwnershipMode::Borrowed
-                            } else {
+                            // Check if self is used in binary operations (for Copy types like Vec2, Vec3)
+                            // If self is used in operators (self.x * other.y, etc.), keep it owned
+                            // This is especially important for math operations on Copy types
+                            if self.is_used_in_binary_op("self", &func.body) {
                                 OwnershipMode::Owned
+                            } else {
+                                let accesses_fields = self.function_accesses_self_fields(func);
+                                if accesses_fields {
+                                    OwnershipMode::Borrowed
+                                } else {
+                                    OwnershipMode::Owned
+                                }
                             }
                         }
                     } else {
@@ -931,7 +938,18 @@ impl Analyzer {
     }
 
     fn expr_is_identifier(&self, name: &str, expr: &Expression) -> bool {
-        matches!(expr, Expression::Identifier { name: id, .. } if id == name)
+        match expr {
+            Expression::Identifier { name: id, .. } if id == name => true,
+            // Also check for field access on the identifier (self.x, self.y, etc.)
+            Expression::FieldAccess { object, .. } => {
+                if let Expression::Identifier { name: id, .. } = &**object {
+                    id == name
+                } else {
+                    false
+                }
+            }
+            _ => false,
+        }
     }
 
     fn build_signature(&self, func: &AnalyzedFunction) -> FunctionSignature {
