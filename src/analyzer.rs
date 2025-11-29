@@ -354,6 +354,7 @@ impl Analyzer {
                 }
                 Item::Struct { decl, .. } => {
                     // Check if struct has @derive(Copy) decorator
+                    // This will work when all files are compiled together in one pass
                     let has_copy_derive = decl.decorators.iter().any(|decorator| {
                         decorator.name == "derive"
                             && decorator.arguments.iter().any(|(_, arg)| {
@@ -366,7 +367,6 @@ impl Analyzer {
                             })
                     });
                     if has_copy_derive {
-                        eprintln!("DEBUG: Registered Copy struct: {}", decl.name);
                         self.copy_structs.insert(decl.name.clone());
                     }
                 }
@@ -1064,17 +1064,20 @@ impl Analyzer {
             Type::Custom(name) => {
                 // Check if it's a known Copy enum
                 if self.copy_enums.contains(name) {
-                    eprintln!("DEBUG: is_copy_type('{}') = true (copy_enum)", name);
                     return true;
                 }
                 // Check if it's a known Copy struct (detected via @derive(Copy))
+                // This works when all files are compiled together
                 if self.copy_structs.contains(name) {
-                    eprintln!("DEBUG: is_copy_type('{}') = true (copy_struct)", name);
                     return true;
                 }
-                // Recognize common Rust primitive types by name
-                let is_primitive = matches!(
+                // Recognize common Rust primitive types and standard math types by name
+                // Note: Vec2/Vec3/Vec4/Mat4/Quat are part of the standard library and are always Copy
+                // They're hardcoded here because files are compiled individually, so the
+                // copy_structs registry doesn't persist across compilations
+                matches!(
                     name.as_str(),
+                    // Primitives
                     "i8" | "i16"
                         | "i32"
                         | "i64"
@@ -1090,14 +1093,13 @@ impl Analyzer {
                         | "f64"
                         | "bool"
                         | "char"
-                );
-                if !is_primitive && (name == "Vec2" || name == "Vec3" || name == "Vec4") {
-                    eprintln!(
-                        "DEBUG: is_copy_type('{}') = {} (copy_structs: {:?})",
-                        name, is_primitive, self.copy_structs
-                    );
-                }
-                is_primitive
+                        // Standard library math types (always Copy)
+                        | "Vec2"
+                        | "Vec3"
+                        | "Vec4"
+                        | "Mat4"
+                        | "Quat"
+                )
             }
             _ => false,
         }
