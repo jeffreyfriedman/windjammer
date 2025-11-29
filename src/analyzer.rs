@@ -613,7 +613,14 @@ impl Analyzer {
             return Ok(OwnershipMode::Owned);
         }
 
-        // 4. Default to borrowed for read-only access
+        // 4. Check if parameter is used in binary operations (for Copy types)
+        // Copy types used in operators (a - b, a + b, etc.) should remain owned
+        // because operator traits are typically implemented for owned values, not references
+        if self.is_used_in_binary_op(param_name, body) {
+            return Ok(OwnershipMode::Owned);
+        }
+
+        // 5. Default to borrowed for read-only access
         Ok(OwnershipMode::Borrowed)
     }
 
@@ -843,6 +850,88 @@ impl Analyzer {
             }
             _ => false,
         }
+    }
+
+    fn is_used_in_binary_op(&self, name: &str, statements: &[Statement]) -> bool {
+        for stmt in statements {
+            match stmt {
+                Statement::Let { value, .. } => {
+                    if self.expr_uses_in_binary_op(name, value) {
+                        return true;
+                    }
+                }
+                Statement::Expression { expr, .. } => {
+                    if self.expr_uses_in_binary_op(name, expr) {
+                        return true;
+                    }
+                }
+                Statement::Return { value, .. } => {
+                    if let Some(expr) = value {
+                        if self.expr_uses_in_binary_op(name, expr) {
+                            return true;
+                        }
+                    }
+                }
+                Statement::If {
+                    condition,
+                    then_block,
+                    else_block,
+                    ..
+                } => {
+                    if self.expr_uses_in_binary_op(name, condition) {
+                        return true;
+                    }
+                    if self.is_used_in_binary_op(name, then_block) {
+                        return true;
+                    }
+                    if let Some(else_b) = else_block {
+                        if self.is_used_in_binary_op(name, else_b) {
+                            return true;
+                        }
+                    }
+                }
+                Statement::Loop { body, .. }
+                | Statement::While { body, .. }
+                | Statement::For { body, .. } => {
+                    if self.is_used_in_binary_op(name, body) {
+                        return true;
+                    }
+                }
+                _ => {}
+            }
+        }
+        false
+    }
+
+    fn expr_uses_in_binary_op(&self, name: &str, expr: &Expression) -> bool {
+        match expr {
+            Expression::Binary { left, right, .. } => {
+                // Check if the parameter is directly used in a binary operation
+                if self.expr_is_identifier(name, left) || self.expr_is_identifier(name, right) {
+                    return true;
+                }
+                // Recursively check nested expressions
+                self.expr_uses_in_binary_op(name, left) || self.expr_uses_in_binary_op(name, right)
+            }
+            Expression::Unary { operand, .. } => self.expr_uses_in_binary_op(name, operand),
+            Expression::Call { arguments, .. } => {
+                arguments.iter().any(|(_, arg)| self.expr_uses_in_binary_op(name, arg))
+            }
+            Expression::MethodCall { object, arguments, .. } => {
+                self.expr_uses_in_binary_op(name, object)
+                    || arguments.iter().any(|(_, arg)| self.expr_uses_in_binary_op(name, arg))
+            }
+            Expression::FieldAccess { object, .. } => self.expr_uses_in_binary_op(name, object),
+            Expression::Index { object, index, .. } => {
+                self.expr_uses_in_binary_op(name, object) || self.expr_uses_in_binary_op(name, index)
+            }
+            Expression::Block { statements, .. } => self.is_used_in_binary_op(name, statements),
+            _ => false,
+        }
+    }
+
+    fn expr_is_identifier(&self, name: &str, expr: &Expression) -> bool {
+        matches!(expr, Expression::Identifier { name: id, .. } if id == name)
     }
 
     fn build_signature(&self, func: &AnalyzedFunction) -> FunctionSignature {
