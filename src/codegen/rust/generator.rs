@@ -4084,7 +4084,21 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
                     return format!("{}[{}{}{}]", obj_str, start_str, range_op, end_str);
                 }
 
-                let idx_str = self.generate_expression(index);
+                let mut idx_str = self.generate_expression(index);
+                
+                // AUTO-CAST: Rust requires usize for array indexing
+                // If the index explicitly casts to i64, change it to usize
+                // This handles: arr[index as int] → arr[index as usize]
+                if idx_str.ends_with(" as i64") {
+                    idx_str = idx_str.replace(" as i64", " as usize");
+                }
+                // Otherwise, wrap the index in (... as usize) to handle int types
+                // This handles: arr[index] where index: int → arr[(index as usize)]
+                // Note: This is safe because Rust will optimize away redundant casts
+                else {
+                    idx_str = format!("({} as usize)", idx_str);
+                }
+                
                 let base_expr = format!("{}[{}]", obj_str, idx_str);
 
                 // AUTO-CLONE: Check if this index expression needs to be cloned
