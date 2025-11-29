@@ -49,6 +49,41 @@ fn compile_should_succeed(code: &str, test_name: &str) {
     }
 }
 
+fn compile_and_check_generated_rust(wj_file: &str, expected_imports: &[&str], test_name: &str) {
+    let wj_path = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("tests")
+        .join(wj_file);
+    
+    let output = Command::new(get_wj_compiler())
+        .args(&["build", wj_path.to_str().unwrap(), "--no-cargo"])
+        .output()
+        .expect("Failed to execute compiler");
+    
+    if !output.status.success() {
+        let stdout = String::from_utf8_lossy(&output.stdout);
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        panic!("✗ {} failed to compile: {}{}", test_name, stdout, stderr);
+    }
+    
+    // Read the generated Rust file
+    let rust_file = wj_file.replace(".wj", ".rs");
+    let rust_path = PathBuf::from("./build").join(&rust_file);
+    let generated_rust = fs::read_to_string(&rust_path)
+        .expect(&format!("Failed to read generated Rust file: {:?}", rust_path));
+    
+    // Check that all expected imports are present
+    for expected_import in expected_imports {
+        if !generated_rust.contains(expected_import) {
+            panic!(
+                "✗ {} failed: Expected import '{}' not found in generated Rust:\n{}",
+                test_name, expected_import, generated_rust
+            );
+        }
+    }
+    
+    println!("✓ {} passed", test_name);
+}
+
 fn compile_should_fail(code: &str, expected_error: &str, test_name: &str) {
     match compile_wj_code(code) {
         Ok(_) => panic!("✗ {} should have failed but succeeded", test_name),
@@ -387,6 +422,24 @@ fn get_first_dimension(shape: Shape) -> f32 {
 }
 "#;
     compile_should_succeed(code, "struct_pattern_multiple_variants");
+}
+
+#[test]
+fn test_module_import_resolution() {
+    // This test verifies that when multiple types are imported from the same module,
+    // the compiler correctly resolves which module file each type is defined in.
+    // Bug: Compiler was generating "use super::collider2d::Collider2D" when it should
+    // generate "use super::module_import_resolution::Collider2D" because Collider2D
+    // is defined in module_import_resolution.wj, not in a separate collider2d.wj file.
+    
+    compile_and_check_generated_rust(
+        "module_import_resolution_user.wj",
+        &[
+            "use module_import_resolution::RigidBody2D",
+            "use module_import_resolution::Collider2D",  // NOT collider2d!
+        ],
+        "module_import_resolution"
+    );
 }
 
 // ============================================================================
