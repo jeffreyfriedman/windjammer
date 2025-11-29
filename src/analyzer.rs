@@ -554,23 +554,34 @@ impl Analyzer {
         let mut analyzed = self.analyze_function(func)?;
 
         // Look up the trait definition
-        if let Some(trait_decl) = self.trait_definitions.get(trait_name) {
+        // Try both the full trait name and just the last segment (e.g., "std::ops::Add" -> "Add")
+        let trait_key = if let Some(pos) = trait_name.rfind("::") {
+            &trait_name[pos + 2..]
+        } else {
+            trait_name
+        };
+        
+        if let Some(trait_decl) = self.trait_definitions.get(trait_key) {
             // Find the matching trait method
             if let Some(trait_method) = trait_decl.methods.iter().find(|m| m.name == func.name) {
                 // Override ALL parameters to match trait signature
                 // Trait implementations must match the trait's exact signature
-                for trait_param in &trait_method.parameters {
-                    if let Some(inferred_mode) = analyzed.inferred_ownership.get_mut(&trait_param.name) {
-                        // Convert trait's OwnershipHint to OwnershipMode
-                        let trait_mode = match &trait_param.ownership {
-                            OwnershipHint::Owned => OwnershipMode::Owned,
-                            OwnershipHint::Ref => OwnershipMode::Borrowed,
-                            OwnershipHint::Mut => OwnershipMode::MutBorrowed,
-                            OwnershipHint::Inferred => OwnershipMode::Borrowed, // Default
-                        };
+                // Match by POSITION, not by name (trait uses "rhs", impl might use "other")
+                for (i, trait_param) in trait_method.parameters.iter().enumerate() {
+                    // Get the corresponding parameter from the implementation by position
+                    if let Some(impl_param) = func.parameters.get(i) {
+                        if let Some(inferred_mode) = analyzed.inferred_ownership.get_mut(&impl_param.name) {
+                            // Convert trait's OwnershipHint to OwnershipMode
+                            let trait_mode = match &trait_param.ownership {
+                                OwnershipHint::Owned => OwnershipMode::Owned,
+                                OwnershipHint::Ref => OwnershipMode::Borrowed,
+                                OwnershipHint::Mut => OwnershipMode::MutBorrowed,
+                                OwnershipHint::Inferred => OwnershipMode::Borrowed, // Default
+                            };
 
-                        // Use trait's ownership mode
-                        *inferred_mode = trait_mode;
+                            // Use trait's ownership mode
+                            *inferred_mode = trait_mode;
+                        }
                     }
                 }
             }
