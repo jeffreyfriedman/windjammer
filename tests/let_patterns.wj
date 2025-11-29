@@ -1,0 +1,92 @@
+// Test: Patterns in Let Bindings
+// Tests that destructuring patterns work in let statements
+
+// ============================================================================
+// TEST 1: Tuple destructuring
+// ============================================================================
+
+fn test_tuple_destructuring() -> i32 {
+    let (x, y) = (10, 20)
+    let (a, b, c) = (1, 2, 3)
+    
+    return x + y + a + b + c
+}
+
+// ============================================================================
+// TEST 2: Nested tuple destructuring
+// ============================================================================
+
+fn test_nested_tuples() -> i32 {
+    let ((a, b), (c, d)) = ((1, 2), (3, 4))
+    
+    return a + b + c + d
+}
+
+// ============================================================================
+// TEST 3: Struct destructuring
+// ============================================================================
+
+struct Point {
+    x: i32,
+    y: i32,
+}
+
+fn test_struct_destructuring() -> i32 {
+    let point = Point { x: 10, y: 20 }
+    let Point { x, y } = point
+    
+    return x + y
+}
+
+// ============================================================================
+// TEST 4: Enum destructuring (irrefutable patterns)
+// ============================================================================
+
+enum SingleVariant {
+    Value(i32),
+}
+
+fn test_enum_destructuring() -> i32 {
+    let value = SingleVariant::Value(42)
+    let SingleVariant::Value(x) = value
+    
+    return x
+}
+
+// ============================================================================
+// TEST 5: Wildcard in let
+// ============================================================================
+
+fn test_wildcard() -> i32 {
+    let _ = 100
+    let (x, _) = (10, 20)
+    let (_, y, _) = (1, 2, 3)
+    
+    return x + y
+}
+
+// ============================================================================
+// TEST 6: Type annotations with patterns
+// ============================================================================
+
+fn test_type_annotations() -> i32 {
+    let (x, y): (i32, i32) = (5, 10)
+    
+    return x + y
+}
+
+// ============================================================================
+// MAIN
+// ============================================================================
+
+fn main() {
+    let r1 = test_tuple_destructuring()
+    let r2 = test_nested_tuples()
+    let r3 = test_struct_destructuring()
+    let r4 = test_enum_destructuring()
+    let r5 = test_wildcard()
+    let r6 = test_type_annotations()
+    
+    println("All let pattern tests passed!")
+}
+
