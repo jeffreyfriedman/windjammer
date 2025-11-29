@@ -1,9 +1,9 @@
 // Pattern Matching Tests
 // Automated tests for pattern matching features
 
-use std::process::Command;
 use std::fs;
 use std::path::PathBuf;
+use std::process::Command;
 
 fn get_wj_compiler() -> PathBuf {
     // Use the release build of the compiler
@@ -21,17 +21,17 @@ fn compile_wj_code(code: &str) -> Result<String, String> {
         .unwrap()
         .as_nanos();
     let temp_file = format!("/tmp/test_pattern_matching_{}.wj", timestamp);
-    
+
     fs::write(&temp_file, code).expect("Failed to write test file");
-    
+
     let output = Command::new(get_wj_compiler())
         .args(&["build", &temp_file, "--no-cargo"])
         .output()
         .expect("Failed to execute compiler");
-    
+
     // Clean up temp file
     let _ = fs::remove_file(&temp_file);
-    
+
     if output.status.success() {
         Ok(String::from_utf8_lossy(&output.stdout).to_string())
     } else {
@@ -53,23 +53,26 @@ fn compile_and_check_rust_compiles(wj_file: &str, test_name: &str) {
     let wj_path = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
         .join("tests")
         .join(wj_file);
-    
+
     // First, compile the Windjammer code
     let output = Command::new(get_wj_compiler())
         .args(&["build", wj_path.to_str().unwrap(), "--no-cargo"])
         .output()
         .expect("Failed to execute compiler");
-    
+
     if !output.status.success() {
         let stdout = String::from_utf8_lossy(&output.stdout);
         let stderr = String::from_utf8_lossy(&output.stderr);
-        panic!("✗ {} failed to compile Windjammer: {}{}", test_name, stdout, stderr);
+        panic!(
+            "✗ {} failed to compile Windjammer: {}{}",
+            test_name, stdout, stderr
+        );
     }
-    
+
     // Get the generated Rust file name (remove .wj extension, add .rs)
     let rust_file = wj_file.replace(".wj", ".rs");
     let rust_path = PathBuf::from("./build").join(&rust_file);
-    
+
     // Then, try to compile the generated Rust code with rustc
     // Use --crate-type=lib to avoid needing a main function
     let rust_output = Command::new("rustc")
@@ -81,13 +84,16 @@ fn compile_and_check_rust_compiles(wj_file: &str, test_name: &str) {
         ])
         .output()
         .expect("Failed to execute rustc");
-    
+
     if !rust_output.status.success() {
         let stdout = String::from_utf8_lossy(&rust_output.stdout);
         let stderr = String::from_utf8_lossy(&rust_output.stderr);
-        panic!("✗ {} failed to compile Rust: {}{}", test_name, stdout, stderr);
+        panic!(
+            "✗ {} failed to compile Rust: {}{}",
+            test_name, stdout, stderr
+        );
     }
-    
+
     println!("✓ {} passed (Windjammer + Rust compilation)", test_name);
 }
 
@@ -95,24 +101,26 @@ fn compile_and_check_generated_rust(wj_file: &str, expected_imports: &[&str], te
     let wj_path = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
         .join("tests")
         .join(wj_file);
-    
+
     let output = Command::new(get_wj_compiler())
         .args(&["build", wj_path.to_str().unwrap(), "--no-cargo"])
         .output()
         .expect("Failed to execute compiler");
-    
+
     if !output.status.success() {
         let stdout = String::from_utf8_lossy(&output.stdout);
         let stderr = String::from_utf8_lossy(&output.stderr);
         panic!("✗ {} failed to compile: {}{}", test_name, stdout, stderr);
     }
-    
+
     // Read the generated Rust file
     let rust_file = wj_file.replace(".wj", ".rs");
     let rust_path = PathBuf::from("./build").join(&rust_file);
-    let generated_rust = fs::read_to_string(&rust_path)
-        .expect(&format!("Failed to read generated Rust file: {:?}", rust_path));
-    
+    let generated_rust = fs::read_to_string(&rust_path).expect(&format!(
+        "Failed to read generated Rust file: {:?}",
+        rust_path
+    ));
+
     // Check that all expected imports are present
     for expected_import in expected_imports {
         if !generated_rust.contains(expected_import) {
@@ -122,7 +130,7 @@ fn compile_and_check_generated_rust(wj_file: &str, expected_imports: &[&str], te
             );
         }
     }
-    
+
     println!("✓ {} passed", test_name);
 }
 
@@ -133,8 +141,10 @@ fn compile_should_fail(code: &str, expected_error: &str, test_name: &str) {
             if e.contains(expected_error) {
                 println!("✓ {} passed (correctly rejected)", test_name);
             } else {
-                panic!("✗ {} failed with wrong error.\nExpected: {}\nGot: {}", 
-                       test_name, expected_error, e);
+                panic!(
+                    "✗ {} failed with wrong error.\nExpected: {}\nGot: {}",
+                    test_name, expected_error, e
+                );
             }
         }
     }
@@ -360,7 +370,11 @@ fn test_module_path_slash_rejected() {
     let code = r#"
 use std/fs
 "#;
-    compile_should_fail(code, "Use '::' for module paths", "module_path_slash_rejected");
+    compile_should_fail(
+        code,
+        "Use '::' for module paths",
+        "module_path_slash_rejected",
+    );
 }
 
 #[test]
@@ -368,7 +382,11 @@ fn test_module_path_dot_rejected() {
     let code = r#"
 use std.fs
 "#;
-    compile_should_fail(code, "Use '::' for module paths", "module_path_dot_rejected");
+    compile_should_fail(
+        code,
+        "Use '::' for module paths",
+        "module_path_dot_rejected",
+    );
 }
 
 // ============================================================================
@@ -473,14 +491,14 @@ fn test_module_import_resolution() {
     // Bug: Compiler was generating "use super::collider2d::Collider2D" when it should
     // generate "use super::module_import_resolution::Collider2D" because Collider2D
     // is defined in module_import_resolution.wj, not in a separate collider2d.wj file.
-    
+
     compile_and_check_generated_rust(
         "module_import_resolution_user.wj",
         &[
             "use module_import_resolution::RigidBody2D",
-            "use module_import_resolution::Collider2D",  // NOT collider2d!
+            "use module_import_resolution::Collider2D", // NOT collider2d!
         ],
-        "module_import_resolution"
+        "module_import_resolution",
     );
 }
 
@@ -488,14 +506,14 @@ fn test_module_import_resolution() {
 fn test_operator_precedence_negation() {
     // Test that !(a || b) generates correct Rust with parentheses preserved
     // Bug: Compiler was generating !a || b instead of !(a || b)
-    
+
     compile_and_check_generated_rust(
         "operator_precedence.wj",
         &[
-            "!(a || b)",  // Must have parentheses around the OR
-            "!(a && b)",  // Must have parentheses around the AND
+            "!(a || b)", // Must have parentheses around the OR
+            "!(a && b)", // Must have parentheses around the AND
         ],
-        "operator_precedence"
+        "operator_precedence",
     );
 }
 
@@ -504,7 +522,7 @@ fn test_array_indexing_with_int() {
     // Test that array indexing with 'int' type automatically casts to usize
     // Bug: arr[index] where index: int generates arr[index as i64] which fails
     // Expected: arr[index as usize] or automatic conversion
-    
+
     compile_and_check_rust_compiles("array_indexing.wj", "array_indexing_with_int");
 }
 
@@ -513,8 +531,11 @@ fn test_param_mutability_inference() {
     // Test that function parameters are automatically inferred as &mut when mutated
     // Bug: fn move_point(p: Point, dx: f32) { p.x = ... } generates p: Point instead of p: &mut Point
     // Expected: Automatic inference of &mut for mutated parameters
-    
-    compile_and_check_rust_compiles("param_mutability_inference.wj", "param_mutability_inference");
+
+    compile_and_check_rust_compiles(
+        "param_mutability_inference.wj",
+        "param_mutability_inference",
+    );
 }
 
 #[test]
@@ -522,7 +543,7 @@ fn test_trait_impl_stdlib() {
     // Test that trait implementations match trait signatures exactly
     // Bug: fn add(self, other: Point) was generating other: &Point
     // Expected: Trait method parameters should NOT be inferred, use trait signature
-    
+
     compile_and_check_rust_compiles("trait_impl_stdlib.wj", "trait_impl_stdlib");
 }
 
@@ -532,7 +553,7 @@ fn test_copy_type_ownership() {
     // Bug: fn distance(a: Vec2, b: Vec2) with a - b generates a: &Vec2, b: &Vec2
     // This breaks operator overloading because Sub is not implemented for &Vec2
     // Expected: Copy types should remain owned for operator compatibility
-    
+
     compile_and_check_rust_compiles("copy_type_ownership.wj", "copy_type_ownership");
 }
 
@@ -543,9 +564,8 @@ fn test_copy_type_ownership() {
 #[test]
 fn run_all_pattern_tests() {
     println!("\n=== Running Pattern Matching Tests ===\n");
-    
+
     // Note: Individual tests run via cargo test
     // This is just a summary
     println!("Run with: cargo test --test pattern_matching_tests");
 }
-

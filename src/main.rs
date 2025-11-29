@@ -335,14 +335,14 @@ fn build_project(path: &Path, output: &Path, target: CompilationTarget) -> Resul
 
     // Create a single ModuleCompiler for all files to share trait registry
     let mut module_compiler = ModuleCompiler::new(target);
-    
+
     // Load windjammer.toml if it exists (search up directory tree)
     let mut search_dir = if path.is_file() {
         path.parent().unwrap_or(Path::new("."))
     } else {
         path
     };
-    
+
     let mut config_loaded = false;
     for _ in 0..5 {
         let config_path = search_dir.join("windjammer.toml");
@@ -357,7 +357,10 @@ fn build_project(path: &Path, output: &Path, target: CompilationTarget) -> Resul
                             if root_path.exists() && root_path.is_dir() {
                                 module_compiler.add_source_root(root_path);
                             } else {
-                                eprintln!("Warning: Source root not found: {}", root_path.display());
+                                eprintln!(
+                                    "Warning: Source root not found: {}",
+                                    root_path.display()
+                                );
                             }
                         }
                         config_loaded = true;
@@ -369,7 +372,7 @@ fn build_project(path: &Path, output: &Path, target: CompilationTarget) -> Resul
                 }
             }
         }
-        
+
         // Go up one directory
         if let Some(parent) = search_dir.parent() {
             search_dir = parent;
@@ -377,7 +380,7 @@ fn build_project(path: &Path, output: &Path, target: CompilationTarget) -> Resul
             break;
         }
     }
-    
+
     if !config_loaded {
         eprintln!("Note: No windjammer.toml found. Module imports will only work with relative paths (./module) or std:: prefix.");
     }
@@ -534,9 +537,9 @@ struct ModuleCompiler {
     compiled_modules: HashMap<String, String>, // module path -> generated Rust code
     target: CompilationTarget,
     stdlib_path: PathBuf,
-    source_roots: Vec<PathBuf>,               // Additional source roots (e.g., ../windjammer-game-core/src_wj)
+    source_roots: Vec<PathBuf>, // Additional source roots (e.g., ../windjammer-game-core/src_wj)
     imported_stdlib_modules: HashSet<String>, // Track which stdlib modules are used
-    external_crates: Vec<String>,             // Track external crates (e.g., windjammer_ui)
+    external_crates: Vec<String>, // Track external crates (e.g., windjammer_ui)
     trait_registry: HashMap<String, parser::TraitDecl>, // Global trait registry for cross-file trait resolution
 }
 
@@ -558,7 +561,7 @@ impl ModuleCompiler {
             trait_registry: HashMap::new(),
         }
     }
-    
+
     fn add_source_root(&mut self, path: PathBuf) {
         self.source_roots.push(path);
     }
@@ -816,7 +819,7 @@ impl ModuleCompiler {
                     // dependencies should be treated as external (will be in same Rust module)
                     return Ok(PathBuf::from(format!("__source_root__::{}", module_path)));
                 }
-                
+
                 // Try directory module: source_root/math/mod.wj
                 let mut candidate = source_root.clone();
                 candidate.push(module_path);
@@ -826,7 +829,7 @@ impl ModuleCompiler {
                     return Ok(PathBuf::from(format!("__source_root__::{}", module_path)));
                 }
             }
-            
+
             // Not found in source roots - treat as external crate
             // External crate imports (e.g., windjammer_ui, external_crate)
             // These are treated as Rust crate dependencies and passed through to generated code

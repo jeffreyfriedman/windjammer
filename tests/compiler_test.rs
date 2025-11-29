@@ -10,56 +10,75 @@ fn test_codegen(test_name: &str) {
     let test_dir = Path::new("tests/codegen");
     let input_file = test_dir.join(format!("{}.wj", test_name));
     let expected_file = test_dir.join(format!("{}.expected.rs", test_name));
-    
+
     assert!(input_file.exists(), "Test file not found: {:?}", input_file);
-    assert!(expected_file.exists(), "Expected file not found: {:?}", expected_file);
-    
+    assert!(
+        expected_file.exists(),
+        "Expected file not found: {:?}",
+        expected_file
+    );
+
     // Compile the Windjammer file
     let output = Command::new("cargo")
-        .args(&["run", "--bin", "wj", "--", "build", input_file.to_str().unwrap(), "--no-cargo"])
+        .args(&[
+            "run",
+            "--bin",
+            "wj",
+            "--",
+            "build",
+            input_file.to_str().unwrap(),
+            "--no-cargo",
+        ])
         .output()
         .expect("Failed to run wj compiler");
-    
-    assert!(output.status.success(), "Compilation failed: {}", String::from_utf8_lossy(&output.stderr));
-    
+
+    assert!(
+        output.status.success(),
+        "Compilation failed: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+
     // Read generated output
     let generated_file = Path::new("build").join(format!("{}.rs", test_name));
-    let generated = fs::read_to_string(&generated_file)
-        .expect("Failed to read generated file");
-    
+    let generated = fs::read_to_string(&generated_file).expect("Failed to read generated file");
+
     // Read expected output
-    let expected = fs::read_to_string(&expected_file)
-        .expect("Failed to read expected file");
-    
+    let expected = fs::read_to_string(&expected_file).expect("Failed to read expected file");
+
     // Normalize whitespace for comparison (ignore formatting differences)
-    let normalize = |s: &str| s.lines()
-        .map(|line| line.trim())
-        .filter(|line| !line.is_empty() && !line.starts_with("//"))
-        .collect::<Vec<_>>()
-        .join("\n");
-    
+    let normalize = |s: &str| {
+        s.lines()
+            .map(|line| line.trim())
+            .filter(|line| !line.is_empty() && !line.starts_with("//"))
+            .collect::<Vec<_>>()
+            .join("\n")
+    };
+
     let generated_normalized = normalize(&generated);
     let expected_normalized = normalize(&expected);
-    
+
     if generated_normalized != expected_normalized {
         eprintln!("=== GENERATED ===\n{}\n", generated);
         eprintln!("=== EXPECTED ===\n{}\n", expected);
-        panic!("Generated code does not match expected output for test: {}", test_name);
+        panic!(
+            "Generated code does not match expected output for test: {}",
+            test_name
+        );
     }
 }
 
 /// Test helper: Verify that generated code compiles with Rust compiler
 fn test_rust_compiles(test_name: &str) {
     let generated_file = Path::new("build").join(format!("{}.rs", test_name));
-    
+
     // Create a temporary Cargo project
     let temp_dir = std::env::temp_dir().join(format!("wj_test_{}", test_name));
     let _ = fs::remove_dir_all(&temp_dir);
     fs::create_dir_all(&temp_dir).unwrap();
-    
+
     // Copy generated file
     fs::copy(&generated_file, temp_dir.join("lib.rs")).unwrap();
-    
+
     // Create Cargo.toml
     let cargo_toml = r#"
 [package]
@@ -71,19 +90,22 @@ edition = "2021"
 path = "lib.rs"
 "#;
     fs::write(temp_dir.join("Cargo.toml"), cargo_toml).unwrap();
-    
+
     // Compile with Rust
     let output = Command::new("cargo")
         .args(&["build", "--lib"])
         .current_dir(&temp_dir)
         .output()
         .expect("Failed to run cargo");
-    
+
     if !output.status.success() {
         let stderr = String::from_utf8_lossy(&output.stderr);
-        panic!("Generated Rust code failed to compile for test {}: \n{}", test_name, stderr);
+        panic!(
+            "Generated Rust code failed to compile for test {}: \n{}",
+            test_name, stderr
+        );
     }
-    
+
     // Cleanup
     let _ = fs::remove_dir_all(&temp_dir);
 }
@@ -159,5 +181,3 @@ fn test_generic_extern_fn() {
     test_codegen("generic_extern_fn");
     test_rust_compiles("generic_extern_fn");
 }
-
-

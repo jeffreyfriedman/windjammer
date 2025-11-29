@@ -67,7 +67,7 @@ pub struct CodeGenerator {
     current_statement_idx: usize,
     // IMPLICIT SELF SUPPORT: Track struct fields for implicit self references
     current_struct_fields: std::collections::HashSet<String>, // Field names in current impl block
-    current_local_vars: std::collections::HashSet<String>,   // Local variables in current function
+    current_local_vars: std::collections::HashSet<String>,    // Local variables in current function
     in_impl_block: bool, // true if currently generating code for an impl block
     // FUNCTION CONTEXT: Track current function parameters for compound assignment optimization
     current_function_params: Vec<crate::parser::Parameter>, // Parameters of the current function
@@ -336,7 +336,6 @@ impl CodeGenerator {
     // ============================================================================
     // UI FRAMEWORK SUPPORT
     // ============================================================================
-
     /// Detect if this program uses UI framework (std::ui)
     fn detect_ui_framework(&self, program: &Program) -> UIFrameworkInfo {
         let mut uses_ui = false;
@@ -431,7 +430,7 @@ impl CodeGenerator {
     fn generate_block(&mut self, stmts: &[Statement]) -> String {
         let mut output = String::new();
         let len = stmts.len();
-        
+
         for (i, stmt) in stmts.iter().enumerate() {
             // Track current statement index for optimization hints
             self.current_statement_idx = i;
@@ -911,7 +910,7 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
 
             // Handle Rust stdlib modules that should NOT be mapped to windjammer_runtime
             // These are native Rust modules that should be used directly
-            if module_base.starts_with("collections") 
+            if module_base.starts_with("collections")
                 || module_base.starts_with("cmp")
                 || module_base.starts_with("ops")
                 || module_base.starts_with("fmt")
@@ -1105,28 +1104,40 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
         // Check if this looks like a source_root import (module::Type pattern, not a crate)
         let rust_path = full_path.replace('.', "::");
         let segments: Vec<&str> = rust_path.split("::").collect();
-        
+
         // If it's a simple module::Type pattern (2 segments, last is uppercase),
         // and the first segment is lowercase (not a crate name with underscores),
         // treat it as a source_root import
         if segments.len() == 2 {
             let module_name = segments[0];
-            let item_name = segments[1];  // Could be a type (uppercase) or function (lowercase)
-            
+            let item_name = segments[1]; // Could be a type (uppercase) or function (lowercase)
+
             // Check if module_name is a simple lowercase identifier (source_root module)
             // vs a crate name like windjammer_game (has underscore)
-            if !module_name.contains('_') 
-                && module_name.chars().all(|c| c.is_lowercase() || c.is_ascii_digit())
+            if !module_name.contains('_')
+                && module_name
+                    .chars()
+                    .all(|c| c.is_lowercase() || c.is_ascii_digit())
             {
                 // Determine the actual file name:
                 // - If module_name is a common directory name (math, physics, rendering, etc.),
                 //   AND item_name starts with uppercase (it's a type),
                 //   convert item_name to snake_case to get the file name
                 // - Otherwise, use module_name as the file name (it's already a file)
-                
-                let common_directories = ["math", "physics", "rendering", "audio", "world", "effects", "ui", "input", "network"];
+
+                let common_directories = [
+                    "math",
+                    "physics",
+                    "rendering",
+                    "audio",
+                    "world",
+                    "effects",
+                    "ui",
+                    "input",
+                    "network",
+                ];
                 let is_type = item_name.chars().next().map_or(false, |c| c.is_uppercase());
-                
+
                 let file_name = if common_directories.contains(&module_name) && is_type {
                     // Directory module with type: math::Vec2 -> vec2.wj
                     // Convert type name to snake_case
@@ -1135,7 +1146,10 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
                         if ch.is_uppercase() && i > 0 {
                             // Don't add underscore before uppercase if previous char was also uppercase
                             // (handles cases like "Vec2D" -> "vec2d" not "vec2_d")
-                            let prev_was_upper = item_name.chars().nth(i - 1).map_or(false, |c| c.is_uppercase());
+                            let prev_was_upper = item_name
+                                .chars()
+                                .nth(i - 1)
+                                .map_or(false, |c| c.is_uppercase());
                             if !prev_was_upper {
                                 snake.push('_');
                             }
@@ -1148,15 +1162,18 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
                     // OR: collision2d::check_collision -> collision2d.wj
                     module_name.to_string()
                 };
-                
+
                 if let Some(alias_name) = alias {
-                    return format!("use super::{}::{} as {};\n", file_name, item_name, alias_name);
+                    return format!(
+                        "use super::{}::{} as {};\n",
+                        file_name, item_name, alias_name
+                    );
                 } else {
                     return format!("use super::{}::{};\n", file_name, item_name);
                 }
             }
         }
-        
+
         // Convert Windjammer's Go-style imports to Rust imports
         // Heuristic: If the last segment starts with an uppercase letter, it's likely a type/struct
         // Otherwise, it's a module and we should add ::*
@@ -1192,16 +1209,16 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
         analyzed: &[AnalyzedFunction],
     ) -> String {
         let mut output = String::new();
-        
+
         // Generate module declaration
         let pub_prefix = if is_public { "pub " } else { "" };
         output.push_str(&format!("{}mod {} {{\n", pub_prefix, name));
-        
+
         // Generate module contents
         // For now, we'll recursively generate all items in the module
         // This is a simplified implementation - a full implementation would need
         // to handle nested modules, visibility, etc.
-        
+
         for item in items {
             match item {
                 Item::Function { decl, .. } => {
@@ -1226,13 +1243,23 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
                             cow_optimizations: Vec::new(),
                             smallvec_optimizations: Vec::new(),
                         };
-                        output.push_str(&self.generate_function(&analyzed_func).replace('\n', "\n    "));
+                        output.push_str(
+                            &self
+                                .generate_function(&analyzed_func)
+                                .replace('\n', "\n    "),
+                        );
                         output.push_str("\n");
                     } else {
                         // Find the analyzed function
-                        if let Some(analyzed_func) = analyzed.iter().find(|f| f.decl.name == decl.name) {
+                        if let Some(analyzed_func) =
+                            analyzed.iter().find(|f| f.decl.name == decl.name)
+                        {
                             output.push_str("    ");
-                            output.push_str(&self.generate_function(analyzed_func).replace('\n', "\n    "));
+                            output.push_str(
+                                &self
+                                    .generate_function(analyzed_func)
+                                    .replace('\n', "\n    "),
+                            );
                             output.push_str("\n");
                         }
                     }
@@ -1261,7 +1288,7 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
                 }
             }
         }
-        
+
         output.push_str("}\n");
         output
     }
@@ -1358,7 +1385,7 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
             let has_copy = self.all_fields_are_copy(&s.fields);
             // Check if all fields are simple (primitives or types in simple_structs registry)
             let all_simple = s.fields.iter().all(|f| self.is_simple_type(&f.field_type));
-            
+
             if has_copy {
                 output.push_str("#[derive(Copy, Clone, Debug, PartialEq)]\n");
             } else if all_simple {
@@ -1505,10 +1532,8 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
                         ));
                     } else {
                         // Multi-field tuple variant: Variant(Type1, Type2, Type3)
-                        let type_strs: Vec<String> = types
-                            .iter()
-                            .map(|t| self.type_to_rust(t))
-                            .collect();
+                        let type_strs: Vec<String> =
+                            types.iter().map(|t| self.type_to_rust(t)).collect();
                         output.push_str(&format!(
                             "    {}({}),\n",
                             variant.name,
@@ -1572,7 +1597,7 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
 
         true
     }
-    
+
     /// Check if an enum can safely derive Copy
     /// All variants must either be unit variants or have Copy-able data
     fn can_enum_derive_copy(&self, e: &EnumDecl) -> bool {
@@ -1610,26 +1635,26 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
 
         true
     }
-    
+
     /// Check if a type implements Copy in Rust
     fn is_copyable_type(&self, type_: &Type) -> bool {
         match type_ {
             // Primitive types that implement Copy
             Type::Int | Type::Int32 | Type::Uint | Type::Float | Type::Bool => true,
-            
+
             // String and Vec are NOT Copy
             Type::String | Type::Vec(_) => false,
-            
+
             // References are Copy, but mutable references are not
             Type::Reference(_) => true,
             Type::MutableReference(_) => false,
-            
+
             // Option is Copy if the inner type is Copy
             Type::Option(inner) => self.is_copyable_type(inner),
-            
+
             // Result is Copy if both types are Copy
             Type::Result(ok, err) => self.is_copyable_type(ok) && self.is_copyable_type(err),
-            
+
             // Custom types - check if they're Rust primitives or known Copy types
             Type::Custom(name) => {
                 matches!(
@@ -1640,27 +1665,31 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
                         | "Vec2" | "Vec3" | "Vec4" | "Mat4" | "Quat" | "Color"
                 )
             }
-            
+
             // Tuples are Copy if all elements are Copy
             Type::Tuple(types) => types.iter().all(|t| self.is_copyable_type(t)),
-            
+
             // Arrays are Copy if the element type is Copy
             Type::Array(inner, _) => self.is_copyable_type(inner),
-            
+
             // Generic types - be conservative and say no
             Type::Generic(_) => false,
-            
+
             // Parameterized types - check the base type
             Type::Parameterized(name, params) => {
                 // Option<T> and Result<T, E> are Copy if T (and E) are Copy
                 match name.as_str() {
                     "Option" => params.len() == 1 && self.is_copyable_type(&params[0]),
-                    "Result" => params.len() == 2 && self.is_copyable_type(&params[0]) && self.is_copyable_type(&params[1]),
+                    "Result" => {
+                        params.len() == 2
+                            && self.is_copyable_type(&params[0])
+                            && self.is_copyable_type(&params[1])
+                    }
                     // Box, Rc, Arc, Vec, HashMap, HashSet are NOT Copy
                     _ => false,
                 }
             }
-            
+
             _ => false,
         }
     }
@@ -1696,41 +1725,50 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
 
     /// Analyze all structs to determine which are "simple" (all fields are Copy/Clone/Debug/PartialEq)
     /// This populates self.simple_structs for use in auto-derive logic
-    fn analyze_simple_structs(&mut self, struct_registry: &std::collections::HashMap<String, &StructDecl>) {
+    fn analyze_simple_structs(
+        &mut self,
+        struct_registry: &std::collections::HashMap<String, &StructDecl>,
+    ) {
         // Use a worklist algorithm to avoid infinite recursion on circular types
         let mut worklist: Vec<String> = struct_registry.keys().cloned().collect();
         let mut visiting: std::collections::HashSet<String> = std::collections::HashSet::new();
-        
+
         while let Some(struct_name) = worklist.pop() {
             // Skip if already analyzed
             if self.simple_structs.contains(&struct_name) {
                 continue;
             }
-            
+
             // Check for cycles
             if visiting.contains(&struct_name) {
                 // Circular dependency detected - not simple
                 continue;
             }
-            
+
             visiting.insert(struct_name.clone());
-            
+
             if let Some(struct_decl) = struct_registry.get(&struct_name) {
                 // Check if this struct can be simple
                 if !self.can_auto_derive_struct(struct_decl) {
                     visiting.remove(&struct_name);
                     continue;
                 }
-                
+
                 // Check if all fields are simple types
                 let mut all_fields_simple = true;
                 let mut needs_retry = false;
-                
+
                 for field in &struct_decl.fields {
-                    if !self.is_simple_type_with_registry(&field.field_type, struct_registry, &visiting) {
+                    if !self.is_simple_type_with_registry(
+                        &field.field_type,
+                        struct_registry,
+                        &visiting,
+                    ) {
                         // Check if this field is a custom type we haven't analyzed yet
                         if let Type::Custom(custom_name) = &field.field_type {
-                            if struct_registry.contains_key(custom_name) && !self.simple_structs.contains(custom_name) {
+                            if struct_registry.contains_key(custom_name)
+                                && !self.simple_structs.contains(custom_name)
+                            {
                                 // Need to analyze this dependency first
                                 needs_retry = true;
                                 worklist.push(struct_name.clone());
@@ -1742,7 +1780,7 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
                         break;
                     }
                 }
-                
+
                 if !needs_retry {
                     if all_fields_simple {
                         self.simple_structs.insert(struct_name.clone());
@@ -1754,7 +1792,7 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
             }
         }
     }
-    
+
     /// Check if a type is simple, with access to the struct registry and cycle detection
     fn is_simple_type_with_registry(
         &self,
@@ -1765,12 +1803,12 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
         match type_ {
             // Primitive types are always simple
             Type::Int | Type::Int32 | Type::Uint | Type::Float | Type::Bool | Type::String => true,
-            
+
             // References are simple if the inner type is simple
             Type::Reference(inner) | Type::MutableReference(inner) => {
                 self.is_simple_type_with_registry(inner, struct_registry, visiting)
             }
-            
+
             // Vec, Option, Result are simple if their inner types are simple
             Type::Vec(inner) | Type::Option(inner) => {
                 self.is_simple_type_with_registry(inner, struct_registry, visiting)
@@ -1779,40 +1817,57 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
                 self.is_simple_type_with_registry(ok, struct_registry, visiting)
                     && self.is_simple_type_with_registry(err, struct_registry, visiting)
             }
-            
+
             // Custom types - check if they're Rust std types or in our simple_structs registry
             Type::Custom(name) => {
                 // Check for Rust std types
                 let is_std_type = matches!(
                     name.as_str(),
-                    "String" | "f32" | "f64" | "i8" | "i16" | "i32" | "i64" | "i128" | "isize"
-                        | "u8" | "u16" | "u32" | "u64" | "u128" | "usize" | "bool" | "char"
+                    "String"
+                        | "f32"
+                        | "f64"
+                        | "i8"
+                        | "i16"
+                        | "i32"
+                        | "i64"
+                        | "i128"
+                        | "isize"
+                        | "u8"
+                        | "u16"
+                        | "u32"
+                        | "u64"
+                        | "u128"
+                        | "usize"
+                        | "bool"
+                        | "char"
                 );
-                
+
                 if is_std_type {
                     return true;
                 }
-                
+
                 // Check if we're currently visiting this type (cycle detection)
                 if visiting.contains(name) {
                     return false; // Circular dependency - not simple
                 }
-                
+
                 // Check if it's already in our simple_structs registry
                 self.simple_structs.contains(name)
             }
-            
+
             // Tuples are simple if all elements are simple
             Type::Tuple(types) => types
                 .iter()
                 .all(|t| self.is_simple_type_with_registry(t, struct_registry, visiting)),
-            
+
             // Arrays are simple if the element type is simple
-            Type::Array(inner, _) => self.is_simple_type_with_registry(inner, struct_registry, visiting),
-            
+            Type::Array(inner, _) => {
+                self.is_simple_type_with_registry(inner, struct_registry, visiting)
+            }
+
             // Generic types - be conservative and say no
             Type::Generic(_) => false,
-            
+
             // Parameterized types - check the base type
             Type::Parameterized(name, params) => {
                 // Common generic types that are Clone + Debug + PartialEq if their params are
@@ -1825,9 +1880,12 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
                         .iter()
                         .all(|t| self.is_simple_type_with_registry(t, struct_registry, visiting))
             }
-            
+
             // Associated types, trait objects, function pointers, infer - be conservative
-            Type::Associated(_, _) | Type::TraitObject(_) | Type::FunctionPointer { .. } | Type::Infer => false,
+            Type::Associated(_, _)
+            | Type::TraitObject(_)
+            | Type::FunctionPointer { .. }
+            | Type::Infer => false,
         }
     }
 
@@ -1850,14 +1908,29 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
                 // Check for Rust std types that are Clone + Debug + PartialEq
                 let is_std_type = matches!(
                     name.as_str(),
-                    "String" | "f32" | "f64" | "i8" | "i16" | "i32" | "i64" | "i128" | "isize"
-                        | "u8" | "u16" | "u32" | "u64" | "u128" | "usize" | "bool" | "char"
+                    "String"
+                        | "f32"
+                        | "f64"
+                        | "i8"
+                        | "i16"
+                        | "i32"
+                        | "i64"
+                        | "i128"
+                        | "isize"
+                        | "u8"
+                        | "u16"
+                        | "u32"
+                        | "u64"
+                        | "u128"
+                        | "usize"
+                        | "bool"
+                        | "char"
                 );
-                
+
                 if is_std_type {
                     return true;
                 }
-                
+
                 // Check if it's in our simple_structs registry (same-file structs)
                 // For cross-file dependencies, we can't verify, so we're conservative
                 self.simple_structs.contains(name)
@@ -2484,7 +2557,7 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
 
         // Track function parameters for compound assignment optimization
         self.current_function_params = func.parameters.clone();
-        
+
         // Clear local variables when entering a new function
         self.current_local_vars.clear();
 
@@ -2575,7 +2648,7 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
 
         // Add indentation for the function signature
         output.push_str(&self.indent());
-        
+
         // Add `pub` if function is marked pub OR we're in a #[wasm_bindgen] impl block OR compiling a module OR has @export decorator
         // BUT NOT if we're in a trait implementation (trait methods cannot have visibility modifiers)
         let has_export = func.decorators.iter().any(|d| d.name == "export");
@@ -2695,7 +2768,9 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
                                     analyzed.inferred_ownership.get(&param.name)
                                 {
                                     match ownership_mode {
-                                        OwnershipMode::MutBorrowed => return "&mut self".to_string(),
+                                        OwnershipMode::MutBorrowed => {
+                                            return "&mut self".to_string()
+                                        }
                                         OwnershipMode::Borrowed => return "&self".to_string(),
                                         OwnershipMode::Owned => {
                                             // Check if function actually modifies self
@@ -2716,11 +2791,11 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
                                 return "self".to_string();
                             }
                         }
-                        
+
                         // CRITICAL FIX: Only add 'mut' if the parameter is actually mutated
                         // For Copy types that are only read, we don't need 'mut'
                         let rust_type = self.type_to_rust(&param.type_);
-                        
+
                         // Check if the analyzer inferred that this parameter is mutated
                         if let Some(ownership_mode) = analyzed.inferred_ownership.get(&param.name) {
                             if ownership_mode == &OwnershipMode::MutBorrowed {
@@ -2861,16 +2936,16 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
                     EnumPatternBinding::Wildcard => format!("{}(_)", variant),
                     EnumPatternBinding::None => variant.clone(),
                     EnumPatternBinding::Tuple(patterns) => {
-                        let rust_patterns: Vec<String> = patterns
-                            .iter()
-                            .map(|p| self.pattern_to_rust(p))
-                            .collect();
+                        let rust_patterns: Vec<String> =
+                            patterns.iter().map(|p| self.pattern_to_rust(p)).collect();
                         format!("{}({})", variant, rust_patterns.join(", "))
                     }
                     EnumPatternBinding::Struct(fields) => {
                         let field_strs: Vec<String> = fields
                             .iter()
-                            .map(|(name, pattern)| format!("{}: {}", name, self.pattern_to_rust(pattern)))
+                            .map(|(name, pattern)| {
+                                format!("{}: {}", name, self.pattern_to_rust(pattern))
+                            })
                             .collect();
                         format!("{} {{ {} }}", variant, field_strs.join(", "))
                     }
@@ -3385,16 +3460,16 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
                     EnumPatternBinding::Wildcard => format!("{}(_)", name),
                     EnumPatternBinding::None => name.clone(),
                     EnumPatternBinding::Tuple(patterns) => {
-                        let pattern_strs: Vec<String> = patterns
-                            .iter()
-                            .map(|p| self.generate_pattern(p))
-                            .collect();
+                        let pattern_strs: Vec<String> =
+                            patterns.iter().map(|p| self.generate_pattern(p)).collect();
                         format!("{}({})", name, pattern_strs.join(", "))
                     }
                     EnumPatternBinding::Struct(fields) => {
                         let field_strs: Vec<String> = fields
                             .iter()
-                            .map(|(field_name, pattern)| format!("{}: {}", field_name, self.generate_pattern(pattern)))
+                            .map(|(field_name, pattern)| {
+                                format!("{}: {}", field_name, self.generate_pattern(pattern))
+                            })
                             .collect();
                         format!("{} {{ {} }}", name, field_strs.join(", "))
                     }
@@ -3576,8 +3651,11 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
                 // 3. We're in a constructor (no self parameter)
                 let is_parameter = self.current_function_params.iter().any(|p| p.name == *name);
                 let is_local_var = self.current_local_vars.contains(name);
-                let has_self = self.current_function_params.iter().any(|p| p.name == "self");
-                
+                let has_self = self
+                    .current_function_params
+                    .iter()
+                    .any(|p| p.name == "self");
+
                 let base_name = if self.in_impl_block
                     && !is_parameter
                     && !is_local_var
@@ -3659,15 +3737,12 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
             Expression::Unary { op, operand, .. } => {
                 let operand_str = self.generate_expression(operand);
                 let op_str = self.unary_op_to_rust(op);
-                
+
                 // Add parentheses around operand if it's a binary expression
                 // to preserve correct operator precedence
                 // Example: !(a || b) should not become !a || b
-                let needs_parens = matches!(
-                    operand.as_ref(),
-                    Expression::Binary { .. }
-                );
-                
+                let needs_parens = matches!(operand.as_ref(), Expression::Binary { .. });
+
                 if needs_parens {
                     format!("{}({})", op_str, operand_str)
                 } else {
@@ -4250,7 +4325,7 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
                 }
 
                 let mut idx_str = self.generate_expression(index);
-                
+
                 // AUTO-CAST: Rust requires usize for array indexing
                 // If the index explicitly casts to i64, change it to usize
                 // This handles: arr[index as int] → arr[index as usize]
@@ -4263,7 +4338,7 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
                 else {
                     idx_str = format!("({} as usize)", idx_str);
                 }
-                
+
                 let base_expr = format!("{}[{}]", obj_str, idx_str);
 
                 // AUTO-CLONE: Check if this index expression needs to be cloned

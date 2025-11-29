@@ -147,7 +147,7 @@ impl Parser {
         if self.position == 0 {
             return false;
         }
-        
+
         // Get the previous and current token locations
         if let (Some(prev), Some(curr)) = (
             self.tokens.get(self.position - 1),
@@ -169,7 +169,7 @@ impl Parser {
 
         while self.current_token() != &Token::Eof {
             items.push(self.parse_item()?);
-            
+
             // Consume optional semicolon after items (ASI - semicolons are optional)
             if self.current_token() == &Token::Semicolon {
                 self.advance();

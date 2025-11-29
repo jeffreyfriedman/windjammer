@@ -232,6 +232,8 @@ pub struct Analyzer {
     variables: HashMap<String, OwnershipMode>,
     // Track enum definitions to determine if they're Copy
     copy_enums: HashSet<String>,
+    // Track struct definitions with @derive(Copy) to determine if they're Copy
+    copy_structs: HashSet<String>,
     // Track trait definitions for impl block analysis
     trait_definitions: HashMap<String, TraitDecl>,
     // Track which local variables are mutated (for automatic mut inference)
@@ -251,65 +253,69 @@ impl Analyzer {
         let mut analyzer = Analyzer {
             variables: HashMap::new(),
             copy_enums: HashSet::new(),
+            copy_structs: HashSet::new(),
             trait_definitions: HashMap::new(),
             mutated_variables: HashSet::new(),
         };
-        
+
         // Pre-register standard library traits so the analyzer knows their signatures
         analyzer.register_stdlib_traits();
-        
+
         analyzer
     }
-    
+
     /// Pre-register standard library traits (Add, Sub, Mul, Div, etc.)
     /// This allows the analyzer to correctly handle trait implementations
     /// for stdlib traits without needing to parse Rust's stdlib.
     fn register_stdlib_traits(&mut self) {
-        use crate::parser::ast::{TraitDecl, TraitMethod, Parameter, Type, OwnershipHint, AssociatedType};
-        
+        use crate::parser::ast::{
+            AssociatedType, OwnershipHint, Parameter, TraitDecl, TraitMethod, Type,
+        };
+
         // Helper to create a binary operator trait (Add, Sub, Mul, Div, etc.)
         let create_binary_op_trait = |name: &str, method: &str| -> TraitDecl {
             TraitDecl {
                 name: name.to_string(),
                 generics: vec!["Rhs".to_string()],
                 supertraits: vec![],
-                methods: vec![
-                    TraitMethod {
-                        name: method.to_string(),
-                        parameters: vec![
-                            Parameter {
-                                name: "self".to_string(),
-                                pattern: None,
-                                type_: Type::Custom("Self".to_string()),
-                                ownership: OwnershipHint::Owned,
-                            },
-                            Parameter {
-                                name: "rhs".to_string(),
-                                pattern: None,
-                                type_: Type::Custom("Rhs".to_string()),
-                                ownership: OwnershipHint::Owned,
-                            },
-                        ],
-                        return_type: Some(Type::Custom("Output".to_string())),
-                        is_async: false,
-                        body: None,
-                    },
-                ],
-                associated_types: vec![
-                    AssociatedType {
-                        name: "Output".to_string(),
-                        concrete_type: None,
-                    },
-                ],
+                methods: vec![TraitMethod {
+                    name: method.to_string(),
+                    parameters: vec![
+                        Parameter {
+                            name: "self".to_string(),
+                            pattern: None,
+                            type_: Type::Custom("Self".to_string()),
+                            ownership: OwnershipHint::Owned,
+                        },
+                        Parameter {
+                            name: "rhs".to_string(),
+                            pattern: None,
+                            type_: Type::Custom("Rhs".to_string()),
+                            ownership: OwnershipHint::Owned,
+                        },
+                    ],
+                    return_type: Some(Type::Custom("Output".to_string())),
+                    is_async: false,
+                    body: None,
+                }],
+                associated_types: vec![AssociatedType {
+                    name: "Output".to_string(),
+                    concrete_type: None,
+                }],
             }
         };
-        
+
         // Register common operator traits
-        self.trait_definitions.insert("Add".to_string(), create_binary_op_trait("Add", "add"));
-        self.trait_definitions.insert("Sub".to_string(), create_binary_op_trait("Sub", "sub"));
-        self.trait_definitions.insert("Mul".to_string(), create_binary_op_trait("Mul", "mul"));
-        self.trait_definitions.insert("Div".to_string(), create_binary_op_trait("Div", "div"));
-        self.trait_definitions.insert("Rem".to_string(), create_binary_op_trait("Rem", "rem"));
+        self.trait_definitions
+            .insert("Add".to_string(), create_binary_op_trait("Add", "add"));
+        self.trait_definitions
+            .insert("Sub".to_string(), create_binary_op_trait("Sub", "sub"));
+        self.trait_definitions
+            .insert("Mul".to_string(), create_binary_op_trait("Mul", "mul"));
+        self.trait_definitions
+            .insert("Div".to_string(), create_binary_op_trait("Div", "div"));
+        self.trait_definitions
+            .insert("Rem".to_string(), create_binary_op_trait("Rem", "rem"));
     }
 
     /// Register trait definitions from an external program (e.g., imported module)
@@ -331,16 +337,37 @@ impl Analyzer {
         let mut analyzed = Vec::new();
         let mut registry = SignatureRegistry::new();
 
-        // First pass: Collect all enum definitions to determine Copy types
+        // First pass: Collect all enum and struct definitions to determine Copy types
         // and collect all trait definitions for impl block analysis
         for item in &program.items {
             match item {
                 Item::Enum { decl, .. } => {
                     // Fieldless enums (unit variants only) are Copy by default
                     use crate::parser::ast::EnumVariantData;
-                    let is_copy = decl.variants.iter().all(|v| matches!(v.data, EnumVariantData::Unit));
+                    let is_copy = decl
+                        .variants
+                        .iter()
+                        .all(|v| matches!(v.data, EnumVariantData::Unit));
                     if is_copy {
                         self.copy_enums.insert(decl.name.clone());
+                    }
+                }
+                Item::Struct { decl, .. } => {
+                    // Check if struct has @derive(Copy) decorator
+                    let has_copy_derive = decl.decorators.iter().any(|decorator| {
+                        decorator.name == "derive"
+                            && decorator.arguments.iter().any(|(_, arg)| {
+                                if let crate::parser::ast::Expression::Identifier { name, .. } = arg
+                                {
+                                    name == "Copy"
+                                } else {
+                                    false
+                                }
+                            })
+                    });
+                    if has_copy_derive {
+                        eprintln!("DEBUG: Registered Copy struct: {}", decl.name);
+                        self.copy_structs.insert(decl.name.clone());
                     }
                 }
                 Item::Trait { decl, .. } => {
@@ -500,8 +527,18 @@ impl Analyzer {
                             }
                         }
                     } else {
-                        // Perform inference based on usage in function body
-                        self.infer_parameter_ownership(&param.name, &func.body, &func.return_type)?
+                        // For Copy types, default to Owned (pass by value)
+                        // This allows seamless use of types like Vec2, Vec3 without references
+                        if self.is_copy_type(&param.type_) {
+                            OwnershipMode::Owned
+                        } else {
+                            // Perform inference based on usage in function body
+                            self.infer_parameter_ownership(
+                                &param.name,
+                                &func.body,
+                                &func.return_type,
+                            )?
+                        }
                     }
                 }
             };
@@ -567,7 +604,7 @@ impl Analyzer {
         } else {
             trait_name
         };
-        
+
         if let Some(trait_decl) = self.trait_definitions.get(trait_key) {
             // Find the matching trait method
             if let Some(trait_method) = trait_decl.methods.iter().find(|m| m.name == func.name) {
@@ -577,7 +614,9 @@ impl Analyzer {
                 for (i, trait_param) in trait_method.parameters.iter().enumerate() {
                     // Get the corresponding parameter from the implementation by position
                     if let Some(impl_param) = func.parameters.get(i) {
-                        if let Some(inferred_mode) = analyzed.inferred_ownership.get_mut(&impl_param.name) {
+                        if let Some(inferred_mode) =
+                            analyzed.inferred_ownership.get_mut(&impl_param.name)
+                        {
                             // Convert trait's OwnershipHint to OwnershipMode
                             let trait_mode = match &trait_param.ownership {
                                 OwnershipHint::Owned => OwnershipMode::Owned,
@@ -641,7 +680,7 @@ impl Analyzer {
                             return true;
                         }
                     }
-                    
+
                     // Check if the assignment target is a field of the parameter
                     // e.g., p.x = ... or p.position.x = ...
                     if self.expression_uses_identifier(name, target) {
@@ -779,7 +818,8 @@ impl Analyzer {
                     // Calculation: self.field = self.field * param (or any other expression)
                     //
                     // We check if the value is JUST the identifier, not part of a larger expression.
-                    if matches!(&**object, Expression::Identifier { name: id, .. } if id == "self") {
+                    if matches!(&**object, Expression::Identifier { name: id, .. } if id == "self")
+                    {
                         // Only return true if the value is EXACTLY the parameter identifier
                         if matches!(value, Expression::Identifier { name: id, .. } if id == name) {
                             return true;
@@ -926,16 +966,21 @@ impl Analyzer {
                 self.expr_uses_in_binary_op(name, left) || self.expr_uses_in_binary_op(name, right)
             }
             Expression::Unary { operand, .. } => self.expr_uses_in_binary_op(name, operand),
-            Expression::Call { arguments, .. } => {
-                arguments.iter().any(|(_, arg)| self.expr_uses_in_binary_op(name, arg))
-            }
-            Expression::MethodCall { object, arguments, .. } => {
+            Expression::Call { arguments, .. } => arguments
+                .iter()
+                .any(|(_, arg)| self.expr_uses_in_binary_op(name, arg)),
+            Expression::MethodCall {
+                object, arguments, ..
+            } => {
                 self.expr_uses_in_binary_op(name, object)
-                    || arguments.iter().any(|(_, arg)| self.expr_uses_in_binary_op(name, arg))
+                    || arguments
+                        .iter()
+                        .any(|(_, arg)| self.expr_uses_in_binary_op(name, arg))
             }
             Expression::FieldAccess { object, .. } => self.expr_uses_in_binary_op(name, object),
             Expression::Index { object, index, .. } => {
-                self.expr_uses_in_binary_op(name, object) || self.expr_uses_in_binary_op(name, index)
+                self.expr_uses_in_binary_op(name, object)
+                    || self.expr_uses_in_binary_op(name, index)
             }
             Expression::Block { statements, .. } => self.is_used_in_binary_op(name, statements),
             _ => false,
@@ -1019,10 +1064,16 @@ impl Analyzer {
             Type::Custom(name) => {
                 // Check if it's a known Copy enum
                 if self.copy_enums.contains(name) {
+                    eprintln!("DEBUG: is_copy_type('{}') = true (copy_enum)", name);
+                    return true;
+                }
+                // Check if it's a known Copy struct (detected via @derive(Copy))
+                if self.copy_structs.contains(name) {
+                    eprintln!("DEBUG: is_copy_type('{}') = true (copy_struct)", name);
                     return true;
                 }
                 // Recognize common Rust primitive types by name
-                matches!(
+                let is_primitive = matches!(
                     name.as_str(),
                     "i8" | "i16"
                         | "i32"
@@ -1039,7 +1090,14 @@ impl Analyzer {
                         | "f64"
                         | "bool"
                         | "char"
-                )
+                );
+                if !is_primitive && (name == "Vec2" || name == "Vec3" || name == "Vec4") {
+                    eprintln!(
+                        "DEBUG: is_copy_type('{}') = {} (copy_structs: {:?})",
+                        name, is_primitive, self.copy_structs
+                    );
+                }
+                is_primitive
             }
             _ => false,
         }
@@ -2166,13 +2224,13 @@ impl Analyzer {
             _ => false,
         }
     }
-    
+
     /// Check if an expression contains self field mutations (for match arms and blocks)
     fn expression_contains_self_field_mutations(&self, expr: &Expression) -> bool {
         match expr {
-            Expression::Block { statements, .. } => {
-                statements.iter().any(|s| self.statement_modifies_self_fields(s))
-            }
+            Expression::Block { statements, .. } => statements
+                .iter()
+                .any(|s| self.statement_modifies_self_fields(s)),
             Expression::MethodCall { object, method, .. } => {
                 // Check if this is a mutating method call on a self field
                 self.expression_is_self_field_access(object) && self.is_mutating_method(method)
@@ -2388,26 +2446,26 @@ impl Analyzer {
                 Statement::For { pattern, body, .. } => {
                     // Collect mutations in loop body
                     self.collect_mutations(body);
-                    
+
                     // If the loop variable itself is mutated in the body, track it
                     // This helps infer `for x in &mut vec` when x is modified
                     if let Pattern::Identifier(var_name) = pattern {
                         // Check if this variable is mutated in the body
                         if self.is_variable_mutated_in_statements(var_name, body) {
                             // Track that this variable needs mutable access
-                            self.mutated_variables.insert(format!("__loop_var_{}", var_name));
+                            self.mutated_variables
+                                .insert(format!("__loop_var_{}", var_name));
                         }
                     }
                 }
-                Statement::While { body, .. }
-                | Statement::Loop { body, .. } => {
+                Statement::While { body, .. } | Statement::Loop { body, .. } => {
                     self.collect_mutations(body);
                 }
                 _ => {}
             }
         }
     }
-    
+
     /// Check if a variable is mutated within a specific set of statements
     fn is_variable_mutated_in_statements(&self, var_name: &str, statements: &[Statement]) -> bool {
         for stmt in statements {
@@ -2434,7 +2492,11 @@ impl Analyzer {
                         return true;
                     }
                 }
-                Statement::If { then_block, else_block, .. } => {
+                Statement::If {
+                    then_block,
+                    else_block,
+                    ..
+                } => {
                     if self.is_variable_mutated_in_statements(var_name, then_block) {
                         return true;
                     }

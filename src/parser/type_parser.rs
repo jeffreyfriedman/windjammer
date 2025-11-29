@@ -356,7 +356,14 @@ impl Parser {
                                             //
                                             // Heuristic: If base is "Self" or looks like a type parameter (single uppercase letter),
                                             // treat as associated type. Otherwise, treat as qualified path.
-                                            if type_name == "Self" || (type_name.len() == 1 && type_name.chars().next().unwrap().is_uppercase()) {
+                                            if type_name == "Self"
+                                                || (type_name.len() == 1
+                                                    && type_name
+                                                        .chars()
+                                                        .next()
+                                                        .unwrap()
+                                                        .is_uppercase())
+                                            {
                                                 // Associated type: Self::Item, T::Output
                                                 self.advance(); // consume ::
                                                 self.advance(); // consume identifier
