@@ -554,18 +554,28 @@ fn find_wj_files(path: &Path) -> Result<Vec<PathBuf>> {
             files.push(path.to_path_buf());
         }
     } else if path.is_dir() {
-        for entry in std::fs::read_dir(path)? {
-            let entry = entry?;
-            let path = entry.path();
-
-            if path.is_file() && path.extension().and_then(|s| s.to_str()) == Some("wj") {
-                files.push(path);
-            }
-        }
+        // Recursively find all .wj files in subdirectories
+        find_wj_files_recursive(path, &mut files)?;
     }
 
     files.sort();
     Ok(files)
+}
+
+/// Recursively find all .wj files in a directory tree
+fn find_wj_files_recursive(dir: &Path, files: &mut Vec<PathBuf>) -> Result<()> {
+    for entry in std::fs::read_dir(dir)? {
+        let entry = entry?;
+        let path = entry.path();
+
+        if path.is_file() && path.extension().and_then(|s| s.to_str()) == Some("wj") {
+            files.push(path);
+        } else if path.is_dir() {
+            // Recurse into subdirectories
+            find_wj_files_recursive(&path, files)?;
+        }
+    }
+    Ok(())
 }
 
 // Module compiler for handling dependencies
