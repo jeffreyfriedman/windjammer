@@ -1,0 +1,35 @@
+// Test: Builder pattern with self-returning methods
+
+pub struct Config {
+    pub host: string,
+    pub port: int,
+    pub timeout: int,
+}
+
+impl Config {
+    pub fn new() -> Config {
+        Config {
+            host: "localhost".to_string(),
+            port: 8080,
+            timeout: 30,
+        }
+    }
+    
+    pub fn host(self, host: string) -> Config {
+        Config {
+            host,
+            port: self.port,
+            timeout: self.timeout,
+        }
+    }
+    
+    pub fn port(self, port: int) -> Config {
+        Config {
+            host: self.host,
+            port,
+            timeout: self.timeout,
+        }
+    }
+}
+
+

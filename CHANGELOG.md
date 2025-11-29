@@ -4,6 +4,32 @@ All notable changes to Windjammer will be documented in this file.
 
 ## [0.38.6] - 2025-11-28
 
+### Added
+- **Extern Function (`extern fn`) Support**: Full support for FFI function declarations.
+  - Syntax: `pub extern fn name(params) -> RetType;` (no body, semicolon-terminated)
+  - Works inside `mod` blocks: `mod ffi { pub extern fn ...; }`
+  - Generates idiomatic Rust `extern fn` declarations
+  - **Impact**: CRITICAL for FFI integration. Enables clean game engine architecture with Windjammer abstractions calling Rust/C FFI.
+
+- **Module (`mod`) Support**: Full support for module declarations and nested items.
+  - Syntax: `mod name { ... }` and `pub mod name { ... }`
+  - Can contain functions, structs, enums, traits, impl blocks, use statements, and nested modules
+  - Enables proper FFI organization: `mod ffi { ... }`
+  - **Impact**: Critical for code organization and FFI declarations. No more workarounds!
+
+- **Automatic `mut` Inference for Local Variables**: The `mut` keyword is now optional for local variables - the compiler automatically infers mutability from usage.
+  - Before: `let mut x = 5` (explicit mut required, like Rust)
+  - After: `let x = 5` (mut inferred if variable is reassigned, like Go)
+  - Aligns with modern languages (Go, Swift's `var`, Kotlin's `var`)
+  - **Impact**: MAJOR ergonomics improvement. Eliminates one of Rust's most criticized quirks. Users never need to write `mut` again!
+
+### Changed
+- **Semicolons Now Optional for Associated Types**: Associated type declarations no longer require semicolons, aligning with modern languages (Swift, Kotlin, Go).
+  - Before: `type Output = Vec2;` (semicolon required, like Rust)
+  - After: `type Output = Vec2` (semicolon optional, like Swift/Kotlin/Go)
+  - Applies to both trait declarations and impl blocks
+  - **Impact**: More consistent and ergonomic syntax. Windjammer no longer copies Rust's quirks unnecessarily.
+
 ### Fixed
 - **Parameter Mutability Over-Inference** (CRITICAL): Fixed bug where explicit type annotations like `delta: f32` were incorrectly generated as `delta: &mut f32`.
   - **Parser Fix**: Now correctly sets `OwnershipHint::Owned` for parameters with explicit non-reference types

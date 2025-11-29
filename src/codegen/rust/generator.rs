@@ -61,10 +61,13 @@ pub struct CodeGenerator {
     cow_optimizations: std::collections::HashSet<String>, // Variables that can use Cow
     // AUTO-CLONE: Track where to automatically insert clones
     auto_clone_analysis: Option<crate::auto_clone::AutoCloneAnalysis>,
+    // AUTO-MUT: Track which local variables are mutated (for automatic mut inference)
+    mutated_variables: std::collections::HashSet<String>,
     // Track current statement index for optimization hints
     current_statement_idx: usize,
     // IMPLICIT SELF SUPPORT: Track struct fields for implicit self references
     current_struct_fields: std::collections::HashSet<String>, // Field names in current impl block
+    current_local_vars: std::collections::HashSet<String>,   // Local variables in current function
     in_impl_block: bool, // true if currently generating code for an impl block
     // FUNCTION CONTEXT: Track current function parameters for compound assignment optimization
     current_function_params: Vec<crate::parser::Parameter>, // Parameters of the current function
@@ -101,8 +104,10 @@ impl CodeGenerator {
             smallvec_optimizations: std::collections::HashMap::new(),
             cow_optimizations: std::collections::HashSet::new(),
             auto_clone_analysis: None,
+            mutated_variables: std::collections::HashSet::new(),
             current_statement_idx: 0,
             current_struct_fields: std::collections::HashSet::new(),
+            current_local_vars: std::collections::HashSet::new(),
             in_impl_block: false,
             current_function_params: Vec::new(),
         }
@@ -423,6 +428,7 @@ impl CodeGenerator {
     fn generate_block(&mut self, stmts: &[Statement]) -> String {
         let mut output = String::new();
         let len = stmts.len();
+        
         for (i, stmt) in stmts.iter().enumerate() {
             // Track current statement index for optimization hints
             self.current_statement_idx = i;
@@ -647,6 +653,15 @@ impl CodeGenerator {
 
                     self.in_impl_block = false;
                     self.current_struct_fields.clear();
+                }
+                Item::Mod {
+                    name,
+                    items,
+                    is_public,
+                    ..
+                } => {
+                    body.push_str(&self.generate_mod(name, items, *is_public, analyzed));
+                    body.push_str("\n\n");
                 }
                 _ => {}
             }
@@ -886,7 +901,15 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
 
             // Handle Rust stdlib modules that should NOT be mapped to windjammer_runtime
             // These are native Rust modules that should be used directly
-            if module_base.starts_with("collections") || module_base.starts_with("cmp") {
+            if module_base.starts_with("collections") 
+                || module_base.starts_with("cmp")
+                || module_base.starts_with("ops")
+                || module_base.starts_with("fmt")
+                || module_base.starts_with("io")
+                || module_base.starts_with("iter")
+                || module_base.starts_with("mem")
+                || module_base.starts_with("ptr")
+            {
                 // Pass through to Rust's std library
                 return format!("use std::{};\n", module_name);
             }
@@ -1095,6 +1118,88 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
         }
     }
 
+    fn generate_mod(
+        &mut self,
+        name: &str,
+        items: &[Item],
+        is_public: bool,
+        analyzed: &[AnalyzedFunction],
+    ) -> String {
+        let mut output = String::new();
+        
+        // Generate module declaration
+        let pub_prefix = if is_public { "pub " } else { "" };
+        output.push_str(&format!("{}mod {} {{\n", pub_prefix, name));
+        
+        // Generate module contents
+        // For now, we'll recursively generate all items in the module
+        // This is a simplified implementation - a full implementation would need
+        // to handle nested modules, visibility, etc.
+        
+        for item in items {
+            match item {
+                Item::Function { decl, .. } => {
+                    // For extern functions, generate directly without analysis
+                    if decl.is_extern {
+                        output.push_str("    ");
+                        // Create a minimal analyzed function for extern functions
+                        let analyzed_func = crate::analyzer::AnalyzedFunction {
+                            decl: decl.clone(),
+                            inferred_ownership: std::collections::HashMap::new(),
+                            clone_optimizations: Vec::new(),
+                            struct_mapping_optimizations: Vec::new(),
+                            string_optimizations: Vec::new(),
+                            assignment_optimizations: Vec::new(),
+                            defer_drop_optimizations: Vec::new(),
+                            const_static_optimizations: Vec::new(),
+                            auto_clone_analysis: crate::auto_clone::AutoCloneAnalysis {
+                                clone_sites: std::collections::HashMap::new(),
+                                string_literal_vars: std::collections::HashSet::new(),
+                            },
+                            mutated_variables: std::collections::HashSet::new(),
+                            cow_optimizations: Vec::new(),
+                            smallvec_optimizations: Vec::new(),
+                        };
+                        output.push_str(&self.generate_function(&analyzed_func).replace('\n', "\n    "));
+                        output.push_str("\n");
+                    } else {
+                        // Find the analyzed function
+                        if let Some(analyzed_func) = analyzed.iter().find(|f| f.decl.name == decl.name) {
+                            output.push_str("    ");
+                            output.push_str(&self.generate_function(analyzed_func).replace('\n', "\n    "));
+                            output.push_str("\n");
+                        }
+                    }
+                }
+                Item::Struct { decl, .. } => {
+                    output.push_str("    ");
+                    output.push_str(&self.generate_struct(decl).replace('\n', "\n    "));
+                    output.push_str("\n");
+                }
+                Item::Enum { decl, .. } => {
+                    output.push_str("    ");
+                    output.push_str(&self.generate_enum(decl).replace('\n', "\n    "));
+                    output.push_str("\n");
+                }
+                Item::Trait { decl, .. } => {
+                    output.push_str("    ");
+                    output.push_str(&self.generate_trait(decl).replace('\n', "\n    "));
+                    output.push_str("\n");
+                }
+                Item::Use { path, alias, .. } => {
+                    output.push_str("    ");
+                    output.push_str(&self.generate_use(path, alias.as_deref()));
+                }
+                _ => {
+                    // TODO: Handle other item types
+                }
+            }
+        }
+        
+        output.push_str("}\n");
+        output
+    }
+
     fn generate_struct(&mut self, s: &StructDecl) -> String {
         let mut output = String::new();
 
@@ -1182,7 +1287,13 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
         // Automatically derive common traits for simple structs (if not already derived)
         // This follows the Windjammer philosophy: hide complexity in the compiler
         if self.can_auto_derive_struct(s) && !output.contains("#[derive(") {
-            output.push_str("#[derive(Clone, Debug, PartialEq)]\n");
+            // Check if all fields are Copy types (primitives like f32, i32, etc.)
+            let has_copy = self.all_fields_are_copy(&s.fields);
+            if has_copy {
+                output.push_str("#[derive(Copy, Clone, Debug, PartialEq)]\n");
+            } else {
+                output.push_str("#[derive(Clone, Debug, PartialEq)]\n");
+            }
         }
 
         // Add struct declaration with type parameters
@@ -1277,7 +1388,13 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
         // Automatic trait derivation - analyze if the enum can safely derive common traits
         let can_auto_derive = self.can_auto_derive_enum(e);
         if can_auto_derive {
-            output.push_str("#[derive(Clone, Debug, PartialEq)]\n");
+            // Check if we can also derive Copy (all variants must be Copy-able)
+            let can_derive_copy = self.can_enum_derive_copy(e);
+            if can_derive_copy {
+                output.push_str("#[derive(Copy, Clone, Debug, PartialEq)]\n");
+            } else {
+                output.push_str("#[derive(Clone, Debug, PartialEq)]\n");
+            }
         }
 
         let pub_prefix = if e.is_pub || self.is_module {
@@ -1332,6 +1449,82 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
 
         true
     }
+    
+    /// Check if an enum can safely derive Copy
+    /// All variants must either be unit variants or have Copy-able data
+    fn can_enum_derive_copy(&self, e: &EnumDecl) -> bool {
+        // Don't derive Copy if the enum has generic parameters
+        if !e.type_params.is_empty() {
+            return false;
+        }
+
+        // Check if all variants are Copy-able
+        for variant in &e.variants {
+            if let Some(data) = &variant.data {
+                // Check if the data type implements Copy
+                if !self.is_copyable_type(data) {
+                    return false;
+                }
+            }
+            // Unit variants are always Copy
+        }
+
+        true
+    }
+    
+    /// Check if a type implements Copy in Rust
+    fn is_copyable_type(&self, type_: &Type) -> bool {
+        match type_ {
+            // Primitive types that implement Copy
+            Type::Int | Type::Int32 | Type::Uint | Type::Float | Type::Bool => true,
+            
+            // String and Vec are NOT Copy
+            Type::String | Type::Vec(_) => false,
+            
+            // References are Copy, but mutable references are not
+            Type::Reference(_) => true,
+            Type::MutableReference(_) => false,
+            
+            // Option is Copy if the inner type is Copy
+            Type::Option(inner) => self.is_copyable_type(inner),
+            
+            // Result is Copy if both types are Copy
+            Type::Result(ok, err) => self.is_copyable_type(ok) && self.is_copyable_type(err),
+            
+            // Custom types - check if they're Rust primitives or known Copy types
+            Type::Custom(name) => {
+                matches!(
+                    name.as_str(),
+                    "f32" | "f64" | "i8" | "i16" | "i32" | "i64" | "i128" | "isize"
+                        | "u8" | "u16" | "u32" | "u64" | "u128" | "usize" | "bool" | "char"
+                        // Game engine types that we know are Copy
+                        | "Vec2" | "Vec3" | "Vec4" | "Mat4" | "Quat" | "Color"
+                )
+            }
+            
+            // Tuples are Copy if all elements are Copy
+            Type::Tuple(types) => types.iter().all(|t| self.is_copyable_type(t)),
+            
+            // Arrays are Copy if the element type is Copy
+            Type::Array(inner, _) => self.is_copyable_type(inner),
+            
+            // Generic types - be conservative and say no
+            Type::Generic(_) => false,
+            
+            // Parameterized types - check the base type
+            Type::Parameterized(name, params) => {
+                // Option<T> and Result<T, E> are Copy if T (and E) are Copy
+                match name.as_str() {
+                    "Option" => params.len() == 1 && self.is_copyable_type(&params[0]),
+                    "Result" => params.len() == 2 && self.is_copyable_type(&params[0]) && self.is_copyable_type(&params[1]),
+                    // Box, Rc, Arc, Vec, HashMap, HashSet are NOT Copy
+                    _ => false,
+                }
+            }
+            
+            _ => false,
+        }
+    }
 
     /// Determine if a struct can safely auto-derive Clone, Debug, PartialEq
     fn can_auto_derive_struct(&self, s: &StructDecl) -> bool {
@@ -1378,8 +1571,12 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
 
             // Custom types - check if they're actually Rust std types that are simple
             Type::Custom(name) => {
-                // String (capitalized) is the Rust type, which is Clone + Debug + PartialEq
-                matches!(name.as_str(), "String")
+                // Check for Rust std types that are Clone + Debug + PartialEq
+                matches!(
+                    name.as_str(),
+                    "String" | "f32" | "f64" | "i8" | "i16" | "i32" | "i64" | "i128" | "isize"
+                        | "u8" | "u16" | "u32" | "u64" | "u128" | "usize" | "bool" | "char"
+                )
             }
 
             // Tuples are simple if all elements are simple
@@ -1991,6 +2188,9 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
         // AUTO-CLONE: Load auto-clone analysis for this function
         self.auto_clone_analysis = Some(analyzed.auto_clone_analysis.clone());
 
+        // AUTO-MUT: Load mutation tracking for this function
+        self.mutated_variables = analyzed.mutated_variables.clone();
+
         // PHASE 2 OPTIMIZATION: Load clone optimizations for this function
         // Variables in this set can safely avoid .clone() calls
         self.clone_optimizations.clear();
@@ -2000,6 +2200,9 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
 
         // Track function parameters for compound assignment optimization
         self.current_function_params = func.parameters.clone();
+        
+        // Clear local variables when entering a new function
+        self.current_local_vars.clear();
 
         // PHASE 8 OPTIMIZATION: Load SmallVec optimizations for this function
         // DISABLED: SmallVec optimizations conflict with return types
@@ -2195,26 +2398,31 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
                 let type_str = match &param.ownership {
                     OwnershipHint::Owned => {
                         if param.name == "self" {
-                            // Check if analyzer inferred a different ownership for self
-                            if let Some(ownership_mode) =
-                                analyzed.inferred_ownership.get(&param.name)
-                            {
-                                match ownership_mode {
-                                    OwnershipMode::MutBorrowed => return "&mut self".to_string(),
-                                    OwnershipMode::Borrowed => return "&self".to_string(),
-                                    OwnershipMode::Owned => {
-                                        // Check if function actually modifies self
-                                        // Only add 'mut' if it does
-                                        if self.function_modifies_self(&analyzed.decl) {
-                                            return "mut self".to_string();
-                                        } else {
-                                            return "self".to_string();
+                            // CRITICAL: For trait implementations, respect the explicit ownership hint!
+                            // Trait signatures must match exactly what the trait requires
+                            // Don't override with analyzer inference for trait impls
+                            if !self.in_trait_impl {
+                                // Check if analyzer inferred a different ownership for self
+                                if let Some(ownership_mode) =
+                                    analyzed.inferred_ownership.get(&param.name)
+                                {
+                                    match ownership_mode {
+                                        OwnershipMode::MutBorrowed => return "&mut self".to_string(),
+                                        OwnershipMode::Borrowed => return "&self".to_string(),
+                                        OwnershipMode::Owned => {
+                                            // Check if function actually modifies self
+                                            // Only add 'mut' if it does
+                                            if self.function_modifies_self(&analyzed.decl) {
+                                                return "mut self".to_string();
+                                            } else {
+                                                return "self".to_string();
+                                            }
                                         }
                                     }
                                 }
                             }
-                            // Default: check if function modifies self
-                            if self.function_modifies_self(&analyzed.decl) {
+                            // Default: check if function modifies self (but only for non-trait impls)
+                            if !self.in_trait_impl && self.function_modifies_self(&analyzed.decl) {
                                 return "mut self".to_string();
                             } else {
                                 return "self".to_string();
@@ -2317,6 +2525,12 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
         // Add where clause if present
         output.push_str(&self.format_where_clause(&func.where_clause));
 
+        // For extern functions, just add a semicolon (no body)
+        if func.is_extern {
+            output.push_str(";\n");
+            return output;
+        }
+
         output.push_str(" {\n");
         self.indent_level += 1;
 
@@ -2390,9 +2604,17 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
                 // e.g., let enemy = self.enemies[i] should be let enemy = &mut self.enemies[i]
                 let needs_mut_ref = self.should_mut_borrow_index_access(value);
 
+                // AUTO-MUT: Check if this variable is mutated (automatic mut inference)
+                let is_mutated = if let Pattern::Identifier(name) = pattern {
+                    self.mutated_variables.contains(name)
+                } else {
+                    false // For tuple patterns, fall back to explicit mut
+                };
+
                 if needs_mut_ref {
                     // Don't add mut keyword, but we'll add &mut to the value
-                } else if *mutable {
+                } else if is_mutated || *mutable {
+                    // Add mut if variable is mutated OR if user explicitly wrote mut (backwards compat)
                     output.push_str("mut ");
                 }
 
@@ -2402,7 +2624,11 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
 
                 // Extract variable name for optimizations (only works for simple identifiers)
                 let var_name = match pattern {
-                    Pattern::Identifier(name) => Some(name.as_str()),
+                    Pattern::Identifier(name) => {
+                        // Track this local variable to prevent incorrect self. prefix
+                        self.current_local_vars.insert(name.clone());
+                        Some(name.as_str())
+                    }
                     _ => None,
                 };
 
@@ -3028,10 +3254,18 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
                 // Qualified paths use :: from parser (e.g., std::fs::read)
                 // Simple identifiers: variable_name -> variable_name
                 // Check if this is a struct field and we're in an impl block
-                // BUT: Don't apply implicit field access if this is a parameter name!
+                // BUT: Don't apply implicit field access if:
+                // 1. This is a parameter name
+                // 2. This is a local variable (tracked in current_local_vars)
+                // 3. We're in a constructor (no self parameter)
                 let is_parameter = self.current_function_params.iter().any(|p| p.name == *name);
+                let is_local_var = self.current_local_vars.contains(name);
+                let has_self = self.current_function_params.iter().any(|p| p.name == "self");
+                
                 let base_name = if self.in_impl_block
                     && !is_parameter
+                    && !is_local_var
+                    && has_self
                     && self.current_struct_fields.contains(name)
                 {
                     format!("self.{}", name)
@@ -3715,7 +3949,8 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
             } => {
                 let expr_strs: Vec<String> =
                     exprs.iter().map(|e| self.generate_expression(e)).collect();
-                format!("vec![{}]", expr_strs.join(", "))
+                // Generate as array literal [x, y, z] not vec![x, y, z]
+                format!("[{}]", expr_strs.join(", "))
             }
             Expression::MacroInvocation {
                 name,
