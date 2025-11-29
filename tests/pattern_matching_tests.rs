@@ -526,6 +526,16 @@ fn test_trait_impl_stdlib() {
     compile_and_check_rust_compiles("trait_impl_stdlib.wj", "trait_impl_stdlib");
 }
 
+#[test]
+fn test_copy_type_ownership() {
+    // Test that Copy types used in operator expressions remain owned
+    // Bug: fn distance(a: Vec2, b: Vec2) with a - b generates a: &Vec2, b: &Vec2
+    // This breaks operator overloading because Sub is not implemented for &Vec2
+    // Expected: Copy types should remain owned for operator compatibility
+    
+    compile_and_check_rust_compiles("copy_type_ownership.wj", "copy_type_ownership");
+}
+
 // ============================================================================
 // MAIN TEST RUNNER
 // ============================================================================
