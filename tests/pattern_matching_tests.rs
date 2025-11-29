@@ -49,6 +49,48 @@ fn compile_should_succeed(code: &str, test_name: &str) {
     }
 }
 
+fn compile_and_check_rust_compiles(wj_file: &str, test_name: &str) {
+    let wj_path = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("tests")
+        .join(wj_file);
+    
+    // First, compile the Windjammer code
+    let output = Command::new(get_wj_compiler())
+        .args(&["build", wj_path.to_str().unwrap(), "--no-cargo"])
+        .output()
+        .expect("Failed to execute compiler");
+    
+    if !output.status.success() {
+        let stdout = String::from_utf8_lossy(&output.stdout);
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        panic!("✗ {} failed to compile Windjammer: {}{}", test_name, stdout, stderr);
+    }
+    
+    // Get the generated Rust file name (remove .wj extension, add .rs)
+    let rust_file = wj_file.replace(".wj", ".rs");
+    let rust_path = PathBuf::from("./build").join(&rust_file);
+    
+    // Then, try to compile the generated Rust code with rustc
+    // Use --crate-type=lib to avoid needing a main function
+    let rust_output = Command::new("rustc")
+        .args(&[
+            rust_path.to_str().unwrap(),
+            "--crate-type=lib",
+            "--edition=2021",
+            "-O",
+        ])
+        .output()
+        .expect("Failed to execute rustc");
+    
+    if !rust_output.status.success() {
+        let stdout = String::from_utf8_lossy(&rust_output.stdout);
+        let stderr = String::from_utf8_lossy(&rust_output.stderr);
+        panic!("✗ {} failed to compile Rust: {}{}", test_name, stdout, stderr);
+    }
+    
+    println!("✓ {} passed (Windjammer + Rust compilation)", test_name);
+}
+
 fn compile_and_check_generated_rust(wj_file: &str, expected_imports: &[&str], test_name: &str) {
     let wj_path = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
         .join("tests")
@@ -455,6 +497,15 @@ fn test_operator_precedence_negation() {
         ],
         "operator_precedence"
     );
+}
+
+#[test]
+fn test_array_indexing_with_int() {
+    // Test that array indexing with 'int' type automatically casts to usize
+    // Bug: arr[index] where index: int generates arr[index as i64] which fails
+    // Expected: arr[index as usize] or automatic conversion
+    
+    compile_and_check_rust_compiles("array_indexing.wj", "array_indexing_with_int");
 }
 
 // ============================================================================
