@@ -417,6 +417,7 @@ mod tests {
         let func = FunctionDecl {
             name: "print".to_string(),
             is_pub: false,
+            is_extern: false,
             decorators: vec![],
             type_params: vec![TypeParam {
                 name: "T".to_string(),
@@ -466,6 +467,7 @@ mod tests {
         let func = FunctionDecl {
             name: "duplicate".to_string(),
             is_pub: false,
+            is_extern: false,
             decorators: vec![],
             type_params: vec![TypeParam {
                 name: "T".to_string(),
@@ -509,6 +511,7 @@ mod tests {
 
         let func = FunctionDecl {
             is_pub: false,
+            is_extern: false,
             name: "add".to_string(),
             decorators: vec![],
             type_params: vec![TypeParam {

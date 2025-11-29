@@ -1,3 +1,9 @@
+## [0.38.8] - 2025-11-29
+### Fixed
+- Add Copy struct detection via @derive(Copy) decorator
+- Fix UI module tests to include is_extern field
+- Add debug output for Copy type investigation
+
 # Changelog
 
 All notable changes to Windjammer will be documented in this file.
