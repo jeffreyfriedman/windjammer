@@ -29,7 +29,7 @@ pub struct WjConfig {
 
     #[serde(default)]
     pub package: PackageConfig,
-    
+
     #[serde(default)]
     pub sources: Option<SourcesConfig>,
 

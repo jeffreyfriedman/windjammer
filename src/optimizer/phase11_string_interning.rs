@@ -715,6 +715,7 @@ mod tests {
         Item::Function {
             decl: FunctionDecl {
                 is_pub: false,
+                is_extern: false,
                 name: name.to_string(),
                 type_params: vec![],
                 where_clause: vec![],

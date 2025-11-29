@@ -141,9 +141,9 @@ pub struct EnumVariant {
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum EnumVariantData {
-    Unit,                                    // Variant
-    Tuple(Vec<Type>),                        // Variant(T1, T2)
-    Struct(Vec<(String, Type)>),             // Variant { field1: T1, field2: T2 }
+    Unit,                        // Variant
+    Tuple(Vec<Type>),            // Variant(T1, T2)
+    Struct(Vec<(String, Type)>), // Variant { field1: T1, field2: T2 }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
@@ -282,11 +282,11 @@ pub struct MatchArm {
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum EnumPatternBinding {
-    None,                                // No parentheses: None, Empty
-    Wildcard,                            // Parentheses with wildcard: Some(_)
-    Single(String),                      // Single binding: Some(x)
-    Tuple(Vec<Pattern>),                 // Multiple bindings: Rgb(r, g, b)
-    Struct(Vec<(String, Pattern)>),      // Struct pattern: Box { width: w, height: h }
+    None,                           // No parentheses: None, Empty
+    Wildcard,                       // Parentheses with wildcard: Some(_)
+    Single(String),                 // Single binding: Some(x)
+    Tuple(Vec<Pattern>),            // Multiple bindings: Rgb(r, g, b)
+    Struct(Vec<(String, Pattern)>), // Struct pattern: Box { width: w, height: h }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
@@ -507,13 +507,13 @@ pub enum BinaryOp {
     Le,
     Gt,
     Ge,
-    And,  // Logical AND (&&)
-    Or,   // Logical OR (||)
-    BitAnd,  // Bitwise AND (&)
-    BitOr,   // Bitwise OR (|)
-    BitXor,  // Bitwise XOR (^)
-    Shl,     // Shift left (<<)
-    Shr,     // Shift right (>>)
+    And,    // Logical AND (&&)
+    Or,     // Logical OR (||)
+    BitAnd, // Bitwise AND (&)
+    BitOr,  // Bitwise OR (|)
+    BitXor, // Bitwise XOR (^)
+    Shl,    // Shift left (<<)
+    Shr,    // Shift right (>>)
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
