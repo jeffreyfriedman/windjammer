@@ -2384,6 +2384,7 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
         // OPTIMIZATION: Add inline hints for hot path functions
         // This is Phase 1 optimization: Generate Inlinable Code
         if self.should_inline_function(func, analyzed) {
+            output.push_str(&self.indent());
             output.push_str("#[inline]\n");
         }
 
@@ -2411,6 +2412,9 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
             output.push_str(&format!("#[{}]\n", rust_attr));
         }
 
+        // Add indentation for the function signature
+        output.push_str(&self.indent());
+        
         // Add `pub` if function is marked pub OR we're in a #[wasm_bindgen] impl block OR compiling a module OR has @export decorator
         // BUT NOT if we're in a trait implementation (trait methods cannot have visibility modifiers)
         let has_export = func.decorators.iter().any(|d| d.name == "export");
