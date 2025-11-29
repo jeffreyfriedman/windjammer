@@ -335,6 +335,52 @@ fn build_project(path: &Path, output: &Path, target: CompilationTarget) -> Resul
 
     // Create a single ModuleCompiler for all files to share trait registry
     let mut module_compiler = ModuleCompiler::new(target);
+    
+    // Load windjammer.toml if it exists (search up directory tree)
+    let mut search_dir = if path.is_file() {
+        path.parent().unwrap_or(Path::new("."))
+    } else {
+        path
+    };
+    
+    let mut config_loaded = false;
+    for _ in 0..5 {
+        let config_path = search_dir.join("windjammer.toml");
+        if config_path.exists() {
+            match config::WjConfig::load_from_file(&config_path) {
+                Ok(config) => {
+                    // Add configured source roots
+                    if let Some(sources) = &config.sources {
+                        for root in &sources.roots {
+                            // Resolve path relative to config file directory
+                            let root_path = search_dir.join(root);
+                            if root_path.exists() && root_path.is_dir() {
+                                module_compiler.add_source_root(root_path);
+                            } else {
+                                eprintln!("Warning: Source root not found: {}", root_path.display());
+                            }
+                        }
+                        config_loaded = true;
+                    }
+                    break;
+                }
+                Err(e) => {
+                    eprintln!("Warning: Failed to load {}: {}", config_path.display(), e);
+                }
+            }
+        }
+        
+        // Go up one directory
+        if let Some(parent) = search_dir.parent() {
+            search_dir = parent;
+        } else {
+            break;
+        }
+    }
+    
+    if !config_loaded {
+        eprintln!("Note: No windjammer.toml found. Module imports will only work with relative paths (./module) or std:: prefix.");
+    }
 
     // PASS 1: Quick parse all files to register trait definitions
     // This ensures all traits are available before any file compilation
@@ -488,6 +534,7 @@ struct ModuleCompiler {
     compiled_modules: HashMap<String, String>, // module path -> generated Rust code
     target: CompilationTarget,
     stdlib_path: PathBuf,
+    source_roots: Vec<PathBuf>,               // Additional source roots (e.g., ../windjammer-game-core/src_wj)
     imported_stdlib_modules: HashSet<String>, // Track which stdlib modules are used
     external_crates: Vec<String>,             // Track external crates (e.g., windjammer_ui)
     trait_registry: HashMap<String, parser::TraitDecl>, // Global trait registry for cross-file trait resolution
@@ -505,10 +552,15 @@ impl ModuleCompiler {
             compiled_modules: HashMap::new(),
             target,
             stdlib_path,
+            source_roots: Vec::new(),
             imported_stdlib_modules: HashSet::new(),
             external_crates: Vec::new(),
             trait_registry: HashMap::new(),
         }
+    }
+    
+    fn add_source_root(&mut self, path: PathBuf) {
+        self.source_roots.push(path);
     }
 
     fn compile_module(&mut self, module_path: &str, source_file: Option<&Path>) -> Result<()> {
@@ -739,6 +791,26 @@ impl ModuleCompiler {
                 source_dir.join(rel_path).join("mod.wj")
             ))
         } else {
+            // Absolute module path (e.g., math, rendering, physics)
+            // First, check if this exists in any of the configured source roots
+            for source_root in &self.source_roots {
+                // Try direct file: source_root/math.wj
+                let mut candidate = source_root.clone();
+                candidate.push(format!("{}.wj", module_path));
+                if candidate.exists() {
+                    return Ok(candidate);
+                }
+                
+                // Try directory module: source_root/math/mod.wj
+                let mut candidate = source_root.clone();
+                candidate.push(module_path);
+                candidate.push("mod.wj");
+                if candidate.exists() {
+                    return Ok(candidate);
+                }
+            }
+            
+            // Not found in source roots - treat as external crate
             // External crate imports (e.g., windjammer_ui, external_crate)
             // These are treated as Rust crate dependencies and passed through to generated code
             // Mark as external by returning a special "external" path
