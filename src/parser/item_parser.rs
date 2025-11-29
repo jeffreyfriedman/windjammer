@@ -563,18 +563,35 @@ impl Parser {
             return Err("Expected module name after 'mod'".to_string());
         };
         
-        // Parse module body: mod name { ... }
-        self.expect(Token::LBrace)?;
-        
-        let mut items = Vec::new();
-        while self.current_token() != &Token::RBrace && self.current_token() != &Token::Eof {
-            items.push(self.parse_item()?);
+        // Check for external module (mod name) vs inline module (mod name { ... })
+        // Semicolons are optional thanks to ASI
+        if self.current_token() == &Token::LBrace {
+            // Inline module: mod name { ... }
+            self.expect(Token::LBrace)?;
+            
+            let mut items = Vec::new();
+            while self.current_token() != &Token::RBrace && self.current_token() != &Token::Eof {
+                items.push(self.parse_item()?);
+                
+                // Consume optional semicolon after items (ASI - semicolons are optional)
+                if self.current_token() == &Token::Semicolon {
+                    self.advance();
+                }
+            }
+            
+            self.expect(Token::RBrace)?;
+            
+            // is_public will be set by parse_item if pub keyword was present
+            Ok((name, items, false))
+        } else {
+            // External module: mod name (semicolon optional)
+            // Consume optional semicolon
+            if self.current_token() == &Token::Semicolon {
+                self.advance();
+            }
+            // Return empty items list - the module will be resolved by the module system
+            Ok((name, Vec::new(), false))
         }
-        
-        self.expect(Token::RBrace)?;
-        
-        // is_public will be set by parse_item if pub keyword was present
-        Ok((name, items, false))
     }
 
     pub(crate) fn parse_function(&mut self) -> Result<FunctionDecl, String> {
