@@ -14,18 +14,31 @@ fn get_wj_compiler() -> PathBuf {
 }
 
 fn compile_wj_code(code: &str) -> Result<String, String> {
-    let temp_file = "/tmp/test_pattern_matching.wj";
-    fs::write(temp_file, code).expect("Failed to write test file");
+    // Use unique temp file to avoid test interference
+    use std::time::{SystemTime, UNIX_EPOCH};
+    let timestamp = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap()
+        .as_nanos();
+    let temp_file = format!("/tmp/test_pattern_matching_{}.wj", timestamp);
+    
+    fs::write(&temp_file, code).expect("Failed to write test file");
     
     let output = Command::new(get_wj_compiler())
-        .args(&["build", temp_file, "--no-cargo"])
+        .args(&["build", &temp_file, "--no-cargo"])
         .output()
         .expect("Failed to execute compiler");
+    
+    // Clean up temp file
+    let _ = fs::remove_file(&temp_file);
     
     if output.status.success() {
         Ok(String::from_utf8_lossy(&output.stdout).to_string())
     } else {
-        Err(String::from_utf8_lossy(&output.stderr).to_string())
+        // Capture both stdout and stderr for error messages
+        let stdout = String::from_utf8_lossy(&output.stdout);
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        Err(format!("{}{}", stdout, stderr))
     }
 }
 
@@ -270,7 +283,7 @@ fn test_module_path_slash_rejected() {
     let code = r#"
 use std/fs
 "#;
-    compile_should_fail(code, "Use '::'", "module_path_slash_rejected");
+    compile_should_fail(code, "Use '::' for module paths", "module_path_slash_rejected");
 }
 
 #[test]
@@ -278,7 +291,7 @@ fn test_module_path_dot_rejected() {
     let code = r#"
 use std.fs
 "#;
-    compile_should_fail(code, "Use '::'", "module_path_dot_rejected");
+    compile_should_fail(code, "Use '::' for module paths", "module_path_dot_rejected");
 }
 
 // ============================================================================
