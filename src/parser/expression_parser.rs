@@ -1420,16 +1420,27 @@ impl Parser {
                             };
 
                             if self.current_token() == &Token::LParen {
-                                // Method call (possibly with turbofish)
-                                self.advance();
-                                let arguments = self.parse_arguments()?;
-                                self.expect(Token::RParen)?;
-                                Expression::MethodCall {
-                                    object: Box::new(expr),
-                                    method: field,
-                                    type_args,
-                                    arguments,
-                                    location: self.current_location(),
+                                // Check for newline before LParen (ASI)
+                                if self.had_newline_before_current() {
+                                    // ASI: This LParen starts a new statement, not a method call
+                                    // Create a field access and break
+                                    Expression::FieldAccess {
+                                        object: Box::new(expr),
+                                        field,
+                                        location: self.current_location(),
+                                    }
+                                } else {
+                                    // Method call (possibly with turbofish)
+                                    self.advance();
+                                    let arguments = self.parse_arguments()?;
+                                    self.expect(Token::RParen)?;
+                                    Expression::MethodCall {
+                                        object: Box::new(expr),
+                                        method: field,
+                                        type_args,
+                                        arguments,
+                                        location: self.current_location(),
+                                    }
                                 }
                             } else if type_args.is_some() {
                                 return Err(
@@ -1585,6 +1596,14 @@ impl Parser {
                     }
                 }
                 Token::LParen => {
+                    // Check for newline before LParen (automatic semicolon insertion)
+                    // If there was a newline, this might be a new statement, not a function call
+                    if self.had_newline_before_current() {
+                        // ASI: Treat newline as statement terminator
+                        // Don't consume the LParen - it belongs to the next statement
+                        break;
+                    }
+                    
                     self.advance();
                     let arguments = self.parse_arguments()?;
                     self.expect(Token::RParen)?;

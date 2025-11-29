@@ -203,6 +203,7 @@ impl TreeShaker {
             Item::Trait { .. } => true,  // Keep all traits
             Item::Impl { .. } => true,   // Keep all impls
             Item::Use { .. } => true,    // Keep all imports (could be smarter here)
+            Item::Mod { .. } => true,    // Keep all modules
             Item::BoundAlias { .. } => true, // Keep all bound aliases
         }
     }

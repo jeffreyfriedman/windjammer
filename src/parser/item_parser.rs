@@ -153,7 +153,10 @@ impl Parser {
 
                 let concrete_type = self.parse_type()?;
 
-                self.expect(Token::Semicolon)?;
+                // Semicolons are optional for associated types (like Swift, Kotlin, Go)
+                if self.current_token() == &Token::Semicolon {
+                    self.advance(); // consume optional semicolon
+                }
 
                 associated_types.push(AssociatedType {
                     name: assoc_name,
@@ -284,7 +287,10 @@ impl Parser {
                     return Err("Expected associated type name".to_string());
                 };
 
-                self.expect(Token::Semicolon)?;
+                // Semicolons are optional for associated types (like Swift, Kotlin, Go)
+                if self.current_token() == &Token::Semicolon {
+                    self.advance(); // consume optional semicolon
+                }
 
                 associated_types.push(AssociatedType {
                     name: assoc_name,
@@ -545,6 +551,32 @@ impl Parser {
         Ok((path, alias))
     }
 
+    pub(crate) fn parse_mod(&mut self) -> Result<(String, Vec<Item>, bool), String> {
+        // Note: Token::Mod already consumed in parse_item
+        
+        // Get module name
+        let name = if let Token::Ident(n) = self.current_token() {
+            let name = n.clone();
+            self.advance();
+            name
+        } else {
+            return Err("Expected module name after 'mod'".to_string());
+        };
+        
+        // Parse module body: mod name { ... }
+        self.expect(Token::LBrace)?;
+        
+        let mut items = Vec::new();
+        while self.current_token() != &Token::RBrace && self.current_token() != &Token::Eof {
+            items.push(self.parse_item()?);
+        }
+        
+        self.expect(Token::RBrace)?;
+        
+        // is_public will be set by parse_item if pub keyword was present
+        Ok((name, items, false))
+    }
+
     pub(crate) fn parse_function(&mut self) -> Result<FunctionDecl, String> {
         // Note: Token::Fn already consumed in parse_item
 
@@ -573,13 +605,21 @@ impl Parser {
         // Parse where clause (optional): where T: Display, U: Debug
         let where_clause = self.parse_where_clause()?;
 
-        self.expect(Token::LBrace)?;
-        let body = self.parse_block_statements()?;
-        self.expect(Token::RBrace)?;
+        // Parse body (or semicolon for extern functions)
+        let body = if self.current_token() == &Token::Semicolon {
+            self.advance();
+            Vec::new() // Empty body for extern functions
+        } else {
+            self.expect(Token::LBrace)?;
+            let statements = self.parse_block_statements()?;
+            self.expect(Token::RBrace)?;
+            statements
+        };
 
         Ok(FunctionDecl {
             name,
             is_pub: false,          // Set by parse_item if pub keyword present
+            is_extern: false,       // Set by parse_item if extern keyword present
             type_params,            // Parsed generic type parameters
             where_clause,           // Parsed where clause
             decorators: Vec::new(), // Set by parse_item

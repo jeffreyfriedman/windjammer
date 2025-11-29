@@ -7,6 +7,8 @@ use std::collections::HashMap;
 pub struct AnalyzedFunction {
     pub decl: FunctionDecl,
     pub inferred_ownership: HashMap<String, OwnershipMode>,
+    // AUTO-MUT: Track which local variables are mutated (for automatic mut inference)
+    pub mutated_variables: HashSet<String>,
     // AUTO-CLONE: Track where clones should be automatically inserted
     pub auto_clone_analysis: AutoCloneAnalysis,
     // PHASE 2 OPTIMIZATION: Track unnecessary clones that can be eliminated
@@ -232,6 +234,8 @@ pub struct Analyzer {
     copy_enums: HashSet<String>,
     // Track trait definitions for impl block analysis
     trait_definitions: HashMap<String, TraitDecl>,
+    // Track which local variables are mutated (for automatic mut inference)
+    mutated_variables: HashSet<String>,
 }
 
 use std::collections::HashSet;
@@ -248,6 +252,7 @@ impl Analyzer {
             variables: HashMap::new(),
             copy_enums: HashSet::new(),
             trait_definitions: HashMap::new(),
+            mutated_variables: HashSet::new(),
         }
     }
 
@@ -456,6 +461,10 @@ impl Analyzer {
         // AUTO-CLONE: Analyze where clones should be automatically inserted
         let auto_clone_analysis = AutoCloneAnalysis::analyze_function(func);
 
+        // AUTO-MUT: Track which local variables are mutated (for automatic mut inference)
+        self.track_mutations(&func.body);
+        let mutated_variables = self.mutated_variables.clone();
+
         // PHASE 7-9: Additional optimizations (future implementation)
         let const_static_optimizations = Vec::new(); // TODO: Implement detection
         let smallvec_optimizations = Vec::new(); // TODO: Implement detection
@@ -464,6 +473,7 @@ impl Analyzer {
         Ok(AnalyzedFunction {
             decl: func.clone(),
             inferred_ownership,
+            mutated_variables,
             auto_clone_analysis,
             clone_optimizations,
             struct_mapping_optimizations,
@@ -1962,6 +1972,27 @@ impl Analyzer {
             Statement::While { body, .. } | Statement::For { body, .. } => {
                 body.iter().any(|s| self.statement_modifies_self_fields(s))
             }
+            Statement::Match { arms, .. } => {
+                // Check if any match arm modifies self fields
+                arms.iter().any(|arm| {
+                    // Match arms have an expression body, check if it contains modifications
+                    self.expression_contains_self_field_mutations(&arm.body)
+                })
+            }
+            _ => false,
+        }
+    }
+    
+    /// Check if an expression contains self field mutations (for match arms and blocks)
+    fn expression_contains_self_field_mutations(&self, expr: &Expression) -> bool {
+        match expr {
+            Expression::Block { statements, .. } => {
+                statements.iter().any(|s| self.statement_modifies_self_fields(s))
+            }
+            Expression::MethodCall { object, method, .. } => {
+                // Check if this is a mutating method call on a self field
+                self.expression_is_self_field_access(object) && self.is_mutating_method(method)
+            }
             _ => false,
         }
     }
@@ -2130,6 +2161,109 @@ impl Analyzer {
             }
             _ => false,
         }
+    }
+
+    /// Track which local variables are mutated in a function body
+    /// This enables automatic `mut` inference - users don't need to write `let mut x`
+    pub fn track_mutations(&mut self, statements: &[Statement]) {
+        self.mutated_variables.clear();
+        self.collect_mutations(statements);
+    }
+
+    /// Recursively collect all variable mutations
+    fn collect_mutations(&mut self, statements: &[Statement]) {
+        for stmt in statements {
+            match stmt {
+                Statement::Assignment { target, .. } => {
+                    // Track the variable being assigned to
+                    if let Expression::Identifier { name, .. } = target {
+                        self.mutated_variables.insert(name.clone());
+                    }
+                }
+                Statement::If {
+                    then_block,
+                    else_block,
+                    ..
+                } => {
+                    self.collect_mutations(then_block);
+                    if let Some(else_stmts) = else_block {
+                        self.collect_mutations(else_stmts);
+                    }
+                }
+                Statement::Match { arms, .. } => {
+                    // Match arms have Expression bodies, which may contain blocks
+                    // For now, we'll skip mutation tracking in match arms
+                    // TODO: Add expression-level mutation tracking
+                    let _ = arms; // Suppress unused warning
+                }
+                Statement::For { pattern, body, .. } => {
+                    // Collect mutations in loop body
+                    self.collect_mutations(body);
+                    
+                    // If the loop variable itself is mutated in the body, track it
+                    // This helps infer `for x in &mut vec` when x is modified
+                    if let Pattern::Identifier(var_name) = pattern {
+                        // Check if this variable is mutated in the body
+                        if self.is_variable_mutated_in_statements(var_name, body) {
+                            // Track that this variable needs mutable access
+                            self.mutated_variables.insert(format!("__loop_var_{}", var_name));
+                        }
+                    }
+                }
+                Statement::While { body, .. }
+                | Statement::Loop { body, .. } => {
+                    self.collect_mutations(body);
+                }
+                _ => {}
+            }
+        }
+    }
+    
+    /// Check if a variable is mutated within a specific set of statements
+    fn is_variable_mutated_in_statements(&self, var_name: &str, statements: &[Statement]) -> bool {
+        for stmt in statements {
+            match stmt {
+                Statement::Assignment { target, .. } => {
+                    if let Expression::Identifier { name, .. } = target {
+                        if name == var_name {
+                            return true;
+                        }
+                    }
+                    // Also check for field assignments like power_up.position.y
+                    if let Expression::FieldAccess { object, .. } = target {
+                        if let Expression::Identifier { name, .. } = &**object {
+                            if name == var_name {
+                                return true;
+                            }
+                        }
+                    }
+                }
+                Statement::For { body, .. }
+                | Statement::While { body, .. }
+                | Statement::Loop { body, .. } => {
+                    if self.is_variable_mutated_in_statements(var_name, body) {
+                        return true;
+                    }
+                }
+                Statement::If { then_block, else_block, .. } => {
+                    if self.is_variable_mutated_in_statements(var_name, then_block) {
+                        return true;
+                    }
+                    if let Some(else_stmts) = else_block {
+                        if self.is_variable_mutated_in_statements(var_name, else_stmts) {
+                            return true;
+                        }
+                    }
+                }
+                _ => {}
+            }
+        }
+        false
+    }
+
+    /// Check if a variable is mutated (for automatic mut inference)
+    pub fn is_variable_mutated(&self, var_name: &str) -> bool {
+        self.mutated_variables.contains(var_name)
     }
 }
 

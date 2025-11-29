@@ -141,6 +141,25 @@ impl Parser {
         }
     }
 
+    /// Check if there was a newline before the current token
+    /// Used for Automatic Semicolon Insertion (ASI) rules
+    pub(crate) fn had_newline_before_current(&self) -> bool {
+        if self.position == 0 {
+            return false;
+        }
+        
+        // Get the previous and current token locations
+        if let (Some(prev), Some(curr)) = (
+            self.tokens.get(self.position - 1),
+            self.tokens.get(self.position),
+        ) {
+            // If the current token is on a different line than the previous token, there was a newline
+            curr.line > prev.line
+        } else {
+            false
+        }
+    }
+
     // ========================================================================
     // SECTION 3: TOP-LEVEL PARSING
     // ========================================================================
@@ -155,7 +174,7 @@ impl Parser {
         Ok(Program { items })
     }
 
-    fn parse_item(&mut self) -> Result<Item, String> {
+    pub(crate) fn parse_item(&mut self) -> Result<Item, String> {
         // Check for decorators
         let mut decorators = Vec::new();
         while let Token::Decorator(_) = self.current_token() {
@@ -171,6 +190,18 @@ impl Parser {
         };
 
         match self.current_token() {
+            Token::Extern => {
+                self.advance(); // Consume the Extern token
+                self.expect(Token::Fn)?;
+                let mut func = self.parse_function()?;
+                func.is_extern = true;
+                func.is_pub = is_pub;
+                func.decorators = decorators.clone();
+                Ok(Item::Function {
+                    decl: func,
+                    location: self.current_location(),
+                })
+            }
             Token::Fn => {
                 self.advance(); // Consume the Fn token
                 let mut func = self.parse_function()?;
@@ -268,6 +299,16 @@ impl Parser {
                 Ok(Item::Use {
                     path,
                     alias,
+                    location: self.current_location(),
+                })
+            }
+            Token::Mod => {
+                self.advance(); // consume 'mod'
+                let (name, items, _) = self.parse_mod()?;
+                Ok(Item::Mod {
+                    name,
+                    items,
+                    is_public: is_pub,
                     location: self.current_location(),
                 })
             }

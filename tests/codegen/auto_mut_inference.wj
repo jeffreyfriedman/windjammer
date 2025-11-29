@@ -1,0 +1,18 @@
+// Test: Automatic mut inference for local variables
+
+pub fn counter() -> int {
+    let count = 0
+    count = count + 1
+    count = count + 1
+    count
+}
+
+pub fn accumulate(values: Vec<int>) -> int {
+    let sum = 0
+    for value in values {
+        sum = sum + value
+    }
+    sum
+}
+
+
