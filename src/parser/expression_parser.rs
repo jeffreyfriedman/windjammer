@@ -490,10 +490,10 @@ impl Parser {
 
     fn get_binary_op(&self) -> Option<(BinaryOp, u8)> {
         match self.current_token() {
-            Token::Or => Some((BinaryOp::Or, 1)),         // Logical OR
-            Token::And => Some((BinaryOp::And, 2)),       // Logical AND
-            Token::Pipe => Some((BinaryOp::BitOr, 3)),    // Bitwise OR
-            Token::Caret => Some((BinaryOp::BitXor, 4)),  // Bitwise XOR
+            Token::Or => Some((BinaryOp::Or, 1)),            // Logical OR
+            Token::And => Some((BinaryOp::And, 2)),          // Logical AND
+            Token::Pipe => Some((BinaryOp::BitOr, 3)),       // Bitwise OR
+            Token::Caret => Some((BinaryOp::BitXor, 4)),     // Bitwise XOR
             Token::Ampersand => Some((BinaryOp::BitAnd, 5)), // Bitwise AND
             Token::Eq => Some((BinaryOp::Eq, 6)),
             Token::Ne => Some((BinaryOp::Ne, 6)),
@@ -501,8 +501,8 @@ impl Parser {
             Token::Le => Some((BinaryOp::Le, 7)),
             Token::Gt => Some((BinaryOp::Gt, 7)),
             Token::Ge => Some((BinaryOp::Ge, 7)),
-            Token::Shl => Some((BinaryOp::Shl, 8)),       // Shift left
-            Token::Shr => Some((BinaryOp::Shr, 8)),       // Shift right
+            Token::Shl => Some((BinaryOp::Shl, 8)), // Shift left
+            Token::Shr => Some((BinaryOp::Shr, 8)), // Shift right
             Token::Plus => Some((BinaryOp::Add, 9)),
             Token::Minus => Some((BinaryOp::Sub, 9)),
             Token::Star => Some((BinaryOp::Mul, 10)),
@@ -1608,7 +1608,7 @@ impl Parser {
                         // Don't consume the LParen - it belongs to the next statement
                         break;
                     }
-                    
+
                     self.advance();
                     let arguments = self.parse_arguments()?;
                     self.expect(Token::RParen)?;

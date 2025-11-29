@@ -734,6 +734,7 @@ mod tests {
     fn make_pub_func(name: &str, body: Vec<Statement>) -> FunctionDecl {
         FunctionDecl {
             is_pub: false,
+            is_extern: false,
             name: name.to_string(),
             type_params: vec![],
             where_clause: vec![],
@@ -752,6 +753,7 @@ mod tests {
     fn make_private_func(name: &str, body: Vec<Statement>) -> FunctionDecl {
         FunctionDecl {
             is_pub: false,
+            is_extern: false,
             name: name.to_string(),
             type_params: vec![],
             where_clause: vec![],

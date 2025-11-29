@@ -58,6 +58,7 @@ mod tests {
     fn test_is_ui_component() {
         let component = FunctionDecl {
             is_pub: false,
+            is_extern: false,
             name: "MyComponent".to_string(),
             type_params: vec![],
             where_clause: vec![],
@@ -79,6 +80,7 @@ mod tests {
     fn test_validate_component_return_type() {
         let valid_component = FunctionDecl {
             is_pub: false,
+            is_extern: false,
             name: "MyComponent".to_string(),
             type_params: vec![],
             where_clause: vec![],
@@ -97,6 +99,7 @@ mod tests {
 
         let invalid_component = FunctionDecl {
             is_pub: false,
+            is_extern: false,
             name: "BadComponent".to_string(),
             type_params: vec![],
             where_clause: vec![],

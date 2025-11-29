@@ -554,7 +554,7 @@ impl Parser {
 
     pub(crate) fn parse_mod(&mut self) -> Result<(String, Vec<Item>, bool), String> {
         // Note: Token::Mod already consumed in parse_item
-        
+
         // Get module name
         let name = if let Token::Ident(n) = self.current_token() {
             let name = n.clone();
@@ -563,25 +563,25 @@ impl Parser {
         } else {
             return Err("Expected module name after 'mod'".to_string());
         };
-        
+
         // Check for external module (mod name) vs inline module (mod name { ... })
         // Semicolons are optional thanks to ASI
         if self.current_token() == &Token::LBrace {
             // Inline module: mod name { ... }
             self.expect(Token::LBrace)?;
-            
+
             let mut items = Vec::new();
             while self.current_token() != &Token::RBrace && self.current_token() != &Token::Eof {
                 items.push(self.parse_item()?);
-                
+
                 // Consume optional semicolon after items (ASI - semicolons are optional)
                 if self.current_token() == &Token::Semicolon {
                     self.advance();
                 }
             }
-            
+
             self.expect(Token::RBrace)?;
-            
+
             // is_public will be set by parse_item if pub keyword was present
             Ok((name, items, false))
         } else {
@@ -874,14 +874,14 @@ impl Parser {
             let data = if self.current_token() == &Token::LParen {
                 // Tuple-style variant: Variant(Type1, Type2, Type3)
                 self.advance();
-                
+
                 let mut types = Vec::new();
-                
+
                 // Parse types separated by commas
                 if self.current_token() != &Token::RParen {
                     loop {
                         types.push(self.parse_type()?);
-                        
+
                         if self.current_token() == &Token::Comma {
                             self.advance();
                             // Allow trailing comma
@@ -893,7 +893,7 @@ impl Parser {
                         }
                     }
                 }
-                
+
                 self.expect(Token::RParen)?;
                 EnumVariantData::Tuple(types)
             } else if self.current_token() == &Token::LBrace {
@@ -901,25 +901,29 @@ impl Parser {
                 self.advance(); // consume {
 
                 let mut fields = Vec::new();
-                
+
                 // Parse field: type pairs
-                while self.current_token() != &Token::RBrace && self.current_token() != &Token::Eof {
+                while self.current_token() != &Token::RBrace && self.current_token() != &Token::Eof
+                {
                     // Parse field name
                     let field_name = if let Token::Ident(name) = self.current_token() {
                         let n = name.clone();
                         self.advance();
                         n
                     } else {
-                        return Err(format!("Expected field name in struct variant (at token position {})", self.position));
+                        return Err(format!(
+                            "Expected field name in struct variant (at token position {})",
+                            self.position
+                        ));
                     };
-                    
+
                     self.expect(Token::Colon)?;
-                    
+
                     // Parse field type
                     let field_type = self.parse_type()?;
-                    
+
                     fields.push((field_name, field_type));
-                    
+
                     // Check for comma or end
                     if self.current_token() == &Token::Comma {
                         self.advance();
@@ -931,7 +935,7 @@ impl Parser {
                         break;
                     }
                 }
-                
+
                 self.expect(Token::RBrace)?;
                 EnumVariantData::Struct(fields)
             } else {

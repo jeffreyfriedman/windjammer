@@ -432,6 +432,7 @@ mod tests {
             items: vec![Item::Function {
                 decl: FunctionDecl {
                     is_pub: false,
+                    is_extern: false,
                     name: "test".to_string(),
                     parameters: vec![],
                     return_type: None,
@@ -493,6 +494,7 @@ mod tests {
             items: vec![Item::Function {
                 decl: FunctionDecl {
                     is_pub: false,
+                    is_extern: false,
                     name: "test".to_string(),
                     parameters: vec![],
                     return_type: None,

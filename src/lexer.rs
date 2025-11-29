@@ -80,11 +80,11 @@ pub enum Token {
     And,
     Or,
     Not,
-    
+
     // Bitwise operators
-    Caret,    // ^ (XOR)
-    Shl,      // <<
-    Shr,      // >>
+    Caret, // ^ (XOR)
+    Shl,   // <<
+    Shr,   // >>
 
     Assign,
     PlusAssign,    // +=
@@ -237,7 +237,7 @@ impl Lexer {
                         // Hexadecimal: 0xFF, 0xDEADBEEF
                         self.advance(); // skip '0'
                         self.advance(); // skip 'x'
-                        
+
                         let mut hex_str = String::new();
                         while let Some(ch) = self.current_char {
                             if ch.is_ascii_hexdigit() {
@@ -249,16 +249,15 @@ impl Lexer {
                                 break;
                             }
                         }
-                        
-                        let value = i64::from_str_radix(&hex_str, 16)
-                            .expect("Invalid hex literal");
+
+                        let value = i64::from_str_radix(&hex_str, 16).expect("Invalid hex literal");
                         return Token::IntLiteral(value);
                     }
                     'b' | 'B' => {
                         // Binary: 0b1010, 0b1111_0000
                         self.advance(); // skip '0'
                         self.advance(); // skip 'b'
-                        
+
                         let mut bin_str = String::new();
                         while let Some(ch) = self.current_char {
                             if ch == '0' || ch == '1' {
@@ -270,16 +269,16 @@ impl Lexer {
                                 break;
                             }
                         }
-                        
-                        let value = i64::from_str_radix(&bin_str, 2)
-                            .expect("Invalid binary literal");
+
+                        let value =
+                            i64::from_str_radix(&bin_str, 2).expect("Invalid binary literal");
                         return Token::IntLiteral(value);
                     }
                     'o' | 'O' => {
                         // Octal: 0o755, 0o644
                         self.advance(); // skip '0'
                         self.advance(); // skip 'o'
-                        
+
                         let mut oct_str = String::new();
                         while let Some(ch) = self.current_char {
                             if ch >= '0' && ch <= '7' {
@@ -291,9 +290,9 @@ impl Lexer {
                                 break;
                             }
                         }
-                        
-                        let value = i64::from_str_radix(&oct_str, 8)
-                            .expect("Invalid octal literal");
+
+                        let value =
+                            i64::from_str_radix(&oct_str, 8).expect("Invalid octal literal");
                         return Token::IntLiteral(value);
                     }
                     _ => {
