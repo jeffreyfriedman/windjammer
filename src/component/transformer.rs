@@ -822,6 +822,11 @@ impl SignalTransformer {
             crate::parser::BinaryOp::Ge => ">=",
             crate::parser::BinaryOp::And => "&&",
             crate::parser::BinaryOp::Or => "||",
+            crate::parser::BinaryOp::BitAnd => "&",
+            crate::parser::BinaryOp::BitOr => "|",
+            crate::parser::BinaryOp::BitXor => "^",
+            crate::parser::BinaryOp::Shl => "<<",
+            crate::parser::BinaryOp::Shr => ">>",
         }
     }
 
