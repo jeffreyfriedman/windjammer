@@ -584,6 +584,19 @@ impl ModuleCompiler {
         // Resolve module path to file path
         let file_path = self.resolve_module_path(module_path, source_file)?;
 
+        // Check if this is a source root module (marked by __source_root__ prefix)
+        // These are modules from configured source roots that shouldn't be recursively compiled
+        // when building individual files (they'll be in the same Rust module)
+        if file_path
+            .to_str()
+            .is_some_and(|s| s.starts_with("__source_root__::"))
+        {
+            // Mark as compiled but don't generate code (will be compiled separately)
+            self.compiled_modules
+                .insert(module_path.to_string(), String::new());
+            return Ok(());
+        }
+
         // Check if this is an external crate (marked by __external__ prefix)
         if file_path
             .to_str()
@@ -792,13 +805,16 @@ impl ModuleCompiler {
             ))
         } else {
             // Absolute module path (e.g., math, rendering, physics)
-            // First, check if this exists in any of the configured source roots
+            // Check if this exists in any of the configured source roots
             for source_root in &self.source_roots {
                 // Try direct file: source_root/math.wj
                 let mut candidate = source_root.clone();
                 candidate.push(format!("{}.wj", module_path));
                 if candidate.exists() {
-                    return Ok(candidate);
+                    // Found in source root - treat as external module
+                    // When compiling individual files from source roots, cross-module
+                    // dependencies should be treated as external (will be in same Rust module)
+                    return Ok(PathBuf::from(format!("__source_root__::{}", module_path)));
                 }
                 
                 // Try directory module: source_root/math/mod.wj
@@ -806,7 +822,8 @@ impl ModuleCompiler {
                 candidate.push(module_path);
                 candidate.push("mod.wj");
                 if candidate.exists() {
-                    return Ok(candidate);
+                    // Found in source root - treat as external module
+                    return Ok(PathBuf::from(format!("__source_root__::{}", module_path)));
                 }
             }
             
@@ -814,7 +831,6 @@ impl ModuleCompiler {
             // External crate imports (e.g., windjammer_ui, external_crate)
             // These are treated as Rust crate dependencies and passed through to generated code
             // Mark as external by returning a special "external" path
-            // We'll handle this specially in the compilation phase
             Ok(PathBuf::from(format!("__external__::{}", module_path)))
         }
     }
