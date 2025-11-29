@@ -1,0 +1,15 @@
+// Test: Basic enum declaration with auto-derive
+
+pub enum Direction {
+    North,
+    South,
+    East,
+    West,
+}
+
+pub enum Result {
+    Ok(int),
+    Err(string),
+}
+
+

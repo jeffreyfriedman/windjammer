@@ -96,13 +96,14 @@ pub struct Decorator {
 pub struct FunctionDecl {
     pub name: String,
     pub is_pub: bool,                // Whether this function has pub visibility
+    pub is_extern: bool,             // Whether this is an extern function (FFI)
     pub type_params: Vec<TypeParam>, // Generic type parameters with optional bounds: <T: Display, U>
     pub where_clause: Vec<(String, Vec<String>)>, // Where clause: [(type_param, [trait_bounds])]
     pub decorators: Vec<Decorator>,
     pub is_async: bool,
     pub parameters: Vec<Parameter>,
     pub return_type: Option<Type>,
-    pub body: Vec<Statement>,
+    pub body: Vec<Statement>,        // Empty for extern functions
     pub parent_type: Option<String>, // The type name if this function is in an impl block
 }
 
@@ -592,6 +593,12 @@ pub enum Item {
         alias: Option<String>,
         location: SourceLocation,
     }, // use std::fs as fs -> path=["std", "fs"], alias=Some("fs")
+    Mod {
+        name: String,
+        items: Vec<Item>,
+        is_public: bool,
+        location: SourceLocation,
+    }, // mod ffi { ... }
     BoundAlias {
         name: String,
         traits: Vec<String>,
@@ -611,6 +618,7 @@ impl Item {
             Item::Const { location, .. } => location.clone(),
             Item::Static { location, .. } => location.clone(),
             Item::Use { location, .. } => location.clone(),
+            Item::Mod { location, .. } => location.clone(),
             Item::BoundAlias { location, .. } => location.clone(),
         }
     }

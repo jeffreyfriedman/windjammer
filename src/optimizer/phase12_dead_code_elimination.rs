@@ -58,6 +58,7 @@ pub fn eliminate_dead_code(program: &Program) -> (Program, DeadCodeStats) {
                 let new_func = FunctionDecl {
                     name: func.name.clone(),
                     is_pub: func.is_pub,
+                    is_extern: func.is_extern,
                     type_params: func.type_params.clone(),
                     where_clause: func.where_clause.clone(),
                     decorators: func.decorators.clone(),
@@ -325,6 +326,7 @@ fn eliminate_dead_code_in_impl(impl_block: &ImplBlock, stats: &mut DeadCodeStats
         let new_func = FunctionDecl {
             name: func.name.clone(),
             is_pub: func.is_pub,
+            is_extern: func.is_extern,
             type_params: func.type_params.clone(),
             where_clause: func.where_clause.clone(),
             decorators: func.decorators.clone(),
