@@ -490,19 +490,24 @@ impl Parser {
 
     fn get_binary_op(&self) -> Option<(BinaryOp, u8)> {
         match self.current_token() {
-            Token::Or => Some((BinaryOp::Or, 1)),
-            Token::And => Some((BinaryOp::And, 2)),
-            Token::Eq => Some((BinaryOp::Eq, 3)),
-            Token::Ne => Some((BinaryOp::Ne, 3)),
-            Token::Lt => Some((BinaryOp::Lt, 4)),
-            Token::Le => Some((BinaryOp::Le, 4)),
-            Token::Gt => Some((BinaryOp::Gt, 4)),
-            Token::Ge => Some((BinaryOp::Ge, 4)),
-            Token::Plus => Some((BinaryOp::Add, 5)),
-            Token::Minus => Some((BinaryOp::Sub, 5)),
-            Token::Star => Some((BinaryOp::Mul, 6)),
-            Token::Slash => Some((BinaryOp::Div, 6)),
-            Token::Percent => Some((BinaryOp::Mod, 6)),
+            Token::Or => Some((BinaryOp::Or, 1)),         // Logical OR
+            Token::And => Some((BinaryOp::And, 2)),       // Logical AND
+            Token::Pipe => Some((BinaryOp::BitOr, 3)),    // Bitwise OR
+            Token::Caret => Some((BinaryOp::BitXor, 4)),  // Bitwise XOR
+            Token::Ampersand => Some((BinaryOp::BitAnd, 5)), // Bitwise AND
+            Token::Eq => Some((BinaryOp::Eq, 6)),
+            Token::Ne => Some((BinaryOp::Ne, 6)),
+            Token::Lt => Some((BinaryOp::Lt, 7)),
+            Token::Le => Some((BinaryOp::Le, 7)),
+            Token::Gt => Some((BinaryOp::Gt, 7)),
+            Token::Ge => Some((BinaryOp::Ge, 7)),
+            Token::Shl => Some((BinaryOp::Shl, 8)),       // Shift left
+            Token::Shr => Some((BinaryOp::Shr, 8)),       // Shift right
+            Token::Plus => Some((BinaryOp::Add, 9)),
+            Token::Minus => Some((BinaryOp::Sub, 9)),
+            Token::Star => Some((BinaryOp::Mul, 10)),
+            Token::Slash => Some((BinaryOp::Div, 10)),
+            Token::Percent => Some((BinaryOp::Mod, 10)),
             _ => None,
         }
     }

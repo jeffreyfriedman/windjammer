@@ -294,6 +294,11 @@ impl WasmComponentGenerator {
                     BinaryOp::Ge => ">=",
                     BinaryOp::And => "&&",
                     BinaryOp::Or => "||",
+                    BinaryOp::BitAnd => "&",
+                    BinaryOp::BitOr => "|",
+                    BinaryOp::BitXor => "^",
+                    BinaryOp::Shl => "<<",
+                    BinaryOp::Shr => ">>",
                 };
                 format!("({} {} {})", left_rust, op_str, right_rust)
             }
