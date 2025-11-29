@@ -71,6 +71,8 @@ pub struct CodeGenerator {
     in_impl_block: bool, // true if currently generating code for an impl block
     // FUNCTION CONTEXT: Track current function parameters for compound assignment optimization
     current_function_params: Vec<crate::parser::Parameter>, // Parameters of the current function
+    // STRUCT REGISTRY: Track which structs are "simple" (all fields are Copy/Clone/Debug/PartialEq)
+    simple_structs: std::collections::HashSet<String>, // Struct names that are simple
 }
 
 impl CodeGenerator {
@@ -110,6 +112,7 @@ impl CodeGenerator {
             current_local_vars: std::collections::HashSet::new(),
             in_impl_block: false,
             current_function_params: Vec::new(),
+            simple_structs: std::collections::HashSet::new(),
         }
     }
 
@@ -502,12 +505,19 @@ impl CodeGenerator {
         // Collect struct definitions for implicit self support
         let mut struct_fields: std::collections::HashMap<String, Vec<String>> =
             std::collections::HashMap::new();
+        let mut struct_registry: std::collections::HashMap<String, &StructDecl> =
+            std::collections::HashMap::new();
         for item in &program.items {
             if let Item::Struct { decl: s, .. } = item {
                 let field_names: Vec<String> = s.fields.iter().map(|f| f.name.clone()).collect();
                 struct_fields.insert(s.name.clone(), field_names);
+                struct_registry.insert(s.name.clone(), s);
             }
         }
+
+        // Analyze which structs are "simple" (all fields are Copy/Clone/Debug/PartialEq)
+        // This is used for auto-derive logic
+        self.analyze_simple_structs(&struct_registry);
 
         // Check for stdlib modules that need special imports
         for item in &program.items {
@@ -1342,14 +1352,20 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
 
         // Automatically derive common traits for simple structs (if not already derived)
         // This follows the Windjammer philosophy: hide complexity in the compiler
+        // CONSERVATIVE APPROACH: Only auto-derive if all fields are primitives OR known-simple types
         if self.can_auto_derive_struct(s) && !output.contains("#[derive(") {
             // Check if all fields are Copy types (primitives like f32, i32, etc.)
             let has_copy = self.all_fields_are_copy(&s.fields);
+            // Check if all fields are simple (primitives or types in simple_structs registry)
+            let all_simple = s.fields.iter().all(|f| self.is_simple_type(&f.field_type));
+            
             if has_copy {
                 output.push_str("#[derive(Copy, Clone, Debug, PartialEq)]\n");
-            } else {
+            } else if all_simple {
+                // All fields are simple (but not all Copy) - safe to derive Clone
                 output.push_str("#[derive(Clone, Debug, PartialEq)]\n");
             }
+            // Otherwise: don't auto-derive (user must add explicit @derive decorator)
         }
 
         // Add struct declaration with type parameters
@@ -1678,6 +1694,143 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
         true
     }
 
+    /// Analyze all structs to determine which are "simple" (all fields are Copy/Clone/Debug/PartialEq)
+    /// This populates self.simple_structs for use in auto-derive logic
+    fn analyze_simple_structs(&mut self, struct_registry: &std::collections::HashMap<String, &StructDecl>) {
+        // Use a worklist algorithm to avoid infinite recursion on circular types
+        let mut worklist: Vec<String> = struct_registry.keys().cloned().collect();
+        let mut visiting: std::collections::HashSet<String> = std::collections::HashSet::new();
+        
+        while let Some(struct_name) = worklist.pop() {
+            // Skip if already analyzed
+            if self.simple_structs.contains(&struct_name) {
+                continue;
+            }
+            
+            // Check for cycles
+            if visiting.contains(&struct_name) {
+                // Circular dependency detected - not simple
+                continue;
+            }
+            
+            visiting.insert(struct_name.clone());
+            
+            if let Some(struct_decl) = struct_registry.get(&struct_name) {
+                // Check if this struct can be simple
+                if !self.can_auto_derive_struct(struct_decl) {
+                    visiting.remove(&struct_name);
+                    continue;
+                }
+                
+                // Check if all fields are simple types
+                let mut all_fields_simple = true;
+                let mut needs_retry = false;
+                
+                for field in &struct_decl.fields {
+                    if !self.is_simple_type_with_registry(&field.field_type, struct_registry, &visiting) {
+                        // Check if this field is a custom type we haven't analyzed yet
+                        if let Type::Custom(custom_name) = &field.field_type {
+                            if struct_registry.contains_key(custom_name) && !self.simple_structs.contains(custom_name) {
+                                // Need to analyze this dependency first
+                                needs_retry = true;
+                                worklist.push(struct_name.clone());
+                                worklist.push(custom_name.clone());
+                                break;
+                            }
+                        }
+                        all_fields_simple = false;
+                        break;
+                    }
+                }
+                
+                if !needs_retry {
+                    if all_fields_simple {
+                        self.simple_structs.insert(struct_name.clone());
+                    }
+                    visiting.remove(&struct_name);
+                }
+            } else {
+                visiting.remove(&struct_name);
+            }
+        }
+    }
+    
+    /// Check if a type is simple, with access to the struct registry and cycle detection
+    fn is_simple_type_with_registry(
+        &self,
+        type_: &Type,
+        struct_registry: &std::collections::HashMap<String, &StructDecl>,
+        visiting: &std::collections::HashSet<String>,
+    ) -> bool {
+        match type_ {
+            // Primitive types are always simple
+            Type::Int | Type::Int32 | Type::Uint | Type::Float | Type::Bool | Type::String => true,
+            
+            // References are simple if the inner type is simple
+            Type::Reference(inner) | Type::MutableReference(inner) => {
+                self.is_simple_type_with_registry(inner, struct_registry, visiting)
+            }
+            
+            // Vec, Option, Result are simple if their inner types are simple
+            Type::Vec(inner) | Type::Option(inner) => {
+                self.is_simple_type_with_registry(inner, struct_registry, visiting)
+            }
+            Type::Result(ok, err) => {
+                self.is_simple_type_with_registry(ok, struct_registry, visiting)
+                    && self.is_simple_type_with_registry(err, struct_registry, visiting)
+            }
+            
+            // Custom types - check if they're Rust std types or in our simple_structs registry
+            Type::Custom(name) => {
+                // Check for Rust std types
+                let is_std_type = matches!(
+                    name.as_str(),
+                    "String" | "f32" | "f64" | "i8" | "i16" | "i32" | "i64" | "i128" | "isize"
+                        | "u8" | "u16" | "u32" | "u64" | "u128" | "usize" | "bool" | "char"
+                );
+                
+                if is_std_type {
+                    return true;
+                }
+                
+                // Check if we're currently visiting this type (cycle detection)
+                if visiting.contains(name) {
+                    return false; // Circular dependency - not simple
+                }
+                
+                // Check if it's already in our simple_structs registry
+                self.simple_structs.contains(name)
+            }
+            
+            // Tuples are simple if all elements are simple
+            Type::Tuple(types) => types
+                .iter()
+                .all(|t| self.is_simple_type_with_registry(t, struct_registry, visiting)),
+            
+            // Arrays are simple if the element type is simple
+            Type::Array(inner, _) => self.is_simple_type_with_registry(inner, struct_registry, visiting),
+            
+            // Generic types - be conservative and say no
+            Type::Generic(_) => false,
+            
+            // Parameterized types - check the base type
+            Type::Parameterized(name, params) => {
+                // Common generic types that are Clone + Debug + PartialEq if their params are
+                let is_common_generic = matches!(
+                    name.as_str(),
+                    "Vec" | "Option" | "Result" | "Box" | "Rc" | "Arc" | "HashMap" | "HashSet"
+                );
+                is_common_generic
+                    && params
+                        .iter()
+                        .all(|t| self.is_simple_type_with_registry(t, struct_registry, visiting))
+            }
+            
+            // Associated types, trait objects, function pointers, infer - be conservative
+            Type::Associated(_, _) | Type::TraitObject(_) | Type::FunctionPointer { .. } | Type::Infer => false,
+        }
+    }
+
     /// Check if a type is "simple" (implements Clone, Debug, PartialEq automatically)
     #[allow(clippy::only_used_in_recursion)]
     fn is_simple_type(&self, type_: &Type) -> bool {
@@ -1692,14 +1845,22 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
             Type::Vec(inner) | Type::Option(inner) => self.is_simple_type(inner),
             Type::Result(ok, err) => self.is_simple_type(ok) && self.is_simple_type(err),
 
-            // Custom types - check if they're actually Rust std types that are simple
+            // Custom types - CONSERVATIVE: only Rust std types or same-file simple structs
             Type::Custom(name) => {
                 // Check for Rust std types that are Clone + Debug + PartialEq
-                matches!(
+                let is_std_type = matches!(
                     name.as_str(),
                     "String" | "f32" | "f64" | "i8" | "i16" | "i32" | "i64" | "i128" | "isize"
                         | "u8" | "u16" | "u32" | "u64" | "u128" | "usize" | "bool" | "char"
-                )
+                );
+                
+                if is_std_type {
+                    return true;
+                }
+                
+                // Check if it's in our simple_structs registry (same-file structs)
+                // For cross-file dependencies, we can't verify, so we're conservative
+                self.simple_structs.contains(name)
             }
 
             // Tuples are simple if all elements are simple
