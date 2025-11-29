@@ -963,7 +963,6 @@ mod tests {
                     body: vec![],
                     decorators: vec![],
                     is_async: false,
-                    is_extern: false,
                     type_params: vec![],
                     where_clause: vec![],
                     parent_type: None,

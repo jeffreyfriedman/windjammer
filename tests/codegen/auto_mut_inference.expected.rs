@@ -7,7 +7,7 @@ pub fn counter() -> i64 {
 }
 
 #[inline]
-pub fn accumulate(values: Vec<i64>) -> i64 {
+pub fn accumulate(values: &Vec<i64>) -> i64 {
     let mut sum = 0;
     for value in values {
         sum += value;
