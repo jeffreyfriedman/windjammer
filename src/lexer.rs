@@ -80,6 +80,11 @@ pub enum Token {
     And,
     Or,
     Not,
+    
+    // Bitwise operators
+    Caret,    // ^ (XOR)
+    Shl,      // <<
+    Shr,      // >>
 
     Assign,
     PlusAssign,    // +=
@@ -555,6 +560,10 @@ impl Lexer {
                 self.advance();
                 Token::Percent
             }
+            Some('^') => {
+                self.advance();
+                Token::Caret
+            }
             Some('=') if self.peek(1) == Some('=') => {
                 self.advance();
                 self.advance();
@@ -583,6 +592,11 @@ impl Lexer {
                 self.advance();
                 Token::LeftArrow
             }
+            Some('<') if self.peek(1) == Some('<') => {
+                self.advance();
+                self.advance();
+                Token::Shl
+            }
             Some('<') if self.peek(1) == Some('=') => {
                 self.advance();
                 self.advance();
@@ -591,6 +605,11 @@ impl Lexer {
             Some('<') => {
                 self.advance();
                 Token::Lt
+            }
+            Some('>') if self.peek(1) == Some('>') => {
+                self.advance();
+                self.advance();
+                Token::Shr
             }
             Some('>') if self.peek(1) == Some('=') => {
                 self.advance();

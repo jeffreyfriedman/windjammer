@@ -498,8 +498,13 @@ pub enum BinaryOp {
     Le,
     Gt,
     Ge,
-    And,
-    Or,
+    And,  // Logical AND (&&)
+    Or,   // Logical OR (||)
+    BitAnd,  // Bitwise AND (&)
+    BitOr,   // Bitwise OR (|)
+    BitXor,  // Bitwise XOR (^)
+    Shl,     // Shift left (<<)
+    Shr,     // Shift right (>>)
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]

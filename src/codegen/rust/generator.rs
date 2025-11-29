@@ -4281,6 +4281,11 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
             BinaryOp::Ge => ">=",
             BinaryOp::And => "&&",
             BinaryOp::Or => "||",
+            BinaryOp::BitAnd => "&",
+            BinaryOp::BitOr => "|",
+            BinaryOp::BitXor => "^",
+            BinaryOp::Shl => "<<",
+            BinaryOp::Shr => ">>",
         }
     }
 
@@ -4337,10 +4342,14 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
         match op {
             BinaryOp::Or => 1,
             BinaryOp::And => 2,
-            BinaryOp::Eq | BinaryOp::Ne => 3,
-            BinaryOp::Lt | BinaryOp::Le | BinaryOp::Gt | BinaryOp::Ge => 4,
-            BinaryOp::Add | BinaryOp::Sub => 5,
-            BinaryOp::Mul | BinaryOp::Div | BinaryOp::Mod => 6,
+            BinaryOp::BitOr => 3,
+            BinaryOp::BitXor => 4,
+            BinaryOp::BitAnd => 5,
+            BinaryOp::Eq | BinaryOp::Ne => 6,
+            BinaryOp::Lt | BinaryOp::Le | BinaryOp::Gt | BinaryOp::Ge => 7,
+            BinaryOp::Shl | BinaryOp::Shr => 8,
+            BinaryOp::Add | BinaryOp::Sub => 9,
+            BinaryOp::Mul | BinaryOp::Div | BinaryOp::Mod => 10,
         }
     }
 
