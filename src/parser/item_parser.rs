@@ -895,31 +895,47 @@ impl Parser {
                 }
                 
                 self.expect(Token::RParen)?;
-                Some(types)
+                EnumVariantData::Tuple(types)
             } else if self.current_token() == &Token::LBrace {
                 // Struct-style variant: Variant { field1: Type1, field2: Type2 }
-                // For now, we'll parse this as a tuple containing a struct type
-                // TODO: Extend EnumVariant to properly represent struct-style variants
                 self.advance(); // consume {
 
-                // Skip the struct fields for now - just consume until we hit }
-                let mut depth = 1;
-                while depth > 0 && self.current_token() != &Token::Eof {
-                    match self.current_token() {
-                        Token::LBrace => depth += 1,
-                        Token::RBrace => depth -= 1,
-                        _ => {}
-                    }
-                    if depth > 0 {
+                let mut fields = Vec::new();
+                
+                // Parse field: type pairs
+                while self.current_token() != &Token::RBrace && self.current_token() != &Token::Eof {
+                    // Parse field name
+                    let field_name = if let Token::Ident(name) = self.current_token() {
+                        let n = name.clone();
                         self.advance();
+                        n
+                    } else {
+                        return Err(format!("Expected field name in struct variant (at token position {})", self.position));
+                    };
+                    
+                    self.expect(Token::Colon)?;
+                    
+                    // Parse field type
+                    let field_type = self.parse_type()?;
+                    
+                    fields.push((field_name, field_type));
+                    
+                    // Check for comma or end
+                    if self.current_token() == &Token::Comma {
+                        self.advance();
+                        // Allow trailing comma
+                        if self.current_token() == &Token::RBrace {
+                            break;
+                        }
+                    } else {
+                        break;
                     }
                 }
+                
                 self.expect(Token::RBrace)?;
-
-                // Represent as None for now - struct-style variants don't have a single type
-                None
+                EnumVariantData::Struct(fields)
             } else {
-                None
+                EnumVariantData::Unit
             };
 
             variants.push(EnumVariant {
