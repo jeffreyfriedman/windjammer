@@ -113,52 +113,63 @@ impl Parser {
                         }
                     }
 
-                    // Check for binding: Result.Ok(x) or Result.Ok(_) or Result.Ok(true)
+                    // Check for binding: Result.Ok(x) or Result.Ok(_) or Rgb(r, g, b)
                     let binding = if self.current_token() == &Token::LParen {
                         self.advance();
-                        let b = match self.current_token() {
-                            Token::Underscore => {
-                                self.advance();
-                                EnumPatternBinding::Wildcard
-                            }
-                            Token::Ident(name) => {
-                                let name = name.clone();
-                                self.advance();
-                                EnumPatternBinding::Named(name)
-                            }
-                            Token::BoolLiteral(_)
-                            | Token::IntLiteral(_)
-                            | Token::StringLiteral(_)
-                            | Token::CharLiteral(_) => {
-                                // Literal pattern inside enum variant: Ok(true), Err(404), etc.
-                                // Parse the literal pattern recursively
-                                let _pattern = self.parse_pattern()?;
-                                // For now, treat literal patterns as wildcards in enum bindings
-                                // TODO: Properly support literal patterns in enum variants
-                                EnumPatternBinding::Wildcard
-                            }
-                            Token::LBrace => {
-                                // Struct-like enum variant: Variant { field1, field2 }
-                                // For now, just consume the whole thing and treat as wildcard
-                                // TODO: Properly parse struct patterns
-                                let mut depth = 1;
-                                self.advance(); // consume {
-                                while depth > 0 && self.current_token() != &Token::Eof {
-                                    match self.current_token() {
-                                        Token::LBrace => depth += 1,
-                                        Token::RBrace => depth -= 1,
-                                        _ => {}
-                                    }
-                                    self.advance();
-                                }
-                                EnumPatternBinding::Wildcard
-                            }
-                            _ => EnumPatternBinding::None,
-                        };
+                        
+                        // Parse patterns separated by commas
+                        let mut patterns = Vec::new();
+                        
+                        // Handle empty parens: Variant()
                         if self.current_token() == &Token::RParen {
-                            self.expect(Token::RParen)?;
+                            self.advance();
+                            return Ok(Pattern::EnumVariant(qualified_path, EnumPatternBinding::None));
                         }
-                        b
+                        
+                        // Parse first pattern
+                        patterns.push(self.parse_pattern()?);
+                        
+                        // Check if there are more patterns (comma-separated)
+                        while self.current_token() == &Token::Comma {
+                            self.advance();
+                            
+                            // Allow trailing comma
+                            if self.current_token() == &Token::RParen {
+                                break;
+                            }
+                            
+                            patterns.push(self.parse_pattern()?);
+                        }
+                        
+                        self.expect(Token::RParen)?;
+                        
+                        // Determine binding type based on number of patterns
+                        if patterns.len() == 1 {
+                            // Single pattern: check what it is
+                            match &patterns[0] {
+                                Pattern::Wildcard => EnumPatternBinding::Wildcard,
+                                Pattern::Identifier(name) => EnumPatternBinding::Single(name.clone()),
+                                _ => EnumPatternBinding::Tuple(patterns),
+                            }
+                        } else {
+                            // Multiple patterns: tuple binding
+                            EnumPatternBinding::Tuple(patterns)
+                        }
+                    } else if self.current_token() == &Token::LBrace {
+                        // Struct-like enum variant: Variant { field1, field2 }
+                        // For now, just consume the whole thing and treat as wildcard
+                        // TODO: Properly parse struct patterns
+                        let mut depth = 1;
+                        self.advance(); // consume {
+                        while depth > 0 && self.current_token() != &Token::Eof {
+                            match self.current_token() {
+                                Token::LBrace => depth += 1,
+                                Token::RBrace => depth -= 1,
+                                _ => {}
+                            }
+                            self.advance();
+                        }
+                        EnumPatternBinding::Wildcard
                     } else if self.current_token() == &Token::LBrace {
                         // Struct-like enum variant without parens: Variant { field1, field2 }
                         let mut depth = 1;
@@ -181,59 +192,48 @@ impl Parser {
                         binding,
                     ))
                 } else if self.current_token() == &Token::LParen {
-                    // Unqualified enum variant with parameter: Some(x), Ok(value), Err(e), Some(_), Ok((a, b))
+                    // Unqualified enum variant with parameter(s): Some(x), Rgb(r, g, b)
                     self.advance();
 
-                    // Handle underscore (Some(_)), identifier (Some(x)), mut identifier (Some(mut x)), or nested patterns (Ok((a, b)))
-                    let binding = match self.current_token() {
-                        Token::Underscore => {
-                            self.advance();
-                            EnumPatternBinding::Wildcard
+                    // Parse patterns separated by commas
+                    let mut patterns = Vec::new();
+                    
+                    // Handle empty parens: Variant()
+                    if self.current_token() == &Token::RParen {
+                        self.advance();
+                        return Ok(Pattern::EnumVariant(qualified_path, EnumPatternBinding::None));
+                    }
+                    
+                    // Parse first pattern
+                    patterns.push(self.parse_pattern()?);
+                    
+                    // Check if there are more patterns (comma-separated)
+                    while self.current_token() == &Token::Comma {
+                        self.advance();
+                        
+                        // Allow trailing comma
+                        if self.current_token() == &Token::RParen {
+                            break;
                         }
-                        Token::Mut => {
-                            // mut binding: Some(mut x)
-                            self.advance();
-                            if let Token::Ident(b) = self.current_token() {
-                                let b = b.clone();
-                                self.advance();
-                                // For now, treat mut bindings same as regular bindings
-                                // The Rust codegen will handle the mut keyword
-                                EnumPatternBinding::Named(format!("mut {}", b))
-                            } else {
-                                return Err(format!("Expected identifier after mut in enum pattern (at token position {})", self.position));
-                            }
+                        
+                        patterns.push(self.parse_pattern()?);
+                    }
+                    
+                    self.expect(Token::RParen)?;
+                    
+                    // Determine binding type based on number of patterns
+                    let binding = if patterns.len() == 1 {
+                        // Single pattern: check what it is
+                        match &patterns[0] {
+                            Pattern::Wildcard => EnumPatternBinding::Wildcard,
+                            Pattern::Identifier(name) => EnumPatternBinding::Single(name.clone()),
+                            _ => EnumPatternBinding::Tuple(patterns),
                         }
-                        Token::Ident(b) => {
-                            let b = b.clone();
-                            self.advance();
-                            EnumPatternBinding::Named(b)
-                        }
-                        Token::LParen => {
-                            // Nested pattern like Ok((a, b))
-                            // Parse as a tuple pattern and convert to string representation
-                            let nested_pattern = self.parse_pattern()?;
-                            // Convert the pattern to a string for now
-                            // TODO: Extend EnumPatternBinding to support nested patterns
-                            EnumPatternBinding::Named(Self::pattern_to_string(&nested_pattern))
-                        }
-                        Token::BoolLiteral(_)
-                        | Token::IntLiteral(_)
-                        | Token::StringLiteral(_)
-                        | Token::CharLiteral(_) => {
-                            // Literal pattern inside enum variant: Ok(true), Err(404), etc.
-                            // Parse the literal pattern and convert to string
-                            let pattern = self.parse_pattern()?;
-                            EnumPatternBinding::Named(Self::pattern_to_string(&pattern))
-                        }
-                        _ => {
-                            return Err(format!(
-                                "Expected binding name or _ in enum pattern (at token position {})",
-                                self.position
-                            ));
-                        }
+                    } else {
+                        // Multiple patterns: tuple binding
+                        EnumPatternBinding::Tuple(patterns)
                     };
 
-                    self.expect(Token::RParen)?;
                     Ok(Pattern::EnumVariant(qualified_path, binding))
                 } else {
                     // Check if this could be an enum variant without parameters (None, Empty, etc.)
@@ -283,14 +283,47 @@ impl Parser {
             Pattern::Reference(inner) => format!("&{}", Self::pattern_to_string(inner)),
             Pattern::EnumVariant(name, binding) => match binding {
                 EnumPatternBinding::None => name.clone(),
-                EnumPatternBinding::Named(b) => format!("{}({})", name, b),
+                EnumPatternBinding::Single(b) => format!("{}({})", name, b),
                 EnumPatternBinding::Wildcard => format!("{}(_)", name),
+                EnumPatternBinding::Tuple(patterns) => {
+                    let parts: Vec<String> = patterns.iter().map(Self::pattern_to_string).collect();
+                    format!("{}({})", name, parts.join(", "))
+                }
             },
             Pattern::Literal(lit) => format!("{:?}", lit),
             Pattern::Or(patterns) => {
                 let parts: Vec<String> = patterns.iter().map(Self::pattern_to_string).collect();
                 parts.join(" | ")
             }
+        }
+    }
+
+    /// Check if a pattern is refutable (can fail to match).
+    /// 
+    /// Irrefutable patterns (always match):
+    /// - Identifier: `x`, `_`
+    /// - Tuple: `(a, b)` (if all elements are irrefutable)
+    /// - Reference: `&x` (if inner is irrefutable)
+    /// 
+    /// Refutable patterns (can fail):
+    /// - Enum variant: `Some(x)`, `Ok(value)`
+    /// - Literal: `42`, `"hello"`, `true`
+    /// - Or pattern: `x | y`
+    pub fn is_pattern_refutable(pattern: &Pattern) -> bool {
+        match pattern {
+            // Irrefutable patterns
+            Pattern::Wildcard => false,
+            Pattern::Identifier(_) => false,
+            Pattern::Tuple(patterns) => {
+                // Tuple is refutable if any element is refutable
+                patterns.iter().any(Self::is_pattern_refutable)
+            }
+            Pattern::Reference(inner) => Self::is_pattern_refutable(inner),
+            
+            // Refutable patterns
+            Pattern::EnumVariant(_, _) => true,
+            Pattern::Literal(_) => true,
+            Pattern::Or(_) => true,
         }
     }
 }

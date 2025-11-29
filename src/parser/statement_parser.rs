@@ -304,25 +304,17 @@ impl Parser {
             false
         };
 
-        // Parse pattern (could be simple name, wildcard, or tuple destructuring)
-        let pattern = if self.current_token() == &Token::LParen {
-            // Tuple destructuring: let (x, y) = ...
-            self.parse_pattern()?
-        } else if self.current_token() == &Token::Underscore {
-            // Wildcard: let _ = ...
-            self.advance();
-            Pattern::Wildcard
-        } else if let Token::Ident(n) = self.current_token() {
-            // Simple variable: let x = ...
-            let name = n.clone();
-            self.advance();
-            Pattern::Identifier(name)
-        } else {
+        // Parse pattern - always use parse_pattern() to handle all cases
+        let pattern = self.parse_pattern()?;
+
+        // Check if the pattern is refutable (can fail to match)
+        // Refutable patterns are only allowed in match statements, not let bindings
+        if Self::is_pattern_refutable(&pattern) {
             return Err(format!(
-                "Expected variable name or pattern (at token position {})",
-                self.position
+                "Refutable pattern in `let` binding. Use `match` instead for patterns that can fail. Pattern: {}",
+                Self::pattern_to_string(&pattern)
             ));
-        };
+        }
 
         let type_ = if self.current_token() == &Token::Colon {
             self.advance();

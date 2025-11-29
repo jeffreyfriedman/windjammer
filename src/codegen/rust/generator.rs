@@ -2625,9 +2625,16 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
             Pattern::EnumVariant(variant, binding) => {
                 use crate::parser::EnumPatternBinding;
                 match binding {
-                    EnumPatternBinding::Named(name) => format!("{}({})", variant, name),
+                    EnumPatternBinding::Single(name) => format!("{}({})", variant, name),
                     EnumPatternBinding::Wildcard => format!("{}(_)", variant),
                     EnumPatternBinding::None => variant.clone(),
+                    EnumPatternBinding::Tuple(patterns) => {
+                        let rust_patterns: Vec<String> = patterns
+                            .iter()
+                            .map(|p| self.pattern_to_rust(p))
+                            .collect();
+                        format!("{}({})", variant, rust_patterns.join(", "))
+                    }
                 }
             }
             Pattern::Literal(lit) => self.generate_literal(lit),
@@ -3135,9 +3142,16 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
             Pattern::EnumVariant(name, binding) => {
                 use crate::parser::EnumPatternBinding;
                 match binding {
-                    EnumPatternBinding::Named(b) => format!("{}({})", name, b),
+                    EnumPatternBinding::Single(b) => format!("{}({})", name, b),
                     EnumPatternBinding::Wildcard => format!("{}(_)", name),
                     EnumPatternBinding::None => name.clone(),
+                    EnumPatternBinding::Tuple(patterns) => {
+                        let pattern_strs: Vec<String> = patterns
+                            .iter()
+                            .map(|p| self.generate_pattern(p))
+                            .collect();
+                        format!("{}({})", name, pattern_strs.join(", "))
+                    }
                 }
             }
             Pattern::Literal(lit) => self.generate_literal(lit),
