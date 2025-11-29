@@ -169,6 +169,11 @@ impl Parser {
 
         while self.current_token() != &Token::Eof {
             items.push(self.parse_item()?);
+            
+            // Consume optional semicolon after items (ASI - semicolons are optional)
+            if self.current_token() == &Token::Semicolon {
+                self.advance();
+            }
         }
 
         Ok(Program { items })
