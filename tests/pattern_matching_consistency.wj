@@ -1,0 +1,202 @@
+// Pattern Matching Consistency Test
+// Tests that patterns work consistently across all contexts
+
+// ============================================================================
+// TEST 1: Simple function parameters (baseline)
+// ============================================================================
+
+fn test_param_simple(x: i32) -> i32 {
+    return x + 42
+}
+
+// ============================================================================
+// TEST 2: Patterns in let bindings
+// ============================================================================
+
+fn test_let_patterns() -> i32 {
+    // Tuple destructuring
+    let (x, y) = (10, 20)
+    
+    // Wildcard
+    let _ = 100
+    
+    return x + y
+}
+
+// ============================================================================
+// TEST 3: Patterns in match arms
+// ============================================================================
+
+enum Color {
+    Red,
+    Green,
+    Blue,
+    Rgb(i32, i32, i32),
+    Named(String),
+}
+
+fn test_match_patterns(color: Color) -> i32 {
+    match color {
+        // Unit variant
+        Color::Red => {
+            return 1
+        }
+        Color::Green => {
+            return 2
+        }
+        Color::Blue => {
+            return 3
+        }
+        // Tuple variant with wildcard
+        Color::Rgb(_, _, _) => {
+            return 4
+        }
+        // Tuple variant with binding
+        Color::Named(name) => {
+            return 5
+        }
+    }
+}
+
+// ============================================================================
+// TEST 4: Patterns in for loops
+// ============================================================================
+
+fn test_for_loop_patterns() -> i32 {
+    let pairs = vec![(1, 2), (3, 4), (5, 6)]
+    
+    let mut sum = 0
+    for (a, b) in pairs {
+        sum = sum + a + b
+    }
+    
+    return sum
+}
+
+// ============================================================================
+// TEST 5: Nested patterns
+// ============================================================================
+
+enum Result<T, E> {
+    Ok(T),
+    Err(E),
+}
+
+fn test_nested_patterns(result: Result<Option<i32>, String>) -> i32 {
+    match result {
+        Result::Ok(Some(value)) => {
+            return value
+        }
+        Result::Ok(None) => {
+            return 0
+        }
+        Result::Err(_) => {
+            return -1
+        }
+    }
+}
+
+// ============================================================================
+// TEST 6: Qualified paths in patterns
+// ============================================================================
+
+fn test_qualified_patterns(opt: std::option::Option<i32>) -> i32 {
+    match opt {
+        std::option::Option::Some(x) => {
+            return x
+        }
+        std::option::Option::None => {
+            return 0
+        }
+    }
+}
+
+// ============================================================================
+// TEST 7: Struct patterns
+// ============================================================================
+
+struct Point {
+    x: i32,
+    y: i32,
+}
+
+fn test_struct_patterns(point: Point) -> i32 {
+    match point {
+        Point { x: 0, y: 0 } => {
+            return 0
+        }
+        Point { x, y } => {
+            return x + y
+        }
+    }
+}
+
+// ============================================================================
+// TEST 8: Or patterns
+// ============================================================================
+
+fn test_or_patterns(value: i32) -> i32 {
+    match value {
+        1 | 2 | 3 => {
+            return 100
+        }
+        4 | 5 => {
+            return 200
+        }
+        _ => {
+            return 0
+        }
+    }
+}
+
+// ============================================================================
+// TEST 9: Reference patterns
+// ============================================================================
+
+fn test_reference_patterns(opt: Option<i32>) -> i32 {
+    match opt {
+        Some(value) => {
+            return value
+        }
+        None => {
+            return 0
+        }
+    }
+}
+
+// ============================================================================
+// MAIN: Run all tests
+// ============================================================================
+
+fn main() {
+    // Test 1: Function parameters
+    let result1 = test_param_simple(10)
+    
+    // Test 2: Let bindings
+    let result3 = test_let_patterns()
+    
+    // Test 3: Match arms
+    let result4 = test_match_patterns(Color::Red)
+    let result5 = test_match_patterns(Color::Rgb(255, 0, 0))
+    
+    // Test 4: For loops
+    let result6 = test_for_loop_patterns()
+    
+    // Test 5: Nested patterns
+    let result7 = test_nested_patterns(Result::Ok(Some(42)))
+    let result8 = test_nested_patterns(Result::Err("error".to_string()))
+    
+    // Test 7: Struct patterns
+    let point = Point { x: 10, y: 20 }
+    let result9 = test_struct_patterns(point)
+    
+    // Test 8: Or patterns
+    let result10 = test_or_patterns(2)
+    let result11 = test_or_patterns(5)
+    
+    // Test 9: Reference patterns
+    let result12 = test_reference_patterns(Some(100))
+    
+    println("All pattern matching tests passed!")
+}
+
