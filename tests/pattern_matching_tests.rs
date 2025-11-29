@@ -327,6 +327,69 @@ fn test(c: Color) -> i32 {
 }
 
 // ============================================================================
+// ============================================================================
+// STRUCT PATTERN TESTS
+// ============================================================================
+
+#[test]
+fn test_struct_pattern_basic() {
+    let code = r#"
+enum Shape {
+    Circle { radius: f32 },
+    Rectangle { width: f32, height: f32 },
+}
+
+fn calculate_area(shape: Shape) -> f32 {
+    match shape {
+        Shape::Circle { radius: r } => {
+            return 3.14159 * r * r
+        }
+        Shape::Rectangle { width: w, height: h } => {
+            return w * h
+        }
+    }
+}
+"#;
+    compile_should_succeed(code, "struct_pattern_basic");
+}
+
+#[test]
+fn test_struct_pattern_with_wildcard() {
+    let code = r#"
+enum Shape {
+    Rectangle { width: f32, height: f32 },
+}
+
+fn has_large_width(shape: Shape) -> bool {
+    match shape {
+        Shape::Rectangle { width: w, height: _ } => w > 10.0,
+    }
+}
+"#;
+    compile_should_succeed(code, "struct_pattern_with_wildcard");
+}
+
+#[test]
+fn test_struct_pattern_multiple_variants() {
+    let code = r#"
+enum Shape {
+    Circle { radius: f32 },
+    Rectangle { width: f32, height: f32 },
+    Triangle { base: f32, height: f32 },
+}
+
+fn get_first_dimension(shape: Shape) -> f32 {
+    match shape {
+        Shape::Circle { radius: r } => r,
+        Shape::Rectangle { width: w, height: _ } => w,
+        Shape::Triangle { base: b, height: _ } => b,
+    }
+}
+"#;
+    compile_should_succeed(code, "struct_pattern_multiple_variants");
+}
+
+// ============================================================================
 // MAIN TEST RUNNER
 // ============================================================================
 

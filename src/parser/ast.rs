@@ -136,7 +136,14 @@ pub struct StructDecl {
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct EnumVariant {
     pub name: String,
-    pub data: Option<Vec<Type>>,  // Changed from Option<Type> to Option<Vec<Type>> for tuple variants
+    pub data: EnumVariantData,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub enum EnumVariantData {
+    Unit,                                    // Variant
+    Tuple(Vec<Type>),                        // Variant(T1, T2)
+    Struct(Vec<(String, Type)>),             // Variant { field1: T1, field2: T2 }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
@@ -275,10 +282,11 @@ pub struct MatchArm {
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum EnumPatternBinding {
-    None,                    // No parentheses: None, Empty
-    Wildcard,                // Parentheses with wildcard: Some(_)
-    Single(String),          // Single binding: Some(x)
-    Tuple(Vec<Pattern>),     // Multiple bindings: Rgb(r, g, b)
+    None,                                // No parentheses: None, Empty
+    Wildcard,                            // Parentheses with wildcard: Some(_)
+    Single(String),                      // Single binding: Some(x)
+    Tuple(Vec<Pattern>),                 // Multiple bindings: Rgb(r, g, b)
+    Struct(Vec<(String, Pattern)>),      // Struct pattern: Box { width: w, height: h }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
