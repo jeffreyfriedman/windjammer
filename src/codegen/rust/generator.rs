@@ -3494,7 +3494,20 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
             Expression::Unary { op, operand, .. } => {
                 let operand_str = self.generate_expression(operand);
                 let op_str = self.unary_op_to_rust(op);
-                format!("{}{}", op_str, operand_str)
+                
+                // Add parentheses around operand if it's a binary expression
+                // to preserve correct operator precedence
+                // Example: !(a || b) should not become !a || b
+                let needs_parens = matches!(
+                    operand.as_ref(),
+                    Expression::Binary { .. }
+                );
+                
+                if needs_parens {
+                    format!("{}({})", op_str, operand_str)
+                } else {
+                    format!("{}{}", op_str, operand_str)
+                }
             }
             Expression::Call {
                 function,
