@@ -555,11 +555,17 @@ impl Analyzer {
     fn is_mutated(&self, name: &str, statements: &[Statement]) -> bool {
         for stmt in statements {
             match stmt {
-                Statement::Assignment {
-                    target: Expression::Identifier { name: id, .. },
-                    ..
-                } => {
-                    if id == name {
+                Statement::Assignment { target, .. } => {
+                    // Check if the assignment target is the parameter itself
+                    if let Expression::Identifier { name: id, .. } = target {
+                        if id == name {
+                            return true;
+                        }
+                    }
+                    
+                    // Check if the assignment target is a field of the parameter
+                    // e.g., p.x = ... or p.position.x = ...
+                    if self.expression_uses_identifier(name, target) {
                         return true;
                     }
                 }
