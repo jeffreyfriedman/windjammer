@@ -501,22 +501,20 @@ impl Analyzer {
         if let Some(trait_decl) = self.trait_definitions.get(trait_name) {
             // Find the matching trait method
             if let Some(trait_method) = trait_decl.methods.iter().find(|m| m.name == func.name) {
-                // Override self parameter to match trait signature
-                if let Some(trait_self_param) = trait_method.parameters.first() {
-                    if trait_self_param.name == "self" {
-                        // Find self parameter in inferred ownership
-                        if let Some(inferred_mode) = analyzed.inferred_ownership.get_mut("self") {
-                            // Convert trait's OwnershipHint to OwnershipMode
-                            let trait_mode = match &trait_self_param.ownership {
-                                OwnershipHint::Owned => OwnershipMode::Owned,
-                                OwnershipHint::Ref => OwnershipMode::Borrowed,
-                                OwnershipHint::Mut => OwnershipMode::MutBorrowed,
-                                OwnershipHint::Inferred => OwnershipMode::Borrowed, // Default
-                            };
+                // Override ALL parameters to match trait signature
+                // Trait implementations must match the trait's exact signature
+                for trait_param in &trait_method.parameters {
+                    if let Some(inferred_mode) = analyzed.inferred_ownership.get_mut(&trait_param.name) {
+                        // Convert trait's OwnershipHint to OwnershipMode
+                        let trait_mode = match &trait_param.ownership {
+                            OwnershipHint::Owned => OwnershipMode::Owned,
+                            OwnershipHint::Ref => OwnershipMode::Borrowed,
+                            OwnershipHint::Mut => OwnershipMode::MutBorrowed,
+                            OwnershipHint::Inferred => OwnershipMode::Borrowed, // Default
+                        };
 
-                            // Use trait's ownership mode
-                            *inferred_mode = trait_mode;
-                        }
+                        // Use trait's ownership mode
+                        *inferred_mode = trait_mode;
                     }
                 }
             }
