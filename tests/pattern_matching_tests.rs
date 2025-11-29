@@ -508,6 +508,15 @@ fn test_array_indexing_with_int() {
     compile_and_check_rust_compiles("array_indexing.wj", "array_indexing_with_int");
 }
 
+#[test]
+fn test_param_mutability_inference() {
+    // Test that function parameters are automatically inferred as &mut when mutated
+    // Bug: fn move_point(p: Point, dx: f32) { p.x = ... } generates p: Point instead of p: &mut Point
+    // Expected: Automatic inference of &mut for mutated parameters
+    
+    compile_and_check_rust_compiles("param_mutability_inference.wj", "param_mutability_inference");
+}
+
 // ============================================================================
 // MAIN TEST RUNNER
 // ============================================================================
