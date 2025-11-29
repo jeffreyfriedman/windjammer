@@ -73,30 +73,45 @@ impl Parser {
                 Ok(Pattern::Literal(Literal::Char(c)))
             }
             Token::Ident(name) => {
-                let name = name.clone();
+                let mut qualified_path = name.clone();
                 self.advance();
 
                 // Check if it's a qualified enum variant: Result.Ok(x) or ClientMessage::Ping
+                // or module::Type::Variant (multi-level path)
                 if self.current_token() == &Token::Dot || self.current_token() == &Token::ColonColon
                 {
-                    let separator = if self.current_token() == &Token::Dot {
-                        "."
-                    } else {
-                        "::"
-                    };
-                    self.advance();
+                    // Build the full qualified path (could be multiple segments)
+                    // e.g., physics::Collider2D::Box or std::option::Option::Some
+                    loop {
+                        let separator = if self.current_token() == &Token::Dot {
+                            "."
+                        } else if self.current_token() == &Token::ColonColon {
+                            "::"
+                        } else {
+                            break;
+                        };
+                        self.advance();
 
-                    // Get variant name - must be an identifier
-                    let variant = if let Token::Ident(v) = self.current_token() {
-                        v.clone()
-                    } else {
-                        return Err(format!(
-                            "Expected variant name after {}, got {:?}",
-                            separator,
-                            self.current_token()
-                        ));
-                    };
-                    self.advance();
+                        // Get next segment - must be an identifier
+                        if let Token::Ident(segment) = self.current_token() {
+                            qualified_path.push_str(separator);
+                            qualified_path.push_str(segment);
+                            self.advance();
+                        } else {
+                            return Err(format!(
+                                "Expected identifier after {}, got {:?}",
+                                separator,
+                                self.current_token()
+                            ));
+                        }
+
+                        // Check if there's another separator (more path segments)
+                        // or if we've reached the variant (followed by { or ( or nothing)
+                        if self.current_token() != &Token::Dot 
+                            && self.current_token() != &Token::ColonColon {
+                            break;
+                        }
+                    }
 
                     // Check for binding: Result.Ok(x) or Result.Ok(_) or Result.Ok(true)
                     let binding = if self.current_token() == &Token::LParen {
@@ -162,7 +177,7 @@ impl Parser {
                     };
 
                     Ok(Pattern::EnumVariant(
-                        format!("{}{}{}", name, separator, variant),
+                        qualified_path,
                         binding,
                     ))
                 } else if self.current_token() == &Token::LParen {
@@ -219,11 +234,11 @@ impl Parser {
                     };
 
                     self.expect(Token::RParen)?;
-                    Ok(Pattern::EnumVariant(name, binding))
+                    Ok(Pattern::EnumVariant(qualified_path, binding))
                 } else {
                     // Check if this could be an enum variant without parameters (None, Empty, etc.)
                     // For now, treat as identifier - the analyzer will determine if it's an enum variant
-                    Ok(Pattern::Identifier(name))
+                    Ok(Pattern::Identifier(qualified_path))
                 }
             }
             _ => Err(format!("Expected pattern, got {:?}", self.current_token())),
