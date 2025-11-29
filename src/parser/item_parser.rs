@@ -710,7 +710,7 @@ impl Parser {
                     let ownership = match &type_ {
                         Type::Reference(_) => OwnershipHint::Ref,
                         Type::MutableReference(_) => OwnershipHint::Mut,
-                        _ => OwnershipHint::Owned, // Explicit owned type
+                        _ => OwnershipHint::Inferred, // Let analyzer infer ownership based on usage
                     };
 
                     params.push(Parameter {
@@ -743,12 +743,12 @@ impl Parser {
 
                     // CRITICAL FIX: Determine ownership from the type annotation
                     // If the type is explicitly &T or &mut T, use that.
-                    // Otherwise, treat it as owned (pass by value).
-                    // The code generator will then apply Copy type optimization if applicable.
+                    // Otherwise, let the analyzer infer based on usage.
+                    // This allows the analyzer to automatically add &mut when parameters are mutated.
                     let ownership = match &type_ {
                         Type::Reference(_) => OwnershipHint::Ref,
                         Type::MutableReference(_) => OwnershipHint::Mut,
-                        _ => OwnershipHint::Owned, // Explicit owned type (e.g., f32, String, Vec<T>)
+                        _ => OwnershipHint::Inferred, // Let analyzer infer ownership based on usage
                     };
 
                     params.push(Parameter {
