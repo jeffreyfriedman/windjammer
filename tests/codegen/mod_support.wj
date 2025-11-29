@@ -1,0 +1,15 @@
+// Test: Module support
+
+pub mod math {
+    pub fn add(a: int, b: int) -> int {
+        a + b
+    }
+}
+
+pub mod utils {
+    pub fn greet(name: string) -> string {
+        "Hello, ".to_string() + name
+    }
+}
+
+
