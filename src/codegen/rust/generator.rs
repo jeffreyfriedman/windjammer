@@ -2789,20 +2789,16 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
         let has_explicit_self = func.parameters.iter().any(|p| p.name == "self");
 
         if self.in_impl_block && !has_explicit_self && !self.current_struct_fields.is_empty() {
-            // CRITICAL FIX: Don't add implicit self for constructors
-            // A constructor is a function that:
-            // 1. Doesn't have a self parameter (already checked via !has_explicit_self)
-            // 2. Returns the struct type (or any type, really - if no self param, it's likely a constructor)
+            // Distinguish between constructors and methods that need implicit self
+            // 1. Constructor: Returns type, does NOT use self → No self parameter
+            // 2. Builder: Returns type, DOES use self → Add mut self
+            // 3. Regular method: Uses self → Add &self or &mut self
             //
-            // We can't reliably distinguish constructors from other functions by checking field access
-            // because constructors often reference field names in struct literals (e.g., `Foo { field: value }`)
-            //
-            // The safest heuristic: if a function has no self parameter and returns a value,
-            // it's probably a constructor or factory function, so don't add implicit self.
-            let is_constructor = func.return_type.is_some();
+            // The key insight: Check if function body actually uses self!
+            let uses_self = self.function_accesses_fields(func) || self.function_mutates_fields(func);
 
-            if !is_constructor {
-                // Check if function body mutates any struct fields
+            if uses_self {
+                // Function uses self, so it needs an implicit self parameter
                 if self.function_mutates_fields(func) {
                     // Check if this is a builder pattern (modifies fields AND returns Self)
                     let returns_self = self.function_returns_self_type(func);
@@ -2818,6 +2814,7 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
                     params.push("&self".to_string());
                 }
             }
+            // If !uses_self, it's a constructor - don't add self parameter
         }
 
         let additional_params: Vec<String> = func
