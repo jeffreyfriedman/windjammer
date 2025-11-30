@@ -1193,11 +1193,16 @@ fn compile_file_with_compiler(
 
             let code = generator.generate_program(&program, &analyzed);
 
+            // TODO: Re-enable source maps with relative paths (not absolute)
+            // Issue: Source maps currently contain hardcoded absolute paths like:
+            //   /Users/jeffreyfriedman/src/wj/...
+            // This breaks for other developers. Need to store relative paths instead.
+            //
             // Save source map for error mapping
-            let source_map_path = output_file_path.with_extension("rs.map");
-            if let Err(e) = generator.get_source_map().save_to_file(&source_map_path) {
-                eprintln!("Warning: Failed to save source map: {}", e);
-            }
+            // let source_map_path = output_file_path.with_extension("rs.map");
+            // if let Err(e) = generator.get_source_map().save_to_file(&source_map_path) {
+            //     eprintln!("Warning: Failed to save source map: {}", e);
+            // }
 
             code
         }
@@ -1220,11 +1225,15 @@ fn compile_file_with_compiler(
 
         let code = generator.generate_program(&program, &analyzed);
 
+        // TODO: Re-enable source maps with relative paths (not absolute)
+        // Issue: Source maps currently contain hardcoded absolute paths
+        // This breaks for other developers. Need to store relative paths instead.
+        //
         // Save source map for error mapping
-        let source_map_path = output_file_path.with_extension("rs.map");
-        if let Err(e) = generator.get_source_map().save_to_file(&source_map_path) {
-            eprintln!("Warning: Failed to save source map: {}", e);
-        }
+        // let source_map_path = output_file_path.with_extension("rs.map");
+        // if let Err(e) = generator.get_source_map().save_to_file(&source_map_path) {
+        //     eprintln!("Warning: Failed to save source map: {}", e);
+        // }
 
         code
     };
