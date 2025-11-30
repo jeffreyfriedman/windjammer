@@ -127,6 +127,33 @@ impl Parser {
         }
     }
 
+    /// Replace >> (Shr) token with two > (Gt) tokens for nested generics
+    /// This handles cases like Vec<Vec<T>> where >> should be parsed as > >
+    pub(crate) fn replace_shr_with_gt(&mut self) {
+        use crate::lexer::{Token, TokenWithLocation};
+        
+        if self.position < self.tokens.len() {
+            // Clone location data before mutating
+            let (line, column) = {
+                let current = &self.tokens[self.position];
+                (current.line, current.column)
+            };
+            
+            if matches!(self.tokens[self.position].token, Token::Shr) {
+                // Replace Shr with Gt
+                self.tokens[self.position].token = Token::Gt;
+                
+                // Insert another Gt token right after
+                let second_gt = TokenWithLocation {
+                    token: Token::Gt,
+                    line,
+                    column: column + 1, // Slightly offset column
+                };
+                self.tokens.insert(self.position + 1, second_gt);
+            }
+        }
+    }
+
     pub(crate) fn expect(&mut self, expected: Token) -> Result<(), String> {
         if self.current_token() == &expected {
             self.advance();
