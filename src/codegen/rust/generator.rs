@@ -5127,15 +5127,35 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
     fn should_mut_borrow_index_access(&self, expr: &Expression) -> bool {
         match expr {
             Expression::Index { object, .. } => {
-                // Check if we're indexing into a field access (e.g., self.enemies[i])
+                // Check if we're indexing into a field access (e.g., self.enemies[i] or polygon.vertices[i])
                 if let Expression::FieldAccess {
                     object: field_obj, ..
                 } = &**object
                 {
-                    // Check if the field is accessed on self or a borrowed parameter
-                    if let Expression::Identifier { .. } = &**field_obj {
-                        // For now, assume self and first parameter are borrowed
-                        return true; // Conservative: always borrow index access (including self)
+                    // Check if the field is accessed on self or a parameter
+                    if let Expression::Identifier { name, .. } = &**field_obj {
+                        // BUG FIX #23 (Dogfooding Win!): Check parameter ownership
+                        // If parameter is &T, use &, not &mut
+                        // If parameter is &mut T, use &mut
+                        // If parameter is owned, don't add any reference
+                        
+                        if name == "self" {
+                            // self is always &self or &mut self, assume &mut for now
+                            // TODO: Track actual self ownership from function signature
+                            return true;
+                        }
+                        
+                        // Check if this is a parameter and its ownership
+                        for param in &self.current_function_params {
+                            if param.name == *name {
+                                // Only add &mut if parameter is explicitly &mut
+                                // If parameter is & (immutable borrow), we should NOT add &mut!
+                                return matches!(param.ownership, crate::parser::OwnershipHint::Mut);
+                            }
+                        }
+                        
+                        // Not a parameter, assume it's a local variable - don't add ref
+                        return false;
                     }
                 }
                 false
