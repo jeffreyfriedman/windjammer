@@ -1210,6 +1210,47 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
     ) -> String {
         let mut output = String::new();
 
+        // Check if this is an FFI module (mod ffi { fn ... })
+        // All functions in a mod ffi block are treated as extern "C" declarations
+        let is_ffi_module = name == "ffi";
+
+        if is_ffi_module {
+            // For FFI modules, generate extern "C" block instead of mod block
+            output.push_str("#[link(name = \"windjammer_game\")]\n");
+            output.push_str("extern \"C\" {\n");
+
+            for item in items {
+                if let Item::Function { decl, .. } = item {
+                    // All functions in mod ffi are treated as extern "C" declarations
+                    output.push_str("    ");
+                    // Generate FFI function declaration with wj_ prefix
+                    output.push_str(&format!("pub fn wj_{}(", decl.name));
+                    
+                    // Generate parameters
+                    for (i, param) in decl.parameters.iter().enumerate() {
+                        if i > 0 {
+                            output.push_str(", ");
+                        }
+                        output.push_str(&param.name);
+                        output.push_str(": ");
+                        output.push_str(&self.type_to_rust(&param.type_));
+                    }
+                    
+                    output.push_str(")");
+                    
+                    // Generate return type
+                    if let Some(ref ret_type) = decl.return_type {
+                        output.push_str(" -> ");
+                        output.push_str(&self.type_to_rust(ret_type));
+                    }
+                    output.push_str(";\n");
+                }
+            }
+
+            output.push_str("}\n");
+            return output;
+        }
+
         // Generate module declaration
         let pub_prefix = if is_public { "pub " } else { "" };
         output.push_str(&format!("{}mod {} {{\n", pub_prefix, name));
