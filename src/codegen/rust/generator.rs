@@ -1215,16 +1215,16 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
         let is_ffi_module = name == "ffi";
 
         if is_ffi_module {
-            // For FFI modules, generate extern "C" block instead of mod block
+            // For FFI modules, generate both extern "C" block AND mod ffi wrapper
+            
+            // Step 1: Generate extern "C" block with wj_ prefixed functions
             output.push_str("#[link(name = \"windjammer_game\")]\n");
             output.push_str("extern \"C\" {\n");
 
             for item in items {
                 if let Item::Function { decl, .. } = item {
-                    // All functions in mod ffi are treated as extern "C" declarations
                     output.push_str("    ");
-                    // Generate FFI function declaration with wj_ prefix
-                    output.push_str(&format!("pub fn wj_{}(", decl.name));
+                    output.push_str(&format!("fn wj_{}(", decl.name));
                     
                     // Generate parameters
                     for (i, param) in decl.parameters.iter().enumerate() {
@@ -1247,6 +1247,54 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
                 }
             }
 
+            output.push_str("}\n\n");
+            
+            // Step 2: Generate mod ffi wrapper module
+            output.push_str("mod ffi {\n");
+            
+            for item in items {
+                if let Item::Function { decl, .. } = item {
+                    output.push_str("    #[inline]\n");
+                    output.push_str("    pub fn ");
+                    output.push_str(&decl.name);
+                    output.push_str("(");
+                    
+                    // Generate parameters
+                    for (i, param) in decl.parameters.iter().enumerate() {
+                        if i > 0 {
+                            output.push_str(", ");
+                        }
+                        output.push_str(&param.name);
+                        output.push_str(": ");
+                        output.push_str(&self.type_to_rust(&param.type_));
+                    }
+                    
+                    output.push_str(")");
+                    
+                    // Generate return type
+                    if let Some(ref ret_type) = decl.return_type {
+                        output.push_str(" -> ");
+                        output.push_str(&self.type_to_rust(ret_type));
+                    }
+                    
+                    output.push_str(" {\n");
+                    output.push_str("        unsafe { super::wj_");
+                    output.push_str(&decl.name);
+                    output.push_str("(");
+                    
+                    // Pass through parameters
+                    for (i, param) in decl.parameters.iter().enumerate() {
+                        if i > 0 {
+                            output.push_str(", ");
+                        }
+                        output.push_str(&param.name);
+                    }
+                    
+                    output.push_str(") }\n");
+                    output.push_str("    }\n");
+                }
+            }
+            
             output.push_str("}\n");
             return output;
         }
