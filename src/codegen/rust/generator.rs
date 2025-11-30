@@ -4418,11 +4418,11 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
                 if idx_str.ends_with(" as i64") {
                     idx_str = idx_str.replace(" as i64", " as usize");
                 }
-                // Otherwise, wrap the index in (... as usize) to handle int types
-                // This handles: arr[index] where index: int → arr[(index as usize)]
-                // Note: This is safe because Rust will optimize away redundant casts
+                // Otherwise, add cast to usize for int types
+                // This handles: arr[index] where index: int → arr[index as usize]
+                // Note: No parentheses needed - index operator [] has high precedence
                 else {
-                    idx_str = format!("({} as usize)", idx_str);
+                    idx_str = format!("{} as usize", idx_str);
                 }
 
                 let base_expr = format!("{}[{}]", obj_str, idx_str);

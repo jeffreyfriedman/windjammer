@@ -1,0 +1,50 @@
+// Test: Index casts should not have unnecessary parentheses
+// Bug: Compiler generates vec[(i as usize)] instead of vec[i as usize]
+//
+// Rust warning:
+//   warning: unnecessary parentheses around index expression
+//   vec[(i as usize)]
+//       ^          ^
+
+pub struct Items {
+    pub values: Vec<i32>,
+}
+
+impl Items {
+    pub fn new() -> Items {
+        Items { values: Vec::new() }
+    }
+
+    // Test: Index with i32 variable (requires cast to usize)
+    // Source: self.values[i]
+    // Should generate: self.values[i as usize]
+    // NOT: self.values[(i as usize)]
+    pub fn iterate(&self) {
+        let mut i = 0
+        while i < self.values.len() {
+            let val = &self.values[i]  // <-- This should NOT have parens around cast
+            println!("{}", val)
+            i = i + 1
+        }
+    }
+
+    // Test 2: for loop with range
+    pub fn sum(&self) -> i32 {
+        let mut total = 0
+        for i in 0..self.values.len() {
+            total = total + self.values[i]  // <-- This too
+        }
+        total
+    }
+}
+
+pub fn main() {
+    let mut items = Items::new();
+    items.values.push(10);
+    items.values.push(20);
+    items.values.push(30);
+    items.iterate();
+    let s = items.sum();
+    println!("Sum: {}", s);
+}
+
