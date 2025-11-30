@@ -424,17 +424,35 @@ impl Parser {
                     // Handle Vec<T>, Option<T>, Result<T, E>
                     if type_name == "Vec" {
                         let inner = Box::new(self.parse_type()?);
-                        self.expect(Token::Gt)?;
+                        // Handle >> as two > tokens for nested generics (Vec<Vec<T>>)
+                        if self.current_token() == &Token::Shr {
+                            self.replace_shr_with_gt();
+                            self.advance(); // Consume the first >
+                        } else {
+                            self.expect(Token::Gt)?;
+                        }
                         Type::Vec(inner)
                     } else if type_name == "Option" {
                         let inner = Box::new(self.parse_type()?);
-                        self.expect(Token::Gt)?;
+                        // Handle >> as two > tokens for nested generics
+                        if self.current_token() == &Token::Shr {
+                            self.replace_shr_with_gt();
+                            self.advance(); // Consume the first >
+                        } else {
+                            self.expect(Token::Gt)?;
+                        }
                         Type::Option(inner)
                     } else if type_name == "Result" {
                         let ok_type = Box::new(self.parse_type()?);
                         self.expect(Token::Comma)?;
                         let err_type = Box::new(self.parse_type()?);
-                        self.expect(Token::Gt)?;
+                        // Handle >> as two > tokens for nested generics
+                        if self.current_token() == &Token::Shr {
+                            self.replace_shr_with_gt();
+                            self.advance(); // Consume the first >
+                        } else {
+                            self.expect(Token::Gt)?;
+                        }
                         Type::Result(ok_type, err_type)
                     } else {
                         // Generic custom type: Box<T>, HashMap<K, V>, etc.
@@ -447,6 +465,12 @@ impl Parser {
                                 self.advance();
                             } else if self.current_token() == &Token::Gt {
                                 self.advance();
+                                break;
+                            } else if self.current_token() == &Token::Shr {
+                                // Handle >> as two > tokens (nested generics: Vec<Vec<T>>)
+                                // Replace >> with > and leave another > for the outer context
+                                self.replace_shr_with_gt();
+                                self.advance(); // Consume the first >
                                 break;
                             } else {
                                 return Err("Expected ',' or '>' in type arguments".to_string());
