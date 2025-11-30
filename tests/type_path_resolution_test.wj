@@ -1,0 +1,39 @@
+// Simplified test: Just test type path resolution in parameters
+// We'll test the actual module nesting separately
+
+pub struct Vec2 {
+    pub x: f32,
+    pub y: f32
+}
+
+impl Vec2 {
+    pub fn new(x: f32, y: f32) -> Vec2 {
+        Vec2 { x, y }
+    }
+}
+
+pub struct Calculator {
+    pub name: String
+}
+
+impl Calculator {
+    pub fn new() -> Calculator {
+        Calculator { name: "Test".to_string() }
+    }
+    
+    // This parameter type should work even though it's not module-qualified
+    pub fn distance(self, a: Vec2, b: Vec2) -> f32 {
+        let dx = b.x - a.x
+        let dy = b.y - a.y
+        (dx * dx + dy * dy).sqrt()
+    }
+}
+
+pub fn main() {
+    let calc = Calculator::new()
+    let p1 = Vec2::new(0.0, 0.0)
+    let p2 = Vec2::new(3.0, 4.0)
+    let dist = calc.distance(p1, p2)
+    println!("Distance: {}", dist)
+}
+
