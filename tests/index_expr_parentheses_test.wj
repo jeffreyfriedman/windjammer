@@ -1,0 +1,50 @@
+// Test: Index expressions should not have unnecessary parentheses
+// Issue: Compiler generates vec[(i as usize)] instead of vec[i as usize]
+//
+// Rust warning:
+//   warning: unnecessary parentheses around index expression
+//   vec[(i as usize)]
+//       ^          ^
+
+pub struct List {
+    pub items: Vec<i32>,
+}
+
+impl List {
+    pub fn new() -> List {
+        List { items: Vec::new() }
+    }
+
+    // Test 1: Simple index with cast - should NOT have outer parens
+    pub fn get(&self, i: i32) -> i32 {
+        self.items[i as int]
+    }
+
+    // Test 2: Index in loop
+    pub fn sum(&self) -> i32 {
+        let mut total = 0
+        for i in 0..self.items.len() {
+            total = total + self.items[i as int]
+        }
+        total
+    }
+
+    // Test 3: Nested index (2D array)
+    pub fn get_2d(grid: &Vec<Vec<i32>>, row: i32, col: i32) -> i32 {
+        grid[row as int][col as int]
+    }
+}
+
+pub fn main() {
+    let mut list = List::new();
+    list.items.push(10);
+    list.items.push(20);
+    list.items.push(30);
+
+    let val = list.get(1);
+    println!("Value: {}", val);
+
+    let total = list.sum();
+    println!("Total: {}", total);
+}
+
