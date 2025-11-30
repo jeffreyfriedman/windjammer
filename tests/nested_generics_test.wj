@@ -1,0 +1,11 @@
+// Test nested generics parsing (Vec<Vec<T>>)
+
+pub struct Grid {
+    pub rows: Vec<Vec<i32>>
+}
+
+pub fn main() {
+    // Just test that the type parses correctly
+    println!("Type declaration parsed!")
+}
+
