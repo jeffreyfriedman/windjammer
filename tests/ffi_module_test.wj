@@ -1,0 +1,15 @@
+// Test: FFI mod blocks should generate extern "C" declarations
+
+mod ffi {
+    pub fn test_function(x: i32) -> i32 {}
+}
+
+pub fn call_ffi() -> i32 {
+    ffi::test_function(42)
+}
+
+pub fn main() {
+    let result = call_ffi()
+    println!("Result: {}", result)
+}
+
