@@ -1,0 +1,35 @@
+// Test that module-qualified type paths resolve correctly in generated code
+// This tests the fix for: rendering::RenderContext should become super::render_context::RenderContext
+
+// Module 1: Define a type
+pub mod math {
+    pub struct Vec2 {
+        pub x: f32,
+        pub y: f32
+    }
+    
+    impl Vec2 {
+        pub fn new(x: f32, y: f32) -> Vec2 {
+            Vec2 { x, y }
+        }
+    }
+}
+
+// Module 2: Use the type with module-qualified path
+pub mod physics {
+    // This should generate as: use super::math::Vec2;
+    // NOT as: use math::Vec2; (which would fail)
+    pub fn calculate_distance(a: math::Vec2, b: math::Vec2) -> f32 {
+        let dx = b.x - a.x
+        let dy = b.y - a.y
+        (dx * dx + dy * dy).sqrt()
+    }
+}
+
+pub fn main() {
+    let p1 = math::Vec2::new(0.0, 0.0)
+    let p2 = math::Vec2::new(3.0, 4.0)
+    let dist = physics::calculate_distance(p1, p2)
+    println!("Distance: {}", dist)
+}
+
