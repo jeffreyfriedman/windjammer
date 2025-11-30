@@ -2192,8 +2192,9 @@ impl Analyzer {
     fn statement_modifies_self_fields(&self, stmt: &Statement) -> bool {
         match stmt {
             Statement::Assignment { target, .. } => {
-                // Check if target is self.field
-                self.expression_is_self_field_access(target)
+                // Check if target is self.field OR self.field[index]
+                self.expression_is_self_field_access(target) 
+                    || self.expression_is_self_field_index_access(target)
             }
             Statement::Expression { expr, .. } => {
                 // Check for mutating method calls on self.field
@@ -2249,6 +2250,19 @@ impl Analyzer {
                     Expression::FieldAccess { .. } => self.expression_is_self_field_access(object),
                     _ => false,
                 }
+            }
+            _ => false,
+        }
+    }
+
+    /// Check if expression is an index access on a self field (self.field[index] or self.field[i][j])
+    fn expression_is_self_field_index_access(&self, expr: &Expression) -> bool {
+        match expr {
+            Expression::Index { object, .. } => {
+                // Check if the object being indexed is a self field access
+                // OR recursively check if it's a nested index access (self.field[i][j])
+                self.expression_is_self_field_access(object) 
+                    || self.expression_is_self_field_index_access(object)
             }
             _ => false,
         }
