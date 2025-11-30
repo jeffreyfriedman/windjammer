@@ -1,0 +1,60 @@
+// Test: Method receiver code generation should use &self or &mut self correctly
+// This tests that the compiler generates correct Rust code for method receivers
+
+pub struct Counter {
+    pub count: i32,
+}
+
+impl Counter {
+    // Constructor - should NOT add implicit self
+    pub fn new() -> Counter {
+        Counter { count: 0 }
+    }
+
+    // Read-only method - should generate &self (not self)
+    pub fn get(self) -> i32 {
+        self.count
+    }
+
+    // Mutating method - should generate &mut self (not self)
+    pub fn increment(self) {
+        self.count = self.count + 1
+    }
+
+    // Method that calls other methods - should generate &self (not self)
+    pub fn double(self) -> i32 {
+        self.get() * 2
+    }
+}
+
+pub struct StringBuilder {
+    pub text: String,
+}
+
+impl StringBuilder {
+    pub fn new() -> StringBuilder {
+        StringBuilder { text: String::new() }
+    }
+
+    // Method that mutates field - should generate &mut self
+    pub fn clear(self) {
+        self.text = String::new()
+    }
+
+    // Read-only method - should generate &self
+    pub fn len(self) -> i32 {
+        self.text.len() as i32
+    }
+}
+
+pub fn main() {
+    let mut counter = Counter::new();
+    counter.increment();
+    let value = counter.get();
+    println!("Count: {}", value);
+
+    let mut sb = StringBuilder::new();
+    sb.clear();
+    println!("Length: {}", sb.len());
+}
+
