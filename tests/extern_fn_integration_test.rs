@@ -37,8 +37,9 @@ fn compile_wj(source: &str) -> (String, bool) {
     let stderr = String::from_utf8_lossy(&output.stderr);
     
     if !success {
-        eprintln!("Compilation failed:");
-        eprintln!("STDERR: {}", stderr);
+        println!("Compilation failed:");
+        println!("STDERR: {}", stderr);
+        println!("STDOUT: {}", String::from_utf8_lossy(&output.stdout));
     }
     
     let rust_file = output_dir.join(format!("{}.rs", test_file.replace(".wj", "")));
