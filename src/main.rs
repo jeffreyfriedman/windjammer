@@ -479,6 +479,12 @@ fn build_project(path: &Path, output: &Path, target: CompilationTarget) -> Resul
             create_cargo_toml_with_deps(output, &all_stdlib_modules, &all_external_crates, target)?;
         }
 
+        // Automatically generate mod.rs for multi-file projects
+        // This makes all compiled modules accessible to each other
+        if wj_files.len() > 1 {
+            generate_mod_file(output)?;
+        }
+
         println!("\n{} Transpilation complete!", "Success!".green().bold());
         println!("Output directory: {:?}", output);
         println!("\nTo run the generated code:");
@@ -2859,22 +2865,11 @@ pub fn generate_mod_file(output_dir: &Path) -> Result<()> {
 
     // Generate mod.rs content
     let mut content = String::from("// Auto-generated mod.rs by Windjammer CLI\n");
-    content.push_str("// DO NOT EDIT MANUALLY - regenerate with: wj build --module-file\n\n");
+    content.push_str("// This file declares all generated Windjammer modules\n\n");
 
     // Add pub mod declarations
     for module in &modules {
         content.push_str(&format!("pub mod {};\n", module));
-    }
-
-    content.push_str("\n// Re-export all public items for convenience\n");
-    for module in &modules {
-        if let Some(exports) = type_exports.get(module) {
-            let exports_str = exports.join(", ");
-            content.push_str(&format!("pub use {}::{{{}}};\n", module, exports_str));
-        } else {
-            // Fallback to wildcard import
-            content.push_str(&format!("pub use {}::*;\n", module));
-        }
     }
 
     // Write mod.rs
