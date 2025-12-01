@@ -541,6 +541,7 @@ impl Analyzer {
                             // Perform inference based on usage in function body
                             self.infer_parameter_ownership(
                                 &param.name,
+                                &param.type_,
                                 &func.body,
                                 &func.return_type,
                             )?
@@ -653,6 +654,7 @@ impl Analyzer {
     fn infer_parameter_ownership(
         &self,
         param_name: &str,
+        param_type: &Type,
         body: &[Statement],
         _return_type: &Option<Type>,
     ) -> Result<OwnershipMode, String> {
@@ -680,8 +682,13 @@ impl Analyzer {
             return Ok(OwnershipMode::Owned);
         }
 
-        // 5. Default to borrowed for read-only access
-        Ok(OwnershipMode::Borrowed)
+        // 5. For Copy types with read-only access, pass by value (Owned)
+        // For non-Copy types with read-only access, borrow (&)
+        if self.is_copy_type(param_type) {
+            Ok(OwnershipMode::Owned)
+        } else {
+            Ok(OwnershipMode::Borrowed)
+        }
     }
 
     fn is_mutated(&self, name: &str, statements: &[Statement]) -> bool {
@@ -1758,7 +1765,7 @@ impl Analyzer {
                 OwnershipHint::Owned => OwnershipMode::Owned,
                 OwnershipHint::Inferred => {
                     // Infer ownership if not specified
-                    self.infer_parameter_ownership(&param.name, &func.body, &func.return_type)
+                    self.infer_parameter_ownership(&param.name, &param.type_, &func.body, &func.return_type)
                         .unwrap_or(OwnershipMode::Owned)
                 }
             };
@@ -2568,9 +2575,11 @@ mod tests {
             location: None,
         }];
 
+        let param_type = Type::String;
         let mode = analyzer
-            .infer_parameter_ownership("s", &body, &None)
+            .infer_parameter_ownership("s", &param_type, &body, &None)
             .unwrap();
+        // String is not Copy, so it should be Borrowed for read-only access
         assert_eq!(mode, OwnershipMode::Borrowed);
     }
 }
