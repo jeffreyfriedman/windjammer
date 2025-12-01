@@ -81,6 +81,23 @@ pub struct Parser {
 }
 
 impl Parser {
+    /// Check if there was a newline before the current token (for ASI - Automatic Semicolon Insertion)
+    pub(crate) fn had_newline_before_current(&self) -> bool {
+        if self.position == 0 {
+            return false; // No previous token
+        }
+        
+        let prev_token = self.tokens.get(self.position - 1);
+        let curr_token = self.tokens.get(self.position);
+        
+        match (prev_token, curr_token) {
+            (Some(prev), Some(curr)) => {
+                // If the line number changed, there was a newline
+                curr.line > prev.line
+            }
+            _ => false,
+        }
+    }
     pub fn new(tokens: Vec<crate::lexer::TokenWithLocation>) -> Self {
         Parser {
             tokens,
@@ -127,33 +144,6 @@ impl Parser {
         }
     }
 
-    /// Replace >> (Shr) token with two > (Gt) tokens for nested generics
-    /// This handles cases like Vec<Vec<T>> where >> should be parsed as > >
-    pub(crate) fn replace_shr_with_gt(&mut self) {
-        use crate::lexer::{Token, TokenWithLocation};
-        
-        if self.position < self.tokens.len() {
-            // Clone location data before mutating
-            let (line, column) = {
-                let current = &self.tokens[self.position];
-                (current.line, current.column)
-            };
-            
-            if matches!(self.tokens[self.position].token, Token::Shr) {
-                // Replace Shr with Gt
-                self.tokens[self.position].token = Token::Gt;
-                
-                // Insert another Gt token right after
-                let second_gt = TokenWithLocation {
-                    token: Token::Gt,
-                    line,
-                    column: column + 1, // Slightly offset column
-                };
-                self.tokens.insert(self.position + 1, second_gt);
-            }
-        }
-    }
-
     pub(crate) fn expect(&mut self, expected: Token) -> Result<(), String> {
         if self.current_token() == &expected {
             self.advance();
@@ -168,25 +158,6 @@ impl Parser {
         }
     }
 
-    /// Check if there was a newline before the current token
-    /// Used for Automatic Semicolon Insertion (ASI) rules
-    pub(crate) fn had_newline_before_current(&self) -> bool {
-        if self.position == 0 {
-            return false;
-        }
-
-        // Get the previous and current token locations
-        if let (Some(prev), Some(curr)) = (
-            self.tokens.get(self.position - 1),
-            self.tokens.get(self.position),
-        ) {
-            // If the current token is on a different line than the previous token, there was a newline
-            curr.line > prev.line
-        } else {
-            false
-        }
-    }
-
     // ========================================================================
     // SECTION 3: TOP-LEVEL PARSING
     // ========================================================================
@@ -196,11 +167,6 @@ impl Parser {
 
         while self.current_token() != &Token::Eof {
             items.push(self.parse_item()?);
-
-            // Consume optional semicolon after items (ASI - semicolons are optional)
-            if self.current_token() == &Token::Semicolon {
-                self.advance();
-            }
         }
 
         Ok(Program { items })
@@ -222,18 +188,6 @@ impl Parser {
         };
 
         match self.current_token() {
-            Token::Extern => {
-                self.advance(); // Consume the Extern token
-                self.expect(Token::Fn)?;
-                let mut func = self.parse_function()?;
-                func.is_extern = true;
-                func.is_pub = is_pub;
-                func.decorators = decorators.clone();
-                Ok(Item::Function {
-                    decl: func,
-                    location: self.current_location(),
-                })
-            }
             Token::Fn => {
                 self.advance(); // Consume the Fn token
                 let mut func = self.parse_function()?;
@@ -328,11 +282,19 @@ impl Parser {
             Token::Use => {
                 self.advance(); // consume 'use'
                 let (path, alias) = self.parse_use()?;
+                // Consume optional semicolon (ASI - automatic semicolon insertion)
+                if self.current_token() == &Token::Semicolon {
+                    self.advance();
+                }
                 Ok(Item::Use {
                     path,
                     alias,
                     location: self.current_location(),
                 })
+            }
+            Token::Bound => {
+                self.advance(); // consume 'bound'
+                self.parse_bound_alias()
             }
             Token::Mod => {
                 self.advance(); // consume 'mod'
@@ -344,9 +306,22 @@ impl Parser {
                     location: self.current_location(),
                 })
             }
-            Token::Bound => {
-                self.advance(); // consume 'bound'
-                self.parse_bound_alias()
+            Token::Extern => {
+                self.advance(); // consume 'extern'
+                self.expect(Token::Fn)?;
+                let mut func = self.parse_function()?;
+                func.is_extern = true;
+                func.is_pub = is_pub;
+                // Extern functions have no body
+                func.body = vec![];
+                // Consume optional semicolon
+                if self.current_token() == &Token::Semicolon {
+                    self.advance();
+                }
+                Ok(Item::Function {
+                    decl: func,
+                    location: self.current_location(),
+                })
             }
             _ => Err(format!(
                 "Unexpected token: {:?} (at token position {})",

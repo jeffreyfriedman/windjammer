@@ -1,0 +1,14 @@
+// ASI Bug: Semicolon should be inserted before parenthesized expression on new line
+
+pub fn test_asi_before_paren() -> int {
+    let a = 5
+    (a + 1) * 2
+}
+
+pub fn test_asi_multiple_statements() -> f32 {
+    let dx = 3.0
+    let dy = 4.0
+    let dz = 5.0
+    (dx * dx + dy * dy + dz * dz).sqrt()
+}
+

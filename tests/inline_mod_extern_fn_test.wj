@@ -1,0 +1,11 @@
+// Test: inline modules with extern fn declarations
+// This is used in render_api.wj for FFI declarations
+
+pub fn test_function() {
+    ffi::my_extern_function(42)
+}
+
+mod ffi {
+    extern fn my_extern_function(value: int);
+}
+
