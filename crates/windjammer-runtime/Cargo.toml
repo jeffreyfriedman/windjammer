@@ -18,7 +18,7 @@ wasm = ["wasm-bindgen", "web-sys", "js-sys", "console_error_panic_hook", "wasm-b
 axum = { version = "0.8", features = ["macros"] }
 tokio = { version = "1", features = ["full"] }
 tower = { version = "0.4", optional = true }
-tower-http = { version = "0.5", features = ["fs", "trace"], optional = true }
+tower-http = { version = "0.6", features = ["fs", "trace"], optional = true }
 
 # JSON
 serde = { version = "1.0", features = ["derive"] }
