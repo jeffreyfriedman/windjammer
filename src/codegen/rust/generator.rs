@@ -2897,7 +2897,13 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
                         if matches!(param.type_, Type::Reference(_) | Type::MutableReference(_)) {
                             self.type_to_rust(&param.type_)
                         } else {
-                            format!("&{}", self.type_to_rust(&param.type_))
+                            // STRING BORROW OPTIMIZATION:
+                            // When borrowing a String, generate &str instead of &String
+                            if self.is_string_type(&param.type_) {
+                                "&str".to_string()
+                            } else {
+                                format!("&{}", self.type_to_rust(&param.type_))
+                            }
                         }
                     }
                     OwnershipHint::Mut => {
@@ -2932,7 +2938,14 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
                                     if self.is_copy_type(&param.type_) {
                                         self.type_to_rust(&param.type_)
                                     } else {
-                                        format!("&{}", self.type_to_rust(&param.type_))
+                                        // STRING BORROW OPTIMIZATION:
+                                        // When borrowing a String parameter that's only read,
+                                        // generate &str instead of &String for efficiency
+                                        if self.is_string_type(&param.type_) {
+                                            "&str".to_string()
+                                        } else {
+                                            format!("&{}", self.type_to_rust(&param.type_))
+                                        }
                                     }
                                 }
                                 OwnershipMode::MutBorrowed => {
@@ -5023,6 +5036,11 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
             }
             _ => false, // String, Vec, Option, Result, other Custom types are not Copy
         }
+    }
+
+    /// Check if a type is String (for String → &str optimization)
+    fn is_string_type(&self, ty: &Type) -> bool {
+        matches!(ty, Type::String)
     }
 
     #[allow(clippy::only_used_in_recursion)]
