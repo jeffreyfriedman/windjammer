@@ -43,7 +43,7 @@ url = "2.5"
 clap = { version = "4.5", features = ["derive"] }
 sha2 = "0.10"
 bcrypt = "0.17"
-base64 = "0.21"
+base64 = "0.22"
 hex = "0.4"
 urlencoding = "2.1"
 dirs = "5.0"
