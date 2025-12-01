@@ -1,0 +1,33 @@
+// Test: Automatic String → &str borrow inference
+// When a String parameter is only read (never stored), 
+// the compiler should infer &str for efficiency
+
+pub struct Logger {
+    prefix: String,
+}
+
+impl Logger {
+    // path is only read, never stored → should infer &str
+    pub fn log_file(path: String) {
+        println!("Loading file: {}", path)
+    }
+    
+    // message is only read → should infer &str
+    pub fn log_message(self, message: String) {
+        println!("[{}] {}", self.prefix, message)
+    }
+    
+    // name is stored in struct → should stay owned String
+    pub fn new(name: String) -> Logger {
+        Logger { prefix: name }
+    }
+}
+
+pub fn test_string_borrow() {
+    // These should work without .to_string()
+    Logger::log_file("test.txt")
+    
+    let logger = Logger::new("App".to_string())
+    logger.log_message("Hello")
+}
+
