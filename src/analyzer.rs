@@ -628,7 +628,15 @@ impl Analyzer {
                                 OwnershipHint::Owned => OwnershipMode::Owned,
                                 OwnershipHint::Ref => OwnershipMode::Borrowed,
                                 OwnershipHint::Mut => OwnershipMode::MutBorrowed,
-                                OwnershipHint::Inferred => OwnershipMode::Borrowed, // Default
+                                OwnershipHint::Inferred => {
+                                    // For Copy types, keep them Owned (pass by value)
+                                    // For non-Copy types, default to Borrowed
+                                    if self.is_copy_type(&trait_param.type_) {
+                                        OwnershipMode::Owned
+                                    } else {
+                                        OwnershipMode::Borrowed
+                                    }
+                                }
                             };
 
                             // Use trait's ownership mode
