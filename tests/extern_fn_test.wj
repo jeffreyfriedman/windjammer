@@ -1,0 +1,17 @@
+// Test: extern fn declarations for FFI
+
+// Simple extern fn
+extern fn printf(format: string);
+
+// Multiple extern fns
+extern fn malloc(size: int) -> int;
+extern fn free(ptr: int);
+
+// With multiple parameters
+extern fn memcpy(dest: int, src: int, n: int) -> int;
+
+// Test using extern fn
+pub fn test_extern() {
+    printf("Hello from Windjammer!");
+}
+
