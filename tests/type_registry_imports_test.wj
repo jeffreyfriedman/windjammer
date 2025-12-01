@@ -1,0 +1,25 @@
+// Test that TypeRegistry correctly fixes import paths for types and functions
+
+// Import from different modules (would be incorrect without TypeRegistry)
+use math::Vec2
+use collision2d::check_collision
+use rigidbody2d::RigidBody2D
+
+struct TestImports {
+    position: Vec2
+    body: RigidBody2D
+}
+
+pub fn test_function() {
+    let imports = TestImports {
+        position: Vec2 { x: 1.0, y: 2.0 }
+        body: RigidBody2D {
+            position: Vec2 { x: 0.0, y: 0.0 }
+            velocity: Vec2 { x: 0.0, y: 0.0 }
+            mass: 1.0
+        }
+    }
+    
+    // Test function import
+    // check_collision would fail without TypeRegistry fixing the path
+}

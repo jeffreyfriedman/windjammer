@@ -291,12 +291,8 @@ if (import.meta.url === `file://${process.argv[1]}`) {
                 // JavaScript doesn't have pattern matching like Rust, simplify
                 match binding {
                     EnumPatternBinding::Single(bind) => bind.clone(),
-                    EnumPatternBinding::Tuple(_) | EnumPatternBinding::Struct(_) => {
-                        // For tuple/struct patterns in JS, just use the variant name
-                        // JS doesn't have native pattern matching, so this is best effort
-                        variant.clone()
-                    }
                     EnumPatternBinding::Wildcard | EnumPatternBinding::None => variant.clone(),
+                    _ => variant.clone(), // Tuple and Struct patterns also simplified to variant name
                 }
             }
             crate::parser::Pattern::Literal(lit) => {
@@ -843,13 +839,10 @@ if (import.meta.url === `file://${process.argv[1]}`) {
                     EnumPatternBinding::Single(var) => {
                         format!("{} === {}.{}", match_value, name, var)
                     }
-                    EnumPatternBinding::Tuple(_) | EnumPatternBinding::Struct(_) => {
-                        // For tuple/struct patterns, just check the variant name
-                        format!("{} === {}", match_value, name)
-                    }
                     EnumPatternBinding::Wildcard | EnumPatternBinding::None => {
                         format!("{} === {}", match_value, name)
                     }
+                    _ => format!("{} === {}", match_value, name), // Tuple and Struct patterns
                 }
             }
             Pattern::Or(patterns) => {

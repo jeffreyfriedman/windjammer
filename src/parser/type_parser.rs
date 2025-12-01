@@ -350,35 +350,13 @@ impl Parser {
                                         | Token::FatArrow
                                         | Token::LBrace
                                         | Token::Where => {
-                                            // This could be either:
-                                            // 1. Associated type: Self::Item, T::Output
-                                            // 2. Qualified path: module::Type, std::fs::File
-                                            //
-                                            // Heuristic: If base is "Self" or looks like a type parameter (single uppercase letter),
-                                            // treat as associated type. Otherwise, treat as qualified path.
-                                            if type_name == "Self"
-                                                || (type_name.len() == 1
-                                                    && type_name
-                                                        .chars()
-                                                        .next()
-                                                        .unwrap()
-                                                        .is_uppercase())
-                                            {
-                                                // Associated type: Self::Item, T::Output
-                                                self.advance(); // consume ::
-                                                self.advance(); // consume identifier
-                                                return Ok(Type::Associated(
-                                                    type_name,
-                                                    next_segment_str,
-                                                ));
-                                            } else {
-                                                // Qualified path: module::Type, collision2d::Collision
-                                                type_name.push_str("::");
-                                                type_name.push_str(&next_segment_str);
-                                                self.advance(); // consume ::
-                                                self.advance(); // consume identifier
-                                                break; // Exit loop, return as Custom type
-                                            }
+                                            // This looks like an associated type (final segment)
+                                            self.advance(); // consume ::
+                                            self.advance(); // consume identifier
+                                            return Ok(Type::Associated(
+                                                type_name,
+                                                next_segment_str,
+                                            ));
                                         }
                                         Token::ColonColon => {
                                             // More path segments to come
@@ -424,35 +402,17 @@ impl Parser {
                     // Handle Vec<T>, Option<T>, Result<T, E>
                     if type_name == "Vec" {
                         let inner = Box::new(self.parse_type()?);
-                        // Handle >> as two > tokens for nested generics (Vec<Vec<T>>)
-                        if self.current_token() == &Token::Shr {
-                            self.replace_shr_with_gt();
-                            self.advance(); // Consume the first >
-                        } else {
-                            self.expect(Token::Gt)?;
-                        }
+                        self.expect(Token::Gt)?;
                         Type::Vec(inner)
                     } else if type_name == "Option" {
                         let inner = Box::new(self.parse_type()?);
-                        // Handle >> as two > tokens for nested generics
-                        if self.current_token() == &Token::Shr {
-                            self.replace_shr_with_gt();
-                            self.advance(); // Consume the first >
-                        } else {
-                            self.expect(Token::Gt)?;
-                        }
+                        self.expect(Token::Gt)?;
                         Type::Option(inner)
                     } else if type_name == "Result" {
                         let ok_type = Box::new(self.parse_type()?);
                         self.expect(Token::Comma)?;
                         let err_type = Box::new(self.parse_type()?);
-                        // Handle >> as two > tokens for nested generics
-                        if self.current_token() == &Token::Shr {
-                            self.replace_shr_with_gt();
-                            self.advance(); // Consume the first >
-                        } else {
-                            self.expect(Token::Gt)?;
-                        }
+                        self.expect(Token::Gt)?;
                         Type::Result(ok_type, err_type)
                     } else {
                         // Generic custom type: Box<T>, HashMap<K, V>, etc.
@@ -465,12 +425,6 @@ impl Parser {
                                 self.advance();
                             } else if self.current_token() == &Token::Gt {
                                 self.advance();
-                                break;
-                            } else if self.current_token() == &Token::Shr {
-                                // Handle >> as two > tokens (nested generics: Vec<Vec<T>>)
-                                // Replace >> with > and leave another > for the outer context
-                                self.replace_shr_with_gt();
-                                self.advance(); // Consume the first >
                                 break;
                             } else {
                                 return Err("Expected ',' or '>' in type arguments".to_string());

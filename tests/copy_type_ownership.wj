@@ -38,3 +38,4 @@ pub fn midpoint(a: Vec2, b: Vec2) -> Vec2 {
     Vec2::new((a.x + b.x) / 2.0, (a.y + b.y) / 2.0)
 }
 
+

@@ -1,0 +1,14 @@
+// Test that use crate:: paths are preserved correctly in generated code
+
+use crate::ffi
+
+pub struct TestStruct {
+    value: int,
+}
+
+impl TestStruct {
+    pub fn new() -> TestStruct {
+        TestStruct { value: 42 }
+    }
+}
+

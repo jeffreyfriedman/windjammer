@@ -692,25 +692,11 @@ impl CodeGenerator {
         // Inject implicit imports if needed
         let mut implicit_imports = String::new();
 
-        // Add game framework imports if this is a game (via std::game import)
-        let uses_game_import = self.detect_game_import(program);
-
-        if uses_game_import {
-            // Use windjammer_game (the actual crate name)
-            // Default to 2D renderer
-            implicit_imports.push_str("use windjammer_game::renderer::{Renderer, Color};\n");
-            implicit_imports.push_str("use windjammer_game::input::{Input, Key, MouseButton};\n");
-            implicit_imports.push_str("use windjammer_game::math::{Vec3, Mat4};\n");
-            implicit_imports.push_str("use windjammer_game::ecs::*;\n");
-            implicit_imports.push_str("use windjammer_game::game_app::GameApp;\n");
-        }
-
-        // Add UI framework imports if using std::ui
-        if ui_framework_info.uses_ui {
-            implicit_imports.push_str("use windjammer_ui::prelude::*;\n");
-            implicit_imports.push_str("use windjammer_ui::components::*;\n");
-            implicit_imports.push_str("use windjammer_ui::simple_vnode::{VNode, VAttr};\n");
-        }
+        // REMOVED: Automatic game/ui framework imports
+        // Reason: std::ui and std::game violate separation of concerns
+        // Users should explicitly add dependencies in Cargo.toml and import them:
+        //   use windjammer_ui::prelude::*;
+        //   use windjammer_game_framework::prelude::*;
 
         // Add platform API imports based on target
         if platform_apis.needs_fs
@@ -898,6 +884,16 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
 
         let full_path = path.join(".");
 
+        // Handle crate:: imports (keep them as-is, don't transform to super::)
+        if full_path.starts_with("crate::") || full_path.starts_with("crate.") {
+            let rust_path = full_path.replace('.', "::");
+            if let Some(alias_name) = alias {
+                return format!("use {} as {};\n", rust_path, alias_name);
+            } else {
+                return format!("use {};\n", rust_path);
+            }
+        }
+
         // Handle stdlib imports FIRST (before glob handling)
         // This ensures std::ui::*, std::fs::*, etc. are properly skipped
         if full_path.starts_with("std::") || full_path.starts_with("std.") {
@@ -923,19 +919,10 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
                 return format!("use std::{};\n", module_name);
             }
 
-            // Handle UI framework - skip explicit import (handled by implicit imports)
-            if module_base == "ui" || module_base.starts_with("ui::") {
-                // UI framework is handled by implicit imports from windjammer-ui crate
-                // Don't generate an explicit import here
-                return String::new();
-            }
-
-            // Handle Game framework - skip explicit import (handled by implicit imports)
-            if module_base == "game" || module_base.starts_with("game::") {
-                // Game framework is handled by implicit imports from windjammer-game-framework crate
-                // Don't generate an explicit import here
-                return String::new();
-            }
+            // REMOVED: std::ui and std::game special cases
+            // These should NOT be in std:: namespace - they are external crates
+            // Users should use: `use ui::Button` or `use game::GameLoop` (not std::ui or std::game)
+            // The crate mapping comes from Cargo.toml dependencies
 
             // Handle Tauri framework - skip explicit import (functions are generated inline)
             if module_base == "tauri" || module_base.starts_with("tauri::") {
@@ -989,8 +976,8 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
                 "strings" => "windjammer_runtime::strings",
                 "testing" => "windjammer_runtime::testing",
                 "time" => "windjammer_runtime::time",
-                // "ui" is handled by implicit imports (windjammer-ui crate), not runtime
-                "game" => "windjammer_runtime::game",
+                // REMOVED: "ui" and "game" mappings (violate separation of concerns)
+                // These are external crates, not part of std:: stdlib
 
                 _ => {
                     // Unknown module - try windjammer_runtime
@@ -2131,11 +2118,17 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
                             format!("&mut {}", self.type_to_rust(&param.type_))
                         }
                         OwnershipHint::Inferred => {
-                            // Default to &
                             if param.name == "self" {
+                                // Default to &self for trait methods
                                 "&self".to_string()
                             } else {
-                                format!("&{}", self.type_to_rust(&param.type_))
+                                // For Copy types (f32, i64, bool, etc.), pass by value
+                                // For non-Copy types, pass by reference
+                                if self.is_copy_type(&param.type_) {
+                                    self.type_to_rust(&param.type_)
+                                } else {
+                                    format!("&{}", self.type_to_rust(&param.type_))
+                                }
                             }
                         }
                     };
