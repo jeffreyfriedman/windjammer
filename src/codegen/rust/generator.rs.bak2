@@ -5077,6 +5077,68 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
         }
     }
 
+    fn param_needs_mut_binding(&self, param_name: &str, body: &[Statement]) -> bool {
+        // Check if the parameter is used with &mut (mutable borrow)
+        // This indicates we need `mut param: T` binding
+        for stmt in body {
+            if self.statement_uses_mut_borrow(param_name, stmt) {
+                return true;
+            }
+        }
+        false
+    }
+
+    fn statement_uses_mut_borrow(&self, param_name: &str, stmt: &Statement) -> bool {
+        use crate::parser::Statement;
+        match stmt {
+            Statement::Expression { expr, .. } | Statement::Return { value: Some(expr), .. } => {
+                self.expr_uses_mut_borrow(param_name, expr)
+            }
+            Statement::Let { value: Some(expr), .. } => self.expr_uses_mut_borrow(param_name, expr),
+            Statement::Assignment { value, .. } => self.expr_uses_mut_borrow(param_name, value),
+            Statement::If { condition, then_block, else_block, .. } => {
+                self.expr_uses_mut_borrow(param_name, condition)
+                    || self.param_needs_mut_binding(param_name, then_block)
+                    || else_block.as_ref().map_or(false, |b| self.param_needs_mut_binding(param_name, b))
+            }
+            Statement::While { condition, body, .. } => {
+                self.expr_uses_mut_borrow(param_name, condition)
+                    || self.param_needs_mut_binding(param_name, body)
+            }
+            Statement::For { body, .. } | Statement::Loop { body, .. } => {
+                self.param_needs_mut_binding(param_name, body)
+            }
+            _ => false,
+        }
+    }
+
+    fn expr_uses_mut_borrow(&self, param_name: &str, expr: &Expression) -> bool {
+        use crate::parser::Expression;
+        match expr {
+            Expression::MutableReference { expr, .. } => {
+                // Check if the inner expression is the parameter
+                if let Expression::Identifier { name, .. } = &**expr {
+                    name == param_name
+                } else {
+                    self.expr_uses_mut_borrow(param_name, expr)
+                }
+            }
+            Expression::Call { args, .. } | Expression::MethodCall { args, .. } => {
+                args.iter().any(|arg| self.expr_uses_mut_borrow(param_name, arg))
+            }
+            Expression::BinaryOp { left, right, .. } => {
+                self.expr_uses_mut_borrow(param_name, left) || self.expr_uses_mut_borrow(param_name, right)
+            }
+            Expression::Unary { expr, .. } => self.expr_uses_mut_borrow(param_name, expr),
+            Expression::Index { object, index, .. } => {
+                self.expr_uses_mut_borrow(param_name, object) || self.expr_uses_mut_borrow(param_name, index)
+            }
+            Expression::FieldAccess { object, .. } => self.expr_uses_mut_borrow(param_name, object),
+            _ => false,
+        }
+    }
+
+    #[allow(clippy::only_used_in_recursion)]
     fn is_comparable_type(&self, ty: &Type) -> bool {
         match ty {
             Type::Int | Type::Int32 | Type::Uint | Type::Float | Type::Bool | Type::String => true,
