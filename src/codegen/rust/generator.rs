@@ -2493,10 +2493,13 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
     fn expression_accesses_fields(&self, expr: &Expression) -> bool {
         match expr {
             Expression::Identifier { name, .. } => {
-                // Check if this is a field name, but NOT a parameter name
-                // Parameters shadow fields, so if it's a parameter, it's not a field access
-                let is_param = self.current_function_params.iter().any(|p| p.name == *name);
-                !is_param && self.current_struct_fields.contains(name)
+                // CRITICAL FIX: Bare identifiers are NOT field accesses!
+                // Only self.field is a field access. Bare identifiers could be:
+                // - Parameters
+                // - Local variables  
+                // - Field names in struct literals (not accesses!)
+                // This was causing constructors to incorrectly get implicit &self
+                false
             }
             Expression::FieldAccess { object, .. } => {
                 // Check for self.field or nested field access
@@ -2524,9 +2527,14 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
             Expression::Index { object, index, .. } => {
                 self.expression_accesses_fields(object) || self.expression_accesses_fields(index)
             }
-            Expression::StructLiteral { fields, .. } => fields
-                .iter()
-                .any(|(_, expr)| self.expression_accesses_fields(expr)),
+            Expression::StructLiteral { fields, .. } => {
+                // CRITICAL FIX: Struct literal field NAMES are not field accesses!
+                // Only the VALUES being assigned might access fields
+                // Example: Tilemap { width: width, height: height }
+                // The identifiers "width" and "height" on the LEFT are field names (not accesses)
+                // The identifiers on the RIGHT are parameter names (also not field accesses)
+                fields.iter().any(|(_, expr)| self.expression_accesses_fields(expr))
+            }
             Expression::MapLiteral { pairs, .. } => pairs.iter().any(|(k, v)| {
                 self.expression_accesses_fields(k) || self.expression_accesses_fields(v)
             }),
@@ -2788,7 +2796,14 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
             // 3. Regular method: Uses self → Add &self or &mut self
             //
             // The key insight: Check if function body actually uses self!
+            // CRITICAL: Set current_function_params BEFORE checking field access
+            // Otherwise parameter names will be incorrectly detected as field accesses
+            let saved_params = self.current_function_params.clone();
+            self.current_function_params = func.parameters.clone();
+            
             let uses_self = self.function_accesses_fields(func) || self.function_mutates_fields(func);
+            
+            self.current_function_params = saved_params;
 
             if uses_self {
                 // Function uses self, so it needs an implicit self parameter
