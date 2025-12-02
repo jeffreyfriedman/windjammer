@@ -493,7 +493,8 @@ fn get_first(arr: Vec<int>) -> int {
     arr[0]
 }
 "#;
-    compile_and_check(source, &["arr[0]"]);
+    // Array indexing with literal now includes cast
+    compile_and_check(source, &["arr[0 as usize]"]);
 }
 
 #[test]
