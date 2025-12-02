@@ -2953,10 +2953,13 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
                                     if self.is_copy_type(&param.type_) {
                                         self.type_to_rust(&param.type_)
                                     } else {
-                                        // STRING BORROW OPTIMIZATION:
-                                        // When borrowing a String parameter that's only read,
-                                        // generate &str instead of &String for efficiency
-                                        if self.is_string_type(&param.type_) {
+                                        // CRITICAL: For generic types, DON'T add &
+                                        // Generics are left as-is: G stays as G
+                                        // Adding & would make it &G which breaks trait bounds
+                                        if self.is_generic_type(&param.type_) {
+                                            self.type_to_rust(&param.type_)
+                                        } else if self.is_string_type(&param.type_) {
+                                            // STRING BORROW OPTIMIZATION
                                             "&str".to_string()
                                         } else {
                                             format!("&{}", self.type_to_rust(&param.type_))
@@ -5056,6 +5059,17 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
     /// Check if a type is String (for String → &str optimization)
     fn is_string_type(&self, ty: &Type) -> bool {
         matches!(ty, Type::String)
+    }
+
+    fn is_generic_type(&self, ty: &Type) -> bool {
+        // Generic type parameters are typically single uppercase letters: T, G, S, etc.
+        // Also include common patterns like T1, T2, etc.
+        if let Type::Custom(name) = ty {
+            name.chars().next().map_or(false, |c| c.is_uppercase())
+                && (name.len() == 1 || name.chars().all(|c| c.is_alphanumeric() && c.is_uppercase() || c.is_numeric()))
+        } else {
+            false
+        }
     }
 
     #[allow(clippy::only_used_in_recursion)]
