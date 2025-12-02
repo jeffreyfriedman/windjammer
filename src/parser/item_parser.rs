@@ -664,6 +664,7 @@ impl Parser {
                         pattern: None,
                         type_: Type::Custom("Self".to_string()),
                         ownership: OwnershipHint::Mut,
+                        is_mutable: false,
                     });
                 } else {
                     self.expect(Token::Self_)?;
@@ -672,6 +673,7 @@ impl Parser {
                         pattern: None,
                         type_: Type::Custom("Self".to_string()),
                         ownership: OwnershipHint::Ref,
+                        is_mutable: false,
                     });
                 }
             } else if self.current_token() == &Token::Self_ {
@@ -681,6 +683,7 @@ impl Parser {
                     pattern: None,
                     type_: Type::Custom("Self".to_string()),
                     ownership: OwnershipHint::Owned,
+                    is_mutable: false,
                 });
             } else if self.current_token() == &Token::Mut && self.peek(1) == Some(&Token::Self_) {
                 // mut self (owned mutable) - only if next token is Self_
@@ -691,6 +694,7 @@ impl Parser {
                     pattern: None,
                     type_: Type::Custom("Self".to_string()),
                     ownership: OwnershipHint::Owned,
+                    is_mutable: false,
                 });
             } else {
                 // Regular parameter - could be a simple name or a pattern
@@ -718,14 +722,17 @@ impl Parser {
                         pattern: Some(pattern),
                         type_,
                         ownership,
+                        is_mutable: false,
                     });
                 } else {
                     // Simple identifier parameter
-                    // Optional: consume 'mut' keyword (for backward compatibility)
-                    // In Windjammer, owned parameters are auto-mutable, so 'mut' is redundant
-                    if self.current_token() == &Token::Mut {
+                    // Check for 'mut' keyword and preserve it
+                    let is_mutable = if self.current_token() == &Token::Mut {
                         self.advance();
-                    }
+                        true
+                    } else {
+                        false
+                    };
 
                     let name = if let Token::Ident(n) = self.current_token() {
                         let name = n.clone();
@@ -756,6 +763,7 @@ impl Parser {
                         pattern: None,
                         type_,
                         ownership,
+                        is_mutable,
                     });
                 }
             }

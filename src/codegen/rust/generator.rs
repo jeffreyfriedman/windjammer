@@ -2980,7 +2980,12 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
                     format!("{}: {}", self.generate_pattern(pattern), type_str)
                 } else {
                     // Simple name: type syntax
-                    format!("{}: {}", param.name, type_str)
+                    // Add 'mut' prefix if parameter was declared as mutable
+                    if param.is_mutable {
+                        format!("mut {}: {}", param.name, type_str)
+                    } else {
+                        format!("{}: {}", param.name, type_str)
+                    }
                 }
             })
             .collect();
@@ -5072,7 +5077,6 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
         }
     }
 
-    #[allow(clippy::only_used_in_recursion)]
     fn is_comparable_type(&self, ty: &Type) -> bool {
         match ty {
             Type::Int | Type::Int32 | Type::Uint | Type::Float | Type::Bool | Type::String => true,
