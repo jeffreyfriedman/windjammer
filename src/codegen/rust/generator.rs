@@ -3,12 +3,6 @@ use crate::analyzer::*;
 use crate::parser::*;
 use crate::CompilationTarget;
 
-/// Information about UI framework usage
-#[derive(Debug, Clone)]
-struct UIFrameworkInfo {
-    uses_ui: bool, // True if imports std::ui::*
-}
-
 /// Information about platform API usage
 #[derive(Debug, Clone, Default)]
 struct PlatformApis {
@@ -332,28 +326,6 @@ impl CodeGenerator {
     // GAME FRAMEWORK SUPPORT
     // ============================================================================
 
-    /// Detect if this program uses game framework decorators
-    // ============================================================================
-    // UI FRAMEWORK SUPPORT
-    // ============================================================================
-    /// Detect if this program uses UI framework (std::ui)
-    fn detect_ui_framework(&self, program: &Program) -> UIFrameworkInfo {
-        let mut uses_ui = false;
-
-        // Check for use std::ui::* or use std::ui
-        for item in &program.items {
-            if let Item::Use { path, .. } = item {
-                let path_str = path.join("::");
-                if path_str == "std::ui" || path_str.starts_with("std::ui::") {
-                    uses_ui = true;
-                    break;
-                }
-            }
-        }
-
-        UIFrameworkInfo { uses_ui }
-    }
-
     /// Detect which platform APIs are used (std::fs, std::process, etc.)
     fn detect_platform_apis(&self, program: &Program) -> PlatformApis {
         let mut apis = PlatformApis::default();
@@ -393,29 +365,6 @@ impl CodeGenerator {
         }
 
         apis
-    }
-
-    // ============================================================================
-    // DEPRECATED: @game DECORATOR SUPPORT
-    // ============================================================================
-    // TODO: Remove this entire section in v0.40+
-    // The @game decorator violates separation of concerns (compiler shouldn't
-    // know about game libraries). Use explicit GameApp API instead.
-    // See: docs/DECORATOR_SYSTEM_DESIGN.md for future decorator system design.
-    // ============================================================================
-
-    /// Detect if this program imports std::game (for non-decorator game usage)
-    fn detect_game_import(&self, program: &Program) -> bool {
-        // Check for use std::game::* or use std::game
-        for item in &program.items {
-            if let Item::Use { path, .. } = item {
-                let path_str = path.join("::");
-                if path_str == "std::game" || path_str.starts_with("std::game::") {
-                    return true;
-                }
-            }
-        }
-        false
     }
 
     /// DEPRECATED: Game loop main function generation (removed for separation of concerns)
@@ -487,9 +436,6 @@ impl CodeGenerator {
     pub fn generate_program(&mut self, program: &Program, analyzed: &[AnalyzedFunction]) -> String {
         let mut imports = String::new();
         let mut body = String::new();
-
-        // Detect UI framework usage
-        let ui_framework_info = self.detect_ui_framework(program);
 
         // Detect platform API usage
         let platform_apis = self.detect_platform_apis(program);
@@ -978,7 +924,6 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
                 "time" => "windjammer_runtime::time",
                 // REMOVED: "ui" and "game" mappings (violate separation of concerns)
                 // These are external crates, not part of std:: stdlib
-
                 _ => {
                     // Unknown module - try windjammer_runtime
                     return format!("use windjammer_runtime::{};\n", module_name);
@@ -1123,7 +1068,7 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
                     "input",
                     "network",
                 ];
-                let is_type = item_name.chars().next().map_or(false, |c| c.is_uppercase());
+                let is_type = item_name.chars().next().is_some_and(|c| c.is_uppercase());
 
                 let file_name = if common_directories.contains(&module_name) && is_type {
                     // Directory module with type: math::Vec2 -> vec2.wj
@@ -1136,7 +1081,7 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
                             let prev_was_upper = item_name
                                 .chars()
                                 .nth(i - 1)
-                                .map_or(false, |c| c.is_uppercase());
+                                .is_some_and(|c| c.is_uppercase());
                             if !prev_was_upper {
                                 snake.push('_');
                             }
@@ -1203,7 +1148,7 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
 
         if is_ffi_module {
             // For FFI modules, generate both extern "C" block AND mod ffi wrapper
-            
+
             // Step 1: Generate extern "C" block with wj_ prefixed functions
             output.push_str("#[link(name = \"windjammer_game\")]\n");
             output.push_str("extern \"C\" {\n");
@@ -1212,7 +1157,7 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
                 if let Item::Function { decl, .. } = item {
                     output.push_str("    ");
                     output.push_str(&format!("fn wj_{}(", decl.name));
-                    
+
                     // Generate parameters
                     for (i, param) in decl.parameters.iter().enumerate() {
                         if i > 0 {
@@ -1222,9 +1167,9 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
                         output.push_str(": ");
                         output.push_str(&self.type_to_rust(&param.type_));
                     }
-                    
-                    output.push_str(")");
-                    
+
+                    output.push(')');
+
                     // Generate return type
                     if let Some(ref ret_type) = decl.return_type {
                         output.push_str(" -> ");
@@ -1235,17 +1180,17 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
             }
 
             output.push_str("}\n\n");
-            
+
             // Step 2: Generate mod ffi wrapper module
             output.push_str("mod ffi {\n");
-            
+
             for item in items {
                 if let Item::Function { decl, .. } = item {
                     output.push_str("    #[inline]\n");
                     output.push_str("    pub fn ");
                     output.push_str(&decl.name);
-                    output.push_str("(");
-                    
+                    output.push('(');
+
                     // Generate parameters
                     for (i, param) in decl.parameters.iter().enumerate() {
                         if i > 0 {
@@ -1255,20 +1200,20 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
                         output.push_str(": ");
                         output.push_str(&self.type_to_rust(&param.type_));
                     }
-                    
-                    output.push_str(")");
-                    
+
+                    output.push(')');
+
                     // Generate return type
                     if let Some(ref ret_type) = decl.return_type {
                         output.push_str(" -> ");
                         output.push_str(&self.type_to_rust(ret_type));
                     }
-                    
+
                     output.push_str(" {\n");
                     output.push_str("        unsafe { super::wj_");
                     output.push_str(&decl.name);
-                    output.push_str("(");
-                    
+                    output.push('(');
+
                     // Pass through parameters
                     for (i, param) in decl.parameters.iter().enumerate() {
                         if i > 0 {
@@ -1276,12 +1221,12 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
                         }
                         output.push_str(&param.name);
                     }
-                    
+
                     output.push_str(") }\n");
                     output.push_str("    }\n");
                 }
             }
-            
+
             output.push_str("}\n");
             return output;
         }
@@ -1324,7 +1269,7 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
                                 .generate_function(&analyzed_func)
                                 .replace('\n', "\n    "),
                         );
-                        output.push_str("\n");
+                        output.push('\n');
                     } else {
                         // Find the analyzed function
                         if let Some(analyzed_func) =
@@ -1336,24 +1281,24 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
                                     .generate_function(analyzed_func)
                                     .replace('\n', "\n    "),
                             );
-                            output.push_str("\n");
+                            output.push('\n');
                         }
                     }
                 }
                 Item::Struct { decl, .. } => {
                     output.push_str("    ");
                     output.push_str(&self.generate_struct(decl).replace('\n', "\n    "));
-                    output.push_str("\n");
+                    output.push('\n');
                 }
                 Item::Enum { decl, .. } => {
                     output.push_str("    ");
                     output.push_str(&self.generate_enum(decl).replace('\n', "\n    "));
-                    output.push_str("\n");
+                    output.push('\n');
                 }
                 Item::Trait { decl, .. } => {
                     output.push_str("    ");
                     output.push_str(&self.generate_trait(decl).replace('\n', "\n    "));
-                    output.push_str("\n");
+                    output.push('\n');
                 }
                 Item::Use { path, alias, .. } => {
                     output.push_str("    ");
@@ -2492,11 +2437,11 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
 
     fn expression_accesses_fields(&self, expr: &Expression) -> bool {
         match expr {
-            Expression::Identifier { name, .. } => {
+            Expression::Identifier { .. } => {
                 // CRITICAL FIX: Bare identifiers are NOT field accesses!
                 // Only self.field is a field access. Bare identifiers could be:
                 // - Parameters
-                // - Local variables  
+                // - Local variables
                 // - Field names in struct literals (not accesses!)
                 // This was causing constructors to incorrectly get implicit &self
                 false
@@ -2533,7 +2478,9 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
                 // Example: Tilemap { width: width, height: height }
                 // The identifiers "width" and "height" on the LEFT are field names (not accesses)
                 // The identifiers on the RIGHT are parameter names (also not field accesses)
-                fields.iter().any(|(_, expr)| self.expression_accesses_fields(expr))
+                fields
+                    .iter()
+                    .any(|(_, expr)| self.expression_accesses_fields(expr))
             }
             Expression::MapLiteral { pairs, .. } => pairs.iter().any(|(k, v)| {
                 self.expression_accesses_fields(k) || self.expression_accesses_fields(v)
@@ -2800,9 +2747,10 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
             // Otherwise parameter names will be incorrectly detected as field accesses
             let saved_params = self.current_function_params.clone();
             self.current_function_params = func.parameters.clone();
-            
-            let uses_self = self.function_accesses_fields(func) || self.function_mutates_fields(func);
-            
+
+            let uses_self =
+                self.function_accesses_fields(func) || self.function_mutates_fields(func);
+
             self.current_function_params = saved_params;
 
             if uses_self {
@@ -4062,18 +4010,20 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
                             }
                         ) {
                             // Check if the parameter expects an owned String
+                            // DON'T add .to_string() if parameter is borrowed (expects &str)
                             let should_convert = if let Some(ref sig) = signature {
                                 if let Some(&ownership) = sig.param_ownership.get(i) {
-                                    // Convert if parameter expects owned String
+                                    // Only convert if parameter expects owned String, NOT borrowed
                                     matches!(ownership, OwnershipMode::Owned)
                                 } else {
-                                    // No ownership info - check if it's a stdlib function
-                                    // (stdlib functions typically expect owned String)
-                                    func_str.contains("::")
+                                    // No ownership info - default to NOT converting
+                                    // String literals as &str is the Rust idiom
+                                    false
                                 }
                             } else {
-                                // No signature found - check if it's a stdlib function
-                                func_str.contains("::")
+                                // No signature found - default to NOT converting
+                                // This prevents unnecessary .to_string() on string literals
+                                false
                             };
 
                             if should_convert {
@@ -5070,8 +5020,11 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
         // Generic type parameters are typically single uppercase letters: T, G, S, etc.
         // Also include common patterns like T1, T2, etc.
         if let Type::Custom(name) = ty {
-            name.chars().next().map_or(false, |c| c.is_uppercase())
-                && (name.len() == 1 || name.chars().all(|c| c.is_alphanumeric() && c.is_uppercase() || c.is_numeric()))
+            name.chars().next().is_some_and(|c| c.is_uppercase())
+                && (name.len() == 1
+                    || name
+                        .chars()
+                        .all(|c| c.is_alphanumeric() && c.is_uppercase() || c.is_numeric()))
         } else {
             false
         }
@@ -5268,22 +5221,25 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
                         // If parameter is &T, use &, not &mut
                         // If parameter is &mut T, use &mut
                         // If parameter is owned, don't add any reference
-                        
+
                         if name == "self" {
                             // self is always &self or &mut self, assume &mut for now
                             // TODO: Track actual self ownership from function signature
                             return true;
                         }
-                        
+
                         // Check if this is a parameter and its ownership
                         for param in &self.current_function_params {
                             if param.name == *name {
                                 // Only add &mut if parameter is explicitly &mut
                                 // If parameter is & (immutable borrow), we should NOT add &mut!
-                                return matches!(param.ownership, crate::parser::OwnershipHint::Mut);
+                                return matches!(
+                                    param.ownership,
+                                    crate::parser::OwnershipHint::Mut
+                                );
                             }
                         }
-                        
+
                         // Not a parameter, assume it's a local variable - don't add ref
                         return false;
                     }

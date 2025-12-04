@@ -935,13 +935,14 @@ impl Analyzer {
                         return true;
                     }
                 }
-                Statement::Return { value, .. } => {
-                    if let Some(expr) = value {
-                        if self.expr_uses_in_binary_op(name, expr) {
-                            return true;
-                        }
+                Statement::Return {
+                    value: Some(expr), ..
+                } => {
+                    if self.expr_uses_in_binary_op(name, expr) {
+                        return true;
                     }
                 }
+                Statement::Return { value: None, .. } => {}
                 Statement::If {
                     condition,
                     then_block,
@@ -1767,8 +1768,13 @@ impl Analyzer {
                 OwnershipHint::Owned => OwnershipMode::Owned,
                 OwnershipHint::Inferred => {
                     // Infer ownership if not specified
-                    self.infer_parameter_ownership(&param.name, &param.type_, &func.body, &func.return_type)
-                        .unwrap_or(OwnershipMode::Owned)
+                    self.infer_parameter_ownership(
+                        &param.name,
+                        &param.type_,
+                        &func.body,
+                        &func.return_type,
+                    )
+                    .unwrap_or(OwnershipMode::Owned)
                 }
             };
 
@@ -2210,7 +2216,7 @@ impl Analyzer {
         match stmt {
             Statement::Assignment { target, .. } => {
                 // Check if target is self.field OR self.field[index]
-                self.expression_is_self_field_access(target) 
+                self.expression_is_self_field_access(target)
                     || self.expression_is_self_field_index_access(target)
             }
             Statement::Expression { expr, .. } => {
@@ -2278,7 +2284,7 @@ impl Analyzer {
             Expression::Index { object, .. } => {
                 // Check if the object being indexed is a self field access
                 // OR recursively check if it's a nested index access (self.field[i][j])
-                self.expression_is_self_field_access(object) 
+                self.expression_is_self_field_access(object)
                     || self.expression_is_self_field_index_access(object)
             }
             _ => false,
@@ -2452,11 +2458,15 @@ impl Analyzer {
     fn collect_mutations(&mut self, statements: &[Statement]) {
         for stmt in statements {
             match stmt {
-                Statement::Assignment { target, .. } => {
+                Statement::Assignment {
+                    target: Expression::Identifier { name, .. },
+                    ..
+                } => {
                     // Track the variable being assigned to
-                    if let Expression::Identifier { name, .. } = target {
-                        self.mutated_variables.insert(name.clone());
-                    }
+                    self.mutated_variables.insert(name.clone());
+                }
+                Statement::Assignment { .. } => {
+                    // Complex target (field access, etc.) - not a simple variable mutation
                 }
                 Statement::If {
                     then_block,

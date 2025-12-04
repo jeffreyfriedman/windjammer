@@ -160,6 +160,7 @@ mod tests {
                 pattern: None,
                 type_: Type::String,
                 ownership: OwnershipHint::Inferred,
+                is_mutable: false,
             }],
             return_type: None,
             body: vec![],

@@ -172,3 +172,4 @@ Build TypeRegistry once, serialize to `.wj_types.cache`, reuse across compilatio
 *Approach: PROPER (no workarounds)*
 *Confidence: HIGH (clear path forward)*
 
+
