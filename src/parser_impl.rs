@@ -86,10 +86,10 @@ impl Parser {
         if self.position == 0 {
             return false; // No previous token
         }
-        
+
         let prev_token = self.tokens.get(self.position - 1);
         let curr_token = self.tokens.get(self.position);
-        
+
         match (prev_token, curr_token) {
             (Some(prev), Some(curr)) => {
                 // If the line number changed, there was a newline

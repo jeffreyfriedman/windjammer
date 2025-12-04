@@ -281,7 +281,7 @@ impl Lexer {
 
                         let mut oct_str = String::new();
                         while let Some(ch) = self.current_char {
-                            if ch >= '0' && ch <= '7' {
+                            if ('0'..='7').contains(&ch) {
                                 oct_str.push(ch);
                                 self.advance();
                             } else if ch == '_' {

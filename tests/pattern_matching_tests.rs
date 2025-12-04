@@ -25,7 +25,7 @@ fn compile_wj_code(code: &str) -> Result<String, String> {
     fs::write(&temp_file, code).expect("Failed to write test file");
 
     let output = Command::new(get_wj_compiler())
-        .args(&["build", &temp_file, "--no-cargo"])
+        .args(["build", &temp_file, "--no-cargo"])
         .output()
         .expect("Failed to execute compiler");
 
@@ -56,7 +56,7 @@ fn compile_and_check_rust_compiles(wj_file: &str, test_name: &str) {
 
     // First, compile the Windjammer code
     let output = Command::new(get_wj_compiler())
-        .args(&["build", wj_path.to_str().unwrap(), "--no-cargo"])
+        .args(["build", wj_path.to_str().unwrap(), "--no-cargo"])
         .output()
         .expect("Failed to execute compiler");
 
@@ -76,7 +76,7 @@ fn compile_and_check_rust_compiles(wj_file: &str, test_name: &str) {
     // Then, try to compile the generated Rust code with rustc
     // Use --crate-type=lib to avoid needing a main function
     let rust_output = Command::new("rustc")
-        .args(&[
+        .args([
             rust_path.to_str().unwrap(),
             "--crate-type=lib",
             "--edition=2021",
@@ -103,7 +103,7 @@ fn compile_and_check_generated_rust(wj_file: &str, expected_imports: &[&str], te
         .join(wj_file);
 
     let output = Command::new(get_wj_compiler())
-        .args(&["build", wj_path.to_str().unwrap(), "--no-cargo"])
+        .args(["build", wj_path.to_str().unwrap(), "--no-cargo"])
         .output()
         .expect("Failed to execute compiler");
 
@@ -116,10 +116,8 @@ fn compile_and_check_generated_rust(wj_file: &str, expected_imports: &[&str], te
     // Read the generated Rust file
     let rust_file = wj_file.replace(".wj", ".rs");
     let rust_path = PathBuf::from("./build").join(&rust_file);
-    let generated_rust = fs::read_to_string(&rust_path).expect(&format!(
-        "Failed to read generated Rust file: {:?}",
-        rust_path
-    ));
+    let generated_rust = fs::read_to_string(&rust_path)
+        .unwrap_or_else(|_| panic!("Failed to read generated Rust file: {:?}", rust_path));
 
     // Check that all expected imports are present
     for expected_import in expected_imports {
