@@ -7,47 +7,72 @@ use std::process::Command;
 fn test_copy_type_method_params() {
     // Compile the Windjammer file
     let output = Command::new("cargo")
-        .args(&["run", "--release", "--", "build",
-                "tests/copy_type_method_params_test.wj",
-                "--output", "tests/generated/copy_type_method_params",
-                "--no-cargo"])
+        .args([
+            "run",
+            "--release",
+            "--",
+            "build",
+            "tests/copy_type_method_params_test.wj",
+            "--output",
+            "tests/generated/copy_type_method_params",
+            "--no-cargo",
+        ])
         .output()
         .expect("Failed to run windjammer compiler");
 
     if !output.status.success() {
-        panic!("Windjammer compilation failed:\n{}", String::from_utf8_lossy(&output.stderr));
+        panic!(
+            "Windjammer compilation failed:\n{}",
+            String::from_utf8_lossy(&output.stderr)
+        );
     }
 
     // Read the generated Rust code
-    let generated = std::fs::read_to_string("tests/generated/copy_type_method_params/copy_type_method_params_test.rs")
-        .expect("Failed to read generated file");
+    let generated = std::fs::read_to_string(
+        "tests/generated/copy_type_method_params/copy_type_method_params_test.rs",
+    )
+    .expect("Failed to read generated file");
 
     println!("Generated code:\n{}", generated);
 
     // Verify Copy type parameters are NOT borrowed in methods
-    assert!(!generated.contains("color: &Color"), 
-        "Copy type 'Color' should not be borrowed in method parameters");
-    assert!(generated.contains("color: Color"), 
-        "Copy type 'Color' should be passed by value");
-    
+    assert!(
+        !generated.contains("color: &Color"),
+        "Copy type 'Color' should not be borrowed in method parameters"
+    );
+    assert!(
+        generated.contains("color: Color"),
+        "Copy type 'Color' should be passed by value"
+    );
+
     // Verify the methods exist with correct signatures
-    assert!(generated.contains("pub fn draw_circle(self, x: f32, y: f32, radius: f32, color: Color)"),
-        "draw_circle should accept Color by value");
-    assert!(generated.contains("pub fn draw_rect(self, x: f32, y: f32, w: f32, h: f32, color: Color)"),
-        "draw_rect should accept Color by value");
+    assert!(
+        generated.contains("pub fn draw_circle(self, x: f32, y: f32, radius: f32, color: Color)"),
+        "draw_circle should accept Color by value"
+    );
+    assert!(
+        generated.contains("pub fn draw_rect(self, x: f32, y: f32, w: f32, h: f32, color: Color)"),
+        "draw_rect should accept Color by value"
+    );
 
     // Try to compile the generated Rust code with rustc
     let compile_output = Command::new("rustc")
-        .args(&["--crate-type", "lib",
-                "--edition", "2021",
-                "tests/generated/copy_type_method_params/copy_type_method_params_test.rs",
-                "--out-dir", "tests/generated/copy_type_method_params"])
+        .args([
+            "--crate-type",
+            "lib",
+            "--edition",
+            "2021",
+            "tests/generated/copy_type_method_params/copy_type_method_params_test.rs",
+            "--out-dir",
+            "tests/generated/copy_type_method_params",
+        ])
         .output()
         .expect("Failed to run rustc");
 
     if !compile_output.status.success() {
-        panic!("Generated Rust code failed to compile:\n{}", 
-               String::from_utf8_lossy(&compile_output.stderr));
+        panic!(
+            "Generated Rust code failed to compile:\n{}",
+            String::from_utf8_lossy(&compile_output.stderr)
+        );
     }
 }
-

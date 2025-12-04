@@ -1,3 +1,7 @@
+// Allow recursive functions that use self only for recursion
+// This is common in AST traversal code
+#![allow(clippy::only_used_in_recursion)]
+
 pub mod analyzer;
 pub mod auto_clone; // Automatic clone insertion for ergonomics
 pub mod auto_fix; // Automatic error fixing
@@ -403,13 +407,14 @@ fn build_project(path: &Path, output: &Path, target: CompilationTarget) -> Resul
                 if let parser::Item::Struct { decl, .. } = item {
                     // Check if struct has @derive(Copy)
                     let has_copy = decl.decorators.iter().any(|d| {
-                        d.name == "derive" && d.arguments.iter().any(|(_, arg)| {
-                            if let parser::Expression::Identifier { name, .. } = arg {
-                                name == "Copy"
-                            } else {
-                                false
-                            }
-                        })
+                        d.name == "derive"
+                            && d.arguments.iter().any(|(_, arg)| {
+                                if let parser::Expression::Identifier { name, .. } = arg {
+                                    name == "Copy"
+                                } else {
+                                    false
+                                }
+                            })
                     });
                     if has_copy {
                         global_copy_structs.insert(decl.name.clone());
@@ -752,7 +757,8 @@ impl ModuleCompiler {
         }
 
         // Analyze with access to all registered traits AND global Copy structs
-        let mut analyzer = analyzer::Analyzer::new_with_copy_structs(self.copy_structs_registry.clone());
+        let mut analyzer =
+            analyzer::Analyzer::new_with_copy_structs(self.copy_structs_registry.clone());
         // Load all registered traits into the analyzer
         for trait_decl in self.trait_registry.values() {
             let dummy_program = parser::Program {
@@ -1120,7 +1126,8 @@ fn compile_file_with_compiler(
     }
 
     // Analyze with access to all registered traits AND global Copy structs
-    let mut analyzer = analyzer::Analyzer::new_with_copy_structs(module_compiler.copy_structs_registry.clone());
+    let mut analyzer =
+        analyzer::Analyzer::new_with_copy_structs(module_compiler.copy_structs_registry.clone());
     // Load all registered traits into the analyzer
     for trait_decl in module_compiler.trait_registry.values() {
         let dummy_program = parser::Program {
@@ -1197,8 +1204,6 @@ fn compile_file_with_compiler(
             );
             generator.set_output_file(&output_file_path);
 
-            let code = generator.generate_program(&program, &analyzed);
-
             // TODO: Re-enable source maps with relative paths (not absolute)
             // Issue: Source maps currently contain hardcoded absolute paths like:
             //   /Users/jeffreyfriedman/src/wj/...
@@ -1210,7 +1215,7 @@ fn compile_file_with_compiler(
             //     eprintln!("Warning: Failed to save source map: {}", e);
             // }
 
-            code
+            generator.generate_program(&program, &analyzed)
         }
     } else {
         // Use old generator for Rust target
@@ -1229,8 +1234,6 @@ fn compile_file_with_compiler(
         );
         generator.set_output_file(&output_file_path);
 
-        let code = generator.generate_program(&program, &analyzed);
-
         // TODO: Re-enable source maps with relative paths (not absolute)
         // Issue: Source maps currently contain hardcoded absolute paths
         // This breaks for other developers. Need to store relative paths instead.
@@ -1241,7 +1244,7 @@ fn compile_file_with_compiler(
         //     eprintln!("Warning: Failed to save source map: {}", e);
         // }
 
-        code
+        generator.generate_program(&program, &analyzed)
     };
 
     // Combine module code with main code

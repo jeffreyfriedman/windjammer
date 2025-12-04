@@ -76,7 +76,7 @@ pub struct Parameter {
     pub pattern: Option<Pattern>, // For pattern matching parameters
     pub type_: Type,
     pub ownership: OwnershipHint,
-    pub is_mutable: bool,         // Whether parameter is declared with 'mut' keyword
+    pub is_mutable: bool, // Whether parameter is declared with 'mut' keyword
 }
 
 // ============================================================================

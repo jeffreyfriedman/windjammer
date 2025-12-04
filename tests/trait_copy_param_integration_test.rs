@@ -27,8 +27,9 @@ impl Calculator for SimpleCalc {
     fs::create_dir_all(&output_dir).expect("Failed to create output directory");
     fs::write(&wj_file_path, wj_code).expect("Failed to write .wj test file");
 
-    let wj_compiler = std::env::var("WJ_COMPILER")
-        .unwrap_or_else(|_| "/Users/jeffreyfriedman/src/wj/windjammer/target/release/wj".to_string());
+    let wj_compiler = std::env::var("WJ_COMPILER").unwrap_or_else(|_| {
+        "/Users/jeffreyfriedman/src/wj/windjammer/target/release/wj".to_string()
+    });
 
     let output = Command::new(&wj_compiler)
         .arg("build")
@@ -44,11 +45,14 @@ impl Calculator for SimpleCalc {
     if !output.status.success() {
         let stdout = String::from_utf8_lossy(&output.stdout);
         let stderr = String::from_utf8_lossy(&output.stderr);
-        panic!("Compilation failed: {}\nSTDOUT: {}\nSTDERR: {}", output.status, stdout, stderr);
+        panic!(
+            "Compilation failed: {}\nSTDOUT: {}\nSTDERR: {}",
+            output.status, stdout, stderr
+        );
     }
 
     let generated_rust = fs::read_to_string(&rs_file_path)
-        .expect(&format!("Failed to read generated Rust file: {:?}", rs_file_path));
+        .unwrap_or_else(|_| panic!("Failed to read generated Rust file: {:?}", rs_file_path));
 
     // Check that f32 parameters are NOT borrowed
     assert!(
@@ -74,4 +78,3 @@ impl Calculator for SimpleCalc {
     fs::remove_file(&wj_file_path).ok();
     fs::remove_file(&rs_file_path).ok();
 }
-
