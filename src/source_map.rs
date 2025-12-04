@@ -46,6 +46,9 @@ pub struct SourceMap {
     mappings_vec: Vec<Mapping>,
     /// Version of the source map format
     version: u32,
+    /// Workspace root path for relative path calculation (optional)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    workspace_root: Option<PathBuf>,
     /// Internal index for fast lookup (not serialized)
     #[serde(skip)]
     lookup_index: HashMap<(PathBuf, usize), usize>, // Maps (rust_file, rust_line) -> index in mappings_vec
@@ -57,8 +60,26 @@ impl SourceMap {
         Self {
             mappings_vec: Vec::new(),
             version: 1,
+            workspace_root: None,
             lookup_index: HashMap::new(),
         }
+    }
+
+    /// Set the workspace root for relative path calculation
+    pub fn set_workspace_root(&mut self, root: impl Into<PathBuf>) {
+        self.workspace_root = Some(root.into());
+    }
+
+    /// Convert an absolute path to a path relative to the workspace root
+    fn to_relative_path(&self, path: &Path) -> PathBuf {
+        if let Some(ref root) = self.workspace_root {
+            // Try to make the path relative to the workspace root
+            if let Ok(relative) = path.strip_prefix(root) {
+                return relative.to_path_buf();
+            }
+        }
+        // Return original path if not under workspace root or no root set
+        path.to_path_buf()
     }
 
     /// Rebuild the lookup index from the mappings vector
@@ -71,6 +92,7 @@ impl SourceMap {
     }
 
     /// Add a mapping from Rust location to Windjammer location
+    /// If a workspace root is set, paths are automatically converted to relative paths
     pub fn add_mapping(
         &mut self,
         rust_file: impl Into<PathBuf>,
@@ -80,17 +102,23 @@ impl SourceMap {
         wj_line: usize,
         wj_column: usize,
     ) {
-        let rust_file = rust_file.into();
+        let rust_file_abs = rust_file.into();
+        let wj_file_abs = wj_file.into();
+
+        // Convert to relative paths if workspace root is set
+        let rust_file_rel = self.to_relative_path(&rust_file_abs);
+        let wj_file_rel = self.to_relative_path(&wj_file_abs);
+
         let mapping = Mapping {
-            rust_file: rust_file.clone(),
+            rust_file: rust_file_rel.clone(),
             rust_line,
             rust_column,
-            wj_file: wj_file.into(),
+            wj_file: wj_file_rel,
             wj_line,
             wj_column,
         };
 
-        let key = (rust_file.clone(), rust_line);
+        let key = (rust_file_rel, rust_line);
         if let Some(&idx) = self.lookup_index.get(&key) {
             // Update existing mapping
             self.mappings_vec[idx] = mapping;
