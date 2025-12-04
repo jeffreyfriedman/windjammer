@@ -1204,18 +1204,19 @@ fn compile_file_with_compiler(
             );
             generator.set_output_file(&output_file_path);
 
-            // TODO: Re-enable source maps with relative paths (not absolute)
-            // Issue: Source maps currently contain hardcoded absolute paths like:
-            //   /Users/jeffreyfriedman/src/wj/...
-            // This breaks for other developers. Need to store relative paths instead.
-            //
-            // Save source map for error mapping
-            // let source_map_path = output_file_path.with_extension("rs.map");
-            // if let Err(e) = generator.get_source_map().save_to_file(&source_map_path) {
-            //     eprintln!("Warning: Failed to save source map: {}", e);
-            // }
+            // Set workspace root for relative paths in source maps
+            // Use the output directory as the workspace root
+            generator.set_workspace_root(output_dir.to_path_buf());
 
-            generator.generate_program(&program, &analyzed)
+            let result = generator.generate_program(&program, &analyzed);
+
+            // Save source map for error mapping (now with relative paths)
+            let source_map_path = output_file_path.with_extension("rs.map");
+            if let Err(e) = generator.get_source_map().save_to_file(&source_map_path) {
+                eprintln!("Warning: Failed to save source map: {}", e);
+            }
+
+            result
         }
     } else {
         // Use old generator for Rust target
@@ -1234,17 +1235,19 @@ fn compile_file_with_compiler(
         );
         generator.set_output_file(&output_file_path);
 
-        // TODO: Re-enable source maps with relative paths (not absolute)
-        // Issue: Source maps currently contain hardcoded absolute paths
-        // This breaks for other developers. Need to store relative paths instead.
-        //
-        // Save source map for error mapping
-        // let source_map_path = output_file_path.with_extension("rs.map");
-        // if let Err(e) = generator.get_source_map().save_to_file(&source_map_path) {
-        //     eprintln!("Warning: Failed to save source map: {}", e);
-        // }
+        // Set workspace root for relative paths in source maps
+        // Use the output directory as the workspace root
+        generator.set_workspace_root(output_dir.to_path_buf());
 
-        generator.generate_program(&program, &analyzed)
+        let result = generator.generate_program(&program, &analyzed);
+
+        // Save source map for error mapping (now with relative paths)
+        let source_map_path = output_file_path.with_extension("rs.map");
+        if let Err(e) = generator.get_source_map().save_to_file(&source_map_path) {
+            eprintln!("Warning: Failed to save source map: {}", e);
+        }
+
+        result
     };
 
     // Combine module code with main code
