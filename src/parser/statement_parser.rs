@@ -308,13 +308,7 @@ impl Parser {
         let pattern = self.parse_pattern()?;
 
         // Check if the pattern is refutable (can fail to match)
-        // Refutable patterns are only allowed in match statements, not let bindings
-        if Self::is_pattern_refutable(&pattern) {
-            return Err(format!(
-                "Refutable pattern in `let` binding. Use `match` instead for patterns that can fail. Pattern: {}",
-                Self::pattern_to_string(&pattern)
-            ));
-        }
+        let is_refutable = Self::is_pattern_refutable(&pattern);
 
         let type_ = if self.current_token() == &Token::Colon {
             self.advance();
@@ -326,6 +320,26 @@ impl Parser {
         self.expect(Token::Assign)?;
         let value = self.parse_expression()?;
 
+        // Check for `else` block (required for refutable patterns)
+        let else_block = if self.current_token() == &Token::Else {
+            self.advance();
+            // Parse the else block (must be a block, not an expression)
+            self.expect(Token::LBrace)?;
+            let block = self.parse_block_statements()?;
+            self.expect(Token::RBrace)?;
+            Some(block)
+        } else {
+            None
+        };
+
+        // Refutable patterns require an else block (let-else syntax)
+        if is_refutable && else_block.is_none() {
+            return Err(format!(
+                "Refutable pattern in `let` binding requires an `else` block. Use `let {} = value else {{ ... }}`",
+                Self::pattern_to_string(&pattern)
+            ));
+        }
+
         // Optionally consume semicolon (semicolons are optional in Windjammer)
         if self.current_token() == &Token::Semicolon {
             self.advance();
@@ -336,6 +350,7 @@ impl Parser {
             mutable,
             type_,
             value,
+            else_block,
             location: self.current_location(),
         })
     }

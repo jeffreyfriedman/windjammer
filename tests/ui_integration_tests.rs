@@ -56,6 +56,7 @@ fn create_simple_counter_component() -> FunctionDecl {
                     )],
                     location: None,
                 },
+                else_block: None,
                 location: None,
             },
             Statement::Expression {

@@ -365,6 +365,7 @@ mod tests {
                     )],
                     location: None,
                 },
+                else_block: None,
                 location: None,
             }],
         );

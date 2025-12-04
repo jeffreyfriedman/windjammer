@@ -2878,6 +2878,12 @@ pub fn generate_mod_file(output_dir: &Path) -> Result<()> {
         content.push_str(&format!("pub mod {};\n", module));
     }
 
+    // Add re-exports for all public types
+    content.push_str("\n// Re-export all public items\n");
+    for module in &modules {
+        content.push_str(&format!("pub use {}::*;\n", module));
+    }
+
     // Write mod.rs
     let mod_file_path = output_dir.join("mod.rs");
     fs::write(&mod_file_path, content)?;
