@@ -1055,6 +1055,13 @@ impl Analyzer {
                     .cloned()
                     .unwrap_or(OwnershipMode::Owned);
 
+                // CRITICAL: Generic type parameters (like G in fn foo<G: Trait>(g: G))
+                // should ALWAYS be Owned. The trait bound is on G, not on &G.
+                // Adding & at call sites would break trait bounds.
+                if Self::is_generic_type_param(&param.type_) {
+                    return OwnershipMode::Owned;
+                }
+
                 // Copy types are always passed by value (Owned) unless mutated
                 // This must match the logic in codegen.rs
                 if self.is_copy_type(&param.type_) {
@@ -1074,6 +1081,20 @@ impl Analyzer {
             name: func.decl.name.clone(),
             param_ownership,
             return_ownership: OwnershipMode::Owned, // For now, always owned
+        }
+    }
+
+    /// Check if a type is a generic type parameter (like T, G, S, T1, T2, etc.)
+    /// Generic type parameters are typically single uppercase letters or uppercase with numbers.
+    /// This matches the logic in codegen/rust/generator.rs is_generic_type().
+    fn is_generic_type_param(ty: &Type) -> bool {
+        if let Type::Custom(name) = ty {
+            // Generic type parameters are uppercase letters, possibly followed by numbers
+            // Examples: T, G, S, T1, T2, KEY, VALUE
+            name.chars().next().is_some_and(|c| c.is_uppercase())
+                && (name.len() == 1 || name.chars().all(|c| c.is_uppercase() || c.is_numeric()))
+        } else {
+            false
         }
     }
 
