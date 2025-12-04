@@ -297,6 +297,7 @@ fn optimize_statement_escape_analysis(
             mutable,
             type_,
             value,
+            else_block,
             ..
         } => {
             // Check if this is a vec! macro that doesn't escape (only for simple identifiers)
@@ -314,6 +315,7 @@ fn optimize_statement_escape_analysis(
                             mutable: *mutable,
                             type_: type_.clone(),
                             value: new_value,
+                            else_block: else_block.clone(),
                             location: None,
                         };
                     }
@@ -325,6 +327,9 @@ fn optimize_statement_escape_analysis(
                 mutable: *mutable,
                 type_: type_.clone(),
                 value: optimize_expression_escape_analysis(value, escape_info, stats),
+                else_block: else_block
+                    .as_ref()
+                    .map(|stmts| optimize_statements_escape_analysis(stmts, escape_info, stats)),
                 location: None,
             }
         }
@@ -459,6 +464,7 @@ mod tests {
                             delimiter: MacroDelimiter::Brackets,
                             location: None,
                         },
+                        else_block: None,
                         location: None,
                     }],
                     type_params: vec![],
@@ -512,6 +518,7 @@ mod tests {
                                 delimiter: MacroDelimiter::Brackets,
                                 location: None,
                             },
+                            else_block: None,
                             location: None,
                         },
                         Statement::Return {
