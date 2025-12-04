@@ -130,6 +130,13 @@ impl InferenceEngine {
 
     /// Infer trait bounds for a function
     pub fn infer_function_bounds(&mut self, func: &FunctionDecl) -> InferredBounds {
+        // If function has explicit where clause, skip inference to avoid conflicts
+        // This is important for associated type bounds like `where P::Output: Display`
+        // where we don't want to accidentally infer `P: Display` for the base type
+        if !func.where_clause.is_empty() {
+            return InferredBounds::new();
+        }
+
         // Collect type parameter names
         self.type_params = func.type_params.iter().map(|p| p.name.clone()).collect();
 
