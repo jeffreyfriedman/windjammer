@@ -256,14 +256,14 @@ fn test_smart_auto_derive() {
     assert!(generated.contains("#[derive(Debug, Clone, PartialEq, Eq, Hash, Default)]\nstruct User"),
         "User with String field should derive Debug, Clone, PartialEq, Eq, Hash, Default but NOT Copy");
 
-    // Check Container: Vec<int> is not Eq or Hash (only PartialEq)
-    // Should derive: Debug, Clone, Default (NO Copy, NO PartialEq/Eq, NO Hash)
-    // Note: Our conservative approach doesn't derive PartialEq for Vec (even though it has it)
+    // Check Container: Vec<int> implements Clone, Debug, Default, and PartialEq
+    // Should derive: Debug, Clone, PartialEq, Default (NO Copy, NO Eq, NO Hash)
+    // Vec<T> is PartialEq if T is PartialEq, but not Eq or Hash
     let has_container_derive =
-        generated.contains("#[derive(Debug, Clone, Default)]\nstruct Container");
+        generated.contains("#[derive(Debug, Clone, PartialEq, Default)]\nstruct Container");
     assert!(
         has_container_derive,
-        "Container with Vec should derive Debug, Clone, Default (no Eq, no Hash, no Copy)"
+        "Container with Vec should derive Debug, Clone, PartialEq, Default (no Eq, no Hash, no Copy)"
     );
 
     // Check Config: explicit traits specified
