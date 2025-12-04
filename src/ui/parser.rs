@@ -148,6 +148,7 @@ mod tests {
                 )],
                 location: None,
             },
+            else_block: None,
             location: None,
         }]);
 
@@ -177,6 +178,7 @@ mod tests {
                     )],
                     location: None,
                 },
+                else_block: None,
                 location: None,
             },
             Statement::Let {
@@ -197,6 +199,7 @@ mod tests {
                     )],
                     location: None,
                 },
+                else_block: None,
                 location: None,
             },
         ]);
@@ -238,6 +241,7 @@ mod tests {
                 )],
                 location: None,
             },
+            else_block: None,
             location: None,
         }]);
 
@@ -292,6 +296,7 @@ mod tests {
                 value: crate::parser::ast::Literal::Int(42),
                 location: None,
             },
+            else_block: None,
             location: None,
         }]);
 

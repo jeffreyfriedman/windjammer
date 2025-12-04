@@ -299,12 +299,19 @@ fn optimize_loops_in_statement(
             mutable,
             type_,
             value,
+            else_block,
             location,
         } => Statement::Let {
             pattern: pattern.clone(),
             mutable: *mutable,
             type_: type_.clone(),
             value: optimize_loops_in_expression(value, config, stats),
+            else_block: else_block.as_ref().map(|stmts| {
+                stmts
+                    .iter()
+                    .map(|s| optimize_loops_in_statement(s, config, stats))
+                    .collect()
+            }),
             location: location.clone(),
         },
         Statement::Assignment {
@@ -775,12 +782,14 @@ fn replace_variable_in_statement(
             mutable,
             type_,
             value,
+            else_block,
             ..
         } => Statement::Let {
             pattern: pattern.clone(),
             mutable: *mutable,
             type_: type_.clone(),
             value: replace_variable_in_expression(value, var_name, replacement),
+            else_block: else_block.clone(),
             location: None,
         },
         Statement::Assignment { target, value, .. } => Statement::Assignment {
@@ -950,6 +959,7 @@ mod tests {
                                     value: Literal::Int(42),
                                     location: None,
                                 },
+                                else_block: None,
                                 location: None,
                             },
                             // Loop-variant: uses 'i'
@@ -1132,6 +1142,7 @@ mod tests {
                                     }),
                                     location: None,
                                 },
+                                else_block: None,
                                 location: None,
                             },
                         ],

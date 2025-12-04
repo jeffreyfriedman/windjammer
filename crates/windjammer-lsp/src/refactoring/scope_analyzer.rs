@@ -427,6 +427,7 @@ mod tests {
                 location: None,
             },
             location: None,
+            else_block: None,
         }];
 
         // Selection: let y = x + 5;
@@ -447,6 +448,7 @@ mod tests {
                 location: None,
             },
             location: None,
+            else_block: None,
         }];
 
         // After: (empty)
@@ -478,6 +480,7 @@ mod tests {
                 location: None,
             },
             location: None,
+            else_block: None,
         }];
 
         // After: println(result);
@@ -520,6 +523,7 @@ mod tests {
                 location: None,
             },
             location: None,
+            else_block: None,
         }];
 
         // Selection: let y = x * 2;
@@ -540,6 +544,7 @@ mod tests {
                 location: None,
             },
             location: None,
+            else_block: None,
         }];
 
         // After: use(y);
