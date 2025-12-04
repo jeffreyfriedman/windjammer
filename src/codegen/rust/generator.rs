@@ -142,6 +142,12 @@ impl CodeGenerator {
         self.current_wj_file = path.into();
     }
 
+    /// Set the workspace root for relative path generation in source maps
+    /// All paths in the source map will be relative to this root
+    pub fn set_workspace_root(&mut self, path: impl Into<std::path::PathBuf>) {
+        self.source_map.set_workspace_root(path);
+    }
+
     /// Get the current line number in the generated Rust code
     #[allow(dead_code)]
     fn current_rust_line(&self) -> usize {
