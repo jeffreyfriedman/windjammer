@@ -410,12 +410,19 @@ fn eliminate_dead_code_in_statement(stmt: &Statement, stats: &mut DeadCodeStats)
             mutable,
             type_,
             value,
+            else_block,
             location,
         } => Statement::Let {
             pattern: pattern.clone(),
             mutable: *mutable,
             type_: type_.clone(),
             value: eliminate_dead_code_in_expression(value),
+            else_block: else_block.as_ref().map(|stmts| {
+                stmts
+                    .iter()
+                    .map(|s| eliminate_dead_code_in_statement(s, stats))
+                    .collect()
+            }),
             location: location.clone(),
         },
         Statement::Assignment {
@@ -1000,6 +1007,7 @@ mod tests {
                                 value: Literal::Int(42),
                                 location: None,
                             },
+                            else_block: None,
                             location: None,
                         },
                         Statement::Return {

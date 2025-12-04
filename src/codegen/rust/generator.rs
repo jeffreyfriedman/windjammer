@@ -373,15 +373,6 @@ impl CodeGenerator {
         apis
     }
 
-    /// DEPRECATED: Game loop main function generation (removed for separation of concerns)
-    /// Users should use the GameApp API directly instead.
-    #[allow(dead_code)]
-    fn generate_game_main_deprecated(&mut self) -> String {
-        // This function is deprecated and should not be used.
-        // Users should use the GameApp API directly.
-        String::new()
-    }
-
     fn generate_block(&mut self, stmts: &[Statement]) -> String {
         let mut output = String::new();
         let len = stmts.len();
@@ -644,12 +635,6 @@ impl CodeGenerator {
         // Inject implicit imports if needed
         let mut implicit_imports = String::new();
 
-        // REMOVED: Automatic game/ui framework imports
-        // Reason: std::ui and std::game violate separation of concerns
-        // Users should explicitly add dependencies in Cargo.toml and import them:
-        //   use windjammer_ui::prelude::*;
-        //   use windjammer_game_framework::prelude::*;
-
         // Add platform API imports based on target
         if platform_apis.needs_fs
             || platform_apis.needs_process
@@ -740,16 +725,29 @@ impl CodeGenerator {
         if !self.needs_trait_imports.is_empty() {
             let mut sorted_traits: Vec<_> = self.needs_trait_imports.iter().collect();
             sorted_traits.sort();
+            let mut imported = std::collections::HashSet::new();
             for trait_name in sorted_traits {
-                match trait_name.as_str() {
+                // Extract base trait name (e.g., "Add<Output = T>" -> "Add")
+                let base_name = if let Some(idx) = trait_name.find('<') {
+                    &trait_name[..idx]
+                } else {
+                    trait_name.as_str()
+                };
+                // Only import once
+                if imported.contains(base_name) {
+                    continue;
+                }
+                match base_name {
                     "Display" | "Debug" => {
-                        implicit_imports.push_str(&format!("use std::fmt::{};\n", trait_name));
+                        implicit_imports.push_str(&format!("use std::fmt::{};\n", base_name));
+                        imported.insert(base_name);
                     }
                     "Clone" => {
                         // Clone is in prelude, no import needed
                     }
                     "Add" | "Sub" | "Mul" | "Div" => {
-                        implicit_imports.push_str(&format!("use std::ops::{};\n", trait_name));
+                        implicit_imports.push_str(&format!("use std::ops::{};\n", base_name));
+                        imported.insert(base_name);
                     }
                     "PartialEq" | "Eq" | "PartialOrd" | "Ord" => {
                         // These are in prelude, no import needed
@@ -871,11 +869,6 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
                 return format!("use std::{};\n", module_name);
             }
 
-            // REMOVED: std::ui and std::game special cases
-            // These should NOT be in std:: namespace - they are external crates
-            // Users should use: `use ui::Button` or `use game::GameLoop` (not std::ui or std::game)
-            // The crate mapping comes from Cargo.toml dependencies
-
             // Handle Tauri framework - skip explicit import (functions are generated inline)
             if module_base == "tauri" || module_base.starts_with("tauri::") {
                 // Tauri functions are handled by compiler codegen (generate_tauri_invoke)
@@ -928,8 +921,6 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
                 "strings" => "windjammer_runtime::strings",
                 "testing" => "windjammer_runtime::testing",
                 "time" => "windjammer_runtime::time",
-                // REMOVED: "ui" and "game" mappings (violate separation of concerns)
-                // These are external crates, not part of std:: stdlib
                 _ => {
                     // Unknown module - try windjammer_runtime
                     return format!("use windjammer_runtime::{};\n", module_name);
@@ -3041,6 +3032,7 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
                 mutable,
                 type_,
                 value,
+                else_block,
                 ..
             } => {
                 let mut output = self.indent();
@@ -3057,10 +3049,15 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
                     false // For tuple patterns, fall back to explicit mut
                 };
 
+                // Check if this is a closure that mutates captured variables
+                // Rust requires closures that mutate captures to be stored in `mut` bindings
+                let is_mutating_closure = self.is_mutating_closure(value);
+
                 if needs_mut_ref {
                     // Don't add mut keyword, but we'll add &mut to the value
-                } else if is_mutated || *mutable {
-                    // Add mut if variable is mutated OR if user explicitly wrote mut (backwards compat)
+                } else if is_mutated || *mutable || is_mutating_closure {
+                    // Add mut if variable is mutated OR if user explicitly wrote mut
+                    // OR if this is a closure that mutates captured variables
                     output.push_str("mut ");
                 }
 
@@ -3175,7 +3172,19 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
                     }
                 }
 
-                output.push_str(";\n");
+                // Handle let-else syntax (e.g., let Some(x) = opt else { return })
+                if let Some(else_stmts) = else_block {
+                    output.push_str(" else {\n");
+                    self.indent_level += 1;
+                    for stmt in else_stmts {
+                        output.push_str(&self.generate_statement(stmt));
+                    }
+                    self.indent_level -= 1;
+                    output.push_str(&self.indent());
+                    output.push_str("};\n"); // let-else needs semicolon after closing brace
+                } else {
+                    output.push_str(";\n");
+                }
                 output
             }
             Statement::Const {
@@ -4371,10 +4380,11 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
                 let params = parameters.join(", ");
                 let body_str = self.generate_expression(body);
 
-                // In Windjammer, closures automatically use move semantics when needed
-                // This is more ergonomic than requiring explicit 'move' keyword
-                // We always generate 'move' for safety in concurrent contexts
-                format!("move |{}| {}", params, body_str)
+                // Let Rust infer the capture mode (by ref, by mut ref, or by value)
+                // This allows closures to borrow instead of taking ownership,
+                // which is more flexible and allows using captured variables after the closure
+                // The user can explicitly write `move` if they want ownership transfer
+                format!("|{}| {}", params, body_str)
             }
             Expression::Index { object, index, .. } => {
                 let obj_str = self.generate_expression(object);
@@ -5252,6 +5262,107 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
                 }
                 false
             }
+            _ => false,
+        }
+    }
+
+    /// Check if an expression is a closure that mutates captured variables
+    /// Rust requires such closures to be stored in `mut` bindings
+    fn is_mutating_closure(&self, expr: &Expression) -> bool {
+        if let Expression::Closure {
+            body, parameters, ..
+        } = expr
+        {
+            // Get the set of closure parameters (these are NOT captured)
+            let param_names: std::collections::HashSet<_> = parameters.iter().cloned().collect();
+
+            // Check if the closure body contains assignments to non-parameter variables
+            self.closure_mutates_captures(body, &param_names)
+        } else {
+            false
+        }
+    }
+
+    /// Recursively check if an expression contains mutations to captured variables
+    fn closure_mutates_captures(
+        &self,
+        expr: &Expression,
+        param_names: &std::collections::HashSet<String>,
+    ) -> bool {
+        match expr {
+            // Block expression - check all statements
+            Expression::Block { statements, .. } => {
+                // Check statements for assignments
+                statements
+                    .iter()
+                    .any(|stmt| self.statement_mutates_captures(stmt, param_names))
+            }
+            // Recurse into sub-expressions
+            Expression::Binary { left, right, .. } => {
+                self.closure_mutates_captures(left, param_names)
+                    || self.closure_mutates_captures(right, param_names)
+            }
+            Expression::Call {
+                function,
+                arguments,
+                ..
+            } => {
+                self.closure_mutates_captures(function, param_names)
+                    || arguments
+                        .iter()
+                        .any(|(_, arg)| self.closure_mutates_captures(arg, param_names))
+            }
+            Expression::MethodCall {
+                object, arguments, ..
+            } => {
+                self.closure_mutates_captures(object, param_names)
+                    || arguments
+                        .iter()
+                        .any(|(_, arg)| self.closure_mutates_captures(arg, param_names))
+            }
+            _ => false,
+        }
+    }
+
+    /// Check if a statement mutates captured variables
+    fn statement_mutates_captures(
+        &self,
+        stmt: &Statement,
+        param_names: &std::collections::HashSet<String>,
+    ) -> bool {
+        match stmt {
+            Statement::Assignment {
+                target: Expression::Identifier { name, .. },
+                ..
+            } => {
+                // If it's not a closure parameter, it's a captured variable from outer scope
+                // (even if it's in current_local_vars - those are the outer scope's locals
+                // which the closure captures)
+                !param_names.contains(name)
+            }
+            Statement::Assignment { .. } => false,
+            Statement::Expression { expr, .. } => self.closure_mutates_captures(expr, param_names),
+            Statement::If {
+                condition,
+                then_block,
+                else_block,
+                ..
+            } => {
+                self.closure_mutates_captures(condition, param_names)
+                    || then_block
+                        .iter()
+                        .any(|s| self.statement_mutates_captures(s, param_names))
+                    || else_block.as_ref().is_some_and(|stmts| {
+                        stmts
+                            .iter()
+                            .any(|s| self.statement_mutates_captures(s, param_names))
+                    })
+            }
+            Statement::For { body, .. }
+            | Statement::While { body, .. }
+            | Statement::Loop { body, .. } => body
+                .iter()
+                .any(|s| self.statement_mutates_captures(s, param_names)),
             _ => false,
         }
     }

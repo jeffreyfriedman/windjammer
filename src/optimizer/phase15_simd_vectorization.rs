@@ -412,6 +412,7 @@ mod tests {
                                 value: Literal::Float(0.0),
                                 location: None,
                             },
+                            else_block: None,
                             location: None,
                         },
                         Statement::For {

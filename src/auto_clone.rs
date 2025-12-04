@@ -511,6 +511,7 @@ mod tests {
                         ],
                         location: None,
                     },
+                    else_block: None,
                     location: None,
                 },
                 Statement::Expression {
@@ -581,6 +582,7 @@ mod tests {
                         elements: vec![],
                         location: None,
                     },
+                    else_block: None,
                     location: None,
                 },
                 Statement::Expression {

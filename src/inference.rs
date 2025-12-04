@@ -136,9 +136,21 @@ impl InferenceEngine {
         // Map function parameters to their type parameters
         self.var_to_type_param.clear();
         for param in &func.parameters {
-            if let crate::parser::Type::Generic(type_param) = &param.type_ {
-                self.var_to_type_param
-                    .insert(param.name.clone(), type_param.clone());
+            // Check for Type::Generic OR Type::Custom with a type parameter name
+            let type_param_name = match &param.type_ {
+                crate::parser::Type::Generic(name) => Some(name.clone()),
+                crate::parser::Type::Custom(name) => {
+                    // If the custom type name is one of our type parameters, treat it as generic
+                    if self.type_params.contains(name) {
+                        Some(name.clone())
+                    } else {
+                        None
+                    }
+                }
+                _ => None,
+            };
+            if let Some(tp_name) = type_param_name {
+                self.var_to_type_param.insert(param.name.clone(), tp_name);
             }
         }
 
@@ -231,20 +243,17 @@ impl InferenceEngine {
             } => {
                 match op {
                     BinaryOp::Add => {
-                        self.infer_trait_for_expression(left, "Add", bounds);
-                        self.infer_trait_for_expression(right, "Add", bounds);
+                        // For T + T operations, we need Add<Output = T>
+                        self.infer_operator_trait(left, right, "Add", bounds);
                     }
                     BinaryOp::Sub => {
-                        self.infer_trait_for_expression(left, "Sub", bounds);
-                        self.infer_trait_for_expression(right, "Sub", bounds);
+                        self.infer_operator_trait(left, right, "Sub", bounds);
                     }
                     BinaryOp::Mul => {
-                        self.infer_trait_for_expression(left, "Mul", bounds);
-                        self.infer_trait_for_expression(right, "Mul", bounds);
+                        self.infer_operator_trait(left, right, "Mul", bounds);
                     }
                     BinaryOp::Div => {
-                        self.infer_trait_for_expression(left, "Div", bounds);
-                        self.infer_trait_for_expression(right, "Div", bounds);
+                        self.infer_operator_trait(left, right, "Div", bounds);
                     }
                     BinaryOp::Eq | BinaryOp::Ne => {
                         self.infer_trait_for_expression(left, "PartialEq", bounds);
@@ -360,6 +369,41 @@ impl InferenceEngine {
             for (_, arg) in arguments {
                 self.infer_trait_for_expression(arg, "Display", bounds);
             }
+        }
+    }
+
+    /// Infer an operator trait (Add, Sub, Mul, Div) with proper Output type
+    /// For T + T, we need T: Add<Output = T> + Copy not just T: Add
+    fn infer_operator_trait(
+        &self,
+        left: &Expression,
+        right: &Expression,
+        trait_name: &str,
+        bounds: &mut InferredBounds,
+    ) {
+        let left_type_param = self.extract_type_param(left);
+        let right_type_param = self.extract_type_param(right);
+
+        // If both operands are the same type parameter (e.g., T + T),
+        // we need the trait with Output = T AND Copy (because x is used twice)
+        if let (Some(left_tp), Some(right_tp)) = (&left_type_param, &right_type_param) {
+            if left_tp == right_tp {
+                // T + T requires T: Add<Output = T> + Copy
+                let full_bound = format!("{}<Output = {}>", trait_name, left_tp);
+                bounds.add_constraint(left_tp.clone(), full_bound);
+                // Also need Copy because the same variable is used twice
+                bounds.add_constraint(left_tp.clone(), "Copy".to_string());
+                return;
+            }
+        }
+
+        // If left is a type parameter, it needs the operator trait
+        if let Some(tp) = left_type_param {
+            bounds.add_constraint(tp, trait_name.to_string());
+        }
+        // If right is a type parameter, it needs the operator trait
+        if let Some(tp) = right_type_param {
+            bounds.add_constraint(tp, trait_name.to_string());
         }
     }
 
@@ -561,6 +605,11 @@ mod tests {
 
         assert!(!bounds.is_empty());
         let t_bounds = bounds.get_bounds("T");
-        assert!(t_bounds.contains(&"Add".to_string()));
+        // Now infers Add<Output = T> instead of just Add for same-type operands
+        assert!(
+            t_bounds.iter().any(|b| b.starts_with("Add")),
+            "Expected Add bound, got: {:?}",
+            t_bounds
+        );
     }
 }

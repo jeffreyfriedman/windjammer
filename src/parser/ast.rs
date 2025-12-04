@@ -166,6 +166,8 @@ pub enum Statement {
         mutable: bool,
         type_: Option<Type>,
         value: Expression,
+        /// Optional else block for let-else patterns (e.g., `let Some(x) = opt else { return }`)
+        else_block: Option<Vec<Statement>>,
         location: SourceLocation,
     },
     Const {

@@ -466,12 +466,19 @@ fn replace_strings_in_statement(stmt: Statement, pool_map: &HashMap<String, Stri
             mutable,
             type_,
             value,
+            else_block,
             location,
         } => Statement::Let {
             pattern,
             mutable,
             type_,
             value: replace_strings_in_expression(value, pool_map),
+            else_block: else_block.map(|stmts| {
+                stmts
+                    .into_iter()
+                    .map(|s| replace_strings_in_statement(s, pool_map))
+                    .collect()
+            }),
             location,
         },
         Statement::Const {
