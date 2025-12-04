@@ -107,7 +107,7 @@ impl Parser {
         Ok(type_params)
     }
 
-    /// Parse where clause: where T: Display, U: Clone + Send
+    /// Parse where clause: where T: Display, U: Clone + Send, P::Output: Debug
     pub fn parse_where_clause(&mut self) -> Result<Vec<(String, Vec<String>)>, String> {
         let mut where_clause = Vec::new();
         if self.current_token() == &Token::Where {
@@ -115,10 +115,22 @@ impl Parser {
             while self.current_token() != &Token::LBrace
                 && self.current_token() != &Token::Semicolon
             {
-                // Parse type parameter name
+                // Parse type parameter name (can be T or P::Output for associated types)
                 let type_param = if let Token::Ident(n) = self.current_token() {
-                    let name = n.clone();
+                    let mut name = n.clone();
                     self.advance();
+
+                    // Check for associated type syntax: P::Output
+                    while self.current_token() == &Token::ColonColon {
+                        self.advance(); // Consume ::
+                        if let Token::Ident(assoc_name) = self.current_token() {
+                            name.push_str("::");
+                            name.push_str(assoc_name);
+                            self.advance();
+                        } else {
+                            return Err("Expected associated type name after '::'".to_string());
+                        }
+                    }
                     name
                 } else {
                     return Err("Expected type parameter name in where clause".to_string());
