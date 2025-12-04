@@ -25,3 +25,4 @@ fn main() {
     println!("v3 = ({}, {})", v3.x, v3.y)
 }
 
+
