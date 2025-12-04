@@ -1712,21 +1712,20 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
         }
     }
 
-    /// Determine if a struct can safely auto-derive Clone, Debug, PartialEq
+    /// Determine if a struct has simple fields (can be in simple_structs registry)
+    /// This is separate from whether it needs automatic derive generation
     fn can_auto_derive_struct(&self, s: &StructDecl) -> bool {
-        // Don't auto-derive if the struct has generic parameters
+        // Don't add to simple_structs if the struct has generic parameters
         // (we'd need to add trait bounds, which is complex)
         if !s.type_params.is_empty() {
             return false;
         }
 
-        // Don't auto-derive if the struct has decorators that might conflict
-        // (e.g., @component, @game, @command which have their own derives)
+        // Don't add to simple_structs if the struct has special decorators
+        // that define their own derives (e.g., @component, @game, @command)
+        // BUT allow @auto and @derive - these are just explicit trait derives
         for decorator in &s.decorators {
-            if matches!(
-                decorator.name.as_str(),
-                "component" | "game" | "command" | "derive" | "auto"
-            ) {
+            if matches!(decorator.name.as_str(), "component" | "game" | "command") {
                 return false;
             }
         }
@@ -1789,6 +1788,9 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
                             {
                                 // Need to analyze this dependency first
                                 needs_retry = true;
+                                // Remove from visiting before pushing back to worklist
+                                // so we can re-analyze later
+                                visiting.remove(&struct_name);
                                 worklist.push(struct_name.clone());
                                 worklist.push(custom_name.clone());
                                 break;
@@ -4952,14 +4954,18 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
             traits.push("Copy".to_string());
         }
 
-        // Check if all fields are PartialEq/Eq
+        // Check if all fields are PartialEq
         if self.all_fields_are_comparable(&struct_.fields) {
             traits.push("PartialEq".to_string());
-            traits.push("Eq".to_string());
 
-            // If Eq, also check for Hash
-            if self.all_fields_are_hashable(&struct_.fields) {
-                traits.push("Hash".to_string());
+            // Check if all fields are Eq (floats are not Eq!)
+            if self.all_fields_are_eq(&struct_.fields) {
+                traits.push("Eq".to_string());
+
+                // If Eq, also check for Hash
+                if self.all_fields_are_hashable(&struct_.fields) {
+                    traits.push("Hash".to_string());
+                }
             }
         }
 
@@ -4983,6 +4989,14 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
             .all(|field| self.is_comparable_type(&field.field_type))
     }
 
+    /// Check if all fields implement Eq (not just PartialEq)
+    /// Floats only implement PartialEq, not Eq
+    fn all_fields_are_eq(&self, fields: &[crate::parser::StructField]) -> bool {
+        fields
+            .iter()
+            .all(|field| self.is_eq_type(&field.field_type))
+    }
+
     fn all_fields_are_hashable(&self, fields: &[crate::parser::StructField]) -> bool {
         fields
             .iter()
@@ -5004,7 +5018,7 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
             Type::Tuple(types) => types.iter().all(|t| self.is_copy_type(t)),
             Type::Custom(name) => {
                 // Recognize common Rust primitive types by name
-                matches!(
+                if matches!(
                     name.as_str(),
                     "i8" | "i16"
                         | "i32"
@@ -5021,7 +5035,12 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
                         | "f64"
                         | "bool"
                         | "char"
-                )
+                ) {
+                    return true;
+                }
+                // Check if it's a user-defined struct that's in our simple_structs registry
+                // (simple_structs contains structs with all Copy fields)
+                self.simple_structs.contains(name)
             }
             _ => false, // String, Vec, Option, Result, other Custom types are not Copy
         }
@@ -5047,6 +5066,7 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
     }
 
     fn is_comparable_type(&self, ty: &Type) -> bool {
+        // PartialEq - floats are included
         match ty {
             Type::Int | Type::Int32 | Type::Uint | Type::Float | Type::Bool | Type::String => true,
             Type::Reference(inner) | Type::MutableReference(inner) => {
@@ -5055,7 +5075,50 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
             Type::Tuple(types) => types.iter().all(|t| self.is_comparable_type(t)),
             Type::Option(inner) => self.is_comparable_type(inner),
             Type::Result(ok, err) => self.is_comparable_type(ok) && self.is_comparable_type(err),
-            _ => false, // Vec is not Eq (only PartialEq), Custom types unknown
+            Type::Vec(inner) => self.is_comparable_type(inner), // Vec<T> is PartialEq if T is
+            Type::Custom(name) => {
+                // Check if it's a user-defined struct in simple_structs (has PartialEq derived)
+                self.simple_structs.contains(name)
+            }
+            _ => false,
+        }
+    }
+
+    /// Check if type implements Eq (not just PartialEq)
+    /// Floats only implement PartialEq, not Eq
+    #[allow(clippy::only_used_in_recursion)]
+    fn is_eq_type(&self, ty: &Type) -> bool {
+        match ty {
+            Type::Int | Type::Int32 | Type::Uint | Type::Bool | Type::String => true,
+            Type::Float => false, // Floats don't implement Eq!
+            Type::Reference(inner) | Type::MutableReference(inner) => self.is_eq_type(inner),
+            Type::Tuple(types) => types.iter().all(|t| self.is_eq_type(t)),
+            Type::Option(inner) => self.is_eq_type(inner),
+            Type::Result(ok, err) => self.is_eq_type(ok) && self.is_eq_type(err),
+            Type::Custom(name) => {
+                // Recognize common Rust types that implement Eq
+                matches!(
+                    name.as_str(),
+                    "i8" | "i16"
+                        | "i32"
+                        | "i64"
+                        | "i128"
+                        | "isize"
+                        | "u8"
+                        | "u16"
+                        | "u32"
+                        | "u64"
+                        | "u128"
+                        | "usize"
+                        | "bool"
+                        | "char"
+                        | "&str"
+                        | "String"
+                )
+                // Note: We don't check simple_structs here because structs with
+                // float fields are in simple_structs but can't derive Eq
+            }
+            _ => false,
         }
     }
 
@@ -5069,7 +5132,9 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
             Type::Tuple(types) => types.iter().all(|t| self.is_hashable_type(t)),
             Type::Vec(_) => false, // Vec is not Hash
             Type::Option(inner) => self.is_hashable_type(inner),
-            _ => false, // Result, Custom types - assume not Hash
+            // Note: We don't check simple_structs for Custom types because
+            // structs with float fields are in simple_structs but can't derive Hash
+            _ => false, // Custom types, Result - assume not Hash
         }
     }
 
@@ -5081,7 +5146,11 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
             Type::Vec(_) => true,    // Vec has Default (empty vec)
             Type::Option(_) => true, // Option has Default (None)
             Type::Tuple(types) => types.iter().all(|t| self.has_default(t)),
-            _ => false, // Refs don't have Default, Result/Custom types unknown
+            Type::Custom(name) => {
+                // Check if it's a user-defined struct in simple_structs (has Default derived)
+                self.simple_structs.contains(name)
+            }
+            _ => false, // Refs don't have Default, Result unknown
         }
     }
 
