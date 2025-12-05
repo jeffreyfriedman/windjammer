@@ -503,6 +503,7 @@ mod tests {
             }],
             where_clause: vec![],
             parent_type: None,
+            doc_comment: None,
         };
 
         let bounds = engine.infer_function_bounds(&func);
@@ -549,6 +550,7 @@ mod tests {
             }],
             where_clause: vec![],
             parent_type: None,
+            doc_comment: None,
         };
 
         let bounds = engine.infer_function_bounds(&func);
@@ -606,6 +608,7 @@ mod tests {
             }],
             where_clause: vec![],
             parent_type: None,
+            doc_comment: None,
         };
 
         let bounds = engine.infer_function_bounds(&func);

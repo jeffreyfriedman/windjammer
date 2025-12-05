@@ -106,6 +106,7 @@ pub struct FunctionDecl {
     pub return_type: Option<Type>,
     pub body: Vec<Statement>,        // Empty for extern functions
     pub parent_type: Option<String>, // The type name if this function is in an impl block
+    pub doc_comment: Option<String>, // Documentation comment (/// lines)
 }
 
 // ============================================================================
@@ -128,6 +129,7 @@ pub struct StructDecl {
     pub where_clause: Vec<(String, Vec<String>)>, // Where clause: [(type_param, [trait_bounds])]
     pub fields: Vec<StructField>,
     pub decorators: Vec<Decorator>,
+    pub doc_comment: Option<String>, // Documentation comment (/// lines)
 }
 
 // ============================================================================
@@ -153,6 +155,7 @@ pub struct EnumDecl {
     pub is_pub: bool,                // Whether this enum has pub visibility
     pub type_params: Vec<TypeParam>, // Generic type parameters: enum Option<T>, enum Result<T, E>
     pub variants: Vec<EnumVariant>,
+    pub doc_comment: Option<String>, // Documentation comment (/// lines)
 }
 
 // ============================================================================
@@ -539,6 +542,7 @@ pub struct TraitDecl {
     pub supertraits: Vec<String>, // Supertrait bounds: trait Manager: Employee
     pub associated_types: Vec<AssociatedType>, // Associated type declarations: type Item;
     pub methods: Vec<TraitMethod>,
+    pub doc_comment: Option<String>, // Documentation comment (/// lines)
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]

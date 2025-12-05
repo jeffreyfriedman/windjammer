@@ -732,6 +732,7 @@ mod tests {
                 return_type: None,
                 body: body_stmts,
                 parent_type: None,
+                doc_comment: None,
             },
             location: None,
         }

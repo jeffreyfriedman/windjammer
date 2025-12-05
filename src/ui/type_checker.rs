@@ -73,6 +73,7 @@ mod tests {
             return_type: Some(Type::Custom("UI".to_string())),
             body: vec![],
             parent_type: None,
+            doc_comment: None,
         };
 
         assert!(validate_return_type(&valid).is_ok());
@@ -101,6 +102,7 @@ mod tests {
             return_type: Some(Type::Custom("UI".to_string())),
             body: vec![],
             parent_type: None,
+            doc_comment: None,
         };
 
         assert!(validate_props(&valid).is_ok());
@@ -126,6 +128,7 @@ mod tests {
             return_type: Some(Type::Custom("UI".to_string())),
             body: vec![],
             parent_type: None,
+            doc_comment: None,
         };
 
         assert!(validate_props(&invalid).is_err());

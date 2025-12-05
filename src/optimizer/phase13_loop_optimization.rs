@@ -110,6 +110,7 @@ fn optimize_loops_in_item(
                     return_type: func.return_type.clone(),
                     body: new_body,
                     parent_type: func.parent_type.clone(),
+                    doc_comment: func.doc_comment.clone(),
                 },
                 location: location.clone(),
             }
@@ -133,6 +134,7 @@ fn optimize_loops_in_item(
                     return_type: func.return_type.clone(),
                     body: optimize_loops_in_statements(&func.body, config, stats),
                     parent_type: func.parent_type.clone(),
+                    doc_comment: func.doc_comment.clone(),
                 })
                 .collect();
 
@@ -874,6 +876,7 @@ mod tests {
                     }],
                     is_async: false,
                     parent_type: None,
+                    doc_comment: None,
                     parameters: vec![],
                     return_type: None,
                     body: vec![Statement::For {
@@ -933,6 +936,7 @@ mod tests {
                     decorators: vec![],
                     is_async: false,
                     parent_type: None,
+                    doc_comment: None,
                     parameters: vec![],
                     return_type: None,
                     body: vec![Statement::For {
@@ -1013,6 +1017,7 @@ mod tests {
                     decorators: vec![],
                     is_async: false,
                     parent_type: None,
+                    doc_comment: None,
                     parameters: vec![],
                     return_type: Some(Type::Custom("i32".to_string())),
                     body: vec![Statement::Return {
@@ -1053,6 +1058,7 @@ mod tests {
                     decorators: vec![],
                     is_async: false,
                     parent_type: None,
+                    doc_comment: None,
                     parameters: vec![],
                     return_type: None,
                     body: vec![Statement::For {
@@ -1108,6 +1114,7 @@ mod tests {
                     decorators: vec![],
                     is_async: false,
                     parent_type: None,
+                    doc_comment: None,
                     parameters: vec![],
                     return_type: None,
                     body: vec![Statement::For {
