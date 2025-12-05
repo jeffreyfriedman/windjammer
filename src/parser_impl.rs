@@ -173,6 +173,18 @@ impl Parser {
     }
 
     pub(crate) fn parse_item(&mut self) -> Result<Item, String> {
+        // Collect doc comments (/// lines) that appear before the item
+        let mut doc_lines = Vec::new();
+        while let Token::DocComment(content) = self.current_token() {
+            doc_lines.push(content.clone());
+            self.advance();
+        }
+        let doc_comment = if doc_lines.is_empty() {
+            None
+        } else {
+            Some(doc_lines.join("\n"))
+        };
+
         // Check for decorators
         let mut decorators = Vec::new();
         while let Token::Decorator(_) = self.current_token() {
@@ -193,6 +205,7 @@ impl Parser {
                 let mut func = self.parse_function()?;
                 func.decorators = decorators.clone();
                 func.is_pub = is_pub;
+                func.doc_comment = doc_comment;
                 // Check if @async decorator is present
                 if decorators.iter().any(|d| d.name == "async") {
                     func.is_async = true;
@@ -209,6 +222,7 @@ impl Parser {
                 func.is_async = true;
                 func.is_pub = is_pub;
                 func.decorators = decorators;
+                func.doc_comment = doc_comment;
                 Ok(Item::Function {
                     decl: func,
                     location: self.current_location(),
@@ -219,6 +233,7 @@ impl Parser {
                 let mut struct_decl = self.parse_struct()?;
                 struct_decl.decorators = decorators;
                 struct_decl.is_pub = is_pub;
+                struct_decl.doc_comment = doc_comment;
                 Ok(Item::Struct {
                     decl: struct_decl,
                     location: self.current_location(),
@@ -228,6 +243,7 @@ impl Parser {
                 self.advance();
                 let mut enum_decl = self.parse_enum()?;
                 enum_decl.is_pub = is_pub;
+                enum_decl.doc_comment = doc_comment;
                 Ok(Item::Enum {
                     decl: enum_decl,
                     location: self.current_location(),
@@ -235,8 +251,10 @@ impl Parser {
             }
             Token::Trait => {
                 self.advance();
+                let mut trait_decl = self.parse_trait()?;
+                trait_decl.doc_comment = doc_comment;
                 Ok(Item::Trait {
-                    decl: self.parse_trait()?,
+                    decl: trait_decl,
                     location: self.current_location(),
                 })
             }

@@ -171,6 +171,7 @@ mod tests {
             type_params: vec![],
             where_clause: vec![],
             parent_type: None,
+            doc_comment: None,
         };
 
         let decl = generate_function_declaration(&func);
@@ -201,6 +202,7 @@ mod tests {
             decorators: vec![],
             type_params: vec![],
             where_clause: vec![],
+            doc_comment: None,
         };
 
         let interface = generate_interface(&struct_def);

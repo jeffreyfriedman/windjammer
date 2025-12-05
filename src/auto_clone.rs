@@ -489,6 +489,7 @@ mod tests {
             decorators: vec![],
             is_async: false,
             parent_type: None,
+            doc_comment: None,
             body: vec![
                 Statement::Let {
                     pattern: Pattern::Identifier("x".to_string()),
@@ -573,6 +574,7 @@ mod tests {
             decorators: vec![],
             is_async: false,
             parent_type: None,
+            doc_comment: None,
             body: vec![
                 Statement::Let {
                     pattern: Pattern::Identifier("x".to_string()),

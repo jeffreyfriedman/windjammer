@@ -71,6 +71,7 @@ mod tests {
             return_type: Some(Type::Custom("UI".to_string())),
             body: vec![],
             parent_type: None,
+            doc_comment: None,
         };
 
         assert!(is_ui_component(&component));
@@ -93,6 +94,7 @@ mod tests {
             return_type: Some(Type::Custom("UI".to_string())),
             body: vec![],
             parent_type: None,
+            doc_comment: None,
         };
 
         assert!(validate_component_return_type(&valid_component).is_ok());
@@ -112,6 +114,7 @@ mod tests {
             return_type: Some(Type::String),
             body: vec![],
             parent_type: None,
+            doc_comment: None,
         };
 
         assert!(validate_component_return_type(&invalid_component).is_err());
