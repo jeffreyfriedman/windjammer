@@ -99,6 +99,7 @@ fn create_simple_counter_component() -> FunctionDecl {
             },
         ],
         parent_type: None,
+        doc_comment: None,
     }
 }
 
@@ -151,6 +152,7 @@ fn create_component_with_props() -> FunctionDecl {
             location: None,
         }],
         parent_type: None,
+        doc_comment: None,
     }
 }
 
@@ -179,6 +181,7 @@ fn test_non_component_function() {
         return_type: Some(Type::Int),
         body: vec![],
         parent_type: None,
+        doc_comment: None,
     };
 
     assert!(!is_ui_component(&regular_func));
@@ -205,6 +208,7 @@ fn test_component_return_type_validation() {
         return_type: Some(Type::Int),
         body: vec![],
         parent_type: None,
+        doc_comment: None,
     };
 
     assert!(validate_component_return_type(&invalid_component).is_err());
@@ -245,6 +249,7 @@ fn test_type_checker_rejects_inferred_props() {
         return_type: Some(Type::Custom("UI".to_string())),
         body: vec![],
         parent_type: None,
+        doc_comment: None,
     };
 
     assert!(check_component(&bad_component).is_err());

@@ -332,6 +332,7 @@ mod tests {
             return_type: Some(Type::Custom("UI".to_string())),
             body,
             parent_type: None,
+            doc_comment: None,
         }
     }
 

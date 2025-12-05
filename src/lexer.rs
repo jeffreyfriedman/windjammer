@@ -125,6 +125,9 @@ pub enum Token {
     // Special
     Eof,
     Newline,
+
+    // Documentation
+    DocComment(String), // /// doc comment content
 }
 
 impl fmt::Display for Token {
@@ -153,6 +156,8 @@ impl std::hash::Hash for Token {
             Token::CharLiteral(c) => c.hash(state),
             Token::BoolLiteral(b) => b.hash(state),
             Token::Ident(s) => s.hash(state),
+            Token::DocComment(s) => s.hash(state),
+            Token::Decorator(s) => s.hash(state),
             _ => {} // Keywords and operators have no data
         }
     }
@@ -550,7 +555,34 @@ impl Lexer {
                 self.advance();
                 Token::Newline
             }
+            Some('/')
+                if self.peek(1) == Some('/')
+                    && self.peek(2) == Some('/')
+                    && self.peek(3) != Some('/') =>
+            {
+                // Doc comment: /// text
+                self.advance(); // skip first /
+                self.advance(); // skip second /
+                self.advance(); // skip third /
+
+                // Skip one leading space if present
+                if self.current_char == Some(' ') {
+                    self.advance();
+                }
+
+                // Read content until end of line
+                let mut content = String::new();
+                while let Some(ch) = self.current_char {
+                    if ch == '\n' {
+                        break;
+                    }
+                    content.push(ch);
+                    self.advance();
+                }
+                Token::DocComment(content)
+            }
             Some('/') if self.peek(1) == Some('/') => {
+                // Regular comment: // text
                 self.skip_comment();
                 return self.next_token();
             }
@@ -872,5 +904,48 @@ mod tests {
         assert_eq!(tokens[0], Token::Thread);
         assert_eq!(tokens[1], Token::Async);
         assert_eq!(tokens[2], Token::Await);
+    }
+
+    #[test]
+    fn test_lexer_doc_comment() {
+        let mut lexer = Lexer::new("/// This is a doc comment\nfn foo() {}");
+        let tokens = lexer.tokenize();
+
+        assert_eq!(
+            tokens[0],
+            Token::DocComment("This is a doc comment".to_string())
+        );
+        assert_eq!(tokens[1], Token::Fn);
+        assert_eq!(tokens[2], Token::Ident("foo".to_string()));
+    }
+
+    #[test]
+    fn test_lexer_doc_comment_no_space() {
+        let mut lexer = Lexer::new("///No leading space\nfn bar() {}");
+        let tokens = lexer.tokenize();
+
+        assert_eq!(tokens[0], Token::DocComment("No leading space".to_string()));
+        assert_eq!(tokens[1], Token::Fn);
+    }
+
+    #[test]
+    fn test_lexer_regular_comment_not_doc() {
+        // Regular comments should be skipped, not captured as DocComment
+        let mut lexer = Lexer::new("// This is a regular comment\nfn baz() {}");
+        let tokens = lexer.tokenize();
+
+        // Regular comment is skipped, first token should be Fn
+        assert_eq!(tokens[0], Token::Fn);
+        assert_eq!(tokens[1], Token::Ident("baz".to_string()));
+    }
+
+    #[test]
+    fn test_lexer_four_slashes_not_doc() {
+        // //// should be treated as regular comment, not doc comment
+        let mut lexer = Lexer::new("//// This is not a doc comment\nfn qux() {}");
+        let tokens = lexer.tokenize();
+
+        // //// is regular comment, skipped
+        assert_eq!(tokens[0], Token::Fn);
     }
 }

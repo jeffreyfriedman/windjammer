@@ -356,6 +356,7 @@ impl Parser {
             supertraits,
             associated_types,
             methods,
+            doc_comment: None,
         })
     }
 
@@ -646,6 +647,7 @@ impl Parser {
             return_type,
             body,
             parent_type: None, // Set by parse_impl for methods
+            doc_comment: None, // Set by parse_item if doc comments present
         })
     }
 
@@ -850,6 +852,7 @@ impl Parser {
             where_clause,
             fields,
             decorators: Vec::new(),
+            doc_comment: None, // Set by parse_item if doc comments present
         })
     }
 
@@ -967,6 +970,7 @@ impl Parser {
             is_pub: false, // Will be set by parse_item() if pub keyword present
             type_params,
             variants,
+            doc_comment: None, // Set by parse_item if doc comments present
         })
     }
 }
