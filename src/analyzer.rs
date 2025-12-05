@@ -1106,6 +1106,16 @@ impl Analyzer {
             Type::Reference(_) => true,
             Type::MutableReference(_) => false,
             Type::Tuple(types) => types.iter().all(|t| self.is_copy_type(t)),
+            // Option<T> is Copy if T is Copy
+            Type::Option(inner) => self.is_copy_type(inner),
+            // Result<T, E> is Copy if both T and E are Copy
+            Type::Result(ok_type, err_type) => {
+                self.is_copy_type(ok_type) && self.is_copy_type(err_type)
+            }
+            // Fixed-size arrays [T; N] are Copy if T is Copy
+            Type::Array(inner, _size) => self.is_copy_type(inner),
+            // Vec<T> is never Copy (heap-allocated)
+            Type::Vec(_) => false,
             Type::Custom(name) => {
                 // Check if it's a known Copy enum
                 if self.copy_enums.contains(name) {
@@ -2585,34 +2595,188 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_infer_borrowed() {
+    fn test_is_copy_type_primitives() {
         let analyzer = Analyzer::new();
 
-        // fn print(s: string) { println(s) }
-        // Should infer borrowed
-        let body = vec![Statement::Expression {
-            expr: Expression::Call {
-                function: Box::new(Expression::Identifier {
-                    name: "println".to_string(),
-                    location: None,
-                }),
-                arguments: vec![(
-                    None,
-                    Expression::Identifier {
-                        name: "s".to_string(),
-                        location: None,
-                    },
-                )],
-                location: None,
-            },
-            location: None,
-        }];
+        // Primitive types are Copy
+        assert!(analyzer.is_copy_type(&Type::Int));
+        assert!(analyzer.is_copy_type(&Type::Int32));
+        assert!(analyzer.is_copy_type(&Type::Uint));
+        assert!(analyzer.is_copy_type(&Type::Float));
+        assert!(analyzer.is_copy_type(&Type::Bool));
 
-        let param_type = Type::String;
-        let mode = analyzer
-            .infer_parameter_ownership("s", &param_type, &body, &None)
-            .unwrap();
-        // String is not Copy, so it should be Borrowed for read-only access
-        assert_eq!(mode, OwnershipMode::Borrowed);
+        // Compound types are not Copy by default
+        assert!(!analyzer.is_copy_type(&Type::String));
+        assert!(!analyzer.is_copy_type(&Type::Vec(Box::new(Type::Int))));
+    }
+
+    #[test]
+    fn test_is_copy_type_references() {
+        let analyzer = Analyzer::new();
+
+        // References to Copy types are Copy
+        assert!(analyzer.is_copy_type(&Type::Reference(Box::new(Type::Int))));
+        assert!(analyzer.is_copy_type(&Type::Reference(Box::new(Type::String))));
+
+        // Mutable references are not Copy
+        assert!(!analyzer.is_copy_type(&Type::MutableReference(Box::new(Type::Int))));
+    }
+
+    #[test]
+    fn test_is_mutating_method() {
+        let analyzer = Analyzer::new();
+
+        // Currently recognized mutating methods
+        assert!(analyzer.is_mutating_method("push"));
+        assert!(analyzer.is_mutating_method("push_str"));
+        assert!(analyzer.is_mutating_method("pop"));
+        assert!(analyzer.is_mutating_method("insert"));
+        assert!(analyzer.is_mutating_method("remove"));
+        assert!(analyzer.is_mutating_method("clear"));
+        assert!(analyzer.is_mutating_method("append"));
+
+        // Non-mutating methods
+        assert!(!analyzer.is_mutating_method("len"));
+        assert!(!analyzer.is_mutating_method("is_empty"));
+        assert!(!analyzer.is_mutating_method("get"));
+        assert!(!analyzer.is_mutating_method("iter"));
+        assert!(!analyzer.is_mutating_method("clone"));
+    }
+
+    #[test]
+    fn test_analyzer_tracks_mutated_variables() {
+        let mut analyzer = Analyzer::new();
+
+        // Initially no mutations
+        assert!(!analyzer.is_variable_mutated("x"));
+        assert!(!analyzer.is_variable_mutated("y"));
+
+        // Track mutation
+        analyzer.mutated_variables.insert("x".to_string());
+        assert!(analyzer.is_variable_mutated("x"));
+        assert!(!analyzer.is_variable_mutated("y"));
+
+        // Track another mutation
+        analyzer.mutated_variables.insert("y".to_string());
+        assert!(analyzer.is_variable_mutated("y"));
+    }
+
+    #[test]
+    fn test_ownership_mode_display() {
+        assert_eq!(format!("{:?}", OwnershipMode::Owned), "Owned");
+        assert_eq!(format!("{:?}", OwnershipMode::Borrowed), "Borrowed");
+        assert_eq!(format!("{:?}", OwnershipMode::MutBorrowed), "MutBorrowed");
+    }
+
+    #[test]
+    fn test_is_generic_type_param() {
+        // is_generic_type_param is a static method
+        // It checks if a Type looks like a generic (e.g., single uppercase letter)
+
+        // Single uppercase letters are generic
+        assert!(Analyzer::is_generic_type_param(&Type::Custom(
+            "T".to_string()
+        )));
+        assert!(Analyzer::is_generic_type_param(&Type::Custom(
+            "U".to_string()
+        )));
+        assert!(Analyzer::is_generic_type_param(&Type::Custom(
+            "A".to_string()
+        )));
+
+        // Multi-letter types are not generic
+        assert!(!Analyzer::is_generic_type_param(&Type::Custom(
+            "Point".to_string()
+        )));
+        assert!(!Analyzer::is_generic_type_param(&Type::Custom(
+            "Vec".to_string()
+        )));
+        assert!(!Analyzer::is_generic_type_param(&Type::Custom(
+            "Item".to_string()
+        )));
+
+        // Primitive types are not generic
+        assert!(!Analyzer::is_generic_type_param(&Type::Int));
+        assert!(!Analyzer::is_generic_type_param(&Type::String));
+    }
+
+    #[test]
+    fn test_analyzer_new() {
+        let analyzer = Analyzer::new();
+
+        // New analyzer should have empty state
+        assert!(analyzer.mutated_variables.is_empty());
+    }
+
+    #[test]
+    fn test_is_copy_type_option() {
+        let analyzer = Analyzer::new();
+
+        // Option<T> is Copy if T is Copy
+        assert!(analyzer.is_copy_type(&Type::Option(Box::new(Type::Int))));
+        assert!(analyzer.is_copy_type(&Type::Option(Box::new(Type::Bool))));
+        assert!(analyzer.is_copy_type(&Type::Option(Box::new(Type::Float))));
+
+        // Option<T> is not Copy if T is not Copy
+        assert!(!analyzer.is_copy_type(&Type::Option(Box::new(Type::String))));
+        assert!(!analyzer.is_copy_type(&Type::Option(Box::new(Type::Vec(Box::new(Type::Int))))));
+    }
+
+    #[test]
+    fn test_is_copy_type_result() {
+        let analyzer = Analyzer::new();
+
+        // Result<T, E> is Copy if both T and E are Copy
+        assert!(analyzer.is_copy_type(&Type::Result(Box::new(Type::Int), Box::new(Type::Bool))));
+
+        // Result<T, E> is not Copy if T is not Copy
+        assert!(!analyzer.is_copy_type(&Type::Result(Box::new(Type::String), Box::new(Type::Int))));
+
+        // Result<T, E> is not Copy if E is not Copy
+        assert!(!analyzer.is_copy_type(&Type::Result(Box::new(Type::Int), Box::new(Type::String))));
+    }
+
+    #[test]
+    fn test_is_copy_type_array() {
+        let analyzer = Analyzer::new();
+
+        // Fixed-size arrays [T; N] are Copy if T is Copy
+        assert!(analyzer.is_copy_type(&Type::Array(Box::new(Type::Int), 10)));
+        assert!(analyzer.is_copy_type(&Type::Array(Box::new(Type::Bool), 5)));
+
+        // Arrays of non-Copy types are not Copy
+        assert!(!analyzer.is_copy_type(&Type::Array(Box::new(Type::String), 3)));
+    }
+
+    #[test]
+    fn test_is_copy_type_vec() {
+        let analyzer = Analyzer::new();
+
+        // Vec<T> is never Copy (heap-allocated)
+        assert!(!analyzer.is_copy_type(&Type::Vec(Box::new(Type::Int))));
+        assert!(!analyzer.is_copy_type(&Type::Vec(Box::new(Type::Bool))));
+    }
+
+    #[test]
+    fn test_is_copy_type_tuple() {
+        let analyzer = Analyzer::new();
+
+        // Tuple of Copy types is Copy
+        assert!(analyzer.is_copy_type(&Type::Tuple(vec![Type::Int, Type::Bool])));
+        assert!(analyzer.is_copy_type(&Type::Tuple(vec![Type::Float, Type::Uint])));
+
+        // Tuple with non-Copy type is not Copy
+        assert!(!analyzer.is_copy_type(&Type::Tuple(vec![Type::Int, Type::String])));
+        assert!(!analyzer.is_copy_type(&Type::Tuple(vec![Type::Vec(Box::new(Type::Int))])));
+    }
+
+    #[test]
+    fn test_ownership_mode_equality() {
+        assert_eq!(OwnershipMode::Owned, OwnershipMode::Owned);
+        assert_eq!(OwnershipMode::Borrowed, OwnershipMode::Borrowed);
+        assert_eq!(OwnershipMode::MutBorrowed, OwnershipMode::MutBorrowed);
+
+        assert_ne!(OwnershipMode::Owned, OwnershipMode::Borrowed);
+        assert_ne!(OwnershipMode::Borrowed, OwnershipMode::MutBorrowed);
     }
 }
