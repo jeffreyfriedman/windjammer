@@ -310,6 +310,7 @@ impl Analyzer {
                     name: "Output".to_string(),
                     concrete_type: None,
                 }],
+                doc_comment: None,
             }
         };
 

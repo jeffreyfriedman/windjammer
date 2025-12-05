@@ -67,6 +67,7 @@ pub fn eliminate_dead_code(program: &Program) -> (Program, DeadCodeStats) {
                     return_type: func.return_type.clone(),
                     body: new_body,
                     parent_type: func.parent_type.clone(),
+                    doc_comment: func.doc_comment.clone(),
                 };
                 new_items.push(Item::Function {
                     decl: new_func,
@@ -335,6 +336,7 @@ fn eliminate_dead_code_in_impl(impl_block: &ImplBlock, stats: &mut DeadCodeStats
             return_type: func.return_type.clone(),
             body: new_body,
             parent_type: func.parent_type.clone(),
+            doc_comment: func.doc_comment.clone(),
         };
         new_functions.push(new_func);
     }
@@ -754,6 +756,7 @@ mod tests {
             return_type: Some(Type::Custom("i32".to_string())),
             body,
             parent_type: None,
+            doc_comment: None,
         }
     }
 
@@ -770,6 +773,7 @@ mod tests {
             return_type: None,
             body,
             parent_type: None,
+            doc_comment: None,
         }
     }
 

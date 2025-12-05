@@ -959,6 +959,7 @@ mod tests {
                     type_params: vec![],
                     where_clause: vec![],
                     parent_type: None,
+                    doc_comment: None,
                 },
                 location: None,
             }],

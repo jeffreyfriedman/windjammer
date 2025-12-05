@@ -1314,6 +1314,13 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
     fn generate_struct(&mut self, s: &StructDecl) -> String {
         let mut output = String::new();
 
+        // Emit doc comments if present
+        if let Some(ref doc) = s.doc_comment {
+            for line in doc.lines() {
+                output.push_str(&format!("/// {}\n", line));
+            }
+        }
+
         // Convert decorators to Rust attributes
         for decorator in &s.decorators {
             // Skip framework decorators - they're handled separately
@@ -1501,6 +1508,13 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
 
     fn generate_enum(&self, e: &EnumDecl) -> String {
         let mut output = String::new();
+
+        // Emit doc comments if present
+        if let Some(ref doc) = e.doc_comment {
+            for line in doc.lines() {
+                output.push_str(&format!("/// {}\n", line));
+            }
+        }
 
         // Automatic trait derivation - analyze if the enum can safely derive common traits
         let can_auto_derive = self.can_auto_derive_enum(e);
@@ -1988,6 +2002,13 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
 
     fn generate_trait(&mut self, trait_decl: &crate::parser::TraitDecl) -> String {
         let mut output = String::new();
+
+        // Emit doc comments if present
+        if let Some(ref doc) = trait_decl.doc_comment {
+            for line in doc.lines() {
+                output.push_str(&format!("/// {}\n", line));
+            }
+        }
 
         // TODO: Add is_pub field to TraitDecl and check it properly
         // For now, always emit pub for traits (the common case)
@@ -2577,6 +2598,13 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
     fn generate_function(&mut self, analyzed: &AnalyzedFunction) -> String {
         let func = &analyzed.decl;
         let mut output = String::new();
+
+        // Emit doc comments if present
+        if let Some(ref doc) = func.doc_comment {
+            for line in doc.lines() {
+                output.push_str(&format!("/// {}\n", line));
+            }
+        }
 
         // AUTO-CLONE: Load auto-clone analysis for this function
         self.auto_clone_analysis = Some(analyzed.auto_clone_analysis.clone());
