@@ -43,6 +43,7 @@ pub enum Token {
     Type,
     Dyn,
     Bound,
+    Move,
 
     // Types
     Int,
@@ -533,6 +534,7 @@ impl Lexer {
             "type" => Token::Type,
             "dyn" => Token::Dyn,
             "bound" => Token::Bound,
+            "move" => Token::Move,
             "int" => Token::Int,
             "int32" => Token::Int32,
             "uint" => Token::Uint,
