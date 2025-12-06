@@ -1,30 +1,31 @@
-// Test file for move closures
+// Test file for closures - Windjammer auto-moves all closures
+// No explicit 'move' keyword needed - the compiler handles it!
 
-fn test_move_closure() {
+fn test_closure_basic() {
     let x = 42
     
-    // Move closure takes ownership of x
-    let closure = move || x + 1
+    // Closure - compiler automatically generates `move`
+    // User just writes the simple syntax
+    let closure = || x + 1
     
     // Use the closure
     let result = closure()
 }
 
-fn test_move_closure_with_params() {
+fn test_closure_with_params() {
     let offset = 10
     
-    // Move closure with parameters (type inferred)
-    let add_offset = move |n| n + offset
+    // Closure with parameters - still auto-moves
+    let add_offset = |n| n + offset
     
     let result = add_offset(5)
 }
 
-fn test_regular_closure() {
+fn test_thread_block() {
     let x = 42
     
-    // Regular closure borrows x
-    let closure = || x + 1
-    
-    // Can still use x after creating closure
-    let y = x * 2
+    // Thread blocks already auto-move - this is the Windjammer way!
+    thread {
+        let y = x + 1
+    }
 }

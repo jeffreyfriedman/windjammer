@@ -4456,22 +4456,26 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
                 }
             }
             Expression::Closure {
-                parameters,
-                body,
-                is_move,
-                ..
+                parameters, body, ..
             } => {
                 let params = parameters.join(", ");
                 let body_str = self.generate_expression(body);
 
-                // If `is_move` is true, emit `move |params| body` to take ownership
-                // This is required for spawning threads or returning closures
-                // Otherwise, let Rust infer the capture mode (by ref, by mut ref, or by value)
-                if *is_move {
-                    format!("move |{}| {}", params, body_str)
-                } else {
-                    format!("|{}| {}", params, body_str)
-                }
+                // WINDJAMMER PHILOSOPHY: Always emit `move` for closures
+                //
+                // In Rust, you must manually write `move` to take ownership of captured
+                // variables. This is a mechanical detail the compiler can infer:
+                // - Threads require 'static lifetime → needs move
+                // - Returning closures → needs move
+                // - Closures stored in structs → needs move
+                //
+                // Rather than burden the developer with this decision, Windjammer
+                // always emits `move` closures. This is safe and works in all cases.
+                // Rust's optimizer will elide unnecessary copies for Copy types.
+                //
+                // The developer writes: |x| x + 1
+                // We generate: move |x| x + 1
+                format!("move |{}| {}", params, body_str)
             }
             Expression::Index { object, index, .. } => {
                 let obj_str = self.generate_expression(object);

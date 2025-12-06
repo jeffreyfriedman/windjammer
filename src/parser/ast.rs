@@ -366,7 +366,6 @@ pub enum Expression {
     Closure {
         parameters: Vec<String>,
         body: Box<Expression>,
-        is_move: bool, // move keyword for ownership-transferring closures
         location: SourceLocation,
     },
     Cast {
