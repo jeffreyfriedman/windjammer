@@ -378,12 +378,10 @@ fn replace_strings_in_expression(
         Expression::Closure {
             parameters,
             body,
-            is_move,
             location,
         } => Expression::Closure {
             parameters,
             body: Box::new(replace_strings_in_expression(*body, pool_map)),
-            is_move,
             location,
         },
         Expression::Cast {
