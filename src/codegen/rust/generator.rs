@@ -2086,6 +2086,14 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
 
         // Generate trait methods
         for method in &trait_decl.methods {
+            // Emit doc comments for method if present
+            if let Some(ref doc) = method.doc_comment {
+                for line in doc.lines() {
+                    output.push_str(&self.indent());
+                    output.push_str(&format!("/// {}\n", line));
+                }
+            }
+
             output.push_str(&self.indent());
 
             if method.is_async {

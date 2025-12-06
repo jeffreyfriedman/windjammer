@@ -166,6 +166,15 @@ impl Parser {
                 continue;
             }
 
+            // Capture doc comment if present (/// or //!)
+            let doc_comment = if let Token::DocComment(comment) = self.current_token() {
+                let comment = comment.clone();
+                self.advance();
+                Some(comment)
+            } else {
+                None
+            };
+
             // Skip decorators for now (could be added later)
             let mut decorators = Vec::new();
             while let Token::Decorator(_) = self.current_token() {
@@ -192,6 +201,7 @@ impl Parser {
             func.is_pub = is_pub;
             func.is_async = is_async;
             func.decorators = decorators;
+            func.doc_comment = doc_comment; // Doc comment from before the method
             func.parent_type = Some(type_name.clone()); // Track which impl block this function belongs to
             functions.push(func);
         }
@@ -300,6 +310,15 @@ impl Parser {
                 continue;
             }
 
+            // Capture doc comment if present (/// or //!)
+            let doc_comment = if let Token::DocComment(comment) = self.current_token() {
+                let comment = comment.clone();
+                self.advance();
+                Some(comment)
+            } else {
+                None
+            };
+
             // Parse trait method signature
             let is_async = if self.current_token() == &Token::Async {
                 self.advance();
@@ -345,6 +364,7 @@ impl Parser {
                 return_type,
                 is_async,
                 body,
+                doc_comment,
             });
         }
 
