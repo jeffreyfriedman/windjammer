@@ -844,6 +844,49 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
             }
         }
 
+        // Handle super:: imports - flatten paths since all generated files are siblings
+        // e.g., super::super::math::vec3::Vec3 -> super::vec3::Vec3
+        // Note: The parser returns the path as a single string element like ["super::super::..."]
+        // so we need to check full_path instead of path segments
+        let rust_full_path = full_path.replace('.', "::");
+        if rust_full_path.starts_with("super::") {
+            // Split the path into segments
+            let segments: Vec<&str> = rust_full_path.split("::").collect();
+
+            // Strip all "super" prefixes and get the remaining segments
+            let non_super_segments: Vec<&str> = segments
+                .iter()
+                .skip_while(|s| **s == "super")
+                .copied()
+                .collect();
+
+            // For cross-module imports (e.g., math::vec3::Vec3), we need the last two segments:
+            // - The file name (vec3)
+            // - The item being imported (Vec3)
+            // The intermediate directory names (math) are irrelevant since all files are flat siblings
+            if non_super_segments.len() >= 2 {
+                let file_name = non_super_segments[non_super_segments.len() - 2];
+                let item_name = non_super_segments[non_super_segments.len() - 1];
+
+                if let Some(alias_name) = alias {
+                    return format!(
+                        "use super::{}::{} as {};\n",
+                        file_name, item_name, alias_name
+                    );
+                } else {
+                    return format!("use super::{}::{};\n", file_name, item_name);
+                }
+            } else if non_super_segments.len() == 1 {
+                // Simple import like super::module_name
+                let module_name = non_super_segments[0];
+                if let Some(alias_name) = alias {
+                    return format!("use super::{} as {};\n", module_name, alias_name);
+                } else {
+                    return format!("use super::{};\n", module_name);
+                }
+            }
+        }
+
         // Handle stdlib imports FIRST (before glob handling)
         // This ensures std::ui::*, std::fs::*, etc. are properly skipped
         if full_path.starts_with("std::") || full_path.starts_with("std.") {
