@@ -4456,16 +4456,22 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
                 }
             }
             Expression::Closure {
-                parameters, body, ..
+                parameters,
+                body,
+                is_move,
+                ..
             } => {
                 let params = parameters.join(", ");
                 let body_str = self.generate_expression(body);
 
-                // Let Rust infer the capture mode (by ref, by mut ref, or by value)
-                // This allows closures to borrow instead of taking ownership,
-                // which is more flexible and allows using captured variables after the closure
-                // The user can explicitly write `move` if they want ownership transfer
-                format!("|{}| {}", params, body_str)
+                // If `is_move` is true, emit `move |params| body` to take ownership
+                // This is required for spawning threads or returning closures
+                // Otherwise, let Rust infer the capture mode (by ref, by mut ref, or by value)
+                if *is_move {
+                    format!("move |{}| {}", params, body_str)
+                } else {
+                    format!("|{}| {}", params, body_str)
+                }
             }
             Expression::Index { object, index, .. } => {
                 let obj_str = self.generate_expression(object);

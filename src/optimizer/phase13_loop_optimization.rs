@@ -445,10 +445,12 @@ fn optimize_loops_in_expression(
         Expression::Closure {
             parameters,
             body,
+            is_move,
             location,
         } => Expression::Closure {
             parameters: parameters.clone(),
             body: Box::new(optimize_loops_in_expression(body, config, stats)),
+            is_move: *is_move,
             location: location.clone(),
         },
         Expression::Index {
