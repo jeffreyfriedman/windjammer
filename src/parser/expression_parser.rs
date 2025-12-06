@@ -982,6 +982,86 @@ impl Parser {
                     location: self.current_location(),
                 }
             }
+            Token::Move => {
+                // Move closure: move |params| body or move || body
+                self.advance(); // consume 'move'
+
+                if self.current_token() == &Token::Or {
+                    // move || body (no parameters)
+                    self.advance();
+                    let body = if self.current_token() == &Token::LBrace {
+                        self.advance();
+                        let statements = self.parse_block_statements()?;
+                        self.expect(Token::RBrace)?;
+                        Box::new(Expression::Block {
+                            statements,
+                            location: self.current_location(),
+                        })
+                    } else {
+                        Box::new(self.parse_expression()?)
+                    };
+                    Expression::Closure {
+                        parameters: Vec::new(),
+                        body,
+                        is_move: true,
+                        location: self.current_location(),
+                    }
+                } else if self.current_token() == &Token::Pipe {
+                    // move |params| body
+                    self.advance();
+                    let mut parameters = Vec::new();
+
+                    while self.current_token() != &Token::Pipe {
+                        let param_name = match self.current_token() {
+                            Token::Ident(name) => {
+                                let n = name.clone();
+                                self.advance();
+                                n
+                            }
+                            Token::Underscore => {
+                                self.advance();
+                                "_".to_string()
+                            }
+                            _ => {
+                                return Err(format!(
+                                    "Expected parameter name in move closure (at token position {})",
+                                    self.position
+                                ));
+                            }
+                        };
+                        parameters.push(param_name);
+
+                        if self.current_token() == &Token::Comma {
+                            self.advance();
+                        }
+                    }
+                    self.expect(Token::Pipe)?;
+
+                    let body = if self.current_token() == &Token::LBrace {
+                        self.advance();
+                        let statements = self.parse_block_statements()?;
+                        self.expect(Token::RBrace)?;
+                        Box::new(Expression::Block {
+                            statements,
+                            location: self.current_location(),
+                        })
+                    } else {
+                        Box::new(self.parse_expression()?)
+                    };
+
+                    Expression::Closure {
+                        parameters,
+                        body,
+                        is_move: true,
+                        location: self.current_location(),
+                    }
+                } else {
+                    return Err(format!(
+                        "Expected '|' or '||' after 'move' keyword (at token position {})",
+                        self.position
+                    ));
+                }
+            }
             Token::Pipe => {
                 // Closure: |params| body
                 self.advance();
@@ -1111,6 +1191,7 @@ impl Parser {
                 Expression::Closure {
                     parameters,
                     body,
+                    is_move: false,
                     location: self.current_location(),
                 }
             }
@@ -1136,6 +1217,7 @@ impl Parser {
                 Expression::Closure {
                     parameters: Vec::new(), // No parameters
                     body,
+                    is_move: false,
                     location: self.current_location(),
                 }
             }
