@@ -1,0 +1,29 @@
+// Test file for sync primitives
+
+use std::sync
+
+fn test_arc_mutex() {
+    // Create shared state with Arc<Mutex>
+    let counter = sync::arc_mutex(0)
+    
+    // Clone for thread
+    let counter_clone = counter.clone()
+    
+    // Spawn thread
+    thread {
+        let guard = sync::lock(counter_clone)
+        // Increment
+    }
+}
+
+fn test_channel() {
+    // Create a channel
+    let (tx, rx) = sync::channel()
+    
+    thread {
+        tx.send(42)
+    }
+    
+    let value = rx.recv()
+}
+
