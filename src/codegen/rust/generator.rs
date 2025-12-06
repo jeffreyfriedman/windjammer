@@ -954,6 +954,7 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
                 // Additional modules
                 "async" => "windjammer_runtime::async_runtime",
                 "cli" => "windjammer_runtime::cli",
+                "collections" => "windjammer_runtime::collections",
                 "crypto" => "windjammer_runtime::crypto",
                 "csv" => "windjammer_runtime::csv_mod",
                 "db" => "windjammer_runtime::db",
@@ -962,7 +963,9 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
                 "random" => "windjammer_runtime::random",
                 "regex" => "windjammer_runtime::regex_mod",
                 "strings" => "windjammer_runtime::strings",
+                "sync" => "windjammer_runtime::sync",
                 "testing" => "windjammer_runtime::testing",
+                "thread" => "windjammer_runtime::thread",
                 "time" => "windjammer_runtime::time",
                 _ => {
                     // Unknown module - try windjammer_runtime
