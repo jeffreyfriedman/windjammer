@@ -552,6 +552,7 @@ pub struct TraitMethod {
     pub return_type: Option<Type>,
     pub is_async: bool,
     pub body: Option<Vec<Statement>>, // None for trait definitions, Some for default impls
+    pub doc_comment: Option<String>,  // Documentation comment (/// lines)
 }
 
 // ============================================================================
