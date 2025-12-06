@@ -648,12 +648,10 @@ fn eliminate_dead_code_in_expression(expr: &Expression) -> Expression {
         Expression::Closure {
             parameters,
             body,
-            is_move,
             location,
         } => Expression::Closure {
             parameters: parameters.clone(),
             body: Box::new(eliminate_dead_code_in_expression(body)),
-            is_move: *is_move,
             location: location.clone(),
         },
         Expression::StructLiteral {
