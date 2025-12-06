@@ -305,6 +305,7 @@ impl Analyzer {
                     return_type: Some(Type::Custom("Output".to_string())),
                     is_async: false,
                     body: None,
+                    doc_comment: None,
                 }],
                 associated_types: vec![AssociatedType {
                     name: "Output".to_string(),
