@@ -1,0 +1,30 @@
+// Test file for move closures
+
+fn test_move_closure() {
+    let x = 42
+    
+    // Move closure takes ownership of x
+    let closure = move || x + 1
+    
+    // Use the closure
+    let result = closure()
+}
+
+fn test_move_closure_with_params() {
+    let offset = 10
+    
+    // Move closure with parameters (type inferred)
+    let add_offset = move |n| n + offset
+    
+    let result = add_offset(5)
+}
+
+fn test_regular_closure() {
+    let x = 42
+    
+    // Regular closure borrows x
+    let closure = || x + 1
+    
+    // Can still use x after creating closure
+    let y = x * 2
+}
