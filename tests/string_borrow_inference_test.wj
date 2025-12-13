@@ -1,38 +1,35 @@
 // Test: String parameter inference 
-// Current behavior: Parameters infer &String, 
-// but callers can pass string literals (with auto .to_string())
+// Tests that stored parameters are kept as owned String
 
 pub struct Logger {
-    prefix: String,
+    prefix: string,
 }
 
 impl Logger {
-    // Takes &str explicitly - the idiomatic way
-    pub fn log_file(path: &str) {
-        println!("Loading file: {}", path)
-    }
-    
-    // Takes &str explicitly for borrowed access
-    pub fn log_message(&self, message: &str) {
-        println!("[{}] {}", self.prefix, message)
-    }
-    
-    // Takes String ownership for storage
-    pub fn new(name: String) -> Logger {
+    // Takes owned String for storage - should remain String
+    pub fn new(name: string) -> Logger {
         Logger { prefix: name }
     }
 }
 
-pub fn test_string_borrow() {
-    // String literals work directly with &str parameters
-    Logger::log_file("test.txt")
+// Function that stores the parameter
+pub fn store_path(paths: &mut Vec<string>, path: string) {
+    paths.push(path)
+}
+
+pub fn test_string_storage() {
+    // Logger::new stores the name, so it should be owned String
+    let logger = Logger::new("App")
     
-    let logger = Logger::new("App".to_string())
-    logger.log_message("Hello")
+    // store_path pushes the path, so it should be owned String
+    let mut paths = Vec::new()
+    store_path(&mut paths, "file.txt")
+    
+    println!("Logger prefix: {}", logger.prefix)
 }
 
 fn main() {
-    test_string_borrow()
+    test_string_storage()
 }
 
 

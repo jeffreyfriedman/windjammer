@@ -1,0 +1,56 @@
+// Test fixture for method argument conversion
+// Windjammer should auto-convert arguments for common methods
+
+struct ItemList {
+    items: Vec<string>,
+}
+
+impl ItemList {
+    fn new() -> ItemList {
+        ItemList {
+            items: Vec::new(),
+        }
+    }
+    
+    // contains() should get & added to argument
+    fn has_item(&self, item: string) -> bool {
+        self.items.contains(item)
+    }
+    
+    // push() should work with owned string
+    fn add_item(&self, item: string) {
+        self.items.push(item)
+    }
+    
+    // push() with literal should convert to String
+    fn add_hello(&self) {
+        self.items.push("hello")
+    }
+}
+
+// String methods
+fn check_prefix(text: string, prefix: string) -> bool {
+    text.starts_with(prefix)
+}
+
+fn check_suffix(text: string, suffix: string) -> bool {
+    text.ends_with(suffix)
+}
+
+fn is_rust_file(filename: string) -> bool {
+    filename.ends_with(".rs")
+}
+
+fn main() {
+    let list = ItemList::new()
+    list.add_item("test")
+    list.add_hello()
+    
+    if list.has_item("test") {
+        println!("Found test!")
+    }
+    
+    if is_rust_file("main.rs") {
+        println!("It's a Rust file!")
+    }
+}
