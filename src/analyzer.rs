@@ -189,6 +189,7 @@ pub struct FunctionSignature {
     pub name: String,
     pub param_ownership: Vec<OwnershipMode>,
     pub return_ownership: OwnershipMode,
+    pub has_self_receiver: bool, // True if first parameter is self/&self/&mut self
 }
 
 #[derive(Debug, Clone)]
@@ -376,7 +377,13 @@ impl Analyzer {
                                 }
                             })
                     });
-                    if has_copy_derive {
+
+                    // Also check for @auto decorator - if all fields are Copy, struct gets Copy
+                    let has_auto_derive = decl.decorators.iter().any(|d| d.name == "auto");
+                    let all_fields_copy =
+                        decl.fields.iter().all(|f| self.is_copy_type(&f.field_type));
+
+                    if has_copy_derive || (has_auto_derive && all_fields_copy) {
                         self.copy_structs.insert(decl.name.clone());
                     }
                 }
@@ -485,12 +492,13 @@ impl Analyzer {
                             // Mutating method that doesn't return self: use `&mut self`
                             OwnershipMode::MutBorrowed
                         } else {
-                            // Check if it accesses fields (read-only)
-                            let accesses_fields = self.function_accesses_self_fields(func);
-                            if accesses_fields {
-                                OwnershipMode::Borrowed
-                            } else {
+                            // Check if self is used in binary operations (for Copy types like Vec2, Vec3)
+                            if self.is_used_in_binary_op("self", &func.body) {
                                 OwnershipMode::Owned
+                            } else {
+                                // Default to borrowed for read-only methods
+                                // Whether or not the method accesses self.fields, &self is appropriate
+                                OwnershipMode::Borrowed
                             }
                         }
                     } else {
@@ -498,7 +506,15 @@ impl Analyzer {
                     }
                 }
                 OwnershipHint::Mut => OwnershipMode::MutBorrowed,
-                OwnershipHint::Ref => OwnershipMode::Borrowed,
+                OwnershipHint::Ref => {
+                    // SMART FIX: If user wrote &self but function modifies fields, upgrade to &mut self
+                    // This prevents a common user error
+                    if param.name == "self" && self.function_modifies_self_fields(func) {
+                        OwnershipMode::MutBorrowed
+                    } else {
+                        OwnershipMode::Borrowed
+                    }
+                }
                 OwnershipHint::Inferred => {
                     // Special case: Game decorator functions always take &mut for first parameter (game state)
                     if is_game_decorator && i == 0 {
@@ -528,19 +544,24 @@ impl Analyzer {
                             if self.is_used_in_binary_op("self", &func.body) {
                                 OwnershipMode::Owned
                             } else {
-                                let accesses_fields = self.function_accesses_self_fields(func);
-                                if accesses_fields {
-                                    OwnershipMode::Borrowed
-                                } else {
-                                    OwnershipMode::Owned
-                                }
+                                // Default to borrowed for read-only methods
+                                // This is correct whether or not the method accesses self.fields
+                                // - If it accesses fields: &self works because we only read
+                                // - If it doesn't access self at all: &self is fine, no need to consume
+                                OwnershipMode::Borrowed
                             }
                         }
                     } else {
-                        // For Copy types, default to Owned (pass by value)
-                        // This allows seamless use of types like Vec2, Vec3 without references
+                        // For Copy types, check if they're mutated first
+                        // Mutated Copy types should be &mut, not Owned
                         if self.is_copy_type(&param.type_) {
-                            OwnershipMode::Owned
+                            // Still check for mutation - mutated Copy types need &mut
+                            if self.is_mutated(&param.name, &func.body) {
+                                OwnershipMode::MutBorrowed
+                            } else {
+                                // Non-mutated Copy types default to Owned (pass by value)
+                                OwnershipMode::Owned
+                            }
                         } else {
                             // Perform inference based on usage in function body
                             self.infer_parameter_ownership(
@@ -686,9 +707,27 @@ impl Analyzer {
             return Ok(OwnershipMode::Owned);
         }
 
-        // 5. For Copy types with read-only access, pass by value (Owned)
+        // 5. Check if parameter is pattern matched with field extraction
+        // Borrowing an enum and pattern matching extracts references to fields
+        // which breaks calls expecting owned values. Keep such parameters owned.
+        if self.is_pattern_matched_with_fields(param_name, body) {
+            return Ok(OwnershipMode::Owned);
+        }
+
+        // 6. For Copy types with read-only access, pass by value (Owned)
         // For non-Copy types with read-only access, borrow (&)
+        // EXCEPTIONS:
+        // - Copy types should stay owned
+        // - String types should stay owned - if user wants &str, they'd write &string
+        // - Generic types should stay owned - trait bounds are on T, not &T
         if self.is_copy_type(param_type) {
+            Ok(OwnershipMode::Owned)
+        } else if matches!(param_type, Type::String) {
+            // Keep String types owned - this is the user's intent
+            // Borrowing would break callers who pass owned strings
+            Ok(OwnershipMode::Owned)
+        } else if Self::is_generic_type_param(param_type) {
+            // Keep generic types owned - trait bounds are on T, not &T
             Ok(OwnershipMode::Owned)
         } else {
             Ok(OwnershipMode::Borrowed)
@@ -765,12 +804,22 @@ impl Analyzer {
     }
 
     fn is_returned(&self, name: &str, statements: &[Statement]) -> bool {
-        for stmt in statements {
+        let len = statements.len();
+        for (i, stmt) in statements.iter().enumerate() {
+            let is_last = i == len - 1;
             match stmt {
                 Statement::Return {
                     value: Some(expr), ..
                 } => {
-                    if self.expression_uses_identifier(name, expr) {
+                    // Check if parameter is returned directly or wrapped in Some/Ok/Err/tuple
+                    if self.expression_uses_identifier_for_return(name, expr) {
+                        return true;
+                    }
+                }
+                // CRITICAL: Handle implicit returns (last expression without semicolon)
+                // In Windjammer/Rust, the last expression in a block is the return value
+                Statement::Expression { expr, .. } if is_last => {
+                    if self.expression_uses_identifier_for_return(name, expr) {
                         return true;
                     }
                 }
@@ -788,10 +837,60 @@ impl Analyzer {
                         }
                     }
                 }
+                // CRITICAL: Handle match expressions where parameter is returned in arms
+                Statement::Match { arms, .. } => {
+                    for arm in arms {
+                        if self.expression_uses_identifier_for_return(name, &arm.body) {
+                            return true;
+                        }
+                    }
+                }
                 _ => {}
             }
         }
         false
+    }
+
+    /// Check if an expression uses a parameter in a way that requires ownership for return.
+    /// This includes direct use, wrapping in Some/Ok/Err, tuples, etc.
+    fn expression_uses_identifier_for_return(&self, name: &str, expr: &Expression) -> bool {
+        match expr {
+            // Direct identifier use
+            Expression::Identifier { name: id, .. } if id == name => true,
+
+            // Wrapped in Some, Ok, Err, etc.
+            Expression::Call {
+                function,
+                arguments,
+                ..
+            } => {
+                // Check if this is a wrapper call like Some(param) or Ok(param)
+                if let Expression::Identifier { name: fn_name, .. } = &**function {
+                    if matches!(fn_name.as_str(), "Some" | "Ok" | "Err") {
+                        for (_label, arg) in arguments {
+                            if self.expression_uses_identifier(name, arg) {
+                                return true;
+                            }
+                        }
+                    }
+                }
+                // Also check general function calls
+                self.expression_uses_identifier(name, expr)
+            }
+
+            // Tuple expression: (a, b, c)
+            Expression::Tuple { elements, .. } => {
+                for elem in elements {
+                    if self.expression_uses_identifier(name, elem) {
+                        return true;
+                    }
+                }
+                false
+            }
+
+            // Default: use standard identifier check
+            _ => self.expression_uses_identifier(name, expr),
+        }
     }
 
     fn is_stored(&self, name: &str, statements: &[Statement]) -> bool {
@@ -854,20 +953,50 @@ impl Analyzer {
                 Statement::Expression {
                     expr:
                         Expression::MethodCall {
-                            object, arguments, ..
+                            object,
+                            method,
+                            arguments,
+                            ..
                         },
                     ..
                 } => {
-                    // Check for method calls on fields: self.field.method(param)
-                    if let Expression::FieldAccess {
-                        object: field_obj, ..
-                    } = &**object
-                    {
-                        if matches!(&**field_obj, Expression::Identifier { name: id, .. } if id == "self")
+                    // Check for method calls on fields: self.field.push(param), self.field.insert(param), etc.
+                    // Only consider storage methods (push, insert, extend) - not lookup methods (contains, get)
+                    let is_storage_method = matches!(
+                        method.as_str(),
+                        "push"
+                            | "insert"
+                            | "extend"
+                            | "append"
+                            | "add"
+                            | "push_back"
+                            | "push_front"
+                    );
+
+                    if is_storage_method {
+                        // Check for method calls on fields: self.field.push(param)
+                        if let Expression::FieldAccess {
+                            object: field_obj, ..
+                        } = &**object
                         {
-                            // Check if any argument uses the parameter
+                            if matches!(&**field_obj, Expression::Identifier { name: id, .. } if id == "self")
+                            {
+                                // Check if any argument uses the parameter DIRECTLY
+                                for (_label, arg) in arguments {
+                                    if matches!(arg, Expression::Identifier { name: id, .. } if id == name)
+                                    {
+                                        return true;
+                                    }
+                                }
+                            }
+                        }
+
+                        // Also check for method calls on local variables: vec.push(param)
+                        // This catches cases like store_path(paths, path) where paths.push(path)
+                        if let Expression::Identifier { .. } = &**object {
                             for (_label, arg) in arguments {
-                                if self.expression_uses_identifier(name, arg) {
+                                if matches!(arg, Expression::Identifier { name: id, .. } if id == name)
+                                {
                                     return true;
                                 }
                             }
@@ -884,6 +1013,46 @@ impl Analyzer {
                                 }
                             }
                         }
+                    }
+
+                    // Check for push/insert with a constructor call: vec.push(Node::new(param, ...))
+                    // The parameter is being stored if passed to a constructor that stores it
+                    if is_storage_method {
+                        for (_label, arg) in arguments {
+                            if let Expression::Call {
+                                arguments: call_args,
+                                ..
+                            } = arg
+                            {
+                                for (_call_label, call_arg) in call_args {
+                                    if matches!(call_arg, Expression::Identifier { name: id, .. } if id == name)
+                                    {
+                                        return true;
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+                // Recursively check if/else bodies for storage operations
+                Statement::If {
+                    then_block,
+                    else_block,
+                    ..
+                } => {
+                    if self.is_stored(name, then_block) {
+                        return true;
+                    }
+                    if let Some(else_stmts) = else_block {
+                        if self.is_stored(name, else_stmts) {
+                            return true;
+                        }
+                    }
+                }
+                // Recursively check loop bodies
+                Statement::While { body, .. } | Statement::For { body, .. } => {
+                    if self.is_stored(name, body) {
+                        return true;
                     }
                 }
                 _ => {}
@@ -985,6 +1154,7 @@ impl Analyzer {
         match expr {
             Expression::Binary { left, right, .. } => {
                 // Check if the parameter is directly used in a binary operation
+                // This is for Copy types like Vec2, Vec3 where `a + b` requires owned values
                 if self.expr_is_identifier(name, left) || self.expr_is_identifier(name, right) {
                     return true;
                 }
@@ -1003,12 +1173,90 @@ impl Analyzer {
                         .iter()
                         .any(|(_, arg)| self.expr_uses_in_binary_op(name, arg))
             }
-            Expression::FieldAccess { object, .. } => self.expr_uses_in_binary_op(name, object),
+            // CRITICAL FIX: Don't recurse into FieldAccess for binary op detection
+            // `self.field + value` doesn't mean `self` is used in a binary op
+            // We only care about the DIRECT use of the parameter, like `param + value`
+            Expression::FieldAccess { .. } => false,
             Expression::Index { object, index, .. } => {
                 self.expr_uses_in_binary_op(name, object)
                     || self.expr_uses_in_binary_op(name, index)
             }
             Expression::Block { statements, .. } => self.is_used_in_binary_op(name, statements),
+            // Recurse into tuple elements
+            Expression::Tuple { elements, .. } => elements
+                .iter()
+                .any(|elem| self.expr_uses_in_binary_op(name, elem)),
+            // Recurse into array elements
+            Expression::Array { elements, .. } => elements
+                .iter()
+                .any(|elem| self.expr_uses_in_binary_op(name, elem)),
+            _ => false,
+        }
+    }
+
+    /// Check if a parameter is pattern matched with field extraction
+    /// e.g., `match param { Enum::Variant { field: f } => ... }`
+    /// If we borrow the parameter, `f` becomes a reference, breaking calls expecting owned values
+    fn is_pattern_matched_with_fields(&self, name: &str, statements: &[Statement]) -> bool {
+        for stmt in statements {
+            match stmt {
+                #[allow(clippy::collapsible_match)]
+                Statement::Match { value, arms, .. } => {
+                    // Check if the match value is the parameter
+                    if let Expression::Identifier { name: id, .. } = value {
+                        if id == name {
+                            // Check if any arm has a pattern with field bindings
+                            for arm in arms {
+                                if self.pattern_has_field_bindings(&arm.pattern) {
+                                    return true;
+                                }
+                            }
+                        }
+                    }
+                }
+                Statement::If {
+                    then_block,
+                    else_block,
+                    ..
+                } => {
+                    if self.is_pattern_matched_with_fields(name, then_block) {
+                        return true;
+                    }
+                    if let Some(else_b) = else_block {
+                        if self.is_pattern_matched_with_fields(name, else_b) {
+                            return true;
+                        }
+                    }
+                }
+                Statement::For { body, .. }
+                | Statement::While { body, .. }
+                | Statement::Loop { body, .. } => {
+                    if self.is_pattern_matched_with_fields(name, body) {
+                        return true;
+                    }
+                }
+                _ => {}
+            }
+        }
+        false
+    }
+
+    /// Check if a pattern has field bindings (not just wildcards or simple identifiers)
+    fn pattern_has_field_bindings(&self, pattern: &Pattern) -> bool {
+        use crate::parser::EnumPatternBinding;
+
+        match pattern {
+            Pattern::EnumVariant(_, binding) => {
+                // Check if the binding extracts fields
+                matches!(
+                    binding,
+                    EnumPatternBinding::Single(_)
+                        | EnumPatternBinding::Tuple(_)
+                        | EnumPatternBinding::Struct(_, _)
+                )
+            }
+            Pattern::Tuple(patterns) => patterns.iter().any(|p| self.pattern_has_field_bindings(p)),
+            Pattern::Or(patterns) => patterns.iter().any(|p| self.pattern_has_field_bindings(p)),
             _ => false,
         }
     }
@@ -1016,14 +1264,12 @@ impl Analyzer {
     fn expr_is_identifier(&self, name: &str, expr: &Expression) -> bool {
         match expr {
             Expression::Identifier { name: id, .. } if id == name => true,
-            // Also check for field access on the identifier (self.x, self.y, etc.)
-            Expression::FieldAccess { object, .. } => {
-                if let Expression::Identifier { name: id, .. } = &**object {
-                    id == name
-                } else {
-                    false
-                }
-            }
+            // CRITICAL FIX: FieldAccess is NOT the same as the identifier!
+            // `self.field` is a field access, NOT the identifier `self`
+            // We should NOT treat `self.field` as "using self in binary op"
+            // This was causing methods that just read self.field in arithmetic
+            // to be incorrectly inferred as needing owned `self`
+            Expression::FieldAccess { .. } => false,
             _ => false,
         }
     }
@@ -1079,10 +1325,19 @@ impl Analyzer {
             })
             .collect();
 
+        // Check if first parameter is self
+        let has_self_receiver = func
+            .decl
+            .parameters
+            .first()
+            .map(|p| p.name == "self" || p.name == "mut self")
+            .unwrap_or(false);
+
         FunctionSignature {
             name: func.decl.name.clone(),
             param_ownership,
             return_ownership: OwnershipMode::Owned, // For now, always owned
+            has_self_receiver,
         }
     }
 
@@ -1148,6 +1403,17 @@ impl Analyzer {
                         | "f64"
                         | "bool"
                         | "char"
+                        // Common game math types that are always Copy
+                        | "Vec2"
+                        | "Vec3"
+                        | "Vec4"
+                        | "Color"
+                        | "Rect"
+                        | "Point"
+                        | "Size"
+                        | "Transform2D"
+                        | "Matrix4"
+                        | "Quaternion"
                 )
             }
             _ => false,
@@ -2378,6 +2644,7 @@ impl Analyzer {
     }
 
     /// Check if a function accesses self fields (for impl methods)
+    #[allow(dead_code)]
     fn function_accesses_self_fields(&self, func: &FunctionDecl) -> bool {
         for stmt in &func.body {
             if self.statement_accesses_self_fields(stmt) {
@@ -2450,6 +2717,19 @@ impl Analyzer {
             Expression::Call { arguments, .. } => arguments
                 .iter()
                 .any(|(_, arg)| self.expression_accesses_self_fields(arg)),
+            // CRITICAL: Check macro arguments for self field access
+            // This handles format!("...", self.field), println!("{}", self.x), etc.
+            Expression::MacroInvocation { args, .. } => args
+                .iter()
+                .any(|arg| self.expression_accesses_self_fields(arg)),
+            // Recurse into tuple elements
+            Expression::Tuple { elements, .. } => elements
+                .iter()
+                .any(|elem| self.expression_accesses_self_fields(elem)),
+            // Recurse into array elements
+            Expression::Array { elements, .. } => elements
+                .iter()
+                .any(|elem| self.expression_accesses_self_fields(elem)),
             _ => false,
         }
     }

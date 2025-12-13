@@ -712,11 +712,11 @@ impl Parser {
                 self.advance(); // consume mut
                 self.advance(); // consume self
                 params.push(Parameter {
-                    name: "mut self".to_string(),
+                    name: "self".to_string(),
                     pattern: None,
                     type_: Type::Custom("Self".to_string()),
                     ownership: OwnershipHint::Owned,
-                    is_mutable: false,
+                    is_mutable: true,
                 });
             } else {
                 // Regular parameter - could be a simple name or a pattern

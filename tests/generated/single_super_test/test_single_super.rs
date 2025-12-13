@@ -8,7 +8,7 @@ pub struct Vec3 {
     pub z: f32,
 }
 
-#[derive(Copy, Clone, Debug, PartialEq)]
+#[derive(Debug, Clone)]
 pub struct Camera3D {
     pub position: Vec3,
 }

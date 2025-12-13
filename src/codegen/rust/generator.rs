@@ -3,6 +3,24 @@ use crate::analyzer::*;
 use crate::parser::*;
 use crate::CompilationTarget;
 
+/// Information about game framework decorators
+#[derive(Debug, Clone)]
+struct GameFrameworkInfo {
+    game_struct: String,
+    init_fn: Option<String>,
+    update_fn: Option<String>,
+    render_fn: Option<String>,
+    input_fn: Option<String>,
+    cleanup_fn: Option<String>,
+    is_3d: bool, // True if using @render3d
+}
+
+/// Information about UI framework usage
+#[derive(Debug, Clone)]
+struct UIFrameworkInfo {
+    uses_ui: bool, // True if imports std::ui::*
+}
+
 /// Information about platform API usage
 #[derive(Debug, Clone, Default)]
 struct PlatformApis {
@@ -55,18 +73,32 @@ pub struct CodeGenerator {
     cow_optimizations: std::collections::HashSet<String>, // Variables that can use Cow
     // AUTO-CLONE: Track where to automatically insert clones
     auto_clone_analysis: Option<crate::auto_clone::AutoCloneAnalysis>,
-    // AUTO-MUT: Track which local variables are mutated (for automatic mut inference)
-    mutated_variables: std::collections::HashSet<String>,
     // Track current statement index for optimization hints
     current_statement_idx: usize,
     // IMPLICIT SELF SUPPORT: Track struct fields for implicit self references
     current_struct_fields: std::collections::HashSet<String>, // Field names in current impl block
-    current_local_vars: std::collections::HashSet<String>,    // Local variables in current function
     in_impl_block: bool, // true if currently generating code for an impl block
     // FUNCTION CONTEXT: Track current function parameters for compound assignment optimization
     current_function_params: Vec<crate::parser::Parameter>, // Parameters of the current function
-    // STRUCT REGISTRY: Track which structs are "simple" (all fields are Copy/Clone/Debug/PartialEq)
-    simple_structs: std::collections::HashSet<String>, // Struct names that are simple
+    // FUNCTION CONTEXT: Track current function return type for string literal conversion
+    current_function_return_type: Option<Type>,
+    // Workspace root for source maps
+    workspace_root: Option<std::path::PathBuf>,
+    // BRANCH TYPE CONSISTENCY: Suppress auto string conversion when any branch uses .as_str()
+    suppress_string_conversion: bool,
+    // TRAIT TRACKING: Track which custom types support PartialEq
+    partial_eq_types: std::collections::HashSet<String>,
+    // MATCH ARM CONTEXT: Force string conversion in match arm blocks
+    in_match_arm_needing_string: bool,
+    // BORROWED ITERATOR VARIABLES: Track variables that are iterating over borrowed collections
+    // These variables are references, so accessing their fields requires .clone()
+    borrowed_iterator_vars: std::collections::HashSet<String>,
+    // USIZE VARIABLES: Track variables assigned from .len() for auto-casting
+    usize_variables: std::collections::HashSet<String>,
+    // INFERRED BORROWED PARAMS: Parameters inferred to be borrowed (for field access cloning)
+    inferred_borrowed_params: std::collections::HashSet<String>,
+    // ASSIGNMENT TARGET: Flag to suppress auto-clone when generating assignment targets
+    generating_assignment_target: bool,
 }
 
 impl CodeGenerator {
@@ -100,14 +132,25 @@ impl CodeGenerator {
             smallvec_optimizations: std::collections::HashMap::new(),
             cow_optimizations: std::collections::HashSet::new(),
             auto_clone_analysis: None,
-            mutated_variables: std::collections::HashSet::new(),
             current_statement_idx: 0,
             current_struct_fields: std::collections::HashSet::new(),
-            current_local_vars: std::collections::HashSet::new(),
             in_impl_block: false,
             current_function_params: Vec::new(),
-            simple_structs: std::collections::HashSet::new(),
+            current_function_return_type: None,
+            workspace_root: None,
+            suppress_string_conversion: false,
+            borrowed_iterator_vars: std::collections::HashSet::new(),
+            usize_variables: std::collections::HashSet::new(),
+            inferred_borrowed_params: std::collections::HashSet::new(),
+            generating_assignment_target: false,
+            partial_eq_types: std::collections::HashSet::new(),
+            in_match_arm_needing_string: false,
         }
+    }
+
+    /// Set the workspace root for relative paths in source maps
+    pub fn set_workspace_root(&mut self, path: std::path::PathBuf) {
+        self.workspace_root = Some(path);
     }
 
     /// Set inferred trait bounds for functions
@@ -140,12 +183,6 @@ impl CodeGenerator {
     /// Set the Windjammer source file path for source mapping
     pub fn set_source_file(&mut self, path: impl Into<std::path::PathBuf>) {
         self.current_wj_file = path.into();
-    }
-
-    /// Set the workspace root for relative path generation in source maps
-    /// All paths in the source map will be relative to this root
-    pub fn set_workspace_root(&mut self, path: impl Into<std::path::PathBuf>) {
-        self.source_map.set_workspace_root(path);
     }
 
     /// Get the current line number in the generated Rust code
@@ -332,6 +369,82 @@ impl CodeGenerator {
     // GAME FRAMEWORK SUPPORT
     // ============================================================================
 
+    /// Detect if this program uses game framework decorators
+    fn detect_game_framework(&self, program: &Program) -> Option<GameFrameworkInfo> {
+        let mut game_struct = None;
+        let mut init_fn = None;
+        let mut update_fn = None;
+        let mut render_fn = None;
+        let mut input_fn = None;
+        let mut cleanup_fn = None;
+
+        // Find @game struct
+        for item in &program.items {
+            if let Item::Struct { decl: s, .. } = item {
+                if s.decorators.iter().any(|d| d.name == "game") {
+                    game_struct = Some(s.name.clone());
+                    break;
+                }
+            }
+        }
+
+        // If no @game struct, this isn't a game
+        game_struct.as_ref()?;
+
+        // Find decorated functions
+        let mut is_3d = false;
+        for item in &program.items {
+            if let Item::Function { decl: func, .. } = item {
+                for decorator in &func.decorators {
+                    match decorator.name.as_str() {
+                        "init" => init_fn = Some(func.name.clone()),
+                        "update" => update_fn = Some(func.name.clone()),
+                        "render" => render_fn = Some(func.name.clone()),
+                        "render3d" => {
+                            render_fn = Some(func.name.clone());
+                            is_3d = true; // Mark as 3D rendering
+                        }
+                        "input" => input_fn = Some(func.name.clone()),
+                        "cleanup" => cleanup_fn = Some(func.name.clone()),
+                        _ => {}
+                    }
+                }
+            }
+        }
+
+        Some(GameFrameworkInfo {
+            game_struct: game_struct.unwrap(),
+            init_fn,
+            update_fn,
+            render_fn,
+            input_fn,
+            cleanup_fn,
+            is_3d,
+        })
+    }
+
+    // ============================================================================
+    // UI FRAMEWORK SUPPORT
+    // ============================================================================
+
+    /// Detect if this program uses UI framework (std::ui)
+    fn detect_ui_framework(&self, program: &Program) -> UIFrameworkInfo {
+        let mut uses_ui = false;
+
+        // Check for use std::ui::* or use std::ui
+        for item in &program.items {
+            if let Item::Use { path, .. } = item {
+                let path_str = path.join("::");
+                if path_str == "std::ui" || path_str.starts_with("std::ui::") {
+                    uses_ui = true;
+                    break;
+                }
+            }
+        }
+
+        UIFrameworkInfo { uses_ui }
+    }
+
     /// Detect which platform APIs are used (std::fs, std::process, etc.)
     fn detect_platform_apis(&self, program: &Program) -> PlatformApis {
         let mut apis = PlatformApis::default();
@@ -373,10 +486,207 @@ impl CodeGenerator {
         apis
     }
 
+    /// Detect if this program imports std::game (for non-decorator game usage)
+    fn detect_game_import(&self, program: &Program) -> bool {
+        // Check for use std::game::* or use std::game
+        for item in &program.items {
+            if let Item::Use { path, .. } = item {
+                let path_str = path.join("::");
+                if path_str == "std::game" || path_str.starts_with("std::game::") {
+                    return true;
+                }
+            }
+        }
+        false
+    }
+
+    /// Generate game loop main function
+    fn generate_game_main(&mut self, info: &GameFrameworkInfo) -> String {
+        let mut output = String::new();
+
+        // Generate GameWorld wrapper struct
+        output.push_str("// Generated: ECS world wrapper\n");
+        output.push_str("struct GameWorld {\n");
+        output.push_str("    world: windjammer_game_framework::ecs::World,\n");
+        output.push_str("    game_entity: windjammer_game_framework::ecs::Entity,\n");
+        output.push_str("}\n\n");
+
+        output.push_str("impl GameWorld {\n");
+        output.push_str("    fn new() -> Self {\n");
+        output.push_str("        use windjammer_game_framework::ecs::*;\n");
+        output.push_str("        let mut world = World::new();\n");
+        output.push_str("        \n");
+        output.push_str("        // Spawn game entity with game component\n");
+        output.push_str("        let game_entity = world.spawn()\n");
+        output.push_str(&format!(
+            "            .with({}::default())\n",
+            info.game_struct
+        ));
+        output.push_str("            .build();\n");
+        output.push_str("        \n");
+        output.push_str("        Self { world, game_entity }\n");
+        output.push_str("    }\n");
+        output.push_str("    \n");
+        output.push_str(&format!(
+            "    fn game_mut(&mut self) -> &mut {} {{\n",
+            info.game_struct
+        ));
+        output.push_str(&format!(
+            "        self.world.get_component_mut::<{}>(self.game_entity).unwrap()\n",
+            info.game_struct
+        ));
+        output.push_str("    }\n");
+        output.push_str("}\n\n");
+
+        output.push_str("fn main() -> Result<(), Box<dyn std::error::Error>> {\n");
+        output.push_str("    use windjammer_game_framework::*;\n");
+        output.push_str("    use windjammer_game_framework::ecs::*;\n");
+        output.push_str("    use winit::event::{Event, WindowEvent};\n");
+        output.push_str("    use winit::event_loop::{ControlFlow, EventLoop};\n");
+        output.push_str("    use winit::window::WindowBuilder;\n");
+        output.push('\n');
+        output.push_str("    // Create event loop and window\n");
+        output.push_str("    let event_loop = EventLoop::new()?;\n");
+        output.push_str("    let window = WindowBuilder::new()\n");
+        output.push_str("        .with_title(\"Windjammer Game\")\n");
+        output.push_str("        .with_inner_size(winit::dpi::LogicalSize::new(800, 600))\n");
+        output.push_str("        .build(&event_loop)?;\n");
+        output.push('\n');
+        output.push_str("    // Initialize ECS world\n");
+        output.push_str("    let mut game_world = GameWorld::new();\n");
+        output.push('\n');
+
+        // Call init function if present
+        if let Some(init_fn) = &info.init_fn {
+            output.push_str("    // Call init function\n");
+            output.push_str(&format!("    {}(game_world.game_mut());\n", init_fn));
+            output.push('\n');
+        }
+
+        output.push_str("    // Initialize renderer\n");
+        output.push_str("    let window_ref: &'static winit::window::Window = unsafe { std::mem::transmute(&window) };\n");
+        if info.is_3d {
+            output.push_str(
+                "    let mut renderer = pollster::block_on(renderer3d::Renderer3D::new(window_ref))?;\n",
+            );
+            output.push_str("    let mut camera = renderer3d::Camera3D::new();\n");
+        } else {
+            output.push_str(
+                "    let mut renderer = pollster::block_on(renderer::Renderer::new(window_ref))?;\n",
+            );
+        }
+        output.push('\n');
+        output.push_str("    // Initialize input\n");
+        output.push_str("    let mut input = input::Input::new();\n");
+        output.push('\n');
+        output.push_str("    // Game loop\n");
+        output.push_str("    let mut last_time = std::time::Instant::now();\n");
+        output.push('\n');
+        output.push_str("    event_loop.run(move |event, elwt| {\n");
+        output.push_str("        match event {\n");
+        output.push_str("            Event::WindowEvent { event, .. } => match event {\n");
+        output.push_str("                WindowEvent::CloseRequested => {\n");
+
+        // Call cleanup function if present
+        if let Some(cleanup_fn) = &info.cleanup_fn {
+            output.push_str(&format!(
+                "                    {}(game_world.game_mut());\n",
+                cleanup_fn
+            ));
+        }
+
+        output.push_str("                    elwt.exit();\n");
+        output.push_str("                }\n");
+        output.push_str("                WindowEvent::RedrawRequested => {\n");
+        output.push_str("                    // Calculate delta time\n");
+        output.push_str("                    let now = std::time::Instant::now();\n");
+        output.push_str("                    let delta = (now - last_time).as_secs_f64();\n");
+        output.push_str("                    last_time = now;\n");
+        output.push('\n');
+
+        // Call update function if present
+        if let Some(update_fn) = &info.update_fn {
+            output.push_str("                    // Update game logic\n");
+            output.push_str(&format!(
+                "                    {}(game_world.game_mut(), delta, &input);\n",
+                update_fn
+            ));
+            output.push('\n');
+            output.push_str("                    // Update ECS systems (scene graph, etc.)\n");
+            output.push_str(
+                "                    SceneGraph::update_transforms(&mut game_world.world);\n",
+            );
+            output.push('\n');
+        }
+
+        // Call render function if present
+        if let Some(render_fn) = &info.render_fn {
+            output.push_str("                    // Render\n");
+            if info.is_3d {
+                output.push_str("                    renderer.set_camera(&camera);\n");
+                output.push_str(&format!(
+                    "                    {}(game_world.game_mut(), &mut renderer, &mut camera);\n",
+                    render_fn
+                ));
+            } else {
+                output.push_str(&format!(
+                    "                    {}(game_world.game_mut(), &mut renderer);\n",
+                    render_fn
+                ));
+            }
+        }
+
+        output.push_str("                    renderer.present();\n");
+        output.push('\n');
+        output.push_str("                    // Clear input frame state\n");
+        output.push_str("                    input.clear_frame_state();\n");
+        output.push_str("                }\n");
+
+        // Handle input if input function present
+        if let Some(input_fn) = &info.input_fn {
+            output.push_str("                WindowEvent::KeyboardInput { event, .. } => {\n");
+            output.push_str("                    input.update_from_winit(&event);\n");
+            output.push_str(&format!(
+                "                    {}(game_world.game_mut(), &input);\n",
+                input_fn
+            ));
+            output.push_str("                }\n");
+
+            // Handle mouse button input
+            output.push_str("                WindowEvent::MouseInput { state, button, .. } => {\n");
+            output.push_str(
+                "                    input.update_mouse_button_from_winit(state, button);\n",
+            );
+            output.push_str(&format!(
+                "                    {}(game_world.game_mut(), &input);\n",
+                input_fn
+            ));
+            output.push_str("                }\n");
+
+            // Handle mouse movement
+            output.push_str("                WindowEvent::CursorMoved { position, .. } => {\n");
+            output.push_str("                    input.update_mouse_position_from_winit(position.x, position.y);\n");
+            output.push_str("                }\n");
+        }
+
+        output.push_str("                _ => {}\n");
+        output.push_str("            },\n");
+        output.push_str("            Event::AboutToWait => {\n");
+        output.push_str("                window.request_redraw();\n");
+        output.push_str("            }\n");
+        output.push_str("            _ => {}\n");
+        output.push_str("        }\n");
+        output.push_str("    })?;\n");
+        output.push('\n');
+        output.push_str("    Ok(())\n");
+        output.push_str("}\n");
+
+        output
+    }
+
     fn generate_block(&mut self, stmts: &[Statement]) -> String {
         let mut output = String::new();
         let len = stmts.len();
-
         for (i, stmt) in stmts.iter().enumerate() {
             // Track current statement index for optimization hints
             self.current_statement_idx = i;
@@ -394,7 +704,70 @@ impl CodeGenerator {
                 match stmt {
                     Statement::Expression { expr, .. } => {
                         output.push_str(&self.indent());
-                        output.push_str(&self.generate_expression(expr));
+                        let mut expr_str = self.generate_expression(expr);
+
+                        // WINDJAMMER PHILOSOPHY: Auto-convert implicit returns when function returns String
+                        // BUT: Don't convert if:
+                        // 1. The expression explicitly uses .as_str() (user wants &str)
+                        // 2. A sibling branch in an if-else uses .as_str() (type consistency)
+                        let returns_string = match &self.current_function_return_type {
+                            Some(Type::String) => true,
+                            Some(Type::Custom(name)) if name == "String" => true,
+                            _ => false,
+                        };
+
+                        // Also check if we're in a match arm that needs string conversion
+                        let in_match_needing_string = self.in_match_arm_needing_string;
+
+                        // Check if the expression explicitly returns &str via .as_str()
+                        let expr_uses_as_str = expr_str.contains(".as_str()");
+
+                        // Check if we should suppress conversion (sibling branch has .as_str())
+                        let should_suppress = self.suppress_string_conversion;
+
+                        if (returns_string || in_match_needing_string)
+                            && !expr_uses_as_str
+                            && !should_suppress
+                        {
+                            // String literal needs .to_string()
+                            if matches!(
+                                expr,
+                                Expression::Literal {
+                                    value: Literal::String(_),
+                                    ..
+                                }
+                            ) && !expr_str.ends_with(".to_string()")
+                            {
+                                expr_str = format!("{}.to_string()", expr_str);
+                            }
+                            // self.field needs .clone() when self is borrowed
+                            else if let Expression::FieldAccess { object, .. } = expr {
+                                if let Expression::Identifier { name: obj_name, .. } = &**object {
+                                    if obj_name == "self" && !expr_str.ends_with(".clone()") {
+                                        let self_is_borrowed =
+                                            self.current_function_params.iter().any(|p| {
+                                                p.name == "self"
+                                                    && matches!(
+                                                        p.ownership,
+                                                        crate::parser::OwnershipHint::Ref
+                                                    )
+                                            });
+                                        if self_is_borrowed {
+                                            expr_str = format!("{}.clone()", expr_str);
+                                        }
+                                    }
+                                }
+                            }
+                        }
+
+                        output.push_str(&expr_str);
+
+                        // If the function returns (), add semicolon to discard the value
+                        let returns_unit = self.current_function_return_type.is_none()
+                            || matches!(self.current_function_return_type, Some(Type::Tuple(ref types)) if types.is_empty());
+                        if returns_unit {
+                            output.push(';');
+                        }
                         output.push('\n');
                     }
                     Statement::Thread { body, .. } => {
@@ -434,6 +807,16 @@ impl CodeGenerator {
         let mut imports = String::new();
         let mut body = String::new();
 
+        // PRE-PASS: Collect which custom types support PartialEq
+        // This enables smart enum derive that only adds PartialEq if all variants support it
+        self.collect_partial_eq_types(program);
+
+        // Detect game framework decorators
+        let game_framework_info = self.detect_game_framework(program);
+
+        // Detect UI framework usage
+        let ui_framework_info = self.detect_ui_framework(program);
+
         // Detect platform API usage
         let platform_apis = self.detect_platform_apis(program);
 
@@ -447,19 +830,12 @@ impl CodeGenerator {
         // Collect struct definitions for implicit self support
         let mut struct_fields: std::collections::HashMap<String, Vec<String>> =
             std::collections::HashMap::new();
-        let mut struct_registry: std::collections::HashMap<String, &StructDecl> =
-            std::collections::HashMap::new();
         for item in &program.items {
             if let Item::Struct { decl: s, .. } = item {
                 let field_names: Vec<String> = s.fields.iter().map(|f| f.name.clone()).collect();
                 struct_fields.insert(s.name.clone(), field_names);
-                struct_registry.insert(s.name.clone(), s);
             }
         }
-
-        // Analyze which structs are "simple" (all fields are Copy/Clone/Debug/PartialEq)
-        // This is used for auto-derive logic
-        self.analyze_simple_structs(&struct_registry);
 
         // Check for stdlib modules that need special imports
         for item in &program.items {
@@ -606,24 +982,53 @@ impl CodeGenerator {
                     self.in_impl_block = false;
                     self.current_struct_fields.clear();
                 }
-                Item::Mod {
-                    name,
-                    items,
-                    is_public,
-                    ..
-                } => {
-                    body.push_str(&self.generate_mod(name, items, *is_public, analyzed));
-                    body.push_str("\n\n");
-                }
                 _ => {}
             }
         }
 
-        // Generate top-level functions (skip impl methods)
+        // Collect game-decorated function names to skip them
+        let mut game_functions = std::collections::HashSet::new();
+        if let Some(ref info) = game_framework_info {
+            if let Some(ref fn_name) = info.init_fn {
+                game_functions.insert(fn_name.clone());
+            }
+            if let Some(ref fn_name) = info.update_fn {
+                game_functions.insert(fn_name.clone());
+            }
+            if let Some(ref fn_name) = info.render_fn {
+                game_functions.insert(fn_name.clone());
+            }
+            if let Some(ref fn_name) = info.input_fn {
+                game_functions.insert(fn_name.clone());
+            }
+            if let Some(ref fn_name) = info.cleanup_fn {
+                game_functions.insert(fn_name.clone());
+            }
+        }
+
+        // Generate game-decorated functions FIRST (before main)
+        if game_framework_info.is_some() {
+            for analyzed_func in analyzed {
+                if game_functions.contains(&analyzed_func.decl.name) {
+                    body.push_str(&self.generate_function(analyzed_func));
+                    body.push_str("\n\n");
+                }
+            }
+        }
+
+        // Generate top-level functions (skip impl methods and game-decorated functions)
         for analyzed_func in analyzed {
             if !impl_methods.contains(&analyzed_func.decl.name) {
                 // Skip main() function in modules - it should only be in the entry point
                 if self.is_module && analyzed_func.decl.name == "main" {
+                    continue;
+                }
+                // Skip main() if this is a game (we'll generate our own)
+                if game_framework_info.is_some() && analyzed_func.decl.name == "main" {
+                    continue;
+                }
+                // Skip game-decorated functions (they were already generated above)
+                if game_functions.contains(&analyzed_func.decl.name) {
                     continue;
                 }
                 // Generate the function
@@ -632,8 +1037,48 @@ impl CodeGenerator {
             }
         }
 
+        // Generate game main function if this is a game
+        if let Some(ref info) = game_framework_info {
+            body.push_str(&self.generate_game_main(info));
+            body.push_str("\n\n");
+        }
+
         // Inject implicit imports if needed
         let mut implicit_imports = String::new();
+
+        // Add game framework imports if this is a game (via decorators or std::game import)
+        let uses_game_decorators = game_framework_info.is_some();
+        let uses_game_import = self.detect_game_import(program);
+
+        if uses_game_decorators || uses_game_import {
+            if let Some(ref info) = game_framework_info {
+                if info.is_3d {
+                    implicit_imports.push_str(
+                        "use windjammer_game_framework::renderer3d::{Renderer3D, Camera3D};\n",
+                    );
+                    implicit_imports.push_str("use windjammer_game_framework::renderer::Color;\n");
+                } else {
+                    implicit_imports
+                        .push_str("use windjammer_game_framework::renderer::{Renderer, Color};\n");
+                }
+            } else {
+                // Default to 2D renderer if no decorator info
+                implicit_imports
+                    .push_str("use windjammer_game_framework::renderer::{Renderer, Color};\n");
+            }
+            implicit_imports
+                .push_str("use windjammer_game_framework::input::{Input, Key, MouseButton};\n");
+            implicit_imports.push_str("use windjammer_game_framework::math::{Vec3, Mat4};\n");
+            implicit_imports.push_str("use windjammer_game_framework::ecs::*;\n");
+            implicit_imports.push_str("use windjammer_game_framework::game_app::GameApp;\n");
+        }
+
+        // Add UI framework imports if using std::ui
+        if ui_framework_info.uses_ui {
+            implicit_imports.push_str("use windjammer_ui::prelude::*;\n");
+            implicit_imports.push_str("use windjammer_ui::components::*;\n");
+            implicit_imports.push_str("use windjammer_ui::simple_vnode::{VNode, VAttr};\n");
+        }
 
         // Add platform API imports based on target
         if platform_apis.needs_fs
@@ -725,29 +1170,16 @@ impl CodeGenerator {
         if !self.needs_trait_imports.is_empty() {
             let mut sorted_traits: Vec<_> = self.needs_trait_imports.iter().collect();
             sorted_traits.sort();
-            let mut imported = std::collections::HashSet::new();
             for trait_name in sorted_traits {
-                // Extract base trait name (e.g., "Add<Output = T>" -> "Add")
-                let base_name = if let Some(idx) = trait_name.find('<') {
-                    &trait_name[..idx]
-                } else {
-                    trait_name.as_str()
-                };
-                // Only import once
-                if imported.contains(base_name) {
-                    continue;
-                }
-                match base_name {
+                match trait_name.as_str() {
                     "Display" | "Debug" => {
-                        implicit_imports.push_str(&format!("use std::fmt::{};\n", base_name));
-                        imported.insert(base_name);
+                        implicit_imports.push_str(&format!("use std::fmt::{};\n", trait_name));
                     }
                     "Clone" => {
                         // Clone is in prelude, no import needed
                     }
                     "Add" | "Sub" | "Mul" | "Div" => {
-                        implicit_imports.push_str(&format!("use std::ops::{};\n", base_name));
-                        imported.insert(base_name);
+                        implicit_imports.push_str(&format!("use std::ops::{};\n", trait_name));
                     }
                     "PartialEq" | "Eq" | "PartialOrd" | "Ord" => {
                         // These are in prelude, no import needed
@@ -834,59 +1266,6 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
 
         let full_path = path.join(".");
 
-        // Handle crate:: imports (keep them as-is, don't transform to super::)
-        if full_path.starts_with("crate::") || full_path.starts_with("crate.") {
-            let rust_path = full_path.replace('.', "::");
-            if let Some(alias_name) = alias {
-                return format!("use {} as {};\n", rust_path, alias_name);
-            } else {
-                return format!("use {};\n", rust_path);
-            }
-        }
-
-        // Handle super:: imports - flatten paths since all generated files are siblings
-        // e.g., super::super::math::vec3::Vec3 -> super::vec3::Vec3
-        // Note: The parser returns the path as a single string element like ["super::super::..."]
-        // so we need to check full_path instead of path segments
-        let rust_full_path = full_path.replace('.', "::");
-        if rust_full_path.starts_with("super::") {
-            // Split the path into segments
-            let segments: Vec<&str> = rust_full_path.split("::").collect();
-
-            // Strip all "super" prefixes and get the remaining segments
-            let non_super_segments: Vec<&str> = segments
-                .iter()
-                .skip_while(|s| **s == "super")
-                .copied()
-                .collect();
-
-            // For cross-module imports (e.g., math::vec3::Vec3), we need the last two segments:
-            // - The file name (vec3)
-            // - The item being imported (Vec3)
-            // The intermediate directory names (math) are irrelevant since all files are flat siblings
-            if non_super_segments.len() >= 2 {
-                let file_name = non_super_segments[non_super_segments.len() - 2];
-                let item_name = non_super_segments[non_super_segments.len() - 1];
-
-                if let Some(alias_name) = alias {
-                    return format!(
-                        "use super::{}::{} as {};\n",
-                        file_name, item_name, alias_name
-                    );
-                } else {
-                    return format!("use super::{}::{};\n", file_name, item_name);
-                }
-            } else if non_super_segments.len() == 1 {
-                // Simple import like super::module_name
-                let module_name = non_super_segments[0];
-                if let Some(alias_name) = alias {
-                    return format!("use super::{} as {};\n", module_name, alias_name);
-                } else {
-                    return format!("use super::{};\n", module_name);
-                }
-            }
-        }
-
         // Handle stdlib imports FIRST (before glob handling)
         // This ensures std::ui::*, std::fs::*, etc. are properly skipped
         if full_path.starts_with("std::") || full_path.starts_with("std.") {
@@ -899,17 +1278,23 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
 
             // Handle Rust stdlib modules that should NOT be mapped to windjammer_runtime
             // These are native Rust modules that should be used directly
-            if module_base.starts_with("collections")
-                || module_base.starts_with("cmp")
-                || module_base.starts_with("ops")
-                || module_base.starts_with("fmt")
-                || module_base.starts_with("io")
-                || module_base.starts_with("iter")
-                || module_base.starts_with("mem")
-                || module_base.starts_with("ptr")
-            {
+            if module_base.starts_with("collections") || module_base.starts_with("cmp") {
                 // Pass through to Rust's std library
                 return format!("use std::{};\n", module_name);
+            }
+
+            // Handle UI framework - skip explicit import (handled by implicit imports)
+            if module_base == "ui" || module_base.starts_with("ui::") {
+                // UI framework is handled by implicit imports from windjammer-ui crate
+                // Don't generate an explicit import here
+                return String::new();
+            }
+
+            // Handle Game framework - skip explicit import (handled by implicit imports)
+            if module_base == "game" || module_base.starts_with("game::") {
+                // Game framework is handled by implicit imports from windjammer-game-framework crate
+                // Don't generate an explicit import here
+                return String::new();
             }
 
             // Handle Tauri framework - skip explicit import (functions are generated inline)
@@ -954,7 +1339,6 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
                 // Additional modules
                 "async" => "windjammer_runtime::async_runtime",
                 "cli" => "windjammer_runtime::cli",
-                "collections" => "windjammer_runtime::collections",
                 "crypto" => "windjammer_runtime::crypto",
                 "csv" => "windjammer_runtime::csv_mod",
                 "db" => "windjammer_runtime::db",
@@ -963,10 +1347,11 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
                 "random" => "windjammer_runtime::random",
                 "regex" => "windjammer_runtime::regex_mod",
                 "strings" => "windjammer_runtime::strings",
-                "sync" => "windjammer_runtime::sync",
                 "testing" => "windjammer_runtime::testing",
-                "thread" => "windjammer_runtime::thread",
                 "time" => "windjammer_runtime::time",
+                // "ui" is handled by implicit imports (windjammer-ui crate), not runtime
+                "game" => "windjammer_runtime::game",
+
                 _ => {
                     // Unknown module - try windjammer_runtime
                     return format!("use windjammer_runtime::{};\n", module_name);
@@ -1055,8 +1440,9 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
                         return format!("use crate::{};\n", rust_path);
                     }
                 }
-                // Otherwise, import all from the path
-                return format!("use crate::{}::*;\n", rust_path);
+                // For crate::module imports, just import the module (not ::*)
+                // This allows qualified usage like module::func() in the code
+                return format!("use crate::{};\n", rust_path);
             } else {
                 // Module import: ./config
                 // In the main entry point (is_module=false), modules are already in scope via pub mod declarations
@@ -1074,84 +1460,10 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
             }
         }
 
-        // Handle imports from source_roots (e.g., math::Vec2, physics::RigidBody2D)
-        // These should use super:: to reference sibling modules in the generated code
-        // Check if this looks like a source_root import (module::Type pattern, not a crate)
-        let rust_path = full_path.replace('.', "::");
-        let segments: Vec<&str> = rust_path.split("::").collect();
-
-        // If it's a simple module::Type pattern (2 segments, last is uppercase),
-        // and the first segment is lowercase (not a crate name with underscores),
-        // treat it as a source_root import
-        if segments.len() == 2 {
-            let module_name = segments[0];
-            let item_name = segments[1]; // Could be a type (uppercase) or function (lowercase)
-
-            // Check if module_name is a simple lowercase identifier (source_root module)
-            // vs a crate name like windjammer_game (has underscore)
-            if !module_name.contains('_')
-                && module_name
-                    .chars()
-                    .all(|c| c.is_lowercase() || c.is_ascii_digit())
-            {
-                // Determine the actual file name:
-                // - If module_name is a common directory name (math, physics, rendering, etc.),
-                //   AND item_name starts with uppercase (it's a type),
-                //   convert item_name to snake_case to get the file name
-                // - Otherwise, use module_name as the file name (it's already a file)
-
-                let common_directories = [
-                    "math",
-                    "physics",
-                    "rendering",
-                    "audio",
-                    "world",
-                    "effects",
-                    "ui",
-                    "input",
-                    "network",
-                ];
-                let is_type = item_name.chars().next().is_some_and(|c| c.is_uppercase());
-
-                let file_name = if common_directories.contains(&module_name) && is_type {
-                    // Directory module with type: math::Vec2 -> vec2.wj
-                    // Convert type name to snake_case
-                    let mut snake = String::new();
-                    for (i, ch) in item_name.chars().enumerate() {
-                        if ch.is_uppercase() && i > 0 {
-                            // Don't add underscore before uppercase if previous char was also uppercase
-                            // (handles cases like "Vec2D" -> "vec2d" not "vec2_d")
-                            let prev_was_upper = item_name
-                                .chars()
-                                .nth(i - 1)
-                                .is_some_and(|c| c.is_uppercase());
-                            if !prev_was_upper {
-                                snake.push('_');
-                            }
-                        }
-                        snake.push(ch.to_lowercase().next().unwrap());
-                    }
-                    snake
-                } else {
-                    // File module: rigidbody2d::Collider2D -> rigidbody2d.wj
-                    // OR: collision2d::check_collision -> collision2d.wj
-                    module_name.to_string()
-                };
-
-                if let Some(alias_name) = alias {
-                    return format!(
-                        "use super::{}::{} as {};\n",
-                        file_name, item_name, alias_name
-                    );
-                } else {
-                    return format!("use super::{}::{};\n", file_name, item_name);
-                }
-            }
-        }
-
         // Convert Windjammer's Go-style imports to Rust imports
         // Heuristic: If the last segment starts with an uppercase letter, it's likely a type/struct
         // Otherwise, it's a module and we should add ::*
+        let rust_path = full_path.replace('.', "::");
         if let Some(alias_name) = alias {
             format!("use {} as {};\n", rust_path, alias_name)
         } else {
@@ -1168,6 +1480,10 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
                 {
                     // Likely a type, don't add ::*
                     format!("use {};\n", rust_path)
+                } else if rust_path.starts_with("crate::") {
+                    // For crate::module imports, don't add ::*
+                    // This allows qualified usage like module::func() in the code
+                    format!("use {};\n", rust_path)
                 } else {
                     // Likely a module, add ::*
                     format!("use {}::*;\n", rust_path)
@@ -1176,196 +1492,8 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
         }
     }
 
-    fn generate_mod(
-        &mut self,
-        name: &str,
-        items: &[Item],
-        is_public: bool,
-        analyzed: &[AnalyzedFunction],
-    ) -> String {
-        let mut output = String::new();
-
-        // Check if this is an FFI module (mod ffi { fn ... })
-        // All functions in a mod ffi block are treated as extern "C" declarations
-        let is_ffi_module = name == "ffi";
-
-        if is_ffi_module {
-            // For FFI modules, generate both extern "C" block AND mod ffi wrapper
-
-            // Step 1: Generate extern "C" block with wj_ prefixed functions
-            output.push_str("#[link(name = \"windjammer_game\")]\n");
-            output.push_str("extern \"C\" {\n");
-
-            for item in items {
-                if let Item::Function { decl, .. } = item {
-                    output.push_str("    ");
-                    output.push_str(&format!("fn wj_{}(", decl.name));
-
-                    // Generate parameters
-                    for (i, param) in decl.parameters.iter().enumerate() {
-                        if i > 0 {
-                            output.push_str(", ");
-                        }
-                        output.push_str(&param.name);
-                        output.push_str(": ");
-                        output.push_str(&self.type_to_rust(&param.type_));
-                    }
-
-                    output.push(')');
-
-                    // Generate return type
-                    if let Some(ref ret_type) = decl.return_type {
-                        output.push_str(" -> ");
-                        output.push_str(&self.type_to_rust(ret_type));
-                    }
-                    output.push_str(";\n");
-                }
-            }
-
-            output.push_str("}\n\n");
-
-            // Step 2: Generate mod ffi wrapper module
-            output.push_str("mod ffi {\n");
-
-            for item in items {
-                if let Item::Function { decl, .. } = item {
-                    output.push_str("    #[inline]\n");
-                    output.push_str("    pub fn ");
-                    output.push_str(&decl.name);
-                    output.push('(');
-
-                    // Generate parameters
-                    for (i, param) in decl.parameters.iter().enumerate() {
-                        if i > 0 {
-                            output.push_str(", ");
-                        }
-                        output.push_str(&param.name);
-                        output.push_str(": ");
-                        output.push_str(&self.type_to_rust(&param.type_));
-                    }
-
-                    output.push(')');
-
-                    // Generate return type
-                    if let Some(ref ret_type) = decl.return_type {
-                        output.push_str(" -> ");
-                        output.push_str(&self.type_to_rust(ret_type));
-                    }
-
-                    output.push_str(" {\n");
-                    output.push_str("        unsafe { super::wj_");
-                    output.push_str(&decl.name);
-                    output.push('(');
-
-                    // Pass through parameters
-                    for (i, param) in decl.parameters.iter().enumerate() {
-                        if i > 0 {
-                            output.push_str(", ");
-                        }
-                        output.push_str(&param.name);
-                    }
-
-                    output.push_str(") }\n");
-                    output.push_str("    }\n");
-                }
-            }
-
-            output.push_str("}\n");
-            return output;
-        }
-
-        // Generate module declaration
-        let pub_prefix = if is_public { "pub " } else { "" };
-        output.push_str(&format!("{}mod {} {{\n", pub_prefix, name));
-
-        // Generate module contents
-        // For now, we'll recursively generate all items in the module
-        // This is a simplified implementation - a full implementation would need
-        // to handle nested modules, visibility, etc.
-
-        for item in items {
-            match item {
-                Item::Function { decl, .. } => {
-                    // For extern functions, generate directly without analysis
-                    if decl.is_extern {
-                        output.push_str("    ");
-                        // Create a minimal analyzed function for extern functions
-                        let analyzed_func = crate::analyzer::AnalyzedFunction {
-                            decl: decl.clone(),
-                            inferred_ownership: std::collections::HashMap::new(),
-                            clone_optimizations: Vec::new(),
-                            struct_mapping_optimizations: Vec::new(),
-                            string_optimizations: Vec::new(),
-                            assignment_optimizations: Vec::new(),
-                            defer_drop_optimizations: Vec::new(),
-                            const_static_optimizations: Vec::new(),
-                            auto_clone_analysis: crate::auto_clone::AutoCloneAnalysis {
-                                clone_sites: std::collections::HashMap::new(),
-                                string_literal_vars: std::collections::HashSet::new(),
-                            },
-                            mutated_variables: std::collections::HashSet::new(),
-                            cow_optimizations: Vec::new(),
-                            smallvec_optimizations: Vec::new(),
-                        };
-                        output.push_str(
-                            &self
-                                .generate_function(&analyzed_func)
-                                .replace('\n', "\n    "),
-                        );
-                        output.push('\n');
-                    } else {
-                        // Find the analyzed function
-                        if let Some(analyzed_func) =
-                            analyzed.iter().find(|f| f.decl.name == decl.name)
-                        {
-                            output.push_str("    ");
-                            output.push_str(
-                                &self
-                                    .generate_function(analyzed_func)
-                                    .replace('\n', "\n    "),
-                            );
-                            output.push('\n');
-                        }
-                    }
-                }
-                Item::Struct { decl, .. } => {
-                    output.push_str("    ");
-                    output.push_str(&self.generate_struct(decl).replace('\n', "\n    "));
-                    output.push('\n');
-                }
-                Item::Enum { decl, .. } => {
-                    output.push_str("    ");
-                    output.push_str(&self.generate_enum(decl).replace('\n', "\n    "));
-                    output.push('\n');
-                }
-                Item::Trait { decl, .. } => {
-                    output.push_str("    ");
-                    output.push_str(&self.generate_trait(decl).replace('\n', "\n    "));
-                    output.push('\n');
-                }
-                Item::Use { path, alias, .. } => {
-                    output.push_str("    ");
-                    output.push_str(&self.generate_use(path, alias.as_deref()));
-                }
-                _ => {
-                    // TODO: Handle other item types
-                }
-            }
-        }
-
-        output.push_str("}\n");
-        output
-    }
-
     fn generate_struct(&mut self, s: &StructDecl) -> String {
         let mut output = String::new();
-
-        // Emit doc comments if present
-        if let Some(ref doc) = s.doc_comment {
-            for line in doc.lines() {
-                output.push_str(&format!("/// {}\n", line));
-            }
-        }
 
         // Convert decorators to Rust attributes
         for decorator in &s.decorators {
@@ -1413,6 +1541,11 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
 
                 if !traits.is_empty() {
                     output.push_str(&format!("#[derive({})]\n", traits.join(", ")));
+
+                    // Track if this struct has PartialEq for enum derive inference
+                    if traits.iter().any(|t| t == "PartialEq") {
+                        // Note: partial_eq_types is already populated in pre-pass, no need to insert here
+                    }
                 }
             } else if decorator.name == "derive" {
                 // Special handling for @derive decorator - generates #[derive(Trait1, Trait2)]
@@ -1448,22 +1581,18 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
             }
         }
 
-        // Automatically derive common traits for simple structs (if not already derived)
-        // This follows the Windjammer philosophy: hide complexity in the compiler
-        // CONSERVATIVE APPROACH: Only auto-derive if all fields are primitives OR known-simple types
-        if self.can_auto_derive_struct(s) && !output.contains("#[derive(") {
-            // Check if all fields are Copy types (primitives like f32, i32, etc.)
-            let has_copy = self.all_fields_are_copy(&s.fields);
-            // Check if all fields are simple (primitives or types in simple_structs registry)
-            let all_simple = s.fields.iter().all(|f| self.is_simple_type(&f.field_type));
-
-            if has_copy {
-                output.push_str("#[derive(Copy, Clone, Debug, PartialEq)]\n");
-            } else if all_simple {
-                // All fields are simple (but not all Copy) - safe to derive Clone
-                output.push_str("#[derive(Clone, Debug, PartialEq)]\n");
+        // WINDJAMMER PHILOSOPHY: Auto-derive common traits for simple structs
+        // If a struct has no @auto or @derive decorator, but all fields are primitive/Copy types,
+        // automatically add Clone, Copy, Debug, PartialEq - this is what the user would want 90% of the time
+        let has_derive_decorator = s
+            .decorators
+            .iter()
+            .any(|d| d.name == "auto" || d.name == "derive");
+        if !has_derive_decorator {
+            let inferred_traits = self.infer_derivable_traits(s);
+            if !inferred_traits.is_empty() {
+                output.push_str(&format!("#[derive({})]\n", inferred_traits.join(", ")));
             }
-            // Otherwise: don't auto-derive (user must add explicit @derive decorator)
         }
 
         // Add struct declaration with type parameters
@@ -1555,24 +1684,26 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
     fn generate_enum(&self, e: &EnumDecl) -> String {
         let mut output = String::new();
 
-        // Emit doc comments if present
-        if let Some(ref doc) = e.doc_comment {
-            for line in doc.lines() {
-                output.push_str(&format!("/// {}\n", line));
-            }
+        // WINDJAMMER PHILOSOPHY: Auto-derive common traits for enums
+        // All enums get Clone, Debug by default
+        // Only add PartialEq if ALL variants support it
+        // Unit-only enums (no data) also get Copy
+        let mut traits = vec!["Clone".to_string(), "Debug".to_string()];
+
+        // Check if all variants support PartialEq
+        let all_variants_partial_eq = self.all_enum_variants_are_partial_eq(&e.variants);
+        if all_variants_partial_eq {
+            traits.push("PartialEq".to_string());
         }
 
-        // Automatic trait derivation - analyze if the enum can safely derive common traits
-        let can_auto_derive = self.can_auto_derive_enum(e);
-        if can_auto_derive {
-            // Check if we can also derive Copy (all variants must be Copy-able)
-            let can_derive_copy = self.can_enum_derive_copy(e);
-            if can_derive_copy {
-                output.push_str("#[derive(Copy, Clone, Debug, PartialEq)]\n");
-            } else {
-                output.push_str("#[derive(Clone, Debug, PartialEq)]\n");
-            }
+        let all_unit = e
+            .variants
+            .iter()
+            .all(|v| matches!(v.data, crate::parser::EnumVariantData::Unit));
+        if all_unit {
+            traits.push("Copy".to_string());
         }
+        output.push_str(&format!("#[derive({})]\n", traits.join(", ")));
 
         let pub_prefix = if e.is_pub || self.is_module {
             "pub "
@@ -1591,36 +1722,21 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
         output.push_str(" {\n");
 
         for variant in &e.variants {
-            use crate::parser::ast::EnumVariantData;
+            use crate::parser::EnumVariantData;
             match &variant.data {
                 EnumVariantData::Unit => {
-                    // Unit variant: Variant
                     output.push_str(&format!("    {},\n", variant.name));
                 }
                 EnumVariantData::Tuple(types) => {
-                    if types.is_empty() {
-                        // Empty tuple variant: Variant()
-                        output.push_str(&format!("    {}(),\n", variant.name));
-                    } else if types.len() == 1 {
-                        // Single-field variant: Variant(Type)
-                        output.push_str(&format!(
-                            "    {}({}),\n",
-                            variant.name,
-                            self.type_to_rust(&types[0])
-                        ));
-                    } else {
-                        // Multi-field tuple variant: Variant(Type1, Type2, Type3)
-                        let type_strs: Vec<String> =
-                            types.iter().map(|t| self.type_to_rust(t)).collect();
-                        output.push_str(&format!(
-                            "    {}({}),\n",
-                            variant.name,
-                            type_strs.join(", ")
-                        ));
-                    }
+                    let type_strs: Vec<String> =
+                        types.iter().map(|t| self.type_to_rust(t)).collect();
+                    output.push_str(&format!(
+                        "    {}({}),\n",
+                        variant.name,
+                        type_strs.join(", ")
+                    ));
                 }
                 EnumVariantData::Struct(fields) => {
-                    // Struct variant: Variant { field1: Type1, field2: Type2 }
                     let field_strs: Vec<String> = fields
                         .iter()
                         .map(|(name, ty)| format!("{}: {}", name, self.type_to_rust(ty)))
@@ -1638,423 +1754,8 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
         output
     }
 
-    /// Determine if an enum can safely auto-derive Clone, Debug, PartialEq
-    fn can_auto_derive_enum(&self, e: &EnumDecl) -> bool {
-        // Don't auto-derive if the enum has generic parameters
-        // (we'd need to add trait bounds, which is complex)
-        if !e.type_params.is_empty() {
-            return false;
-        }
-
-        // Check if all variants are simple (no data or only simple types)
-        use crate::parser::ast::EnumVariantData;
-        for variant in &e.variants {
-            match &variant.data {
-                EnumVariantData::Unit => {
-                    // Unit variants are always simple
-                    continue;
-                }
-                EnumVariantData::Tuple(types) => {
-                    // Check if all tuple data types are simple
-                    for type_ in types {
-                        if !self.is_simple_type(type_) {
-                            return false;
-                        }
-                    }
-                }
-                EnumVariantData::Struct(fields) => {
-                    // Check if all struct field types are simple
-                    for (_name, type_) in fields {
-                        if !self.is_simple_type(type_) {
-                            return false;
-                        }
-                    }
-                }
-            }
-        }
-
-        true
-    }
-
-    /// Check if an enum can safely derive Copy
-    /// All variants must either be unit variants or have Copy-able data
-    fn can_enum_derive_copy(&self, e: &EnumDecl) -> bool {
-        // Don't derive Copy if the enum has generic parameters
-        if !e.type_params.is_empty() {
-            return false;
-        }
-
-        // Check if all variants are Copy-able
-        use crate::parser::ast::EnumVariantData;
-        for variant in &e.variants {
-            match &variant.data {
-                EnumVariantData::Unit => {
-                    // Unit variants are always Copy
-                    continue;
-                }
-                EnumVariantData::Tuple(types) => {
-                    // Check if all tuple data types implement Copy
-                    for type_ in types {
-                        if !self.is_copyable_type(type_) {
-                            return false;
-                        }
-                    }
-                }
-                EnumVariantData::Struct(fields) => {
-                    // Check if all struct field types implement Copy
-                    for (_name, type_) in fields {
-                        if !self.is_copyable_type(type_) {
-                            return false;
-                        }
-                    }
-                }
-            }
-        }
-
-        true
-    }
-
-    /// Check if a type implements Copy in Rust
-    fn is_copyable_type(&self, type_: &Type) -> bool {
-        match type_ {
-            // Primitive types that implement Copy
-            Type::Int | Type::Int32 | Type::Uint | Type::Float | Type::Bool => true,
-
-            // String and Vec are NOT Copy
-            Type::String | Type::Vec(_) => false,
-
-            // References are Copy, but mutable references are not
-            Type::Reference(_) => true,
-            Type::MutableReference(_) => false,
-
-            // Option is Copy if the inner type is Copy
-            Type::Option(inner) => self.is_copyable_type(inner),
-
-            // Result is Copy if both types are Copy
-            Type::Result(ok, err) => self.is_copyable_type(ok) && self.is_copyable_type(err),
-
-            // Custom types - check if they're Rust primitives or known Copy types
-            Type::Custom(name) => {
-                matches!(
-                    name.as_str(),
-                    "f32" | "f64" | "i8" | "i16" | "i32" | "i64" | "i128" | "isize"
-                        | "u8" | "u16" | "u32" | "u64" | "u128" | "usize" | "bool" | "char"
-                        // Game engine types that we know are Copy
-                        | "Vec2" | "Vec3" | "Vec4" | "Mat4" | "Quat" | "Color"
-                )
-            }
-
-            // Tuples are Copy if all elements are Copy
-            Type::Tuple(types) => types.iter().all(|t| self.is_copyable_type(t)),
-
-            // Arrays are Copy if the element type is Copy
-            Type::Array(inner, _) => self.is_copyable_type(inner),
-
-            // Generic types - be conservative and say no
-            Type::Generic(_) => false,
-
-            // Parameterized types - check the base type
-            Type::Parameterized(name, params) => {
-                // Option<T> and Result<T, E> are Copy if T (and E) are Copy
-                match name.as_str() {
-                    "Option" => params.len() == 1 && self.is_copyable_type(&params[0]),
-                    "Result" => {
-                        params.len() == 2
-                            && self.is_copyable_type(&params[0])
-                            && self.is_copyable_type(&params[1])
-                    }
-                    // Box, Rc, Arc, Vec, HashMap, HashSet are NOT Copy
-                    _ => false,
-                }
-            }
-
-            _ => false,
-        }
-    }
-
-    /// Determine if a struct has simple fields (can be in simple_structs registry)
-    /// This is separate from whether it needs automatic derive generation
-    fn can_auto_derive_struct(&self, s: &StructDecl) -> bool {
-        // Don't add to simple_structs if the struct has generic parameters
-        // (we'd need to add trait bounds, which is complex)
-        if !s.type_params.is_empty() {
-            return false;
-        }
-
-        // Don't add to simple_structs if the struct has special decorators
-        // that define their own derives (e.g., @component, @game, @command)
-        // BUT allow @auto and @derive - these are just explicit trait derives
-        for decorator in &s.decorators {
-            if matches!(decorator.name.as_str(), "component" | "game" | "command") {
-                return false;
-            }
-        }
-
-        // Check if all fields are simple types that implement Clone, Debug, PartialEq
-        for field in &s.fields {
-            if !self.is_simple_type(&field.field_type) {
-                return false;
-            }
-        }
-
-        true
-    }
-
-    /// Analyze all structs to determine which are "simple" (all fields are Copy/Clone/Debug/PartialEq)
-    /// This populates self.simple_structs for use in auto-derive logic
-    fn analyze_simple_structs(
-        &mut self,
-        struct_registry: &std::collections::HashMap<String, &StructDecl>,
-    ) {
-        // Use a worklist algorithm to avoid infinite recursion on circular types
-        let mut worklist: Vec<String> = struct_registry.keys().cloned().collect();
-        let mut visiting: std::collections::HashSet<String> = std::collections::HashSet::new();
-
-        while let Some(struct_name) = worklist.pop() {
-            // Skip if already analyzed
-            if self.simple_structs.contains(&struct_name) {
-                continue;
-            }
-
-            // Check for cycles
-            if visiting.contains(&struct_name) {
-                // Circular dependency detected - not simple
-                continue;
-            }
-
-            visiting.insert(struct_name.clone());
-
-            if let Some(struct_decl) = struct_registry.get(&struct_name) {
-                // Check if this struct can be simple
-                if !self.can_auto_derive_struct(struct_decl) {
-                    visiting.remove(&struct_name);
-                    continue;
-                }
-
-                // Check if all fields are simple types
-                let mut all_fields_simple = true;
-                let mut needs_retry = false;
-
-                for field in &struct_decl.fields {
-                    if !self.is_simple_type_with_registry(
-                        &field.field_type,
-                        struct_registry,
-                        &visiting,
-                    ) {
-                        // Check if this field is a custom type we haven't analyzed yet
-                        if let Type::Custom(custom_name) = &field.field_type {
-                            if struct_registry.contains_key(custom_name)
-                                && !self.simple_structs.contains(custom_name)
-                            {
-                                // Need to analyze this dependency first
-                                needs_retry = true;
-                                // Remove from visiting before pushing back to worklist
-                                // so we can re-analyze later
-                                visiting.remove(&struct_name);
-                                worklist.push(struct_name.clone());
-                                worklist.push(custom_name.clone());
-                                break;
-                            }
-                        }
-                        all_fields_simple = false;
-                        break;
-                    }
-                }
-
-                if !needs_retry {
-                    if all_fields_simple {
-                        self.simple_structs.insert(struct_name.clone());
-                    }
-                    visiting.remove(&struct_name);
-                }
-            } else {
-                visiting.remove(&struct_name);
-            }
-        }
-    }
-
-    /// Check if a type is simple, with access to the struct registry and cycle detection
-    fn is_simple_type_with_registry(
-        &self,
-        type_: &Type,
-        struct_registry: &std::collections::HashMap<String, &StructDecl>,
-        visiting: &std::collections::HashSet<String>,
-    ) -> bool {
-        match type_ {
-            // Primitive types are always simple
-            Type::Int | Type::Int32 | Type::Uint | Type::Float | Type::Bool | Type::String => true,
-
-            // References are simple if the inner type is simple
-            Type::Reference(inner) | Type::MutableReference(inner) => {
-                self.is_simple_type_with_registry(inner, struct_registry, visiting)
-            }
-
-            // Vec, Option, Result are simple if their inner types are simple
-            Type::Vec(inner) | Type::Option(inner) => {
-                self.is_simple_type_with_registry(inner, struct_registry, visiting)
-            }
-            Type::Result(ok, err) => {
-                self.is_simple_type_with_registry(ok, struct_registry, visiting)
-                    && self.is_simple_type_with_registry(err, struct_registry, visiting)
-            }
-
-            // Custom types - check if they're Rust std types or in our simple_structs registry
-            Type::Custom(name) => {
-                // Check for Rust std types
-                let is_std_type = matches!(
-                    name.as_str(),
-                    "String"
-                        | "f32"
-                        | "f64"
-                        | "i8"
-                        | "i16"
-                        | "i32"
-                        | "i64"
-                        | "i128"
-                        | "isize"
-                        | "u8"
-                        | "u16"
-                        | "u32"
-                        | "u64"
-                        | "u128"
-                        | "usize"
-                        | "bool"
-                        | "char"
-                );
-
-                if is_std_type {
-                    return true;
-                }
-
-                // Check if we're currently visiting this type (cycle detection)
-                if visiting.contains(name) {
-                    return false; // Circular dependency - not simple
-                }
-
-                // Check if it's already in our simple_structs registry
-                self.simple_structs.contains(name)
-            }
-
-            // Tuples are simple if all elements are simple
-            Type::Tuple(types) => types
-                .iter()
-                .all(|t| self.is_simple_type_with_registry(t, struct_registry, visiting)),
-
-            // Arrays are simple if the element type is simple
-            Type::Array(inner, _) => {
-                self.is_simple_type_with_registry(inner, struct_registry, visiting)
-            }
-
-            // Generic types - be conservative and say no
-            Type::Generic(_) => false,
-
-            // Parameterized types - check the base type
-            Type::Parameterized(name, params) => {
-                // Common generic types that are Clone + Debug + PartialEq if their params are
-                let is_common_generic = matches!(
-                    name.as_str(),
-                    "Vec" | "Option" | "Result" | "Box" | "Rc" | "Arc" | "HashMap" | "HashSet"
-                );
-                is_common_generic
-                    && params
-                        .iter()
-                        .all(|t| self.is_simple_type_with_registry(t, struct_registry, visiting))
-            }
-
-            // Associated types, trait objects, function pointers, infer - be conservative
-            Type::Associated(_, _)
-            | Type::TraitObject(_)
-            | Type::FunctionPointer { .. }
-            | Type::Infer => false,
-        }
-    }
-
-    /// Check if a type is "simple" (implements Clone, Debug, PartialEq automatically)
-    #[allow(clippy::only_used_in_recursion)]
-    fn is_simple_type(&self, type_: &Type) -> bool {
-        match type_ {
-            // Primitive types are always simple
-            Type::Int | Type::Int32 | Type::Uint | Type::Float | Type::Bool | Type::String => true,
-
-            // References are simple if the inner type is simple
-            Type::Reference(inner) | Type::MutableReference(inner) => self.is_simple_type(inner),
-
-            // Vec, Option, Result are simple if their inner types are simple
-            Type::Vec(inner) | Type::Option(inner) => self.is_simple_type(inner),
-            Type::Result(ok, err) => self.is_simple_type(ok) && self.is_simple_type(err),
-
-            // Custom types - CONSERVATIVE: only Rust std types or same-file simple structs
-            Type::Custom(name) => {
-                // Check for Rust std types that are Clone + Debug + PartialEq
-                let is_std_type = matches!(
-                    name.as_str(),
-                    "String"
-                        | "f32"
-                        | "f64"
-                        | "i8"
-                        | "i16"
-                        | "i32"
-                        | "i64"
-                        | "i128"
-                        | "isize"
-                        | "u8"
-                        | "u16"
-                        | "u32"
-                        | "u64"
-                        | "u128"
-                        | "usize"
-                        | "bool"
-                        | "char"
-                );
-
-                if is_std_type {
-                    return true;
-                }
-
-                // Check if it's in our simple_structs registry (same-file structs)
-                // For cross-file dependencies, we can't verify, so we're conservative
-                self.simple_structs.contains(name)
-            }
-
-            // Tuples are simple if all elements are simple
-            Type::Tuple(types) => types.iter().all(|t| self.is_simple_type(t)),
-
-            // Arrays are simple if the element type is simple
-            Type::Array(inner, _) => self.is_simple_type(inner),
-
-            // Generic types - be conservative and say no
-            Type::Generic(_) => false,
-
-            // Parameterized types - check the base type
-            Type::Parameterized(name, params) => {
-                // Common generic types that are Clone + Debug + PartialEq if their params are
-                let is_common_generic = matches!(
-                    name.as_str(),
-                    "Vec" | "Option" | "Result" | "Box" | "Rc" | "Arc" | "HashMap" | "HashSet"
-                );
-                is_common_generic && params.iter().all(|t| self.is_simple_type(t))
-            }
-
-            // Associated types, trait objects - be conservative
-            Type::Associated(_, _) | Type::TraitObject(_) => false,
-
-            // Function pointers are not simple
-            Type::FunctionPointer { .. } => false,
-
-            // Infer type - be conservative
-            Type::Infer => false,
-        }
-    }
-
     fn generate_trait(&mut self, trait_decl: &crate::parser::TraitDecl) -> String {
         let mut output = String::new();
-
-        // Emit doc comments if present
-        if let Some(ref doc) = trait_decl.doc_comment {
-            for line in doc.lines() {
-                output.push_str(&format!("/// {}\n", line));
-            }
-        }
 
         // TODO: Add is_pub field to TraitDecl and check it properly
         // For now, always emit pub for traits (the common case)
@@ -2089,14 +1790,6 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
 
         // Generate trait methods
         for method in &trait_decl.methods {
-            // Emit doc comments for method if present
-            if let Some(ref doc) = method.doc_comment {
-                for line in doc.lines() {
-                    output.push_str(&self.indent());
-                    output.push_str(&format!("/// {}\n", line));
-                }
-            }
-
             output.push_str(&self.indent());
 
             if method.is_async {
@@ -2137,17 +1830,11 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
                             format!("&mut {}", self.type_to_rust(&param.type_))
                         }
                         OwnershipHint::Inferred => {
+                            // Default to &
                             if param.name == "self" {
-                                // Default to &self for trait methods
                                 "&self".to_string()
                             } else {
-                                // For Copy types (f32, i64, bool, etc.), pass by value
-                                // For non-Copy types, pass by reference
-                                if self.is_copy_type(&param.type_) {
-                                    self.type_to_rust(&param.type_)
-                                } else {
-                                    format!("&{}", self.type_to_rust(&param.type_))
-                                }
+                                format!("&{}", self.type_to_rust(&param.type_))
                             }
                         }
                     };
@@ -2511,14 +2198,11 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
 
     fn expression_accesses_fields(&self, expr: &Expression) -> bool {
         match expr {
-            Expression::Identifier { .. } => {
-                // CRITICAL FIX: Bare identifiers are NOT field accesses!
-                // Only self.field is a field access. Bare identifiers could be:
-                // - Parameters
-                // - Local variables
-                // - Field names in struct literals (not accesses!)
-                // This was causing constructors to incorrectly get implicit &self
-                false
+            Expression::Identifier { name, .. } => {
+                // Check if this is a field name, but NOT a parameter name
+                // Parameters shadow fields, so if it's a parameter, it's not a field access
+                let is_param = self.current_function_params.iter().any(|p| p.name == *name);
+                !is_param && self.current_struct_fields.contains(name)
             }
             Expression::FieldAccess { object, .. } => {
                 // Check for self.field or nested field access
@@ -2546,16 +2230,9 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
             Expression::Index { object, index, .. } => {
                 self.expression_accesses_fields(object) || self.expression_accesses_fields(index)
             }
-            Expression::StructLiteral { fields, .. } => {
-                // CRITICAL FIX: Struct literal field NAMES are not field accesses!
-                // Only the VALUES being assigned might access fields
-                // Example: Tilemap { width: width, height: height }
-                // The identifiers "width" and "height" on the LEFT are field names (not accesses)
-                // The identifiers on the RIGHT are parameter names (also not field accesses)
-                fields
-                    .iter()
-                    .any(|(_, expr)| self.expression_accesses_fields(expr))
-            }
+            Expression::StructLiteral { fields, .. } => fields
+                .iter()
+                .any(|(_, expr)| self.expression_accesses_fields(expr)),
             Expression::MapLiteral { pairs, .. } => pairs.iter().any(|(k, v)| {
                 self.expression_accesses_fields(k) || self.expression_accesses_fields(v)
             }),
@@ -2590,15 +2267,7 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
 
     fn expression_is_field_access(&self, expr: &Expression) -> bool {
         match expr {
-            Expression::Identifier { .. } => {
-                // CRITICAL FIX: Check if this is a field name, but NOT a local variable or parameter
-                // Local variables and parameters shadow fields
-                // We need to track local variables to avoid false positives
-                // For now, we can't distinguish between local variables and fields without full scope tracking
-                // So we require explicit `self.field` syntax for field mutations
-                // This is safer and more explicit
-                false
-            }
+            Expression::Identifier { name, .. } => self.current_struct_fields.contains(name),
             Expression::FieldAccess { object, .. } => {
                 if let Expression::Identifier { name: obj_name, .. } = &**object {
                     obj_name == "self"
@@ -2653,18 +2322,8 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
         let func = &analyzed.decl;
         let mut output = String::new();
 
-        // Emit doc comments if present
-        if let Some(ref doc) = func.doc_comment {
-            for line in doc.lines() {
-                output.push_str(&format!("/// {}\n", line));
-            }
-        }
-
         // AUTO-CLONE: Load auto-clone analysis for this function
         self.auto_clone_analysis = Some(analyzed.auto_clone_analysis.clone());
-
-        // AUTO-MUT: Load mutation tracking for this function
-        self.mutated_variables = analyzed.mutated_variables.clone();
 
         // PHASE 2 OPTIMIZATION: Load clone optimizations for this function
         // Variables in this set can safely avoid .clone() calls
@@ -2676,8 +2335,16 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
         // Track function parameters for compound assignment optimization
         self.current_function_params = func.parameters.clone();
 
-        // Clear local variables when entering a new function
-        self.current_local_vars.clear();
+        // Track function return type for string literal conversion
+        self.current_function_return_type = func.return_type.clone();
+
+        // Track parameters inferred as borrowed for field access cloning
+        self.inferred_borrowed_params.clear();
+        for (param_name, ownership) in &analyzed.inferred_ownership {
+            if matches!(ownership, crate::analyzer::OwnershipMode::Borrowed) {
+                self.inferred_borrowed_params.insert(param_name.clone());
+            }
+        }
 
         // PHASE 8 OPTIMIZATION: Load SmallVec optimizations for this function
         // DISABLED: SmallVec optimizations conflict with return types
@@ -2725,6 +2392,13 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
         // Track variables that should have their drops deferred to background thread
         self.defer_drop_optimizations = analyzed.defer_drop_optimizations.clone();
 
+        // Generate doc comment if present
+        if let Some(doc_comment) = &func.doc_comment {
+            for line in doc_comment.lines() {
+                output.push_str(&format!("/// {}\n", line.trim()));
+            }
+        }
+
         // Check for @async decorator (special case: it's a keyword, not an attribute)
         let is_async = func.decorators.iter().any(|d| d.name == "async");
 
@@ -2736,7 +2410,6 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
         // OPTIMIZATION: Add inline hints for hot path functions
         // This is Phase 1 optimization: Generate Inlinable Code
         if self.should_inline_function(func, analyzed) {
-            output.push_str(&self.indent());
             output.push_str("#[inline]\n");
         }
 
@@ -2763,9 +2436,6 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
             let rust_attr = self.map_decorator(&decorator.name);
             output.push_str(&format!("#[{}]\n", rust_attr));
         }
-
-        // Add indentation for the function signature
-        output.push_str(&self.indent());
 
         // Add `pub` if function is marked pub OR we're in a #[wasm_bindgen] impl block OR compiling a module OR has @export decorator
         // BUT NOT if we're in a trait implementation (trait methods cannot have visibility modifiers)
@@ -2818,53 +2488,26 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
         let has_explicit_self = func.parameters.iter().any(|p| p.name == "self");
 
         if self.in_impl_block && !has_explicit_self && !self.current_struct_fields.is_empty() {
-            // Distinguish between constructors and methods that need implicit self
-            // 1. Constructor: Returns type, does NOT use self → No self parameter
-            // 2. Builder: Returns type, DOES use self → Add mut self
-            // 3. Regular method: Uses self → Add &self or &mut self
-            //
-            // The key insight: Check if function body actually uses self!
-            // CRITICAL: Set current_function_params BEFORE checking field access
-            // Otherwise parameter names will be incorrectly detected as field accesses
-            let saved_params = self.current_function_params.clone();
-            self.current_function_params = func.parameters.clone();
-
-            let uses_self =
-                self.function_accesses_fields(func) || self.function_mutates_fields(func);
-
-            self.current_function_params = saved_params;
-
-            if uses_self {
-                // Function uses self, so it needs an implicit self parameter
-                if self.function_mutates_fields(func) {
-                    // Check if this is a builder pattern (modifies fields AND returns Self)
-                    let returns_self = self.function_returns_self_type(func);
-                    if returns_self {
-                        // Builder pattern: use `mut self` (consuming)
-                        params.push("mut self".to_string());
-                    } else {
-                        // Regular mutating method: use `&mut self` (borrowing)
-                        params.push("&mut self".to_string());
-                    }
-                } else if self.function_accesses_fields(func) {
-                    // Only read access needed
-                    params.push("&self".to_string());
+            // Check if function body mutates any struct fields
+            if self.function_mutates_fields(func) {
+                // Check if this is a builder pattern (modifies fields AND returns Self)
+                let returns_self = self.function_returns_self_type(func);
+                if returns_self {
+                    // Builder pattern: use `mut self` (consuming)
+                    params.push("mut self".to_string());
+                } else {
+                    // Regular mutating method: use `&mut self` (borrowing)
+                    params.push("&mut self".to_string());
                 }
+            } else if self.function_accesses_fields(func) {
+                // Only read access needed
+                params.push("&self".to_string());
             }
-            // If !uses_self, it's a constructor - don't add self parameter
         }
 
         let additional_params: Vec<String> = func
             .parameters
             .iter()
-            .filter(|param| {
-                // Skip self parameter if we already added it implicitly (when has_explicit_self is false)
-                // In other words, only process explicit self if has_explicit_self is true
-                if param.name == "self" {
-                    return has_explicit_self;
-                }
-                true
-            })
             .map(|param| {
                 // PHASE 9 OPTIMIZATION: Check if this parameter should use Cow<'_, T>
                 if self.cow_optimizations.contains(&param.name) {
@@ -2882,72 +2525,56 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
                 let type_str = match &param.ownership {
                     OwnershipHint::Owned => {
                         if param.name == "self" {
-                            // CRITICAL: For trait implementations, respect the explicit ownership hint!
-                            // Trait signatures must match exactly what the trait requires
-                            // Don't override with analyzer inference for trait impls
-                            if !self.in_trait_impl {
-                                // Check if analyzer inferred a different ownership for self
-                                if let Some(ownership_mode) =
-                                    analyzed.inferred_ownership.get(&param.name)
-                                {
-                                    match ownership_mode {
-                                        OwnershipMode::MutBorrowed => {
-                                            return "&mut self".to_string()
-                                        }
-                                        OwnershipMode::Borrowed => return "&self".to_string(),
-                                        OwnershipMode::Owned => {
-                                            // Check if function actually modifies self
-                                            // Only add 'mut' if it does
-                                            if self.function_modifies_self(&analyzed.decl) {
-                                                return "mut self".to_string();
-                                            } else {
-                                                return "self".to_string();
-                                            }
+                            // Check if analyzer inferred a different ownership for self
+                            if let Some(ownership_mode) =
+                                analyzed.inferred_ownership.get(&param.name)
+                            {
+                                match ownership_mode {
+                                    OwnershipMode::MutBorrowed => return "&mut self".to_string(),
+                                    OwnershipMode::Borrowed => return "&self".to_string(),
+                                    OwnershipMode::Owned => {
+                                        // Check if function actually modifies self
+                                        // Only add 'mut' if it does
+                                        if self.function_modifies_self(&analyzed.decl) {
+                                            return "mut self".to_string();
+                                        } else {
+                                            return "self".to_string();
                                         }
                                     }
                                 }
                             }
-                            // Default: check if function modifies self (but only for non-trait impls)
-                            if !self.in_trait_impl && self.function_modifies_self(&analyzed.decl) {
+                            // Default: check if function modifies self
+                            if self.function_modifies_self(&analyzed.decl) {
                                 return "mut self".to_string();
                             } else {
                                 return "self".to_string();
                             }
                         }
-
-                        // CRITICAL FIX: Only add 'mut' if the parameter is actually mutated
-                        // For Copy types that are only read, we don't need 'mut'
-                        let rust_type = self.type_to_rust(&param.type_);
-
-                        // Check if the analyzer inferred that this parameter is mutated
-                        if let Some(ownership_mode) = analyzed.inferred_ownership.get(&param.name) {
-                            if ownership_mode == &OwnershipMode::MutBorrowed {
-                                // Parameter is mutated, needs 'mut'
-                                rust_type // Will be formatted as "mut name: type" below
-                            } else {
-                                // Parameter is not mutated, no 'mut' needed
-                                rust_type
-                            }
-                        } else {
-                            // No inference available, assume not mutated
-                            rust_type
-                        }
+                        // Owned parameters are always mutable in Windjammer
+                        return format!("mut {}: {}", param.name, self.type_to_rust(&param.type_));
                     }
                     OwnershipHint::Ref => {
                         if param.name == "self" {
+                            // Check if analyzer inferred a different ownership (e.g., &mut self)
+                            if let Some(ownership_mode) =
+                                analyzed.inferred_ownership.get(&param.name)
+                            {
+                                match ownership_mode {
+                                    OwnershipMode::MutBorrowed => return "&mut self".to_string(),
+                                    OwnershipMode::Borrowed => return "&self".to_string(),
+                                    OwnershipMode::Owned => {
+                                        // Shouldn't happen for explicit &self, but handle it
+                                        return "self".to_string();
+                                    }
+                                }
+                            }
                             return "&self".to_string();
                         }
                         // Don't add & if the type is already a Reference
                         if matches!(param.type_, Type::Reference(_) | Type::MutableReference(_)) {
                             self.type_to_rust(&param.type_)
                         } else {
-                            // STRING BORROW OPTIMIZATION:
-                            // When borrowing a String, generate &str instead of &String
-                            if self.is_string_type(&param.type_) {
-                                "&str".to_string()
-                            } else {
-                                format!("&{}", self.type_to_rust(&param.type_))
-                            }
+                            format!("&{}", self.type_to_rust(&param.type_))
                         }
                     }
                     OwnershipHint::Mut => {
@@ -2982,17 +2609,7 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
                                     if self.is_copy_type(&param.type_) {
                                         self.type_to_rust(&param.type_)
                                     } else {
-                                        // CRITICAL: For generic types, DON'T add &
-                                        // Generics are left as-is: G stays as G
-                                        // Adding & would make it &G which breaks trait bounds
-                                        if self.is_generic_type(&param.type_) {
-                                            self.type_to_rust(&param.type_)
-                                        } else if self.is_string_type(&param.type_) {
-                                            // STRING BORROW OPTIMIZATION
-                                            "&str".to_string()
-                                        } else {
-                                            format!("&{}", self.type_to_rust(&param.type_))
-                                        }
+                                        format!("&{}", self.type_to_rust(&param.type_))
                                     }
                                 }
                                 OwnershipMode::MutBorrowed => {
@@ -3003,18 +2620,21 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
                     }
                 };
 
+                // Check if parameter is declared with 'mut' keyword
+                let mut_prefix = if param.is_mutable { "mut " } else { "" };
+
                 // Check if this is a pattern parameter
                 if let Some(pattern) = &param.pattern {
                     // Generate pattern: type syntax
-                    format!("{}: {}", self.generate_pattern(pattern), type_str)
+                    format!(
+                        "{}{}: {}",
+                        mut_prefix,
+                        self.generate_pattern(pattern),
+                        type_str
+                    )
                 } else {
                     // Simple name: type syntax
-                    // Add 'mut' prefix if parameter was declared as mutable
-                    if param.is_mutable {
-                        format!("mut {}: {}", param.name, type_str)
-                    } else {
-                        format!("{}: {}", param.name, type_str)
-                    }
+                    format!("{}{}: {}", mut_prefix, param.name, type_str)
                 }
             })
             .collect();
@@ -3031,12 +2651,6 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
 
         // Add where clause if present
         output.push_str(&self.format_where_clause(&func.where_clause));
-
-        // For extern functions, just add a semicolon (no body)
-        if func.is_extern {
-            output.push_str(";\n");
-            return output;
-        }
 
         output.push_str(" {\n");
         self.indent_level += 1;
@@ -3084,14 +2698,25 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
                             patterns.iter().map(|p| self.pattern_to_rust(p)).collect();
                         format!("{}({})", variant, rust_patterns.join(", "))
                     }
-                    EnumPatternBinding::Struct(fields) => {
-                        let field_strs: Vec<String> = fields
-                            .iter()
-                            .map(|(name, pattern)| {
-                                format!("{}: {}", name, self.pattern_to_rust(pattern))
-                            })
-                            .collect();
-                        format!("{} {{ {} }}", variant, field_strs.join(", "))
+                    EnumPatternBinding::Struct(fields, has_wildcard) => {
+                        if fields.is_empty() {
+                            // Empty struct binding means { .. } wildcard
+                            format!("{} {{ .. }}", variant)
+                        } else {
+                            let field_strs: Vec<String> = fields
+                                .iter()
+                                .map(|(name, pat)| {
+                                    format!("{}: {}", name, self.pattern_to_rust(pat))
+                                })
+                                .collect();
+                            if *has_wildcard {
+                                // Partial match: { field1, field2, .. }
+                                format!("{} {{ {}, .. }}", variant, field_strs.join(", "))
+                            } else {
+                                // Complete match: { field1, field2 }
+                                format!("{} {{ {} }}", variant, field_strs.join(", "))
+                            }
+                        }
                     }
                 }
             }
@@ -3116,7 +2741,6 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
                 mutable,
                 type_,
                 value,
-                else_block,
                 ..
             } => {
                 let mut output = self.indent();
@@ -3126,22 +2750,9 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
                 // e.g., let enemy = self.enemies[i] should be let enemy = &mut self.enemies[i]
                 let needs_mut_ref = self.should_mut_borrow_index_access(value);
 
-                // AUTO-MUT: Check if this variable is mutated (automatic mut inference)
-                let is_mutated = if let Pattern::Identifier(name) = pattern {
-                    self.mutated_variables.contains(name)
-                } else {
-                    false // For tuple patterns, fall back to explicit mut
-                };
-
-                // Check if this is a closure that mutates captured variables
-                // Rust requires closures that mutate captures to be stored in `mut` bindings
-                let is_mutating_closure = self.is_mutating_closure(value);
-
                 if needs_mut_ref {
                     // Don't add mut keyword, but we'll add &mut to the value
-                } else if is_mutated || *mutable || is_mutating_closure {
-                    // Add mut if variable is mutated OR if user explicitly wrote mut
-                    // OR if this is a closure that mutates captured variables
+                } else if *mutable {
                     output.push_str("mut ");
                 }
 
@@ -3151,11 +2762,7 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
 
                 // Extract variable name for optimizations (only works for simple identifiers)
                 let var_name = match pattern {
-                    Pattern::Identifier(name) => {
-                        // Track this local variable to prevent incorrect self. prefix
-                        self.current_local_vars.insert(name.clone());
-                        Some(name.as_str())
-                    }
+                    Pattern::Identifier(name) => Some(name.as_str()),
                     _ => None,
                 };
 
@@ -3215,7 +2822,23 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
                         if needs_mut_ref {
                             output.push_str("&mut ");
                         }
-                        output.push_str(&self.generate_expression(value));
+
+                        // WINDJAMMER PHILOSOPHY: Auto-convert string literals to String
+                        // String literals assigned to variables should become String (not &str)
+                        // because they may be passed to functions expecting String later.
+                        // This is safe because String auto-borrows to &str when needed.
+                        let mut value_str = self.generate_expression(value);
+                        if matches!(
+                            value,
+                            Expression::Literal {
+                                value: Literal::String(_),
+                                ..
+                            }
+                        ) {
+                            value_str = format!("{}.to_string()", value_str);
+                        }
+
+                        output.push_str(&value_str);
                     }
                 } else {
                     // No SmallVec optimization for this variable
@@ -3252,23 +2875,37 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
                         if needs_mut_ref {
                             output.push_str("&mut ");
                         }
-                        output.push_str(&self.generate_expression(value));
+
+                        // WINDJAMMER PHILOSOPHY: Auto-convert mutable string variables
+                        // When a mutable variable is initialized with a string literal,
+                        // it should be a String (not &str) because &str can't be mutated
+                        let mut value_str = self.generate_expression(value);
+                        if *mutable
+                            && matches!(
+                                value,
+                                Expression::Literal {
+                                    value: Literal::String(_),
+                                    ..
+                                }
+                            )
+                        {
+                            value_str = format!("{}.to_string()", value_str);
+                        }
+
+                        output.push_str(&value_str);
                     }
                 }
 
-                // Handle let-else syntax (e.g., let Some(x) = opt else { return })
-                if let Some(else_stmts) = else_block {
-                    output.push_str(" else {\n");
-                    self.indent_level += 1;
-                    for stmt in else_stmts {
-                        output.push_str(&self.generate_statement(stmt));
+                output.push_str(";\n");
+
+                // Track variables assigned from .len() as usize type
+                // This enables auto-casting in comparisons with i32
+                if let Some(name) = var_name {
+                    if self.expression_produces_usize(value) {
+                        self.usize_variables.insert(name.to_string());
                     }
-                    self.indent_level -= 1;
-                    output.push_str(&self.indent());
-                    output.push_str("};\n"); // let-else needs semicolon after closing brace
-                } else {
-                    output.push_str(";\n");
                 }
+
                 output
             }
             Statement::Const {
@@ -3328,7 +2965,49 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
                 output.push_str("return");
                 if let Some(e) = expr {
                     output.push(' ');
-                    output.push_str(&self.generate_expression(e));
+                    let mut return_str = self.generate_expression(e);
+
+                    // WINDJAMMER PHILOSOPHY: Auto-convert string literals in return statements
+                    // when the function returns String
+                    let returns_string = match &self.current_function_return_type {
+                        Some(Type::String) => true,
+                        Some(Type::Custom(name)) if name == "String" => true,
+                        _ => false,
+                    };
+
+                    if returns_string {
+                        // String literal needs .to_string()
+                        if matches!(
+                            e,
+                            Expression::Literal {
+                                value: Literal::String(_),
+                                ..
+                            }
+                        ) && !return_str.ends_with(".to_string()")
+                        {
+                            return_str = format!("{}.to_string()", return_str);
+                        }
+                        // self.field needs .clone() when self is borrowed
+                        else if let Expression::FieldAccess { object, .. } = e {
+                            if let Expression::Identifier { name: obj_name, .. } = &**object {
+                                if obj_name == "self" && !return_str.ends_with(".clone()") {
+                                    let self_is_borrowed =
+                                        self.current_function_params.iter().any(|p| {
+                                            p.name == "self"
+                                                && matches!(
+                                                    p.ownership,
+                                                    crate::parser::OwnershipHint::Ref
+                                                )
+                                        });
+                                    if self_is_borrowed {
+                                        return_str = format!("{}.clone()", return_str);
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    output.push_str(&return_str);
                 }
                 output.push_str(";\n");
                 output
@@ -3345,6 +3024,18 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
                 else_block,
                 ..
             } => {
+                // WINDJAMMER PHILOSOPHY: Check if any branch explicitly uses .as_str()
+                // If so, we should NOT auto-convert string literals in other branches
+                let any_branch_has_as_str = self.block_has_as_str(then_block)
+                    || else_block
+                        .as_ref()
+                        .is_some_and(|b| self.block_has_as_str(b));
+
+                let old_suppress = self.suppress_string_conversion;
+                if any_branch_has_as_str {
+                    self.suppress_string_conversion = true;
+                }
+
                 let mut output = self.indent();
                 output.push_str("if ");
                 output.push_str(&self.generate_expression(condition));
@@ -3366,6 +3057,7 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
                     output.push('}');
                 }
 
+                self.suppress_string_conversion = old_suppress;
                 output.push('\n');
                 output
             }
@@ -3399,6 +3091,22 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
                 output.push_str(" {\n");
 
                 self.indent_level += 1;
+
+                // WINDJAMMER PHILOSOPHY: Auto-convert match arm strings when return type is String
+                // OR when any other arm produces a String (e.g., format! macro, or blocks with converted strings)
+                let needs_string_conversion = match &self.current_function_return_type {
+                    Some(Type::String) => true,
+                    Some(Type::Custom(name)) if name == "String" => true,
+                    _ => {
+                        // Check if any arm produces a String (format!, to_string(), etc.)
+                        // OR if any arm has a block whose last expression is converted to String
+                        arms.iter().any(|arm| {
+                            self.expression_produces_string(&arm.body)
+                                || self.arm_returns_converted_string(&arm.body)
+                        })
+                    }
+                };
+
                 for arm in arms {
                     output.push_str(&self.indent());
                     output.push_str(&self.generate_pattern(&arm.pattern));
@@ -3410,7 +3118,32 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
                     }
 
                     output.push_str(" => ");
-                    output.push_str(&self.generate_expression(&arm.body));
+
+                    // Set context flag for block generation
+                    let old_in_match_arm = self.in_match_arm_needing_string;
+                    if needs_string_conversion {
+                        self.in_match_arm_needing_string = true;
+                    }
+
+                    // Auto-convert string literals to String when any arm produces String
+                    let mut arm_str = self.generate_expression(&arm.body);
+
+                    self.in_match_arm_needing_string = old_in_match_arm;
+                    let is_string_literal = matches!(
+                        &arm.body,
+                        Expression::Literal {
+                            value: Literal::String(_),
+                            ..
+                        }
+                    );
+
+                    // Only apply .to_string() for direct string literals, NOT blocks
+                    // Blocks handle their own string conversion via in_match_arm_needing_string flag
+                    if needs_string_conversion && is_string_literal {
+                        arm_str = format!("{}.to_string()", arm_str);
+                    }
+
+                    output.push_str(&arm_str);
                     output.push_str(",\n");
                 }
                 self.indent_level -= 1;
@@ -3478,6 +3211,12 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
                 let needs_borrow = self.should_borrow_for_iteration(iterable);
                 let needs_mut_borrow = needs_mut && needs_borrow;
 
+                // BORROWED ITERATOR: Track if iterator variable is from borrowed collection
+                // So we can auto-clone when pushing to new collections
+                // If we add & to the iterable, the iterator variable is a reference
+                let is_borrowed_iterator =
+                    needs_borrow || self.is_iterating_over_borrowed(iterable);
+
                 if needs_mut_borrow {
                     output.push_str("&mut ");
                 } else if needs_borrow {
@@ -3488,9 +3227,25 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
                 output.push_str(" {\n");
 
                 self.indent_level += 1;
+
+                // Track borrowed iterator variable for field access cloning
+                if is_borrowed_iterator {
+                    if let Some(var) = &loop_var {
+                        self.borrowed_iterator_vars.insert(var.clone());
+                    }
+                }
+
                 for stmt in body {
                     output.push_str(&self.generate_statement(stmt));
                 }
+
+                // Remove iterator variable from tracking after loop
+                if is_borrowed_iterator {
+                    if let Some(var) = &loop_var {
+                        self.borrowed_iterator_vars.remove(var);
+                    }
+                }
+
                 self.indent_level -= 1;
 
                 output.push_str(&self.indent());
@@ -3561,9 +3316,34 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
                 // If no optimization applied, fall through to regular assignment
 
                 // Fall back to regular assignment
+                // CRITICAL: Set flag to suppress auto-clone for assignment targets
+                self.generating_assignment_target = true;
                 output.push_str(&self.generate_expression(target));
+                self.generating_assignment_target = false;
                 output.push_str(" = ");
-                output.push_str(&self.generate_expression(value));
+
+                // WINDJAMMER PHILOSOPHY: Auto-convert string literals to String
+                // When assigning a string literal to a field, it likely needs .to_string()
+                let mut value_str = self.generate_expression(value);
+                if matches!(
+                    value,
+                    Expression::Literal {
+                        value: Literal::String(_),
+                        ..
+                    }
+                ) {
+                    // String literal assigned to field - add .to_string()
+                    value_str = format!("{}.to_string()", value_str);
+                }
+
+                // AUTO-CAST: When assigning usize (.len() result) to i32 field, cast
+                // WINDJAMMER PHILOSOPHY: Compiler does the work - no explicit casting needed
+                if self.expression_produces_usize(value) {
+                    // Wrap the entire expression in parens before casting
+                    value_str = format!("(({}) as i32)", value_str);
+                }
+
+                output.push_str(&value_str);
                 output.push_str(";\n");
                 output
             }
@@ -3622,18 +3402,27 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
                     EnumPatternBinding::Wildcard => format!("{}(_)", name),
                     EnumPatternBinding::None => name.clone(),
                     EnumPatternBinding::Tuple(patterns) => {
-                        let pattern_strs: Vec<String> =
+                        let rust_patterns: Vec<String> =
                             patterns.iter().map(|p| self.generate_pattern(p)).collect();
-                        format!("{}({})", name, pattern_strs.join(", "))
+                        format!("{}({})", name, rust_patterns.join(", "))
                     }
-                    EnumPatternBinding::Struct(fields) => {
-                        let field_strs: Vec<String> = fields
-                            .iter()
-                            .map(|(field_name, pattern)| {
-                                format!("{}: {}", field_name, self.generate_pattern(pattern))
-                            })
-                            .collect();
-                        format!("{} {{ {} }}", name, field_strs.join(", "))
+                    EnumPatternBinding::Struct(fields, has_wildcard) => {
+                        if fields.is_empty() {
+                            // Empty struct binding means { .. } wildcard
+                            format!("{} {{ .. }}", name)
+                        } else {
+                            let field_strs: Vec<String> = fields
+                                .iter()
+                                .map(|(n, pat)| format!("{}: {}", n, self.generate_pattern(pat)))
+                                .collect();
+                            if *has_wildcard {
+                                // Partial match: { field1, field2, .. }
+                                format!("{} {{ {}, .. }}", name, field_strs.join(", "))
+                            } else {
+                                // Complete match: { field1, field2 }
+                                format!("{} {{ {} }}", name, field_strs.join(", "))
+                            }
+                        }
                     }
                 }
             }
@@ -3655,6 +3444,270 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
     /// This is used to determine if we need to add .as_str() to match expressions
     fn pattern_has_string_literal(&self, pattern: &Pattern) -> bool {
         pattern_has_string_literal_impl(pattern)
+    }
+
+    /// Check if match needs .clone() to avoid partial move from self
+    /// This is needed when:
+    /// 1. Match value is a field access on `self` (e.g., self.selected_id)
+    /// 2. Self is used again after the match (pattern extracts value)
+    /// 3. The pattern extracts a non-Copy value (Some(id), Ok(val), etc.)
+    fn match_needs_clone_for_self_field(
+        &self,
+        value: &Expression,
+        arms: &[crate::parser::MatchArm],
+    ) -> bool {
+        // Check if value is self.field
+        let is_self_field = if let Expression::FieldAccess { object, .. } = value {
+            matches!(&**object, Expression::Identifier { name, .. } if name == "self")
+        } else {
+            false
+        };
+
+        if !is_self_field {
+            return false;
+        }
+
+        // Check if current function has self (either borrowed or owned)
+        let has_self = self
+            .current_function_params
+            .iter()
+            .any(|p| p.name == "self");
+
+        if !has_self {
+            return false;
+        }
+
+        // Check if any arm pattern extracts a value (not just wildcard or literal)
+        arms.iter()
+            .any(|arm| self.pattern_extracts_value(&arm.pattern))
+    }
+
+    /// Check if a pattern extracts a value that would cause a move
+    fn pattern_extracts_value(&self, pattern: &Pattern) -> bool {
+        use crate::parser::EnumPatternBinding;
+        match pattern {
+            Pattern::Wildcard | Pattern::Literal(_) => false,
+            Pattern::Identifier(_) => true, // Binding moves the value
+            Pattern::Reference(inner) => self.pattern_extracts_value(inner),
+            Pattern::Tuple(patterns) => patterns.iter().any(|p| self.pattern_extracts_value(p)),
+            Pattern::EnumVariant(_, binding) => match binding {
+                EnumPatternBinding::None | EnumPatternBinding::Wildcard => false,
+                EnumPatternBinding::Single(_) => true, // Some(id) extracts id
+                EnumPatternBinding::Tuple(patterns) => {
+                    patterns.iter().any(|p| self.pattern_extracts_value(p))
+                }
+                EnumPatternBinding::Struct(fields, _) => {
+                    fields.iter().any(|(_, p)| self.pattern_extracts_value(p))
+                }
+            },
+            Pattern::Or(patterns) => patterns.iter().any(|p| self.pattern_extracts_value(p)),
+        }
+    }
+
+    /// Check if an expression produces a String (not &str)
+    /// Used to detect match arm type consistency
+    /// Check if a match arm returns a string that will be converted to String
+    /// This handles cases like: if x { "a" } else { "b" } where the if-else branches
+    /// will be auto-converted to String, making the whole arm return String
+    fn arm_returns_converted_string(&self, expr: &Expression) -> bool {
+        match expr {
+            // Block with if-else that returns strings
+            Expression::Block { statements, .. } => {
+                if let Some(last) = statements.last() {
+                    match last {
+                        Statement::If {
+                            then_block,
+                            else_block,
+                            ..
+                        } => {
+                            // Check if both branches have string literals
+                            let then_has_string = then_block.last().is_some_and(|s| {
+                                matches!(s, Statement::Expression { expr: e, .. }
+                                    if matches!(e, Expression::Literal { value: Literal::String(_), .. }))
+                            });
+                            let else_has_string = else_block.as_ref().is_some_and(|block| {
+                                block.last().is_some_and(|s| {
+                                    matches!(s, Statement::Expression { expr: e, .. }
+                                        if matches!(e, Expression::Literal { value: Literal::String(_), .. }))
+                                })
+                            });
+                            then_has_string && else_has_string
+                        }
+                        Statement::Expression { expr: e, .. } => {
+                            // Check if it's a string literal (will be converted)
+                            // OR recursively check nested expressions
+                            matches!(
+                                e,
+                                Expression::Literal {
+                                    value: Literal::String(_),
+                                    ..
+                                }
+                            ) || self.arm_returns_converted_string(e)
+                        }
+                        _ => false,
+                    }
+                } else {
+                    false
+                }
+            }
+            // Direct if-else expression (not in a block)
+            _ => false,
+        }
+    }
+
+    fn expression_produces_string(&self, expr: &Expression) -> bool {
+        match expr {
+            // Macro invocations like format!(...) produce String
+            Expression::MacroInvocation { name, .. } => {
+                // format!, concat!, and write!-like macros produce String
+                matches!(name.as_str(), "format" | "concat" | "format_args" | "write")
+            }
+            // Function calls like String::from, format() without !
+            Expression::Call { function, .. } => {
+                if let Expression::Identifier { name, .. } = &**function {
+                    name == "format" || name == "String" || name == "to_string"
+                } else if let Expression::FieldAccess { field, .. } = &**function {
+                    field == "from" || field == "to_string"
+                } else {
+                    false
+                }
+            }
+            // Method calls like .to_string()
+            Expression::MethodCall { method, .. } => method == "to_string" || method == "to_owned",
+            // Blocks - check last statement for String-producing expression
+            Expression::Block { statements, .. } => {
+                if let Some(last) = statements.last() {
+                    match last {
+                        Statement::Expression { expr, .. } => self.expression_produces_string(expr),
+                        // If statements - check if branches return String
+                        Statement::If {
+                            then_block,
+                            else_block,
+                            ..
+                        } => {
+                            // Check if then branch produces String
+                            let then_produces_string = then_block.last().is_some_and(|s| {
+                                if let Statement::Expression { expr, .. } = s {
+                                    self.expression_produces_string(expr)
+                                } else {
+                                    false
+                                }
+                            });
+                            // Check else branch if present
+                            let else_produces_string = else_block.as_ref().is_some_and(|block| {
+                                block.last().is_some_and(|s| {
+                                    if let Statement::Expression { expr, .. } = s {
+                                        self.expression_produces_string(expr)
+                                    } else {
+                                        false
+                                    }
+                                })
+                            });
+                            then_produces_string || else_produces_string
+                        }
+                        _ => false,
+                    }
+                } else {
+                    false
+                }
+            }
+            _ => false,
+        }
+    }
+
+    /// Check if a block contains any expression that explicitly uses .as_str()
+    /// Used to prevent auto-conversion of string literals in if-else branches
+    fn block_has_as_str(&self, stmts: &[Statement]) -> bool {
+        for stmt in stmts {
+            if self.statement_has_as_str(stmt) {
+                return true;
+            }
+        }
+        false
+    }
+
+    /// Check if a block's LAST expression (return value) is an explicit reference (&self.field, &var, etc.)
+    /// Used to suppress string literal conversion when one if-else branch returns an explicit ref
+    #[allow(dead_code)]
+    fn block_has_explicit_ref(&self, stmts: &[Statement]) -> bool {
+        if stmts.is_empty() {
+            return false;
+        }
+
+        // Only check the LAST statement (the return value of the block)
+        if let Some(last_stmt) = stmts.last() {
+            match last_stmt {
+                Statement::Expression { expr, .. } => self.expression_is_explicit_ref(expr),
+                Statement::Return {
+                    value: Some(expr), ..
+                } => self.expression_is_explicit_ref(expr),
+                _ => false,
+            }
+        } else {
+            false
+        }
+    }
+
+    fn expression_is_explicit_ref(&self, expr: &Expression) -> bool {
+        match expr {
+            Expression::Unary {
+                op: crate::parser::UnaryOp::Ref,
+                ..
+            } => true,
+            Expression::Block { statements, .. } => self.block_has_explicit_ref(statements),
+            _ => false,
+        }
+    }
+
+    /// Check if an expression produces usize (e.g., .len(), array indexing)
+    /// Used for auto-casting between i32 and usize in comparisons
+    fn expression_produces_usize(&self, expr: &Expression) -> bool {
+        match expr {
+            // .len() returns usize
+            Expression::MethodCall { method, .. } => {
+                method == "len" || method == "count" || method == "capacity"
+            }
+            // Binary ops with len: len() - 1, len() + offset, etc.
+            Expression::Binary { left, right, .. } => {
+                self.expression_produces_usize(left) || self.expression_produces_usize(right)
+            }
+            // Variables assigned from .len()
+            Expression::Identifier { name, .. } => self.usize_variables.contains(name),
+            _ => false,
+        }
+    }
+
+    /// Check if a statement contains an explicit .as_str() call
+    fn statement_has_as_str(&self, stmt: &Statement) -> bool {
+        match stmt {
+            Statement::Expression { expr, .. } => self.expression_has_as_str(expr),
+            Statement::Return {
+                value: Some(expr), ..
+            } => self.expression_has_as_str(expr),
+            Statement::If {
+                then_block,
+                else_block,
+                ..
+            } => {
+                self.block_has_as_str(then_block)
+                    || else_block
+                        .as_ref()
+                        .is_some_and(|b| self.block_has_as_str(b))
+            }
+            _ => false,
+        }
+    }
+
+    /// Check if an expression explicitly uses .as_str()
+    fn expression_has_as_str(&self, expr: &Expression) -> bool {
+        match expr {
+            Expression::MethodCall { method, object, .. } => {
+                method == "as_str" || self.expression_has_as_str(object)
+            }
+            Expression::Block { statements, .. } => self.block_has_as_str(statements),
+            Expression::FieldAccess { object, .. } => self.expression_has_as_str(object),
+            _ => false,
+        }
     }
 
     fn generate_expression_with_precedence(&mut self, expr: &Expression) -> String {
@@ -3807,21 +3860,10 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
                 // Qualified paths use :: from parser (e.g., std::fs::read)
                 // Simple identifiers: variable_name -> variable_name
                 // Check if this is a struct field and we're in an impl block
-                // BUT: Don't apply implicit field access if:
-                // 1. This is a parameter name
-                // 2. This is a local variable (tracked in current_local_vars)
-                // 3. We're in a constructor (no self parameter)
+                // BUT: Don't apply implicit field access if this is a parameter name!
                 let is_parameter = self.current_function_params.iter().any(|p| p.name == *name);
-                let is_local_var = self.current_local_vars.contains(name);
-                let has_self = self
-                    .current_function_params
-                    .iter()
-                    .any(|p| p.name == "self");
-
                 let base_name = if self.in_impl_block
                     && !is_parameter
-                    && !is_local_var
-                    && has_self
                     && self.current_struct_fields.contains(name)
                 {
                     format!("self.{}", name)
@@ -3872,8 +3914,39 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
                     }
                 }
 
+                // Check for usize/i32 comparison or arithmetic - cast if needed
+                let is_comparison = matches!(
+                    op,
+                    BinaryOp::Lt
+                        | BinaryOp::Le
+                        | BinaryOp::Gt
+                        | BinaryOp::Ge
+                        | BinaryOp::Eq
+                        | BinaryOp::Ne
+                );
+                let is_arithmetic = matches!(
+                    op,
+                    BinaryOp::Add | BinaryOp::Sub | BinaryOp::Mul | BinaryOp::Div
+                );
+                let left_is_usize = self.expression_produces_usize(left);
+                let right_is_usize = self.expression_produces_usize(right);
+                let right_is_int_literal = matches!(
+                    right.as_ref(),
+                    Expression::Literal {
+                        value: Literal::Int(_),
+                        ..
+                    }
+                );
+                let left_is_int_literal = matches!(
+                    left.as_ref(),
+                    Expression::Literal {
+                        value: Literal::Int(_),
+                        ..
+                    }
+                );
+
                 // Wrap operands in parens if they have lower precedence
-                let left_str = match left.as_ref() {
+                let mut left_str = match left.as_ref() {
                     Expression::Binary { op: left_op, .. } => {
                         if self.op_precedence(left_op) < self.op_precedence(op) {
                             format!("({})", self.generate_expression(left))
@@ -3883,7 +3956,7 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
                     }
                     _ => self.generate_expression(left),
                 };
-                let right_str = match right.as_ref() {
+                let mut right_str = match right.as_ref() {
                     Expression::Binary { op: right_op, .. } => {
                         if self.op_precedence(right_op) < self.op_precedence(op) {
                             format!("({})", self.generate_expression(right))
@@ -3893,6 +3966,27 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
                     }
                     _ => self.generate_expression(right),
                 };
+
+                // AUTO-CAST: When comparing i32 with usize (.len() result), cast usize to i32
+                // WINDJAMMER PHILOSOPHY: Compiler does the work - no explicit casting needed
+                if is_comparison && left_is_usize != right_is_usize {
+                    if left_is_usize && !right_is_usize {
+                        // Cast left (usize) to i32
+                        left_str = format!("({} as i32)", left_str);
+                    } else if !left_is_usize && right_is_usize {
+                        // Cast right (usize) to i32
+                        right_str = format!("({} as i32)", right_str);
+                    }
+                }
+
+                // AUTO-CAST: When doing arithmetic between usize and int literal, cast literal to usize
+                // E.g., items.len() - 1 -> items.len() - 1usize
+                if is_arithmetic && left_is_usize && right_is_int_literal && !right_is_usize {
+                    right_str = format!("({} as usize)", right_str);
+                } else if is_arithmetic && right_is_usize && left_is_int_literal && !left_is_usize {
+                    left_str = format!("({} as usize)", left_str);
+                }
+
                 let op_str = self.binary_op_to_rust(op);
                 format!("{} {} {}", left_str, op_str, right_str)
             }
@@ -3900,10 +3994,10 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
                 let operand_str = self.generate_expression(operand);
                 let op_str = self.unary_op_to_rust(op);
 
-                // Add parentheses around operand if it's a binary expression
-                // to preserve correct operator precedence
-                // Example: !(a || b) should not become !a || b
-                let needs_parens = matches!(operand.as_ref(), Expression::Binary { .. });
+                // CRITICAL: Preserve parentheses for binary expressions in unary context
+                // !(a || b) should generate !(a || b), not !a || b
+                // Binary operators have lower precedence than unary operators, so we need parens
+                let needs_parens = matches!(&**operand, Expression::Binary { .. });
 
                 if needs_parens {
                     format!("{}({})", op_str, operand_str)
@@ -4091,6 +4185,43 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
 
                 let func_str = self.generate_expression(function);
 
+                // WINDJAMMER PHILOSOPHY: Some/Ok/Err with string literals need .to_string()
+                // Some("literal") -> Some("literal".to_string())
+                // Ok("literal") -> Ok("literal".to_string())
+                // Err("literal") -> Err("literal".to_string())
+                // Also: Some(borrowed_iterator_var) -> Some(borrowed_iterator_var.clone())
+                if matches!(func_name.as_str(), "Some" | "Ok" | "Err") {
+                    let args: Vec<String> = arguments
+                        .iter()
+                        .map(|(_label, arg)| {
+                            let arg_str = self.generate_expression(arg);
+                            // Auto-convert string literals to String for Option/Result wrappers
+                            if matches!(
+                                arg,
+                                Expression::Literal {
+                                    value: Literal::String(_),
+                                    ..
+                                }
+                            ) {
+                                format!("{}.to_string()", arg_str)
+                            } else if let Expression::Identifier { name, .. } = arg {
+                                // AUTO-CLONE: When wrapping a borrowed iterator variable in Some/Ok/Err,
+                                // we need to clone it since the wrapper takes ownership
+                                if self.borrowed_iterator_vars.contains(name)
+                                    && !arg_str.ends_with(".clone()")
+                                {
+                                    format!("{}.clone()", arg_str)
+                                } else {
+                                    arg_str
+                                }
+                            } else {
+                                arg_str
+                            }
+                        })
+                        .collect();
+                    return format!("{}({})", func_str, args.join(", "));
+                }
+
                 // Look up signature and clone it to avoid borrow conflicts
                 let signature = self.signature_registry.get_signature(&func_name).cloned();
 
@@ -4109,20 +4240,18 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
                             }
                         ) {
                             // Check if the parameter expects an owned String
-                            // DON'T add .to_string() if parameter is borrowed (expects &str)
                             let should_convert = if let Some(ref sig) = signature {
                                 if let Some(&ownership) = sig.param_ownership.get(i) {
-                                    // Only convert if parameter expects owned String, NOT borrowed
+                                    // Convert if parameter expects owned String
                                     matches!(ownership, OwnershipMode::Owned)
                                 } else {
-                                    // No ownership info - default to NOT converting
-                                    // String literals as &str is the Rust idiom
-                                    false
+                                    // No ownership info - check if it's a stdlib function
+                                    // (stdlib functions typically expect owned String)
+                                    func_str.contains("::")
                                 }
                             } else {
-                                // No signature found - default to NOT converting
-                                // This prevents unnecessary .to_string() on string literals
-                                false
+                                // No signature found - check if it's a stdlib function
+                                func_str.contains("::")
                             };
 
                             if should_convert {
@@ -4147,7 +4276,58 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
                                         }
                                     }
                                     OwnershipMode::Owned => {
-                                        // No change needed (already handled above for string literals)
+                                        // AUTO-CLONE: When passing a field from a borrowed parameter
+                                        // to a function that expects an owned value, clone it
+                                        if let Expression::FieldAccess {
+                                            object: field_obj, ..
+                                        } = arg
+                                        {
+                                            if let Expression::Identifier { name, .. } =
+                                                &**field_obj
+                                            {
+                                                // Check if it's a borrowed parameter (explicit OR inferred)
+                                                let is_explicitly_borrowed =
+                                                    self.current_function_params.iter().any(|p| {
+                                                        &p.name == name
+                                                            && matches!(
+                                                                p.ownership,
+                                                                crate::parser::OwnershipHint::Ref
+                                                            )
+                                                    });
+                                                let is_inferred_borrowed =
+                                                    self.inferred_borrowed_params.contains(name);
+                                                if (is_explicitly_borrowed || is_inferred_borrowed)
+                                                    && !arg_str.ends_with(".clone()")
+                                                {
+                                                    arg_str = format!("{}.clone()", arg_str);
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        } else {
+                            // No signature found - still check for borrowed param field access
+                            // This handles qualified calls like Type::method(param.field)
+                            if let Expression::FieldAccess {
+                                object: field_obj, ..
+                            } = arg
+                            {
+                                if let Expression::Identifier { name, .. } = &**field_obj {
+                                    let is_explicitly_borrowed =
+                                        self.current_function_params.iter().any(|p| {
+                                            &p.name == name
+                                                && matches!(
+                                                    p.ownership,
+                                                    crate::parser::OwnershipHint::Ref
+                                                )
+                                        });
+                                    let is_inferred_borrowed =
+                                        self.inferred_borrowed_params.contains(name);
+                                    if (is_explicitly_borrowed || is_inferred_borrowed)
+                                        && !arg_str.ends_with(".clone()")
+                                    {
+                                        arg_str = format!("{}.clone()", arg_str);
                                     }
                                 }
                             }
@@ -4169,12 +4349,46 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
 
                 // Special handling for methods that commonly need String arguments
                 // Note: push_str takes &str, NOT String, so we should NOT convert for it
-                // Only convert for push (Vec<String>::push) and set
-                let needs_string_conversion = matches!(method.as_str(), "push" | "set");
+                // Many editor/game methods expect owned String for name/description fields
+                // WINDJAMMER PHILOSOPHY: Compiler does the work - convert string literals automatically
+                let needs_string_conversion = matches!(
+                    method.as_str(),
+                    // Collection methods
+                    "push" | "insert" | "set" |
+                    // Builder pattern methods (commonly return Self with owned fields)
+                    "name" | "description" | "title" | "label" | "icon" | "text" |
+                    "tooltip" | "placeholder" | "value" | "id" | "class" | "style" |
+                    "path" | "url" | "file" | "author" | "version" | "message" |
+                    "prefix" | "suffix" | "format" | "pattern" | "key" | "tag" |
+                    // Editor/game specific
+                    "add_node" | "add_state" | "add_connection" |
+                    "add_effect" | "add_layer" | "add_keyframe" | "add_track" |
+                    "add_property" | "add_item" | "add_element" | "add_entry" |
+                    "add_parameter" | "add_transition" | "add_blend" | "add_clip" |
+                    "set_name" | "set_description" | "set_title" | "set_label" |
+                    "with_name" | "with_icon" | "with_label" | "with_title" |
+                    "with_description" | "with_text" | "with_tooltip" | "with_items" |
+                    "create" | "spawn" | "new_with_name" |
+                    // UI rendering methods
+                    "render_section" | "render_field" | "render_input" | "render_button" |
+                    "render_label" | "render_header" | "render_group" | "render_panel" |
+                    "render_vec3_editor" | "render_color_picker" | "render_slider" |
+                    "render_menu" | "render_toolbar" | "render_statusbar" | "render_transform" |
+                    "render_texture_slot" | "render_number_editor" | "render_color_editor" |
+                    "render_text_input" | "render_number_input" | "render_checkbox" |
+                    "render_vector3_input" | "render_dropdown" | "render_range" |
+                    "render_graph" | "render_object_properties" |
+                    // MenuItem/UI builder methods
+                    "shortcut" | "enabled" | "checked" | "separator"
+                );
+
+                // Look up method signature for auto-ref
+                let method_signature = self.signature_registry.get_signature(method).cloned();
 
                 let args: Vec<String> = arguments
                     .iter()
-                    .map(|(_label, arg)| {
+                    .enumerate()
+                    .map(|(i, (_label, arg))| {
                         let mut arg_str = self.generate_expression(arg);
 
                         // Auto-convert string literals to String for methods that need it
@@ -4189,6 +4403,99 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
                             )
                         {
                             arg_str = format!("{}.to_string()", arg_str);
+                        }
+
+                        // AUTO-CLONE: When pushing a borrowed iterator variable to a Vec,
+                        // we need to clone it since push() takes ownership
+                        if method == "push" {
+                            if let Expression::Identifier { name, .. } = arg {
+                                if self.borrowed_iterator_vars.contains(name) {
+                                    arg_str = format!("{}.clone()", arg_str);
+                                }
+                            }
+                        }
+
+                        // AUTO-CLONE: When passing a field from a borrowed parameter to a method
+                        // that expects an owned value, clone it
+                        if let Some(ref sig) = method_signature {
+                            let param_idx = if sig.has_self_receiver { i + 1 } else { i };
+                            if let Some(&ownership) = sig.param_ownership.get(param_idx) {
+                                // Only clone if method expects owned value (not borrowed)
+                                if matches!(ownership, crate::analyzer::OwnershipMode::Owned) {
+                                    // Check if arg is a field access on a borrowed param
+                                    if let Expression::FieldAccess { object, .. } = arg {
+                                        if let Expression::Identifier { name, .. } = &**object {
+                                            // Check if it's a borrowed parameter (explicit OR inferred)
+                                            let is_explicitly_borrowed = self.current_function_params.iter().any(|p| {
+                                                &p.name == name && matches!(p.ownership, crate::parser::OwnershipHint::Ref)
+                                            });
+                                            let is_inferred_borrowed = self.inferred_borrowed_params.contains(name);
+                                            if (is_explicitly_borrowed || is_inferred_borrowed) && !arg_str.ends_with(".clone()") {
+                                                arg_str = format!("{}.clone()", arg_str);
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+
+                        // AUTO-REF: Add & when parameter expects reference but arg is owned
+                        // Check signature for parameter ownership
+                        if let Some(ref sig) = method_signature {
+                            // Adjust for self parameter (signature includes self at index 0)
+                            // Arguments don't include self, so add 1 to i
+                            let param_idx = if sig.has_self_receiver { i + 1 } else { i };
+                            if let Some(&ownership) = sig.param_ownership.get(param_idx) {
+                                if matches!(ownership, crate::analyzer::OwnershipMode::Borrowed)
+                                    && !arg_str.starts_with('&')
+                                    && !matches!(arg, Expression::Unary { op: crate::parser::UnaryOp::Ref | crate::parser::UnaryOp::MutRef, .. })
+                                {
+                                    arg_str = format!("&{}", arg_str);
+                                }
+                            }
+                        }
+
+                        // AUTO-REF for Rust stdlib HashMap methods (not in our signature registry)
+                        // HashMap::remove, HashMap::contains_key expect &K for string keys
+                        // NOTE: Don't add & for .get() as it's too generic (also used for Vec/array indexing)
+                        // NOTE: Don't add & if parameter is already a reference type
+                        let is_hashmap_key_method = matches!(method.as_str(), "remove" | "contains_key" | "entry");
+                        let is_string_arg = matches!(arg, Expression::Identifier { .. } | Expression::FieldAccess { .. })
+                            && arg_str.parse::<i64>().is_err();  // Not a numeric literal
+                        // Check if the argument is already a reference parameter
+                        let arg_is_ref_param = if let Expression::Identifier { name, .. } = arg {
+                            self.current_function_params.iter().any(|p|
+                                &p.name == name && matches!(p.ownership, crate::parser::OwnershipHint::Ref | crate::parser::OwnershipHint::Mut)
+                            )
+                        } else {
+                            false
+                        };
+                        let needs_stdlib_ref = is_hashmap_key_method
+                            && i == 0  // First argument (the key)
+                            && is_string_arg
+                            && !arg_str.starts_with('&')
+                            && !arg_is_ref_param
+                            && !matches!(arg, Expression::Unary { op: crate::parser::UnaryOp::Ref | crate::parser::UnaryOp::MutRef, .. });
+                        if needs_stdlib_ref {
+                            arg_str = format!("&{}", arg_str);
+                        }
+
+                        // AUTO-BORROW for push_str: String::push_str expects &str, not String
+                        // If arg is a String variable/expression (not a string literal), add &
+                        if method == "push_str" && i == 0 {
+                            let is_string_literal = matches!(arg, Expression::Literal { value: Literal::String(_), .. });
+                            // If not a string literal and not already a reference, add &
+                            if !is_string_literal && !arg_str.starts_with('&') {
+                                // Check if it's a String-producing expression (variable, field access, method call)
+                                let needs_borrow = matches!(arg,
+                                    Expression::Identifier { .. } |
+                                    Expression::FieldAccess { .. } |
+                                    Expression::MethodCall { .. }
+                                );
+                                if needs_borrow {
+                                    arg_str = format!("&{}", arg_str);
+                                }
+                            }
                         }
 
                         arg_str
@@ -4212,6 +4519,21 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
                 // Special case: substring(start, end) -> &text[start..end]
                 if method == "substring" && args.len() == 2 {
                     return format!("&{}[{}..{}]", obj_str, args[0], args[1]);
+                }
+
+                // Special case: contains() with String argument needs .as_str()
+                // String::contains() expects &str, not String
+                if method == "contains" && args.len() == 1 {
+                    // Check if argument is a method call that returns String (like to_lowercase())
+                    if let Some((_label, arg)) = arguments.first() {
+                        if matches!(arg, Expression::MethodCall { method: m, .. } if
+                            m == "to_lowercase" || m == "to_uppercase" ||
+                            m == "to_string" || m == "trim" || m == "clone")
+                        {
+                            // The argument is String, needs .as_str()
+                            return format!("{}.{}({}.as_str())", obj_str, method, args[0]);
+                        }
+                    }
                 }
 
                 // Determine separator: :: for static calls, . for instance methods
@@ -4382,6 +4704,38 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
                     }
                 }
 
+                // BORROWED ITERATOR: If accessing fields through a borrowed iterator variable,
+                // we need to clone String fields since we can't move out of a reference
+                // BUT: Don't clone for assignment targets (left side of =)
+                if !self.generating_assignment_target {
+                    if let Expression::Identifier { name: var_name, .. } = &**object {
+                        if self.borrowed_iterator_vars.contains(var_name) {
+                            // Clone non-Copy fields (String-like names)
+                            // Exclude obvious Copy fields
+                            // ALSO exclude method names that look like fields (as_str, to_string, etc.)
+                            let needs_clone = !matches!(
+                                field.as_str(),
+                                "len" | "count" | "size" | "index" | "idx" | "i" | "j" | "k" |
+                                "x" | "y" | "z" | "w" | "width" | "height" | "depth" |
+                                "r" | "g" | "b" | "a" | "left" | "right" | "top" | "bottom" |
+                                "min" | "max" | "start" | "end" | "offset" | "scale" |
+                                "speed" | "time" | "delta" | "angle" | "radius" | "distance" |
+                                "visible" | "enabled" | "active" | "selected" | "focused" |
+                                "id" | "type" | "kind" | "priority" | "level" |
+                                // Method-like names that should NOT be cloned (they're method calls, not fields)
+                                "as_str" | "to_string" | "clone" | "iter" | "iter_mut" | "is_empty"
+                            );
+                            if needs_clone && !base_expr.ends_with(".clone()") {
+                                return format!("{}.clone()", base_expr);
+                            }
+                        }
+                    }
+                }
+
+                // NOTE: Auto-clone for self.field is handled at a higher level
+                // (in struct literal generation and specific return contexts)
+                // Do NOT clone here as it causes issues with .iter() on collections
+
                 base_expr
             }
             Expression::StructLiteral { name, fields, .. } => {
@@ -4392,9 +4746,45 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
                 let field_str: Vec<String> = fields
                     .iter()
                     .map(|(field_name, expr)| {
-                        // For simple direct field access (e.g., source.field -> target.field),
-                        // we can generate cleaner code
-                        let expr_str = self.generate_expression(expr);
+                        // WINDJAMMER PHILOSOPHY: Auto-convert string literals to String
+                        // In Windjammer, `string` type is always owned (maps to Rust String)
+                        // So string literals in struct fields should be converted automatically
+                        let mut expr_str = self.generate_expression(expr);
+
+                        // Auto-convert string literals to String for struct fields
+                        if matches!(
+                            expr,
+                            Expression::Literal {
+                                value: Literal::String(_),
+                                ..
+                            }
+                        ) {
+                            expr_str = format!("{}.to_string()", expr_str);
+                        }
+
+                        // CRITICAL: Auto-clone self.field when constructing struct from borrowed self
+                        // Pattern: fn method(&self) -> Self { Self { field: self.field } }
+                        // Non-Copy fields from borrowed self need to be cloned
+                        if let Expression::FieldAccess { object, .. } = expr {
+                            if let Expression::Identifier { name: obj_name, .. } = &**object {
+                                if obj_name == "self" && !expr_str.contains(".clone()") {
+                                    // Check if current function takes &self (borrowed)
+                                    let self_is_borrowed =
+                                        self.current_function_params.iter().any(|p| {
+                                            p.name == "self"
+                                                && matches!(
+                                                    p.ownership,
+                                                    crate::parser::OwnershipHint::Ref
+                                                )
+                                        });
+
+                                    if self_is_borrowed {
+                                        // Clone the field access since self is borrowed
+                                        expr_str = format!("{}.clone()", expr_str);
+                                    }
+                                }
+                            }
+                        }
 
                         // Check for field shorthand: if expr is just the field name, use shorthand
                         if let Expression::Identifier { name: id, .. } = expr {
@@ -4464,20 +4854,9 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
                 let params = parameters.join(", ");
                 let body_str = self.generate_expression(body);
 
-                // WINDJAMMER PHILOSOPHY: Always emit `move` for closures
-                //
-                // In Rust, you must manually write `move` to take ownership of captured
-                // variables. This is a mechanical detail the compiler can infer:
-                // - Threads require 'static lifetime → needs move
-                // - Returning closures → needs move
-                // - Closures stored in structs → needs move
-                //
-                // Rather than burden the developer with this decision, Windjammer
-                // always emits `move` closures. This is safe and works in all cases.
-                // Rust's optimizer will elide unnecessary copies for Copy types.
-                //
-                // The developer writes: |x| x + 1
-                // We generate: move |x| x + 1
+                // In Windjammer, closures automatically use move semantics when needed
+                // This is more ergonomic than requiring explicit 'move' keyword
+                // We always generate 'move' for safety in concurrent contexts
                 format!("move |{}| {}", params, body_str)
             }
             Expression::Index { object, index, .. } => {
@@ -4499,22 +4878,38 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
                     return format!("{}[{}{}{}]", obj_str, start_str, range_op, end_str);
                 }
 
-                let mut idx_str = self.generate_expression(index);
+                let idx_str = self.generate_expression(index);
 
-                // AUTO-CAST: Rust requires usize for array indexing
-                // If the index explicitly casts to i64, change it to usize
-                // This handles: arr[index as int] → arr[index as usize]
-                if idx_str.ends_with(" as i64") {
-                    idx_str = idx_str.replace(" as i64", " as usize");
-                }
-                // Otherwise, add cast to usize for int types
-                // This handles: arr[index] where index: int → arr[index as usize]
-                // Note: No parentheses needed - index operator [] has high precedence
-                else {
-                    idx_str = format!("{} as usize", idx_str);
-                }
+                // WINDJAMMER PHILOSOPHY: Auto-cast to usize for array indexing
+                // Rust requires usize for indexing, but Windjammer uses int (i64)
+                // Handle cases:
+                // 1. Simple identifier: arr[idx] -> arr[idx as usize]
+                // 2. Integer literal: arr[0] -> arr[0 as usize]
+                // 3. Cast to int/i64: arr[x as int] -> arr[x as usize]
+                // 4. Already usize: don't double-cast
+                let final_idx = if idx_str.ends_with("as i64") || idx_str.ends_with("as int") {
+                    // Replace i64/int cast with usize
+                    let base = idx_str
+                        .trim_end_matches("as i64")
+                        .trim_end_matches("as int")
+                        .trim();
+                    format!("{} as usize", base)
+                } else if matches!(
+                    &**index,
+                    Expression::Identifier { .. }
+                        | Expression::Literal {
+                            value: Literal::Int(_),
+                            ..
+                        }
+                ) && !idx_str.contains(" as ")
+                {
+                    // Simple identifier or integer literal - add usize cast
+                    format!("{} as usize", idx_str)
+                } else {
+                    idx_str
+                };
 
-                let base_expr = format!("{}[{}]", obj_str, idx_str);
+                let base_expr = format!("{}[{}]", obj_str, final_idx);
 
                 // AUTO-CLONE: Check if this index expression needs to be cloned
                 if let Some(path) = self.extract_field_access_path(expr) {
@@ -4542,8 +4937,7 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
             } => {
                 let expr_strs: Vec<String> =
                     exprs.iter().map(|e| self.generate_expression(e)).collect();
-                // Generate as array literal [x, y, z] not vec![x, y, z]
-                format!("[{}]", expr_strs.join(", "))
+                format!("vec![{}]", expr_strs.join(", "))
             }
             Expression::MacroInvocation {
                 name,
@@ -4657,6 +5051,10 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
                             .iter()
                             .any(|arm| matches!(arm.pattern, Pattern::Tuple(_)));
 
+                        // CRITICAL: Check if matching on self.field to avoid partial move
+                        let needs_clone_for_match =
+                            self.match_needs_clone_for_self_field(value, arms);
+
                         let value_str = self.generate_expression(value);
                         if has_string_literal && !is_tuple_match {
                             // Add .as_str() if the value doesn't already end with it
@@ -4665,6 +5063,9 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
                             } else {
                                 output.push_str(&value_str);
                             }
+                        } else if needs_clone_for_match && !value_str.ends_with(".clone()") {
+                            // Clone the field to avoid partial move from self
+                            output.push_str(&format!("{}.clone()", value_str));
                         } else {
                             output.push_str(&value_str);
                         }
@@ -4672,7 +5073,54 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
                         output.push_str(" {\n");
 
                         self.indent_level += 1;
-                        for arm in arms {
+
+                        // WINDJAMMER PHILOSOPHY: Detect if any arm returns String and convert all arms
+                        // Check if conversion is needed based on function return type FIRST
+                        let needs_string_conversion_from_type =
+                            match &self.current_function_return_type {
+                                Some(Type::String) => true,
+                                Some(Type::Custom(name)) if name == "String" => true,
+                                _ => {
+                                    // Also check if any arm explicitly produces String
+                                    arms.iter().any(|arm| {
+                                        self.expression_produces_string(&arm.body)
+                                            || self.arm_returns_converted_string(&arm.body)
+                                    })
+                                }
+                            };
+
+                        // Set context flag BEFORE generating arms
+                        let old_in_match_arm = self.in_match_arm_needing_string;
+                        if needs_string_conversion_from_type {
+                            self.in_match_arm_needing_string = true;
+                        }
+
+                        // Generate all arms with the flag set
+                        let arm_strings: Vec<(String, bool)> = arms
+                            .iter()
+                            .map(|arm| {
+                                let body_str = self.generate_expression(&arm.body);
+                                let is_string_literal = matches!(
+                                    &arm.body,
+                                    Expression::Literal {
+                                        value: Literal::String(_),
+                                        ..
+                                    }
+                                );
+                                (body_str, is_string_literal)
+                            })
+                            .collect();
+
+                        // Restore flag
+                        self.in_match_arm_needing_string = old_in_match_arm;
+
+                        // For direct string literals, we still need to apply .to_string()
+                        // (blocks handle their own conversion via the flag)
+                        let any_arm_produces_string = needs_string_conversion_from_type;
+
+                        for (arm, (arm_str, is_string_literal)) in
+                            arms.iter().zip(arm_strings.iter())
+                        {
                             output.push_str(&self.indent());
                             output.push_str(&self.generate_pattern(&arm.pattern));
 
@@ -4683,7 +5131,16 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
                             }
 
                             output.push_str(" => ");
-                            output.push_str(&self.generate_expression(&arm.body));
+
+                            // Auto-convert string literals to String when other arms return String
+                            if any_arm_produces_string
+                                && *is_string_literal
+                                && !arm_str.ends_with(".to_string()")
+                            {
+                                output.push_str(&format!("{}.to_string()", arm_str));
+                            } else {
+                                output.push_str(arm_str);
+                            }
                             output.push_str(",\n");
                         }
                         self.indent_level -= 1;
@@ -4713,7 +5170,23 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
                         match stmt {
                             Statement::Expression { expr, .. } => {
                                 output.push_str(&self.indent());
-                                output.push_str(&self.generate_expression(expr));
+                                let mut expr_str = self.generate_expression(expr);
+
+                                // If in a match arm needing string conversion, convert string literals
+                                if self.in_match_arm_needing_string {
+                                    let is_string_literal = matches!(
+                                        expr,
+                                        Expression::Literal {
+                                            value: Literal::String(_),
+                                            ..
+                                        }
+                                    );
+                                    if is_string_literal && !expr_str.ends_with(".to_string()") {
+                                        expr_str = format!("{}.to_string()", expr_str);
+                                    }
+                                }
+
+                                output.push_str(&expr_str);
                                 output.push('\n');
                             }
                             Statement::Thread { body, .. } => {
@@ -5046,11 +5519,11 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
             traits.push("Copy".to_string());
         }
 
-        // Check if all fields are PartialEq
-        if self.all_fields_are_comparable(&struct_.fields) {
+        // Check if all fields are PartialEq (most types support this)
+        if self.all_fields_are_partial_eq(&struct_.fields) {
             traits.push("PartialEq".to_string());
 
-            // Check if all fields are Eq (floats are not Eq!)
+            // Only add Eq if all fields support it (not floats)
             if self.all_fields_are_eq(&struct_.fields) {
                 traits.push("Eq".to_string());
 
@@ -5075,14 +5548,112 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
             .all(|field| self.is_copy_type(&field.field_type))
     }
 
-    fn all_fields_are_comparable(&self, fields: &[crate::parser::StructField]) -> bool {
+    fn all_fields_are_partial_eq(&self, fields: &[crate::parser::StructField]) -> bool {
         fields
             .iter()
-            .all(|field| self.is_comparable_type(&field.field_type))
+            .all(|field| self.is_partial_eq_type(&field.field_type))
     }
 
-    /// Check if all fields implement Eq (not just PartialEq)
-    /// Floats only implement PartialEq, not Eq
+    fn all_enum_variants_are_partial_eq(&self, variants: &[crate::parser::EnumVariant]) -> bool {
+        use crate::parser::EnumVariantData;
+        variants.iter().all(|variant| {
+            match &variant.data {
+                EnumVariantData::Unit => true, // Unit variants always support PartialEq
+                EnumVariantData::Tuple(types) => types.iter().all(|ty| self.is_partial_eq_type(ty)),
+                EnumVariantData::Struct(fields) => fields
+                    .iter()
+                    .all(|(_, field_type)| self.is_partial_eq_type(field_type)),
+            }
+        })
+    }
+
+    /// Pre-pass: Collect which custom types (structs/enums) support PartialEq
+    /// This enables smart enum derives that only add PartialEq if all variants support it
+    fn collect_partial_eq_types(&mut self, program: &Program) {
+        for item in &program.items {
+            match item {
+                Item::Struct { decl: s, .. } => {
+                    // Check if this struct has @auto or explicitly derives PartialEq
+                    let has_auto = s.decorators.iter().any(|d| d.name == "auto");
+                    if has_auto {
+                        // Check if all fields support PartialEq
+                        let all_fields_support_partial_eq = s
+                            .fields
+                            .iter()
+                            .all(|f| self.is_partial_eq_type_recursive(&f.field_type));
+                        if all_fields_support_partial_eq {
+                            self.partial_eq_types.insert(s.name.clone());
+                        }
+                    }
+                }
+                Item::Enum { decl: e, .. } => {
+                    // Enums support PartialEq if all variants do
+                    if self.all_enum_variants_are_partial_eq_recursive(&e.variants) {
+                        self.partial_eq_types.insert(e.name.clone());
+                    }
+                }
+                _ => {}
+            }
+        }
+    }
+
+    /// Recursive check for PartialEq without using the partial_eq_types set (for pre-pass)
+    fn is_partial_eq_type_recursive(&self, ty: &Type) -> bool {
+        match ty {
+            Type::Int | Type::Int32 | Type::Uint | Type::Float | Type::Bool | Type::String => true,
+            Type::Custom(name)
+                if matches!(
+                    name.as_str(),
+                    "f32"
+                        | "f64"
+                        | "i8"
+                        | "i16"
+                        | "i32"
+                        | "i64"
+                        | "i128"
+                        | "u8"
+                        | "u16"
+                        | "u32"
+                        | "u64"
+                        | "u128"
+                        | "usize"
+                        | "isize"
+                        | "char"
+                ) =>
+            {
+                true
+            }
+            Type::Reference(inner) | Type::MutableReference(inner) => {
+                self.is_partial_eq_type_recursive(inner)
+            }
+            Type::Tuple(types) => types.iter().all(|t| self.is_partial_eq_type_recursive(t)),
+            Type::Vec(inner) => self.is_partial_eq_type_recursive(inner),
+            Type::Option(inner) => self.is_partial_eq_type_recursive(inner),
+            Type::Result(ok, err) => {
+                self.is_partial_eq_type_recursive(ok) && self.is_partial_eq_type_recursive(err)
+            }
+            // For custom types in pre-pass, assume false (we don't know yet)
+            _ => false,
+        }
+    }
+
+    /// Recursive check for enum variants without using partial_eq_types set
+    fn all_enum_variants_are_partial_eq_recursive(
+        &self,
+        variants: &[crate::parser::EnumVariant],
+    ) -> bool {
+        use crate::parser::EnumVariantData;
+        variants.iter().all(|variant| match &variant.data {
+            EnumVariantData::Unit => true,
+            EnumVariantData::Tuple(types) => {
+                types.iter().all(|ty| self.is_partial_eq_type_recursive(ty))
+            }
+            EnumVariantData::Struct(fields) => fields
+                .iter()
+                .all(|(_, field_type)| self.is_partial_eq_type_recursive(field_type)),
+        })
+    }
+
     fn all_fields_are_eq(&self, fields: &[crate::parser::StructField]) -> bool {
         fields
             .iter()
@@ -5110,7 +5681,7 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
             Type::Tuple(types) => types.iter().all(|t| self.is_copy_type(t)),
             Type::Custom(name) => {
                 // Recognize common Rust primitive types by name
-                if matches!(
+                matches!(
                     name.as_str(),
                     "i8" | "i16"
                         | "i32"
@@ -5127,89 +5698,85 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
                         | "f64"
                         | "bool"
                         | "char"
-                ) {
-                    return true;
-                }
-                // Check if it's a user-defined struct that's in our simple_structs registry
-                // (simple_structs contains structs with all Copy fields)
-                self.simple_structs.contains(name)
+                )
             }
             _ => false, // String, Vec, Option, Result, other Custom types are not Copy
         }
     }
 
-    /// Check if a type is String (for String → &str optimization)
-    fn is_string_type(&self, ty: &Type) -> bool {
-        matches!(ty, Type::String)
-    }
-
-    fn is_generic_type(&self, ty: &Type) -> bool {
-        // Generic type parameters are typically single uppercase letters: T, G, S, etc.
-        // Also include common patterns like T1, T2, etc.
-        if let Type::Custom(name) = ty {
-            name.chars().next().is_some_and(|c| c.is_uppercase())
-                && (name.len() == 1
-                    || name
-                        .chars()
-                        .all(|c| c.is_alphanumeric() && c.is_uppercase() || c.is_numeric()))
-        } else {
-            false
-        }
-    }
-
-    fn is_comparable_type(&self, ty: &Type) -> bool {
-        // PartialEq - floats are included
+    #[allow(clippy::only_used_in_recursion)]
+    fn is_partial_eq_type(&self, ty: &Type) -> bool {
+        // Most types support PartialEq including floats
         match ty {
             Type::Int | Type::Int32 | Type::Uint | Type::Float | Type::Bool | Type::String => true,
-            Type::Reference(inner) | Type::MutableReference(inner) => {
-                self.is_comparable_type(inner)
-            }
-            Type::Tuple(types) => types.iter().all(|t| self.is_comparable_type(t)),
-            Type::Option(inner) => self.is_comparable_type(inner),
-            Type::Result(ok, err) => self.is_comparable_type(ok) && self.is_comparable_type(err),
-            Type::Vec(inner) => self.is_comparable_type(inner), // Vec<T> is PartialEq if T is
-            Type::Custom(name) => {
-                // Check if it's a user-defined struct in simple_structs (has PartialEq derived)
-                self.simple_structs.contains(name)
-            }
-            _ => false,
-        }
-    }
-
-    /// Check if type implements Eq (not just PartialEq)
-    /// Floats only implement PartialEq, not Eq
-    #[allow(clippy::only_used_in_recursion)]
-    fn is_eq_type(&self, ty: &Type) -> bool {
-        match ty {
-            Type::Int | Type::Int32 | Type::Uint | Type::Bool | Type::String => true,
-            Type::Float => false, // Floats don't implement Eq!
-            Type::Reference(inner) | Type::MutableReference(inner) => self.is_eq_type(inner),
-            Type::Tuple(types) => types.iter().all(|t| self.is_eq_type(t)),
-            Type::Option(inner) => self.is_eq_type(inner),
-            Type::Result(ok, err) => self.is_eq_type(ok) && self.is_eq_type(err),
-            Type::Custom(name) => {
-                // Recognize common Rust types that implement Eq
-                matches!(
+            // Handle Rust-style type names that aren't Windjammer keywords
+            Type::Custom(name)
+                if matches!(
                     name.as_str(),
-                    "i8" | "i16"
+                    "f32"
+                        | "f64"
+                        | "i8"
+                        | "i16"
                         | "i32"
                         | "i64"
                         | "i128"
-                        | "isize"
                         | "u8"
                         | "u16"
                         | "u32"
                         | "u64"
                         | "u128"
                         | "usize"
-                        | "bool"
+                        | "isize"
                         | "char"
-                        | "&str"
-                        | "String"
-                )
-                // Note: We don't check simple_structs here because structs with
-                // float fields are in simple_structs but can't derive Eq
+                ) =>
+            {
+                true
             }
+            // Check collected custom types from pre-pass
+            Type::Custom(name) => self.partial_eq_types.contains(name),
+            Type::Reference(inner) | Type::MutableReference(inner) => {
+                self.is_partial_eq_type(inner)
+            }
+            Type::Tuple(types) => types.iter().all(|t| self.is_partial_eq_type(t)),
+            Type::Vec(inner) => self.is_partial_eq_type(inner),
+            Type::Option(inner) => self.is_partial_eq_type(inner),
+            Type::Result(ok, err) => self.is_partial_eq_type(ok) && self.is_partial_eq_type(err),
+            _ => false,
+        }
+    }
+
+    #[allow(clippy::only_used_in_recursion)]
+    fn is_eq_type(&self, ty: &Type) -> bool {
+        // Eq is stricter - floats don't support it (NaN != NaN)
+        match ty {
+            Type::Int | Type::Int32 | Type::Uint | Type::Bool | Type::String => true,
+            Type::Float => false, // Floats don't implement Eq
+            // Handle Rust-style type names - floats don't support Eq
+            Type::Custom(name) if matches!(name.as_str(), "f32" | "f64") => false,
+            Type::Custom(name)
+                if matches!(
+                    name.as_str(),
+                    "i8" | "i16"
+                        | "i32"
+                        | "i64"
+                        | "i128"
+                        | "u8"
+                        | "u16"
+                        | "u32"
+                        | "u64"
+                        | "u128"
+                        | "usize"
+                        | "isize"
+                        | "char"
+                ) =>
+            {
+                true
+            }
+            Type::Reference(inner) | Type::MutableReference(inner) => self.is_eq_type(inner),
+            Type::Tuple(types) => types.iter().all(|t| self.is_eq_type(t)),
+            Type::Vec(inner) => self.is_eq_type(inner),
+            Type::Option(inner) => self.is_eq_type(inner),
+            Type::Result(ok, err) => self.is_eq_type(ok) && self.is_eq_type(err),
             _ => false,
         }
     }
@@ -5224,9 +5791,7 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
             Type::Tuple(types) => types.iter().all(|t| self.is_hashable_type(t)),
             Type::Vec(_) => false, // Vec is not Hash
             Type::Option(inner) => self.is_hashable_type(inner),
-            // Note: We don't check simple_structs for Custom types because
-            // structs with float fields are in simple_structs but can't derive Hash
-            _ => false, // Custom types, Result - assume not Hash
+            _ => false, // Result, Custom types - assume not Hash
         }
     }
 
@@ -5238,11 +5803,7 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
             Type::Vec(_) => true,    // Vec has Default (empty vec)
             Type::Option(_) => true, // Option has Default (None)
             Type::Tuple(types) => types.iter().all(|t| self.has_default(t)),
-            Type::Custom(name) => {
-                // Check if it's a user-defined struct in simple_structs (has Default derived)
-                self.simple_structs.contains(name)
-            }
-            _ => false, // Refs don't have Default, Result unknown
+            _ => false, // Refs don't have Default, Result/Custom types unknown
         }
     }
 
@@ -5319,6 +5880,39 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
         }
     }
 
+    /// Check if we're iterating over a borrowed collection
+    /// (the iterator variable will be a reference, so field access needs .clone())
+    fn is_iterating_over_borrowed(&self, iterable: &Expression) -> bool {
+        match iterable {
+            // Borrowing the collection: &items, &self.items
+            Expression::Unary { op, .. } => {
+                matches!(op, UnaryOp::Ref | UnaryOp::MutRef)
+            }
+            // Field access on borrowed self: self.items (when self is &self)
+            Expression::FieldAccess { object, .. } => {
+                if let Expression::Identifier { name, .. } = &**object {
+                    // Check if self is borrowed
+                    if name == "self" {
+                        return self.current_function_params.iter().any(|p| {
+                            p.name == "self"
+                                && matches!(p.ownership, crate::parser::OwnershipHint::Ref)
+                        });
+                    }
+                    // Check if it's a borrowed parameter
+                    return self.current_function_params.iter().any(|p| {
+                        &p.name == name && matches!(p.ownership, crate::parser::OwnershipHint::Ref)
+                    });
+                }
+                false
+            }
+            // Direct variable that's a borrowed parameter
+            Expression::Identifier { name, .. } => self.current_function_params.iter().any(|p| {
+                &p.name == name && matches!(p.ownership, crate::parser::OwnershipHint::Ref)
+            }),
+            _ => false,
+        }
+    }
+
     /// Extract the identifier from a pattern (for for-loop variable names)
     fn extract_pattern_identifier(&self, pattern: &Pattern) -> Option<String> {
         match pattern {
@@ -5387,143 +5981,19 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
     fn should_mut_borrow_index_access(&self, expr: &Expression) -> bool {
         match expr {
             Expression::Index { object, .. } => {
-                // Check if we're indexing into a field access (e.g., self.enemies[i] or polygon.vertices[i])
+                // Check if we're indexing into a field access (e.g., self.enemies[i])
                 if let Expression::FieldAccess {
                     object: field_obj, ..
                 } = &**object
                 {
-                    // Check if the field is accessed on self or a parameter
-                    if let Expression::Identifier { name, .. } = &**field_obj {
-                        // BUG FIX #23 (Dogfooding Win!): Check parameter ownership
-                        // If parameter is &T, use &, not &mut
-                        // If parameter is &mut T, use &mut
-                        // If parameter is owned, don't add any reference
-
-                        if name == "self" {
-                            // self is always &self or &mut self, assume &mut for now
-                            // TODO: Track actual self ownership from function signature
-                            return true;
-                        }
-
-                        // Check if this is a parameter and its ownership
-                        for param in &self.current_function_params {
-                            if param.name == *name {
-                                // Only add &mut if parameter is explicitly &mut
-                                // If parameter is & (immutable borrow), we should NOT add &mut!
-                                return matches!(
-                                    param.ownership,
-                                    crate::parser::OwnershipHint::Mut
-                                );
-                            }
-                        }
-
-                        // Not a parameter, assume it's a local variable - don't add ref
-                        return false;
+                    // Check if the field is accessed on self or a borrowed parameter
+                    if let Expression::Identifier { .. } = &**field_obj {
+                        // For now, assume self and first parameter are borrowed
+                        return true; // Conservative: always borrow index access (including self)
                     }
                 }
                 false
             }
-            _ => false,
-        }
-    }
-
-    /// Check if an expression is a closure that mutates captured variables
-    /// Rust requires such closures to be stored in `mut` bindings
-    fn is_mutating_closure(&self, expr: &Expression) -> bool {
-        if let Expression::Closure {
-            body, parameters, ..
-        } = expr
-        {
-            // Get the set of closure parameters (these are NOT captured)
-            let param_names: std::collections::HashSet<_> = parameters.iter().cloned().collect();
-
-            // Check if the closure body contains assignments to non-parameter variables
-            self.closure_mutates_captures(body, &param_names)
-        } else {
-            false
-        }
-    }
-
-    /// Recursively check if an expression contains mutations to captured variables
-    fn closure_mutates_captures(
-        &self,
-        expr: &Expression,
-        param_names: &std::collections::HashSet<String>,
-    ) -> bool {
-        match expr {
-            // Block expression - check all statements
-            Expression::Block { statements, .. } => {
-                // Check statements for assignments
-                statements
-                    .iter()
-                    .any(|stmt| self.statement_mutates_captures(stmt, param_names))
-            }
-            // Recurse into sub-expressions
-            Expression::Binary { left, right, .. } => {
-                self.closure_mutates_captures(left, param_names)
-                    || self.closure_mutates_captures(right, param_names)
-            }
-            Expression::Call {
-                function,
-                arguments,
-                ..
-            } => {
-                self.closure_mutates_captures(function, param_names)
-                    || arguments
-                        .iter()
-                        .any(|(_, arg)| self.closure_mutates_captures(arg, param_names))
-            }
-            Expression::MethodCall {
-                object, arguments, ..
-            } => {
-                self.closure_mutates_captures(object, param_names)
-                    || arguments
-                        .iter()
-                        .any(|(_, arg)| self.closure_mutates_captures(arg, param_names))
-            }
-            _ => false,
-        }
-    }
-
-    /// Check if a statement mutates captured variables
-    fn statement_mutates_captures(
-        &self,
-        stmt: &Statement,
-        param_names: &std::collections::HashSet<String>,
-    ) -> bool {
-        match stmt {
-            Statement::Assignment {
-                target: Expression::Identifier { name, .. },
-                ..
-            } => {
-                // If it's not a closure parameter, it's a captured variable from outer scope
-                // (even if it's in current_local_vars - those are the outer scope's locals
-                // which the closure captures)
-                !param_names.contains(name)
-            }
-            Statement::Assignment { .. } => false,
-            Statement::Expression { expr, .. } => self.closure_mutates_captures(expr, param_names),
-            Statement::If {
-                condition,
-                then_block,
-                else_block,
-                ..
-            } => {
-                self.closure_mutates_captures(condition, param_names)
-                    || then_block
-                        .iter()
-                        .any(|s| self.statement_mutates_captures(s, param_names))
-                    || else_block.as_ref().is_some_and(|stmts| {
-                        stmts
-                            .iter()
-                            .any(|s| self.statement_mutates_captures(s, param_names))
-                    })
-            }
-            Statement::For { body, .. }
-            | Statement::While { body, .. }
-            | Statement::Loop { body, .. } => body
-                .iter()
-                .any(|s| self.statement_mutates_captures(s, param_names)),
             _ => false,
         }
     }
