@@ -202,38 +202,8 @@ impl Parser {
                 return Err("Expected identifier after & in for loop pattern".to_string());
             }
         } else if self.current_token() == &Token::LParen {
-            // Tuple pattern
-            self.advance(); // consume (
-            let mut patterns = Vec::new();
-
-            while self.current_token() != &Token::RParen {
-                // Support reference patterns in tuples too: (&x, &y)
-                let pat = if self.current_token() == &Token::Ampersand {
-                    self.advance();
-                    if let Token::Ident(name) = self.current_token() {
-                        let name = name.clone();
-                        self.advance();
-                        Pattern::Reference(Box::new(Pattern::Identifier(name)))
-                    } else {
-                        return Err("Expected identifier after & in tuple pattern".to_string());
-                    }
-                } else if let Token::Ident(name) = self.current_token() {
-                    let name = name.clone();
-                    self.advance();
-                    Pattern::Identifier(name)
-                } else {
-                    return Err("Expected identifier in tuple pattern".to_string());
-                };
-
-                patterns.push(pat);
-
-                if self.current_token() == &Token::Comma {
-                    self.advance();
-                }
-            }
-
-            self.expect(Token::RParen)?;
-            Pattern::Tuple(patterns)
+            // Tuple pattern - use general pattern parser for full support
+            self.parse_pattern()?
         } else if let Token::Ident(name) = self.current_token() {
             let name = name.clone();
             self.advance();

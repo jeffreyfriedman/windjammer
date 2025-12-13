@@ -1,4 +1,4 @@
-use super::vec3::Vec3;
+use super::super::math::vec3::Vec3;
 
 
 #[derive(Copy, Clone, Debug)]
@@ -8,7 +8,7 @@ pub struct Vec3 {
     pub z: f32,
 }
 
-#[derive(Copy, Clone, Debug, PartialEq)]
+#[derive(Debug, Clone)]
 pub struct Camera3D {
     pub position: Vec3,
 }

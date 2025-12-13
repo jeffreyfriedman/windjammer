@@ -92,6 +92,7 @@ fn parse_function_signature(line: &str, module: &str) -> Option<FunctionSignatur
         name: full_name,
         param_ownership,
         return_ownership: OwnershipMode::Owned, // Default
+        has_self_receiver: false,               // Stdlib functions don't have self
     })
 }
 
@@ -132,6 +133,7 @@ fn populate_fallback_signatures(registry: &mut SignatureRegistry) -> Result<(), 
             name: "game::create_entity".to_string(),
             param_ownership: vec![MutBorrowed],
             return_ownership: Owned,
+            has_self_receiver: false,
         },
     );
 
@@ -141,6 +143,7 @@ fn populate_fallback_signatures(registry: &mut SignatureRegistry) -> Result<(), 
             name: "game::add_transform".to_string(),
             param_ownership: vec![MutBorrowed, Owned, Owned],
             return_ownership: Owned,
+            has_self_receiver: false,
         },
     );
 
@@ -150,6 +153,7 @@ fn populate_fallback_signatures(registry: &mut SignatureRegistry) -> Result<(), 
             name: "game::add_velocity".to_string(),
             param_ownership: vec![MutBorrowed, Owned, Owned],
             return_ownership: Owned,
+            has_self_receiver: false,
         },
     );
 
@@ -159,6 +163,7 @@ fn populate_fallback_signatures(registry: &mut SignatureRegistry) -> Result<(), 
             name: "game::add_mesh".to_string(),
             param_ownership: vec![MutBorrowed, Owned, Owned],
             return_ownership: Owned,
+            has_self_receiver: false,
         },
     );
 
