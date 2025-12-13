@@ -88,7 +88,7 @@ impl HeartbeatManager {
                 
                 {
                     let hb = heartbeats.read()
-                    for (connection_id, last_heartbeat) in hb.iter() {
+                    for (connection_id, last_heartbeat) in hb {
                         let elapsed = now - last_heartbeat
                         
                         if elapsed > timeout {
@@ -156,7 +156,7 @@ impl HeartbeatManager {
         
         let mut statuses = vec![]
         
-        for (connection_id, last_heartbeat) in heartbeats.iter() {
+        for (connection_id, last_heartbeat) in heartbeats {
             let elapsed = now - last_heartbeat
             
             let status = if elapsed > self.timeout_seconds {
@@ -271,7 +271,7 @@ impl RecoveryManager {
         
         let mut expired_users = vec![];
         
-        for (user_id, token) in tokens.iter() {
+        for (user_id, token) in tokens {
             if now > token.expires_at {
                 expired_users.push(user_id.clone())
             }

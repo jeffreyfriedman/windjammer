@@ -1,4 +1,4 @@
-use super::types::MyType;
+use super::super::super::core::types::MyType;
 
 
 #[derive(Copy, Clone, Debug)]
@@ -6,7 +6,7 @@ pub struct MyType {
     pub value: i32,
 }
 
-#[derive(Copy, Clone, Debug, PartialEq)]
+#[derive(Debug, Clone)]
 pub struct Foo {
     pub value: MyType,
 }

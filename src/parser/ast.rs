@@ -288,11 +288,11 @@ pub struct MatchArm {
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum EnumPatternBinding {
-    None,                           // No parentheses: None, Empty
-    Wildcard,                       // Parentheses with wildcard: Some(_)
-    Single(String),                 // Single binding: Some(x)
-    Tuple(Vec<Pattern>),            // Multiple bindings: Rgb(r, g, b)
-    Struct(Vec<(String, Pattern)>), // Struct pattern: Box { width: w, height: h }
+    None,                                 // No parentheses: None, Empty
+    Wildcard,                             // Parentheses with wildcard: Some(_)
+    Single(String),                       // Single binding: Some(x)
+    Tuple(Vec<Pattern>),                  // Multiple bindings: Rgb(r, g, b)
+    Struct(Vec<(String, Pattern)>, bool), // Struct pattern: Box { width: w, height: h }, bool=has_wildcard (..)
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]

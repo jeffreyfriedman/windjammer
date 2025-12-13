@@ -8,7 +8,10 @@ fn compile_fixture(fixture_name: &str) -> Result<String, String> {
         .join("fixtures")
         .join(format!("{}.wj", fixture_name));
 
-    let output_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("test_output");
+    // Use unique output dir per fixture to avoid race conditions in parallel tests
+    let output_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("test_output")
+        .join(fixture_name);
     std::fs::create_dir_all(&output_dir).map_err(|e| e.to_string())?;
 
     // Run the compiler (--no-cargo to avoid file lock conflicts in parallel tests)
@@ -256,14 +259,14 @@ fn test_smart_auto_derive() {
     assert!(generated.contains("#[derive(Debug, Clone, PartialEq, Eq, Hash, Default)]\nstruct User"),
         "User with String field should derive Debug, Clone, PartialEq, Eq, Hash, Default but NOT Copy");
 
-    // Check Container: Vec<int> implements Clone, Debug, Default, and PartialEq
-    // Should derive: Debug, Clone, PartialEq, Default (NO Copy, NO Eq, NO Hash)
-    // Vec<T> is PartialEq if T is PartialEq, but not Eq or Hash
+    // Check Container: Vec<int> implements Clone, Debug, Default, PartialEq, and Eq
+    // Should derive: Debug, Clone, PartialEq, Eq, Default (NO Copy, NO Hash)
+    // Vec<T> is PartialEq and Eq if T is PartialEq/Eq, but NOT Hash (even if T: Hash)
     let has_container_derive =
-        generated.contains("#[derive(Debug, Clone, PartialEq, Default)]\nstruct Container");
+        generated.contains("#[derive(Debug, Clone, PartialEq, Eq, Default)]\nstruct Container");
     assert!(
         has_container_derive,
-        "Container with Vec should derive Debug, Clone, PartialEq, Default (no Eq, no Hash, no Copy)"
+        "Container with Vec should derive Debug, Clone, PartialEq, Eq, Default (no Hash, no Copy)"
     );
 
     // Check Config: explicit traits specified
