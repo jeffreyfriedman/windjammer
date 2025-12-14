@@ -6,6 +6,7 @@
 //! - **statements**: Statement generation  
 //! - **items**: Top-level item generation (functions, structs, enums, etc.)
 //! - **types**: Type conversion (Windjammer → Rust)
+//! - **literals**: Literal expression generation (pure functions)
 //! - **optimizations**: Optimization passes
 //! - **helpers**: Utility functions
 //! - **backend**: Backend trait implementation
@@ -15,6 +16,7 @@ pub mod expressions;
 pub mod generator;
 pub mod helpers;
 pub mod items;
+pub mod literals;
 pub mod optimizations;
 pub mod statements;
 pub mod types;
