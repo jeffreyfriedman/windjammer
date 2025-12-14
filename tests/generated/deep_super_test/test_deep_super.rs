@@ -1,4 +1,4 @@
-use super::super::super::core::types::MyType;
+use super::MyType;
 
 
 #[derive(Copy, Clone, Debug)]
