@@ -1918,11 +1918,14 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
                             format!("&mut {}", self.type_to_rust(&param.type_))
                         }
                         OwnershipHint::Inferred => {
-                            // Default to &
+                            // TRAIT SIGNATURES: Default to owned (no &) to match Rust conventions
+                            // Trait methods take ownership by default unless explicitly marked with &
+                            // This matches Rust's trait signature semantics
                             if param.name == "self" {
                                 "&self".to_string()
                             } else {
-                                format!("&{}", self.type_to_rust(&param.type_))
+                                // Owned parameter (no &)
+                                self.type_to_rust(&param.type_)
                             }
                         }
                     };
