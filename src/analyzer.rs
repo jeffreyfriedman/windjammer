@@ -962,12 +962,20 @@ impl Analyzer {
                 }
                 // CRITICAL: Handle implicit returns (last expression without semicolon)
                 // In Windjammer/Rust, the last expression in a block is the return value
-                // BUT: Don't treat function calls as returning their arguments!
-                // Example: println(text) doesn't return text, it returns ()
                 Statement::Expression { expr, .. } if is_last => {
-                    // Skip function/method calls - they don't return their arguments
-                    let is_call = matches!(expr, Expression::Call { .. } | Expression::MethodCall { .. });
-                    if !is_call && self.expression_uses_identifier_for_return(name, expr) {
+                    // Skip ONLY void-returning function calls (like println)
+                    // Wrapper calls (Some, Ok, Err) DO return their arguments!
+                    let is_void_call = if let Expression::Call { function, .. } = expr {
+                        if let Expression::Identifier { name: fn_name, .. } = &**function {
+                            matches!(fn_name.as_str(), "println" | "print" | "eprintln" | "eprint" | "assert" | "panic")
+                        } else {
+                            false
+                        }
+                    } else {
+                        false
+                    };
+                    
+                    if !is_void_call && self.expression_uses_identifier_for_return(name, expr) {
                         return true;
                     }
                 }
