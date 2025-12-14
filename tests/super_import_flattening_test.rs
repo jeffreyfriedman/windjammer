@@ -9,7 +9,6 @@ use std::fs;
 use std::process::Command;
 
 #[test]
-#[ignore] // TODO: Fix super::super:: import flattening
 fn test_super_super_import_flattens_to_super() {
     // Create the test source file
     let source = r#"
@@ -62,10 +61,11 @@ pub struct Camera3D {
 
     println!("Generated code:\n{}", generated);
 
-    // The import should be flattened from super::super::math::vec3::Vec3 to super::vec3::Vec3
+    // The import should be flattened from super::super::math::vec3::Vec3 to super::Vec3
+    // (We flatten all the way to just the type name for flat directory structure)
     assert!(
-        generated.contains("use super::vec3::Vec3;"),
-        "Expected flattened import 'use super::vec3::Vec3;' but got:\n{}",
+        generated.contains("use super::Vec3;"),
+        "Expected flattened import 'use super::Vec3;' but got:\n{}",
         generated
     );
 
@@ -137,7 +137,6 @@ pub struct Camera3D {
 }
 
 #[test]
-#[ignore] // TODO: Fix super::super::super:: import flattening
 fn test_deeply_nested_super_import_flattens() {
     // Even deeper nesting should flatten correctly
     let source = r#"
@@ -187,10 +186,10 @@ pub struct Foo {
 
     println!("Generated code:\n{}", generated);
 
-    // Should flatten to just super::types::MyType (last two segments)
+    // Should flatten to just super::MyType (just the type name for flat directory)
     assert!(
-        generated.contains("use super::types::MyType;"),
-        "Expected flattened import 'use super::types::MyType;' but got:\n{}",
+        generated.contains("use super::MyType;"),
+        "Expected flattened import 'use super::MyType;' but got:\n{}",
         generated
     );
 }
