@@ -683,13 +683,11 @@ impl Analyzer {
                                 OwnershipHint::Ref => OwnershipMode::Borrowed,
                                 OwnershipHint::Mut => OwnershipMode::MutBorrowed,
                                 OwnershipHint::Inferred => {
-                                    // For Copy types, keep them Owned (pass by value)
-                                    // For non-Copy types, default to Borrowed
-                                    if self.is_copy_type(&trait_param.type_) {
-                                        OwnershipMode::Owned
-                                    } else {
-                                        OwnershipMode::Borrowed
-                                    }
+                                    // CRITICAL: Must match trait generation in generator.rs (line 1920-1930)
+                                    // Trait generation defaults Inferred → Owned (no &)
+                                    // So impl must also use Owned to match trait signature
+                                    // This prevents E0053 (incompatible type for trait)
+                                    OwnershipMode::Owned
                                 }
                             };
 
