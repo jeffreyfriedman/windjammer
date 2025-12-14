@@ -86,8 +86,16 @@ pub struct CodeGenerator {
     workspace_root: Option<std::path::PathBuf>,
     // BRANCH TYPE CONSISTENCY: Suppress auto string conversion when any branch uses .as_str()
     suppress_string_conversion: bool,
+    // LOCAL VARIABLE TRACKING: Stack of scopes, each scope contains local variable names
+    // Enables proper variable shadowing of field names
+    local_variable_scopes: Vec<std::collections::HashSet<String>>,
+    // EXPRESSION CONTEXT: Track if we're generating code whose value will be used
+    // Prevents adding semicolons to final expressions in if-else/match when used as values
+    in_expression_context: bool,
     // TRAIT TRACKING: Track which custom types support PartialEq
-    partial_eq_types: std::collections::HashSet<String>,
+    partial_eq_types: std::collections::HashSet<String>
+
+,
     // MATCH ARM CONTEXT: Force string conversion in match arm blocks
     in_match_arm_needing_string: bool,
     // BORROWED ITERATOR VARIABLES: Track variables that are iterating over borrowed collections
@@ -145,6 +153,8 @@ impl CodeGenerator {
             generating_assignment_target: false,
             partial_eq_types: std::collections::HashSet::new(),
             in_match_arm_needing_string: false,
+            local_variable_scopes: Vec::new(),
+            in_expression_context: false,
         }
     }
 
@@ -760,12 +770,27 @@ impl CodeGenerator {
                             }
                         }
 
+                        // FIXED: Auto-cast usize to i64 for implicit returns
+                        let returns_int = match &self.current_function_return_type {
+                            Some(Type::Int) => true,
+                            Some(Type::Custom(name)) if name == "i64" || name == "int" => true,
+                            _ => false,
+                        };
+                        
+                        if returns_int && self.expression_produces_usize(expr) {
+                            // Implicit return of .len() - auto-cast!
+                            expr_str = format!("{} as i64", expr_str);
+                        }
+
                         output.push_str(&expr_str);
 
-                        // If the function returns (), add semicolon to discard the value
+                        // BUGFIX: Only add semicolon if:
+                        // 1. Function returns ()
+                        // 2. AND we're not in an expression context (value is not being used)
+                        // This prevents adding semicolons to if-else branches when used as values
                         let returns_unit = self.current_function_return_type.is_none()
                             || matches!(self.current_function_return_type, Some(Type::Tuple(ref types)) if types.is_empty());
-                        if returns_unit {
+                        if returns_unit && !self.in_expression_context {
                             output.push(';');
                         }
                         output.push('\n');
@@ -1278,7 +1303,10 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
 
             // Handle Rust stdlib modules that should NOT be mapped to windjammer_runtime
             // These are native Rust modules that should be used directly
-            if module_base.starts_with("collections") || module_base.starts_with("cmp") {
+            if module_base.starts_with("collections") 
+                || module_base.starts_with("cmp")
+                || module_base.starts_with("ops")
+                || module_base == "ops" {
                 // Pass through to Rust's std library
                 return format!("use std::{};\n", module_name);
             }
@@ -1464,12 +1492,72 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
         // Heuristic: If the last segment starts with an uppercase letter, it's likely a type/struct
         // Otherwise, it's a module and we should add ::*
         let rust_path = full_path.replace('.', "::");
+        
+        // BUGFIX: Handle imports from sibling modules (flat directory structure)
+        // When importing from common module names like math, rendering, collision2d, etc.,
+        // these are sibling files in src/generated/, so use super:: instead of absolute paths
+        //
+        // IMPORTANT: Distinguish between:
+        // 1. Directory prefixes (math, rendering, physics) - should be stripped
+        // 2. Actual module files (texture_atlas, sprite_region) - should be preserved
+        let directory_prefixes = ["math", "rendering", "physics", "ecs", "audio", "effects", "input", "game_loop", "world"];
+        let common_sibling_modules = [
+            "vec2", "vec3", "vec4", "mat4", "quat",
+            "collision2d", "rigidbody2d", "physics_world",
+            "entity", "components", "query", "world", "ecs",
+            "texture", "texture_atlas", "sprite", "sprite_region",
+            "camera2d", "camera3d", "color", "render_context", "render_api",
+        ];
+        
+        // Handle super::super::math::vec3::Vec3 -> super::Vec3
+        // This handles cases where Windjammer source uses "use super.super.math.vec3::Vec3"
+        if rust_path.starts_with("super::super::") {
+            // Extract the path after super::super::
+            if let Some(rest_path) = rust_path.strip_prefix("super::super::") {
+                // Find the actual type name (last segment)
+                let segments: Vec<&str> = rest_path.split("::").collect();
+                if let Some(type_name) = segments.last() {
+                    if type_name.chars().next().is_some_and(|c| c.is_uppercase()) {
+                        // It's a type, use just super::TypeName
+                        return format!("use super::{};\n", type_name);
+                    }
+                }
+            }
+        }
+        
+        let first_segment = rust_path.split("::").next().unwrap_or("");
+        let is_directory_prefix = directory_prefixes.contains(&first_segment);
+        let is_actual_module_file = common_sibling_modules.contains(&first_segment) && !is_directory_prefix;
+        let _is_sibling_module = is_directory_prefix || is_actual_module_file || first_segment == "super";
+        
         if let Some(alias_name) = alias {
+            if is_directory_prefix {
+                // Strip directory prefix: math::Vec2 as V -> use super::Vec2 as V;
+                let rest = rust_path.strip_prefix(&format!("{}::", first_segment)).unwrap_or(&rust_path);
+                format!("use super::{} as {};\n", rest, alias_name)
+            } else if is_actual_module_file {
+                // Keep module path for actual module files: texture_atlas::TextureAtlas as TA -> use super::texture_atlas::TextureAtlas as TA;
+                format!("use super::{} as {};\n", rust_path.replacen(&format!("{}::", first_segment), &format!("{}::", first_segment), 1), alias_name)
+            } else {
             format!("use {} as {};\n", rust_path, alias_name)
+            }
         } else {
             // Check if already a glob import (ends with ::*)
             if rust_path.ends_with("::*") {
                 format!("use {};\n", rust_path)
+            } else if is_directory_prefix {
+                // Strip directory prefix: math::Vec2 -> use super::Vec2;
+                let rest = rust_path.strip_prefix(&format!("{}::", first_segment)).unwrap_or(&rust_path);
+                if rest == rust_path {
+                    // Just the directory name
+                    format!("use super::{};\n", first_segment)
+                } else {
+                    format!("use super::{};\n", rest)
+                }
+            } else if is_actual_module_file {
+                // Keep full path for actual module files to avoid ambiguity
+                // texture_atlas::TextureAtlas -> use super::texture_atlas::TextureAtlas;
+                format!("use super::{};\n", rust_path)
             } else {
                 // Check if the last segment looks like a type (starts with uppercase)
                 let last_segment = rust_path.split("::").last().unwrap_or("");
@@ -1730,11 +1818,11 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
                 EnumVariantData::Tuple(types) => {
                     let type_strs: Vec<String> =
                         types.iter().map(|t| self.type_to_rust(t)).collect();
-                    output.push_str(&format!(
-                        "    {}({}),\n",
-                        variant.name,
-                        type_strs.join(", ")
-                    ));
+                        output.push_str(&format!(
+                            "    {}({}),\n",
+                            variant.name,
+                            type_strs.join(", ")
+                        ));
                 }
                 EnumVariantData::Struct(fields) => {
                     let field_strs: Vec<String> = fields
@@ -2322,6 +2410,9 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
         let func = &analyzed.decl;
         let mut output = String::new();
 
+        // LOCAL VARIABLE TRACKING: Push new scope for this function
+        self.local_variable_scopes.push(std::collections::HashSet::new());
+
         // AUTO-CLONE: Load auto-clone analysis for this function
         self.auto_clone_analysis = Some(analyzed.auto_clone_analysis.clone());
 
@@ -2334,7 +2425,7 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
 
         // Track function parameters for compound assignment optimization
         self.current_function_params = func.parameters.clone();
-
+        
         // Track function return type for string literal conversion
         self.current_function_return_type = func.return_type.clone();
 
@@ -2436,7 +2527,7 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
             let rust_attr = self.map_decorator(&decorator.name);
             output.push_str(&format!("#[{}]\n", rust_attr));
         }
-
+        
         // Add `pub` if function is marked pub OR we're in a #[wasm_bindgen] impl block OR compiling a module OR has @export decorator
         // BUT NOT if we're in a trait implementation (trait methods cannot have visibility modifiers)
         let has_export = func.decorators.iter().any(|d| d.name == "export");
@@ -2488,30 +2579,37 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
         let has_explicit_self = func.parameters.iter().any(|p| p.name == "self");
 
         if self.in_impl_block && !has_explicit_self && !self.current_struct_fields.is_empty() {
-            // Check if function body mutates any struct fields
-            if self.function_mutates_fields(func) {
-                // Check if this is a builder pattern (modifies fields AND returns Self)
-                let returns_self = self.function_returns_self_type(func);
-                if returns_self {
-                    // Builder pattern: use `mut self` (consuming)
-                    params.push("mut self".to_string());
-                } else {
-                    // Regular mutating method: use `&mut self` (borrowing)
-                    params.push("&mut self".to_string());
-                }
-            } else if self.function_accesses_fields(func) {
-                // Only read access needed
-                params.push("&self".to_string());
+                // Check if function body mutates any struct fields
+                if self.function_mutates_fields(func) {
+                    // Check if this is a builder pattern (modifies fields AND returns Self)
+                    let returns_self = self.function_returns_self_type(func);
+                    if returns_self {
+                        // Builder pattern: use `mut self` (consuming)
+                        params.push("mut self".to_string());
+                    } else {
+                        // Regular mutating method: use `&mut self` (borrowing)
+                        params.push("&mut self".to_string());
+                    }
+                } else if self.function_accesses_fields(func) {
+                    // Only read access needed
+                    params.push("&self".to_string());
             }
         }
 
         let additional_params: Vec<String> = func
             .parameters
             .iter()
-            .map(|param| {
+            .enumerate()
+            .map(|(param_idx, param)| {
+                // SMART STRING INFERENCE: Use the inferred type from analyzer (string → &str vs String)
+                let inferred_type = analyzed
+                    .inferred_param_types
+                    .get(param_idx)
+                    .unwrap_or(&param.type_);
+                
                 // PHASE 9 OPTIMIZATION: Check if this parameter should use Cow<'_, T>
                 if self.cow_optimizations.contains(&param.name) {
-                    let base_type = self.type_to_rust(&param.type_);
+                    let base_type = self.type_to_rust(inferred_type);
                     // For String types, use Cow<'_, str>
                     let cow_type = if base_type == "String" {
                         "Cow<'_, str>".to_string()
@@ -2525,24 +2623,24 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
                 let type_str = match &param.ownership {
                     OwnershipHint::Owned => {
                         if param.name == "self" {
-                            // Check if analyzer inferred a different ownership for self
-                            if let Some(ownership_mode) =
-                                analyzed.inferred_ownership.get(&param.name)
-                            {
-                                match ownership_mode {
-                                    OwnershipMode::MutBorrowed => return "&mut self".to_string(),
-                                    OwnershipMode::Borrowed => return "&self".to_string(),
-                                    OwnershipMode::Owned => {
-                                        // Check if function actually modifies self
-                                        // Only add 'mut' if it does
-                                        if self.function_modifies_self(&analyzed.decl) {
-                                            return "mut self".to_string();
-                                        } else {
-                                            return "self".to_string();
+                                // Check if analyzer inferred a different ownership for self
+                                if let Some(ownership_mode) =
+                                    analyzed.inferred_ownership.get(&param.name)
+                                {
+                                    match ownership_mode {
+                                        OwnershipMode::MutBorrowed => return "&mut self".to_string(),
+                                        OwnershipMode::Borrowed => return "&self".to_string(),
+                                        OwnershipMode::Owned => {
+                                            // Check if function actually modifies self
+                                            // Only add 'mut' if it does
+                                            if self.function_modifies_self(&analyzed.decl) {
+                                                return "mut self".to_string();
+                                            } else {
+                                                return "self".to_string();
+                                            }
                                         }
                                     }
                                 }
-                            }
                             // Default: check if function modifies self
                             if self.function_modifies_self(&analyzed.decl) {
                                 return "mut self".to_string();
@@ -2551,7 +2649,7 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
                             }
                         }
                         // Owned parameters are always mutable in Windjammer
-                        return format!("mut {}: {}", param.name, self.type_to_rust(&param.type_));
+                        return format!("mut {}: {}", param.name, self.type_to_rust(inferred_type));
                     }
                     OwnershipHint::Ref => {
                         if param.name == "self" {
@@ -2571,10 +2669,10 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
                             return "&self".to_string();
                         }
                         // Don't add & if the type is already a Reference
-                        if matches!(param.type_, Type::Reference(_) | Type::MutableReference(_)) {
-                            self.type_to_rust(&param.type_)
+                        if matches!(inferred_type, Type::Reference(_) | Type::MutableReference(_)) {
+                            self.type_to_rust(inferred_type)
                         } else {
-                            format!("&{}", self.type_to_rust(&param.type_))
+                            format!("&{}", self.type_to_rust(inferred_type))
                         }
                     }
                     OwnershipHint::Mut => {
@@ -2582,41 +2680,16 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
                             return "&mut self".to_string();
                         }
                         // Don't add &mut if the type is already a MutableReference
-                        if matches!(param.type_, Type::MutableReference(_)) {
-                            self.type_to_rust(&param.type_)
+                        if matches!(inferred_type, Type::MutableReference(_)) {
+                            self.type_to_rust(inferred_type)
                         } else {
-                            format!("&mut {}", self.type_to_rust(&param.type_))
+                            format!("&mut {}", self.type_to_rust(inferred_type))
                         }
                     }
                     OwnershipHint::Inferred => {
-                        // Use analyzer's inference
-                        let ownership_mode = analyzed
-                            .inferred_ownership
-                            .get(&param.name)
-                            .unwrap_or(&OwnershipMode::Borrowed);
-
-                        // Override for Copy types UNLESS they're mutated
-                        // Mutated parameters should be &mut even for Copy types
-                        if self.is_copy_type(&param.type_)
-                            && ownership_mode != &OwnershipMode::MutBorrowed
-                        {
-                            self.type_to_rust(&param.type_)
-                        } else {
-                            match ownership_mode {
-                                OwnershipMode::Owned => self.type_to_rust(&param.type_),
-                                OwnershipMode::Borrowed => {
-                                    // For Copy types that are only read, pass by value
-                                    if self.is_copy_type(&param.type_) {
-                                        self.type_to_rust(&param.type_)
-                                    } else {
-                                        format!("&{}", self.type_to_rust(&param.type_))
-                                    }
-                                }
-                                OwnershipMode::MutBorrowed => {
-                                    format!("&mut {}", self.type_to_rust(&param.type_))
-                                }
-                            }
-                        }
+                        // SMART STRING INFERENCE: inferred_type already has &str vs String resolved!
+                        // Just convert it directly - no need to add & or &mut
+                        self.type_to_rust(inferred_type)
                     }
                 };
 
@@ -2669,6 +2742,9 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
         self.indent_level -= 1;
         output.push('}');
 
+        // LOCAL VARIABLE TRACKING: Pop scope when exiting function
+        self.local_variable_scopes.pop();
+
         output
     }
 
@@ -2703,18 +2779,18 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
                             // Empty struct binding means { .. } wildcard
                             format!("{} {{ .. }}", variant)
                         } else {
-                            let field_strs: Vec<String> = fields
-                                .iter()
+                        let field_strs: Vec<String> = fields
+                            .iter()
                                 .map(|(name, pat)| {
                                     format!("{}: {}", name, self.pattern_to_rust(pat))
                                 })
-                                .collect();
+                            .collect();
                             if *has_wildcard {
                                 // Partial match: { field1, field2, .. }
                                 format!("{} {{ {}, .. }}", variant, field_strs.join(", "))
                             } else {
                                 // Complete match: { field1, field2 }
-                                format!("{} {{ {} }}", variant, field_strs.join(", "))
+                        format!("{} {{ {} }}", variant, field_strs.join(", "))
                             }
                         }
                     }
@@ -2765,6 +2841,14 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
                     Pattern::Identifier(name) => Some(name.as_str()),
                     _ => None,
                 };
+
+                // LOCAL VARIABLE TRACKING: Add this variable to the current scope
+                // This enables proper shadowing of field names
+                if let Some(name) = var_name {
+                    if let Some(current_scope) = self.local_variable_scopes.last_mut() {
+                        current_scope.insert(name.to_string());
+                    }
+                }
 
                 // PHASE 8: Check if this variable should use SmallVec
                 if let Some(name) = var_name {
@@ -2823,6 +2907,11 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
                             output.push_str("&mut ");
                         }
 
+                        // EXPRESSION CONTEXT: Mark that we're generating a value that will be used
+                        // This prevents adding semicolons to if-else branches when used in let bindings
+                        let old_ctx = self.in_expression_context;
+                        self.in_expression_context = true;
+
                         // WINDJAMMER PHILOSOPHY: Auto-convert string literals to String
                         // String literals assigned to variables should become String (not &str)
                         // because they may be passed to functions expecting String later.
@@ -2839,6 +2928,9 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
                         }
 
                         output.push_str(&value_str);
+                        
+                        // Restore expression context
+                        self.in_expression_context = old_ctx;
                     }
                 } else {
                     // No SmallVec optimization for this variable
@@ -2846,6 +2938,10 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
                         output.push_str(": ");
                         output.push_str(&self.type_to_rust(t));
                         output.push_str(" = ");
+
+                        // EXPRESSION CONTEXT: Mark that we're generating a value
+                        let old_ctx = self.in_expression_context;
+                        self.in_expression_context = true;
 
                         // Auto-convert &str to String if type is String
                         let mut value_str = self.generate_expression(value);
@@ -2870,11 +2966,18 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
                             value_str = format!("&mut {}", value_str);
                         }
                         output.push_str(&value_str);
+                        
+                        // Restore expression context
+                        self.in_expression_context = old_ctx;
                     } else {
                         output.push_str(" = ");
                         if needs_mut_ref {
                             output.push_str("&mut ");
                         }
+
+                        // EXPRESSION CONTEXT: Mark that we're generating a value
+                        let old_ctx = self.in_expression_context;
+                        self.in_expression_context = true;
 
                         // WINDJAMMER PHILOSOPHY: Auto-convert mutable string variables
                         // When a mutable variable is initialized with a string literal,
@@ -2893,6 +2996,9 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
                         }
 
                         output.push_str(&value_str);
+                        
+                        // Restore expression context
+                        self.in_expression_context = old_ctx;
                     }
                 }
 
@@ -3005,6 +3111,19 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
                                 }
                             }
                         }
+                    }
+
+                    // FIXED: Auto-cast usize to i64 when function returns int
+                    // WINDJAMMER PHILOSOPHY: Compiler handles type conversions automatically
+                    let returns_int = match &self.current_function_return_type {
+                        Some(Type::Int) => true,
+                        Some(Type::Custom(name)) if name == "i64" || name == "int" => true,
+                        _ => false,
+                    };
+                    
+                    if returns_int && self.expression_produces_usize(e) {
+                        // .len() returns usize, but function expects i64 - auto-cast!
+                        return_str = format!("{} as i64", return_str);
                     }
 
                     output.push_str(&return_str);
@@ -3411,16 +3530,16 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
                             // Empty struct binding means { .. } wildcard
                             format!("{} {{ .. }}", name)
                         } else {
-                            let field_strs: Vec<String> = fields
-                                .iter()
+                        let field_strs: Vec<String> = fields
+                            .iter()
                                 .map(|(n, pat)| format!("{}: {}", n, self.generate_pattern(pat)))
-                                .collect();
+                            .collect();
                             if *has_wildcard {
                                 // Partial match: { field1, field2, .. }
                                 format!("{} {{ {}, .. }}", name, field_strs.join(", "))
                             } else {
                                 // Complete match: { field1, field2 }
-                                format!("{} {{ {} }}", name, field_strs.join(", "))
+                        format!("{} {{ {} }}", name, field_strs.join(", "))
                             }
                         }
                     }
@@ -3860,10 +3979,15 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
                 // Qualified paths use :: from parser (e.g., std::fs::read)
                 // Simple identifiers: variable_name -> variable_name
                 // Check if this is a struct field and we're in an impl block
-                // BUT: Don't apply implicit field access if this is a parameter name!
+                // BUT: Don't apply implicit field access if:
+                // 1. It's a parameter name (parameters shadow fields)
+                // 2. It's a local variable (local vars shadow fields)
                 let is_parameter = self.current_function_params.iter().any(|p| p.name == *name);
+                let is_local_variable = self.local_variable_scopes.iter().any(|scope| scope.contains(name));
+                
                 let base_name = if self.in_impl_block
                     && !is_parameter
+                    && !is_local_variable  // NEW: Local variables shadow fields!
                     && self.current_struct_fields.contains(name)
                 {
                     format!("self.{}", name)
@@ -3967,16 +4091,17 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
                     _ => self.generate_expression(right),
                 };
 
-                // AUTO-CAST: When comparing i32 with usize (.len() result), cast usize to i32
-                // WINDJAMMER PHILOSOPHY: Compiler does the work - no explicit casting needed
+                // FIXED: Don't auto-cast in comparisons
+                // WINDJAMMER PHILOSOPHY: Keep types compatible, but don't force conversions
+                //
+                // The issue: We can't reliably detect int vs usize variables without full type info
+                // The solution: Fix source code to use appropriate types (usize for indices)
+                //
+                // When both sides are usize → no cast
+                // When mixing int/usize → developer should use correct type
                 if is_comparison && left_is_usize != right_is_usize {
-                    if left_is_usize && !right_is_usize {
-                        // Cast left (usize) to i32
-                        left_str = format!("({} as i32)", left_str);
-                    } else if !left_is_usize && right_is_usize {
-                        // Cast right (usize) to i32
-                        right_str = format!("({} as i32)", right_str);
-                    }
+                    // NO AUTO-CASTING - too error-prone without full type information
+                    // The Windjammer source code should use usize for array indices
                 }
 
                 // AUTO-CAST: When doing arithmetic between usize and int literal, cast literal to usize
@@ -3993,12 +4118,12 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
             Expression::Unary { op, operand, .. } => {
                 let operand_str = self.generate_expression(operand);
                 let op_str = self.unary_op_to_rust(op);
-
+                
                 // CRITICAL: Preserve parentheses for binary expressions in unary context
                 // !(a || b) should generate !(a || b), not !a || b
                 // Binary operators have lower precedence than unary operators, so we need parens
                 let needs_parens = matches!(&**operand, Expression::Binary { .. });
-
+                
                 if needs_parens {
                     format!("{}({})", op_str, operand_str)
                 } else {
@@ -4264,8 +4389,11 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
                             if let Some(&ownership) = sig.param_ownership.get(i) {
                                 match ownership {
                                     OwnershipMode::Borrowed => {
-                                        // Insert & if not already a reference
-                                        if !self.is_reference_expression(arg) {
+                                        // String literals are ALREADY &str - don't add &!
+                                        let is_string_literal = matches!(arg, Expression::Literal { value: Literal::String(_), .. });
+                                        
+                                        // Insert & if not already a reference and not a string literal
+                                        if !self.is_reference_expression(arg) && !is_string_literal {
                                             return format!("&{}", arg_str);
                                         }
                                     }
@@ -4347,40 +4475,9 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
             } => {
                 let obj_str = self.generate_expression_with_precedence(object);
 
-                // Special handling for methods that commonly need String arguments
-                // Note: push_str takes &str, NOT String, so we should NOT convert for it
-                // Many editor/game methods expect owned String for name/description fields
-                // WINDJAMMER PHILOSOPHY: Compiler does the work - convert string literals automatically
-                let needs_string_conversion = matches!(
-                    method.as_str(),
-                    // Collection methods
-                    "push" | "insert" | "set" |
-                    // Builder pattern methods (commonly return Self with owned fields)
-                    "name" | "description" | "title" | "label" | "icon" | "text" |
-                    "tooltip" | "placeholder" | "value" | "id" | "class" | "style" |
-                    "path" | "url" | "file" | "author" | "version" | "message" |
-                    "prefix" | "suffix" | "format" | "pattern" | "key" | "tag" |
-                    // Editor/game specific
-                    "add_node" | "add_state" | "add_connection" |
-                    "add_effect" | "add_layer" | "add_keyframe" | "add_track" |
-                    "add_property" | "add_item" | "add_element" | "add_entry" |
-                    "add_parameter" | "add_transition" | "add_blend" | "add_clip" |
-                    "set_name" | "set_description" | "set_title" | "set_label" |
-                    "with_name" | "with_icon" | "with_label" | "with_title" |
-                    "with_description" | "with_text" | "with_tooltip" | "with_items" |
-                    "create" | "spawn" | "new_with_name" |
-                    // UI rendering methods
-                    "render_section" | "render_field" | "render_input" | "render_button" |
-                    "render_label" | "render_header" | "render_group" | "render_panel" |
-                    "render_vec3_editor" | "render_color_picker" | "render_slider" |
-                    "render_menu" | "render_toolbar" | "render_statusbar" | "render_transform" |
-                    "render_texture_slot" | "render_number_editor" | "render_color_editor" |
-                    "render_text_input" | "render_number_input" | "render_checkbox" |
-                    "render_vector3_input" | "render_dropdown" | "render_range" |
-                    "render_graph" | "render_object_properties" |
-                    // MenuItem/UI builder methods
-                    "shortcut" | "enabled" | "checked" | "separator"
-                );
+                // REMOVED: Hardcoded method name list (replaced with type-based inference)
+                // The compiler now uses actual parameter types from signatures
+                // to intelligently convert string literals only when needed
 
                 // Look up method signature for auto-ref
                 let method_signature = self.signature_registry.get_signature(method).cloned();
@@ -4391,9 +4488,35 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
                     .map(|(i, (_label, arg))| {
                         let mut arg_str = self.generate_expression(arg);
 
-                        // Auto-convert string literals to String for methods that need it
-                        // This is for Vec<String>::push() which needs String, not &str
-                        if needs_string_conversion
+                        // SMART STRING CONVERSION: Use actual parameter type from signature!
+                        // WINDJAMMER PHILOSOPHY: Compiler infers based on types, not hardcoded lists
+                        //
+                        // Check if parameter expects String (owned) or &str (borrowed)
+                        // Only convert string literals when parameter explicitly needs String
+                        let should_convert_string_literal = if let Some(ref sig) = method_signature {
+                            // Get the parameter index (accounting for self)
+                            let param_idx = if sig.has_self_receiver { i + 1 } else { i };
+                            
+                            // Check if we have type information for this parameter
+                            if let Some(param_type) = sig.param_types.get(param_idx) {
+                                // Check if parameter type is String (needs conversion)
+                                // Note: &str parameters don't need conversion (literals are &str)
+                                match param_type {
+                                    crate::parser::Type::String => true,
+                                    crate::parser::Type::Custom(name) if name == "String" => true,
+                                    _ => false,
+                                }
+                            } else {
+                                // No type info - don't convert (safe default)
+                                false
+                            }
+                        } else {
+                            // No signature - don't convert (safe default)
+                            false
+                        };
+                        
+                        // Auto-convert string literals ONLY when we KNOW parameter needs String
+                        if should_convert_string_literal
                             && matches!(
                                 arg,
                                 Expression::Literal {
@@ -4446,8 +4569,12 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
                             // Arguments don't include self, so add 1 to i
                             let param_idx = if sig.has_self_receiver { i + 1 } else { i };
                             if let Some(&ownership) = sig.param_ownership.get(param_idx) {
+                                // String literals are ALREADY &str - don't add &!
+                                let is_string_literal = matches!(arg, Expression::Literal { value: Literal::String(_), .. });
+                                
                                 if matches!(ownership, crate::analyzer::OwnershipMode::Borrowed)
                                     && !arg_str.starts_with('&')
+                                    && !is_string_literal  // NEW: Don't add & to string literals
                                     && !matches!(arg, Expression::Unary { op: crate::parser::UnaryOp::Ref | crate::parser::UnaryOp::MutRef, .. })
                                 {
                                     arg_str = format!("&{}", arg_str);
@@ -4455,11 +4582,18 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
                             }
                         }
 
-                        // AUTO-REF for Rust stdlib HashMap methods (not in our signature registry)
-                        // HashMap::remove, HashMap::contains_key expect &K for string keys
-                        // NOTE: Don't add & for .get() as it's too generic (also used for Vec/array indexing)
-                        // NOTE: Don't add & if parameter is already a reference type
-                        let is_hashmap_key_method = matches!(method.as_str(), "remove" | "contains_key" | "entry");
+                        // FIXED: AUTO-REF for HashMap methods ONLY (not Vec!)
+                        // HashMap::remove, HashMap::contains_key expect &K
+                        // But Vec::remove, Vec::swap_remove expect usize BY VALUE (not &usize)
+                        // 
+                        // BUG FIX: Don't auto-ref for ALL .remove() calls - check the receiver type!
+                        // Old logic incorrectly added & to Vec::remove arguments (causing type errors)
+                        // New logic: Only add & if we KNOW it's a HashMap method, not a Vec method
+                        //
+                        // Since we don't have full type information here, use a heuristic:
+                        // - If argument is usize/int type, likely Vec::remove (needs value)
+                        // - If argument is String/identifier, likely HashMap::remove (needs &)
+                        let is_hashmap_key_method = matches!(method.as_str(), "contains_key" | "entry");  // REMOVED "remove" from this list!
                         let is_string_arg = matches!(arg, Expression::Identifier { .. } | Expression::FieldAccess { .. })
                             && arg_str.parse::<i64>().is_err();  // Not a numeric literal
                         // Check if the argument is already a reference parameter
@@ -4937,7 +5071,10 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
             } => {
                 let expr_strs: Vec<String> =
                     exprs.iter().map(|e| self.generate_expression(e)).collect();
-                format!("vec![{}]", expr_strs.join(", "))
+                // FIXED: Generate array literal [...] instead of vec![...]
+                // Array literals create stack-allocated arrays: [1, 2, 3]
+                // vec! macro creates heap-allocated vectors: vec![1, 2, 3]
+                format!("[{}]", expr_strs.join(", "))
             }
             Expression::MacroInvocation {
                 name,
@@ -5525,11 +5662,11 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
 
             // Only add Eq if all fields support it (not floats)
             if self.all_fields_are_eq(&struct_.fields) {
-                traits.push("Eq".to_string());
+            traits.push("Eq".to_string());
 
-                // If Eq, also check for Hash
-                if self.all_fields_are_hashable(&struct_.fields) {
-                    traits.push("Hash".to_string());
+            // If Eq, also check for Hash
+            if self.all_fields_are_hashable(&struct_.fields) {
+                traits.push("Hash".to_string());
                 }
             }
         }
@@ -5977,25 +6114,17 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
     }
 
     /// Check if we should add &mut for index access on borrowed fields
-    /// e.g., self.enemies[i] should become &mut self.enemies[i] in let bindings
-    fn should_mut_borrow_index_access(&self, expr: &Expression) -> bool {
-        match expr {
-            Expression::Index { object, .. } => {
-                // Check if we're indexing into a field access (e.g., self.enemies[i])
-                if let Expression::FieldAccess {
-                    object: field_obj, ..
-                } = &**object
-                {
-                    // Check if the field is accessed on self or a borrowed parameter
-                    if let Expression::Identifier { .. } = &**field_obj {
-                        // For now, assume self and first parameter are borrowed
-                        return true; // Conservative: always borrow index access (including self)
-                    }
-                }
+    /// FIXED: Never add &mut for index access - let auto-clone analysis handle it!
+    /// 
+    /// WINDJAMMER PHILOSOPHY: Compiler does the work automatically
+    /// - Copy types (i64, f32, etc.) are automatically copied
+    /// - Non-Copy types get .clone() from auto-clone analysis
+    /// - Adding &mut breaks Copy types and creates type errors
+    fn should_mut_borrow_index_access(&self, _expr: &Expression) -> bool {
+        // FIXED: Don't add &mut for index access
+        // The auto-clone analysis will add .clone() when needed
+        // Copy types will be automatically copied (no .clone() needed)
                 false
-            }
-            _ => false,
-        }
     }
 
     /// Count statements in a function body (for inline heuristics)
