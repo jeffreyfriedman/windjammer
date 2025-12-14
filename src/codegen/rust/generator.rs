@@ -2691,8 +2691,35 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
                     }
                     OwnershipHint::Inferred => {
                         // SMART STRING INFERENCE: inferred_type already has &str vs String resolved!
-                        // Just convert it directly - no need to add & or &mut
-                        self.type_to_rust(inferred_type)
+                        // For strings: Type::Reference(String) → &str, Type::String → String
+                        // For other types: Apply ownership mode from analyzer
+                        
+                        // Check if type already has ownership baked in (like &str from string inference)
+                        if matches!(inferred_type, Type::Reference(_) | Type::MutableReference(_)) {
+                            // Already has & or &mut - just convert
+                            self.type_to_rust(inferred_type)
+                        } else {
+                            // Apply ownership mode from analyzer
+                            let ownership_mode = analyzed
+                                .inferred_ownership
+                                .get(&param.name)
+                                .unwrap_or(&OwnershipMode::Borrowed);
+
+                            match ownership_mode {
+                                OwnershipMode::Owned => self.type_to_rust(inferred_type),
+                                OwnershipMode::Borrowed => {
+                                    if self.is_copy_type(inferred_type) {
+                                        // Copy types pass by value even when borrowed
+                                        self.type_to_rust(inferred_type)
+                                    } else {
+                                        format!("&{}", self.type_to_rust(inferred_type))
+                                    }
+                                }
+                                OwnershipMode::MutBorrowed => {
+                                    format!("&mut {}", self.type_to_rust(inferred_type))
+                                }
+                            }
+                        }
                     }
                 };
 
