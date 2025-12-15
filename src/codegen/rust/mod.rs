@@ -17,6 +17,7 @@ pub mod generator;
 pub mod helpers;
 pub mod items;
 pub mod literals;
+pub mod operators;
 pub mod optimizations;
 pub mod self_analysis;
 pub mod statements;
