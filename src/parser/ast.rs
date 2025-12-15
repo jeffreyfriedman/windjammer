@@ -162,6 +162,21 @@ pub struct EnumDecl {
 // STATEMENTS
 // ============================================================================
 
+/// Compound assignment operators (+=, -=, etc.)
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum CompoundOp {
+    Add,      // +=
+    Sub,      // -=
+    Mul,      // *=
+    Div,      // /=
+    Mod,      // %=
+    BitAnd,   // &=
+    BitOr,    // |=
+    BitXor,   // ^=
+    Shl,      // <<=
+    Shr,      // >>=
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum Statement {
     Let {
@@ -189,6 +204,7 @@ pub enum Statement {
     Assignment {
         target: Expression,
         value: Expression,
+        compound_op: Option<CompoundOp>,
         location: SourceLocation,
     },
     Return {

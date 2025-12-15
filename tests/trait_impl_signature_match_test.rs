@@ -133,3 +133,4 @@ impl GameLoop for MyGame {
     assert!(!rust_stderr.contains("E0053"), "Should not have E0053. Stderr:\n{}", rust_stderr);
 }
 
+

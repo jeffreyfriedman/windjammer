@@ -519,10 +519,12 @@ fn replace_strings_in_statement(stmt: Statement, pool_map: &HashMap<String, Stri
         Statement::Assignment {
             target,
             value,
+            compound_op,
             location,
         } => Statement::Assignment {
             target: replace_strings_in_expression(target, pool_map),
             value: replace_strings_in_expression(value, pool_map),
+            compound_op,
             location,
         },
         Statement::If {

@@ -24,3 +24,4 @@ fn test_source_map_resolves_across_machines() {
     // 3. Verify paths resolve correctly
     // 4. Verify error mapping works
 }
+
