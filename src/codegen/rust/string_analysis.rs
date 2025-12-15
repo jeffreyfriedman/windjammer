@@ -371,3 +371,62 @@ pub fn statement_has_as_str(stmt: &crate::parser::Statement) -> bool {
 pub fn block_has_as_str(stmts: &[crate::parser::Statement]) -> bool {
     stmts.iter().any(statement_has_as_str)
 }
+
+// =============================================================================
+// Explicit Reference Detection (for String Conversion Suppression)
+// =============================================================================
+
+/// Check if a block's LAST expression (return value) is an explicit reference
+///
+/// Used to suppress string literal conversion when one if-else branch returns
+/// an explicit ref (&self.field, &var, etc.)
+///
+/// # Examples
+/// ```
+/// // { &x } → true
+/// // { let y = 1; &x } → true
+/// // { x } → false
+/// // {} → false
+/// ```
+pub fn block_has_explicit_ref(stmts: &[crate::parser::Statement]) -> bool {
+    use crate::parser::Statement;
+    if stmts.is_empty() {
+        return false;
+    }
+
+    // Only check the LAST statement (the return value of the block)
+    if let Some(last_stmt) = stmts.last() {
+        match last_stmt {
+            Statement::Expression { expr, .. } => expression_is_explicit_ref(expr),
+            Statement::Return {
+                value: Some(expr), ..
+            } => expression_is_explicit_ref(expr),
+            _ => false,
+        }
+    } else {
+        false
+    }
+}
+
+/// Check if an expression is an explicit reference (&expr)
+///
+/// Returns true for &x, &self.field, etc.
+/// Recursively checks blocks.
+///
+/// # Examples
+/// ```
+/// // &x → true
+/// // &self.field → true
+/// // { &x } → true (recursive)
+/// // x → false
+/// ```
+pub fn expression_is_explicit_ref(expr: &Expression) -> bool {
+    match expr {
+        Expression::Unary {
+            op: crate::parser::UnaryOp::Ref,
+            ..
+        } => true,
+        Expression::Block { statements, .. } => block_has_explicit_ref(statements),
+        _ => false,
+    }
+}
