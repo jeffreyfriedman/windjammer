@@ -21,6 +21,7 @@ pub mod operators;
 pub mod optimizations;
 pub mod self_analysis;
 pub mod statements;
+pub mod string_analysis;
 pub mod type_analysis;
 pub mod type_casting;
 pub mod types;
