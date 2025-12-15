@@ -198,3 +198,4 @@ impl Drawable for Sprite {
         "Trait mutating method should infer '&mut self'. Trait:\n{}", trait_section);
 }
 
+

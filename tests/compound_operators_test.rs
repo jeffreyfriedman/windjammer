@@ -100,3 +100,4 @@ impl Vec2 {
         "Should preserve compound operator with field access. Generated:\n{}", generated);
 }
 
+

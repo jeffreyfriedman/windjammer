@@ -102,6 +102,7 @@ impl Parser {
                         Ok(Statement::Assignment {
                             target: expr,
                             value,
+                            compound_op: None,
                             location: self.current_location(),
                         })
                     }
@@ -115,21 +116,15 @@ impl Parser {
 
                         let rhs = self.parse_expression()?;
 
-                        // Convert x += y to x = x + y
-                        let op = match op_token {
-                            Token::PlusAssign => BinaryOp::Add,
-                            Token::MinusAssign => BinaryOp::Sub,
-                            Token::StarAssign => BinaryOp::Mul,
-                            Token::SlashAssign => BinaryOp::Div,
-                            Token::PercentAssign => BinaryOp::Mod,
+                        // PRESERVE compound operator for idiomatic Rust output
+                        // Map token to CompoundOp
+                        let compound_op = match op_token {
+                            Token::PlusAssign => CompoundOp::Add,
+                            Token::MinusAssign => CompoundOp::Sub,
+                            Token::StarAssign => CompoundOp::Mul,
+                            Token::SlashAssign => CompoundOp::Div,
+                            Token::PercentAssign => CompoundOp::Mod,
                             _ => unreachable!(),
-                        };
-
-                        let value = Expression::Binary {
-                            left: Box::new(expr.clone()),
-                            op,
-                            right: Box::new(rhs),
-                            location: self.current_location(),
                         };
 
                         // Optionally consume semicolon
@@ -139,7 +134,8 @@ impl Parser {
 
                         Ok(Statement::Assignment {
                             target: expr,
-                            value,
+                            value: rhs,  // Just the RHS, not expanded binary expression
+                            compound_op: Some(compound_op),
                             location: self.current_location(),
                         })
                     }

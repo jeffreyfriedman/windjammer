@@ -116,3 +116,4 @@ pub fn test() -> string {
 
     assert!(success, "Generated code should compile. Error: {}", err);
 }
+
