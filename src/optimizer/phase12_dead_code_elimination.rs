@@ -430,10 +430,12 @@ fn eliminate_dead_code_in_statement(stmt: &Statement, stats: &mut DeadCodeStats)
         Statement::Assignment {
             target,
             value,
+            compound_op,
             location,
         } => Statement::Assignment {
             target: target.clone(),
             value: eliminate_dead_code_in_expression(value),
+            compound_op: *compound_op,
             location: location.clone(),
         },
         Statement::If {

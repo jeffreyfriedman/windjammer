@@ -143,3 +143,4 @@ fn compile_code(code: &str) -> Result<String, String> {
     fs::read_to_string(&rust_file).map_err(|e| format!("Failed to read generated file: {}", e))
 }
 
+

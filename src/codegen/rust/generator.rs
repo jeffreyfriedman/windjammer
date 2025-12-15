@@ -1,5 +1,6 @@
 // Rust code generator
 use crate::analyzer::*;
+use crate::parser::ast::CompoundOp;
 use crate::parser::*;
 use crate::CompilationTarget;
 
@@ -3422,47 +3423,37 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
                 output.push_str(";\n");
                 output
             }
-            Statement::Assignment { target, value, .. } => {
+            Statement::Assignment { target, value, compound_op, .. } => {
                 let mut output = self.indent();
 
-                // PHASE 5 OPTIMIZATION: Check if this can use a compound operator
-                if let Expression::Identifier { name: var_name, .. } = target {
-                    if let Expression::Binary {
-                        left, right, op, ..
-                    } = value
-                    {
-                        if let Expression::Identifier { name: left_var, .. } = &**left {
-                            if left_var == var_name {
-                                // Check if we have this optimization hint
-                                if self.assignment_optimizations.contains_key(var_name) {
-                                    // Check if target is a mutable reference parameter (needs deref)
-                                    // Parameters with assignments inferred to need &mut need deref
-                                    let is_mut_param = self
-                                        .current_function_params
-                                        .iter()
-                                        .any(|p| p.name == *var_name);
-
-                                    // Generate compound assignment with deref if needed
-                                    if is_mut_param {
-                                        output.push('*');
-                                    }
-                                    output.push_str(&self.generate_expression(target));
-                                    output.push_str(match op {
-                                        crate::parser::BinaryOp::Add => " += ",
-                                        crate::parser::BinaryOp::Sub => " -= ",
-                                        crate::parser::BinaryOp::Mul => " *= ",
-                                        crate::parser::BinaryOp::Div => " /= ",
-                                        _ => " = ",
-                                    });
-                                    output.push_str(&self.generate_expression(right));
-                                    output.push_str(";\n");
-                                    return output;
-                                }
-                            }
-                        }
-                    }
+                // Check if this is a compound assignment (+=, -=, etc.)
+                if let Some(op) = compound_op {
+                    // Generate compound assignment: target += value
+                    // CRITICAL: Set flag to suppress auto-clone for assignment targets
+                    self.generating_assignment_target = true;
+                    output.push_str(&self.generate_expression(target));
+                    self.generating_assignment_target = false;
+                    
+                    // Generate compound operator
+                    output.push_str(match op {
+                        CompoundOp::Add => " += ",
+                        CompoundOp::Sub => " -= ",
+                        CompoundOp::Mul => " *= ",
+                        CompoundOp::Div => " /= ",
+                        CompoundOp::Mod => " %= ",
+                        CompoundOp::BitAnd => " &= ",
+                        CompoundOp::BitOr => " |= ",
+                        CompoundOp::BitXor => " ^= ",
+                        CompoundOp::Shl => " <<= ",
+                        CompoundOp::Shr => " >>= ",
+                    });
+                    
+                    output.push_str(&self.generate_expression(value));
+                    output.push_str(";\n");
+                    return output;
                 }
-                // If no optimization applied, fall through to regular assignment
+                
+                // Regular assignment: target = value
 
                 // Fall back to regular assignment
                 // CRITICAL: Set flag to suppress auto-clone for assignment targets
