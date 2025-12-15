@@ -792,16 +792,14 @@ impl Analyzer {
                 self.expr_only_uses_in_read_only_fns(name, value, read_only_fns)
             }
             Statement::Return { value, .. } => {
-                if let Some(expr) = value {
+                value.as_ref().is_none_or(|expr| {
                     self.expr_only_uses_in_read_only_fns(name, expr, read_only_fns)
-                } else {
-                    true
-                }
+                })
             }
             Statement::If { condition, then_block, else_block, .. } => {
                 self.expr_only_uses_in_read_only_fns(name, condition, read_only_fns)
                     && self.stmts_only_use_in_read_only_fns(name, then_block, read_only_fns)
-                    && else_block.as_ref().map_or(true, |block| {
+                    && else_block.as_ref().is_none_or(|block| {
                         self.stmts_only_use_in_read_only_fns(name, block, read_only_fns)
                     })
             }
@@ -847,7 +845,7 @@ impl Analyzer {
                     })
                 } else {
                     // Not a read-only function - if it uses our parameter, fail
-                    !self.expression_uses_identifier(name, &**function)
+                    !self.expression_uses_identifier(name, function)
                         && arguments.iter().all(|(_, arg)| {
                             !self.expression_uses_identifier(name, arg)
                         })
