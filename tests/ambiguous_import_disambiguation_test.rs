@@ -1,8 +1,8 @@
 // Test: Ambiguous import disambiguation
 // Ensures module paths are preserved to avoid ambiguity with glob re-exports
 
-use std::process::Command;
 use std::fs;
+use std::process::Command;
 
 fn compile_and_verify_imports(code: &str, module_name: &str) -> Result<String, String> {
     let test_dir = format!("tests/generated/ambiguous_import_test_{}", module_name);
@@ -49,20 +49,19 @@ fn test_texture_atlas_import_preserves_module_path() {
     }
     "#;
 
-    let generated = compile_and_verify_imports(code, "texture_atlas")
-        .expect("Compilation failed");
-    
+    let generated = compile_and_verify_imports(code, "texture_atlas").expect("Compilation failed");
+
     // Should preserve full module path to avoid ambiguity
     assert!(
         generated.contains("use super::texture_atlas::TextureAtlas;"),
         "Expected 'use super::texture_atlas::TextureAtlas;' to avoid ambiguity, got: {}",
         generated
     );
-    
+
     // Should NOT strip module path
     assert!(
-        !generated.contains("use super::TextureAtlas;") || 
-        generated.contains("use super::texture_atlas::TextureAtlas;"),
+        !generated.contains("use super::TextureAtlas;")
+            || generated.contains("use super::texture_atlas::TextureAtlas;"),
         "Should NOT use 'use super::TextureAtlas;' alone (ambiguous), got: {}",
         generated
     );
@@ -79,9 +78,8 @@ fn test_sprite_region_import_preserves_module_path() {
     }
     "#;
 
-    let generated = compile_and_verify_imports(code, "sprite_region")
-        .expect("Compilation failed");
-    
+    let generated = compile_and_verify_imports(code, "sprite_region").expect("Compilation failed");
+
     // Should preserve full module path
     assert!(
         generated.contains("use super::sprite_region::SpriteRegion;"),
@@ -101,16 +99,15 @@ fn test_math_directory_prefix_stripped() {
     }
     "#;
 
-    let generated = compile_and_verify_imports(code, "math_vec2")
-        .expect("Compilation failed");
-    
+    let generated = compile_and_verify_imports(code, "math_vec2").expect("Compilation failed");
+
     // Directory prefix should be stripped
     assert!(
         generated.contains("use super::Vec2;"),
         "Expected 'use super::Vec2;' (directory prefix stripped), got: {}",
         generated
     );
-    
+
     // Should NOT preserve module path for directory prefixes
     assert!(
         !generated.contains("use super::math::Vec2;"),
@@ -130,9 +127,9 @@ fn test_rendering_directory_prefix_stripped() {
     }
     "#;
 
-    let generated = compile_and_verify_imports(code, "rendering_color")
-        .expect("Compilation failed");
-    
+    let generated =
+        compile_and_verify_imports(code, "rendering_color").expect("Compilation failed");
+
     // Directory prefix should be stripped
     assert!(
         generated.contains("use super::Color;"),
@@ -158,29 +155,28 @@ fn test_multiple_imports_mixed_types() {
     }
     "#;
 
-    let generated = compile_and_verify_imports(code, "mixed")
-        .expect("Compilation failed");
-    
+    let generated = compile_and_verify_imports(code, "mixed").expect("Compilation failed");
+
     // Directory prefixes stripped
     assert!(
         generated.contains("use super::Vec2;"),
         "Vec2 should have directory prefix stripped, got: {}",
         generated
     );
-    
+
     assert!(
         generated.contains("use super::Texture;"),
         "Texture should have directory prefix stripped, got: {}",
         generated
     );
-    
+
     // Module files preserved
     assert!(
         generated.contains("use super::texture_atlas::TextureAtlas;"),
         "TextureAtlas should preserve module path, got: {}",
         generated
     );
-    
+
     assert!(
         generated.contains("use super::sprite_region::SpriteRegion;"),
         "SpriteRegion should preserve module path, got: {}",
@@ -199,9 +195,8 @@ fn test_collision2d_module_preserves_path() {
     }
     "#;
 
-    let generated = compile_and_verify_imports(code, "collision2d")
-        .expect("Compilation failed");
-    
+    let generated = compile_and_verify_imports(code, "collision2d").expect("Compilation failed");
+
     // Module path should be preserved
     assert!(
         generated.contains("use super::collision2d::check_collision;"),
@@ -223,16 +218,15 @@ fn test_entity_component_imports_preserve_paths() {
     }
     "#;
 
-    let generated = compile_and_verify_imports(code, "ecs")
-        .expect("Compilation failed");
-    
+    let generated = compile_and_verify_imports(code, "ecs").expect("Compilation failed");
+
     // Module paths should be preserved for actual module files
     assert!(
         generated.contains("use super::entity::Entity;"),
         "Entity import should preserve module path, got: {}",
         generated
     );
-    
+
     assert!(
         generated.contains("use super::components::Transform;"),
         "Transform import should preserve module path, got: {}",
@@ -263,17 +257,16 @@ fn test_ambiguity_prevention_with_mod_rs_globs() {
     }
     "#;
 
-    let generated = compile_and_verify_imports(code, "ambiguity_test")
-        .expect("Compilation failed");
-    
+    let generated = compile_and_verify_imports(code, "ambiguity_test").expect("Compilation failed");
+
     // Both should preserve module paths
     assert!(
-        generated.contains("use super::texture_atlas::TextureAtlas;") &&
-        generated.contains("use super::sprite_region::SpriteRegion;"),
+        generated.contains("use super::texture_atlas::TextureAtlas;")
+            && generated.contains("use super::sprite_region::SpriteRegion;"),
         "Both imports should preserve module paths to avoid ambiguity, got: {}",
         generated
     );
-    
+
     // Verify we can compile the generated Rust code (no ambiguity errors)
     // This would fail if the imports were ambiguous
     assert!(
@@ -282,5 +275,3 @@ fn test_ambiguity_prevention_with_mod_rs_globs() {
         generated
     );
 }
-
-

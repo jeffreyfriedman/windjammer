@@ -1,8 +1,8 @@
 // TDD Test: Self parameter inference - developers write just "self", compiler infers &self, &mut self, or self
 // Philosophy: "Compiler does the hard work, not the developer"
-// Expected: 
+// Expected:
 //   - self only read → &self
-//   - self mutated → &mut self  
+//   - self mutated → &mut self
 //   - self consumed → self (owned)
 
 use std::fs;
@@ -11,14 +11,14 @@ use std::process::Command;
 fn compile_and_check(code: &str) -> (bool, String) {
     let test_file = "/tmp/self_inference_test.wj";
     let output_file = "/tmp/self_inference_test.rs";
-    
+
     fs::write(test_file, code).unwrap();
-    
+
     let output = Command::new(env!("CARGO_BIN_EXE_wj"))
-        .args(&["build", test_file, "--output", "/tmp", "--no-cargo"])
+        .args(["build", test_file, "--output", "/tmp", "--no-cargo"])
         .output()
         .expect("Failed to run wj");
-    
+
     let generated = fs::read_to_string(output_file).unwrap_or_default();
     (output.status.success(), generated)
 }
@@ -41,15 +41,21 @@ impl Point {
     }
 }
 "#;
-    
+
     let (success, generated) = compile_and_check(code);
     assert!(success, "Should compile successfully");
-    
+
     // When self is only read, should infer &self
-    assert!(generated.contains("pub fn get_x(&self) -> i64"), 
-        "Read-only method should infer '&self'. Generated:\n{}", generated);
-    assert!(generated.contains("pub fn distance_from_origin(&self) -> f32"), 
-        "Read-only method should infer '&self'. Generated:\n{}", generated);
+    assert!(
+        generated.contains("pub fn get_x(&self) -> i64"),
+        "Read-only method should infer '&self'. Generated:\n{}",
+        generated
+    );
+    assert!(
+        generated.contains("pub fn distance_from_origin(&self) -> f32"),
+        "Read-only method should infer '&self'. Generated:\n{}",
+        generated
+    );
 }
 
 #[test]
@@ -73,17 +79,26 @@ impl Counter {
     }
 }
 "#;
-    
+
     let (success, generated) = compile_and_check(code);
     assert!(success, "Should compile successfully");
-    
+
     // When self is mutated, should infer &mut self
-    assert!(generated.contains("pub fn increment(&mut self)"), 
-        "Mutating method should infer '&mut self'. Generated:\n{}", generated);
-    assert!(generated.contains("pub fn add(&mut self, amount: i64)"), 
-        "Mutating method should infer '&mut self'. Generated:\n{}", generated);
-    assert!(generated.contains("pub fn reset(&mut self)"), 
-        "Mutating method should infer '&mut self'. Generated:\n{}", generated);
+    assert!(
+        generated.contains("pub fn increment(&mut self)"),
+        "Mutating method should infer '&mut self'. Generated:\n{}",
+        generated
+    );
+    assert!(
+        generated.contains("pub fn add(&mut self, amount: i64)"),
+        "Mutating method should infer '&mut self'. Generated:\n{}",
+        generated
+    );
+    assert!(
+        generated.contains("pub fn reset(&mut self)"),
+        "Mutating method should infer '&mut self'. Generated:\n{}",
+        generated
+    );
 }
 
 #[test]
@@ -103,15 +118,21 @@ impl Builder {
     }
 }
 "#;
-    
+
     let (success, generated) = compile_and_check(code);
     assert!(success, "Should compile successfully");
-    
+
     // When self is consumed (returned/moved), should stay as self (owned)
-    assert!(generated.contains("pub fn build(self) -> i64"), 
-        "Consuming method should use 'self' (owned). Generated:\n{}", generated);
-    assert!(generated.contains("pub fn into_inner(self) -> i64"), 
-        "Consuming method should use 'self' (owned). Generated:\n{}", generated);
+    assert!(
+        generated.contains("pub fn build(self) -> i64"),
+        "Consuming method should use 'self' (owned). Generated:\n{}",
+        generated
+    );
+    assert!(
+        generated.contains("pub fn into_inner(self) -> i64"),
+        "Consuming method should use 'self' (owned). Generated:\n{}",
+        generated
+    );
 }
 
 #[test]
@@ -138,21 +159,30 @@ impl Vector {
     }
 }
 "#;
-    
+
     let (success, generated) = compile_and_check(code);
     assert!(success, "Should compile successfully");
-    
+
     // length: read-only → &self
-    assert!(generated.contains("pub fn length(&self) -> f32"), 
-        "Read-only should infer '&self'. Generated:\n{}", generated);
-    
+    assert!(
+        generated.contains("pub fn length(&self) -> f32"),
+        "Read-only should infer '&self'. Generated:\n{}",
+        generated
+    );
+
     // normalize: mutates self → &mut self
-    assert!(generated.contains("pub fn normalize(&mut self)"), 
-        "Mutating should infer '&mut self'. Generated:\n{}", generated);
-    
+    assert!(
+        generated.contains("pub fn normalize(&mut self)"),
+        "Mutating should infer '&mut self'. Generated:\n{}",
+        generated
+    );
+
     // consume: moves self → self (owned)
-    assert!(generated.contains("pub fn consume(self) -> f32"), 
-        "Consuming should use 'self' (owned). Generated:\n{}", generated);
+    assert!(
+        generated.contains("pub fn consume(self) -> f32"),
+        "Consuming should use 'self' (owned). Generated:\n{}",
+        generated
+    );
 }
 
 #[test]
@@ -178,24 +208,29 @@ impl Drawable for Sprite {
     }
 }
 "#;
-    
+
     let (success, generated) = compile_and_check(code);
     assert!(success, "Should compile successfully");
-    
+
     // Trait methods should also infer
     // draw: read-only → &self
-    let trait_section: String = generated.lines()
+    let trait_section: String = generated
+        .lines()
         .skip_while(|l| !l.contains("trait Drawable"))
         .take(10)
         .collect::<Vec<_>>()
         .join("\n");
-    
-    assert!(trait_section.contains("fn draw(&self);"), 
-        "Trait read-only method should infer '&self'. Trait:\n{}", trait_section);
-    
+
+    assert!(
+        trait_section.contains("fn draw(&self);"),
+        "Trait read-only method should infer '&self'. Trait:\n{}",
+        trait_section
+    );
+
     // update: mutates → &mut self
-    assert!(trait_section.contains("fn update(&mut self, delta: f32);"), 
-        "Trait mutating method should infer '&mut self'. Trait:\n{}", trait_section);
+    assert!(
+        trait_section.contains("fn update(&mut self, delta: f32);"),
+        "Trait mutating method should infer '&mut self'. Trait:\n{}",
+        trait_section
+    );
 }
-
-

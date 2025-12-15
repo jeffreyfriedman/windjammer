@@ -1,8 +1,8 @@
 // TDD Test: Compiler should NOT add &mut when indexing array of Copy types
 // WINDJAMMER PHILOSOPHY: Copy types should be copied, not borrowed
 
-use std::process::Command;
 use std::fs;
+use std::process::Command;
 
 fn compile_code(code: &str) -> Result<String, String> {
     let test_dir = "tests/generated/array_index_copy_test";
@@ -30,8 +30,7 @@ fn compile_code(code: &str) -> Result<String, String> {
     }
 
     let generated_file = format!("{}/test.rs", test_dir);
-    let generated = fs::read_to_string(&generated_file)
-        .expect("Failed to read generated file");
+    let generated = fs::read_to_string(&generated_file).expect("Failed to read generated file");
 
     fs::remove_dir_all(test_dir).ok();
 
@@ -55,18 +54,18 @@ fn test_array_index_of_copy_type_should_not_add_mut_ref() {
     "#;
 
     let generated = compile_code(code).expect("Compilation failed");
-    
+
     // Should NOT add &mut for Copy types
     assert!(
         !generated.contains("&mut self.data["),
         "Should NOT add &mut when indexing Copy type array, got:\n{}",
         generated
     );
-    
+
     // Should be a simple read
     assert!(
-        generated.contains("self.data[index as usize]") || 
-        generated.contains("let value = self.data["),
+        generated.contains("self.data[index as usize]")
+            || generated.contains("let value = self.data["),
         "Should be a simple array read, got:\n{}",
         generated
     );
@@ -94,7 +93,7 @@ fn test_inline_array_index_copy_type_in_return() {
     "#;
 
     let generated = compile_code(code).expect("Compilation failed");
-    
+
     // Should NOT have &mut for Copy type
     assert!(
         !generated.contains("&mut self.generations["),
@@ -118,7 +117,7 @@ fn test_array_index_non_copy_type_may_add_ref() {
     "#;
 
     let generated = compile_code(code).expect("Compilation failed");
-    
+
     // For non-Copy types, & is appropriate (or .clone())
     // This test just verifies compilation succeeds
     assert!(
@@ -141,7 +140,7 @@ fn test_copy_type_used_in_function_call() {
     "#;
 
     let generated = compile_code(code).expect("Compilation failed");
-    
+
     // Should pass by value, not reference
     assert!(
         !generated.contains("&mut ids["),
@@ -149,5 +148,3 @@ fn test_copy_type_used_in_function_call() {
         generated
     );
 }
-
-

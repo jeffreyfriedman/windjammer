@@ -1,8 +1,8 @@
 // TDD Test: Compiler should auto-cast .len() to i64 when comparing with int variables
 // WINDJAMMER PHILOSOPHY: Compiler handles type compatibility automatically
 
-use std::process::Command;
 use std::fs;
+use std::process::Command;
 
 fn compile_code(code: &str) -> Result<String, String> {
     let test_dir = "tests/generated/int_usize_comparison_test";
@@ -30,8 +30,7 @@ fn compile_code(code: &str) -> Result<String, String> {
     }
 
     let generated_file = format!("{}/test.rs", test_dir);
-    let generated = fs::read_to_string(&generated_file)
-        .expect("Failed to read generated file");
+    let generated = fs::read_to_string(&generated_file).expect("Failed to read generated file");
 
     fs::remove_dir_all(test_dir).ok();
 
@@ -55,11 +54,11 @@ fn test_int_var_compared_with_len_should_cast_len() {
     "#;
 
     let generated = compile_code(code).expect("Compilation failed");
-    
+
     // Should cast .len() to i64 for comparison with int field
     assert!(
-        generated.contains("self.index < (self.items.len() as i64)") ||
-        generated.contains("(self.items.len() as i64)"),
+        generated.contains("self.index < (self.items.len() as i64)")
+            || generated.contains("(self.items.len() as i64)"),
         "Should cast .len() to i64 when comparing with int field, got:\n{}",
         generated
     );
@@ -74,7 +73,7 @@ fn test_int_local_var_compared_with_len() {
     "#;
 
     let generated = compile_code(code).expect("Compilation failed");
-    
+
     // Should cast .len() to i64
     assert!(
         generated.contains("items.len() as i64"),
@@ -93,7 +92,7 @@ fn test_usize_var_compared_with_len_no_cast() {
     "#;
 
     let generated = compile_code(code).expect("Compilation failed");
-    
+
     // Should NOT cast when both are usize
     assert!(
         !generated.contains("as i64") || !generated.contains("index"),
@@ -121,7 +120,7 @@ fn test_int_field_compared_with_len_in_if() {
     "#;
 
     let generated = compile_code(code).expect("Compilation failed");
-    
+
     // Should cast .len() to i64 in if condition
     assert!(
         generated.contains("self.data.len() as i64"),
@@ -129,5 +128,3 @@ fn test_int_field_compared_with_len_in_if() {
         generated
     );
 }
-
-
