@@ -319,10 +319,12 @@ fn optimize_loops_in_statement(
         Statement::Assignment {
             target,
             value,
+            compound_op,
             location,
         } => Statement::Assignment {
             target: target.clone(),
             value: optimize_loops_in_expression(value, config, stats),
+            compound_op: *compound_op,
             location: location.clone(),
         },
         Statement::If {
@@ -797,6 +799,7 @@ fn replace_variable_in_statement(
         Statement::Assignment { target, value, .. } => Statement::Assignment {
             target: replace_variable_in_expression(target, var_name, replacement),
             value: replace_variable_in_expression(value, var_name, replacement),
+            compound_op: None,
             location: None,
         },
         _ => stmt.clone(),
