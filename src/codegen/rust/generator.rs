@@ -1,6 +1,8 @@
 // Rust code generator
 use crate::analyzer::*;
-use crate::codegen::rust::{operators, pattern_analysis, self_analysis, string_analysis};
+use crate::codegen::rust::{
+    operators, pattern_analysis, self_analysis, string_analysis, type_analysis,
+};
 use crate::parser::ast::CompoundOp;
 use crate::parser::*;
 use crate::CompilationTarget;
@@ -2227,7 +2229,7 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
                             match ownership_mode {
                                 OwnershipMode::Owned => self.type_to_rust(inferred_type),
                                 OwnershipMode::Borrowed => {
-                                    if self.is_copy_type(inferred_type) {
+                                    if type_analysis::is_copy_type(inferred_type) {
                                         // Copy types pass by value even when borrowed
                                         self.type_to_rust(inferred_type)
                                     } else {
@@ -5074,7 +5076,7 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
     fn all_fields_are_copy(&self, fields: &[crate::parser::StructField]) -> bool {
         fields
             .iter()
-            .all(|field| self.is_copy_type(&field.field_type))
+            .all(|field| type_analysis::is_copy_type(&field.field_type))
     }
 
     fn all_fields_are_partial_eq(&self, fields: &[crate::parser::StructField]) -> bool {
@@ -5202,37 +5204,6 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
     }
 
     #[allow(clippy::only_used_in_recursion)]
-    fn is_copy_type(&self, ty: &Type) -> bool {
-        match ty {
-            Type::Int | Type::Int32 | Type::Uint | Type::Float | Type::Bool => true,
-            Type::Reference(_) => true,         // References are Copy
-            Type::MutableReference(_) => false, // Mutable references are not Copy
-            Type::Tuple(types) => types.iter().all(|t| self.is_copy_type(t)),
-            Type::Custom(name) => {
-                // Recognize common Rust primitive types by name
-                matches!(
-                    name.as_str(),
-                    "i8" | "i16"
-                        | "i32"
-                        | "i64"
-                        | "i128"
-                        | "isize"
-                        | "u8"
-                        | "u16"
-                        | "u32"
-                        | "u64"
-                        | "u128"
-                        | "usize"
-                        | "f32"
-                        | "f64"
-                        | "bool"
-                        | "char"
-                )
-            }
-            _ => false, // String, Vec, Option, Result, other Custom types are not Copy
-        }
-    }
-
     #[allow(clippy::only_used_in_recursion)]
     fn is_partial_eq_type(&self, ty: &Type) -> bool {
         // Most types support PartialEq including floats
