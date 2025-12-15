@@ -19,6 +19,7 @@ pub mod items;
 pub mod literals;
 pub mod operators;
 pub mod optimizations;
+pub mod pattern_analysis;
 pub mod self_analysis;
 pub mod statements;
 pub mod string_analysis;
