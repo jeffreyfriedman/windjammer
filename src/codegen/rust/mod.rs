@@ -19,6 +19,7 @@ pub mod items;
 pub mod literals;
 pub mod optimizations;
 pub mod statements;
+pub mod type_casting;
 pub mod types;
 
 // Re-export the main CodeGenerator for backward compatibility
