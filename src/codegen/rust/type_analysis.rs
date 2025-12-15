@@ -8,9 +8,7 @@
 // These functions are used by the derive inference system to automatically
 // add trait implementations to structs and enums.
 
-use crate::parser::{
-    EnumDecl, EnumVariant, EnumVariantData, Item, Program, StructDecl, StructField, Type,
-};
+use crate::parser::{EnumVariant, EnumVariantData, Item, Program, StructDecl, StructField, Type};
 use std::collections::HashSet;
 
 /// Type analyzer with knowledge of which custom types support various traits
