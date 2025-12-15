@@ -47,8 +47,8 @@ pub struct Camera {
     }
 
     // Read the generated Rust code
-    let generated = fs::read_to_string(format!("{}/test_math.rs", input_dir))
-        .expect("Failed to read output");
+    let generated =
+        fs::read_to_string(format!("{}/test_math.rs", input_dir)).expect("Failed to read output");
 
     println!("Generated code:\n{}", generated);
 
@@ -233,8 +233,8 @@ impl Add for Vec2 {
         );
     }
 
-    let generated = fs::read_to_string(format!("{}/test_ops.rs", input_dir))
-        .expect("Failed to read output");
+    let generated =
+        fs::read_to_string(format!("{}/test_ops.rs", input_dir)).expect("Failed to read output");
 
     println!("Generated code:\n{}", generated);
 
@@ -299,8 +299,8 @@ pub struct World {
         );
     }
 
-    let generated = fs::read_to_string(format!("{}/test_ecs.rs", input_dir))
-        .expect("Failed to read output");
+    let generated =
+        fs::read_to_string(format!("{}/test_ecs.rs", input_dir)).expect("Failed to read output");
 
     println!("Generated code:\n{}", generated);
 
@@ -378,4 +378,3 @@ pub struct MyStruct {
 
     fs::remove_dir_all(input_dir).ok();
 }
-

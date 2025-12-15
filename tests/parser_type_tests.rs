@@ -50,6 +50,7 @@ fn get_struct_field_type(input: &str) -> Type {
 }
 
 /// Check if a type is a numeric type (either specific variant or Custom)
+#[allow(dead_code)]
 fn is_numeric_type(ty: &Type, expected_name: &str) -> bool {
     match ty {
         Type::Int | Type::Int32 | Type::Uint | Type::Float => true,

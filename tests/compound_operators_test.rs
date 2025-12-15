@@ -8,14 +8,14 @@ use std::process::Command;
 fn compile_and_check(code: &str) -> (bool, String) {
     let test_file = "/tmp/compound_test.wj";
     let output_file = "/tmp/compound_test.rs";
-    
+
     fs::write(test_file, code).unwrap();
-    
+
     let output = Command::new(env!("CARGO_BIN_EXE_wj"))
-        .args(&["build", test_file, "--output", "/tmp", "--no-cargo"])
+        .args(["build", test_file, "--output", "/tmp", "--no-cargo"])
         .output()
         .expect("Failed to run wj");
-    
+
     let generated = fs::read_to_string(output_file).unwrap_or_default();
     (output.status.success(), generated)
 }
@@ -33,15 +33,21 @@ impl Counter {
     }
 }
 "#;
-    
+
     let (success, generated) = compile_and_check(code);
     assert!(success, "Should compile successfully");
-    
+
     // Should preserve += operator
-    assert!(generated.contains("self.count += 1"), 
-        "Should preserve '+=' operator, not expand it. Generated:\n{}", generated);
-    assert!(!generated.contains("self.count = self.count + 1"), 
-        "Should NOT expand to 'x = x + 1'. Generated:\n{}", generated);
+    assert!(
+        generated.contains("self.count += 1"),
+        "Should preserve '+=' operator, not expand it. Generated:\n{}",
+        generated
+    );
+    assert!(
+        !generated.contains("self.count = self.count + 1"),
+        "Should NOT expand to 'x = x + 1'. Generated:\n{}",
+        generated
+    );
 }
 
 #[test]
@@ -60,19 +66,31 @@ impl Math {
     }
 }
 "#;
-    
+
     let (success, generated) = compile_and_check(code);
     assert!(success, "Should compile successfully");
-    
+
     // Should preserve all compound operators
-    assert!(generated.contains("self.value += x"), 
-        "Should preserve '+=' operator. Generated:\n{}", generated);
-    assert!(generated.contains("self.value -= x"), 
-        "Should preserve '-=' operator. Generated:\n{}", generated);
-    assert!(generated.contains("self.value *= x"), 
-        "Should preserve '*=' operator. Generated:\n{}", generated);
-    assert!(generated.contains("self.value /= x"), 
-        "Should preserve '/=' operator. Generated:\n{}", generated);
+    assert!(
+        generated.contains("self.value += x"),
+        "Should preserve '+=' operator. Generated:\n{}",
+        generated
+    );
+    assert!(
+        generated.contains("self.value -= x"),
+        "Should preserve '-=' operator. Generated:\n{}",
+        generated
+    );
+    assert!(
+        generated.contains("self.value *= x"),
+        "Should preserve '*=' operator. Generated:\n{}",
+        generated
+    );
+    assert!(
+        generated.contains("self.value /= x"),
+        "Should preserve '/=' operator. Generated:\n{}",
+        generated
+    );
 }
 
 #[test]
@@ -90,14 +108,18 @@ impl Vec2 {
     }
 }
 "#;
-    
+
     let (success, generated) = compile_and_check(code);
     assert!(success, "Should compile successfully");
-    
-    assert!(generated.contains("self.x += other.x"), 
-        "Should preserve compound operator with field access. Generated:\n{}", generated);
-    assert!(generated.contains("self.y += other.y"), 
-        "Should preserve compound operator with field access. Generated:\n{}", generated);
+
+    assert!(
+        generated.contains("self.x += other.x"),
+        "Should preserve compound operator with field access. Generated:\n{}",
+        generated
+    );
+    assert!(
+        generated.contains("self.y += other.y"),
+        "Should preserve compound operator with field access. Generated:\n{}",
+        generated
+    );
 }
-
-

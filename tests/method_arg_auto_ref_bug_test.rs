@@ -1,8 +1,8 @@
 // TDD Test: Compiler incorrectly adds & to Copy type method arguments
 // Vec::remove expects usize (by value), not &usize
 
-use std::process::Command;
 use std::fs;
+use std::process::Command;
 
 fn compile_code(code: &str) -> Result<String, String> {
     let test_dir = "tests/generated/method_arg_ref_test";
@@ -30,8 +30,7 @@ fn compile_code(code: &str) -> Result<String, String> {
     }
 
     let generated_file = format!("{}/test.rs", test_dir);
-    let generated = fs::read_to_string(&generated_file)
-        .expect("Failed to read generated file");
+    let generated = fs::read_to_string(&generated_file).expect("Failed to read generated file");
 
     fs::remove_dir_all(test_dir).ok();
 
@@ -48,14 +47,14 @@ fn test_vec_remove_should_not_add_reference() {
     "#;
 
     let generated = compile_code(code).expect("Compilation failed");
-    
+
     // Should NOT add & to the argument
     assert!(
         !generated.contains("items.remove(&index)"),
         "Should NOT add & to usize argument for Vec::remove, got:\n{}",
         generated
     );
-    
+
     // Should pass by value
     assert!(
         generated.contains("items.remove(index)"),
@@ -75,14 +74,14 @@ fn test_vec_remove_with_cast_should_not_add_reference() {
     "#;
 
     let generated = compile_code(code).expect("Compilation failed");
-    
+
     // Should NOT add & or .clone()
     assert!(
         !generated.contains("dense.remove(&idx") && !generated.contains("&idx.clone()"),
         "Should NOT add & or .clone() to usize variable, got:\n{}",
         generated
     );
-    
+
     // Should be simple: dense.remove(idx)
     assert!(
         generated.contains("dense.remove(idx)"),
@@ -103,7 +102,7 @@ fn test_hashmap_remove_expects_reference() {
     "#;
 
     let generated = compile_code(code).expect("Compilation failed");
-    
+
     // HashMap::remove DOES need &, so this should have it
     assert!(
         generated.contains("map.remove(&key)"),
@@ -128,7 +127,7 @@ fn test_method_signature_determines_ref_not_type() {
     "#;
 
     let generated = compile_code(code).expect("Compilation failed");
-    
+
     // Should NOT add & to usize for Vec::remove
     assert!(
         !generated.contains("self.items.remove(&index)"),
@@ -136,5 +135,3 @@ fn test_method_signature_determines_ref_not_type() {
         generated
     );
 }
-
-

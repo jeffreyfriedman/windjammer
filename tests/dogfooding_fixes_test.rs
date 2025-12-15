@@ -1,3 +1,4 @@
+#![allow(unused)]
 // Tests for compiler fixes discovered through dogfooding
 // These test specific edge cases found while compiling the editor panels
 

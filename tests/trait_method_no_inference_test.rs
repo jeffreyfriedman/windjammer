@@ -8,18 +8,24 @@ fn compile_and_check(code: &str) -> (bool, String) {
     let temp_dir = std::env::temp_dir();
     let test_file = temp_dir.join("trait_test.wj");
     let output_dir = temp_dir.join("trait_output");
-    
+
     std::fs::create_dir_all(&output_dir).ok();
     std::fs::write(&test_file, code).unwrap();
-    
+
     let output = Command::new(env!("CARGO_BIN_EXE_wj"))
-        .args(&["build", test_file.to_str().unwrap(), "--output", output_dir.to_str().unwrap(), "--no-cargo"])
+        .args([
+            "build",
+            test_file.to_str().unwrap(),
+            "--output",
+            output_dir.to_str().unwrap(),
+            "--no-cargo",
+        ])
         .output()
         .expect("Failed to run wj");
-    
+
     let generated_file = output_dir.join("trait_test.rs");
     let generated = std::fs::read_to_string(&generated_file).unwrap_or_default();
-    
+
     (output.status.success(), generated)
 }
 
@@ -32,17 +38,23 @@ pub trait GameLoop {
     }
 }
 "#;
-    
+
     let (success, generated) = compile_and_check(code);
     assert!(success, "Should compile successfully");
-    
+
     // Check that trait signature uses f32, not &f32
-    assert!(generated.contains("fn update(&mut self, delta: f32)"),  
-        "Trait method should have 'delta: f32' (owned), not '&f32'. Generated:\n{}", generated);
-    
+    assert!(
+        generated.contains("fn update(&mut self, delta: f32)"),
+        "Trait method should have 'delta: f32' (owned), not '&f32'. Generated:\n{}",
+        generated
+    );
+
     // Ensure it's NOT generating &f32
-    assert!(!generated.contains("delta: &f32"),
-        "Trait method should NOT have '&f32'. Generated:\n{}", generated);
+    assert!(
+        !generated.contains("delta: &f32"),
+        "Trait method should NOT have '&f32'. Generated:\n{}",
+        generated
+    );
 }
 
 #[test]
@@ -61,13 +73,16 @@ pub trait GameLoop {
     }
 }
 "#;
-    
+
     let (success, generated) = compile_and_check(code);
     assert!(success, "Should compile successfully");
-    
+
     // Check that trait signatures use owned types, not references
-    assert!(generated.contains("fn update(&mut self, input: Input)"), 
-        "Trait method should have 'input: Input' (owned), not '&Input'. Generated:\n{}", generated);
+    assert!(
+        generated.contains("fn update(&mut self, input: Input)"),
+        "Trait method should have 'input: Input' (owned), not '&Input'. Generated:\n{}",
+        generated
+    );
     assert!(generated.contains("fn render(&self, ctx: RenderContext)"), 
         "Trait method should have 'ctx: RenderContext' (owned), not '&RenderContext'. Generated:\n{}", generated);
 }
@@ -90,15 +105,17 @@ impl GameLoop for MyGame {
     }
 }
 "#;
-    
+
     let (success, generated) = compile_and_check(code);
     assert!(success, "Should compile successfully");
-    
+
     // Trait signature should be owned
-    assert!(generated.contains("fn update(&mut self, input: Input);"), 
-        "Trait method signature should have 'input: Input' (owned). Generated:\n{}", generated);
-    
+    assert!(
+        generated.contains("fn update(&mut self, input: Input);"),
+        "Trait method signature should have 'input: Input' (owned). Generated:\n{}",
+        generated
+    );
+
     // Implementation matches trait signature
     // (The implementation will also have Input because it must match the trait)
 }
-

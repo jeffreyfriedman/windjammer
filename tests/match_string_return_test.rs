@@ -95,4 +95,3 @@ fn test_match_empty_string_return() {
         generated
     );
 }
-

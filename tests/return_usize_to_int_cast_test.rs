@@ -1,8 +1,8 @@
 // TDD Test: Compiler should auto-cast usize to i64 in return statements
 // Functions returning int should accept .len() (usize) without explicit casts
 
-use std::process::Command;
 use std::fs;
+use std::process::Command;
 
 fn compile_code(code: &str) -> Result<String, String> {
     let test_dir = "tests/generated/return_cast_test";
@@ -30,8 +30,7 @@ fn compile_code(code: &str) -> Result<String, String> {
     }
 
     let generated_file = format!("{}/test.rs", test_dir);
-    let generated = fs::read_to_string(&generated_file)
-        .expect("Failed to read generated file");
+    let generated = fs::read_to_string(&generated_file).expect("Failed to read generated file");
 
     fs::remove_dir_all(test_dir).ok();
 
@@ -48,7 +47,7 @@ fn test_return_vec_len_should_cast_to_int() {
     "#;
 
     let generated = compile_code(code).expect("Compilation failed");
-    
+
     // Should auto-cast .len() (usize) to i64
     assert!(
         generated.contains("items.len() as i64") || generated.contains("(items.len() as i64)"),
@@ -73,10 +72,11 @@ fn test_return_len_from_method() {
     "#;
 
     let generated = compile_code(code).expect("Compilation failed");
-    
+
     // Should auto-cast
     assert!(
-        generated.contains("self.dense.len() as i64") || generated.contains("(self.dense.len() as i64)"),
+        generated.contains("self.dense.len() as i64")
+            || generated.contains("(self.dense.len() as i64)"),
         "Should auto-cast .len() to i64, got:\n{}",
         generated
     );
@@ -92,7 +92,7 @@ fn test_implicit_return_len_should_cast() {
     "#;
 
     let generated = compile_code(code).expect("Compilation failed");
-    
+
     // Should auto-cast implicit return
     assert!(
         generated.contains("items.len() as i64"),
@@ -112,7 +112,7 @@ fn test_return_usize_variable_to_int() {
     "#;
 
     let generated = compile_code(code).expect("Compilation failed");
-    
+
     // Should auto-cast usize variable to i64
     assert!(
         generated.contains("return count as i64"),
@@ -131,7 +131,7 @@ fn test_return_computed_usize_to_int() {
     "#;
 
     let generated = compile_code(code).expect("Compilation failed");
-    
+
     // Should cast the entire expression
     assert!(
         generated.contains("as i64") || generated.contains("as usize"),
@@ -139,5 +139,3 @@ fn test_return_computed_usize_to_int() {
         generated
     );
 }
-
-

@@ -25,14 +25,20 @@ fn test_local_variable_shadows_field() {
     "#;
 
     let generated = compile_code(code).expect("Compilation failed");
-    
+
     // Should generate: required.push(component_name)
-    assert!(generated.contains("required.push(component_name)"), 
-        "Local variable 'required' should shadow field, generated:\n{}", generated);
-    
+    assert!(
+        generated.contains("required.push(component_name)"),
+        "Local variable 'required' should shadow field, generated:\n{}",
+        generated
+    );
+
     // Should NOT generate: self.required.push(component_name)
-    assert!(!generated.contains("self.required.push(component_name)"), 
-        "Should not use self.required when local variable shadows it, generated:\n{}", generated);
+    assert!(
+        !generated.contains("self.required.push(component_name)"),
+        "Should not use self.required when local variable shadows it, generated:\n{}",
+        generated
+    );
 }
 
 #[test]
@@ -53,10 +59,13 @@ fn test_nested_shadowing() {
     "#;
 
     let generated = compile_code(code).expect("Compilation failed");
-    
+
     // Should use local variables x and y, not self.x and self.y
-    assert!(generated.contains("Point { x, y }") || generated.contains("Point { x: x, y: y }"), 
-        "Should use local variables, generated:\n{}", generated);
+    assert!(
+        generated.contains("Point { x, y }") || generated.contains("Point { x: x, y: y }"),
+        "Should use local variables, generated:\n{}",
+        generated
+    );
 }
 
 #[test]
@@ -74,10 +83,13 @@ fn test_parameter_does_not_shadow() {
     "#;
 
     let generated = compile_code(code).expect("Compilation failed");
-    
+
     // Should still generate self.count for field access
-    assert!(generated.contains("self.count = count"), 
-        "Parameters shadow fields but assignment target should use self.count, generated:\n{}", generated);
+    assert!(
+        generated.contains("self.count = count"),
+        "Parameters shadow fields but assignment target should use self.count, generated:\n{}",
+        generated
+    );
 }
 
 #[test]
@@ -97,12 +109,18 @@ fn test_local_var_method_call() {
     "#;
 
     let generated = compile_code(code).expect("Compilation failed");
-    
+
     // Should use local variable items
-    assert!(generated.contains("items.push(item)"), 
-        "Should use local variable for method call, generated:\n{}", generated);
-    assert!(!generated.contains("self.items.push(item)"), 
-        "Should not use self.items when shadowed, generated:\n{}", generated);
+    assert!(
+        generated.contains("items.push(item)"),
+        "Should use local variable for method call, generated:\n{}",
+        generated
+    );
+    assert!(
+        !generated.contains("self.items.push(item)"),
+        "Should not use self.items when shadowed, generated:\n{}",
+        generated
+    );
 }
 
 // Helper function to compile Windjammer code and return generated Rust
@@ -142,5 +160,3 @@ fn compile_code(code: &str) -> Result<String, String> {
     let rust_file = output_dir.join("test.rs");
     fs::read_to_string(&rust_file).map_err(|e| format!("Failed to read generated file: {}", e))
 }
-
-

@@ -1,8 +1,8 @@
 // TDD Test: Compiler incorrectly adds 'as i32' casts to .len() in comparisons
 // This test should FAIL until the bug is fixed
 
-use std::process::Command;
 use std::fs;
+use std::process::Command;
 
 fn compile_and_check_casts(code: &str) -> Result<String, String> {
     let test_dir = "tests/generated/usize_cast_test";
@@ -31,8 +31,7 @@ fn compile_and_check_casts(code: &str) -> Result<String, String> {
 
     // Read generated file
     let generated_file = format!("{}/test.rs", test_dir);
-    let generated = fs::read_to_string(&generated_file)
-        .expect("Failed to read generated file");
+    let generated = fs::read_to_string(&generated_file).expect("Failed to read generated file");
 
     fs::remove_dir_all(test_dir).ok();
 
@@ -48,20 +47,19 @@ fn test_vec_len_comparison_should_not_cast_to_i32() {
     }
     "#;
 
-    let generated = compile_and_check_casts(code)
-        .expect("Compilation failed");
-    
+    let generated = compile_and_check_casts(code).expect("Compilation failed");
+
     // Should NOT cast .len() to i32 when comparing with usize
     assert!(
         !generated.contains("(items.len() as i32)") && !generated.contains(".len() as i32"),
         "Should NOT cast .len() to i32 when comparing with usize variable, got:\n{}",
         generated
     );
-    
+
     // Should either keep both as usize or cast the usize variable
     assert!(
-        generated.contains("items.len() > index") || 
-        generated.contains("items.len() > (index as i64)"),
+        generated.contains("items.len() > index")
+            || generated.contains("items.len() > (index as i64)"),
         "Should compare without incorrect casts, got:\n{}",
         generated
     );
@@ -85,9 +83,8 @@ fn test_sparse_vec_len_comparison_with_usize() {
     }
     "#;
 
-    let generated = compile_and_check_casts(code)
-        .expect("Compilation failed");
-    
+    let generated = compile_and_check_casts(code).expect("Compilation failed");
+
     // Should NOT cast .len() to i32
     assert!(
         !generated.contains("(self.sparse.len() as i32)"),
@@ -110,9 +107,8 @@ fn test_usize_variable_in_comparison_keeps_type() {
     }
     "#;
 
-    let generated = compile_and_check_casts(code)
-        .expect("Compilation failed");
-    
+    let generated = compile_and_check_casts(code).expect("Compilation failed");
+
     // Should NOT add any i32 casts to usize comparisons
     assert!(
         !generated.contains("as i32") || !generated.contains("len") && !generated.contains("idx"),
@@ -133,9 +129,8 @@ fn test_len_in_while_loop_condition() {
     }
     "#;
 
-    let generated = compile_and_check_casts(code)
-        .expect("Compilation failed");
-    
+    let generated = compile_and_check_casts(code).expect("Compilation failed");
+
     // Should NOT cast .len() to i32 when comparing with usize
     assert!(
         !generated.contains("(items.len() as i32)"),
@@ -143,5 +138,3 @@ fn test_len_in_while_loop_condition() {
         generated
     );
 }
-
-

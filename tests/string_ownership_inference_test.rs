@@ -1,8 +1,8 @@
 // TDD Test: String ownership inference (&str vs String)
 // WINDJAMMER PHILOSOPHY: User writes 'string', compiler infers ownership
 
-use std::process::Command;
 use std::fs;
+use std::process::Command;
 
 fn compile_code(code: &str) -> Result<String, String> {
     let test_dir = "tests/generated/string_inference_test";
@@ -30,8 +30,7 @@ fn compile_code(code: &str) -> Result<String, String> {
     }
 
     let generated_file = format!("{}/test.rs", test_dir);
-    let generated = fs::read_to_string(&generated_file)
-        .expect("Failed to read generated file");
+    let generated = fs::read_to_string(&generated_file).expect("Failed to read generated file");
 
     fs::remove_dir_all(test_dir).ok();
 
@@ -51,13 +50,13 @@ fn test_read_only_param_infers_str_ref() {
     "#;
 
     let generated = compile_code(code).expect("Compilation failed");
-    
+
     assert!(
         generated.contains("text: &str"),
         "Should infer &str for read-only parameter, got:\n{}",
         generated
     );
-    
+
     assert!(
         !generated.contains("\"hello\".to_string()"),
         "Should NOT convert literal for &str param, got:\n{}",
@@ -84,13 +83,13 @@ fn test_stored_param_infers_owned() {
     "#;
 
     let generated = compile_code(code).expect("Compilation failed");
-    
+
     assert!(
         generated.contains("name: String"),
         "Should infer String for stored parameter, got:\n{}",
         generated
     );
-    
+
     assert!(
         generated.contains("User::new(\"Alice\".to_string())"),
         "SHOULD convert literal for String param, got:\n{}",

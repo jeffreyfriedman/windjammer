@@ -1,8 +1,8 @@
 // Test: If-else expression context tracking
 // Ensures if-else branches don't get semicolons when used as values
 
-use std::process::Command;
 use std::fs;
+use std::process::Command;
 
 fn compile_code(code: &str) -> Result<String, String> {
     let test_dir = "tests/generated/if_else_context_test";
@@ -31,8 +31,7 @@ fn compile_code(code: &str) -> Result<String, String> {
 
     // Read the generated file
     let generated_file = format!("{}/test.rs", test_dir);
-    let generated = fs::read_to_string(&generated_file)
-        .expect("Failed to read generated file");
+    let generated = fs::read_to_string(&generated_file).expect("Failed to read generated file");
 
     fs::remove_dir_all(test_dir).ok();
 
@@ -50,20 +49,20 @@ fn test_if_else_in_let_no_semicolons() {
     "#;
 
     let generated = compile_code(code).expect("Compilation failed");
-    
+
     // Should NOT have semicolons in branches
     assert!(
         !generated.contains("1.0;"),
         "If branch should NOT have semicolon when used as value, got: {}",
         generated
     );
-    
+
     assert!(
         !generated.contains("2.0;") || generated.contains("2.0; }"),
         "Else branch should NOT have semicolon when used as value (unless at block end), got: {}",
         generated
     );
-    
+
     // Should have branches without semicolons
     assert!(
         generated.contains("if flag") && generated.contains("1.0") && generated.contains("2.0"),
@@ -94,7 +93,7 @@ fn test_if_else_with_field_access_no_semicolons() {
     "#;
 
     let generated = compile_code(code).expect("Compilation failed");
-    
+
     // This is the EXACT bug case from character_controller.rs
     // Should NOT have semicolons in branches
     assert!(
@@ -102,7 +101,7 @@ fn test_if_else_with_field_access_no_semicolons() {
         "If branch with literal should NOT have semicolon, got: {}",
         generated
     );
-    
+
     assert!(
         !generated.contains("self.air_control;") || generated.contains("self.air_control; }"),
         "Else branch with field access should NOT have semicolon, got: {}",
@@ -120,7 +119,7 @@ fn test_if_else_in_return_no_semicolons() {
     "#;
 
     let generated = compile_code(code).expect("Compilation failed");
-    
+
     // Branches should NOT have semicolons
     assert!(
         generated.contains(r#""positive""#) && generated.contains(r#""negative""#),
@@ -143,7 +142,7 @@ fn test_if_else_in_function_returning_unit_has_semicolons() {
     "#;
 
     let generated = compile_code(code).expect("Compilation failed");
-    
+
     // This is a statement, not an expression, so semicolons are OK
     // (but Windjammer might optimize this anyway)
     assert!(
@@ -168,11 +167,13 @@ fn test_nested_if_else_in_let_no_semicolons() {
     "#;
 
     let generated = compile_code(code).expect("Compilation failed");
-    
+
     // Inner branches should NOT have semicolons
     assert!(
-        generated.contains("1") && generated.contains("2") && 
-        generated.contains("3") && generated.contains("4"),
+        generated.contains("1")
+            && generated.contains("2")
+            && generated.contains("3")
+            && generated.contains("4"),
         "Should contain all numeric values, got: {}",
         generated
     );
@@ -189,7 +190,7 @@ fn test_if_else_in_assignment_no_semicolons() {
     "#;
 
     let generated = compile_code(code).expect("Compilation failed");
-    
+
     // Branches should NOT have semicolons when used as RHS of assignment
     assert!(
         generated.contains("if flag"),
@@ -215,7 +216,7 @@ fn test_if_else_block_expressions_no_semicolons() {
     "#;
 
     let generated = compile_code(code).expect("Compilation failed");
-    
+
     // Last expressions in blocks should NOT have semicolons
     assert!(
         generated.contains("temp + 1") && generated.contains("temp - 1"),
@@ -223,4 +224,3 @@ fn test_if_else_block_expressions_no_semicolons() {
         generated
     );
 }
-
