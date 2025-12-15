@@ -1,5 +1,6 @@
 // Rust code generator
 use crate::analyzer::*;
+use crate::codegen::rust::string_analysis;
 use crate::parser::ast::CompoundOp;
 use crate::parser::*;
 use crate::CompilationTarget;
@@ -2691,10 +2692,10 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
             } => {
                 // WINDJAMMER PHILOSOPHY: Check if any branch explicitly uses .as_str()
                 // If so, we should NOT auto-convert string literals in other branches
-                let any_branch_has_as_str = self.block_has_as_str(then_block)
+                let any_branch_has_as_str = string_analysis::block_has_as_str(then_block)
                     || else_block
                         .as_ref()
-                        .is_some_and(|b| self.block_has_as_str(b));
+                        .is_some_and(|b| string_analysis::block_has_as_str(b));
 
                 let old_suppress = self.suppress_string_conversion;
                 if any_branch_has_as_str {
@@ -2766,7 +2767,7 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
                         // Check if any arm produces a String (format!, to_string(), etc.)
                         // OR if any arm has a block whose last expression is converted to String
                         arms.iter().any(|arm| {
-                            self.expression_produces_string(&arm.body)
+                            string_analysis::expression_produces_string(&arm.body)
                                 || self.arm_returns_converted_string(&arm.body)
                         })
                     }
@@ -3215,77 +3216,6 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
         }
     }
 
-    fn expression_produces_string(&self, expr: &Expression) -> bool {
-        match expr {
-            // Macro invocations like format!(...) produce String
-            Expression::MacroInvocation { name, .. } => {
-                // format!, concat!, and write!-like macros produce String
-                matches!(name.as_str(), "format" | "concat" | "format_args" | "write")
-            }
-            // Function calls like String::from, format() without !
-            Expression::Call { function, .. } => {
-                if let Expression::Identifier { name, .. } = &**function {
-                    name == "format" || name == "String" || name == "to_string"
-                } else if let Expression::FieldAccess { field, .. } = &**function {
-                    field == "from" || field == "to_string"
-                } else {
-                    false
-                }
-            }
-            // Method calls like .to_string()
-            Expression::MethodCall { method, .. } => method == "to_string" || method == "to_owned",
-            // Blocks - check last statement for String-producing expression
-            Expression::Block { statements, .. } => {
-                if let Some(last) = statements.last() {
-                    match last {
-                        Statement::Expression { expr, .. } => self.expression_produces_string(expr),
-                        // If statements - check if branches return String
-                        Statement::If {
-                            then_block,
-                            else_block,
-                            ..
-                        } => {
-                            // Check if then branch produces String
-                            let then_produces_string = then_block.last().is_some_and(|s| {
-                                if let Statement::Expression { expr, .. } = s {
-                                    self.expression_produces_string(expr)
-                                } else {
-                                    false
-                                }
-                            });
-                            // Check else branch if present
-                            let else_produces_string = else_block.as_ref().is_some_and(|block| {
-                                block.last().is_some_and(|s| {
-                                    if let Statement::Expression { expr, .. } = s {
-                                        self.expression_produces_string(expr)
-                                    } else {
-                                        false
-                                    }
-                                })
-                            });
-                            then_produces_string || else_produces_string
-                        }
-                        _ => false,
-                    }
-                } else {
-                    false
-                }
-            }
-            _ => false,
-        }
-    }
-
-    /// Check if a block contains any expression that explicitly uses .as_str()
-    /// Used to prevent auto-conversion of string literals in if-else branches
-    fn block_has_as_str(&self, stmts: &[Statement]) -> bool {
-        for stmt in stmts {
-            if self.statement_has_as_str(stmt) {
-                return true;
-            }
-        }
-        false
-    }
-
     /// Check if a block's LAST expression (return value) is an explicit reference (&self.field, &var, etc.)
     /// Used to suppress string literal conversion when one if-else branch returns an explicit ref
     #[allow(dead_code)]
@@ -3333,39 +3263,6 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
             }
             // Variables assigned from .len()
             Expression::Identifier { name, .. } => self.usize_variables.contains(name),
-            _ => false,
-        }
-    }
-
-    /// Check if a statement contains an explicit .as_str() call
-    fn statement_has_as_str(&self, stmt: &Statement) -> bool {
-        match stmt {
-            Statement::Expression { expr, .. } => self.expression_has_as_str(expr),
-            Statement::Return {
-                value: Some(expr), ..
-            } => self.expression_has_as_str(expr),
-            Statement::If {
-                then_block,
-                else_block,
-                ..
-            } => {
-                self.block_has_as_str(then_block)
-                    || else_block
-                        .as_ref()
-                        .is_some_and(|b| self.block_has_as_str(b))
-            }
-            _ => false,
-        }
-    }
-
-    /// Check if an expression explicitly uses .as_str()
-    fn expression_has_as_str(&self, expr: &Expression) -> bool {
-        match expr {
-            Expression::MethodCall { method, object, .. } => {
-                method == "as_str" || self.expression_has_as_str(object)
-            }
-            Expression::Block { statements, .. } => self.block_has_as_str(statements),
-            Expression::FieldAccess { object, .. } => self.expression_has_as_str(object),
             _ => false,
         }
     }
@@ -4771,7 +4668,7 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
                                 _ => {
                                     // Also check if any arm explicitly produces String
                                     arms.iter().any(|arm| {
-                                        self.expression_produces_string(&arm.body)
+                                        string_analysis::expression_produces_string(&arm.body)
                                             || self.arm_returns_converted_string(&arm.body)
                                     })
                                 }
