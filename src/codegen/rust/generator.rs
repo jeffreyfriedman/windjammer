@@ -1,6 +1,6 @@
 // Rust code generator
 use crate::analyzer::*;
-use crate::codegen::rust::string_analysis;
+use crate::codegen::rust::{operators, pattern_analysis, self_analysis, string_analysis};
 use crate::parser::ast::CompoundOp;
 use crate::parser::*;
 use crate::CompilationTarget;
@@ -2094,7 +2094,9 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
 
         if self.in_impl_block && !has_explicit_self && !self.current_struct_fields.is_empty() {
             // Check if function body mutates any struct fields
-            if self.function_mutates_fields(func) {
+            let ctx =
+                self_analysis::AnalysisContext::new(&func.parameters, &self.current_struct_fields);
+            if self_analysis::function_mutates_fields(&ctx, func) {
                 // Check if this is a builder pattern (modifies fields AND returns Self)
                 let returns_self = self.function_returns_self_type(func);
                 if returns_self {
@@ -2104,7 +2106,7 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
                     // Regular mutating method: use `&mut self` (borrowing)
                     params.push("&mut self".to_string());
                 }
-            } else if self.function_accesses_fields(func) {
+            } else if self_analysis::function_accesses_fields(&ctx, func) {
                 // Only read access needed
                 params.push("&self".to_string());
             }
@@ -2736,7 +2738,7 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
                 // BUT: Don't add .as_str() if the match value is a tuple (tuple patterns handle their own string matching)
                 let has_string_literal = arms
                     .iter()
-                    .any(|arm| self.pattern_has_string_literal(&arm.pattern));
+                    .any(|arm| pattern_analysis::pattern_has_string_literal(&arm.pattern));
 
                 let is_tuple_match = arms
                     .iter()
@@ -3099,12 +3101,6 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
                 pattern_strs.join(" | ")
             }
         }
-    }
-
-    /// Check if a pattern contains a string literal
-    /// This is used to determine if we need to add .as_str() to match expressions
-    fn pattern_has_string_literal(&self, pattern: &Pattern) -> bool {
-        pattern_has_string_literal_impl(pattern)
     }
 
     /// Check if match needs .clone() to avoid partial move from self
@@ -3470,8 +3466,8 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
                             value: Literal::String(_),
                             ..
                         }
-                    ) || Self::contains_string_literal(left)
-                        || Self::contains_string_literal(right);
+                    ) || string_analysis::contains_string_literal(left)
+                        || string_analysis::contains_string_literal(right);
 
                     if has_string_literal {
                         // For string concatenation, use format! macro for clean, efficient code
@@ -3553,7 +3549,7 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
                     left_str = format!("({} as usize)", left_str);
                 }
 
-                let op_str = self.binary_op_to_rust(op);
+                let op_str = operators::binary_op_to_rust(op);
                 format!("{} {} {}", left_str, op_str, right_str)
             }
             Expression::Unary { op, operand, .. } => {
@@ -3635,26 +3631,27 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
                         } = first_arg
                         {
                             // Check if this is string concatenation
-                            let has_string_literal = matches!(
-                                left.as_ref(),
-                                Expression::Literal {
-                                    value: Literal::String(_),
-                                    ..
-                                }
-                            ) || matches!(
-                                right.as_ref(),
-                                Expression::Literal {
-                                    value: Literal::String(_),
-                                    ..
-                                }
-                            ) || Self::contains_string_literal(left)
-                                || Self::contains_string_literal(right);
+                            let has_string_literal =
+                                matches!(
+                                    left.as_ref(),
+                                    Expression::Literal {
+                                        value: Literal::String(_),
+                                        ..
+                                    }
+                                ) || matches!(
+                                    right.as_ref(),
+                                    Expression::Literal {
+                                        value: Literal::String(_),
+                                        ..
+                                    }
+                                ) || string_analysis::contains_string_literal(left)
+                                    || string_analysis::contains_string_literal(right);
 
                             if has_string_literal {
                                 // Collect all parts of the concatenation
                                 let mut parts = Vec::new();
-                                Self::collect_concat_parts_static(left, &mut parts);
-                                Self::collect_concat_parts_static(right, &mut parts);
+                                string_analysis::collect_concat_parts_static(left, &mut parts);
+                                string_analysis::collect_concat_parts_static(right, &mut parts);
 
                                 // Generate format string and arguments
                                 let format_str = "{}".repeat(parts.len());
@@ -4630,7 +4627,7 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
                         // BUT: Don't add .as_str() if the match value is a tuple
                         let has_string_literal = arms
                             .iter()
-                            .any(|arm| self.pattern_has_string_literal(&arm.pattern));
+                            .any(|arm| pattern_analysis::pattern_has_string_literal(&arm.pattern));
 
                         let is_tuple_match = arms
                             .iter()
@@ -4917,35 +4914,12 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
         }
     }
 
-    fn binary_op_to_rust(&self, op: &BinaryOp) -> &str {
-        match op {
-            BinaryOp::Add => "+",
-            BinaryOp::Sub => "-",
-            BinaryOp::Mul => "*",
-            BinaryOp::Div => "/",
-            BinaryOp::Mod => "%",
-            BinaryOp::Eq => "==",
-            BinaryOp::Ne => "!=",
-            BinaryOp::Lt => "<",
-            BinaryOp::Le => "<=",
-            BinaryOp::Gt => ">",
-            BinaryOp::Ge => ">=",
-            BinaryOp::And => "&&",
-            BinaryOp::Or => "||",
-            BinaryOp::BitAnd => "&",
-            BinaryOp::BitOr => "|",
-            BinaryOp::BitXor => "^",
-            BinaryOp::Shl => "<<",
-            BinaryOp::Shr => ">>",
-        }
-    }
-
     /// Generate efficient string concatenation using format! macro
     fn generate_string_concat(&mut self, left: &Expression, right: &Expression) -> String {
         // Collect all parts of the concatenation chain
         let mut parts = Vec::new();
-        Self::collect_concat_parts_static(left, &mut parts);
-        Self::collect_concat_parts_static(right, &mut parts);
+        string_analysis::collect_concat_parts_static(left, &mut parts);
+        string_analysis::collect_concat_parts_static(right, &mut parts);
 
         // Generate format! macro call
         let format_str = "{}".repeat(parts.len());
@@ -4957,36 +4931,6 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
         }
 
         format!("format!(\"{}\", {})", format_str, args.join(", "))
-    }
-
-    /// Recursively collect all parts of a string concatenation chain (static to avoid borrow issues)
-    fn collect_concat_parts_static(expr: &Expression, parts: &mut Vec<Expression>) {
-        match expr {
-            Expression::Binary {
-                left,
-                op: BinaryOp::Add,
-                right,
-                ..
-            } => {
-                Self::collect_concat_parts_static(left, parts);
-                Self::collect_concat_parts_static(right, parts);
-            }
-            _ => parts.push(expr.clone()),
-        }
-    }
-
-    /// Check if an expression contains a string literal (recursively for binary expressions)
-    fn contains_string_literal(expr: &Expression) -> bool {
-        match expr {
-            Expression::Literal {
-                value: Literal::String(_),
-                ..
-            } => true,
-            Expression::Binary { left, right, .. } => {
-                Self::contains_string_literal(left) || Self::contains_string_literal(right)
-            }
-            _ => false,
-        }
     }
 
     fn op_precedence(&self, op: &BinaryOp) -> i32 {
@@ -5521,7 +5465,7 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
         match stmt {
             Statement::Assignment { target, .. } => {
                 // Check if we're assigning to var_name or var_name.field
-                self.expression_references_variable_or_field(target, var_name)
+                self_analysis::expression_references_variable_or_field(target, var_name)
             }
             Statement::If {
                 then_block,
@@ -5540,23 +5484,6 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
             Statement::While { body, .. } | Statement::For { body, .. } => body
                 .iter()
                 .any(|s| self.statement_modifies_variable(s, var_name)),
-            _ => false,
-        }
-    }
-
-    /// Check if an expression references a variable or its fields
-    #[allow(clippy::only_used_in_recursion)]
-    fn expression_references_variable_or_field(&self, expr: &Expression, var_name: &str) -> bool {
-        match expr {
-            Expression::Identifier { name, .. } => name == var_name,
-            Expression::FieldAccess { object, .. } => {
-                // Check if object is the variable
-                if let Expression::Identifier { name, .. } = &**object {
-                    name == var_name
-                } else {
-                    self.expression_references_variable_or_field(object, var_name)
-                }
-            }
             _ => false,
         }
     }
@@ -5793,16 +5720,5 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
         output.push('}');
 
         output
-    }
-}
-
-/// Helper function to check if a pattern contains a string literal
-/// Extracted to avoid clippy::only_used_in_recursion warning
-fn pattern_has_string_literal_impl(pattern: &Pattern) -> bool {
-    match pattern {
-        Pattern::Literal(Literal::String(_)) => true,
-        Pattern::Tuple(patterns) => patterns.iter().any(pattern_has_string_literal_impl),
-        Pattern::Or(patterns) => patterns.iter().any(pattern_has_string_literal_impl),
-        _ => false,
     }
 }
