@@ -221,3 +221,90 @@ mod tests {
         assert!(!contains_string_literal(&expr));
     }
 }
+
+/// Checks if an expression produces a String (not &str)
+///
+/// Detects expressions that return owned String values like:
+/// - `format!("hello")`  
+/// - `obj.to_string()`
+/// - `s.to_owned()`
+///
+/// # Examples
+/// ```
+/// // format!() → true
+/// // .to_string() → true
+/// // .len() → false
+/// ```
+pub fn expression_produces_string(expr: &Expression) -> bool {
+    match expr {
+        Expression::MacroInvocation { name, .. } => {
+            matches!(name.as_str(), "format" | "concat" | "format_args" | "write")
+        }
+        Expression::MethodCall { method, .. } => method == "to_string" || method == "to_owned",
+        _ => false,
+    }
+}
+
+/// Checks if an expression contains .as_str() call (recursively)
+///
+/// This is useful for detecting when string conversion should be suppressed
+/// because the user explicitly wants a &str.
+///
+/// # Examples
+/// ```
+/// // s.as_str() → true
+/// // s.trim().as_str() → true (nested)
+/// // s.to_string() → false
+/// ```
+pub fn expression_has_as_str(expr: &Expression) -> bool {
+    use crate::parser::Statement;
+    match expr {
+        Expression::MethodCall { method, object, .. } => {
+            method == "as_str" || expression_has_as_str(object)
+        }
+        Expression::Block { statements, .. } => block_has_as_str(statements),
+        _ => false,
+    }
+}
+
+/// Checks if a statement contains .as_str() call
+///
+/// Recursively checks the statement and any nested statements (like in if/else).
+///
+/// # Examples
+/// ```
+/// // let x = s.as_str(); → true
+/// // return s.as_str(); → true
+/// // if true { s.as_str() } → true
+/// ```
+pub fn statement_has_as_str(stmt: &crate::parser::Statement) -> bool {
+    use crate::parser::Statement;
+    match stmt {
+        Statement::Expression { expr, .. } => expression_has_as_str(expr),
+        Statement::Return {
+            value: Some(expr), ..
+        } => expression_has_as_str(expr),
+        Statement::If {
+            then_block,
+            else_block,
+            ..
+        } => {
+            block_has_as_str(then_block) || else_block.as_ref().is_some_and(|b| block_has_as_str(b))
+        }
+        _ => false,
+    }
+}
+
+/// Checks if a block of statements contains .as_str() call
+///
+/// Returns true if any statement in the block contains .as_str().
+///
+/// # Examples
+/// ```
+/// // { s.as_str(); } → true
+/// // { let x = 1; s.as_str(); } → true
+/// // {} → false
+/// ```
+pub fn block_has_as_str(stmts: &[crate::parser::Statement]) -> bool {
+    stmts.iter().any(statement_has_as_str)
+}
