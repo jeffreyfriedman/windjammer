@@ -228,19 +228,73 @@ mod tests {
 /// - `format!("hello")`  
 /// - `obj.to_string()`
 /// - `s.to_owned()`
+/// - `String::from("text")`
+/// - Blocks that end in String-producing expressions
 ///
 /// # Examples
 /// ```
 /// // format!() → true
 /// // .to_string() → true
+/// // String::from() → true
 /// // .len() → false
 /// ```
 pub fn expression_produces_string(expr: &Expression) -> bool {
+    use crate::parser::Statement;
     match expr {
+        // Macro invocations like format!(...) produce String
         Expression::MacroInvocation { name, .. } => {
+            // format!, concat!, and write!-like macros produce String
             matches!(name.as_str(), "format" | "concat" | "format_args" | "write")
         }
+        // Function calls like String::from, format() without !
+        Expression::Call { function, .. } => {
+            if let Expression::Identifier { name, .. } = &**function {
+                name == "format" || name == "String" || name == "to_string"
+            } else if let Expression::FieldAccess { field, .. } = &**function {
+                field == "from" || field == "to_string"
+            } else {
+                false
+            }
+        }
+        // Method calls like .to_string()
         Expression::MethodCall { method, .. } => method == "to_string" || method == "to_owned",
+        // Blocks - check last statement for String-producing expression
+        Expression::Block { statements, .. } => {
+            if let Some(last) = statements.last() {
+                match last {
+                    Statement::Expression { expr, .. } => expression_produces_string(expr),
+                    // If statements - check if branches return String
+                    Statement::If {
+                        then_block,
+                        else_block,
+                        ..
+                    } => {
+                        // Check if then branch produces String
+                        let then_produces_string = then_block.last().is_some_and(|s| {
+                            if let Statement::Expression { expr, .. } = s {
+                                expression_produces_string(expr)
+                            } else {
+                                false
+                            }
+                        });
+                        // Check else branch if present
+                        let else_produces_string = else_block.as_ref().is_some_and(|block| {
+                            block.last().is_some_and(|s| {
+                                if let Statement::Expression { expr, .. } = s {
+                                    expression_produces_string(expr)
+                                } else {
+                                    false
+                                }
+                            })
+                        });
+                        then_produces_string || else_produces_string
+                    }
+                    _ => false,
+                }
+            } else {
+                false
+            }
+        }
         _ => false,
     }
 }
@@ -254,15 +308,16 @@ pub fn expression_produces_string(expr: &Expression) -> bool {
 /// ```
 /// // s.as_str() → true
 /// // s.trim().as_str() → true (nested)
+/// // obj.field.as_str() → true (field access)
 /// // s.to_string() → false
 /// ```
 pub fn expression_has_as_str(expr: &Expression) -> bool {
-    use crate::parser::Statement;
     match expr {
         Expression::MethodCall { method, object, .. } => {
             method == "as_str" || expression_has_as_str(object)
         }
         Expression::Block { statements, .. } => block_has_as_str(statements),
+        Expression::FieldAccess { object, .. } => expression_has_as_str(object),
         _ => false,
     }
 }
