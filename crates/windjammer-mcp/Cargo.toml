@@ -49,7 +49,7 @@ clap = { version = "4.4", features = ["derive"] }
 axum = { version = "0.8", optional = true }
 tower = { version = "0.4", optional = true }
 tower-http = { version = "0.5", features = ["cors", "trace"], optional = true }
-uuid = { version = "1.6", features = ["v4", "serde"] }
+uuid = { version = "1.19", features = ["v4", "serde"] }
 
 # OAuth 2.0 authentication
 jsonwebtoken = "9.2"
