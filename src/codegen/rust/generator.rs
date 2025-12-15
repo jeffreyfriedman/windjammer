@@ -3214,39 +3214,6 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
         }
     }
 
-    /// Check if a block's LAST expression (return value) is an explicit reference (&self.field, &var, etc.)
-    /// Used to suppress string literal conversion when one if-else branch returns an explicit ref
-    #[allow(dead_code)]
-    fn block_has_explicit_ref(&self, stmts: &[Statement]) -> bool {
-        if stmts.is_empty() {
-            return false;
-        }
-
-        // Only check the LAST statement (the return value of the block)
-        if let Some(last_stmt) = stmts.last() {
-            match last_stmt {
-                Statement::Expression { expr, .. } => self.expression_is_explicit_ref(expr),
-                Statement::Return {
-                    value: Some(expr), ..
-                } => self.expression_is_explicit_ref(expr),
-                _ => false,
-            }
-        } else {
-            false
-        }
-    }
-
-    fn expression_is_explicit_ref(&self, expr: &Expression) -> bool {
-        match expr {
-            Expression::Unary {
-                op: crate::parser::UnaryOp::Ref,
-                ..
-            } => true,
-            Expression::Block { statements, .. } => self.block_has_explicit_ref(statements),
-            _ => false,
-        }
-    }
-
     /// Check if an expression produces usize (e.g., .len(), array indexing)
     /// Used for auto-casting between i32 and usize in comparisons
     fn expression_produces_usize(&self, expr: &Expression) -> bool {
