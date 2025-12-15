@@ -43,6 +43,14 @@ fn collect_concat_parts_recursive(expr: &Expression, parts: &mut Vec<Expression>
     }
 }
 
+/// Collects string concatenation parts into a mutable Vec (static version for use without `self`)
+///
+/// This is the same as `collect_concat_parts` but uses a mutable reference
+/// instead of returning a Vec, avoiding unnecessary allocation in some contexts.
+pub fn collect_concat_parts_static(expr: &Expression, parts: &mut Vec<Expression>) {
+    collect_concat_parts_recursive(expr, parts);
+}
+
 /// Checks if an expression contains a string literal (recursively)
 ///
 /// This is useful for detecting string operations that might need special handling.
