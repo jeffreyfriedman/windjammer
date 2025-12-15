@@ -435,3 +435,49 @@ mod tests {
         assert!(analyzer.has_default(&Type::String));
     }
 }
+
+// =============================================================================
+// Pure Type Checking Functions
+// =============================================================================
+
+/// Check if a type implements Copy trait
+///
+/// Returns true for primitive types, references, and tuples of Copy types.
+///
+/// # Examples
+/// ```
+/// // i32, bool, f64 → true
+/// // &T → true
+/// // &mut T → false
+/// // String, Vec<T> → false
+/// ```
+pub fn is_copy_type(ty: &Type) -> bool {
+    match ty {
+        Type::Int | Type::Int32 | Type::Uint | Type::Float | Type::Bool => true,
+        Type::Reference(_) => true,         // References are Copy
+        Type::MutableReference(_) => false, // Mutable references are not Copy
+        Type::Tuple(types) => types.iter().all(is_copy_type),
+        Type::Custom(name) => {
+            // Recognize common Rust primitive types by name
+            matches!(
+                name.as_str(),
+                "i8" | "i16"
+                    | "i32"
+                    | "i64"
+                    | "i128"
+                    | "isize"
+                    | "u8"
+                    | "u16"
+                    | "u32"
+                    | "u64"
+                    | "u128"
+                    | "usize"
+                    | "f32"
+                    | "f64"
+                    | "bool"
+                    | "char"
+            )
+        }
+        _ => false, // String, Vec, Option, Result, other Custom types are not Copy
+    }
+}
