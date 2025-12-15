@@ -1,3 +1,4 @@
+#![allow(unused)]
 //! Comprehensive Analyzer Ownership Inference Tests
 //!
 //! These tests verify the Windjammer compiler's automatic ownership inference.

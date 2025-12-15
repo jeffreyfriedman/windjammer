@@ -134,7 +134,7 @@ impl Parser {
 
                         Ok(Statement::Assignment {
                             target: expr,
-                            value: rhs,  // Just the RHS, not expanded binary expression
+                            value: rhs, // Just the RHS, not expanded binary expression
                             compound_op: Some(compound_op),
                             location: self.current_location(),
                         })

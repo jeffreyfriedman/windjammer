@@ -1,3 +1,4 @@
+#![allow(dead_code)]
 //! Ownership Inference Tests
 //!
 //! Tests for automatic ownership inference including:

@@ -165,16 +165,16 @@ pub struct EnumDecl {
 /// Compound assignment operators (+=, -=, etc.)
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum CompoundOp {
-    Add,      // +=
-    Sub,      // -=
-    Mul,      // *=
-    Div,      // /=
-    Mod,      // %=
-    BitAnd,   // &=
-    BitOr,    // |=
-    BitXor,   // ^=
-    Shl,      // <<=
-    Shr,      // >>=
+    Add,    // +=
+    Sub,    // -=
+    Mul,    // *=
+    Div,    // /=
+    Mod,    // %=
+    BitAnd, // &=
+    BitOr,  // |=
+    BitXor, // ^=
+    Shl,    // <<=
+    Shr,    // >>=
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]

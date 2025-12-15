@@ -35,7 +35,12 @@ pub fn maybe_cast_usize_to_int(expr_str: String, needs_cast: bool) -> String {
 }
 
 /// Generate a cast for usize in binary operations
-pub fn cast_for_usize_binary_op(left_str: &str, right_str: &str, left_is_usize: bool, right_is_usize: bool) -> (String, String) {
+pub fn cast_for_usize_binary_op(
+    left_str: &str,
+    right_str: &str,
+    left_is_usize: bool,
+    right_is_usize: bool,
+) -> (String, String) {
     match (left_is_usize, right_is_usize) {
         (true, false) => {
             // Cast left (usize) to match right (int)
@@ -73,7 +78,10 @@ mod tests {
 
     #[test]
     fn test_maybe_cast_usize_to_int() {
-        assert_eq!(maybe_cast_usize_to_int("vec.len()".to_string(), true), "(vec.len() as i64)");
+        assert_eq!(
+            maybe_cast_usize_to_int("vec.len()".to_string(), true),
+            "(vec.len() as i64)"
+        );
         assert_eq!(maybe_cast_usize_to_int("42".to_string(), false), "42");
     }
 
@@ -92,4 +100,3 @@ mod tests {
         assert_eq!(right, "y");
     }
 }
-

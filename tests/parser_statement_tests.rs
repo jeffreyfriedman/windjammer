@@ -28,6 +28,7 @@ fn parse_stmt(input: &str) -> Statement {
     panic!("Failed to extract statement from: {}", input);
 }
 
+#[allow(dead_code)]
 fn parse_program(input: &str) -> Program {
     let mut lexer = Lexer::new(input);
     let tokens = lexer.tokenize_with_locations();
