@@ -1,3 +1,4 @@
+#![allow(unused)]
 //! Comprehensive Analyzer Trait/Impl Tests
 //!
 //! These tests verify that the Windjammer compiler correctly handles

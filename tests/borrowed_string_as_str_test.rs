@@ -130,4 +130,3 @@ pub fn test_greet() -> string {
 
     assert!(success, "Generated code should compile. Error: {}", err);
 }
-

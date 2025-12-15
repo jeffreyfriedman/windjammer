@@ -129,7 +129,7 @@ fn test_enum_without_f32_has_partialeq() {
                     .lines()
                     .skip_while(|l| l != line)
                     .nth(1)
-                    .map_or(false, |l| l.contains("struct Point"))
+                    .is_some_and(|l| l.contains("struct Point"))
         })
         .unwrap_or("");
     assert!(
@@ -146,7 +146,7 @@ fn test_enum_without_f32_has_partialeq() {
                     .lines()
                     .skip_while(|l| l != line)
                     .nth(1)
-                    .map_or(false, |l| l.contains("enum Shape"))
+                    .is_some_and(|l| l.contains("enum Shape"))
         })
         .unwrap_or("");
     assert!(

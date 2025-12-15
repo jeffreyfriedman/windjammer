@@ -1,8 +1,8 @@
 // TDD Test: Compiler should NOT add .to_string() when function expects &str
 // WINDJAMMER PHILOSOPHY: Smart inference - only convert when needed
 
-use std::process::Command;
 use std::fs;
+use std::process::Command;
 
 fn compile_code(code: &str) -> Result<String, String> {
     let test_dir = "tests/generated/string_literal_test";
@@ -30,8 +30,7 @@ fn compile_code(code: &str) -> Result<String, String> {
     }
 
     let generated_file = format!("{}/test.rs", test_dir);
-    let generated = fs::read_to_string(&generated_file)
-        .expect("Failed to read generated file");
+    let generated = fs::read_to_string(&generated_file).expect("Failed to read generated file");
 
     fs::remove_dir_all(test_dir).ok();
 
@@ -52,14 +51,14 @@ fn test_string_literal_to_str_param_no_conversion() {
     "#;
 
     let generated = compile_code(code).expect("Compilation failed");
-    
+
     // Should NOT add .to_string() for &str parameter
     assert!(
         !generated.contains("\"hello\".to_string()"),
         "Should NOT add .to_string() when function expects &str, got:\n{}",
         generated
     );
-    
+
     // Should pass string literal directly
     assert!(
         generated.contains("process(\"hello\")"),
@@ -80,7 +79,7 @@ fn test_ffi_function_str_param() {
     "#;
 
     let generated = compile_code(code).expect("Compilation failed");
-    
+
     // Should NOT convert string literals for FFI &str params
     assert!(
         !generated.contains(".to_string()"),
@@ -107,7 +106,7 @@ fn test_method_call_with_str_param() {
     "#;
 
     let generated = compile_code(code).expect("Compilation failed");
-    
+
     // Should NOT add .to_string() for method with &str param
     assert!(
         !generated.contains("\"data.txt\".to_string()"),
@@ -130,7 +129,7 @@ fn test_string_param_needs_conversion() {
     "#;
 
     let generated = compile_code(code).expect("Compilation failed");
-    
+
     // SHOULD add .to_string() for String parameter
     assert!(
         generated.contains("\"hello\".to_string()"),
@@ -157,7 +156,7 @@ fn test_mixed_str_and_string_params() {
     "#;
 
     let generated = compile_code(code).expect("Compilation failed");
-    
+
     // Check both cases
     assert!(
         generated.contains("process_str(\"no conversion\")"),
@@ -170,5 +169,3 @@ fn test_mixed_str_and_string_params() {
         generated
     );
 }
-
-
