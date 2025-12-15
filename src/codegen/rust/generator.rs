@@ -1538,7 +1538,7 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
                 format!("use super::{} as {};\n", rest, alias_name)
             } else if is_actual_module_file {
                 // Keep module path for actual module files: texture_atlas::TextureAtlas as TA -> use super::texture_atlas::TextureAtlas as TA;
-                format!("use super::{} as {};\n", rust_path.replacen(&format!("{}::", first_segment), &format!("{}::", first_segment), 1), alias_name)
+                format!("use super::{} as {};\n", rust_path, alias_name)
             } else {
             format!("use {} as {};\n", rust_path, alias_name)
             }
