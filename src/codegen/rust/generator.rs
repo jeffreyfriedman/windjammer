@@ -2843,7 +2843,7 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
 
                 // Check if the loop body modifies the loop variable
                 let pattern_str = self.pattern_to_rust(pattern);
-                let loop_var = self.extract_pattern_identifier(pattern);
+                let loop_var = pattern_analysis::extract_pattern_identifier(pattern);
                 let needs_mut = loop_var
                     .as_ref()
                     .is_some_and(|var| self.loop_body_modifies_variable(body, var));
@@ -5340,13 +5340,6 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
     }
 
     /// Extract the identifier from a pattern (for for-loop variable names)
-    fn extract_pattern_identifier(&self, pattern: &Pattern) -> Option<String> {
-        match pattern {
-            Pattern::Identifier(name) => Some(name.clone()),
-            _ => None,
-        }
-    }
-
     /// Check if a loop body modifies a variable
     fn loop_body_modifies_variable(&self, body: &[Statement], var_name: &str) -> bool {
         for stmt in body {
