@@ -7,7 +7,7 @@
 //
 // Expected impact: 60-80% reduction in test code lines
 
-use super::types::{Type, SourceLocation};
+use super::types::Type;
 use super::ownership::OwnershipHint;
 use super::literals::Literal;
 use super::operators::{BinaryOp, CompoundOp, UnaryOp};
