@@ -3523,7 +3523,7 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
             }
             Expression::Unary { op, operand, .. } => {
                 let operand_str = self.generate_expression(operand);
-                let op_str = self.unary_op_to_rust(op);
+                let op_str = operators::unary_op_to_rust(op);
 
                 // CRITICAL: Preserve parentheses for binary expressions in unary context
                 // !(a || b) should generate !(a || b), not !a || b
@@ -4915,16 +4915,6 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
             BinaryOp::Shl | BinaryOp::Shr => 8,
             BinaryOp::Add | BinaryOp::Sub => 9,
             BinaryOp::Mul | BinaryOp::Div | BinaryOp::Mod => 10,
-        }
-    }
-
-    fn unary_op_to_rust(&self, op: &UnaryOp) -> &str {
-        match op {
-            UnaryOp::Not => "!",
-            UnaryOp::Neg => "-",
-            UnaryOp::Ref => "&",
-            UnaryOp::MutRef => "&mut ",
-            UnaryOp::Deref => "*",
         }
     }
 
