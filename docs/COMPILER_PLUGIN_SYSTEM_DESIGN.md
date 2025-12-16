@@ -540,3 +540,14 @@ The following application-specific functions have been removed from the core com
 **Total Application Code Removed:** ~79 lines
 
 These functions hardcoded application/framework-specific logic into the core compiler, which violates the Windjammer philosophy of keeping the compiler general-purpose and using plugins for application-specific code generation.
+
+### 4. `is_tauri_function` + `generate_tauri_invoke` (Deleted: Dec 15, 2025)
+- **Lines:** 61 lines (17 + 44)
+- **Purpose:** 
+  - Hardcoded Tauri command detection (read_file, write_file, list_directory, etc. - 12 commands)
+  - Generated `tauri_invoke()` calls for WASM target
+  - Special case in `generate_expression` for Tauri commands
+- **Reason for Removal:** Application-specific, violates core compiler philosophy
+- **Future:** Should be implemented via compiler plugin system for Tauri integration
+
+**Updated Total Application Code Removed:** ~143 lines (4 functions + 1 special case)

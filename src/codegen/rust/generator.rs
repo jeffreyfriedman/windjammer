@@ -3290,11 +3290,6 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
                 // Extract function name for signature lookup
                 let func_name = ast_utilities::extract_function_name(function);
 
-                // Special case: Tauri command calls (for WASM target)
-                if self.target == CompilationTarget::Wasm && self.is_tauri_function(&func_name) {
-                    return self.generate_tauri_invoke(&func_name, arguments);
-                }
-
                 // Special case: convert print/println/eprintln/eprint() to macros
                 if func_name == "print"
                     || func_name == "println"
@@ -4649,70 +4644,6 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
         }
 
         format!("format!(\"{}\", {})", format_str, args.join(", "))
-    }
-
-    /// Check if a function is a Tauri command that needs special handling
-    fn is_tauri_function(&self, name: &str) -> bool {
-        matches!(
-            name,
-            "read_file"
-                | "write_file"
-                | "list_directory"
-                | "create_game_project"
-                | "run_game"
-                | "stop_game"
-                | "open_file_dialog"
-                | "save_file_dialog"
-                | "set_title"
-                | "minimize"
-                | "maximize"
-                | "close"
-        )
-    }
-
-    /// Generate a Tauri invoke call for WASM
-    fn generate_tauri_invoke(
-        &mut self,
-        func_name: &str,
-        arguments: &[(Option<String>, Expression)],
-    ) -> String {
-        // Generate the invoke call
-        let mut code = String::from("tauri_invoke(\"");
-        code.push_str(func_name);
-        code.push_str("\", ");
-
-        // Generate arguments object
-        if arguments.is_empty() {
-            code.push_str("serde_json::json!({})");
-        } else {
-            code.push_str("serde_json::json!({ ");
-            for (i, (param_name, arg_expr)) in arguments.iter().enumerate() {
-                if i > 0 {
-                    code.push_str(", ");
-                }
-                // Use parameter name or default to arg0, arg1, etc.
-                let key = param_name
-                    .as_ref()
-                    .map(|s| s.as_str())
-                    .unwrap_or_else(|| match i {
-                        0 => "arg0",
-                        1 => "arg1",
-                        2 => "arg2",
-                        _ => "arg",
-                    });
-                code.push('"');
-                code.push_str(key);
-                code.push_str("\": ");
-                code.push_str(&self.generate_expression(arg_expr));
-            }
-            code.push_str(" })");
-        }
-        code.push(')');
-
-        // Mark that we need serde_json imports
-        self.needs_serde_imports = true;
-
-        code
     }
 
     fn infer_derivable_traits(&self, struct_: &StructDecl) -> Vec<String> {
