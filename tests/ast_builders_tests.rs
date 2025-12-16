@@ -470,3 +470,180 @@ fn test_expr_chained_complex() {
     }
 }
 
+
+// ============================================================================
+// STATEMENT BUILDER TESTS (TDD - Tests FIRST!)
+// ============================================================================
+
+#[test]
+fn test_stmt_let() {
+    // Before: 10+ lines
+    // After: stmt_let("x", Some(Type::Int), expr_int(42))
+    
+    use windjammer::parser::ast::*;
+    
+    let stmt = stmt_let("x", Some(Type::Int), expr_int(42));
+    
+    if let Statement::Let { mutable, type_, .. } = stmt {
+        assert!(!mutable);
+        assert_eq!(type_, Some(Type::Int));
+    } else {
+        panic!("Expected Let statement");
+    }
+}
+
+#[test]
+fn test_stmt_let_mut() {
+    use windjammer::parser::ast::*;
+    
+    let stmt = stmt_let_mut("x", Some(Type::Int), expr_int(0));
+    
+    if let Statement::Let { mutable, .. } = stmt {
+        assert!(mutable);
+    } else {
+        panic!("Expected Let statement");
+    }
+}
+
+#[test]
+fn test_stmt_assign() {
+    use windjammer::parser::ast::*;
+    
+    let stmt = stmt_assign(expr_var("x"), expr_int(42));
+    
+    if let Statement::Assignment { compound_op, .. } = stmt {
+        assert_eq!(compound_op, None);
+    } else {
+        panic!("Expected Assignment statement");
+    }
+}
+
+#[test]
+fn test_stmt_compound_assign() {
+    use windjammer::parser::ast::*;
+    
+    let stmt = stmt_compound_assign(CompoundOp::Add, expr_var("x"), expr_int(1));
+    
+    if let Statement::Assignment { compound_op, .. } = stmt {
+        assert_eq!(compound_op, Some(CompoundOp::Add));
+    } else {
+        panic!("Expected Assignment statement");
+    }
+}
+
+#[test]
+fn test_stmt_return_some() {
+    use windjammer::parser::ast::*;
+    
+    let stmt = stmt_return(Some(expr_int(42)));
+    
+    if let Statement::Return { value, .. } = stmt {
+        assert!(value.is_some());
+    } else {
+        panic!("Expected Return statement");
+    }
+}
+
+#[test]
+fn test_stmt_return_none() {
+    use windjammer::parser::ast::*;
+    
+    let stmt = stmt_return(None);
+    
+    if let Statement::Return { value, .. } = stmt {
+        assert!(value.is_none());
+    } else {
+        panic!("Expected Return statement");
+    }
+}
+
+#[test]
+fn test_stmt_expr() {
+    use windjammer::parser::ast::*;
+    
+    let stmt = stmt_expr(expr_call("foo", vec![]));
+    
+    if let Statement::Expression { .. } = stmt {
+        // Success
+    } else {
+        panic!("Expected Expression statement");
+    }
+}
+
+#[test]
+fn test_stmt_if() {
+    use windjammer::parser::ast::*;
+    
+    let stmt = stmt_if(
+        expr_bool(true),
+        vec![stmt_return(None)],
+        None
+    );
+    
+    if let Statement::If { then_block, else_block, .. } = stmt {
+        assert_eq!(then_block.len(), 1);
+        assert!(else_block.is_none());
+    } else {
+        panic!("Expected If statement");
+    }
+}
+
+#[test]
+fn test_stmt_if_else() {
+    use windjammer::parser::ast::*;
+    
+    let stmt = stmt_if_else(
+        expr_bool(true),
+        vec![stmt_return(Some(expr_int(1)))],
+        vec![stmt_return(Some(expr_int(2)))]
+    );
+    
+    if let Statement::If { else_block, .. } = stmt {
+        assert!(else_block.is_some());
+        assert_eq!(else_block.unwrap().len(), 1);
+    } else {
+        panic!("Expected If statement");
+    }
+}
+
+#[test]
+fn test_stmt_while() {
+    use windjammer::parser::ast::*;
+    
+    let stmt = stmt_while(
+        expr_bool(true),
+        vec![stmt_expr(expr_call("work", vec![]))]
+    );
+    
+    if let Statement::While { body, .. } = stmt {
+        assert_eq!(body.len(), 1);
+    } else {
+        panic!("Expected While statement");
+    }
+}
+
+#[test]
+fn test_stmt_break() {
+    use windjammer::parser::ast::*;
+    
+    let stmt = stmt_break();
+    
+    if let Statement::Break { .. } = stmt {
+        // Success
+    } else {
+        panic!("Expected Break statement");
+    }
+}
+
+#[test]
+fn test_stmt_continue() {
+    use windjammer::parser::ast::*;
+    
+    let stmt = stmt_continue();
+    
+    if let Statement::Continue { .. } = stmt {
+        // Success
+    } else {
+        panic!("Expected Continue statement");
+    }
+}
