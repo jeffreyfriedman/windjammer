@@ -9,7 +9,7 @@
 
 use super::types::Type;
 use super::ownership::OwnershipHint;
-use super::literals::Literal;
+use super::literals::{Literal, MacroDelimiter};
 use super::operators::{BinaryOp, CompoundOp, UnaryOp};
 use super::core::{Expression, Parameter, Pattern, Statement};
 
@@ -290,6 +290,16 @@ pub fn expr_method(
     }
 }
 
+/// Build macro invocation expression
+pub fn expr_macro(name: impl Into<String>, args: Vec<Expression>) -> Expression {
+    Expression::MacroInvocation {
+        name: name.into(),
+        args,
+        delimiter: MacroDelimiter::Parens,
+        location: None,
+    }
+}
+
 /// Build field access expression
 pub fn expr_field(object: Expression, field: impl Into<String>) -> Expression {
     Expression::FieldAccess {
@@ -449,6 +459,25 @@ pub fn stmt_break() -> Statement {
 /// Build continue statement
 pub fn stmt_continue() -> Statement {
     Statement::Continue { location: None }
+}
+
+/// Build for loop statement
+pub fn stmt_for(pattern: Pattern, iterable: Expression, body: Vec<Statement>) -> Statement {
+    Statement::For {
+        pattern,
+        iterable,
+        body,
+        location: None,
+    }
+}
+
+/// Build match statement
+pub fn stmt_match(value: Expression, arms: Vec<super::core::MatchArm>) -> Statement {
+    Statement::Match {
+        value,
+        arms,
+        location: None,
+    }
 }
 
 // ============================================================================
