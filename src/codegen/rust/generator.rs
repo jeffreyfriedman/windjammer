@@ -1,8 +1,8 @@
 // Rust code generator
 use crate::analyzer::*;
 use crate::codegen::rust::{
-    ast_utilities, codegen_helpers, constant_folding, expression_helpers, operators,
-    pattern_analysis, self_analysis, string_analysis, type_analysis,
+    arm_string_analysis, ast_utilities, codegen_helpers, constant_folding, expression_helpers,
+    operators, pattern_analysis, self_analysis, string_analysis, type_analysis,
 };
 use crate::parser::ast::CompoundOp;
 use crate::parser::*;
@@ -2736,7 +2736,7 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
                         // OR if any arm has a block whose last expression is converted to String
                         arms.iter().any(|arm| {
                             string_analysis::expression_produces_string(&arm.body)
-                                || self.arm_returns_converted_string(&arm.body)
+                                || arm_string_analysis::arm_returns_converted_string(&arm.body)
                         })
                     }
                 };
@@ -3132,52 +3132,6 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
     /// Check if a match arm returns a string that will be converted to String
     /// This handles cases like: if x { "a" } else { "b" } where the if-else branches
     /// will be auto-converted to String, making the whole arm return String
-    fn arm_returns_converted_string(&self, expr: &Expression) -> bool {
-        match expr {
-            // Block with if-else that returns strings
-            Expression::Block { statements, .. } => {
-                if let Some(last) = statements.last() {
-                    match last {
-                        Statement::If {
-                            then_block,
-                            else_block,
-                            ..
-                        } => {
-                            // Check if both branches have string literals
-                            let then_has_string = then_block.last().is_some_and(|s| {
-                                matches!(s, Statement::Expression { expr: e, .. }
-                                    if matches!(e, Expression::Literal { value: Literal::String(_), .. }))
-                            });
-                            let else_has_string = else_block.as_ref().is_some_and(|block| {
-                                block.last().is_some_and(|s| {
-                                    matches!(s, Statement::Expression { expr: e, .. }
-                                        if matches!(e, Expression::Literal { value: Literal::String(_), .. }))
-                                })
-                            });
-                            then_has_string && else_has_string
-                        }
-                        Statement::Expression { expr: e, .. } => {
-                            // Check if it's a string literal (will be converted)
-                            // OR recursively check nested expressions
-                            matches!(
-                                e,
-                                Expression::Literal {
-                                    value: Literal::String(_),
-                                    ..
-                                }
-                            ) || self.arm_returns_converted_string(e)
-                        }
-                        _ => false,
-                    }
-                } else {
-                    false
-                }
-            }
-            // Direct if-else expression (not in a block)
-            _ => false,
-        }
-    }
-
     /// Check if an expression produces usize (e.g., .len(), array indexing)
     /// Used for auto-casting between i32 and usize in comparisons
     fn expression_produces_usize(&self, expr: &Expression) -> bool {
@@ -4473,7 +4427,9 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
                                     // Also check if any arm explicitly produces String
                                     arms.iter().any(|arm| {
                                         string_analysis::expression_produces_string(&arm.body)
-                                            || self.arm_returns_converted_string(&arm.body)
+                                            || arm_string_analysis::arm_returns_converted_string(
+                                                &arm.body,
+                                            )
                                     })
                                 }
                             };
