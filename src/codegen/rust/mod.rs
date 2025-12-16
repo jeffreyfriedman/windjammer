@@ -11,6 +11,7 @@
 //! - **helpers**: Utility functions
 //! - **backend**: Backend trait implementation
 
+pub mod ast_utilities;
 pub mod backend;
 pub mod expression_helpers;
 pub mod expressions;
