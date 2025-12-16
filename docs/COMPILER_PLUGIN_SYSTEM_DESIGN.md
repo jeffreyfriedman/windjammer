@@ -512,3 +512,31 @@ The compiler plugin system will enable Windjammer to remain a **pure, general-pu
 
 **"The compiler should be simple. Complexity belongs in plugins."**
 
+
+---
+
+## Appendix: Application-Specific Code Removed
+
+The following application-specific functions have been removed from the core compiler (Dec 2025):
+
+### 1. `is_tauri_function` (Deleted: Phase 10)
+- **Lines:** ~15 lines
+- **Purpose:** Hardcoded Tauri framework function detection
+- **Reason for Removal:** Application-specific, violates core compiler philosophy
+- **Future:** Should be implemented via compiler plugin system
+
+### 2. `is_builder_method` (Deleted: Phase 10)
+- **Lines:** ~20 lines (dead code)
+- **Purpose:** Builder pattern detection
+- **Reason for Removal:** Unused dead code
+- **Future:** Not needed (was dead code)
+
+### 3. `is_ui_component_expr` (Deleted: Dec 15, 2025)
+- **Lines:** 44 lines (dead code)
+- **Purpose:** Hardcoded UI component names (Button, Text, Panel, etc. - 23 components)
+- **Reason for Removal:** Application-specific, violates core compiler philosophy, zero callers
+- **Future:** Should be implemented via compiler plugin system for UI framework support
+
+**Total Application Code Removed:** ~79 lines
+
+These functions hardcoded application/framework-specific logic into the core compiler, which violates the Windjammer philosophy of keeping the compiler general-purpose and using plugins for application-specific code generation.

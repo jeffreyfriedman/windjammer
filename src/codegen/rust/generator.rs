@@ -260,51 +260,6 @@ impl CodeGenerator {
 
     /// Check if an expression is a UI component that needs .to_vnode()
     #[allow(dead_code, clippy::only_used_in_recursion)]
-    fn is_ui_component_expr(&self, expr: &Expression) -> bool {
-        // List of UI components that implement ToVNode
-        const UI_COMPONENTS: &[&str] = &[
-            "Button",
-            "Text",
-            "Panel",
-            "Container",
-            "Flex",
-            "Input",
-            "CodeEditor",
-            "FileTree",
-            "Alert",
-            "Card",
-            "Grid",
-            "Toolbar",
-            "Tabs",
-            "Checkbox",
-            "Radio",
-            "Select",
-            "Switch",
-            "Dialog",
-            "Slider",
-            "Tooltip",
-            "Badge",
-            "Progress",
-            "Spinner",
-        ];
-
-        match expr {
-            // Button::new(...) -> check if Button is a UI component
-            Expression::Call { function, .. } => {
-                if let Expression::FieldAccess { object, .. } = &**function {
-                    // Type::method() pattern - check the object (Button), not the method (new)
-                    if let Expression::Identifier { name, .. } = &**object {
-                        return UI_COMPONENTS.contains(&name.as_str());
-                    }
-                }
-                false
-            }
-            // button.variant(...).on_click(...) -> check the root object
-            Expression::MethodCall { object, .. } => self.is_ui_component_expr(object),
-            _ => false,
-        }
-    }
-
     /// Check if a method is a builder method that returns Self (for chaining)
     #[allow(dead_code)]
     fn generate_block(&mut self, stmts: &[Statement]) -> String {
