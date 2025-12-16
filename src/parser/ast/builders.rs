@@ -7,9 +7,11 @@
 //
 // Expected impact: 60-80% reduction in test code lines
 
-use super::types::{Type, TypeParam, AssociatedType};
+use super::types::{Type, SourceLocation};
 use super::ownership::OwnershipHint;
-use super::core::Parameter;
+use super::literals::Literal;
+use super::operators::{BinaryOp, UnaryOp};
+use super::core::{Expression, Parameter};
 
 // ============================================================================
 // TYPE BUILDERS
@@ -155,6 +157,170 @@ pub fn param_owned(name: impl Into<String>, type_: Type) -> Parameter {
         type_,
         ownership: OwnershipHint::Owned,
         is_mutable: false,
+    }
+}
+
+// ============================================================================
+// EXPRESSION BUILDERS
+// ============================================================================
+
+/// Build integer literal expression
+pub fn expr_int(value: i64) -> Expression {
+    Expression::Literal {
+        value: Literal::Int(value),
+        location: None,
+    }
+}
+
+/// Build float literal expression
+pub fn expr_float(value: f64) -> Expression {
+    Expression::Literal {
+        value: Literal::Float(value),
+        location: None,
+    }
+}
+
+/// Build string literal expression
+pub fn expr_string(value: impl Into<String>) -> Expression {
+    Expression::Literal {
+        value: Literal::String(value.into()),
+        location: None,
+    }
+}
+
+/// Build boolean literal expression
+pub fn expr_bool(value: bool) -> Expression {
+    Expression::Literal {
+        value: Literal::Bool(value),
+        location: None,
+    }
+}
+
+/// Build character literal expression
+pub fn expr_char(value: char) -> Expression {
+    Expression::Literal {
+        value: Literal::Char(value),
+        location: None,
+    }
+}
+
+/// Build variable/identifier expression
+pub fn expr_var(name: impl Into<String>) -> Expression {
+    Expression::Identifier {
+        name: name.into(),
+        location: None,
+    }
+}
+
+/// Build binary operation expression
+pub fn expr_binary(op: BinaryOp, left: Expression, right: Expression) -> Expression {
+    Expression::Binary {
+        left: Box::new(left),
+        op,
+        right: Box::new(right),
+        location: None,
+    }
+}
+
+/// Build addition expression (convenience)
+pub fn expr_add(left: Expression, right: Expression) -> Expression {
+    expr_binary(BinaryOp::Add, left, right)
+}
+
+/// Build subtraction expression (convenience)
+pub fn expr_sub(left: Expression, right: Expression) -> Expression {
+    expr_binary(BinaryOp::Sub, left, right)
+}
+
+/// Build multiplication expression (convenience)
+pub fn expr_mul(left: Expression, right: Expression) -> Expression {
+    expr_binary(BinaryOp::Mul, left, right)
+}
+
+/// Build division expression (convenience)
+pub fn expr_div(left: Expression, right: Expression) -> Expression {
+    expr_binary(BinaryOp::Div, left, right)
+}
+
+/// Build equality expression (convenience)
+pub fn expr_eq(left: Expression, right: Expression) -> Expression {
+    expr_binary(BinaryOp::Eq, left, right)
+}
+
+/// Build unary operation expression
+pub fn expr_unary(op: UnaryOp, operand: Expression) -> Expression {
+    Expression::Unary {
+        op,
+        operand: Box::new(operand),
+        location: None,
+    }
+}
+
+/// Build negation expression (convenience)
+pub fn expr_neg(operand: Expression) -> Expression {
+    expr_unary(UnaryOp::Neg, operand)
+}
+
+/// Build logical NOT expression (convenience)
+pub fn expr_not(operand: Expression) -> Expression {
+    expr_unary(UnaryOp::Not, operand)
+}
+
+/// Build function call expression
+pub fn expr_call(function: impl Into<String>, arguments: Vec<Expression>) -> Expression {
+    Expression::Call {
+        function: Box::new(expr_var(function)),
+        arguments: arguments.into_iter().map(|arg| (None, arg)).collect(),
+        location: None,
+    }
+}
+
+/// Build method call expression
+pub fn expr_method(
+    object: Expression,
+    method: impl Into<String>,
+    arguments: Vec<Expression>,
+) -> Expression {
+    Expression::MethodCall {
+        object: Box::new(object),
+        method: method.into(),
+        type_args: None,
+        arguments: arguments.into_iter().map(|arg| (None, arg)).collect(),
+        location: None,
+    }
+}
+
+/// Build field access expression
+pub fn expr_field(object: Expression, field: impl Into<String>) -> Expression {
+    Expression::FieldAccess {
+        object: Box::new(object),
+        field: field.into(),
+        location: None,
+    }
+}
+
+/// Build array index expression
+pub fn expr_index(array: Expression, index: Expression) -> Expression {
+    Expression::Index {
+        object: Box::new(array),
+        index: Box::new(index),
+        location: None,
+    }
+}
+
+/// Build array literal expression
+pub fn expr_array(elements: Vec<Expression>) -> Expression {
+    Expression::Array {
+        elements,
+        location: None,
+    }
+}
+
+/// Build tuple expression
+pub fn expr_tuple(elements: Vec<Expression>) -> Expression {
+    Expression::Tuple {
+        elements,
+        location: None,
     }
 }
 
