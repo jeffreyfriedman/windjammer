@@ -1,26 +1,29 @@
 // AST Module - Windjammer Abstract Syntax Tree
 //
-// This module is being refactored into domain-specific submodules.
-// All types are re-exported to maintain backward compatibility.
+// Organized into domain-specific submodules:
+// - Independent types (types, literals, operators, ownership)
+// - Circular core (core.rs: Expression ↔ Statement ↔ Pattern)
 
-// Import legacy types from ast_legacy.rs (temporary during migration)
-#[path = "../ast_legacy.rs"]
-mod ast_legacy;
+// Core module with circular dependencies
+pub mod core;
 
-// Domain modules (extracted)
+// Domain modules (extracted - independent, no circular deps)
 pub mod types;
 pub mod literals;
 pub mod operators;
+pub mod ownership;
 
 // Re-export from domain modules
 pub use types::*;
 pub use literals::*;
 pub use operators::*;
+pub use ownership::*;
 
-// Re-export non-type system items from legacy ast.rs
-// TODO: Extract these into their own modules
-pub use ast_legacy::{
+// Re-export circular types from core module
+// These types have circular dependencies and must stay together:
+// Expression ↔ Statement ↔ Pattern
+pub use core::{
     Decorator, EnumDecl, EnumPatternBinding, EnumVariant, EnumVariantData, Expression,
-    FunctionDecl, ImplBlock, Item, MatchArm, OwnershipHint, Parameter, Pattern, Program,
-    Statement, StructDecl, StructField, TraitDecl, TraitMethod,
+    FunctionDecl, ImplBlock, Item, MatchArm, Parameter, Pattern, Program, Statement, StructDecl,
+    StructField, TraitDecl, TraitMethod,
 };
