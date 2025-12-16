@@ -3456,7 +3456,7 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
                 // Wrap operands in parens if they have lower precedence
                 let mut left_str = match left.as_ref() {
                     Expression::Binary { op: left_op, .. } => {
-                        if self.op_precedence(left_op) < self.op_precedence(op) {
+                        if operators::op_precedence(left_op) < operators::op_precedence(op) {
                             format!("({})", self.generate_expression(left))
                         } else {
                             self.generate_expression(left)
@@ -3466,7 +3466,7 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
                 };
                 let mut right_str = match right.as_ref() {
                     Expression::Binary { op: right_op, .. } => {
-                        if self.op_precedence(right_op) < self.op_precedence(op) {
+                        if operators::op_precedence(right_op) < operators::op_precedence(op) {
                             format!("({})", self.generate_expression(right))
                         } else {
                             self.generate_expression(right)
@@ -4879,21 +4879,6 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
         }
 
         format!("format!(\"{}\", {})", format_str, args.join(", "))
-    }
-
-    fn op_precedence(&self, op: &BinaryOp) -> i32 {
-        match op {
-            BinaryOp::Or => 1,
-            BinaryOp::And => 2,
-            BinaryOp::BitOr => 3,
-            BinaryOp::BitXor => 4,
-            BinaryOp::BitAnd => 5,
-            BinaryOp::Eq | BinaryOp::Ne => 6,
-            BinaryOp::Lt | BinaryOp::Le | BinaryOp::Gt | BinaryOp::Ge => 7,
-            BinaryOp::Shl | BinaryOp::Shr => 8,
-            BinaryOp::Add | BinaryOp::Sub => 9,
-            BinaryOp::Mul | BinaryOp::Div | BinaryOp::Mod => 10,
-        }
     }
 
     fn extract_function_name(&self, expr: &Expression) -> String {
