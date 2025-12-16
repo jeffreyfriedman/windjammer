@@ -10,8 +10,8 @@
 use super::types::{Type, SourceLocation};
 use super::ownership::OwnershipHint;
 use super::literals::Literal;
-use super::operators::{BinaryOp, UnaryOp};
-use super::core::{Expression, Parameter};
+use super::operators::{BinaryOp, CompoundOp, UnaryOp};
+use super::core::{Expression, Parameter, Pattern, Statement};
 
 // ============================================================================
 // TYPE BUILDERS
@@ -322,6 +322,125 @@ pub fn expr_tuple(elements: Vec<Expression>) -> Expression {
         elements,
         location: None,
     }
+}
+
+// ============================================================================
+// STATEMENT BUILDERS
+// ============================================================================
+
+/// Build let statement (immutable)
+pub fn stmt_let(name: impl Into<String>, type_: Option<Type>, value: Expression) -> Statement {
+    Statement::Let {
+        pattern: Pattern::Identifier(name.into()),
+        mutable: false,
+        type_,
+        value,
+        else_block: None,
+        location: None,
+    }
+}
+
+/// Build let mut statement (mutable)
+pub fn stmt_let_mut(name: impl Into<String>, type_: Option<Type>, value: Expression) -> Statement {
+    Statement::Let {
+        pattern: Pattern::Identifier(name.into()),
+        mutable: true,
+        type_,
+        value,
+        else_block: None,
+        location: None,
+    }
+}
+
+/// Build assignment statement
+pub fn stmt_assign(target: Expression, value: Expression) -> Statement {
+    Statement::Assignment {
+        target,
+        value,
+        compound_op: None,
+        location: None,
+    }
+}
+
+/// Build compound assignment statement (+=, -=, etc.)
+pub fn stmt_compound_assign(op: CompoundOp, target: Expression, value: Expression) -> Statement {
+    Statement::Assignment {
+        target,
+        value,
+        compound_op: Some(op),
+        location: None,
+    }
+}
+
+/// Build return statement
+pub fn stmt_return(value: Option<Expression>) -> Statement {
+    Statement::Return {
+        value,
+        location: None,
+    }
+}
+
+/// Build expression statement
+pub fn stmt_expr(expr: Expression) -> Statement {
+    Statement::Expression {
+        expr,
+        location: None,
+    }
+}
+
+/// Build if statement (no else)
+pub fn stmt_if(
+    condition: Expression,
+    then_block: Vec<Statement>,
+    else_block: Option<Vec<Statement>>,
+) -> Statement {
+    Statement::If {
+        condition,
+        then_block,
+        else_block,
+        location: None,
+    }
+}
+
+/// Build if-else statement (convenience)
+pub fn stmt_if_else(
+    condition: Expression,
+    then_block: Vec<Statement>,
+    else_block: Vec<Statement>,
+) -> Statement {
+    Statement::If {
+        condition,
+        then_block,
+        else_block: Some(else_block),
+        location: None,
+    }
+}
+
+/// Build while loop statement
+pub fn stmt_while(condition: Expression, body: Vec<Statement>) -> Statement {
+    Statement::While {
+        condition,
+        body,
+        location: None,
+    }
+}
+
+/// Build infinite loop statement
+pub fn stmt_loop(body: Vec<Statement>) -> Statement {
+    Statement::Loop {
+        body,
+        location: None,
+    }
+}
+
+/// Build break statement
+pub fn stmt_break() -> Statement {
+    Statement::Break { location: None }
+}
+
+/// Build continue statement
+pub fn stmt_continue() -> Statement {
+    Statement::Continue { location: None }
 }
 
 // ============================================================================
