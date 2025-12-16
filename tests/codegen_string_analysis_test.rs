@@ -3,20 +3,12 @@
 // This module contains pure functions for analyzing string-related expressions:
 // - Collecting string concatenation parts
 // - Detecting string literals in expressions
+//
+// UPDATED: Now using AST builder functions for cleaner, more readable tests!
 
-use std::path::PathBuf;
 use windjammer::codegen::rust::string_analysis::{collect_concat_parts, contains_string_literal};
+use windjammer::parser::ast::builders::*;
 use windjammer::parser::{BinaryOp, Expression, Literal};
-use windjammer::source_map::Location;
-
-// Helper to create a location for tests
-fn test_loc() -> Location {
-    Location {
-        file: PathBuf::from(""),
-        line: 0,
-        column: 0,
-    }
-}
 
 #[cfg(test)]
 mod collect_concat_parts_tests {
@@ -25,10 +17,7 @@ mod collect_concat_parts_tests {
     #[test]
     fn test_single_string_literal() {
         // Test: "hello" → ["hello"]
-        let expr = Expression::Literal {
-            value: Literal::String("hello".to_string()),
-            location: Some(test_loc()),
-        };
+        let expr = expr_string("hello");
 
         let parts = collect_concat_parts(&expr);
         assert_eq!(parts.len(), 1);
@@ -47,20 +36,7 @@ mod collect_concat_parts_tests {
     #[test]
     fn test_two_string_concat() {
         // Test: "hello" + "world" → ["hello", "world"]
-        let left = Expression::Literal {
-            value: Literal::String("hello".to_string()),
-            location: Some(test_loc()),
-        };
-        let right = Expression::Literal {
-            value: Literal::String("world".to_string()),
-            location: Some(test_loc()),
-        };
-        let expr = Expression::Binary {
-            left: Box::new(left),
-            op: BinaryOp::Add,
-            right: Box::new(right),
-            location: Some(test_loc()),
-        };
+        let expr = expr_add(expr_string("hello"), expr_string("world"));
 
         let parts = collect_concat_parts(&expr);
         assert_eq!(parts.len(), 2);
@@ -86,32 +62,11 @@ mod collect_concat_parts_tests {
     #[test]
     fn test_three_string_concat_chain() {
         // Test: "a" + "b" + "c" → ["a", "b", "c"]
-        let a = Expression::Literal {
-            value: Literal::String("a".to_string()),
-            location: Some(test_loc()),
-        };
-        let b = Expression::Literal {
-            value: Literal::String("b".to_string()),
-            location: Some(test_loc()),
-        };
-        let c = Expression::Literal {
-            value: Literal::String("c".to_string()),
-            location: Some(test_loc()),
-        };
-
         // ("a" + "b") + "c"
-        let ab = Expression::Binary {
-            left: Box::new(a),
-            op: BinaryOp::Add,
-            right: Box::new(b),
-            location: Some(test_loc()),
-        };
-        let abc = Expression::Binary {
-            left: Box::new(ab),
-            op: BinaryOp::Add,
-            right: Box::new(c),
-            location: Some(test_loc()),
-        };
+        let abc = expr_add(
+            expr_add(expr_string("a"), expr_string("b")),
+            expr_string("c")
+        );
 
         let parts = collect_concat_parts(&abc);
         assert_eq!(parts.len(), 3);
@@ -120,20 +75,7 @@ mod collect_concat_parts_tests {
     #[test]
     fn test_mixed_expression_concat() {
         // Test: "hello" + variable_name → ["hello", variable_name]
-        let lit = Expression::Literal {
-            value: Literal::String("hello".to_string()),
-            location: Some(test_loc()),
-        };
-        let var = Expression::Identifier {
-            name: "name".to_string(),
-            location: Some(test_loc()),
-        };
-        let expr = Expression::Binary {
-            left: Box::new(lit),
-            op: BinaryOp::Add,
-            right: Box::new(var),
-            location: Some(test_loc()),
-        };
+        let expr = expr_add(expr_string("hello"), expr_var("name"));
 
         let parts = collect_concat_parts(&expr);
         assert_eq!(parts.len(), 2);
@@ -156,20 +98,7 @@ mod collect_concat_parts_tests {
     #[test]
     fn test_non_add_binary_expression() {
         // Test: a * b → [a * b] (not a concatenation)
-        let a = Expression::Identifier {
-            name: "a".to_string(),
-            location: Some(test_loc()),
-        };
-        let b = Expression::Identifier {
-            name: "b".to_string(),
-            location: Some(test_loc()),
-        };
-        let expr = Expression::Binary {
-            left: Box::new(a),
-            op: BinaryOp::Mul,
-            right: Box::new(b),
-            location: Some(test_loc()),
-        };
+        let expr = expr_mul(expr_var("a"), expr_var("b"));
 
         let parts = collect_concat_parts(&expr);
         assert_eq!(parts.len(), 1); // Whole expression, not split
@@ -192,127 +121,52 @@ mod contains_string_literal_tests {
     #[test]
     fn test_single_string_literal() {
         // Test: "hello" → true
-        let expr = Expression::Literal {
-            value: Literal::String("hello".to_string()),
-            location: Some(test_loc()),
-        };
-
+        let expr = expr_string("hello");
         assert!(contains_string_literal(&expr));
     }
 
     #[test]
     fn test_number_literal() {
         // Test: 42 → false
-        let expr = Expression::Literal {
-            value: Literal::Int(42),
-            location: Some(test_loc()),
-        };
-
+        let expr = expr_int(42);
         assert!(!contains_string_literal(&expr));
     }
 
     #[test]
     fn test_identifier() {
         // Test: variable_name → false
-        let expr = Expression::Identifier {
-            name: "variable_name".to_string(),
-            location: Some(test_loc()),
-        };
-
+        let expr = expr_var("variable_name");
         assert!(!contains_string_literal(&expr));
     }
 
     #[test]
     fn test_binary_with_string_left() {
         // Test: "hello" + variable → true
-        let left = Expression::Literal {
-            value: Literal::String("hello".to_string()),
-            location: Some(test_loc()),
-        };
-        let right = Expression::Identifier {
-            name: "name".to_string(),
-            location: Some(test_loc()),
-        };
-        let expr = Expression::Binary {
-            left: Box::new(left),
-            op: BinaryOp::Add,
-            right: Box::new(right),
-            location: Some(test_loc()),
-        };
-
+        let expr = expr_add(expr_string("hello"), expr_var("name"));
         assert!(contains_string_literal(&expr));
     }
 
     #[test]
     fn test_binary_with_string_right() {
         // Test: variable + "world" → true
-        let left = Expression::Identifier {
-            name: "name".to_string(),
-            location: Some(test_loc()),
-        };
-        let right = Expression::Literal {
-            value: Literal::String("world".to_string()),
-            location: Some(test_loc()),
-        };
-        let expr = Expression::Binary {
-            left: Box::new(left),
-            op: BinaryOp::Add,
-            right: Box::new(right),
-            location: Some(test_loc()),
-        };
-
+        let expr = expr_add(expr_var("name"), expr_string("world"));
         assert!(contains_string_literal(&expr));
     }
 
     #[test]
     fn test_binary_no_strings() {
         // Test: a + b → false
-        let left = Expression::Identifier {
-            name: "a".to_string(),
-            location: Some(test_loc()),
-        };
-        let right = Expression::Identifier {
-            name: "b".to_string(),
-            location: Some(test_loc()),
-        };
-        let expr = Expression::Binary {
-            left: Box::new(left),
-            op: BinaryOp::Add,
-            right: Box::new(right),
-            location: Some(test_loc()),
-        };
-
+        let expr = expr_add(expr_var("a"), expr_var("b"));
         assert!(!contains_string_literal(&expr));
     }
 
     #[test]
     fn test_nested_binary_with_string() {
         // Test: (a + b) + "hello" → true
-        let a = Expression::Identifier {
-            name: "a".to_string(),
-            location: Some(test_loc()),
-        };
-        let b = Expression::Identifier {
-            name: "b".to_string(),
-            location: Some(test_loc()),
-        };
-        let ab = Expression::Binary {
-            left: Box::new(a),
-            op: BinaryOp::Add,
-            right: Box::new(b),
-            location: Some(test_loc()),
-        };
-        let str_lit = Expression::Literal {
-            value: Literal::String("hello".to_string()),
-            location: Some(test_loc()),
-        };
-        let expr = Expression::Binary {
-            left: Box::new(ab),
-            op: BinaryOp::Add,
-            right: Box::new(str_lit),
-            location: Some(test_loc()),
-        };
-
+        let expr = expr_add(
+            expr_add(expr_var("a"), expr_var("b")),
+            expr_string("hello")
+        );
         assert!(contains_string_literal(&expr));
     }
 }
