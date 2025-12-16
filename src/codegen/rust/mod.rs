@@ -13,6 +13,7 @@
 
 pub mod ast_utilities;
 pub mod backend;
+pub mod codegen_helpers;
 pub mod expression_helpers;
 pub mod expressions;
 pub mod generator;

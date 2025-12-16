@@ -80,9 +80,7 @@ pub fn extract_field_access_path(expr: &Expression) -> Option<String> {
             // Recursively build the path: object.field
             extract_field_access_path(object).map(|base_path| format!("{}.{}", base_path, field))
         }
-        Expression::MethodCall {
-            object, method, ..
-        } => {
+        Expression::MethodCall { object, method, .. } => {
             // Build path: object.method()
             extract_field_access_path(object).map(|base_path| format!("{}.{}()", base_path, method))
         }
@@ -93,9 +91,9 @@ pub fn extract_field_access_path(expr: &Expression) -> Option<String> {
                 Expression::Literal { value, .. } => format!("{:?}", value),
                 _ => "_".to_string(), // Non-literal index
             };
-            extract_field_access_path(object).map(|base_path| format!("{}[{}]", base_path, index_str))
+            extract_field_access_path(object)
+                .map(|base_path| format!("{}[{}]", base_path, index_str))
         }
         _ => None,
     }
 }
-
