@@ -323,28 +323,6 @@ impl CodeGenerator {
 
     /// Check if a method is a builder method that returns Self (for chaining)
     #[allow(dead_code)]
-    fn is_builder_method(&self, method: &str) -> bool {
-        // Common builder methods that return Self
-        const BUILDER_METHODS: &[&str] = &[
-            "variant",
-            "size",
-            "on_click",
-            "on_change",
-            "placeholder",
-            "child",
-            "direction",
-            "gap",
-            "max_width",
-            "padding",
-            "title",
-            "language",
-            "theme",
-            "bold",
-            "disabled",
-        ];
-        BUILDER_METHODS.contains(&method)
-    }
-
     fn generate_block(&mut self, stmts: &[Statement]) -> String {
         let mut output = String::new();
         let len = stmts.len();
