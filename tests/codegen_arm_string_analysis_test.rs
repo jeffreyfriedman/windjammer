@@ -1,53 +1,35 @@
 // TDD Tests for Match Arm String Analysis
 // Tests written FIRST before extraction!
+//
+// UPDATED: Now using AST builder functions!
 
 use windjammer::codegen::rust::arm_string_analysis::*;
-use windjammer::parser::{Expression, Literal, Statement};
+use windjammer::parser::ast::builders::*;
+use windjammer::parser::{Expression, Statement};
 
-// Helper to create string literal expression
+// Helper wrappers using builders
 fn string_lit(s: &str) -> Expression {
-    Expression::Literal {
-        value: Literal::String(s.to_string()),
-        location: None,
-    }
+    expr_string(s)
 }
 
-// Helper to create int literal expression
 fn int_lit(n: i64) -> Expression {
-    Expression::Literal {
-        value: Literal::Int(n),
-        location: None,
-    }
+    expr_int(n)
 }
 
-// Helper to create block expression
 fn block_expr(statements: Vec<Statement>) -> Expression {
-    Expression::Block {
-        statements,
-        location: None,
-    }
+    expr_block(statements)
 }
 
-// Helper to create expression statement
 fn expr_stmt(expr: Expression) -> Statement {
-    Statement::Expression {
-        expr,
-        location: None,
-    }
+    stmt_expr(expr)
 }
 
-// Helper to create if statement
 fn if_stmt(
     condition: Expression,
     then_block: Vec<Statement>,
     else_block: Option<Vec<Statement>>,
 ) -> Statement {
-    Statement::If {
-        condition,
-        then_block,
-        else_block,
-        location: None,
-    }
+    stmt_if(condition, then_block, else_block)
 }
 
 // ============================================================================

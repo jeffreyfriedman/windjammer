@@ -324,6 +324,14 @@ pub fn expr_tuple(elements: Vec<Expression>) -> Expression {
     }
 }
 
+/// Build block expression
+pub fn expr_block(statements: Vec<Statement>) -> Expression {
+    Expression::Block {
+        statements,
+        location: None,
+    }
+}
+
 // ============================================================================
 // STATEMENT BUILDERS
 // ============================================================================
