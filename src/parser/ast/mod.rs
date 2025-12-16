@@ -12,12 +12,14 @@ pub mod types;
 pub mod literals;
 pub mod operators;
 pub mod ownership;
+pub mod builders;
 
 // Re-export from domain modules
 pub use types::*;
 pub use literals::*;
 pub use operators::*;
 pub use ownership::*;
+pub use builders::*;
 
 // Re-export circular types from core module
 // These types have circular dependencies and must stay together:
