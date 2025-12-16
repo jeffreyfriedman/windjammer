@@ -1,10 +1,12 @@
 // AST Types - Legacy file during refactoring
 //
 // This file contains types that haven't been extracted yet.
-// Type system has been moved to ast/types.rs
+// Type system, literals, and operators have been extracted.
 
-// Import types from the types module
+// Import types from extracted modules
 use crate::parser::ast::types::{AssociatedType, SourceLocation, Type, TypeParam};
+use crate::parser::ast::literals::{Literal, MacroDelimiter};
+use crate::parser::ast::operators::{BinaryOp, CompoundOp, UnaryOp};
 
 // ============================================================================
 // PARAMETERS AND OWNERSHIP
@@ -109,21 +111,6 @@ pub struct EnumDecl {
 // ============================================================================
 // STATEMENTS
 // ============================================================================
-
-/// Compound assignment operators (+=, -=, etc.)
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub enum CompoundOp {
-    Add,    // +=
-    Sub,    // -=
-    Mul,    // *=
-    Div,    // /=
-    Mod,    // %=
-    BitAnd, // &=
-    BitOr,  // |=
-    BitXor, // ^=
-    Shl,    // <<=
-    Shr,    // >>=
-}
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum Statement {
@@ -408,29 +395,6 @@ impl Expression {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub enum MacroDelimiter {
-    Parens,   // println!()
-    Brackets, // vec![]
-    Braces,   // macro_name!{}
-}
-
-// ============================================================================
-// LITERALS
-// ============================================================================
-
-#[derive(Debug, Clone, PartialEq)]
-pub enum Literal {
-    Int(i64),
-    Float(f64),
-    String(String),
-    Char(char),
-    Bool(bool),
-}
-
-// Manual Eq implementation (treats NaN == NaN for hashing purposes)
-impl Eq for Literal {}
-
 // Manual Hash implementation for Literal (needed because f64 doesn't implement Hash)
 impl std::hash::Hash for Literal {
     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
@@ -458,41 +422,6 @@ impl std::hash::Hash for Literal {
             }
         }
     }
-}
-
-// ============================================================================
-// OPERATORS
-// ============================================================================
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub enum BinaryOp {
-    Add,
-    Sub,
-    Mul,
-    Div,
-    Mod,
-    Eq,
-    Ne,
-    Lt,
-    Le,
-    Gt,
-    Ge,
-    And,    // Logical AND (&&)
-    Or,     // Logical OR (||)
-    BitAnd, // Bitwise AND (&)
-    BitOr,  // Bitwise OR (|)
-    BitXor, // Bitwise XOR (^)
-    Shl,    // Shift left (<<)
-    Shr,    // Shift right (>>)
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub enum UnaryOp {
-    Not,
-    Neg,
-    Ref,    // & operator
-    MutRef, // &mut operator
-    Deref,  // * operator (dereference)
 }
 
 // ============================================================================
