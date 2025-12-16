@@ -12,6 +12,7 @@
 //! - **backend**: Backend trait implementation
 
 pub mod backend;
+pub mod expression_helpers;
 pub mod expressions;
 pub mod generator;
 pub mod helpers;
