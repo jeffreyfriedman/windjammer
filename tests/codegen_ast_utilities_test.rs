@@ -359,4 +359,3 @@ fn test_extract_field_access_path_binary_returns_none() {
     };
     assert_eq!(extract_field_access_path(&expr), None);
 }
-

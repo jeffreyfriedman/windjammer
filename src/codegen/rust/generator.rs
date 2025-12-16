@@ -1,8 +1,8 @@
 // Rust code generator
 use crate::analyzer::*;
 use crate::codegen::rust::{
-    ast_utilities, expression_helpers, operators, pattern_analysis, self_analysis, string_analysis,
-    type_analysis,
+    ast_utilities, codegen_helpers, expression_helpers, operators, pattern_analysis, self_analysis,
+    string_analysis, type_analysis,
 };
 use crate::parser::ast::CompoundOp;
 use crate::parser::*;
@@ -196,23 +196,6 @@ impl CodeGenerator {
                 wj_location.column,
             );
         }
-    }
-
-    /// Extract location from an Expression
-    #[allow(dead_code)]
-    fn get_expression_location(&self, expr: &Expression) -> Option<crate::source_map::Location> {
-        expr.location().clone()
-    }
-
-    /// Extract location from a Statement
-    fn get_statement_location(&self, stmt: &Statement) -> Option<crate::source_map::Location> {
-        stmt.location().clone()
-    }
-
-    /// Extract location from an Item
-    #[allow(dead_code)]
-    fn get_item_location(&self, item: &Item) -> Option<crate::source_map::Location> {
-        item.location().clone()
     }
 
     /// Get the source map (for saving after code generation)
@@ -1189,7 +1172,7 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
         }
 
         // Add where clause if present
-        output.push_str(&self.format_where_clause(&s.where_clause));
+        output.push_str(&codegen_helpers::format_where_clause(&s.where_clause));
 
         output.push_str(" {\n");
 
@@ -1500,7 +1483,9 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
         }
 
         // Add where clause if present
-        output.push_str(&self.format_where_clause(&impl_block.where_clause));
+        output.push_str(&codegen_helpers::format_where_clause(
+            &impl_block.where_clause,
+        ));
 
         output.push_str(" {\n");
 
@@ -2253,7 +2238,7 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
         }
 
         // Add where clause if present
-        output.push_str(&self.format_where_clause(&func.where_clause));
+        output.push_str(&codegen_helpers::format_where_clause(&func.where_clause));
 
         output.push_str(" {\n");
         self.indent_level += 1;
@@ -2337,7 +2322,7 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
 
     fn generate_statement(&mut self, stmt: &Statement) -> String {
         // Record source mapping if location info is available
-        if let Some(location) = self.get_statement_location(stmt) {
+        if let Some(location) = codegen_helpers::get_statement_location(stmt) {
             self.record_mapping(&location);
         }
 
@@ -5359,21 +5344,6 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
             })
             .collect::<Vec<_>>()
             .join(", ")
-    }
-
-    // Format where clause for Rust output
-    // Example: [("T", ["Display"]), ("U", ["Debug", "Clone"])] -> "\nwhere\n    T: Display,\n    U: Debug + Clone"
-    fn format_where_clause(&self, where_clause: &[(String, Vec<String>)]) -> String {
-        if where_clause.is_empty() {
-            return String::new();
-        }
-
-        let clauses: Vec<String> = where_clause
-            .iter()
-            .map(|(type_param, bounds)| format!("    {}: {}", type_param, bounds.join(" + ")))
-            .collect();
-
-        format!("\nwhere\n{}", clauses.join(",\n"))
     }
 
     /// PHASE 6 OPTIMIZATION: Wrap function body with defer drop logic
