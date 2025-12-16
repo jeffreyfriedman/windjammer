@@ -1,7 +1,8 @@
 // Rust code generator
 use crate::analyzer::*;
 use crate::codegen::rust::{
-    expression_helpers, operators, pattern_analysis, self_analysis, string_analysis, type_analysis,
+    ast_utilities, expression_helpers, operators, pattern_analysis, self_analysis, string_analysis,
+    type_analysis,
 };
 use crate::parser::ast::CompoundOp;
 use crate::parser::*;
@@ -3311,44 +3312,6 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
         }
     }
 
-    /// Extract a field access, method call, or index expression path from an expression
-    /// (e.g., "config.paths", "source.get_items()", "items[0]")
-    /// This matches the logic in auto_clone.rs
-    #[allow(clippy::only_used_in_recursion)]
-    fn extract_field_access_path(&self, expr: &Expression) -> Option<String> {
-        match expr {
-            Expression::Identifier { name, .. } => Some(name.clone()),
-            Expression::FieldAccess { object, field, .. } => {
-                // Recursively build the path: object.field
-                self.extract_field_access_path(object)
-                    .map(|base_path| format!("{}.{}", base_path, field))
-            }
-            Expression::MethodCall { object, method, .. } => {
-                // Build path for method calls: object.method()
-                self.extract_field_access_path(object)
-                    .map(|base_path| format!("{}.{}()", base_path, method))
-            }
-            Expression::Index { object, index, .. } => {
-                // Build path for index expressions: object[index]
-                if let Some(base_path) = self.extract_field_access_path(object) {
-                    // Try to get a more specific index if it's a literal
-                    let index_str = match index.as_ref() {
-                        Expression::Literal {
-                            value: Literal::Int(n),
-                            ..
-                        } => n.to_string(),
-                        Expression::Identifier { name, .. } => name.clone(),
-                        _ => "*".to_string(), // Generic placeholder
-                    };
-                    Some(format!("{}[{}]", base_path, index_str))
-                } else {
-                    None
-                }
-            }
-            _ => None,
-        }
-    }
-
     fn generate_expression(&mut self, expr: &Expression) -> String {
         // PHASE 7: Try constant folding first
         let folded_expr = self.try_fold_constant(expr);
@@ -3520,7 +3483,7 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
                 ..
             } => {
                 // Extract function name for signature lookup
-                let func_name = self.extract_function_name(function);
+                let func_name = ast_utilities::extract_function_name(function);
 
                 // Special case: Tauri command calls (for WASM target)
                 if self.target == CompilationTarget::Wasm && self.is_tauri_function(&func_name) {
@@ -4177,7 +4140,7 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
                 );
 
                 // AUTO-CLONE: Check if this method call needs to be cloned
-                if let Some(path) = self.extract_field_access_path(expr) {
+                if let Some(path) = ast_utilities::extract_field_access_path(expr) {
                     if let Some(ref analysis) = self.auto_clone_analysis {
                         if analysis
                             .needs_clone(&path, self.current_statement_idx)
@@ -4219,7 +4182,7 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
 
                 // AUTO-CLONE: Check if this field access needs to be cloned
                 // Extract the full path (e.g., "config.paths")
-                if let Some(path) = self.extract_field_access_path(expr) {
+                if let Some(path) = ast_utilities::extract_field_access_path(expr) {
                     if let Some(ref analysis) = self.auto_clone_analysis {
                         if analysis
                             .needs_clone(&path, self.current_statement_idx)
@@ -4439,7 +4402,7 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
                 let base_expr = format!("{}[{}]", obj_str, final_idx);
 
                 // AUTO-CLONE: Check if this index expression needs to be cloned
-                if let Some(path) = self.extract_field_access_path(expr) {
+                if let Some(path) = ast_utilities::extract_field_access_path(expr) {
                     if let Some(ref analysis) = self.auto_clone_analysis {
                         if analysis
                             .needs_clone(&path, self.current_statement_idx)
@@ -4881,14 +4844,6 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
         format!("format!(\"{}\", {})", format_str, args.join(", "))
     }
 
-    fn extract_function_name(&self, expr: &Expression) -> String {
-        match expr {
-            Expression::Identifier { name, .. } => name.clone(),
-            Expression::FieldAccess { field, .. } => field.clone(),
-            _ => String::new(), // Can't determine function name
-        }
-    }
-
     /// Check if a function is a Tauri command that needs special handling
     fn is_tauri_function(&self, name: &str) -> bool {
         matches!(
@@ -5250,7 +5205,7 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
         }
 
         // Count statements in function body
-        let statement_count = self.count_statements(&func.body);
+        let statement_count = ast_utilities::count_statements(&func.body);
 
         // Inline small functions (< 10 statements)
         if statement_count < 10 {
@@ -5375,33 +5330,6 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
         // The auto-clone analysis will add .clone() when needed
         // Copy types will be automatically copied (no .clone() needed)
         false
-    }
-
-    /// Count statements in a function body (for inline heuristics)
-    fn count_statements(&self, body: &[Statement]) -> usize {
-        let mut count = 0;
-        for stmt in body {
-            count += match stmt {
-                Statement::Let { .. } => 1,
-                Statement::Const { .. } => 1,
-                Statement::Static { .. } => 1,
-                Statement::Return { .. } => 1,
-                Statement::Expression { .. } => 1,
-                Statement::If { .. } => 3, // Weighted more heavily
-                Statement::While { .. } => 3,
-                Statement::Loop { .. } => 3,
-                Statement::For { .. } => 3,
-                Statement::Match { .. } => 5, // Match statements are complex
-                Statement::Assignment { .. } => 1,
-                Statement::Thread { .. } => 2, // Thread spawn
-                Statement::Async { .. } => 2,  // Async spawn
-                Statement::Defer { .. } => 1,
-                Statement::Break { .. } => 1,
-                Statement::Continue { .. } => 1,
-                Statement::Use { .. } => 0, // Use statements don't affect complexity
-            };
-        }
-        count
     }
 
     // Format type parameters with trait bounds for Rust output
