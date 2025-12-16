@@ -9,15 +9,18 @@ mod ast_legacy;
 
 // Domain modules (extracted)
 pub mod types;
+pub mod literals;
+pub mod operators;
 
 // Re-export from domain modules
 pub use types::*;
+pub use literals::*;
+pub use operators::*;
 
 // Re-export non-type system items from legacy ast.rs
 // TODO: Extract these into their own modules
 pub use ast_legacy::{
-    BinaryOp, CompoundOp, Decorator, EnumDecl, EnumPatternBinding, EnumVariant, EnumVariantData,
-    Expression, FunctionDecl, ImplBlock, Item, Literal, MacroDelimiter, MatchArm, OwnershipHint,
-    Parameter, Pattern, Program, Statement, StructDecl, StructField, TraitDecl, TraitMethod,
-    UnaryOp,
+    Decorator, EnumDecl, EnumPatternBinding, EnumVariant, EnumVariantData, Expression,
+    FunctionDecl, ImplBlock, Item, MatchArm, OwnershipHint, Parameter, Pattern, Program,
+    Statement, StructDecl, StructField, TraitDecl, TraitMethod,
 };
