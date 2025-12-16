@@ -234,3 +234,239 @@ fn test_parameter_builder_mutable() {
 //
 // Reduction: 7 lines → 1 line (85% reduction)
 
+// ============================================================================
+// EXPRESSION BUILDER TESTS (TDD - Tests FIRST!)
+// ============================================================================
+
+#[test]
+fn test_expr_literal_int() {
+    // Before: Expression::Literal { value: Literal::Int(42), location: None }
+    // After: expr_int(42)
+    
+    use windjammer::parser::ast::*;
+    
+    let expr = expr_int(42);
+    
+    if let Expression::Literal { value, .. } = expr {
+        assert_eq!(value, Literal::Int(42));
+    } else {
+        panic!("Expected Literal expression");
+    }
+}
+
+#[test]
+fn test_expr_literal_float() {
+    use windjammer::parser::ast::*;
+    
+    let expr = expr_float(3.14);
+    
+    if let Expression::Literal { value, .. } = expr {
+        assert_eq!(value, Literal::Float(3.14));
+    } else {
+        panic!("Expected Literal expression");
+    }
+}
+
+#[test]
+fn test_expr_literal_string() {
+    use windjammer::parser::ast::*;
+    
+    let expr = expr_string("hello");
+    
+    if let Expression::Literal { value, .. } = expr {
+        assert_eq!(value, Literal::String("hello".to_string()));
+    } else {
+        panic!("Expected Literal expression");
+    }
+}
+
+#[test]
+fn test_expr_literal_bool() {
+    use windjammer::parser::ast::*;
+    
+    let expr = expr_bool(true);
+    
+    if let Expression::Literal { value, .. } = expr {
+        assert_eq!(value, Literal::Bool(true));
+    } else {
+        panic!("Expected Literal expression");
+    }
+}
+
+#[test]
+fn test_expr_var() {
+    // Before: Expression::Identifier { name: "x".to_string(), location: None }
+    // After: expr_var("x")
+    
+    use windjammer::parser::ast::*;
+    
+    let expr = expr_var("x");
+    
+    if let Expression::Identifier { name, .. } = expr {
+        assert_eq!(name, "x");
+    } else {
+        panic!("Expected Identifier expression");
+    }
+}
+
+#[test]
+fn test_expr_binary() {
+    // Before: 
+    // Expression::Binary {
+    //     left: Box::new(Expression::Identifier { name: "a".to_string(), location: None }),
+    //     op: BinaryOp::Add,
+    //     right: Box::new(Expression::Identifier { name: "b".to_string(), location: None }),
+    //     location: None,
+    // }
+    // 
+    // After: expr_binary(BinaryOp::Add, expr_var("a"), expr_var("b"))
+    
+    use windjammer::parser::ast::*;
+    
+    let expr = expr_binary(BinaryOp::Add, expr_var("a"), expr_var("b"));
+    
+    if let Expression::Binary { left, op, right, .. } = expr {
+        assert_eq!(op, BinaryOp::Add);
+        if let Expression::Identifier { name, .. } = *left {
+            assert_eq!(name, "a");
+        } else {
+            panic!("Expected left to be Identifier");
+        }
+        if let Expression::Identifier { name, .. } = *right {
+            assert_eq!(name, "b");
+        } else {
+            panic!("Expected right to be Identifier");
+        }
+    } else {
+        panic!("Expected Binary expression");
+    }
+}
+
+#[test]
+fn test_expr_add_shorthand() {
+    // Convenience: expr_add(a, b) instead of expr_binary(BinaryOp::Add, a, b)
+    
+    use windjammer::parser::ast::*;
+    
+    let expr = expr_add(expr_var("x"), expr_int(1));
+    
+    if let Expression::Binary { op, .. } = expr {
+        assert_eq!(op, BinaryOp::Add);
+    } else {
+        panic!("Expected Binary expression");
+    }
+}
+
+#[test]
+fn test_expr_call() {
+    // Before:
+    // Expression::Call {
+    //     function: Box::new(Expression::Identifier { name: "foo".to_string(), location: None }),
+    //     arguments: vec![
+    //         (None, Expression::Literal { value: Literal::Int(1), location: None }),
+    //         (None, Expression::Literal { value: Literal::Int(2), location: None }),
+    //     ],
+    //     location: None,
+    // }
+    //
+    // After: expr_call("foo", vec![expr_int(1), expr_int(2)])
+    
+    use windjammer::parser::ast::*;
+    
+    let expr = expr_call("foo", vec![expr_int(1), expr_int(2)]);
+    
+    if let Expression::Call { function, arguments, .. } = expr {
+        if let Expression::Identifier { name, .. } = *function {
+            assert_eq!(name, "foo");
+        } else {
+            panic!("Expected function to be Identifier");
+        }
+        assert_eq!(arguments.len(), 2);
+    } else {
+        panic!("Expected Call expression");
+    }
+}
+
+#[test]
+fn test_expr_method_call() {
+    // Before:
+    // Expression::MethodCall {
+    //     object: Box::new(Expression::Identifier { name: "obj".to_string(), location: None }),
+    //     method: "method".to_string(),
+    //     type_args: None,
+    //     arguments: vec![],
+    //     location: None,
+    // }
+    //
+    // After: expr_method("obj", "method", vec![])
+    
+    use windjammer::parser::ast::*;
+    
+    let expr = expr_method(expr_var("obj"), "method", vec![]);
+    
+    if let Expression::MethodCall { object, method, arguments, .. } = expr {
+        if let Expression::Identifier { name, .. } = *object {
+            assert_eq!(name, "obj");
+        } else {
+            panic!("Expected object to be Identifier");
+        }
+        assert_eq!(method, "method");
+        assert_eq!(arguments.len(), 0);
+    } else {
+        panic!("Expected MethodCall expression");
+    }
+}
+
+#[test]
+fn test_expr_field() {
+    // Before:
+    // Expression::FieldAccess {
+    //     object: Box::new(Expression::Identifier { name: "obj".to_string(), location: None }),
+    //     field: "field".to_string(),
+    //     location: None,
+    // }
+    //
+    // After: expr_field(expr_var("obj"), "field")
+    
+    use windjammer::parser::ast::*;
+    
+    let expr = expr_field(expr_var("obj"), "field");
+    
+    if let Expression::FieldAccess { object, field, .. } = expr {
+        if let Expression::Identifier { name, .. } = *object {
+            assert_eq!(name, "obj");
+        } else {
+            panic!("Expected object to be Identifier");
+        }
+        assert_eq!(field, "field");
+    } else {
+        panic!("Expected FieldAccess expression");
+    }
+}
+
+#[test]
+fn test_expr_chained_complex() {
+    // Complex example: obj.method(x + 1).field
+    //
+    // Before: ~20 lines of nested Expression structs
+    // After: expr_field(expr_method(expr_var("obj"), "method", vec![expr_add(expr_var("x"), expr_int(1))]), "field")
+    
+    use windjammer::parser::ast::*;
+    
+    let expr = expr_field(
+        expr_method(
+            expr_var("obj"),
+            "method",
+            vec![expr_add(expr_var("x"), expr_int(1))]
+        ),
+        "field"
+    );
+    
+    // Just verify it constructs without panicking
+    if let Expression::FieldAccess { .. } = expr {
+        // Success
+    } else {
+        panic!("Expected FieldAccess expression");
+    }
+}
+
