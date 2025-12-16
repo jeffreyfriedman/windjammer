@@ -11,6 +11,7 @@
 //! - **helpers**: Utility functions
 //! - **backend**: Backend trait implementation
 
+pub mod arm_string_analysis;
 pub mod ast_utilities;
 pub mod backend;
 pub mod codegen_helpers;
