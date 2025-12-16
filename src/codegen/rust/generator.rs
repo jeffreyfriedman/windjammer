@@ -1,7 +1,7 @@
 // Rust code generator
 use crate::analyzer::*;
 use crate::codegen::rust::{
-    operators, pattern_analysis, self_analysis, string_analysis, type_analysis,
+    expression_helpers, operators, pattern_analysis, self_analysis, string_analysis, type_analysis,
 };
 use crate::parser::ast::CompoundOp;
 use crate::parser::*;
@@ -571,7 +571,7 @@ impl CodeGenerator {
                         ));
                     } else {
                         // PHASE 7: Promote static to const if value is compile-time evaluable
-                        let keyword = if self.is_const_evaluable(value) {
+                        let keyword = if expression_helpers::is_const_evaluable(value) {
                             "const" // Zero runtime overhead!
                         } else {
                             "static"
@@ -3806,14 +3806,15 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
                                         );
 
                                         // Insert & if not already a reference and not a string literal
-                                        if !self.is_reference_expression(arg) && !is_string_literal
+                                        if !expression_helpers::is_reference_expression(arg)
+                                            && !is_string_literal
                                         {
                                             return format!("&{}", arg_str);
                                         }
                                     }
                                     OwnershipMode::MutBorrowed => {
                                         // Insert &mut if not already a reference
-                                        if !self.is_reference_expression(arg) {
+                                        if !expression_helpers::is_reference_expression(arg) {
                                             return format!("&mut {}", arg_str);
                                         }
                                     }
@@ -4999,16 +5000,6 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
         code
     }
 
-    fn is_reference_expression(&self, expr: &Expression) -> bool {
-        matches!(
-            expr,
-            Expression::Unary {
-                op: UnaryOp::Ref | UnaryOp::MutRef,
-                ..
-            }
-        )
-    }
-
     fn infer_derivable_traits(&self, struct_: &StructDecl) -> Vec<String> {
         let mut traits = vec!["Debug".to_string(), "Clone".to_string()]; // Always safe to derive
 
@@ -5586,34 +5577,6 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
     /// PHASE 7: Check if an expression can be evaluated at compile time
     /// If true, we can use `const` instead of `static`
     #[allow(clippy::only_used_in_recursion)]
-    fn is_const_evaluable(&self, expr: &Expression) -> bool {
-        match expr {
-            // Literals are always const
-            Expression::Literal { .. } => true,
-
-            // Binary operations on const values are const
-            Expression::Binary { left, right, .. } => {
-                self.is_const_evaluable(left) && self.is_const_evaluable(right)
-            }
-
-            // Unary operations on const values are const
-            Expression::Unary { operand, .. } => self.is_const_evaluable(operand),
-
-            // Struct literals with const fields might be const
-            Expression::StructLiteral { fields, .. } => {
-                fields.iter().all(|(_, expr)| self.is_const_evaluable(expr))
-            }
-
-            // Map literals with const entries might be const
-            Expression::MapLiteral { pairs, .. } => pairs
-                .iter()
-                .all(|(k, v)| self.is_const_evaluable(k) && self.is_const_evaluable(v)),
-
-            // Most other expressions are not const-evaluable
-            _ => false,
-        }
-    }
-
     /// Generate automatic trait implementation for @component decorator
     fn generate_component_impl(&mut self, s: &StructDecl) -> String {
         let mut output = String::new();
