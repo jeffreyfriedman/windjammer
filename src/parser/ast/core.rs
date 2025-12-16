@@ -1,24 +1,19 @@
-// AST Types - Legacy file during refactoring
+// AST Core Types - Circular dependencies
 //
-// This file contains types that haven't been extracted yet.
-// Type system, literals, and operators have been extracted.
+// This file contains types with circular dependencies that must stay together:
+// Expression ↔ Statement ↔ Pattern
+//
+// Independent types have been extracted to separate modules.
 
 // Import types from extracted modules
 use crate::parser::ast::types::{AssociatedType, SourceLocation, Type, TypeParam};
 use crate::parser::ast::literals::{Literal, MacroDelimiter};
 use crate::parser::ast::operators::{BinaryOp, CompoundOp, UnaryOp};
+use crate::parser::ast::ownership::OwnershipHint;
 
 // ============================================================================
-// PARAMETERS AND OWNERSHIP
+// PARAMETERS (depends on Pattern - circular)
 // ============================================================================
-
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub enum OwnershipHint {
-    Owned,
-    Ref,
-    Mut,
-    Inferred, // Let the analyzer decide
-}
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct Parameter {
