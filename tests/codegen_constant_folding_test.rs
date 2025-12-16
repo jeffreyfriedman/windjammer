@@ -1,50 +1,31 @@
 // TDD Tests for Constant Folding Optimization
 // Tests written FIRST before extraction!
+//
+// UPDATED: Now using standard AST builder functions!
 
 use windjammer::codegen::rust::constant_folding::*;
+use windjammer::parser::ast::builders::*;
 use windjammer::parser::{BinaryOp, Expression, Literal, UnaryOp};
 
-// Helper to create integer literal
+// Re-alias builders for backward compatibility with existing tests
 fn int_lit(n: i64) -> Expression {
-    Expression::Literal {
-        value: Literal::Int(n),
-        location: None,
-    }
+    expr_int(n)
 }
 
-// Helper to create float literal
 fn float_lit(f: f64) -> Expression {
-    Expression::Literal {
-        value: Literal::Float(f),
-        location: None,
-    }
+    expr_float(f)
 }
 
-// Helper to create bool literal
 fn bool_lit(b: bool) -> Expression {
-    Expression::Literal {
-        value: Literal::Bool(b),
-        location: None,
-    }
+    expr_bool(b)
 }
 
-// Helper to create binary expression
 fn binary(left: Expression, op: BinaryOp, right: Expression) -> Expression {
-    Expression::Binary {
-        left: Box::new(left),
-        op,
-        right: Box::new(right),
-        location: None,
-    }
+    expr_binary(op, left, right)
 }
 
-// Helper to create unary expression
 fn unary(op: UnaryOp, operand: Expression) -> Expression {
-    Expression::Unary {
-        op,
-        operand: Box::new(operand),
-        location: None,
-    }
+    expr_unary(op, operand)
 }
 
 // ============================================================================
