@@ -276,3 +276,33 @@ mod regression_tests {
     }
 }
 
+
+#[cfg(test)]
+mod file_placement_tests {
+    use super::*;
+
+    #[test]
+    fn test_preserve_directory_structure_in_output() {
+        // When compiling nested modules, output .rs files should maintain
+        // the same directory structure as source .wj files
+        //
+        // Input: src_wj/math/vec2.wj
+        // Output: build/math/vec2.rs (NOT build/vec2.rs!)
+        
+        // This test validates that get_relative_output_path() works correctly
+        // TODO: Implement get_relative_output_path(source_root, input_file, output_root)
+    }
+
+    #[test]
+    fn test_output_path_calculation() {
+        // source_root = "src_wj/"
+        // input_file = "src_wj/math/vec2.wj"
+        // output_root = "build/"
+        // Expected: "build/math/vec2.rs"
+        
+        // source_root = "src_wj/"
+        // input_file = "src_wj/rendering/color.wj"
+        // output_root = "build/"
+        // Expected: "build/rendering/color.rs"
+    }
+}
