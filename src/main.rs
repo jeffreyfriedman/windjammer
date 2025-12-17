@@ -450,12 +450,19 @@ fn build_project(path: &Path, output: &Path, target: CompilationTarget) -> Resul
         }
     }
 
+    // Determine source_root: if path is a file, use its parent directory
+    let source_root = if path.is_file() {
+        path.parent().unwrap_or(Path::new("."))
+    } else {
+        path
+    };
+
     // PASS 2: Full compilation with all traits available
     for file in &wj_files {
         let file_name = file.file_name().unwrap().to_str().unwrap();
         print!("  Compiling {:?}... ", file_name);
 
-        match compile_file_with_compiler(file, output, &mut module_compiler) {
+        match compile_file_with_compiler(source_root, file, output, &mut module_compiler) {
             Ok((stdlib_modules, external_crates)) => {
                 println!("{}", "✓".green());
                 // If both are empty, this might be a component (which handles its own Cargo.toml)
@@ -977,11 +984,14 @@ fn compile_file(
     target: CompilationTarget,
 ) -> Result<(HashSet<String>, Vec<String>)> {
     let mut module_compiler = ModuleCompiler::new(target);
-    compile_file_with_compiler(input_path, output_dir, &mut module_compiler)
+    // For single-file compilation, use parent directory as source root
+    let source_root = input_path.parent().unwrap_or(Path::new("."));
+    compile_file_with_compiler(source_root, input_path, output_dir, &mut module_compiler)
 }
 
 /// Compile a file with a provided ModuleCompiler (for shared trait registry)
 fn compile_file_with_compiler(
+    source_root: &Path,
     input_path: &Path,
     output_dir: &Path,
     module_compiler: &mut ModuleCompiler,
@@ -1121,14 +1131,11 @@ fn compile_file_with_compiler(
 
             // Set source file for error mapping
             generator.set_source_file(input_path);
-            let output_file_path = output_dir.join(
-                input_path
-                    .file_name()
-                    .unwrap()
-                    .to_str()
-                    .unwrap()
-                    .replace(".wj", ".rs"),
-            );
+            let output_file_path = get_relative_output_path(source_root, input_path, output_dir)?;
+            // Create parent directories if needed
+            if let Some(parent) = output_file_path.parent() {
+                std::fs::create_dir_all(parent)?;
+            }
             generator.set_output_file(&output_file_path);
 
             // Set workspace root for relative paths in source maps
@@ -1152,14 +1159,11 @@ fn compile_file_with_compiler(
 
         // Set source file for error mapping
         generator.set_source_file(input_path);
-        let output_file_path = output_dir.join(
-            input_path
-                .file_name()
-                .unwrap()
-                .to_str()
-                .unwrap()
-                .replace(".wj", ".rs"),
-        );
+        let output_file_path = get_relative_output_path(source_root, input_path, output_dir)?;
+        // Create parent directories if needed
+        if let Some(parent) = output_file_path.parent() {
+            std::fs::create_dir_all(parent)?;
+        }
         generator.set_output_file(&output_file_path);
 
         // Set workspace root for relative paths in source maps
@@ -1185,15 +1189,13 @@ fn compile_file_with_compiler(
         format!("{}\n\n{}", module_code, rust_code)
     };
 
-    // Write output
-    let output_file = output_dir.join(
-        input_path
-            .file_name()
-            .unwrap()
-            .to_str()
-            .unwrap()
-            .replace(".wj", ".rs"),
-    );
+    // Write output (preserving directory structure)
+    let output_file = get_relative_output_path(source_root, input_path, output_dir)?;
+    
+    // Create parent directories if needed
+    if let Some(parent) = output_file.parent() {
+        std::fs::create_dir_all(parent)?;
+    }
 
     std::fs::write(output_file, combined_code)?;
 
@@ -2879,8 +2881,80 @@ pub fn strip_main_functions(output_dir: &Path) -> Result<()> {
     Ok(())
 }
 
+/// Calculate output path that preserves directory structure
+/// 
+/// Example:
+/// - source_root: "windjammer-game/src_wj"
+/// - input_path: "windjammer-game/src_wj/math/vec2.wj"
+/// - output_dir: "build"
+/// - Result: "build/math/vec2.rs"
+pub fn get_relative_output_path(
+    source_root: &Path,
+    input_path: &Path,
+    output_dir: &Path,
+) -> Result<PathBuf> {
+    // Get the relative path from source_root to input_path
+    let relative = input_path
+        .strip_prefix(source_root)
+        .unwrap_or(input_path);
+    
+    // Replace .wj extension with .rs
+    let rs_filename = relative
+        .file_name()
+        .and_then(|n| n.to_str())
+        .map(|s| s.replace(".wj", ".rs"))
+        .ok_or_else(|| anyhow::anyhow!("Invalid filename"))?;
+    
+    // Construct output path preserving directory structure
+    let mut output_path = output_dir.to_path_buf();
+    
+    // Add parent directories if they exist
+    if let Some(parent) = relative.parent() {
+        if parent != Path::new("") {
+            output_path.push(parent);
+        }
+    }
+    
+    // Add the .rs filename
+    output_path.push(rs_filename);
+    
+    Ok(output_path)
+}
+
 #[cfg(test)]
 mod tests {
+    use super::*;
+
+    #[test]
+    fn test_get_relative_output_path_nested() {
+        let source_root = Path::new("src_wj");
+        let input_path = Path::new("src_wj/math/vec2.wj");
+        let output_dir = Path::new("build");
+        
+        let result = get_relative_output_path(source_root, input_path, output_dir).unwrap();
+        assert_eq!(result, PathBuf::from("build/math/vec2.rs"));
+    }
+
+    #[test]
+    fn test_get_relative_output_path_flat() {
+        let source_root = Path::new("src_wj");
+        let input_path = Path::new("src_wj/vec2.wj");
+        let output_dir = Path::new("build");
+        
+        let result = get_relative_output_path(source_root, input_path, output_dir).unwrap();
+        assert_eq!(result, PathBuf::from("build/vec2.rs"));
+    }
+
+    #[test]
+    fn test_get_relative_output_path_deeply_nested() {
+        let source_root = Path::new("game/src_wj");
+        let input_path = Path::new("game/src_wj/rendering/shaders/vertex.wj");
+        let output_dir = Path::new("build");
+        
+        let result = get_relative_output_path(source_root, input_path, output_dir).unwrap();
+        assert_eq!(result, PathBuf::from("build/rendering/shaders/vertex.rs"));
+    }
+
     #[test]
     fn test_two_pass_compilation_concept() {
         // This test documents the two-pass compilation approach:
