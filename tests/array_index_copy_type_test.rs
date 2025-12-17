@@ -4,9 +4,9 @@
 use std::fs;
 use std::process::Command;
 
-fn compile_code(code: &str) -> Result<String, String> {
-    let test_dir = "tests/generated/array_index_copy_test";
-    fs::create_dir_all(test_dir).expect("Failed to create test dir");
+fn compile_code(code: &str, test_name: &str) -> Result<String, String> {
+    let test_dir = format!("tests/generated/array_index_copy_test_{}", test_name);
+    fs::create_dir_all(&test_dir).expect("Failed to create test dir");
     let input_file = format!("{}/test.wj", test_dir);
     fs::write(&input_file, code).expect("Failed to write source file");
 
@@ -18,21 +18,21 @@ fn compile_code(code: &str) -> Result<String, String> {
             "build",
             &input_file,
             "--output",
-            test_dir,
+            &test_dir,
             "--no-cargo",
         ])
         .output()
         .expect("Failed to run compiler");
 
     if !output.status.success() {
-        fs::remove_dir_all(test_dir).ok();
+        fs::remove_dir_all(&test_dir).ok();
         return Err(String::from_utf8_lossy(&output.stderr).to_string());
     }
 
-    let generated_file = format!("{}/test.rs", test_dir);
+    let generated_file = format!("{}/test.rs", &test_dir);
     let generated = fs::read_to_string(&generated_file).expect("Failed to read generated file");
 
-    fs::remove_dir_all(test_dir).ok();
+    fs::remove_dir_all(&test_dir).ok();
 
     Ok(generated)
 }
@@ -53,7 +53,7 @@ fn test_array_index_of_copy_type_should_not_add_mut_ref() {
     }
     "#;
 
-    let generated = compile_code(code).expect("Compilation failed");
+    let generated = compile_code(code, "no_mut_ref").expect("Compilation failed");
 
     // Should NOT add &mut for Copy types
     assert!(
@@ -92,7 +92,7 @@ fn test_inline_array_index_copy_type_in_return() {
     }
     "#;
 
-    let generated = compile_code(code).expect("Compilation failed");
+    let generated = compile_code(code, "inline_return").expect("Compilation failed");
 
     // Should NOT have &mut for Copy type
     assert!(
@@ -116,7 +116,7 @@ fn test_array_index_non_copy_type_may_add_ref() {
     }
     "#;
 
-    let generated = compile_code(code).expect("Compilation failed");
+    let generated = compile_code(code, "non_copy").expect("Compilation failed");
 
     // For non-Copy types, & is appropriate (or .clone())
     // This test just verifies compilation succeeds
@@ -139,7 +139,7 @@ fn test_copy_type_used_in_function_call() {
     }
     "#;
 
-    let generated = compile_code(code).expect("Compilation failed");
+    let generated = compile_code(code, "function_call").expect("Compilation failed");
 
     // Should pass by value, not reference
     assert!(
