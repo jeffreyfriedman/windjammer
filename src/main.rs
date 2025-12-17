@@ -14,7 +14,9 @@ pub mod compiler_database;
 pub mod config;
 pub mod ejector;
 pub mod error_catalog; // Error catalog generation and documentation
+pub mod module_system; // Nested module system - The Windjammer Way!
 pub mod error_codes; // Windjammer error codes (WJ0001, etc.)
+
 pub mod error_mapper;
 pub mod error_statistics; // Error statistics tracking and analysis
 pub mod error_tui; // Interactive TUI for error navigation
@@ -483,7 +485,7 @@ fn build_project(path: &Path, output: &Path, target: CompilationTarget) -> Resul
         // Automatically generate mod.rs for multi-file projects
         // This makes all compiled modules accessible to each other
         if wj_files.len() > 1 {
-            generate_mod_file(output)?;
+            generate_nested_module_structure(path, output)?;
         }
 
         println!("\n{} Transpilation complete!", "Success!".green().bold());
@@ -2893,4 +2895,48 @@ mod tests {
         // The actual implementation is in build_project()
         // If this test compiles and passes, the concept is sound
     }
+}
+
+/// Generate nested module structure using the new Windjammer module system
+/// This replaces the old flat generate_mod_file with proper nested support
+pub fn generate_nested_module_structure(source_dir: &Path, output_dir: &Path) -> Result<()> {
+    use colored::*;
+    use anyhow::Context;
+    use crate::module_system::{discover_nested_modules, generate_lib_rs, generate_mod_rs_for_submodule};
+    
+    // Discover all modules in the source directory
+    let module_tree = discover_nested_modules(source_dir)
+        .context("Failed to discover module structure")?;
+    
+    // Generate lib.rs (or mod.rs for root)
+    let lib_rs_content = generate_lib_rs(&module_tree)?;
+    let lib_rs_path = output_dir.join("lib.rs");
+    std::fs::write(&lib_rs_path, lib_rs_content)?;
+    
+    println!("{} Generated lib.rs with {} top-level modules", 
+             "✓".green(), module_tree.root_modules.len());
+    
+    // Recursively generate mod.rs for each directory module
+    fn generate_mod_rs_recursive(module: &crate::module_system::Module, output_dir: &Path) -> Result<()> {
+        if module.is_directory && !module.submodules.is_empty() {
+            let mod_rs_content = generate_mod_rs_for_submodule(module)?;
+            let module_output_dir = output_dir.join(&module.name);
+            std::fs::create_dir_all(&module_output_dir)?;
+            let mod_rs_path = module_output_dir.join("mod.rs");
+            std::fs::write(&mod_rs_path, mod_rs_content)?;
+            
+            // Recursively generate for submodules
+            for submodule in &module.submodules {
+                generate_mod_rs_recursive(submodule, &module_output_dir)?;
+            }
+        }
+        Ok(())
+    }
+    
+    // Generate mod.rs for all directory modules
+    for module in &module_tree.root_modules {
+        generate_mod_rs_recursive(module, output_dir)?;
+    }
+    
+    Ok(())
 }
