@@ -30,10 +30,6 @@ pub mod source_map_cache; // Source map caching for performance
 pub mod stdlib_scanner;
 pub mod syntax_highlighter; // Syntax highlighting for error snippets
 
-// UI component compilation
-pub mod component;
-pub mod ui; // Windjammer UI compilation (desktop + web)
-
 use anyhow::Result;
 use clap::{Parser, Subcommand, ValueEnum};
 use std::collections::{HashMap, HashSet};
@@ -992,77 +988,6 @@ fn compile_file_with_compiler(
 
     // Read source file
     let source = std::fs::read_to_string(input_path)?;
-
-    // Check if this is a component file by looking for component-specific syntax
-    // Components must have a "view {" block (as a standalone token, not substring)
-    let is_component = if target == CompilationTarget::Wasm {
-        // Only detect as component if "view" is followed by "{" (not just any "view" word)
-        source.contains("view {")
-            || source.contains("view{")
-            || source.contains("\nview ") && (source.contains("view {") || source.contains("view{"))
-    } else {
-        false
-    };
-
-    // If it's a component file, handle it specially
-    if is_component {
-        use component::analyzer::DependencyAnalyzer;
-        use component::codegen::ComponentCodegen;
-        use component::parser::ComponentParser;
-        use component::transformer::SignalTransformer;
-
-        // Parse as component
-        let component_file = ComponentParser::parse(&source)
-            .map_err(|e| anyhow::anyhow!("Component parse error: {}", e))?;
-
-        // Analyze dependencies
-        let deps = DependencyAnalyzer::analyze(&component_file)
-            .map_err(|e| anyhow::anyhow!("Component analysis error: {}", e))?;
-
-        // Transform to signals
-        let transformed = SignalTransformer::transform(&component_file, &deps)
-            .map_err(|e| anyhow::anyhow!("Component transformation error: {}", e))?;
-
-        // Generate code
-        let rust_code = ComponentCodegen::generate(&transformed)
-            .map_err(|e| anyhow::anyhow!("Component codegen error: {}", e))?;
-
-        // Write lib.rs
-        std::fs::create_dir_all(output_dir.join("src"))?;
-        let lib_path = output_dir.join("src").join("lib.rs");
-        std::fs::write(&lib_path, &rust_code)?;
-
-        // Get component name (use filename if not specified)
-        let component_name = component_file.name.as_deref().unwrap_or_else(|| {
-            input_path
-                .file_stem()
-                .and_then(|s| s.to_str())
-                .unwrap_or("Component")
-        });
-
-        // Generate Cargo.toml
-        let cargo_toml = ComponentCodegen::generate_cargo_toml(component_name)?;
-        std::fs::write(output_dir.join("Cargo.toml"), &cargo_toml)?;
-
-        // Generate index.html
-        let index_html = ComponentCodegen::generate_index_html(component_name)?;
-        std::fs::write(output_dir.join("index.html"), &index_html)?;
-
-        // Generate README
-        let readme = ComponentCodegen::generate_readme(component_name)?;
-        std::fs::write(output_dir.join("README.md"), &readme)?;
-
-        println!("  Component compiled successfully!");
-        println!("  Output directory: {}", output_dir.display());
-        println!("  Next steps:");
-        println!("    cd {}", output_dir.display());
-        println!("    wasm-pack build --target web");
-        println!("    python3 -m http.server 8080");
-
-        return Ok((HashSet::new(), Vec::new()));
-    }
-
-    // Regular Windjammer file - use standard parser
     // Lex
     let mut lexer = lexer::Lexer::new(&source);
     let tokens = lexer.tokenize_with_locations();
