@@ -387,6 +387,15 @@ fn build_project(path: &Path, output: &Path, target: CompilationTarget) -> Resul
         eprintln!("Note: No windjammer.toml found. Module imports will only work with relative paths (./module) or std:: prefix.");
     }
 
+    // Add the project's own source directory to source_roots
+    // This ensures that internal modules (vec2, camera2d, etc.) are not treated as external crates
+    let project_source_dir = if path.is_file() {
+        path.parent().unwrap_or(Path::new(".")).to_path_buf()
+    } else {
+        path.to_path_buf()
+    };
+    module_compiler.add_source_root(project_source_dir);
+
     // PASS 0: Quick parse all files to register Copy structs
     // This ensures Copy type detection works across all files
     let mut global_copy_structs = HashSet::new();
@@ -896,7 +905,31 @@ impl ModuleCompiler {
                 }
             }
 
-            // Not found in source roots - treat as external crate
+            // THE WINDJAMMER WAY: Also check the current file's directory
+            // This allows "use texture_atlas::Foo" to work when texture_atlas.wj
+            // is in the same directory as the importing file
+            if let Some(source_file) = source_file {
+                if let Some(source_dir) = source_file.parent() {
+                    // Try direct file in same directory: source_dir/texture_atlas.wj
+                    let mut candidate = source_dir.to_path_buf();
+                    candidate.push(format!("{}.wj", module_path));
+                    if candidate.exists() {
+                        // Found in same directory as source file!
+                        // Convert to relative import for codegen
+                        return Ok(candidate);
+                    }
+
+                    // Try directory module in same directory: source_dir/texture_atlas/mod.wj
+                    let mut candidate = source_dir.to_path_buf();
+                    candidate.push(module_path);
+                    candidate.push("mod.wj");
+                    if candidate.exists() {
+                        return Ok(candidate);
+                    }
+                }
+            }
+
+            // Not found in source roots or current directory - treat as external crate
             // External crate imports (e.g., windjammer_ui, external_crate)
             // These are treated as Rust crate dependencies and passed through to generated code
             // Mark as external by returning a special "external" path
