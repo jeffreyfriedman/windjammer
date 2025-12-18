@@ -474,11 +474,13 @@ impl Parser {
 
         // Parse the rest of the path (identifiers separated by :: or /)
         loop {
+            // THE WINDJAMMER WAY: Support Rust-style path keywords (self, super, crate)
             // Allow keywords as identifiers in module paths
             let name_opt = match self.current_token() {
-                Token::Ident(n) => Some(n.clone()),
+                Token::Ident(n) => Some(n.clone()), // Includes "super" and "crate" (not reserved)
                 Token::Thread => Some("thread".to_string()),
                 Token::Async => Some("async".to_string()),
+                Token::Self_ => Some("self".to_string()), // "self" IS a reserved keyword
                 _ => None,
             };
 
@@ -550,9 +552,31 @@ impl Parser {
             path_str.push('}');
         }
 
-        // For now, return the path as a single-element vector
-        // This preserves the relative path structure
-        path.push(path_str.clone());
+        // Split the path string into segments
+        // Examples:
+        // - "std::fs" -> ["std", "fs"]  
+        // - "self::utils" -> ["self", "utils"]
+        // - "./module::Type" -> ["./module", "Type"]
+        // - "module::{A, B, C}" -> ["module::{A, B, C}"] (keep braced imports as one segment)
+        
+        if path_str.contains("::{") {
+            // Braced import - keep as single segment
+            path.push(path_str.clone());
+        } else if path_str.starts_with("./") || path_str.starts_with("../") {
+            // Relative import - split on :: but keep ./ or ../ prefix with first segment
+            let parts: Vec<&str> = path_str.split("::").collect();
+            for part in parts {
+                path.push(part.to_string());
+            }
+        } else {
+            // Absolute import - split on ::
+            let parts: Vec<&str> = path_str.split("::").collect();
+            for part in parts {
+                if !part.is_empty() {
+                    path.push(part.to_string());
+                }
+            }
+        }
 
         // Check for optional "as alias" syntax
         let alias = if self.current_token() == &Token::As {
