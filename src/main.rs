@@ -883,6 +883,32 @@ impl ModuleCompiler {
             ))
         } else {
             // Absolute module path (e.g., math, rendering, physics)
+            
+            // THE WINDJAMMER WAY: Check the current file's directory FIRST
+            // This allows "use texture_atlas::Foo" to work when texture_atlas.wj
+            // is in the same directory as the importing file
+            // We check this BEFORE source_roots to prioritize same-directory imports
+            if let Some(source_file) = source_file {
+                if let Some(source_dir) = source_file.parent() {
+                    // Try direct file in same directory: source_dir/texture_atlas.wj
+                    let mut candidate = source_dir.to_path_buf();
+                    candidate.push(format!("{}.wj", module_path));
+                    if candidate.exists() {
+                        // Found in same directory as source file!
+                        // Return the real path to compile it alongside
+                        return Ok(candidate);
+                    }
+
+                    // Try directory module in same directory: source_dir/texture_atlas/mod.wj
+                    let mut candidate = source_dir.to_path_buf();
+                    candidate.push(module_path);
+                    candidate.push("mod.wj");
+                    if candidate.exists() {
+                        return Ok(candidate);
+                    }
+                }
+            }
+            
             // Check if this exists in any of the configured source roots
             for source_root in &self.source_roots {
                 // Try direct file: source_root/math.wj
@@ -902,30 +928,6 @@ impl ModuleCompiler {
                 if candidate.exists() {
                     // Found in source root - treat as external module
                     return Ok(PathBuf::from(format!("__source_root__::{}", module_path)));
-                }
-            }
-
-            // THE WINDJAMMER WAY: Also check the current file's directory
-            // This allows "use texture_atlas::Foo" to work when texture_atlas.wj
-            // is in the same directory as the importing file
-            if let Some(source_file) = source_file {
-                if let Some(source_dir) = source_file.parent() {
-                    // Try direct file in same directory: source_dir/texture_atlas.wj
-                    let mut candidate = source_dir.to_path_buf();
-                    candidate.push(format!("{}.wj", module_path));
-                    if candidate.exists() {
-                        // Found in same directory as source file!
-                        // Convert to relative import for codegen
-                        return Ok(candidate);
-                    }
-
-                    // Try directory module in same directory: source_dir/texture_atlas/mod.wj
-                    let mut candidate = source_dir.to_path_buf();
-                    candidate.push(module_path);
-                    candidate.push("mod.wj");
-                    if candidate.exists() {
-                        return Ok(candidate);
-                    }
                 }
             }
 
@@ -1406,6 +1408,12 @@ fn create_cargo_toml_with_deps(
     // to their Cargo.toml - the compiler no longer auto-adds filesystem paths
     let mut external_deps = Vec::new();
     for crate_name in external_crates {
+        // THE WINDJAMMER WAY: Filter out Rust keywords (crate, super, self)
+        // These are language features, not external dependencies!
+        if crate_name == "crate" || crate_name == "super" || crate_name == "self" {
+            continue; // Skip Rust keywords
+        }
+        
         // All external crates are assumed to be from crates.io
         external_deps.push(format!("{} = \"*\"", crate_name));
     }
