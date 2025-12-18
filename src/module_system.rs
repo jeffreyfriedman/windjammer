@@ -153,20 +153,18 @@ pub fn generate_lib_rs(module_tree: &ModuleTree) -> Result<String> {
         let mod_content = fs::read_to_string(&root_mod_path)?;
         let (pub_mods, pub_uses) = parse_mod_declarations(&mod_content);
         
-        // Generate pub mod declarations
-        content.push_str("// Module declarations\n");
+        // THE WINDJAMMER WAY: Auto-discover ALL modules (compiler does the work!)
+        // mod.wj controls re-exports, but module declarations are auto-discovered
+        content.push_str("// Module declarations (auto-discovered)\n");
         for module in &module_tree.root_modules {
-            // Only generate pub mod if it's in the explicit list OR if no explicit list exists
-            if pub_mods.is_empty() || pub_mods.contains(&module.name) {
-                if module.is_public {
-                    content.push_str(&format!("pub mod {};\n", module.name));
-                } else {
-                    content.push_str(&format!("mod {};\n", module.name));
-                }
+            if module.is_public {
+                content.push_str(&format!("pub mod {};\n", module.name));
+            } else {
+                content.push_str(&format!("mod {};\n", module.name));
             }
         }
         
-        // Generate re-exports
+        // Generate re-exports (controlled by mod.wj)
         if !pub_uses.is_empty() {
             content.push_str("\n// Re-exports (from mod.wj)\n");
             for pub_use in pub_uses {
