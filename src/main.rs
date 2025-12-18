@@ -306,8 +306,7 @@ fn main() -> Result<()> {
     Ok(())
 }
 
-#[allow(dead_code)]
-fn build_project(path: &Path, output: &Path, target: CompilationTarget) -> Result<()> {
+pub fn build_project(path: &Path, output: &Path, target: CompilationTarget) -> Result<()> {
     use colored::*;
 
     println!(
@@ -495,7 +494,29 @@ fn build_project(path: &Path, output: &Path, target: CompilationTarget) -> Resul
     if !has_errors {
         // Create Cargo.toml with stdlib and external dependencies (unless it's a component project)
         if !is_component_project {
-            create_cargo_toml_with_deps(output, &all_stdlib_modules, &all_external_crates, target)?;
+            // THE WINDJAMMER WAY: Filter out internal modules from external_crates
+            // Any module that has a .wj file in the project should NOT be an external dependency
+            let internal_modules: HashSet<String> = wj_files
+                .iter()
+                .filter_map(|f| {
+                    f.file_stem()
+                        .and_then(|s| s.to_str())
+                        .map(|s| s.to_string())
+                })
+                .collect();
+            
+            let filtered_external_crates: Vec<String> = all_external_crates
+                .into_iter()
+                .filter(|crate_name| {
+                    // Check both with hyphens and underscores (Cargo uses hyphens, files use underscores)
+                    let crate_name_normalized = crate_name.replace('-', "_");
+                    let is_internal = internal_modules.contains(crate_name) || internal_modules.contains(&crate_name_normalized);
+                    // Keep only crates that are NOT internal modules
+                    !is_internal
+                })
+                .collect();
+            
+            create_cargo_toml_with_deps(output, &all_stdlib_modules, &filtered_external_crates, target)?;
         }
 
         // Automatically generate mod.rs for multi-file projects
