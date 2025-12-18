@@ -83,10 +83,8 @@ fn test_super_keyword_not_in_dependencies() {
 }
 
 #[test]
-#[ignore] // Parser doesn't support "use self::" yet - this is a parser limitation, not a dependency issue
 fn test_self_keyword_not_in_dependencies() {
     // Code that uses "use self::foo" should NOT add "self" to Cargo.toml
-    // NOTE: Parser doesn't currently support "self::" in use statements
     let code = r#"
     use self::utils
     
