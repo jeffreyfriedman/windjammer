@@ -243,6 +243,8 @@ pub struct Analyzer {
     trait_definitions: HashMap<String, TraitDecl>,
     // Track which local variables are mutated (for automatic mut inference)
     mutated_variables: HashSet<String>,
+    // Track functions in the current impl block (for cross-method analysis)
+    current_impl_functions: Option<HashMap<String, crate::parser::ast::FunctionDecl>>,
 }
 
 use std::collections::HashSet;
@@ -267,6 +269,7 @@ impl Analyzer {
             copy_structs: global_copy_structs, // Use global Copy structs from all files
             trait_definitions: HashMap::new(),
             mutated_variables: HashSet::new(),
+            current_impl_functions: None,
         };
 
         // Pre-register standard library traits so the analyzer knows their signatures
@@ -429,8 +432,8 @@ impl Analyzer {
                             // This is a trait impl - use trait method signatures
                             self.analyze_trait_impl_function(func, trait_name)?
                         } else {
-                            // Regular impl - infer as usual
-                            self.analyze_function(func)?
+                            // Regular impl - infer as usual (pass impl_block for cross-method analysis)
+                            self.analyze_function_in_impl(func, impl_block)?
                         };
 
                         // PHASE 7: Detect const/static optimizations
@@ -463,6 +466,29 @@ impl Analyzer {
         Ok((analyzed, registry))
     }
 
+    /// Analyze a function within an impl block (has access to other methods for cross-method analysis)
+    fn analyze_function_in_impl(
+        &mut self,
+        func: &FunctionDecl,
+        impl_block: &crate::parser::ast::ImplBlock,
+    ) -> Result<AnalyzedFunction, String> {
+        // Store current impl block for cross-method lookups
+        self.current_impl_functions = Some(
+            impl_block
+                .functions
+                .iter()
+                .map(|f| (f.name.clone(), f.clone()))
+                .collect(),
+        );
+        
+        let result = self.analyze_function(func);
+        
+        // Clear impl block after analysis
+        self.current_impl_functions = None;
+        
+        result
+    }
+    
     fn analyze_function(&mut self, func: &FunctionDecl) -> Result<AnalyzedFunction, String> {
         let mut inferred_ownership = HashMap::new();
 
@@ -2739,6 +2765,40 @@ impl Analyzer {
 
     /// Check if a function modifies self fields (for impl methods)
     fn function_modifies_self_fields(&self, func: &FunctionDecl) -> bool {
+        // THE WINDJAMMER WAY: Check ALL cases that require &mut self
+        
+        // Case 1: Return type is &mut T (requires &mut self)
+        if let Some(return_type) = &func.return_type {
+            if self.type_is_mut_ref(return_type) {
+                return true;
+            }
+        }
+        
+        // Case 2: Function calls other methods on self that need &mut self
+        if self.function_calls_mutating_self_methods(func) {
+            return true;
+        }
+        
+        // Case 3: Function modifies self fields directly
+        for stmt in &func.body {
+            if self.statement_modifies_self_fields(stmt) {
+                return true;
+            }
+        }
+        false
+    }
+    
+    /// Check if a function modifies self fields WITHOUT checking for method calls
+    /// (prevents infinite recursion when analyzing cross-method dependencies)
+    fn function_modifies_self_fields_recursive(&self, func: &FunctionDecl) -> bool {
+        // Case 1: Return type is &mut T (requires &mut self)
+        if let Some(return_type) = &func.return_type {
+            if self.type_is_mut_ref(return_type) {
+                return true;
+            }
+        }
+        
+        // Case 2: Function modifies self fields directly
         for stmt in &func.body {
             if self.statement_modifies_self_fields(stmt) {
                 return true;
@@ -2747,6 +2807,92 @@ impl Analyzer {
         false
     }
 
+    /// Check if a type contains a mutable reference (&mut T)
+    /// This includes Option<&mut T>, Result<&mut T, E>, Vec<&mut T>, etc.
+    fn type_is_mut_ref(&self, ty: &Type) -> bool {
+        match ty {
+            Type::MutableReference(_) => true,
+            Type::Option(inner) | Type::Vec(inner) | Type::Reference(inner) => {
+                self.type_is_mut_ref(inner)
+            }
+            Type::Result(ok, err) => self.type_is_mut_ref(ok) || self.type_is_mut_ref(err),
+            Type::Tuple(types) => types.iter().any(|t| self.type_is_mut_ref(t)),
+            Type::Parameterized(_, args) => args.iter().any(|t| self.type_is_mut_ref(t)),
+            _ => false,
+        }
+    }
+    
+    /// Check if function calls methods on self that require &mut self
+    fn function_calls_mutating_self_methods(&self, func: &FunctionDecl) -> bool {
+        for stmt in &func.body {
+            if self.statement_calls_mutating_self_methods(stmt) {
+                return true;
+            }
+        }
+        false
+    }
+    
+    /// Check if statement calls methods on self that require &mut self
+    fn statement_calls_mutating_self_methods(&self, stmt: &Statement) -> bool {
+        match stmt {
+            Statement::Expression { expr, .. } => {
+                self.expression_calls_mutating_self_methods(expr)
+            }
+            Statement::If {
+                then_block,
+                else_block,
+                ..
+            } => {
+                then_block
+                    .iter()
+                    .any(|s| self.statement_calls_mutating_self_methods(s))
+                    || else_block.as_ref().is_some_and(|block| {
+                        block
+                            .iter()
+                            .any(|s| self.statement_calls_mutating_self_methods(s))
+                    })
+            }
+            Statement::While { body, .. } | Statement::For { body, .. } => body
+                .iter()
+                .any(|s| self.statement_calls_mutating_self_methods(s)),
+            _ => false,
+        }
+    }
+    
+    /// Check if expression calls methods on self that require &mut self
+    fn expression_calls_mutating_self_methods(&self, expr: &Expression) -> bool {
+        match expr {
+            Expression::MethodCall { object, method, .. } => {
+                // Check if calling a method on self (not self.field, just self)
+                if let Expression::Identifier { name, .. } = &**object {
+                    if name == "self" {
+                        // THE WINDJAMMER WAY: Check if this method requires &mut self
+                        // 1. Check hardcoded stdlib mutating methods
+                        if self.is_mutating_method(method) {
+                            return true;
+                        }
+                        
+                        // 2. Check methods in current impl block
+                        if let Some(impl_functions) = &self.current_impl_functions {
+                            if let Some(called_func) = impl_functions.get(method) {
+                                // Check if the called method modifies self fields
+                                // or returns &mut T (which requires &mut self)
+                                if self.function_modifies_self_fields_recursive(called_func) {
+                                    return true;
+                                }
+                            }
+                        }
+                    }
+                }
+                false
+            }
+            Expression::Block { statements, .. } => statements
+                .iter()
+                .any(|s| self.statement_calls_mutating_self_methods(s)),
+            _ => false,
+        }
+    }
+    
     /// Check if a statement modifies self fields
     fn statement_modifies_self_fields(&self, stmt: &Statement) -> bool {
         match stmt {
