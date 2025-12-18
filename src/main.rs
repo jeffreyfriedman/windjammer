@@ -492,6 +492,12 @@ pub fn build_project(path: &Path, output: &Path, target: CompilationTarget) -> R
     }
 
     if !has_errors {
+        // THE WINDJAMMER WAY: Generate lib.rs FIRST (before Cargo.toml) for multi-file projects
+        // This allows Cargo.toml generation to detect lib.rs and create [lib] instead of [[bin]]
+        if wj_files.len() > 1 {
+            generate_nested_module_structure(path, output)?;
+        }
+        
         // Create Cargo.toml with stdlib and external dependencies (unless it's a component project)
         if !is_component_project {
             // THE WINDJAMMER WAY: Filter out internal modules from external_crates
@@ -517,12 +523,6 @@ pub fn build_project(path: &Path, output: &Path, target: CompilationTarget) -> R
                 .collect();
             
             create_cargo_toml_with_deps(output, &all_stdlib_modules, &filtered_external_crates, target)?;
-        }
-
-        // Automatically generate mod.rs for multi-file projects
-        // This makes all compiled modules accessible to each other
-        if wj_files.len() > 1 {
-            generate_nested_module_structure(path, output)?;
         }
 
         println!("\n{} Transpilation complete!", "Success!".green().bold());
@@ -1487,26 +1487,38 @@ fn create_cargo_toml_with_deps(
         format!("[dependencies]\n{}\n\n", deps.join("\n"))
     };
 
-    // Find all .rs files to create [[bin]] sections
-    let mut bin_sections = Vec::new();
-    if let Ok(entries) = fs::read_dir(output_dir) {
-        for entry in entries.flatten() {
-            if let Some(filename) = entry.file_name().to_str() {
-                if filename.ends_with(".rs") && filename != "lib.rs" {
-                    let bin_name = filename.strip_suffix(".rs").unwrap_or(filename);
-                    bin_sections.push(format!(
-                        "[[bin]]\nname = \"{}\"\npath = \"{}\"\n",
-                        bin_name, filename
-                    ));
+    // THE WINDJAMMER WAY: Check if lib.rs exists to determine if this is a library or binary project
+    let has_lib_rs = output_dir.join("lib.rs").exists();
+    let has_main_rs = output_dir.join("main.rs").exists();
+
+    let lib_or_bin_section = if has_lib_rs {
+        // Library project - generate [lib] section
+        format!("[lib]\nname = \"windjammer_app\"\npath = \"lib.rs\"\n\n")
+    } else if has_main_rs {
+        // Binary project with main.rs - generate [[bin]] section
+        format!("[[bin]]\nname = \"windjammer-app\"\npath = \"main.rs\"\n\n")
+    } else {
+        // Multiple standalone files - generate [[bin]] sections for each
+        let mut bin_sections = Vec::new();
+        if let Ok(entries) = fs::read_dir(output_dir) {
+            for entry in entries.flatten() {
+                if let Some(filename) = entry.file_name().to_str() {
+                    if filename.ends_with(".rs") {
+                        let bin_name = filename.strip_suffix(".rs").unwrap_or(filename);
+                        bin_sections.push(format!(
+                            "[[bin]]\nname = \"{}\"\npath = \"{}\"\n",
+                            bin_name, filename
+                        ));
+                    }
                 }
             }
         }
-    }
-
-    let bin_section = if !bin_sections.is_empty() {
-        format!("{}\n", bin_sections.join("\n"))
-    } else {
-        String::new()
+        
+        if !bin_sections.is_empty() {
+            format!("{}\n", bin_sections.join("\n"))
+        } else {
+            String::new()
+        }
     };
 
     let cargo_toml = format!(
@@ -1521,7 +1533,7 @@ edition = "2021"
 {}{}[profile.release]
 opt-level = 3
 "#,
-        deps_section, bin_section
+        deps_section, lib_or_bin_section
     );
 
     let cargo_toml_path = output_dir.join("Cargo.toml");
