@@ -9,6 +9,7 @@
 // This is NOT just copying Rust's module system!
 // Windjammer infers structure while Rust forces manual declaration.
 
+use std::collections::HashSet;
 use std::fs;
 use std::path::{Path, PathBuf};
 use anyhow::{Context, Result};
@@ -200,6 +201,20 @@ pub fn generate_lib_rs(module_tree: &ModuleTree) -> Result<String> {
 pub fn generate_mod_rs_for_submodule(module: &Module) -> Result<String> {
     let mut content = String::from("// Auto-generated mod.rs by Windjammer\n\n");
     
+    // THE WINDJAMMER WAY: Find all .wj files in the directory (except mod.wj)
+    let mut module_files = Vec::new();
+    if let Ok(entries) = fs::read_dir(&module.path) {
+        for entry in entries.flatten() {
+            if let Some(filename) = entry.file_name().to_str() {
+                if filename.ends_with(".wj") && filename != "mod.wj" {
+                    let module_name = filename.strip_suffix(".wj").unwrap().to_string();
+                    module_files.push(module_name);
+                }
+            }
+        }
+    }
+    module_files.sort();
+    
     // Check if this module has a mod.wj
     let mod_wj_path = module.path.join("mod.wj");
     let has_mod_wj = mod_wj_path.exists();
@@ -209,14 +224,26 @@ pub fn generate_mod_rs_for_submodule(module: &Module) -> Result<String> {
         let mod_content = fs::read_to_string(&mod_wj_path)?;
         let (pub_mods, pub_uses) = parse_mod_declarations(&mod_content);
         
-        // Generate pub mod declarations for submodules
-        content.push_str("// Submodule declarations\n");
-        for submodule in &module.submodules {
-            if pub_mods.is_empty() || pub_mods.contains(&submodule.name) {
-                if submodule.is_public {
-                    content.push_str(&format!("pub mod {};\n", submodule.name));
-                } else {
-                    content.push_str(&format!("mod {};\n", submodule.name));
+        // Generate pub mod declarations for .wj files in this directory (excluding directories)
+        content.push_str("// Module file declarations\n");
+        let submodule_names: HashSet<&String> = module.submodules.iter().map(|s| &s.name).collect();
+        for module_file in &module_files {
+            // Only include if it's not a subdirectory
+            if !submodule_names.contains(module_file) && (pub_mods.is_empty() || pub_mods.contains(module_file)) {
+                content.push_str(&format!("pub mod {};\n", module_file));
+            }
+        }
+        
+        // Generate pub mod declarations for subdirectories only
+        if !module.submodules.is_empty() {
+            content.push_str("\n// Submodule declarations\n");
+            for submodule in &module.submodules {
+                if pub_mods.is_empty() || pub_mods.contains(&submodule.name) {
+                    if submodule.is_public {
+                        content.push_str(&format!("pub mod {};\n", submodule.name));
+                    } else {
+                        content.push_str(&format!("mod {};\n", submodule.name));
+                    }
                 }
             }
         }
@@ -229,13 +256,23 @@ pub fn generate_mod_rs_for_submodule(module: &Module) -> Result<String> {
             }
         }
     } else {
-        // No mod.wj - auto-generate declarations
-        content.push_str("// Auto-discovered submodules\n");
-        for submodule in &module.submodules {
-            content.push_str(&format!("pub mod {};\n", submodule.name));
+        // No mod.wj - auto-generate declarations for all .wj files and subdirectories
+        content.push_str("// Auto-discovered modules\n");
+        for module_file in &module_files {
+            content.push_str(&format!("pub mod {};\n", module_file));
+        }
+        
+        if !module.submodules.is_empty() {
+            content.push_str("\n// Auto-discovered submodules\n");
+            for submodule in &module.submodules {
+                content.push_str(&format!("pub mod {};\n", submodule.name));
+            }
         }
         
         content.push_str("\n// Auto-generated re-exports\n");
+        for module_file in &module_files {
+            content.push_str(&format!("pub use {}::*;\n", module_file));
+        }
         for submodule in &module.submodules {
             content.push_str(&format!("pub use {}::*;\n", submodule.name));
         }
@@ -258,6 +295,8 @@ fn parse_mod_declarations(content: &str) -> (Vec<String>, Vec<String>) {
         if trimmed.starts_with("pub mod ") {
             if let Some(name) = trimmed.strip_prefix("pub mod ")
                 .and_then(|s| s.split_whitespace().next()) {
+                // Remove trailing semicolon from module name
+                let name = name.trim_end_matches(';');
                 pub_mods.push(name.to_string());
             }
         }
