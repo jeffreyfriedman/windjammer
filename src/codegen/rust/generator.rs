@@ -896,6 +896,8 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
         // IMPORTANT: Distinguish between:
         // 1. Directory prefixes (math, rendering, physics) - should be stripped
         // 2. Actual module files (texture_atlas, sprite_region) - should be preserved
+        // THE WINDJAMMER WAY: With nested module system (lib.rs), use crate:: for cross-directory imports
+        // Only use super:: for same-directory imports
         let directory_prefixes = [
             "math",
             "rendering",
@@ -906,6 +908,8 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
             "input",
             "game_loop",
             "world",
+            "debug",
+            "assets",
         ];
         let common_sibling_modules = [
             "vec2",
@@ -957,11 +961,9 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
 
         if let Some(alias_name) = alias {
             if is_directory_prefix {
-                // Strip directory prefix: math::Vec2 as V -> use super::Vec2 as V;
-                let rest = rust_path
-                    .strip_prefix(&format!("{}::", first_segment))
-                    .unwrap_or(&rust_path);
-                format!("use super::{} as {};\n", rest, alias_name)
+                // THE WINDJAMMER WAY: Use crate:: for cross-directory imports
+                // math::Vec2 as V -> use crate::math::Vec2 as V;
+                format!("use crate::{} as {};\n", rust_path, alias_name)
             } else if is_actual_module_file {
                 // Keep module path for actual module files: texture_atlas::TextureAtlas as TA -> use super::texture_atlas::TextureAtlas as TA;
                 format!("use super::{} as {};\n", rust_path, alias_name)
@@ -973,16 +975,9 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
             if rust_path.ends_with("::*") {
                 format!("use {};\n", rust_path)
             } else if is_directory_prefix {
-                // Strip directory prefix: math::Vec2 -> use super::Vec2;
-                let rest = rust_path
-                    .strip_prefix(&format!("{}::", first_segment))
-                    .unwrap_or(&rust_path);
-                if rest == rust_path {
-                    // Just the directory name
-                    format!("use super::{};\n", first_segment)
-                } else {
-                    format!("use super::{};\n", rest)
-                }
+                // THE WINDJAMMER WAY: Use crate:: for cross-directory imports
+                // math::Vec2 -> use crate::math::Vec2;
+                format!("use crate::{};\n", rust_path)
             } else if is_actual_module_file {
                 // Keep full path for actual module files to avoid ambiguity
                 // texture_atlas::TextureAtlas -> use super::texture_atlas::TextureAtlas;
