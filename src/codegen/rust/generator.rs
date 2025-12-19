@@ -50,6 +50,7 @@ pub struct CodeGenerator {
     current_statement_idx: usize,
     // IMPLICIT SELF SUPPORT: Track struct fields for implicit self references
     current_struct_fields: std::collections::HashSet<String>, // Field names in current impl block
+    current_struct_name: Option<String>, // Name of struct in current impl block
     in_impl_block: bool, // true if currently generating code for an impl block
     // FUNCTION CONTEXT: Track current function parameters for compound assignment optimization
     current_function_params: Vec<crate::parser::Parameter>, // Parameters of the current function
@@ -113,6 +114,7 @@ impl CodeGenerator {
             auto_clone_analysis: None,
             current_statement_idx: 0,
             current_struct_fields: std::collections::HashSet::new(),
+            current_struct_name: None,
             in_impl_block: false,
             current_function_params: Vec::new(),
             current_function_return_type: None,
@@ -552,7 +554,8 @@ impl CodeGenerator {
                 Item::Impl {
                     block: impl_block, ..
                 } => {
-                    // Set the struct fields for implicit self support
+                    // Set the struct name and fields for implicit self support
+                    self.current_struct_name = Some(impl_block.type_name.clone());
                     if let Some(fields) = struct_fields.get(&impl_block.type_name) {
                         self.current_struct_fields = fields.iter().cloned().collect();
                     } else {
@@ -564,6 +567,7 @@ impl CodeGenerator {
                     body.push_str("\n\n");
 
                     self.in_impl_block = false;
+                    self.current_struct_name = None;
                     self.current_struct_fields.clear();
                 }
                 _ => {}
@@ -2005,10 +2009,24 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
         output.push('(');
 
         // Add implicit &self or &mut self for impl block methods that access fields
+        // THE WINDJAMMER WAY: Constructors (associated functions) should NOT get self added!
         let mut params: Vec<String> = Vec::new();
         let has_explicit_self = func.parameters.iter().any(|p| p.name == "self");
+        
+        // Check if this is a constructor (associated function returning the struct type)
+        // A constructor returns the struct being implemented, e.g., fn new() -> Tilemap
+        let is_constructor = !has_explicit_self && {
+            if let Some(Type::Custom(return_type_name)) = &func.return_type {
+                // Check if return type matches current struct name
+                self.current_struct_name
+                    .as_ref()
+                    .is_some_and(|struct_name| struct_name == return_type_name)
+            } else {
+                false
+            }
+        };
 
-        if self.in_impl_block && !has_explicit_self && !self.current_struct_fields.is_empty() {
+        if self.in_impl_block && !has_explicit_self && !self.current_struct_fields.is_empty() && !is_constructor {
             // Check if function body mutates any struct fields
             let ctx =
                 self_analysis::AnalysisContext::new(&func.parameters, &self.current_struct_fields);
