@@ -852,6 +852,21 @@ impl Analyzer {
             Statement::For { body, .. } => {
                 self.stmts_only_use_in_read_only_fns(name, body, read_only_fns)
             }
+            Statement::Assignment { target, value, .. } => {
+                // THE WINDJAMMER WAY: Field assignments are NOT read-only!
+                // If assigning parameter to a field: self.name = name
+                // This requires owned String, not &str
+                if let Expression::FieldAccess { object, .. } = target {
+                    if matches!(&**object, Expression::Identifier { name: id, .. } if id == "self") {
+                        if matches!(value, Expression::Identifier { name: id, .. } if id == name) {
+                            // Direct field assignment of parameter → NOT read-only!
+                            return false;
+                        }
+                    }
+                }
+                // Other assignments are considered read-only
+                true
+            }
             _ => true, // Other statements don't use the parameter
         }
     }
