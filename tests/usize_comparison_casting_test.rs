@@ -138,3 +138,4 @@ fn test_len_in_while_loop_condition() {
         generated
     );
 }
+

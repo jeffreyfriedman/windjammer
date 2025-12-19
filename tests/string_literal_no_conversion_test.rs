@@ -169,3 +169,4 @@ fn test_mixed_str_and_string_params() {
         generated
     );
 }
+
