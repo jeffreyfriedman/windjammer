@@ -73,3 +73,4 @@ impl Panel {
         generated
     );
 }
+

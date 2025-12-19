@@ -171,3 +171,4 @@ This removal makes Windjammer more **Rust-like** (explicit over implicit) and mo
 **Lines:** -524  
 **Tests:** 231/231 passing ✅
 
+

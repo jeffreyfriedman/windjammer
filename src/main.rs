@@ -466,11 +466,12 @@ pub fn build_project(path: &Path, output: &Path, target: CompilationTarget) -> R
     };
 
     // PASS 2: Full compilation with all traits available
+    let is_multi_file = wj_files.len() > 1;
     for file in &wj_files {
         let file_name = file.file_name().unwrap().to_str().unwrap();
         print!("  Compiling {:?}... ", file_name);
 
-        match compile_file_with_compiler(source_root, file, output, &mut module_compiler) {
+        match compile_file_with_compiler(source_root, file, output, &mut module_compiler, is_multi_file) {
             Ok((stdlib_modules, external_crates)) => {
                 println!("{}", "✓".green());
                 // If both are empty, this might be a component (which handles its own Cargo.toml)
@@ -1042,7 +1043,8 @@ fn compile_file(
     let mut module_compiler = ModuleCompiler::new(target);
     // For single-file compilation, use parent directory as source root
     let source_root = input_path.parent().unwrap_or(Path::new("."));
-    compile_file_with_compiler(source_root, input_path, output_dir, &mut module_compiler)
+    let is_multi_file = false; // Single file compilation
+    compile_file_with_compiler(source_root, input_path, output_dir, &mut module_compiler, is_multi_file)
 }
 
 /// Compile a file with a provided ModuleCompiler (for shared trait registry)
@@ -1051,6 +1053,7 @@ fn compile_file_with_compiler(
     input_path: &Path,
     output_dir: &Path,
     module_compiler: &mut ModuleCompiler,
+    is_multi_file_project: bool,
 ) -> Result<(HashSet<String>, Vec<String>)> {
     let target = module_compiler.target;
 
@@ -1237,12 +1240,21 @@ fn compile_file_with_compiler(
         result
     };
 
-    // Combine module code with main code
-    let module_code = module_compiler.get_compiled_modules().join("\n");
-    let combined_code = if module_code.is_empty() {
+    // THE WINDJAMMER WAY: Don't inline modules in multi-file projects!
+    // The module system (lib.rs + mod.rs) handles module structure.
+    // Only inline modules for single-file compilation (legacy behavior).
+    let combined_code = if is_multi_file_project {
+        // Multi-file project: Don't inline modules, just use imports
+        // The module system handles everything via lib.rs/mod.rs
         rust_code
     } else {
-        format!("{}\n\n{}", module_code, rust_code)
+        // Single-file or legacy: Inline compiled modules
+        let module_code = module_compiler.get_compiled_modules().join("\n");
+        if module_code.is_empty() {
+            rust_code
+        } else {
+            format!("{}\n\n{}", module_code, rust_code)
+        }
     };
 
     // Write output (preserving directory structure)

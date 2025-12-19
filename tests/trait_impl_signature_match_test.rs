@@ -180,3 +180,4 @@ impl GameLoop for MyGame {
         rust_stderr
     );
 }
+

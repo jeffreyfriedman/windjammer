@@ -234,3 +234,4 @@ impl Drawable for Sprite {
         trait_section
     );
 }
+
