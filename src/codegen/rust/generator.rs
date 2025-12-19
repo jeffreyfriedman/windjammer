@@ -3256,17 +3256,22 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
                     _ => self.generate_expression(right),
                 };
 
-                // FIXED: Don't auto-cast in comparisons
-                // WINDJAMMER PHILOSOPHY: Keep types compatible, but don't force conversions
+                // WINDJAMMER PHILOSOPHY: Auto-cast int/usize in comparisons
+                // When comparing int (i64) with usize, automatically cast to make it work.
                 //
-                // The issue: We can't reliably detect int vs usize variables without full type info
-                // The solution: Fix source code to use appropriate types (usize for indices)
+                // Heuristic: Cast .len() (usize) to i64 to match int variables
+                // This is safe because:
+                // 1. Most collections fit in i64 range
+                // 2. Windjammer uses int (i64) for indices by default
+                // 3. Makes comparisons "just work" without manual casts
                 //
-                // When both sides are usize → no cast
-                // When mixing int/usize → developer should use correct type
-                if is_comparison && left_is_usize != right_is_usize {
-                    // NO AUTO-CASTING - too error-prone without full type information
-                    // The Windjammer source code should use usize for array indices
+                // Example: if index >= items.len() → if index >= items.len() as i64
+                if is_comparison && left_is_usize && !right_is_usize {
+                    // Left is usize (e.g., .len()), right is int → cast left to i64
+                    left_str = format!("({} as i64)", left_str);
+                } else if is_comparison && right_is_usize && !left_is_usize {
+                    // Right is usize (e.g., .len()), left is int → cast right to i64
+                    right_str = format!("({} as i64)", right_str);
                 }
 
                 // AUTO-CAST: When doing arithmetic between usize and int literal, cast literal to usize
@@ -4227,27 +4232,20 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
                     idx_str
                 };
 
-                // WINDJAMMER PHILOSOPHY: Auto-borrow for vec indexing
-                // When you index into a Vec in Windjammer, we automatically borrow
-                // to prevent E0507 (cannot move out of index).
-                //
-                // Rust behavior:
-                // - vec[0] tries to move the value (fails for non-Copy types)
-                // - &vec[0] borrows the value (always works)
-                //
-                // Windjammer behavior:
-                // - let x = vec[0] -> let x = &vec[0] (auto-borrow)
-                // - return vec[0] -> return vec[0].clone() (auto-clone when needed)
-                //
-                // We use a simple heuristic:
-                // 1. If assigned to a variable -> borrow (&vec[0])
-                // 2. If returned -> clone (vec[0].clone())
-                // 3. If passed to function -> depends on function signature
-                //
-                // For now, we'll always borrow and let Rust's auto-deref handle it.
-                // If the value needs to be owned, Rust will tell us and we can add .clone()
-                let base_expr = format!("&{}[{}]", obj_str, final_idx);
+                let base_expr = format!("{}[{}]", obj_str, final_idx);
 
+                // TODO: Vec indexing of non-Copy types causes E0507
+                // Need to implement context-aware borrowing:
+                // - If used for field access: &vec[idx]
+                // - If returned/stored: vec[idx].clone()
+                // - If Copy type: vec[idx] (no change)
+                //
+                // For now, this generates vec[idx] which works for Copy types
+                // but fails for non-Copy types. The proper fix requires:
+                // 1. Type inference to detect non-Copy types
+                // 2. Usage analysis to determine if borrow or clone is needed
+                // 3. Context-aware code generation
+                //
                 // AUTO-CLONE: Check if this index expression needs to be cloned
                 if let Some(path) = ast_utilities::extract_field_access_path(expr) {
                     if let Some(ref analysis) = self.auto_clone_analysis {
@@ -4256,9 +4254,7 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
                             .is_some()
                         {
                             // Automatically insert .clone() for index expression!
-                            // Remove the & we just added and add .clone() instead
-                            let base_without_ref = format!("{}[{}]", obj_str, final_idx);
-                            return format!("{}.clone()", base_without_ref);
+                            return format!("{}.clone()", base_expr);
                         }
                     }
                 }
