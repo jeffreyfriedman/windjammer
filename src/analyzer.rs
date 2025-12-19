@@ -482,6 +482,51 @@ impl Analyzer {
                         analyzed.push(analyzed_func);
                     }
                 }
+                Item::Trait { decl, .. } => {
+                    // Analyze trait methods with default implementations
+                    for method in &decl.methods {
+                        // Only analyze methods with bodies (default implementations)
+                        if method.body.is_none() {
+                            // Abstract method - no analysis needed (no body)
+                            continue;
+                        }
+                        
+                        // Convert TraitMethod to FunctionDecl for analysis
+                        let func = FunctionDecl {
+                            name: method.name.clone(),
+                            is_pub: true, // Trait methods are public
+                            is_extern: false,
+                            type_params: vec![],
+                            where_clause: vec![],
+                            decorators: vec![],
+                            is_async: method.is_async,
+                            parameters: method.parameters.clone(),
+                            return_type: method.return_type.clone(),
+                            body: method.body.clone().unwrap_or_default(),
+                            parent_type: None,
+                            doc_comment: method.doc_comment.clone(),
+                        };
+                        
+                        // Trait methods with default implementations should use &self
+                        // to work with unsized types. The Windjammer way: make it work!
+                        let mut analyzed_func = self.analyze_trait_method(&func)?;
+
+                        // PHASE 7: Detect const/static optimizations
+                        analyzed_func.const_static_optimizations =
+                            self.detect_const_static_opportunities(&analyzed_func);
+
+                        // PHASE 8: Detect SmallVec optimizations
+                        analyzed_func.smallvec_optimizations =
+                            self.detect_smallvec_opportunities(&func);
+
+                        // PHASE 9: Detect Cow optimizations
+                        analyzed_func.cow_optimizations = self.detect_cow_opportunities(&func);
+
+                        let signature = self.build_signature(&analyzed_func);
+                        registry.add_function(func.name.clone(), signature);
+                        analyzed.push(analyzed_func);
+                    }
+                }
                 Item::Static { mutable, value, .. } => {
                     // Analyze static declarations for const promotion
                     if !mutable && self.is_const_evaluable(value) {
@@ -494,6 +539,38 @@ impl Analyzer {
         }
 
         Ok((analyzed, registry))
+    }
+
+    /// Analyze a trait method with default implementation
+    /// Trait methods must use &self or &mut self (not owned self)
+    /// to work with unsized types
+    fn analyze_trait_method(&mut self, func: &FunctionDecl) -> Result<AnalyzedFunction, String> {
+        // Analyze the function normally first
+        let mut analyzed = self.analyze_function(func)?;
+        
+        // WINDJAMMER PHILOSOPHY: Force &self for trait methods with default impls
+        // Rust requires trait methods to use references (not owned self) unless
+        // you add `where Self: Sized`, which is too complex for users.
+        // 
+        // The Windjammer way: automatically infer &self for trait methods!
+        for (param_name, ownership) in analyzed.inferred_ownership.iter_mut() {
+            if param_name == "self" {
+                // Check if it was inferred as Owned
+                if *ownership == OwnershipMode::Owned {
+                    // Check if the method modifies self
+                    let modifies_self = self.function_modifies_self_fields(func);
+                    
+                    // Use &mut self if it modifies, &self otherwise
+                    *ownership = if modifies_self {
+                        OwnershipMode::MutBorrowed
+                    } else {
+                        OwnershipMode::Borrowed
+                    };
+                }
+            }
+        }
+        
+        Ok(analyzed)
     }
 
     /// Analyze a function within an impl block (has access to other methods for cross-method analysis)
