@@ -3491,7 +3491,18 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
                 }
 
                 // Look up signature and clone it to avoid borrow conflicts
-                let signature = self.signature_registry.get_signature(&func_name).cloned();
+                // THE WINDJAMMER WAY: Try qualified name first, then simple name
+                // e.g., "Sound::new" -> try "Sound::new", then "new"
+                let signature = self.signature_registry.get_signature(&func_name).cloned()
+                    .or_else(|| {
+                        // If qualified lookup fails, try simple name (just the method)
+                        if let Some(pos) = func_name.rfind("::") {
+                            let simple_name = &func_name[pos + 2..];
+                            self.signature_registry.get_signature(simple_name).cloned()
+                        } else {
+                            None
+                        }
+                    });
 
                 let args: Vec<String> = arguments
                     .iter()
@@ -3500,6 +3511,7 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
                         let mut arg_str = self.generate_expression(arg);
 
                         // Auto-convert string literals to String for functions expecting owned String
+                        // THE WINDJAMMER WAY: Smart inference based on available information!
                         if matches!(
                             arg,
                             Expression::Literal {
@@ -3513,13 +3525,16 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
                                     // Convert if parameter expects owned String
                                     matches!(ownership, OwnershipMode::Owned)
                                 } else {
-                                    // No ownership info - check if it's a stdlib function
-                                    // (stdlib functions typically expect owned String)
-                                    func_str.contains("::")
+                                    // No ownership info for this param
+                                    // THE WINDJAMMER WAY: Heuristic for constructors
+                                    // Functions named 'new' (or Type::new) taking string params likely expect String
+                                    func_name == "new" || func_name.ends_with("::new")
                                 }
                             } else {
-                                // No signature found - check if it's a stdlib function
-                                func_str.contains("::")
+                                // No signature found
+                                // THE WINDJAMMER WAY: Heuristic for constructors
+                                // Functions named 'new' (or Type::new) taking string params likely expect String
+                                func_name == "new" || func_name.ends_with("::new")
                             };
 
                             if should_convert {
