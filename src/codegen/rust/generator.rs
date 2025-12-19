@@ -4227,7 +4227,26 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
                     idx_str
                 };
 
-                let base_expr = format!("{}[{}]", obj_str, final_idx);
+                // WINDJAMMER PHILOSOPHY: Auto-borrow for vec indexing
+                // When you index into a Vec in Windjammer, we automatically borrow
+                // to prevent E0507 (cannot move out of index).
+                //
+                // Rust behavior:
+                // - vec[0] tries to move the value (fails for non-Copy types)
+                // - &vec[0] borrows the value (always works)
+                //
+                // Windjammer behavior:
+                // - let x = vec[0] -> let x = &vec[0] (auto-borrow)
+                // - return vec[0] -> return vec[0].clone() (auto-clone when needed)
+                //
+                // We use a simple heuristic:
+                // 1. If assigned to a variable -> borrow (&vec[0])
+                // 2. If returned -> clone (vec[0].clone())
+                // 3. If passed to function -> depends on function signature
+                //
+                // For now, we'll always borrow and let Rust's auto-deref handle it.
+                // If the value needs to be owned, Rust will tell us and we can add .clone()
+                let base_expr = format!("&{}[{}]", obj_str, final_idx);
 
                 // AUTO-CLONE: Check if this index expression needs to be cloned
                 if let Some(path) = ast_utilities::extract_field_access_path(expr) {
@@ -4237,7 +4256,9 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
                             .is_some()
                         {
                             // Automatically insert .clone() for index expression!
-                            return format!("{}.clone()", base_expr);
+                            // Remove the & we just added and add .clone() instead
+                            let base_without_ref = format!("{}[{}]", obj_str, final_idx);
+                            return format!("{}.clone()", base_without_ref);
                         }
                     }
                 }
