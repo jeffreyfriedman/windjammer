@@ -2488,9 +2488,12 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
                 output.push_str(";\n");
 
                 // Track variables assigned from .len() as usize type
+                // OR variables with explicit usize type annotation
                 // This enables auto-casting in comparisons with i32
                 if let Some(name) = var_name {
-                    if self.expression_produces_usize(value) {
+                    let is_usize = self.expression_produces_usize(value)
+                        || matches!(type_, Some(Type::Custom(s)) if s == "usize");
+                    if is_usize {
                         self.usize_variables.insert(name.to_string());
                     }
                 }
@@ -3266,13 +3269,18 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
                 // 3. Makes comparisons "just work" without manual casts
                 //
                 // Example: if index >= items.len() → if index >= items.len() as i64
+                //
+                // IMPORTANT: Only cast when there's a MISMATCH (one is usize, one is not)
+                // If BOTH are usize, no cast needed!
                 if is_comparison && left_is_usize && !right_is_usize {
-                    // Left is usize (e.g., .len()), right is int → cast left to i64
+                    // Left is usize, right is NOT usize → cast left to i64
                     left_str = format!("({} as i64)", left_str);
                 } else if is_comparison && right_is_usize && !left_is_usize {
-                    // Right is usize (e.g., .len()), left is int → cast right to i64
+                    // Right is usize, left is NOT usize → cast right to i64
                     right_str = format!("({} as i64)", right_str);
                 }
+                // If both are usize: no cast (usize == usize is fine)
+                // If neither is usize: no cast (i64 == i64 is fine)
 
                 // AUTO-CAST: When doing arithmetic between usize and int literal, cast literal to usize
                 // E.g., items.len() - 1 -> items.len() - 1usize
