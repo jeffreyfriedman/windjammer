@@ -2759,7 +2759,7 @@ impl Analyzer {
     fn is_mutating_method(&self, method: &str) -> bool {
         matches!(
             method,
-            "push" | "push_str" | "clear" | "pop" | "remove" | "insert" | "append"
+            "push" | "push_str" | "clear" | "pop" | "remove" | "insert" | "append" | "get_mut" | "allocate" | "free"
         )
     }
 
@@ -2926,6 +2926,16 @@ impl Analyzer {
                     // Match arms have an expression body, check if it contains modifications
                     self.expression_contains_self_field_mutations(&arm.body)
                 })
+            }
+            Statement::Return { value, .. } => {
+                // Check if the return expression contains mutations of self fields
+                // e.g., return self.allocator.allocate()
+                value.as_ref().is_some_and(|expr| self.expression_mutates_self_fields(expr))
+            }
+            Statement::Let { value, .. } => {
+                // Check if the let binding contains mutations of self fields
+                // e.g., let x = self.allocator.allocate()
+                self.expression_mutates_self_fields(value)
             }
             _ => false,
         }
