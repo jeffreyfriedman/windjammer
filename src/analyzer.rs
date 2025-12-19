@@ -2759,7 +2759,7 @@ impl Analyzer {
     fn is_mutating_method(&self, method: &str) -> bool {
         matches!(
             method,
-            "push" | "push_str" | "clear" | "pop" | "remove" | "insert" | "append" | "get_mut" | "allocate" | "free"
+            "push" | "push_str" | "clear" | "pop" | "remove" | "insert" | "append" | "get_mut" | "allocate" | "free" | "update" | "play" | "reset"
         )
     }
 
@@ -2906,13 +2906,17 @@ impl Analyzer {
                 self.expression_mutates_self_fields(expr)
             }
             Statement::If {
+                condition,
                 then_block,
                 else_block,
                 ..
             } => {
-                then_block
-                    .iter()
-                    .any(|s| self.statement_modifies_self_fields(s))
+                // THE WINDJAMMER WAY: Check condition for mutations!
+                // if let Some(x) = self.field.get_mut() requires &mut self
+                self.expression_mutates_self_fields(condition)
+                    || then_block
+                        .iter()
+                        .any(|s| self.statement_modifies_self_fields(s))
                     || else_block.as_ref().is_some_and(|block| {
                         block.iter().any(|s| self.statement_modifies_self_fields(s))
                     })
@@ -2920,12 +2924,14 @@ impl Analyzer {
             Statement::While { body, .. } | Statement::For { body, .. } => {
                 body.iter().any(|s| self.statement_modifies_self_fields(s))
             }
-            Statement::Match { arms, .. } => {
-                // Check if any match arm modifies self fields
-                arms.iter().any(|arm| {
-                    // Match arms have an expression body, check if it contains modifications
-                    self.expression_contains_self_field_mutations(&arm.body)
-                })
+            Statement::Match { value, arms, .. } => {
+                // THE WINDJAMMER WAY: Check match value for mutations!
+                // match self.field.get_mut() requires &mut self
+                self.expression_mutates_self_fields(value)
+                    || arms.iter().any(|arm| {
+                        // Match arms have an expression body, check if it contains modifications
+                        self.expression_contains_self_field_mutations(&arm.body)
+                    })
             }
             Statement::Return { value, .. } => {
                 // Check if the return expression contains mutations of self fields
