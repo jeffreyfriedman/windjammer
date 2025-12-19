@@ -123,3 +123,4 @@ impl Vec2 {
         generated
     );
 }
+

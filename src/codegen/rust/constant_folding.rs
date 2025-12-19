@@ -115,3 +115,4 @@ pub fn try_fold_constant(expr: &Expression) -> Option<Expression> {
         _ => None,
     }
 }
+

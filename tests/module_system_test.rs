@@ -306,3 +306,4 @@ mod file_placement_tests {
         // Expected: "build/rendering/color.rs"
     }
 }
+

@@ -128,3 +128,4 @@ fn test_int_field_compared_with_len_in_if() {
         generated
     );
 }
+
