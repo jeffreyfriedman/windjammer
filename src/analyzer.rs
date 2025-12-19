@@ -334,6 +334,36 @@ impl Analyzer {
             .insert("Div".to_string(), create_binary_op_trait("Div", "div"));
         self.trait_definitions
             .insert("Rem".to_string(), create_binary_op_trait("Rem", "rem"));
+        
+        // Register unary operator traits
+        // Neg: -x
+        self.trait_definitions.insert(
+            "Neg".to_string(),
+            TraitDecl {
+                name: "Neg".to_string(),
+                generics: vec![],
+                supertraits: vec![],
+                methods: vec![TraitMethod {
+                    name: "neg".to_string(),
+                    parameters: vec![Parameter {
+                        name: "self".to_string(),
+                        pattern: None,
+                        type_: Type::Custom("Self".to_string()),
+                        ownership: OwnershipHint::Owned,  // THE WINDJAMMER WAY: Neg uses owned self!
+                        is_mutable: false,
+                    }],
+                    return_type: Some(Type::Custom("Output".to_string())),
+                    is_async: false,
+                    body: None,
+                    doc_comment: None,
+                }],
+                associated_types: vec![AssociatedType {
+                    name: "Output".to_string(),
+                    concrete_type: None,
+                }],
+                doc_comment: None,
+            },
+        );
     }
 
     /// Register trait definitions from an external program (e.g., imported module)
