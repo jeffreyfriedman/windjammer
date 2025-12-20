@@ -52,6 +52,8 @@ pub struct CodeGenerator {
     current_struct_fields: std::collections::HashSet<String>, // Field names in current impl block
     current_struct_name: Option<String>, // Name of struct in current impl block
     in_impl_block: bool, // true if currently generating code for an impl block
+    // USIZE DETECTION: Track which struct fields have type usize (for auto-casting)
+    usize_struct_fields: std::collections::HashMap<String, std::collections::HashSet<String>>, // Struct name -> usize field names
     // FUNCTION CONTEXT: Track current function parameters for compound assignment optimization
     current_function_params: Vec<crate::parser::Parameter>, // Parameters of the current function
     // FUNCTION CONTEXT: Track current function return type for string literal conversion
@@ -116,6 +118,7 @@ impl CodeGenerator {
             current_struct_fields: std::collections::HashSet::new(),
             current_struct_name: None,
             in_impl_block: false,
+            usize_struct_fields: std::collections::HashMap::new(),
             current_function_params: Vec::new(),
             current_function_return_type: None,
             workspace_root: None,
@@ -1010,6 +1013,15 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
 
     fn generate_struct(&mut self, s: &StructDecl) -> String {
         let mut output = String::new();
+
+        // Track which fields have type usize (for auto-casting in comparisons)
+        let mut usize_fields = std::collections::HashSet::new();
+        for field in &s.fields {
+            if matches!(field.field_type, Type::Custom(ref name) if name == "usize") {
+                usize_fields.insert(field.name.clone());
+            }
+        }
+        self.usize_struct_fields.insert(s.name.clone(), usize_fields);
 
         // Convert decorators to Rust attributes
         for decorator in &s.decorators {
@@ -3161,7 +3173,38 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
                 self.expression_produces_usize(left) || self.expression_produces_usize(right)
             }
             // Variables assigned from .len()
-            Expression::Identifier { name, .. } => self.usize_variables.contains(name),
+            Expression::Identifier { name, .. } => {
+                if self.usize_variables.contains(name) {
+                    return true;
+                }
+                
+                // Check if this is a struct field with usize type (in impl block)
+                if self.in_impl_block && self.current_struct_fields.contains(name) {
+                    // Look up the struct to see if this field is usize
+                    if let Some(struct_name) = &self.current_struct_name {
+                        if let Some(usize_fields) = self.usize_struct_fields.get(struct_name) {
+                            return usize_fields.contains(name);
+                        }
+                    }
+                }
+                
+                false
+            }
+            // Field access: self.field_name or obj.field_name
+            Expression::FieldAccess { object, field, .. } => {
+                // Check if accessing a usize field on self
+                if let Expression::Identifier { name: obj_name, .. } = &**object {
+                    if obj_name == "self" && self.in_impl_block {
+                        // Look up struct to see if this field is usize
+                        if let Some(struct_name) = &self.current_struct_name {
+                            if let Some(usize_fields) = self.usize_struct_fields.get(struct_name) {
+                                return usize_fields.contains(field);
+                            }
+                        }
+                    }
+                }
+                false
+            }
             _ => false,
         }
     }
