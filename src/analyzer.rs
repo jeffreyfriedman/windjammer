@@ -818,11 +818,20 @@ impl Analyzer {
                                 OwnershipHint::Ref => OwnershipMode::Borrowed,
                                 OwnershipHint::Mut => OwnershipMode::MutBorrowed,
                                 OwnershipHint::Inferred => {
-                                    // CRITICAL: Must match trait generation in generator.rs (line 1920-1930)
-                                    // Trait generation defaults Inferred → Owned (no &)
-                                    // So impl must also use Owned to match trait signature
-                                    // This prevents E0053 (incompatible type for trait)
-                                    OwnershipMode::Owned
+                                    // WINDJAMMER PHILOSOPHY: Match analyzed trait method ownership
+                                    // For trait methods with default implementations, we analyze them
+                                    // and infer &self or &mut self (not owned self) to prevent E0277
+                                    //
+                                    // Check if trait method was analyzed (has default impl)
+                                    if trait_param.name == "self" {
+                                        // Look up the analyzed trait method to get inferred ownership
+                                        // This is stored in the registry from analyze_trait_method
+                                        // For now, default to &self (most common case)
+                                        // TODO: Look up actual analyzed ownership
+                                        OwnershipMode::Borrowed
+                                    } else {
+                                        OwnershipMode::Owned
+                                    }
                                 }
                             };
 

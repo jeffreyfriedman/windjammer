@@ -548,7 +548,7 @@ impl CodeGenerator {
                     body.push_str("\n\n");
                 }
                 Item::Trait { decl: t, .. } => {
-                    body.push_str(&self.generate_trait(t));
+                    body.push_str(&self.generate_trait_with_analysis(t, analyzed));
                     body.push_str("\n\n");
                 }
                 Item::Impl {
@@ -1270,7 +1270,11 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
         output
     }
 
-    fn generate_trait(&mut self, trait_decl: &crate::parser::TraitDecl) -> String {
+    fn generate_trait_with_analysis(
+        &mut self,
+        trait_decl: &crate::parser::TraitDecl,
+        analyzed: &[AnalyzedFunction],
+    ) -> String {
         let mut output = String::new();
 
         // TODO: Add is_pub field to TraitDecl and check it properly
@@ -1306,6 +1310,8 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
 
         // Generate trait methods
         for method in &trait_decl.methods {
+            // Look up analyzed data for this method (if it has a default impl)
+            let analyzed_method = analyzed.iter().find(|f| f.decl.name == method.name);
             output.push_str(&self.indent());
 
             if method.is_async {
@@ -1324,7 +1330,22 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
                 .iter()
                 .map(|param| {
                     use crate::parser::OwnershipHint;
-                    let type_str = match &param.ownership {
+                    
+                    // WINDJAMMER PHILOSOPHY: Use analyzed ownership for trait methods with default impls
+                    // This fixes E0277 errors where owned self causes "Self: Sized" issues
+                    let ownership = if param.name == "self" && analyzed_method.is_some() {
+                        // Use analyzer's inferred ownership
+                        match analyzed_method.unwrap().inferred_ownership.get("self") {
+                            Some(OwnershipMode::Borrowed) => OwnershipHint::Ref,
+                            Some(OwnershipMode::MutBorrowed) => OwnershipHint::Mut,
+                            Some(OwnershipMode::Owned) => OwnershipHint::Owned,
+                            None => param.ownership.clone(), // Fallback
+                        }
+                    } else {
+                        param.ownership.clone()
+                    };
+                    
+                    let type_str = match &ownership {
                         OwnershipHint::Owned => {
                             if param.name == "self" {
                                 // Trait signatures: just 'self' (no 'mut')
@@ -1346,9 +1367,8 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
                             format!("&mut {}", self.type_to_rust(&param.type_))
                         }
                         OwnershipHint::Inferred => {
-                            // TRAIT SIGNATURES: Default to owned (no &) to match Rust conventions
-                            // Trait methods take ownership by default unless explicitly marked with &
-                            // This matches Rust's trait signature semantics
+                            // TRAIT SIGNATURES: Default to &self for trait methods
+                            // This prevents E0277 (Self not Sized) errors
                             if param.name == "self" {
                                 "&self".to_string()
                             } else {
