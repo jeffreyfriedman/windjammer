@@ -2164,6 +2164,31 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
                         // For strings: Type::Reference(String) → &str, Type::String → String
                         // For other types: Apply ownership mode from analyzer
 
+                        // Special handling for `self` parameters (trait impl methods)
+                        if param.name == "self" {
+                            // Check analyzer for inferred ownership
+                            if let Some(ownership_mode) = analyzed.inferred_ownership.get(&param.name) {
+                                match ownership_mode {
+                                    OwnershipMode::MutBorrowed => return "&mut self".to_string(),
+                                    OwnershipMode::Borrowed => return "&self".to_string(),
+                                    OwnershipMode::Owned => {
+                                        // Check if function actually modifies self
+                                        if self.function_modifies_self(&analyzed.decl) {
+                                            return "mut self".to_string();
+                                        } else {
+                                            return "self".to_string();
+                                        }
+                                    }
+                                }
+                            }
+                            // Default: check if function modifies self
+                            if self.function_modifies_self(&analyzed.decl) {
+                                return "mut self".to_string();
+                            } else {
+                                return "self".to_string();
+                            }
+                        }
+
                         // Check if type already has ownership baked in (like &str from string inference)
                         if matches!(
                             inferred_type,

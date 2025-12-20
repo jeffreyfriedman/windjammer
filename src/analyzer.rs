@@ -241,6 +241,8 @@ pub struct Analyzer {
     copy_structs: HashSet<String>,
     // Track trait definitions for impl block analysis
     trait_definitions: HashMap<String, TraitDecl>,
+    // Track analyzed trait methods (trait_name -> method_name -> AnalyzedFunction)
+    analyzed_trait_methods: HashMap<String, HashMap<String, AnalyzedFunction>>,
     // Track which local variables are mutated (for automatic mut inference)
     mutated_variables: HashSet<String>,
     // Track functions in the current impl block (for cross-method analysis)
@@ -268,6 +270,7 @@ impl Analyzer {
             copy_enums: HashSet::new(),
             copy_structs: global_copy_structs, // Use global Copy structs from all files
             trait_definitions: HashMap::new(),
+            analyzed_trait_methods: HashMap::new(),
             mutated_variables: HashSet::new(),
             current_impl_functions: None,
         };
@@ -522,6 +525,12 @@ impl Analyzer {
                         // PHASE 9: Detect Cow optimizations
                         analyzed_func.cow_optimizations = self.detect_cow_opportunities(&func);
 
+                        // Store analyzed trait method for trait impl matching
+                        self.analyzed_trait_methods
+                            .entry(decl.name.clone())
+                            .or_insert_with(HashMap::new)
+                            .insert(func.name.clone(), analyzed_func.clone());
+
                         let signature = self.build_signature(&analyzed_func);
                         registry.add_function(func.name.clone(), signature);
                         analyzed.push(analyzed_func);
@@ -544,6 +553,23 @@ impl Analyzer {
     /// Analyze a trait method with default implementation
     /// Trait methods must use &self or &mut self (not owned self)
     /// to work with unsized types
+    /// Helper: Convert OwnershipHint to OwnershipMode
+    fn convert_ownership_hint_to_mode(&self, hint: &OwnershipHint, param_name: &str) -> OwnershipMode {
+        match hint {
+            OwnershipHint::Owned => OwnershipMode::Owned,
+            OwnershipHint::Ref => OwnershipMode::Borrowed,
+            OwnershipHint::Mut => OwnershipMode::MutBorrowed,
+            OwnershipHint::Inferred => {
+                // For inferred parameters, default to borrowed for self, owned otherwise
+                if param_name == "self" {
+                    OwnershipMode::Borrowed
+                } else {
+                    OwnershipMode::Owned
+                }
+            }
+        }
+    }
+
     fn analyze_trait_method(&mut self, func: &FunctionDecl) -> Result<AnalyzedFunction, String> {
         // Analyze the function normally first
         let mut analyzed = self.analyze_function(func)?;
@@ -792,6 +818,7 @@ impl Analyzer {
         // Start with regular analysis
         let mut analyzed = self.analyze_function(func)?;
 
+
         // Look up the trait definition
         // Try both the full trait name and just the last segment (e.g., "std::ops::Add" -> "Add")
         let trait_key = if let Some(pos) = trait_name.rfind("::") {
@@ -812,27 +839,25 @@ impl Analyzer {
                         if let Some(inferred_mode) =
                             analyzed.inferred_ownership.get_mut(&impl_param.name)
                         {
-                            // Convert trait's OwnershipHint to OwnershipMode
-                            let trait_mode = match &trait_param.ownership {
-                                OwnershipHint::Owned => OwnershipMode::Owned,
-                                OwnershipHint::Ref => OwnershipMode::Borrowed,
-                                OwnershipHint::Mut => OwnershipMode::MutBorrowed,
-                                OwnershipHint::Inferred => {
-                                    // WINDJAMMER PHILOSOPHY: Match analyzed trait method ownership
-                                    // For trait methods with default implementations, we analyze them
-                                    // and infer &self or &mut self (not owned self) to prevent E0277
-                                    //
-                                    // Check if trait method was analyzed (has default impl)
-                                    if trait_param.name == "self" {
-                                        // Look up the analyzed trait method to get inferred ownership
-                                        // This is stored in the registry from analyze_trait_method
-                                        // For now, default to &self (most common case)
-                                        // TODO: Look up actual analyzed ownership
-                                        OwnershipMode::Borrowed
+                            // WINDJAMMER PHILOSOPHY: Use ANALYZED trait method ownership, not AST ownership!
+                            // The AST might have `self` (Owned) but analysis infers `&self` (Borrowed).
+                            // Check if this trait method was analyzed (has default implementation)
+                            let trait_mode = if let Some(trait_methods) = self.analyzed_trait_methods.get(trait_key) {
+                                if let Some(analyzed_trait_method) = trait_methods.get(&func.name) {
+                                    // Use analyzed ownership (takes priority!)
+                                    if let Some(analyzed_ownership) = analyzed_trait_method.inferred_ownership.get(&trait_param.name) {
+                                        *analyzed_ownership
                                     } else {
-                                        OwnershipMode::Owned
+                                        // Fall back to converting AST ownership hint
+                                        self.convert_ownership_hint_to_mode(&trait_param.ownership, &trait_param.name)
                                     }
+                                } else {
+                                    // Trait method not analyzed, convert from AST
+                                    self.convert_ownership_hint_to_mode(&trait_param.ownership, &trait_param.name)
                                 }
+                            } else {
+                                // Trait not analyzed, convert from AST
+                                self.convert_ownership_hint_to_mode(&trait_param.ownership, &trait_param.name)
                             };
 
                             // Use trait's ownership mode
@@ -842,6 +867,7 @@ impl Analyzer {
                 }
             }
         }
+
 
         Ok(analyzed)
     }
