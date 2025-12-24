@@ -3,11 +3,12 @@
 
 use std::fs;
 use std::process::Command;
+use tempfile::TempDir;
 
 fn compile_code(code: &str) -> Result<String, String> {
-    let test_dir = "tests/generated/if_else_context_test";
-    fs::create_dir_all(test_dir).expect("Failed to create test dir");
-    let input_file = format!("{}/test.wj", test_dir);
+    let temp_dir = TempDir::new().expect("Failed to create temp dir");
+    let test_dir = temp_dir.path();
+    let input_file = test_dir.join("test.wj");
     fs::write(&input_file, code).expect("Failed to write source file");
 
     let output = Command::new("cargo")
@@ -16,24 +17,21 @@ fn compile_code(code: &str) -> Result<String, String> {
             "--release",
             "--",
             "build",
-            &input_file,
+            input_file.to_str().unwrap(),
             "--output",
-            test_dir,
+            test_dir.to_str().unwrap(),
             "--no-cargo",
         ])
         .output()
         .expect("Failed to run compiler");
 
     if !output.status.success() {
-        fs::remove_dir_all(test_dir).ok();
         return Err(String::from_utf8_lossy(&output.stderr).to_string());
     }
 
     // Read the generated file
-    let generated_file = format!("{}/test.rs", test_dir);
+    let generated_file = test_dir.join("test.rs");
     let generated = fs::read_to_string(&generated_file).expect("Failed to read generated file");
-
-    fs::remove_dir_all(test_dir).ok();
 
     Ok(generated)
 }

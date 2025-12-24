@@ -2,8 +2,11 @@
 // THE WINDJAMMER WAY: Compiler infers mutability from usage!
 
 use windjammer::analyzer::Analyzer;
-use windjammer::parser::{Parser, Program, Type, FunctionDecl, Parameter, Statement, Expression, StructDecl, StructField, Item};
 use windjammer::lexer::Lexer;
+use windjammer::parser::{
+    Expression, FunctionDecl, Item, Parameter, Parser, Program, Statement, StructDecl, StructField,
+    Type,
+};
 
 fn parse_code(code: &str) -> Program {
     let mut lexer = Lexer::new(code);
@@ -36,19 +39,22 @@ impl World {
     }
 }
 "#;
-    
+
     let program = parse_code(code);
     let mut analyzer = Analyzer::new();
-    let (analyzed, _) = analyzer.analyze_program(&program).unwrap();
-    
+    let (analyzed, _, _) = analyzer.analyze_program(&program).unwrap();
+
     // Find the spawn function
-    let spawn_fn = analyzed.iter()
+    let spawn_fn = analyzed
+        .iter()
         .find(|f| f.decl.name == "spawn")
         .expect("spawn function not found");
-    
+
     // ASSERT: spawn should have &mut self because it calls allocate() on self.allocator,
     // and allocate() mutates self (it does self.next_id += 1)
-    let self_ownership = spawn_fn.inferred_ownership.get("self")
+    let self_ownership = spawn_fn
+        .inferred_ownership
+        .get("self")
         .expect("self parameter should exist");
     assert_eq!(
         *self_ownership,
@@ -80,18 +86,21 @@ impl World {
     }
 }
 "#;
-    
+
     let program = parse_code(code);
     let mut analyzer = Analyzer::new();
-    let (analyzed, _) = analyzer.analyze_program(&program).unwrap();
-    
+    let (analyzed, _, _) = analyzer.analyze_program(&program).unwrap();
+
     // Find the max_entities function
-    let max_entities_fn = analyzed.iter()
+    let max_entities_fn = analyzed
+        .iter()
         .find(|f| f.decl.name == "max_entities")
         .expect("max_entities function not found");
-    
+
     // ASSERT: max_entities should have &self because get_max() doesn't mutate
-    let self_ownership = max_entities_fn.inferred_ownership.get("self")
+    let self_ownership = max_entities_fn
+        .inferred_ownership
+        .get("self")
         .expect("self parameter should exist");
     assert_eq!(
         *self_ownership,
@@ -115,18 +124,21 @@ impl World {
     }
 }
 "#;
-    
+
     let program = parse_code(code);
     let mut analyzer = Analyzer::new();
-    let (analyzed, _) = analyzer.analyze_program(&program).unwrap();
-    
+    let (analyzed, _, _) = analyzer.analyze_program(&program).unwrap();
+
     // Find the remove_transform function
-    let remove_fn = analyzed.iter()
+    let remove_fn = analyzed
+        .iter()
         .find(|f| f.decl.name == "remove_transform")
         .expect("remove_transform function not found");
-    
+
     // ASSERT: remove_transform should have &mut self because it calls remove() on a HashMap
-    let self_ownership = remove_fn.inferred_ownership.get("self")
+    let self_ownership = remove_fn
+        .inferred_ownership
+        .get("self")
         .expect("self parameter should exist");
     assert_eq!(
         *self_ownership,
@@ -150,18 +162,21 @@ impl World {
     }
 }
 "#;
-    
+
     let program = parse_code(code);
     let mut analyzer = Analyzer::new();
-    let (analyzed, _) = analyzer.analyze_program(&program).unwrap();
-    
+    let (analyzed, _, _) = analyzer.analyze_program(&program).unwrap();
+
     // Find the mark_dirty function
-    let mark_dirty_fn = analyzed.iter()
+    let mark_dirty_fn = analyzed
+        .iter()
         .find(|f| f.decl.name == "mark_dirty")
         .expect("mark_dirty function not found");
-    
+
     // ASSERT: mark_dirty should have &mut self because it calls get_mut()
-    let self_ownership = mark_dirty_fn.inferred_ownership.get("self")
+    let self_ownership = mark_dirty_fn
+        .inferred_ownership
+        .get("self")
         .expect("self parameter should exist");
     assert_eq!(
         *self_ownership,
@@ -187,18 +202,21 @@ impl World {
     }
 }
 "#;
-    
+
     let program = parse_code(code);
     let mut analyzer = Analyzer::new();
-    let (analyzed, _) = analyzer.analyze_program(&program).unwrap();
-    
+    let (analyzed, _, _) = analyzer.analyze_program(&program).unwrap();
+
     // Find the mark_dirty function
-    let mark_dirty_fn = analyzed.iter()
+    let mark_dirty_fn = analyzed
+        .iter()
         .find(|f| f.decl.name == "mark_dirty")
         .expect("mark_dirty function not found");
-    
+
     // ASSERT: mark_dirty should have &mut self because if-let condition calls get_mut()
-    let self_ownership = mark_dirty_fn.inferred_ownership.get("self")
+    let self_ownership = mark_dirty_fn
+        .inferred_ownership
+        .get("self")
         .expect("self parameter should exist");
     assert_eq!(
         *self_ownership,
@@ -224,18 +242,21 @@ impl AnimatedSprite {
     }
 }
 "#;
-    
+
     let program = parse_code(code);
     let mut analyzer = Analyzer::new();
-    let (analyzed, _) = analyzer.analyze_program(&program).unwrap();
-    
+    let (analyzed, _, _) = analyzer.analyze_program(&program).unwrap();
+
     // Find the tick function
-    let tick_fn = analyzed.iter()
+    let tick_fn = analyzed
+        .iter()
         .find(|f| f.decl.name == "tick")
         .expect("tick function not found");
-    
+
     // ASSERT: tick should have &mut self because it calls self.update() which mutates self
-    let self_ownership = tick_fn.inferred_ownership.get("self")
+    let self_ownership = tick_fn
+        .inferred_ownership
+        .get("self")
         .expect("self parameter should exist");
     assert_eq!(
         *self_ownership,
@@ -267,18 +288,21 @@ impl OuterSprite {
     }
 }
 "#;
-    
+
     let program = parse_code(code);
     let mut analyzer = Analyzer::new();
-    let (analyzed, _) = analyzer.analyze_program(&program).unwrap();
-    
+    let (analyzed, _, _) = analyzer.analyze_program(&program).unwrap();
+
     // Find the tick function
-    let tick_fn = analyzed.iter()
+    let tick_fn = analyzed
+        .iter()
         .find(|f| f.decl.name == "tick")
         .expect("tick function not found");
-    
+
     // ASSERT: tick should have &mut self because it calls update() on self.sprite
-    let self_ownership = tick_fn.inferred_ownership.get("self")
+    let self_ownership = tick_fn
+        .inferred_ownership
+        .get("self")
         .expect("self parameter should exist");
     assert_eq!(
         *self_ownership,

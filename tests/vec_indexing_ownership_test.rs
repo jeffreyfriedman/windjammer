@@ -6,10 +6,10 @@
 //! EXPECTED: Should generate `&self.frames[index]` (borrow)
 //! ACTUAL: Generates `self.frames[index]` (move)
 
-use windjammer::lexer::Lexer;
-use windjammer::parser::{Parser, Program};
 use windjammer::analyzer::Analyzer;
 use windjammer::codegen::rust::CodeGenerator;
+use windjammer::lexer::Lexer;
+use windjammer::parser::{Parser, Program};
 use windjammer::CompilationTarget;
 
 fn parse_code(code: &str) -> Program {
@@ -42,10 +42,11 @@ fn test_vec_indexing_borrows_non_copy_type() {
 
     let program = parse_code(source);
     let mut analyzer = Analyzer::new();
-    let (analyzed_functions, analyzed_structs) = analyzer.analyze_program(&program).unwrap();
+    let (analyzed_functions, analyzed_structs, _analyzed_trait_methods) =
+        analyzer.analyze_program(&program).unwrap();
     let mut generator = CodeGenerator::new_for_module(analyzed_structs, CompilationTarget::Rust);
     let rust_code = generator.generate_program(&program, &analyzed_functions);
-    
+
     // Region has a String field, so it can't be Copy
     // When indexing and accessing a field, should borrow: &self.frames[0]
     assert!(
@@ -72,10 +73,11 @@ fn test_vec_indexing_with_copy_type_can_move() {
 
     let program = parse_code(source);
     let mut analyzer = Analyzer::new();
-    let (analyzed_functions, analyzed_structs) = analyzer.analyze_program(&program).unwrap();
+    let (analyzed_functions, analyzed_structs, _analyzed_trait_methods) =
+        analyzer.analyze_program(&program).unwrap();
     let mut generator = CodeGenerator::new_for_module(analyzed_structs, CompilationTarget::Rust);
     let rust_code = generator.generate_program(&program, &analyzed_functions);
-    
+
     // For Copy types, either borrowing or moving is fine
     // The key is it should compile without errors
     println!("Generated Rust:\n{}", rust_code);
@@ -103,10 +105,11 @@ fn test_vec_indexing_in_expression() {
 
     let program = parse_code(source);
     let mut analyzer = Analyzer::new();
-    let (analyzed_functions, analyzed_structs) = analyzer.analyze_program(&program).unwrap();
+    let (analyzed_functions, analyzed_structs, _analyzed_trait_methods) =
+        analyzer.analyze_program(&program).unwrap();
     let mut generator = CodeGenerator::new_for_module(analyzed_structs, CompilationTarget::Rust);
     let rust_code = generator.generate_program(&program, &analyzed_functions);
-    
+
     // Should borrow the Point, then access its field
     assert!(
         rust_code.contains("self.points[") && rust_code.contains(".x"),
@@ -137,11 +140,11 @@ fn test_vec_indexing_with_variable() {
 
     let program = parse_code(source);
     let mut analyzer = Analyzer::new();
-    let (analyzed_functions, analyzed_structs) = analyzer.analyze_program(&program).unwrap();
+    let (analyzed_functions, analyzed_structs, _analyzed_trait_methods) =
+        analyzer.analyze_program(&program).unwrap();
     let mut generator = CodeGenerator::new_for_module(analyzed_structs, CompilationTarget::Rust);
     let rust_code = generator.generate_program(&program, &analyzed_functions);
-    
+
     // Should borrow the Frame
     println!("Generated Rust:\n{}", rust_code);
 }
-

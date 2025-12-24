@@ -1,6 +1,6 @@
 /// TDD test for string literal conversion in struct constructors
 /// BUG: Compiler adds .to_string() even when function expects &str
-/// 
+///
 /// Example:
 /// ```windjammer
 /// struct Sound {}
@@ -16,14 +16,13 @@
 ///     }
 /// }
 /// ```
-/// 
+///
 /// EXPECTED: Sound::load("assets/jump.ogg")
 /// ACTUAL: Sound::load("assets/jump.ogg".to_string()) ❌ Type mismatch!
-
 use windjammer::analyzer::Analyzer;
 use windjammer::codegen::rust::CodeGenerator;
-use windjammer::parser::{Parser, Program};
 use windjammer::lexer::Lexer;
+use windjammer::parser::{Parser, Program};
 use windjammer::CompilationTarget;
 
 fn parse_code(code: &str) -> Program {
@@ -56,20 +55,25 @@ impl SoundLibrary {
     }
 }
 "#;
-    
+
     let program = parse_code(code);
     let mut analyzer = Analyzer::new();
-    let (analyzed_functions, analyzed_structs) = analyzer.analyze_program(&program).unwrap();
+    let (analyzed_functions, analyzed_structs, _analyzed_trait_methods) =
+        analyzer.analyze_program(&program).unwrap();
     let mut generator = CodeGenerator::new_for_module(analyzed_structs, CompilationTarget::Rust);
     let generated = generator.generate_program(&program, &analyzed_functions);
-    
+
     // ASSERT: Should NOT add .to_string() for &str parameters
-    assert!(!generated.contains("\"assets/jump.ogg\".to_string()"), 
-        "Compiler should NOT add .to_string() when function expects &str!");
-    
+    assert!(
+        !generated.contains("\"assets/jump.ogg\".to_string()"),
+        "Compiler should NOT add .to_string() when function expects &str!"
+    );
+
     // ASSERT: Should pass string literal directly as &str
-    assert!(generated.contains("Sound::load(\"assets/jump.ogg\")"),
-        "Compiler should pass string literals directly as &str!");
+    assert!(
+        generated.contains("Sound::load(\"assets/jump.ogg\")"),
+        "Compiler should pass string literals directly as &str!"
+    );
 }
 
 #[test]
@@ -101,20 +105,27 @@ impl Library {
     }
 }
 "#;
-    
+
     let program = parse_code(code);
     let mut analyzer = Analyzer::new();
-    let (analyzed_functions, analyzed_structs) = analyzer.analyze_program(&program).unwrap();
+    let (analyzed_functions, analyzed_structs, _analyzed_trait_methods) =
+        analyzer.analyze_program(&program).unwrap();
     let mut generator = CodeGenerator::new_for_module(analyzed_structs, CompilationTarget::Rust);
     let generated = generator.generate_program(&program, &analyzed_functions);
-    
+
     // ASSERT: Should NOT add .to_string() for &str parameters in vec! macro
-    assert!(!generated.contains("\"jump.ogg\".to_string()"), 
-        "Compiler should NOT add .to_string() when function expects &str!");
-    assert!(!generated.contains("\"land.ogg\".to_string()"), 
-        "Compiler should NOT add .to_string() when function expects &str!");
-    assert!(!generated.contains("\"coin.ogg\".to_string()"), 
-        "Compiler should NOT add .to_string() when function expects &str!");
+    assert!(
+        !generated.contains("\"jump.ogg\".to_string()"),
+        "Compiler should NOT add .to_string() when function expects &str!"
+    );
+    assert!(
+        !generated.contains("\"land.ogg\".to_string()"),
+        "Compiler should NOT add .to_string() when function expects &str!"
+    );
+    assert!(
+        !generated.contains("\"coin.ogg\".to_string()"),
+        "Compiler should NOT add .to_string() when function expects &str!"
+    );
 }
 
 #[test]
@@ -140,15 +151,17 @@ impl App {
     }
 }
 "#;
-    
+
     let program = parse_code(code);
     let mut analyzer = Analyzer::new();
-    let (analyzed_functions, analyzed_structs) = analyzer.analyze_program(&program).unwrap();
+    let (analyzed_functions, analyzed_structs, _analyzed_trait_methods) =
+        analyzer.analyze_program(&program).unwrap();
     let mut generator = CodeGenerator::new_for_module(analyzed_structs, CompilationTarget::Rust);
     let generated = generator.generate_program(&program, &analyzed_functions);
-    
-    // ASSERT: SHOULD add .to_string() for owned String parameters
-    assert!(generated.contains("\"MyApp\".to_string()"), 
-        "Compiler SHOULD add .to_string() when function expects owned String!");
-}
 
+    // ASSERT: SHOULD add .to_string() for owned String parameters
+    assert!(
+        generated.contains("\"MyApp\".to_string()"),
+        "Compiler SHOULD add .to_string() when function expects owned String!"
+    );
+}

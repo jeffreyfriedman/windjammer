@@ -81,4 +81,3 @@ pub fn is_const_evaluable(expr: &Expression) -> bool {
         _ => false,
     }
 }
-

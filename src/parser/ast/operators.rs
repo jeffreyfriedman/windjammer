@@ -45,4 +45,3 @@ pub enum CompoundOp {
     Shl,    // <<=
     Shr,    // >>=
 }
-

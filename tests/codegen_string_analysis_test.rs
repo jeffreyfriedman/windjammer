@@ -65,7 +65,7 @@ mod collect_concat_parts_tests {
         // ("a" + "b") + "c"
         let abc = expr_add(
             expr_add(expr_string("a"), expr_string("b")),
-            expr_string("c")
+            expr_string("c"),
         );
 
         let parts = collect_concat_parts(&abc);
@@ -163,10 +163,7 @@ mod contains_string_literal_tests {
     #[test]
     fn test_nested_binary_with_string() {
         // Test: (a + b) + "hello" → true
-        let expr = expr_add(
-            expr_add(expr_var("a"), expr_var("b")),
-            expr_string("hello")
-        );
+        let expr = expr_add(expr_add(expr_var("a"), expr_var("b")), expr_string("hello"));
         assert!(contains_string_literal(&expr));
     }
 }

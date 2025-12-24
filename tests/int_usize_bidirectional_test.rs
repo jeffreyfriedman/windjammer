@@ -20,10 +20,10 @@
 //!
 //! EXPECTED: Auto-cast to common type (i64)
 
-use windjammer::lexer::Lexer;
-use windjammer::parser::Parser;
 use windjammer::analyzer::Analyzer;
 use windjammer::codegen::rust::CodeGenerator;
+use windjammer::lexer::Lexer;
+use windjammer::parser::Parser;
 use windjammer::CompilationTarget;
 
 fn parse_and_generate(code: &str) -> String {
@@ -32,7 +32,8 @@ fn parse_and_generate(code: &str) -> String {
     let mut parser = Parser::new(tokens);
     let program = parser.parse().unwrap();
     let mut analyzer = Analyzer::new();
-    let (analyzed_functions, analyzed_structs) = analyzer.analyze_program(&program).unwrap();
+    let (analyzed_functions, analyzed_structs, _analyzed_trait_methods) =
+        analyzer.analyze_program(&program).unwrap();
     let mut generator = CodeGenerator::new_for_module(analyzed_structs, CompilationTarget::Rust);
     generator.generate_program(&program, &analyzed_functions)
 }
@@ -56,9 +57,9 @@ impl Query {
 "#;
 
     let output = parse_and_generate(source);
-    
+
     println!("Generated Rust:\n{}", output);
-    
+
     // Should cast usize to i64 for comparison
     assert!(
         output.contains("self.index as i64") || output.contains("(self.index as i64)"),
@@ -86,9 +87,9 @@ impl Counter {
 "#;
 
     let output = parse_and_generate(source);
-    
+
     println!("Generated Rust:\n{}", output);
-    
+
     // Should cast usize to i64 for comparison
     assert!(
         output.contains("self.max as i64") || output.contains("(self.max as i64)"),
@@ -116,9 +117,9 @@ impl Buffer {
 "#;
 
     let output = parse_and_generate(source);
-    
+
     println!("Generated Rust:\n{}", output);
-    
+
     // Vec::len() returns usize, capacity is usize, no cast needed
     assert!(
         !output.contains("as i64"),
@@ -126,4 +127,3 @@ impl Buffer {
         output
     );
 }
-
