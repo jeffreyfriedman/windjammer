@@ -161,7 +161,8 @@ pub fn perform_analysis(program: &parser::Program) -> Result<AnalysisResults, St
 
     // Run ownership and type analysis
     let mut analyzer = Analyzer::new();
-    let (analyzed_functions, signatures) = analyzer.analyze_program(program)?;
+    let (analyzed_functions, signatures, _analyzed_trait_methods) =
+        analyzer.analyze_program(program)?;
 
     // Run trait bound inference
     let mut inference_engine = InferenceEngine::new();

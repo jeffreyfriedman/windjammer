@@ -1,9 +1,9 @@
 // Test: Trait implementation should match trait method signatures
 //
-// Bug: Analyzer infers `&self` for methods that access fields, 
+// Bug: Analyzer infers `&self` for methods that access fields,
 // but trait requires `self` (owned). This causes E0053 errors.
 //
-// Expected: When implementing a trait method, use the trait's 
+// Expected: When implementing a trait method, use the trait's
 // self parameter type, not the inferred type.
 
 use std::fs;
@@ -51,7 +51,7 @@ fn compile_windjammer_code(code: &str) -> Result<String, String> {
 #[test]
 fn test_trait_impl_self_param_owned() {
     // TDD: This test will FAIL until we fix the analyzer
-    
+
     let code = r#"
         trait Renderable {
             fn render(self) -> string
@@ -67,25 +67,34 @@ fn test_trait_impl_self_param_owned() {
             }
         }
     "#;
-    
+
     let result = compile_windjammer_code(code);
-    
+
     // Should compile successfully
-    assert!(result.is_ok(), "Trait impl should compile: {:?}", result.err());
-    
+    assert!(
+        result.is_ok(),
+        "Trait impl should compile: {:?}",
+        result.err()
+    );
+
     let generated = result.unwrap();
-    
+
     // Verify generated Rust uses owned self (matches trait)
-    assert!(generated.contains("fn render(self) -> String"), 
-            "Expected 'fn render(self)' but got:\n{}", generated);
-    assert!(!generated.contains("fn render(&self)"), 
-            "Should NOT use &self when trait requires self");
+    assert!(
+        generated.contains("fn render(self) -> String"),
+        "Expected 'fn render(self)' but got:\n{}",
+        generated
+    );
+    assert!(
+        !generated.contains("fn render(&self)"),
+        "Should NOT use &self when trait requires self"
+    );
 }
 
 #[test]
 fn test_trait_impl_self_param_borrowed() {
     // TDD: Test that &self in trait is respected
-    
+
     let code = r#"
         trait Displayable {
             fn display(&self) -> string
@@ -101,23 +110,30 @@ fn test_trait_impl_self_param_borrowed() {
             }
         }
     "#;
-    
+
     let result = compile_windjammer_code(code);
-    
+
     // Should compile successfully
-    assert!(result.is_ok(), "Trait impl should compile: {:?}", result.err());
-    
+    assert!(
+        result.is_ok(),
+        "Trait impl should compile: {:?}",
+        result.err()
+    );
+
     let generated = result.unwrap();
-    
+
     // Verify generated Rust uses &self (matches trait)
-    assert!(generated.contains("fn display(&self) -> String"), 
-            "Expected 'fn display(&self)' but got:\n{}", generated);
+    assert!(
+        generated.contains("fn display(&self) -> String"),
+        "Expected 'fn display(&self)' but got:\n{}",
+        generated
+    );
 }
 
 #[test]
 fn test_trait_impl_self_param_mutable() {
     // TDD: Test that &mut self in trait is respected
-    
+
     let code = r#"
         trait Updatable {
             fn update(&mut self, value: int)
@@ -133,16 +149,22 @@ fn test_trait_impl_self_param_mutable() {
             }
         }
     "#;
-    
-    let result = compile_windjammer_code(code);
-    
-    // Should compile successfully
-    assert!(result.is_ok(), "Trait impl should compile: {:?}", result.err());
-    
-    let generated = result.unwrap();
-    
-    // Verify generated Rust uses &mut self (matches trait)
-    assert!(generated.contains("fn update(&mut self, value: i64)"), 
-            "Expected 'fn update(&mut self, value: i64)' but got:\n{}", generated);
-}
 
+    let result = compile_windjammer_code(code);
+
+    // Should compile successfully
+    assert!(
+        result.is_ok(),
+        "Trait impl should compile: {:?}",
+        result.err()
+    );
+
+    let generated = result.unwrap();
+
+    // Verify generated Rust uses &mut self (matches trait)
+    assert!(
+        generated.contains("fn update(&mut self, value: i64)"),
+        "Expected 'fn update(&mut self, value: i64)' but got:\n{}",
+        generated
+    );
+}

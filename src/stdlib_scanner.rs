@@ -95,6 +95,7 @@ fn parse_function_signature(line: &str, module: &str) -> Option<FunctionSignatur
         return_type: None,                      // TODO: Extract from Rust AST
         return_ownership: OwnershipMode::Owned, // Default
         has_self_receiver: false,               // Stdlib functions don't have self
+        is_extern: false,                       // Stdlib functions are not extern
     })
 }
 
@@ -139,6 +140,7 @@ fn populate_fallback_signatures(registry: &mut SignatureRegistry) -> Result<(), 
             return_type: None,
             return_ownership: Owned,
             has_self_receiver: false,
+            is_extern: false,
         },
     );
 
@@ -152,6 +154,7 @@ fn populate_fallback_signatures(registry: &mut SignatureRegistry) -> Result<(), 
             return_type: None,
             return_ownership: Owned,
             has_self_receiver: false,
+            is_extern: false,
         },
     );
 
@@ -164,6 +167,7 @@ fn populate_fallback_signatures(registry: &mut SignatureRegistry) -> Result<(), 
             return_type: None,
             return_ownership: Owned,
             has_self_receiver: false,
+            is_extern: false,
         },
     );
 
@@ -176,6 +180,7 @@ fn populate_fallback_signatures(registry: &mut SignatureRegistry) -> Result<(), 
             return_type: None,
             return_ownership: Owned,
             has_self_receiver: false,
+            is_extern: false,
         },
     );
 
@@ -188,6 +193,7 @@ fn populate_fallback_signatures(registry: &mut SignatureRegistry) -> Result<(), 
             return_type: None,
             return_ownership: Owned,
             has_self_receiver: false,
+            is_extern: false,
         },
     );
 

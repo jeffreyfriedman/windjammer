@@ -2,7 +2,7 @@
 //
 // Tests FIRST, then implementation (proper TDD)
 
-use windjammer::parser::ast::{Type, Parameter, OwnershipHint};
+use windjammer::parser::ast::{OwnershipHint, Parameter, Type};
 
 // ============================================================================
 // TYPE BUILDER TESTS
@@ -12,9 +12,9 @@ use windjammer::parser::ast::{Type, Parameter, OwnershipHint};
 fn test_type_builder_primitives() {
     // Before: Type::Int
     // After: type_int()
-    
+
     use windjammer::parser::ast::*;
-    
+
     assert_eq!(type_int(), Type::Int);
     assert_eq!(type_float(), Type::Float);
     assert_eq!(type_bool(), Type::Bool);
@@ -25,9 +25,9 @@ fn test_type_builder_primitives() {
 fn test_type_builder_custom() {
     // Before: Type::Custom("MyType".to_string())
     // After: type_custom("MyType")
-    
+
     use windjammer::parser::ast::*;
-    
+
     assert_eq!(type_custom("MyType"), Type::Custom("MyType".to_string()));
 }
 
@@ -35,22 +35,19 @@ fn test_type_builder_custom() {
 fn test_type_builder_reference() {
     // Before: Type::Reference(Box::new(Type::Int))
     // After: type_ref(type_int())
-    
+
     use windjammer::parser::ast::*;
-    
-    assert_eq!(
-        type_ref(Type::Int),
-        Type::Reference(Box::new(Type::Int))
-    );
+
+    assert_eq!(type_ref(Type::Int), Type::Reference(Box::new(Type::Int)));
 }
 
 #[test]
 fn test_type_builder_mut_reference() {
     // Before: Type::MutableReference(Box::new(Type::Int))
     // After: type_mut_ref(type_int())
-    
+
     use windjammer::parser::ast::*;
-    
+
     assert_eq!(
         type_mut_ref(Type::Int),
         Type::MutableReference(Box::new(Type::Int))
@@ -61,22 +58,19 @@ fn test_type_builder_mut_reference() {
 fn test_type_builder_vec() {
     // Before: Type::Vec(Box::new(Type::Int))
     // After: type_vec(type_int())
-    
+
     use windjammer::parser::ast::*;
-    
-    assert_eq!(
-        type_vec(Type::Int),
-        Type::Vec(Box::new(Type::Int))
-    );
+
+    assert_eq!(type_vec(Type::Int), Type::Vec(Box::new(Type::Int)));
 }
 
 #[test]
 fn test_type_builder_option() {
     // Before: Type::Option(Box::new(Type::String))
     // After: type_option(type_string())
-    
+
     use windjammer::parser::ast::*;
-    
+
     assert_eq!(
         type_option(Type::String),
         Type::Option(Box::new(Type::String))
@@ -87,9 +81,9 @@ fn test_type_builder_option() {
 fn test_type_builder_result() {
     // Before: Type::Result(Box::new(Type::Int), Box::new(Type::String))
     // After: type_result(type_int(), type_string())
-    
+
     use windjammer::parser::ast::*;
-    
+
     assert_eq!(
         type_result(Type::Int, Type::String),
         Type::Result(Box::new(Type::Int), Box::new(Type::String))
@@ -100,9 +94,9 @@ fn test_type_builder_result() {
 fn test_type_builder_parameterized() {
     // Before: Type::Parameterized("Vec".to_string(), vec![Type::Int])
     // After: type_parameterized("Vec", vec![type_int()])
-    
+
     use windjammer::parser::ast::*;
-    
+
     assert_eq!(
         type_parameterized("Vec", vec![Type::Int]),
         Type::Parameterized("Vec".to_string(), vec![Type::Int])
@@ -113,9 +107,9 @@ fn test_type_builder_parameterized() {
 fn test_type_builder_tuple() {
     // Before: Type::Tuple(vec![Type::Int, Type::String])
     // After: type_tuple(vec![type_int(), type_string()])
-    
+
     use windjammer::parser::ast::*;
-    
+
     assert_eq!(
         type_tuple(vec![Type::Int, Type::String]),
         Type::Tuple(vec![Type::Int, Type::String])
@@ -133,18 +127,16 @@ fn test_type_builder_chained() {
     // ))
     //
     // After: type_option(type_mut_ref(type_vec(type_string())))
-    
+
     use windjammer::parser::ast::*;
-    
+
     let complex_type = type_option(type_mut_ref(type_vec(Type::String)));
-    
+
     assert_eq!(
         complex_type,
-        Type::Option(Box::new(
-            Type::MutableReference(Box::new(
-                Type::Vec(Box::new(Type::String))
-            ))
-        ))
+        Type::Option(Box::new(Type::MutableReference(Box::new(Type::Vec(
+            Box::new(Type::String)
+        )))))
     );
 }
 
@@ -164,11 +156,11 @@ fn test_parameter_builder_simple() {
     // }
     //
     // After: param("x", type_int())
-    
+
     use windjammer::parser::ast::*;
-    
+
     let p = param("x", Type::Int);
-    
+
     assert_eq!(p.name, "x");
     assert_eq!(p.type_, Type::Int);
     assert_eq!(p.ownership, OwnershipHint::Inferred);
@@ -187,11 +179,11 @@ fn test_parameter_builder_with_ownership() {
     // }
     //
     // After: param_ref("x", type_int())
-    
+
     use windjammer::parser::ast::*;
-    
+
     let p = param_ref("x", Type::Int);
-    
+
     assert_eq!(p.ownership, OwnershipHint::Ref);
 }
 
@@ -207,11 +199,11 @@ fn test_parameter_builder_mutable() {
     // }
     //
     // After: param_mut("x", type_int())
-    
+
     use windjammer::parser::ast::*;
-    
+
     let p = param_mut("x", Type::Int);
-    
+
     assert_eq!(p.ownership, OwnershipHint::Mut);
     assert_eq!(p.is_mutable, true);
 }
@@ -242,11 +234,11 @@ fn test_parameter_builder_mutable() {
 fn test_expr_literal_int() {
     // Before: Expression::Literal { value: Literal::Int(42), location: None }
     // After: expr_int(42)
-    
+
     use windjammer::parser::ast::*;
-    
+
     let expr = expr_int(42);
-    
+
     if let Expression::Literal { value, .. } = expr {
         assert_eq!(value, Literal::Int(42));
     } else {
@@ -257,9 +249,9 @@ fn test_expr_literal_int() {
 #[test]
 fn test_expr_literal_float() {
     use windjammer::parser::ast::*;
-    
+
     let expr = expr_float(3.14);
-    
+
     if let Expression::Literal { value, .. } = expr {
         assert_eq!(value, Literal::Float(3.14));
     } else {
@@ -270,9 +262,9 @@ fn test_expr_literal_float() {
 #[test]
 fn test_expr_literal_string() {
     use windjammer::parser::ast::*;
-    
+
     let expr = expr_string("hello");
-    
+
     if let Expression::Literal { value, .. } = expr {
         assert_eq!(value, Literal::String("hello".to_string()));
     } else {
@@ -283,9 +275,9 @@ fn test_expr_literal_string() {
 #[test]
 fn test_expr_literal_bool() {
     use windjammer::parser::ast::*;
-    
+
     let expr = expr_bool(true);
-    
+
     if let Expression::Literal { value, .. } = expr {
         assert_eq!(value, Literal::Bool(true));
     } else {
@@ -297,11 +289,11 @@ fn test_expr_literal_bool() {
 fn test_expr_var() {
     // Before: Expression::Identifier { name: "x".to_string(), location: None }
     // After: expr_var("x")
-    
+
     use windjammer::parser::ast::*;
-    
+
     let expr = expr_var("x");
-    
+
     if let Expression::Identifier { name, .. } = expr {
         assert_eq!(name, "x");
     } else {
@@ -311,21 +303,24 @@ fn test_expr_var() {
 
 #[test]
 fn test_expr_binary() {
-    // Before: 
+    // Before:
     // Expression::Binary {
     //     left: Box::new(Expression::Identifier { name: "a".to_string(), location: None }),
     //     op: BinaryOp::Add,
     //     right: Box::new(Expression::Identifier { name: "b".to_string(), location: None }),
     //     location: None,
     // }
-    // 
+    //
     // After: expr_binary(BinaryOp::Add, expr_var("a"), expr_var("b"))
-    
+
     use windjammer::parser::ast::*;
-    
+
     let expr = expr_binary(BinaryOp::Add, expr_var("a"), expr_var("b"));
-    
-    if let Expression::Binary { left, op, right, .. } = expr {
+
+    if let Expression::Binary {
+        left, op, right, ..
+    } = expr
+    {
         assert_eq!(op, BinaryOp::Add);
         if let Expression::Identifier { name, .. } = *left {
             assert_eq!(name, "a");
@@ -345,11 +340,11 @@ fn test_expr_binary() {
 #[test]
 fn test_expr_add_shorthand() {
     // Convenience: expr_add(a, b) instead of expr_binary(BinaryOp::Add, a, b)
-    
+
     use windjammer::parser::ast::*;
-    
+
     let expr = expr_add(expr_var("x"), expr_int(1));
-    
+
     if let Expression::Binary { op, .. } = expr {
         assert_eq!(op, BinaryOp::Add);
     } else {
@@ -370,12 +365,17 @@ fn test_expr_call() {
     // }
     //
     // After: expr_call("foo", vec![expr_int(1), expr_int(2)])
-    
+
     use windjammer::parser::ast::*;
-    
+
     let expr = expr_call("foo", vec![expr_int(1), expr_int(2)]);
-    
-    if let Expression::Call { function, arguments, .. } = expr {
+
+    if let Expression::Call {
+        function,
+        arguments,
+        ..
+    } = expr
+    {
         if let Expression::Identifier { name, .. } = *function {
             assert_eq!(name, "foo");
         } else {
@@ -399,12 +399,18 @@ fn test_expr_method_call() {
     // }
     //
     // After: expr_method("obj", "method", vec![])
-    
+
     use windjammer::parser::ast::*;
-    
+
     let expr = expr_method(expr_var("obj"), "method", vec![]);
-    
-    if let Expression::MethodCall { object, method, arguments, .. } = expr {
+
+    if let Expression::MethodCall {
+        object,
+        method,
+        arguments,
+        ..
+    } = expr
+    {
         if let Expression::Identifier { name, .. } = *object {
             assert_eq!(name, "obj");
         } else {
@@ -427,11 +433,11 @@ fn test_expr_field() {
     // }
     //
     // After: expr_field(expr_var("obj"), "field")
-    
+
     use windjammer::parser::ast::*;
-    
+
     let expr = expr_field(expr_var("obj"), "field");
-    
+
     if let Expression::FieldAccess { object, field, .. } = expr {
         if let Expression::Identifier { name, .. } = *object {
             assert_eq!(name, "obj");
@@ -450,18 +456,18 @@ fn test_expr_chained_complex() {
     //
     // Before: ~20 lines of nested Expression structs
     // After: expr_field(expr_method(expr_var("obj"), "method", vec![expr_add(expr_var("x"), expr_int(1))]), "field")
-    
+
     use windjammer::parser::ast::*;
-    
+
     let expr = expr_field(
         expr_method(
             expr_var("obj"),
             "method",
-            vec![expr_add(expr_var("x"), expr_int(1))]
+            vec![expr_add(expr_var("x"), expr_int(1))],
         ),
-        "field"
+        "field",
     );
-    
+
     // Just verify it constructs without panicking
     if let Expression::FieldAccess { .. } = expr {
         // Success
@@ -469,7 +475,6 @@ fn test_expr_chained_complex() {
         panic!("Expected FieldAccess expression");
     }
 }
-
 
 // ============================================================================
 // STATEMENT BUILDER TESTS (TDD - Tests FIRST!)
@@ -479,11 +484,11 @@ fn test_expr_chained_complex() {
 fn test_stmt_let() {
     // Before: 10+ lines
     // After: stmt_let("x", Some(Type::Int), expr_int(42))
-    
+
     use windjammer::parser::ast::*;
-    
+
     let stmt = stmt_let("x", Some(Type::Int), expr_int(42));
-    
+
     if let Statement::Let { mutable, type_, .. } = stmt {
         assert!(!mutable);
         assert_eq!(type_, Some(Type::Int));
@@ -495,9 +500,9 @@ fn test_stmt_let() {
 #[test]
 fn test_stmt_let_mut() {
     use windjammer::parser::ast::*;
-    
+
     let stmt = stmt_let_mut("x", Some(Type::Int), expr_int(0));
-    
+
     if let Statement::Let { mutable, .. } = stmt {
         assert!(mutable);
     } else {
@@ -508,9 +513,9 @@ fn test_stmt_let_mut() {
 #[test]
 fn test_stmt_assign() {
     use windjammer::parser::ast::*;
-    
+
     let stmt = stmt_assign(expr_var("x"), expr_int(42));
-    
+
     if let Statement::Assignment { compound_op, .. } = stmt {
         assert_eq!(compound_op, None);
     } else {
@@ -521,9 +526,9 @@ fn test_stmt_assign() {
 #[test]
 fn test_stmt_compound_assign() {
     use windjammer::parser::ast::*;
-    
+
     let stmt = stmt_compound_assign(CompoundOp::Add, expr_var("x"), expr_int(1));
-    
+
     if let Statement::Assignment { compound_op, .. } = stmt {
         assert_eq!(compound_op, Some(CompoundOp::Add));
     } else {
@@ -534,9 +539,9 @@ fn test_stmt_compound_assign() {
 #[test]
 fn test_stmt_return_some() {
     use windjammer::parser::ast::*;
-    
+
     let stmt = stmt_return(Some(expr_int(42)));
-    
+
     if let Statement::Return { value, .. } = stmt {
         assert!(value.is_some());
     } else {
@@ -547,9 +552,9 @@ fn test_stmt_return_some() {
 #[test]
 fn test_stmt_return_none() {
     use windjammer::parser::ast::*;
-    
+
     let stmt = stmt_return(None);
-    
+
     if let Statement::Return { value, .. } = stmt {
         assert!(value.is_none());
     } else {
@@ -560,9 +565,9 @@ fn test_stmt_return_none() {
 #[test]
 fn test_stmt_expr() {
     use windjammer::parser::ast::*;
-    
+
     let stmt = stmt_expr(expr_call("foo", vec![]));
-    
+
     if let Statement::Expression { .. } = stmt {
         // Success
     } else {
@@ -573,14 +578,15 @@ fn test_stmt_expr() {
 #[test]
 fn test_stmt_if() {
     use windjammer::parser::ast::*;
-    
-    let stmt = stmt_if(
-        expr_bool(true),
-        vec![stmt_return(None)],
-        None
-    );
-    
-    if let Statement::If { then_block, else_block, .. } = stmt {
+
+    let stmt = stmt_if(expr_bool(true), vec![stmt_return(None)], None);
+
+    if let Statement::If {
+        then_block,
+        else_block,
+        ..
+    } = stmt
+    {
         assert_eq!(then_block.len(), 1);
         assert!(else_block.is_none());
     } else {
@@ -591,13 +597,13 @@ fn test_stmt_if() {
 #[test]
 fn test_stmt_if_else() {
     use windjammer::parser::ast::*;
-    
+
     let stmt = stmt_if_else(
         expr_bool(true),
         vec![stmt_return(Some(expr_int(1)))],
-        vec![stmt_return(Some(expr_int(2)))]
+        vec![stmt_return(Some(expr_int(2)))],
     );
-    
+
     if let Statement::If { else_block, .. } = stmt {
         assert!(else_block.is_some());
         assert_eq!(else_block.unwrap().len(), 1);
@@ -609,12 +615,9 @@ fn test_stmt_if_else() {
 #[test]
 fn test_stmt_while() {
     use windjammer::parser::ast::*;
-    
-    let stmt = stmt_while(
-        expr_bool(true),
-        vec![stmt_expr(expr_call("work", vec![]))]
-    );
-    
+
+    let stmt = stmt_while(expr_bool(true), vec![stmt_expr(expr_call("work", vec![]))]);
+
     if let Statement::While { body, .. } = stmt {
         assert_eq!(body.len(), 1);
     } else {
@@ -625,9 +628,9 @@ fn test_stmt_while() {
 #[test]
 fn test_stmt_break() {
     use windjammer::parser::ast::*;
-    
+
     let stmt = stmt_break();
-    
+
     if let Statement::Break { .. } = stmt {
         // Success
     } else {
@@ -638,9 +641,9 @@ fn test_stmt_break() {
 #[test]
 fn test_stmt_continue() {
     use windjammer::parser::ast::*;
-    
+
     let stmt = stmt_continue();
-    
+
     if let Statement::Continue { .. } = stmt {
         // Success
     } else {

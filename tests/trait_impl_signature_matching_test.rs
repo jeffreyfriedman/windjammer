@@ -2,10 +2,10 @@
 // Bug: Impl methods generate `self` when trait has `&self`
 // Expected: Impl methods should match trait ownership (&self, &mut self, owned)
 
-use windjammer::lexer::Lexer;
-use windjammer::parser::{Parser, Program};
 use windjammer::analyzer::Analyzer;
 use windjammer::codegen::rust::CodeGenerator;
+use windjammer::lexer::Lexer;
+use windjammer::parser::{Parser, Program};
 use windjammer::CompilationTarget;
 
 fn parse_and_generate(code: &str) -> String {
@@ -14,7 +14,8 @@ fn parse_and_generate(code: &str) -> String {
     let mut parser = Parser::new(tokens);
     let program = parser.parse().unwrap();
     let mut analyzer = Analyzer::new();
-    let (analyzed_functions, analyzed_structs) = analyzer.analyze_program(&program).unwrap();
+    let (analyzed_functions, analyzed_structs, _analyzed_trait_methods) =
+        analyzer.analyze_program(&program).unwrap();
     let mut generator = CodeGenerator::new_for_module(analyzed_structs, CompilationTarget::Rust);
     generator.generate_program(&program, &analyzed_functions)
 }
@@ -54,22 +55,36 @@ impl GameLoop for TestGame {
 "#;
 
     let output = parse_and_generate(source);
-    
+
     println!("Generated Rust:\n{}", output);
-    
+
     // Both trait and impl should use &self (inferred from usage)
     assert!(output.contains("trait GameLoop"), "Trait not generated");
-    assert!(output.contains("fn init(&self)"), "Trait method should use &self");
-    
+    assert!(
+        output.contains("fn init(&self)"),
+        "Trait method should use &self"
+    );
+
     // Impl should MATCH trait signature
-    assert!(output.contains("impl GameLoop for TestGame"), "Impl not generated");
-    assert!(output.contains("fn init(&self)") && output.contains("TestGame init"), 
-            "Impl method should match trait signature (&self)");
-    
+    assert!(
+        output.contains("impl GameLoop for TestGame"),
+        "Impl not generated"
+    );
+    assert!(
+        output.contains("fn init(&self)") && output.contains("TestGame init"),
+        "Impl method should match trait signature (&self)"
+    );
+
     // Should not have owned self in impl
-    let impl_section = output.split("impl GameLoop for TestGame").nth(1).unwrap_or("");
-    assert!(!impl_section.contains("fn init(self)"), 
-            "Impl should not use owned self when trait uses &self, but found:\n{}", impl_section);
+    let impl_section = output
+        .split("impl GameLoop for TestGame")
+        .nth(1)
+        .unwrap_or("");
+    assert!(
+        !impl_section.contains("fn init(self)"),
+        "Impl should not use owned self when trait uses &self, but found:\n{}",
+        impl_section
+    );
 }
 
 #[test]
@@ -94,16 +109,20 @@ impl Printable for Item {
 "#;
 
     let output = parse_and_generate(source);
-    
+
     println!("Generated Rust:\n{}", output);
-    
+
     // Trait should infer &self for read-only methods
-    assert!(output.contains("fn display(&self)"), 
-            "Trait default method should infer &self for read-only access");
-    
+    assert!(
+        output.contains("fn display(&self)"),
+        "Trait default method should infer &self for read-only access"
+    );
+
     // Impl should MATCH trait signature (&self)
     let impl_section = output.split("impl Printable for Item").nth(1).unwrap_or("");
-    assert!(impl_section.contains("fn display(&self)"), 
-            "Impl method should match trait signature (&self), but found:\n{}", impl_section);
+    assert!(
+        impl_section.contains("fn display(&self)"),
+        "Impl method should match trait signature (&self), but found:\n{}",
+        impl_section
+    );
 }
-

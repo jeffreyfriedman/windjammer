@@ -46,7 +46,6 @@ fn compile_fixture(fixture_name: &str) -> Result<String, String> {
 // ============================================================================
 
 #[test]
-#[ignore] // TODO: Implement auto-& for contains() method arguments
 fn test_contains_adds_reference() {
     let generated = compile_fixture("method_arg_conversion").expect("Compilation failed");
 

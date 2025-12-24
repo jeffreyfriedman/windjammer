@@ -1,6 +1,6 @@
 /// TDD test for string parameter assignment to string field
 /// BUG: Compiler infers &str when parameter is assigned to String field
-/// 
+///
 /// Example:
 /// ```windjammer
 /// struct Config {
@@ -12,14 +12,13 @@
 ///     }
 /// }
 /// ```
-/// 
+///
 /// EXPECTED: set_name(&mut self, name: String)
 /// ACTUAL: set_name(&mut self, name: &str) ❌ Type mismatch!
-
 use windjammer::analyzer::Analyzer;
 use windjammer::codegen::rust::CodeGenerator;
-use windjammer::parser::{Parser, Program};
 use windjammer::lexer::Lexer;
+use windjammer::parser::{Parser, Program};
 use windjammer::CompilationTarget;
 
 fn parse_code(code: &str) -> Program {
@@ -42,20 +41,27 @@ impl Config {
     }
 }
 "#;
-    
+
     let program = parse_code(code);
     let mut analyzer = Analyzer::new();
-    let (analyzed_functions, analyzed_structs) = analyzer.analyze_program(&program).unwrap();
+    let (analyzed_functions, analyzed_structs, _analyzed_trait_methods) =
+        analyzer.analyze_program(&program).unwrap();
     let mut generator = CodeGenerator::new_for_module(analyzed_structs, CompilationTarget::Rust);
     let generated = generator.generate_program(&program, &analyzed_functions);
-    
+
     // ASSERT: Parameter should be String, not &str
-    assert!(generated.contains("name: String"), 
-        "Parameter should be String when assigned to String field!\nGenerated:\n{}", generated);
-    
+    assert!(
+        generated.contains("name: String"),
+        "Parameter should be String when assigned to String field!\nGenerated:\n{}",
+        generated
+    );
+
     // ASSERT: Should NOT be &str
-    assert!(!generated.contains("set_name(&mut self, name: &str)"), 
-        "Parameter should NOT be &str when assigned to String field!\nGenerated:\n{}", generated);
+    assert!(
+        !generated.contains("set_name(&mut self, name: &str)"),
+        "Parameter should NOT be &str when assigned to String field!\nGenerated:\n{}",
+        generated
+    );
 }
 
 #[test]
@@ -72,16 +78,20 @@ impl Logger {
     }
 }
 "#;
-    
+
     let program = parse_code(code);
     let mut analyzer = Analyzer::new();
-    let (analyzed_functions, analyzed_structs) = analyzer.analyze_program(&program).unwrap();
+    let (analyzed_functions, analyzed_structs, _analyzed_trait_methods) =
+        analyzer.analyze_program(&program).unwrap();
     let mut generator = CodeGenerator::new_for_module(analyzed_structs, CompilationTarget::Rust);
     let generated = generator.generate_program(&program, &analyzed_functions);
-    
+
     // ASSERT: Parameter can be &str since it's not assigned to a field
-    assert!(generated.contains("message: &str") || generated.contains("message: String"), 
-        "Parameter can be &str or String when not assigned to field!\nGenerated:\n{}", generated);
+    assert!(
+        generated.contains("message: &str") || generated.contains("message: String"),
+        "Parameter can be &str or String when not assigned to field!\nGenerated:\n{}",
+        generated
+    );
 }
 
 #[test]
@@ -97,16 +107,20 @@ impl Logger {
     }
 }
 "#;
-    
+
     let program = parse_code(code);
     let mut analyzer = Analyzer::new();
-    let (analyzed_functions, analyzed_structs) = analyzer.analyze_program(&program).unwrap();
+    let (analyzed_functions, analyzed_structs, _analyzed_trait_methods) =
+        analyzer.analyze_program(&program).unwrap();
     let mut generator = CodeGenerator::new_for_module(analyzed_structs, CompilationTarget::Rust);
     let generated = generator.generate_program(&program, &analyzed_functions);
-    
+
     // ASSERT: Parameter should be String when pushed to Vec<String>
-    assert!(generated.contains("message: String"), 
-        "Parameter should be String when pushed to Vec<String>!\nGenerated:\n{}", generated);
+    assert!(
+        generated.contains("message: String"),
+        "Parameter should be String when pushed to Vec<String>!\nGenerated:\n{}",
+        generated
+    );
 }
 
 #[test]
@@ -124,17 +138,23 @@ impl User {
     }
 }
 "#;
-    
+
     let program = parse_code(code);
     let mut analyzer = Analyzer::new();
-    let (analyzed_functions, analyzed_structs) = analyzer.analyze_program(&program).unwrap();
+    let (analyzed_functions, analyzed_structs, _analyzed_trait_methods) =
+        analyzer.analyze_program(&program).unwrap();
     let mut generator = CodeGenerator::new_for_module(analyzed_structs, CompilationTarget::Rust);
     let generated = generator.generate_program(&program, &analyzed_functions);
-    
-    // ASSERT: Both parameters should be String
-    assert!(generated.contains("name: String"), 
-        "name parameter should be String!\nGenerated:\n{}", generated);
-    assert!(generated.contains("email: String"), 
-        "email parameter should be String!\nGenerated:\n{}", generated);
-}
 
+    // ASSERT: Both parameters should be String
+    assert!(
+        generated.contains("name: String"),
+        "name parameter should be String!\nGenerated:\n{}",
+        generated
+    );
+    assert!(
+        generated.contains("email: String"),
+        "email parameter should be String!\nGenerated:\n{}",
+        generated
+    );
+}

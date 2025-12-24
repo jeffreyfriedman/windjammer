@@ -1,8 +1,8 @@
 // TDD Test: Simple imports without self/crate/super should work
 // THE WINDJAMMER WAY: Compiler finds modules automatically!
 
-use windjammer::parser::{Item, Parser};
 use windjammer::lexer::Lexer;
+use windjammer::parser::{Item, Parser};
 
 #[test]
 fn test_simple_import() {
@@ -11,7 +11,7 @@ fn test_simple_import() {
     let tokens = lexer.tokenize_with_locations();
     let mut parser = Parser::new(tokens);
     let program = parser.parse().expect("Should parse simple import");
-    
+
     assert_eq!(program.items.len(), 1);
     if let Item::Use { path, .. } = &program.items[0] {
         assert_eq!(path.len(), 1);
@@ -28,7 +28,7 @@ fn test_namespaced_import() {
     let tokens = lexer.tokenize_with_locations();
     let mut parser = Parser::new(tokens);
     let program = parser.parse().expect("Should parse namespaced import");
-    
+
     assert_eq!(program.items.len(), 1);
     if let Item::Use { path, .. } = &program.items[0] {
         assert_eq!(path.len(), 2);
@@ -47,13 +47,13 @@ fn test_rust_style_imports_still_work() {
         ("use crate::math::Vec2;", vec!["crate", "math", "Vec2"]),
         ("use super::Camera2D;", vec!["super", "Camera2D"]),
     ];
-    
+
     for (source, expected_path) in test_cases {
         let mut lexer = Lexer::new(source);
         let tokens = lexer.tokenize_with_locations();
         let mut parser = Parser::new(tokens);
         let program = parser.parse().expect(&format!("Should parse: {}", source));
-        
+
         if let Item::Use { path, .. } = &program.items[0] {
             assert_eq!(path, &expected_path, "Failed for: {}", source);
         } else {

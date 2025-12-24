@@ -64,4 +64,3 @@ pub struct TestStruct {
     fs::remove_file(&wj_file_path).ok();
     fs::remove_file(&rs_file_path).ok();
 }
-

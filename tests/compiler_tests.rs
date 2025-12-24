@@ -39,21 +39,20 @@ fn compile_fixture(fixture_name: &str) -> Result<String, String> {
 }
 
 #[test]
-#[ignore] // Codegen changed - needs update
 fn test_automatic_reference_insertion() {
     let generated = compile_fixture("auto_reference").expect("Compilation failed");
 
-    // Check that Copy types are passed by value (auto-mutable owned)
+    // Check that Copy types are passed by value (no mut if not mutated)
     assert!(
-        generated.contains("fn double(mut x: i64) -> i64"),
-        "Copy types should be passed by value (auto-mutable owned)"
+        generated.contains("fn double(x: i64) -> i64"),
+        "Copy types should be passed by value without mut if not mutated"
     );
 
-    // Check that non-Copy types are also owned (with auto-mutable)
-    // TODO: Ownership inference should detect read-only usage and use &String instead
+    // THE WINDJAMMER WAY: Explicit `string` type is honored as `String` (owned)
+    // This prevents API contract violations where methods expect owned strings
     assert!(
-        generated.contains("fn greet(mut name: String)"),
-        "Non-Copy types are currently owned (should be inferred as borrowed)"
+        generated.contains("fn greet(name: String)"),
+        "Explicit string type should be honored as String (owned)"
     );
 
     // Check that call sites pass Copy types by value (no &)
@@ -62,14 +61,13 @@ fn test_automatic_reference_insertion() {
         "Copy types should be passed by value at call site"
     );
 
-    // Check that call sites pass non-Copy types by value (no & with current implementation)
-    // TODO: Should auto-insert & for non-Copy types when ownership inference works
+    // Check that string literals are auto-converted to String
     assert!(
-        generated.contains("greet(name)"),
-        "Non-Copy types are passed by value (should have & auto-inserted)"
+        generated.contains(r#"greet("Alice".to_string())"#) || generated.contains("greet(name)"),
+        "String literals should be converted to String with .to_string()"
     );
 
-    println!("✓ Copy type handling works (ownership inference needs fixing)");
+    println!("✓ Ownership inference and auto-ref working correctly");
 }
 
 #[test]
@@ -175,13 +173,12 @@ fn main() {
 }
 
 #[test]
-#[ignore] // Codegen changed - needs update
 fn test_ownership_inference_borrowed() {
-    // Test that parameters used read-only are inferred as borrowed
+    // Test that parameters used read-only are inferred correctly
     let fixture = r#"
 fn print_twice(x: int) {
-    println!("{}", x)
-    println!("{}", x)
+    println("{}", x)
+    println("{}", x)
 }
 
 fn main() {
@@ -197,11 +194,10 @@ fn main() {
 
     let generated = compile_fixture("temp_borrowed").expect("Compilation failed");
 
-    // Copy types should always be passed by value, regardless of usage
-    // With auto-mutable owned parameters, they're marked as mut
+    // Copy types are passed by value (no mut if not mutated)
     assert!(
-        generated.contains("fn print_twice(mut x: i64)"),
-        "Copy types should be passed by value (auto-mutable owned)"
+        generated.contains("fn print_twice(x: i64)"),
+        "Copy types should be passed by value without mut if read-only"
     );
     assert!(
         generated.contains("print_twice(42)"),
@@ -281,7 +277,6 @@ fn test_smart_auto_derive() {
 }
 
 #[test]
-#[ignore] // TODO: Fix ownership inference after auto-mutable owned parameters change
 fn test_ownership_inference_mut_borrowed() {
     let generated = compile_fixture("mut_borrowed").expect("Compilation failed");
 

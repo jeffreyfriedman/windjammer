@@ -60,7 +60,6 @@ fn compile_and_verify(code: &str) -> (bool, String, String) {
 }
 
 #[test]
-#[ignore] // TODO: Implement auto-.to_string() for method string arguments
 fn test_method_with_read_only_string_param() {
     // A method that only reads its string parameter should work when called with literals
     let code = r#"
@@ -101,7 +100,6 @@ pub fn create_editor() {
 }
 
 #[test]
-#[ignore] // TODO: Implement auto-.to_string() for method string arguments
 fn test_method_with_stored_string_param() {
     // A method that stores its string parameter should take owned String
     let code = r#"
@@ -138,7 +136,6 @@ pub fn test_name_list() {
 }
 
 #[test]
-#[ignore] // TODO: Implement auto-.to_string() for method string arguments
 fn test_method_returning_computed_value() {
     // A method that uses string for computation should handle correctly
     let code = r#"
@@ -178,7 +175,6 @@ pub fn test_counter() {
 }
 
 #[test]
-#[ignore] // TODO: Implement auto-.to_string() for method string arguments
 fn test_chained_method_calls_with_strings() {
     // Chained method calls with string parameters
     let code = r#"

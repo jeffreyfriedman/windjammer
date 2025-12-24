@@ -248,7 +248,7 @@ impl Parser {
                 }
             }
 
-            self.expect(Token::Gt)?;
+            self.expect_gt_or_split_shr()?; // Handle nested generics
             params
         } else {
             Vec::new()
@@ -355,6 +355,11 @@ impl Parser {
                 self.expect(Token::RBrace)?;
                 Some(statements)
             } else {
+                // No body - this is a trait method declaration
+                // Semicolons are optional (Windjammer philosophy: minimize ceremony)
+                if self.current_token() == &Token::Semicolon {
+                    self.advance(); // consume optional semicolon
+                }
                 None
             };
 
@@ -554,11 +559,11 @@ impl Parser {
 
         // Split the path string into segments
         // Examples:
-        // - "std::fs" -> ["std", "fs"]  
+        // - "std::fs" -> ["std", "fs"]
         // - "self::utils" -> ["self", "utils"]
         // - "./module::Type" -> ["./module", "Type"]
         // - "module::{A, B, C}" -> ["module::{A, B, C}"] (keep braced imports as one segment)
-        
+
         if path_str.contains("::{") {
             // Braced import - keep as single segment
             path.push(path_str.clone());
@@ -669,14 +674,18 @@ impl Parser {
         let where_clause = self.parse_where_clause()?;
 
         // Parse body (or semicolon for extern functions)
+        // Semicolons are optional (Windjammer philosophy)
         let body = if self.current_token() == &Token::Semicolon {
             self.advance();
             Vec::new() // Empty body for extern functions
-        } else {
+        } else if self.current_token() == &Token::LBrace {
             self.expect(Token::LBrace)?;
             let statements = self.parse_block_statements()?;
             self.expect(Token::RBrace)?;
             statements
+        } else {
+            // No semicolon and no body - assume extern function
+            Vec::new()
         };
 
         Ok(FunctionDecl {
@@ -845,49 +854,68 @@ impl Parser {
         // Parse where clause (optional): where T: Clone, U: Debug
         let where_clause = self.parse_where_clause()?;
 
-        self.expect(Token::LBrace)?;
+        // Check for unit struct: struct Name;
+        let fields = if self.current_token() == &Token::Semicolon {
+            // Unit struct with no fields
+            self.advance(); // consume semicolon
+            Vec::new()
+        } else {
+            // Regular struct with fields
+            self.expect(Token::LBrace)?;
 
-        let mut fields = Vec::new();
-        while self.current_token() != &Token::RBrace {
-            // Parse decorators on fields
-            let mut field_decorators = Vec::new();
-            while let Token::Decorator(_dec_name) = self.current_token() {
-                let decorator = self.parse_decorator()?;
-                field_decorators.push(decorator);
+            let mut fields = Vec::new();
+            while self.current_token() != &Token::RBrace {
+                // Collect doc comment for field (if any)
+                let field_doc_comment = if let Token::DocComment(comment) = self.current_token() {
+                    let doc = comment.clone();
+                    self.advance();
+                    Some(doc)
+                } else {
+                    None
+                };
+
+                // Parse decorators on fields
+                let mut field_decorators = Vec::new();
+                while let Token::Decorator(_dec_name) = self.current_token() {
+                    let decorator = self.parse_decorator()?;
+                    field_decorators.push(decorator);
+                }
+
+                // Parse pub keyword for fields
+                let is_pub = if self.current_token() == &Token::Pub {
+                    self.advance();
+                    true
+                } else {
+                    false
+                };
+
+                let field_name = if let Token::Ident(n) = self.current_token() {
+                    let name = n.clone();
+                    self.advance();
+                    name
+                } else {
+                    return Err("Expected field name".to_string());
+                };
+
+                self.expect(Token::Colon)?;
+                let field_type = self.parse_type()?;
+
+                fields.push(StructField {
+                    name: field_name,
+                    field_type,
+                    decorators: field_decorators,
+                    is_pub,
+                    doc_comment: field_doc_comment,
+                });
+
+                if self.current_token() == &Token::Comma {
+                    self.advance();
+                }
             }
 
-            // Parse pub keyword for fields
-            let is_pub = if self.current_token() == &Token::Pub {
-                self.advance();
-                true
-            } else {
-                false
-            };
-
-            let field_name = if let Token::Ident(n) = self.current_token() {
-                let name = n.clone();
-                self.advance();
-                name
-            } else {
-                return Err("Expected field name".to_string());
-            };
-
-            self.expect(Token::Colon)?;
-            let field_type = self.parse_type()?;
-
-            fields.push(StructField {
-                name: field_name,
-                field_type,
-                decorators: field_decorators,
-                is_pub,
-            });
-
-            if self.current_token() == &Token::Comma {
-                self.advance();
-            }
-        }
-
-        self.expect(Token::RBrace)?;
+            self.expect(Token::RBrace)?;
+            fields
+        };
 
         Ok(StructDecl {
             name,
@@ -918,6 +946,15 @@ impl Parser {
 
         let mut variants = Vec::new();
         while self.current_token() != &Token::RBrace {
+            // Collect doc comment for variant (if any)
+            let doc_comment = if let Token::DocComment(comment) = self.current_token() {
+                let doc = comment.clone();
+                self.advance();
+                Some(doc)
+            } else {
+                None
+            };
+
             let variant_name = if let Token::Ident(n) = self.current_token() {
                 let name = n.clone();
                 self.advance();
@@ -1000,6 +1037,7 @@ impl Parser {
             variants.push(EnumVariant {
                 name: variant_name,
                 data,
+                doc_comment,
             });
 
             if self.current_token() == &Token::Comma {

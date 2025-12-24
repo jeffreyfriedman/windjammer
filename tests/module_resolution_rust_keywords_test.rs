@@ -30,8 +30,7 @@ fn compile_code_to_cargo_toml(code: &str, test_name: &str) -> Result<String, Str
     }
 
     let cargo_toml_path = format!("{}/Cargo.toml", test_dir);
-    let cargo_toml = fs::read_to_string(&cargo_toml_path)
-        .expect("Failed to read Cargo.toml");
+    let cargo_toml = fs::read_to_string(&cargo_toml_path).expect("Failed to read Cargo.toml");
 
     fs::remove_dir_all(&test_dir).ok();
 
@@ -49,8 +48,7 @@ fn test_crate_keyword_not_in_dependencies() {
     }
     "#;
 
-    let cargo_toml = compile_code_to_cargo_toml(code, "crate_keyword")
-        .expect("Compilation failed");
+    let cargo_toml = compile_code_to_cargo_toml(code, "crate_keyword").expect("Compilation failed");
 
     // Should NOT contain "crate = " in dependencies
     assert!(
@@ -71,8 +69,7 @@ fn test_super_keyword_not_in_dependencies() {
     }
     "#;
 
-    let cargo_toml = compile_code_to_cargo_toml(code, "super_keyword")
-        .expect("Compilation failed");
+    let cargo_toml = compile_code_to_cargo_toml(code, "super_keyword").expect("Compilation failed");
 
     // Should NOT contain "super = " in dependencies
     assert!(
@@ -93,8 +90,7 @@ fn test_self_keyword_not_in_dependencies() {
     }
     "#;
 
-    let cargo_toml = compile_code_to_cargo_toml(code, "self_keyword")
-        .expect("Compilation failed");
+    let cargo_toml = compile_code_to_cargo_toml(code, "self_keyword").expect("Compilation failed");
 
     // Should NOT contain "self = " in dependencies
     assert!(
@@ -117,13 +113,12 @@ fn test_multiple_rust_keywords_filtered() {
     }
     "#;
 
-    let cargo_toml = compile_code_to_cargo_toml(code, "multiple_keywords")
-        .expect("Compilation failed");
+    let cargo_toml =
+        compile_code_to_cargo_toml(code, "multiple_keywords").expect("Compilation failed");
 
     // Should NOT contain ANY Rust keywords in dependencies
     assert!(
-        !cargo_toml.contains("crate = ") && 
-        !cargo_toml.contains("super = "),
+        !cargo_toml.contains("crate = ") && !cargo_toml.contains("super = "),
         "Should NOT add Rust keywords to dependencies, got:\n{}",
         cargo_toml
     );

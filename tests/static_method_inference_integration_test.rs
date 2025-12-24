@@ -4,7 +4,6 @@
 use std::process::Command;
 
 #[test]
-#[ignore] // TODO: Fix local variable vs field name shadowing in static method detection
 fn test_static_method_inference() {
     // Compile the Windjammer test file
     let output = Command::new("cargo")

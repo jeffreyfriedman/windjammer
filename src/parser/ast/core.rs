@@ -6,10 +6,10 @@
 // Independent types have been extracted to separate modules.
 
 // Import types from extracted modules
-use crate::parser::ast::types::{AssociatedType, SourceLocation, Type, TypeParam};
 use crate::parser::ast::literals::{Literal, MacroDelimiter};
 use crate::parser::ast::operators::{BinaryOp, CompoundOp, UnaryOp};
 use crate::parser::ast::ownership::OwnershipHint;
+use crate::parser::ast::types::{AssociatedType, SourceLocation, Type, TypeParam};
 
 // ============================================================================
 // PARAMETERS (depends on Pattern - circular)
@@ -64,6 +64,7 @@ pub struct StructField {
     pub field_type: Type,
     pub decorators: Vec<Decorator>,
     pub is_pub: bool,
+    pub doc_comment: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
@@ -85,6 +86,7 @@ pub struct StructDecl {
 pub struct EnumVariant {
     pub name: String,
     pub data: EnumVariantData,
+    pub doc_comment: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
@@ -192,6 +194,7 @@ pub enum Statement {
     Use {
         path: Vec<String>,
         alias: Option<String>,
+        is_pub: bool, // THE WINDJAMMER WAY: Track pub use for re-exports
         location: SourceLocation,
     },
 }
@@ -501,6 +504,7 @@ pub enum Item {
     Use {
         path: Vec<String>,
         alias: Option<String>,
+        is_pub: bool, // THE WINDJAMMER WAY: Track pub use for re-exports
         location: SourceLocation,
     }, // use std::fs as fs -> path=["std", "fs"], alias=Some("fs")
     Mod {

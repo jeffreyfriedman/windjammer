@@ -8,18 +8,18 @@
 pub mod core;
 
 // Domain modules (extracted - independent, no circular deps)
-pub mod types;
+pub mod builders;
 pub mod literals;
 pub mod operators;
 pub mod ownership;
-pub mod builders;
+pub mod types;
 
 // Re-export from domain modules
-pub use types::*;
+pub use builders::*;
 pub use literals::*;
 pub use operators::*;
 pub use ownership::*;
-pub use builders::*;
+pub use types::*;
 
 // Re-export circular types from core module
 // These types have circular dependencies and must stay together:

@@ -19,4 +19,3 @@ pub enum MacroDelimiter {
     Brackets, // vec![]
     Braces,   // macro_name!{}
 }
-

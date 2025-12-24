@@ -158,6 +158,39 @@ impl Parser {
         }
     }
 
+    /// Handle closing of nested generic types where `>>` should be treated as two `>` tokens
+    pub(crate) fn expect_gt_or_split_shr(&mut self) -> Result<bool, String> {
+        match self.current_token() {
+            Token::Gt => {
+                self.advance();
+                Ok(false) // Not a split, normal >
+            }
+            Token::Shr => {
+                // Split >> into two > tokens
+                // We consume one > and insert another > after it
+                let current_location = self.tokens[self.position].clone();
+                let mut gt_token = current_location.clone();
+                gt_token.token = Token::Gt;
+
+                // Replace current Shr with Gt
+                self.tokens[self.position] = gt_token.clone();
+
+                // Insert another Gt right after this position
+                self.tokens.insert(self.position + 1, gt_token);
+
+                // Advance to consume the first >
+                self.advance();
+
+                Ok(true) // Was a split >>
+            }
+            _ => Err(format!(
+                "Expected '>' or '>>', got {:?} (at token position {})",
+                self.current_token(),
+                self.position
+            )),
+        }
+    }
+
     // ========================================================================
     // SECTION 3: TOP-LEVEL PARSING
     // ========================================================================
@@ -200,6 +233,19 @@ impl Parser {
         };
 
         match self.current_token() {
+            Token::Extern => {
+                self.advance(); // Consume the Extern token
+                self.expect(Token::Fn)?; // Expect fn after extern
+                let mut func = self.parse_function()?;
+                func.is_extern = true; // Mark as extern function
+                func.is_pub = is_pub;
+                func.decorators = decorators;
+                func.doc_comment = doc_comment;
+                Ok(Item::Function {
+                    decl: func,
+                    location: self.current_location(),
+                })
+            }
             Token::Fn => {
                 self.advance(); // Consume the Fn token
                 let mut func = self.parse_function()?;
@@ -307,6 +353,7 @@ impl Parser {
                 Ok(Item::Use {
                     path,
                     alias,
+                    is_pub, // THE WINDJAMMER WAY: Track pub use for re-exports
                     location: self.current_location(),
                 })
             }
@@ -321,23 +368,6 @@ impl Parser {
                     name,
                     items,
                     is_public: is_pub,
-                    location: self.current_location(),
-                })
-            }
-            Token::Extern => {
-                self.advance(); // consume 'extern'
-                self.expect(Token::Fn)?;
-                let mut func = self.parse_function()?;
-                func.is_extern = true;
-                func.is_pub = is_pub;
-                // Extern functions have no body
-                func.body = vec![];
-                // Consume optional semicolon
-                if self.current_token() == &Token::Semicolon {
-                    self.advance();
-                }
-                Ok(Item::Function {
-                    decl: func,
                     location: self.current_location(),
                 })
             }

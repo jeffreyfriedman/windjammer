@@ -140,4 +140,3 @@ mod tests {
         assert!(!pattern_extracts_value(&pattern));
     }
 }
-

@@ -194,6 +194,7 @@ pub struct FunctionSignature {
     pub return_type: Option<Type>, // ADDED: Store return type for smart inference
     pub return_ownership: OwnershipMode,
     pub has_self_receiver: bool, // True if first parameter is self/&self/&mut self
+    pub is_extern: bool,         // True if this is an extern function (FFI)
 }
 
 #[derive(Debug, Clone)]
@@ -242,7 +243,8 @@ pub struct Analyzer {
     // Track trait definitions for impl block analysis
     trait_definitions: HashMap<String, TraitDecl>,
     // Track analyzed trait methods (trait_name -> method_name -> AnalyzedFunction)
-    analyzed_trait_methods: HashMap<String, HashMap<String, AnalyzedFunction>>,
+    // PUBLIC: The generator needs this for trait signature inference
+    pub analyzed_trait_methods: HashMap<String, HashMap<String, AnalyzedFunction>>,
     // Track which local variables are mutated (for automatic mut inference)
     mutated_variables: HashSet<String>,
     // Track functions in the current impl block (for cross-method analysis)
@@ -279,6 +281,12 @@ impl Analyzer {
         analyzer.register_stdlib_traits();
 
         analyzer
+    }
+
+    /// Update the analyzer's Copy structs registry (for shared analyzer across files)
+    /// This allows newly discovered Copy structs to be available for subsequent file analysis
+    pub fn update_copy_structs(&mut self, global_copy_structs: HashSet<String>) {
+        self.copy_structs = global_copy_structs;
     }
 
     /// Pre-register standard library traits (Add, Sub, Mul, Div, etc.)
@@ -337,7 +345,7 @@ impl Analyzer {
             .insert("Div".to_string(), create_binary_op_trait("Div", "div"));
         self.trait_definitions
             .insert("Rem".to_string(), create_binary_op_trait("Rem", "rem"));
-        
+
         // Register unary operator traits
         // Neg: -x
         self.trait_definitions.insert(
@@ -352,7 +360,7 @@ impl Analyzer {
                         name: "self".to_string(),
                         pattern: None,
                         type_: Type::Custom("Self".to_string()),
-                        ownership: OwnershipHint::Owned,  // THE WINDJAMMER WAY: Neg uses owned self!
+                        ownership: OwnershipHint::Owned, // THE WINDJAMMER WAY: Neg uses owned self!
                         is_mutable: false,
                     }],
                     return_type: Some(Type::Custom("Output".to_string())),
@@ -384,7 +392,14 @@ impl Analyzer {
     pub fn analyze_program(
         &mut self,
         program: &Program,
-    ) -> Result<(Vec<AnalyzedFunction>, SignatureRegistry), String> {
+    ) -> Result<
+        (
+            Vec<AnalyzedFunction>,
+            SignatureRegistry,
+            std::collections::HashMap<String, std::collections::HashMap<String, AnalyzedFunction>>,
+        ),
+        String,
+    > {
         let mut analyzed = Vec::new();
         let mut registry = SignatureRegistry::new();
 
@@ -435,6 +450,10 @@ impl Analyzer {
                 _ => {}
             }
         }
+
+        // NOTE: Trait signature inference is now done GLOBALLY after all files are compiled
+        // See ModuleCompiler::finalize_trait_inference() in main.rs
+        // (We no longer call infer_trait_signatures_from_impls here for single files)
 
         for item in &program.items {
             match item {
@@ -493,7 +512,7 @@ impl Analyzer {
                             // Abstract method - no analysis needed (no body)
                             continue;
                         }
-                        
+
                         // Convert TraitMethod to FunctionDecl for analysis
                         let func = FunctionDecl {
                             name: method.name.clone(),
@@ -509,7 +528,7 @@ impl Analyzer {
                             parent_type: None,
                             doc_comment: method.doc_comment.clone(),
                         };
-                        
+
                         // Trait methods with default implementations should use &self
                         // to work with unsized types. The Windjammer way: make it work!
                         let mut analyzed_func = self.analyze_trait_method(&func)?;
@@ -525,12 +544,21 @@ impl Analyzer {
                         // PHASE 9: Detect Cow optimizations
                         analyzed_func.cow_optimizations = self.detect_cow_opportunities(&func);
 
-                        // Store analyzed trait method for trait impl matching
-                        self.analyzed_trait_methods
+                        // THE WINDJAMMER WAY: Store analyzed trait method for trait impl matching
+                        // BUT: Don't overwrite if cross-file inference has already set it!
+                        // (finalize_trait_inference runs globally and sets the most permissive signature)
+                        let trait_methods = self
+                            .analyzed_trait_methods
                             .entry(decl.name.clone())
-                            .or_insert_with(HashMap::new)
-                            .insert(func.name.clone(), analyzed_func.clone());
+                            .or_insert_with(HashMap::new);
 
+                        // Only insert if not already present (from global inference)
+                        if !trait_methods.contains_key(&func.name) {
+                            trait_methods.insert(func.name.clone(), analyzed_func.clone());
+                        }
+
+                        // Add trait methods to analyzed list so codegen can access ownership info
+                        // They won't be generated as standalone functions (codegen skips trait methods)
                         let signature = self.build_signature(&analyzed_func);
                         registry.add_function(func.name.clone(), signature);
                         analyzed.push(analyzed_func);
@@ -543,18 +571,68 @@ impl Analyzer {
                         // Store in a global optimization list (TODO: add to Program-level analysis)
                     }
                 }
+                Item::Mod { items, .. } => {
+                    // Recursively analyze items inside inline modules
+                    // NOTE: We analyze them for signature registry, but don't add them
+                    // to the top-level analyzed list since they'll be generated inside their modules
+                    for item in items {
+                        match item {
+                            Item::Function { decl: func, .. } => {
+                                let mut analyzed_func = self.analyze_function(func)?;
+                                analyzed_func.const_static_optimizations =
+                                    self.detect_const_static_opportunities(&analyzed_func);
+                                analyzed_func.smallvec_optimizations =
+                                    self.detect_smallvec_opportunities(func);
+                                analyzed_func.cow_optimizations =
+                                    self.detect_cow_opportunities(func);
+                                let signature = self.build_signature(&analyzed_func);
+                                registry.add_function(func.name.clone(), signature);
+                                // Add to analyzed list for codegen to access (but marked as in-module)
+                                analyzed.push(analyzed_func);
+                            }
+                            Item::Impl {
+                                block: impl_block, ..
+                            } => {
+                                // Analyze methods in impl blocks inside modules
+                                for func in &impl_block.functions {
+                                    let mut analyzed_func =
+                                        if let Some(trait_name) = &impl_block.trait_name {
+                                            self.analyze_trait_impl_function(func, trait_name)?
+                                        } else {
+                                            self.analyze_function_in_impl(func, impl_block)?
+                                        };
+                                    analyzed_func.const_static_optimizations =
+                                        self.detect_const_static_opportunities(&analyzed_func);
+                                    analyzed_func.smallvec_optimizations =
+                                        self.detect_smallvec_opportunities(func);
+                                    analyzed_func.cow_optimizations =
+                                        self.detect_cow_opportunities(func);
+                                    let signature = self.build_signature(&analyzed_func);
+                                    registry.add_function(func.name.clone(), signature);
+                                    analyzed.push(analyzed_func);
+                                }
+                            }
+                            // Could recursively handle nested modules here
+                            _ => {}
+                        }
+                    }
+                }
                 _ => {}
             }
         }
 
-        Ok((analyzed, registry))
+        Ok((analyzed, registry, self.analyzed_trait_methods.clone()))
     }
 
     /// Analyze a trait method with default implementation
     /// Trait methods must use &self or &mut self (not owned self)
     /// to work with unsized types
     /// Helper: Convert OwnershipHint to OwnershipMode
-    fn convert_ownership_hint_to_mode(&self, hint: &OwnershipHint, param_name: &str) -> OwnershipMode {
+    fn convert_ownership_hint_to_mode(
+        &self,
+        hint: &OwnershipHint,
+        param_name: &str,
+    ) -> OwnershipMode {
         match hint {
             OwnershipHint::Owned => OwnershipMode::Owned,
             OwnershipHint::Ref => OwnershipMode::Borrowed,
@@ -570,32 +648,235 @@ impl Analyzer {
         }
     }
 
-    fn analyze_trait_method(&mut self, func: &FunctionDecl) -> Result<AnalyzedFunction, String> {
-        // Analyze the function normally first
-        let mut analyzed = self.analyze_function(func)?;
-        
-        // WINDJAMMER PHILOSOPHY: Force &self for trait methods with default impls
-        // Rust requires trait methods to use references (not owned self) unless
-        // you add `where Self: Sized`, which is too complex for users.
-        // 
-        // The Windjammer way: automatically infer &self for trait methods!
-        for (param_name, ownership) in analyzed.inferred_ownership.iter_mut() {
-            if param_name == "self" {
-                // Check if it was inferred as Owned
-                if *ownership == OwnershipMode::Owned {
-                    // Check if the method modifies self
-                    let modifies_self = self.function_modifies_self_fields(func);
-                    
-                    // Use &mut self if it modifies, &self otherwise
-                    *ownership = if modifies_self {
-                        OwnershipMode::MutBorrowed
-                    } else {
-                        OwnershipMode::Borrowed
-                    };
+    /// THE WINDJAMMER WAY: Infer trait method signatures from ALL implementations
+    /// If any impl needs &mut self, the trait gets &mut self
+    /// The compiler does the work, not the user!
+    pub fn infer_trait_signatures_from_impls(&mut self, program: &Program) -> Result<(), String> {
+        use std::collections::HashMap;
+
+        eprintln!(
+            "DEBUG: infer_trait_signatures_from_impls called with {} items",
+            program.items.len()
+        );
+
+        // Step 1: Collect all trait implementations WITH their impl blocks
+        // THE WINDJAMMER WAY: We need the impl block for proper ownership analysis
+        // Map: trait_name -> Vec<(ImplBlock, functions)>
+        let mut trait_impls: HashMap<String, Vec<crate::parser::ast::ImplBlock>> = HashMap::new();
+
+        for item in &program.items {
+            if let Item::Impl {
+                block: impl_block, ..
+            } = item
+            {
+                if let Some(trait_name) = &impl_block.trait_name {
+                    trait_impls
+                        .entry(trait_name.clone())
+                        .or_insert_with(Vec::new)
+                        .push(impl_block.clone());
                 }
             }
         }
-        
+
+        eprintln!("DEBUG: Found {} trait implementations", trait_impls.len());
+        for (trait_name, _) in &trait_impls {
+            eprintln!("DEBUG:   - {}", trait_name);
+        }
+
+        // Step 2: For each trait, analyze ALL implementations and determine most permissive signature
+        for (trait_name, impl_blocks) in trait_impls {
+            eprintln!(
+                "DEBUG INFERENCE: Processing trait: {} with {} impl blocks",
+                trait_name,
+                impl_blocks.len()
+            );
+            if let Some(trait_methods) = self.analyzed_trait_methods.get(&trait_name).cloned() {
+                eprintln!(
+                    "DEBUG INFERENCE:   Found {} methods in trait",
+                    trait_methods.len()
+                );
+                for (method_name, method_analysis) in &trait_methods {
+                    eprintln!(
+                        "DEBUG INFERENCE:     Method {} has self ownership: {:?}",
+                        method_name,
+                        method_analysis.inferred_ownership.get("self")
+                    );
+                }
+                let mut updated_methods = HashMap::new();
+
+                for (method_name, mut trait_method_analysis) in trait_methods {
+                    // THE WINDJAMMER WAY: Find the most permissive ownership needed across ALL impls
+                    // for BOTH self AND all parameters
+                    let mut most_permissive_self = OwnershipMode::Borrowed; // Start with &self
+                    let mut most_permissive_params: HashMap<String, OwnershipMode> = HashMap::new();
+
+                    for impl_block in &impl_blocks {
+                        for func in &impl_block.functions {
+                            if func.name == method_name {
+                                // THE WINDJAMMER WAY: Analyze impl function WITH impl block context
+                                // This ensures we correctly detect self mutations
+                                eprintln!(
+                                    "DEBUG INFERENCE: Analyzing impl for {}.{}",
+                                    trait_name, method_name
+                                );
+                                let impl_analysis =
+                                    self.analyze_function_in_impl(func, impl_block)?;
+                                eprintln!(
+                                    "DEBUG INFERENCE:   Impl inferred ownership: {:?}",
+                                    impl_analysis.inferred_ownership
+                                );
+
+                                // Check what ownership the impl needs for self
+                                if let Some(&impl_self_ownership) =
+                                    impl_analysis.inferred_ownership.get("self")
+                                {
+                                    eprintln!(
+                                        "DEBUG INFERENCE:   Impl self ownership: {:?}",
+                                        impl_self_ownership
+                                    );
+                                    // Determine which is more permissive
+                                    match (most_permissive_self, impl_self_ownership) {
+                                        (OwnershipMode::Borrowed, OwnershipMode::MutBorrowed) => {
+                                            most_permissive_self = OwnershipMode::MutBorrowed;
+                                        }
+                                        (OwnershipMode::Borrowed, OwnershipMode::Owned) => {
+                                            most_permissive_self = OwnershipMode::Owned;
+                                        }
+                                        (OwnershipMode::MutBorrowed, OwnershipMode::Owned) => {
+                                            most_permissive_self = OwnershipMode::Owned;
+                                        }
+                                        _ => {
+                                            // Keep current most_permissive_self
+                                        }
+                                    }
+                                }
+
+                                // THE WINDJAMMER WAY: Also check PARAMETER ownership
+                                for param_name in func.parameters.iter().map(|p| &p.name) {
+                                    if param_name == "self" {
+                                        continue; // Already handled above
+                                    }
+
+                                    if let Some(&impl_param_ownership) =
+                                        impl_analysis.inferred_ownership.get(param_name)
+                                    {
+                                        let current_param_ownership = most_permissive_params
+                                            .get(param_name)
+                                            .copied()
+                                            .unwrap_or(OwnershipMode::Owned); // Default to Owned (most restrictive for params)
+
+                                        // For parameters, Borrowed (&) is MORE permissive than Owned
+                                        let new_param_ownership =
+                                            match (current_param_ownership, impl_param_ownership) {
+                                                (OwnershipMode::Owned, OwnershipMode::Borrowed) => {
+                                                    OwnershipMode::Borrowed
+                                                }
+                                                (
+                                                    OwnershipMode::Owned,
+                                                    OwnershipMode::MutBorrowed,
+                                                ) => OwnershipMode::MutBorrowed,
+                                                (
+                                                    OwnershipMode::MutBorrowed,
+                                                    OwnershipMode::Borrowed,
+                                                ) => OwnershipMode::Borrowed,
+                                                _ => current_param_ownership, // Keep current
+                                            };
+
+                                        most_permissive_params
+                                            .insert(param_name.clone(), new_param_ownership);
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    // Update the trait method's self ownership to be most permissive
+                    trait_method_analysis
+                        .inferred_ownership
+                        .insert("self".to_string(), most_permissive_self);
+                    eprintln!(
+                        "DEBUG:     Method {} inferred self: {:?}",
+                        method_name, most_permissive_self
+                    );
+
+                    // Update all parameter ownerships to be most permissive
+                    for (param_name, param_ownership) in most_permissive_params {
+                        eprintln!(
+                            "DEBUG:     Method {} inferred param {}: {:?}",
+                            method_name, param_name, param_ownership
+                        );
+                        trait_method_analysis
+                            .inferred_ownership
+                            .insert(param_name, param_ownership);
+                    }
+
+                    updated_methods.insert(method_name, trait_method_analysis);
+                }
+
+                // Replace the trait's analyzed methods with updated versions
+                self.analyzed_trait_methods
+                    .insert(trait_name, updated_methods);
+            }
+        }
+
+        Ok(())
+    }
+
+    fn analyze_trait_method(&mut self, func: &FunctionDecl) -> Result<AnalyzedFunction, String> {
+        // Analyze the function normally first
+        let mut analyzed = self.analyze_function(func)?;
+
+        // WINDJAMMER PHILOSOPHY: Trait method ownership inference
+        // - For explicit references (`&self`, `&mut self`, `&Input`): ALWAYS preserve them
+        // - For `self` (Owned): Infer from body analysis (&self or &mut self)
+        // - For non-self params with no explicit `&`: Default to Owned
+
+        // Process ALL parameters
+        for param in &func.parameters {
+            if param.name == "self" {
+                // Check if user explicitly specified & or &mut
+                match &param.ownership {
+                    OwnershipHint::Ref => {
+                        // Explicit &self - preserve it
+                        analyzed
+                            .inferred_ownership
+                            .insert("self".to_string(), OwnershipMode::Borrowed);
+                    }
+                    OwnershipHint::Mut => {
+                        // Explicit &mut self - preserve it
+                        analyzed
+                            .inferred_ownership
+                            .insert("self".to_string(), OwnershipMode::MutBorrowed);
+                    }
+                    OwnershipHint::Owned | OwnershipHint::Inferred => {
+                        // Written as `self` (no explicit &) - infer from body
+                        let modifies_self = self.function_modifies_self_fields(func);
+                        let self_ownership = if modifies_self {
+                            OwnershipMode::MutBorrowed
+                        } else {
+                            OwnershipMode::Borrowed
+                        };
+                        analyzed
+                            .inferred_ownership
+                            .insert("self".to_string(), self_ownership);
+                    }
+                }
+            } else {
+                // Non-self parameters: Preserve explicit ownership or default to Owned
+                let explicit_ownership = match &param.ownership {
+                    OwnershipHint::Ref => Some(OwnershipMode::Borrowed),
+                    OwnershipHint::Mut => Some(OwnershipMode::MutBorrowed),
+                    OwnershipHint::Owned | OwnershipHint::Inferred => Some(OwnershipMode::Owned),
+                };
+
+                if let Some(ownership) = explicit_ownership {
+                    analyzed
+                        .inferred_ownership
+                        .insert(param.name.clone(), ownership);
+                }
+            }
+        }
+
         Ok(analyzed)
     }
 
@@ -613,15 +894,15 @@ impl Analyzer {
                 .map(|f| (f.name.clone(), f.clone()))
                 .collect(),
         );
-        
+
         let result = self.analyze_function(func);
-        
+
         // Clear impl block after analysis
         self.current_impl_functions = None;
-        
+
         result
     }
-    
+
     fn analyze_function(&mut self, func: &FunctionDecl) -> Result<AnalyzedFunction, String> {
         let mut inferred_ownership = HashMap::new();
 
@@ -633,6 +914,35 @@ impl Analyzer {
             )
         });
         let is_render3d = func.decorators.iter().any(|d| d.name == "render3d");
+
+        // THE WINDJAMMER WAY: Auto-Self Inference
+        // If a method uses `self` in its body but doesn't declare it as a parameter,
+        // automatically infer and add it.
+        let declares_self = func.parameters.iter().any(|p| p.name == "self");
+        let uses_self = self.function_uses_identifier("self", &func.body);
+
+        if uses_self && !declares_self {
+            // Auto-infer self ownership based on usage
+            let modifies_fields = self.function_modifies_self_fields(func);
+            let returns_self = self.function_returns_self(func);
+
+            let self_ownership = if returns_self {
+                // Builder pattern: mut self (owned)
+                OwnershipMode::Owned
+            } else if modifies_fields {
+                // Mutating method: &mut self
+                OwnershipMode::MutBorrowed
+            } else if self.is_used_in_binary_op("self", &func.body) {
+                // Copy types in operators: self (owned)
+                OwnershipMode::Owned
+            } else {
+                // Read-only: &self
+                OwnershipMode::Borrowed
+            };
+
+            // Store inferred self ownership
+            inferred_ownership.insert("self".to_string(), self_ownership);
+        }
 
         // Analyze each parameter to infer ownership mode
         for (i, param) in func.parameters.iter().enumerate() {
@@ -766,29 +1076,12 @@ impl Analyzer {
         let smallvec_optimizations = Vec::new(); // TODO: Implement detection
         let cow_optimizations = Vec::new(); // TODO: Implement detection
 
-        // SMART STRING INFERENCE: Build inferred parameter types (especially string → &str vs String)
+        // THE WINDJAMMER WAY: Keep parameter types as explicitly declared
+        // No smart string inference for parameters - respect the API contract
         let inferred_param_types: Vec<Type> = func
             .parameters
             .iter()
-            .map(|param| {
-                let ownership = inferred_ownership
-                    .get(&param.name)
-                    .cloned()
-                    .unwrap_or(OwnershipMode::Owned);
-
-                // Convert 'string' type based on inferred ownership
-                if matches!(param.type_, Type::String) {
-                    match ownership {
-                        OwnershipMode::Borrowed => Type::Reference(Box::new(Type::String)),
-                        OwnershipMode::MutBorrowed => {
-                            Type::MutableReference(Box::new(Type::String))
-                        }
-                        OwnershipMode::Owned => Type::String,
-                    }
-                } else {
-                    param.type_.clone()
-                }
-            })
+            .map(|param| param.type_.clone())
             .collect();
 
         Ok(AnalyzedFunction {
@@ -818,7 +1111,6 @@ impl Analyzer {
         // Start with regular analysis
         let mut analyzed = self.analyze_function(func)?;
 
-
         // Look up the trait definition
         // Try both the full trait name and just the last segment (e.g., "std::ops::Add" -> "Add")
         let trait_key = if let Some(pos) = trait_name.rfind("::") {
@@ -827,7 +1119,40 @@ impl Analyzer {
             trait_name
         };
 
-        if let Some(trait_decl) = self.trait_definitions.get(trait_key) {
+        // Check if this is a standard operator trait (std::ops::Add, Sub, Mul, etc.)
+        // These traits use `self` (owned) for Copy types, not `&self`
+        let is_std_operator_trait = matches!(
+            trait_key,
+            "Add"
+                | "Sub"
+                | "Mul"
+                | "Div"
+                | "Rem"
+                | "Neg"
+                | "Not"
+                | "BitAnd"
+                | "BitOr"
+                | "BitXor"
+                | "Shl"
+                | "Shr"
+        );
+
+        // For standard operator traits, use `self` (owned) instead of `&self`
+        if is_std_operator_trait {
+            // Standard operator trait (Add, Sub, Mul, etc.) - not defined in Windjammer stdlib
+            // These traits use `self` (owned) for the first parameter (self), not `&self`
+            // Example: `fn add(self, rhs: Rhs) -> Output`
+
+            // For the first parameter (self), use Owned for Copy types
+            if let Some(first_param) = func.parameters.first() {
+                if first_param.name == "self" {
+                    // Use Owned (self) for operator traits on Copy types
+                    analyzed
+                        .inferred_ownership
+                        .insert("self".to_string(), OwnershipMode::Owned);
+                }
+            }
+        } else if let Some(trait_decl) = self.trait_definitions.get(trait_key) {
             // Find the matching trait method
             if let Some(trait_method) = trait_decl.methods.iter().find(|m| m.name == func.name) {
                 // Override ALL parameters to match trait signature
@@ -836,38 +1161,92 @@ impl Analyzer {
                 for (i, trait_param) in trait_method.parameters.iter().enumerate() {
                     // Get the corresponding parameter from the implementation by position
                     if let Some(impl_param) = func.parameters.get(i) {
-                        if let Some(inferred_mode) =
-                            analyzed.inferred_ownership.get_mut(&impl_param.name)
+                        // WINDJAMMER PHILOSOPHY: Use ANALYZED trait method ownership, not AST ownership!
+                        // The AST might have `self` (Owned) but analysis infers `&self` (Borrowed).
+                        // Check if this trait method was analyzed (has default implementation)
+                        let trait_mode = if let Some(trait_methods) =
+                            self.analyzed_trait_methods.get(trait_key)
                         {
-                            // WINDJAMMER PHILOSOPHY: Use ANALYZED trait method ownership, not AST ownership!
-                            // The AST might have `self` (Owned) but analysis infers `&self` (Borrowed).
-                            // Check if this trait method was analyzed (has default implementation)
-                            let trait_mode = if let Some(trait_methods) = self.analyzed_trait_methods.get(trait_key) {
-                                if let Some(analyzed_trait_method) = trait_methods.get(&func.name) {
-                                    // Use analyzed ownership (takes priority!)
-                                    if let Some(analyzed_ownership) = analyzed_trait_method.inferred_ownership.get(&trait_param.name) {
-                                        *analyzed_ownership
-                                    } else {
-                                        // Fall back to converting AST ownership hint
-                                        self.convert_ownership_hint_to_mode(&trait_param.ownership, &trait_param.name)
-                                    }
+                            if let Some(analyzed_trait_method) = trait_methods.get(&func.name) {
+                                // Use analyzed ownership (takes priority!)
+                                if let Some(analyzed_ownership) = analyzed_trait_method
+                                    .inferred_ownership
+                                    .get(&trait_param.name)
+                                {
+                                    *analyzed_ownership
                                 } else {
-                                    // Trait method not analyzed, convert from AST
-                                    self.convert_ownership_hint_to_mode(&trait_param.ownership, &trait_param.name)
+                                    // Fall back to converting AST ownership hint
+                                    self.convert_ownership_hint_to_mode(
+                                        &trait_param.ownership,
+                                        &trait_param.name,
+                                    )
                                 }
                             } else {
-                                // Trait not analyzed, convert from AST
-                                self.convert_ownership_hint_to_mode(&trait_param.ownership, &trait_param.name)
-                            };
+                                // Trait method not analyzed, convert from AST
+                                self.convert_ownership_hint_to_mode(
+                                    &trait_param.ownership,
+                                    &trait_param.name,
+                                )
+                            }
+                        } else {
+                            // Trait not analyzed, convert from AST
+                            self.convert_ownership_hint_to_mode(
+                                &trait_param.ownership,
+                                &trait_param.name,
+                            )
+                        };
 
-                            // Use trait's ownership mode
-                            *inferred_mode = trait_mode;
-                        }
+                        // Determine final ownership based on whether trait has a body
+                        let final_mode = if trait_method.body.is_none() {
+                            // NO DEFAULT IMPLEMENTATION: Use trait's AST ownership EXACTLY
+                            // The trait signature is the contract - impl must match it precisely
+                            trait_mode
+                        } else {
+                            // HAS DEFAULT IMPLEMENTATION: Use the MORE RESTRICTIVE ownership
+                            // Get the impl's analyzed ownership for this parameter
+                            let impl_mode =
+                                analyzed.inferred_ownership.get(&impl_param.name).copied();
+
+                            // If impl needs &mut self but trait has &self, use &mut self
+                            // If impl needs &self but trait has self (owned), use &self
+                            // Priority: MutBorrowed > Borrowed > Owned
+                            match (trait_mode, impl_mode) {
+                                // If impl needs &mut, always use &mut (most restrictive)
+                                (_, Some(OwnershipMode::MutBorrowed)) => OwnershipMode::MutBorrowed,
+                                (OwnershipMode::MutBorrowed, _) => OwnershipMode::MutBorrowed,
+
+                                // If either needs &, use & (second most restrictive)
+                                (OwnershipMode::Borrowed, _) => OwnershipMode::Borrowed,
+                                (_, Some(OwnershipMode::Borrowed)) => OwnershipMode::Borrowed,
+
+                                // Otherwise use owned
+                                _ => trait_mode,
+                            }
+                        };
+
+                        // INSERT or UPDATE with the final ownership mode
+                        analyzed
+                            .inferred_ownership
+                            .insert(impl_param.name.clone(), final_mode);
                     }
+                }
+
+                // WINDJAMMER PHILOSOPHY: For traits WITHOUT default implementations,
+                // update the trait method's analyzed ownership from the impl.
+                // This ensures the trait signature matches the impl's inferred signature.
+                if trait_method.body.is_none() {
+                    // Trait has no default implementation - use impl's analyzed ownership
+                    // Create or update the analyzed trait method entry
+                    let analyzed_trait_methods_for_trait = self
+                        .analyzed_trait_methods
+                        .entry(trait_key.to_string())
+                        .or_insert_with(std::collections::HashMap::new);
+
+                    // Store the impl's analyzed ownership for this trait method
+                    analyzed_trait_methods_for_trait.insert(func.name.clone(), analyzed.clone());
                 }
             }
         }
-
 
         Ok(analyzed)
     }
@@ -891,14 +1270,20 @@ impl Analyzer {
             return Ok(OwnershipMode::Owned);
         }
 
-        // 2.5. SPECIAL CASE: String parameters passed only to read-only functions
-        // Check this BEFORE is_stored to allow &str inference for println(text)
-        // TODO: Use SignatureRegistry instead of hardcoding
-        if matches!(param_type, Type::String)
-            && self.is_only_passed_to_read_only_fns(param_name, body)
-        {
-            return Ok(OwnershipMode::Borrowed);
+        // 2.3. WINDJAMMER FIX: Check if parameter is used in if/else expression
+        // When a parameter appears in an if/else that's assigned or returned,
+        // it needs to be owned to match the other branch's ownership
+        if self.is_used_in_if_else_expression(param_name, body) {
+            return Ok(OwnershipMode::Owned);
         }
+
+        // THE WINDJAMMER WAY: Removed aggressive string optimization
+        // When a user writes `text: string`, they mean `String` (owned), period.
+        // Do NOT auto-convert to `&str` just because it's "only passed to read-only functions".
+        // That breaks API contracts and causes confusing type errors.
+        //
+        // Smart inference is OFF for explicit type annotations.
+        // (Future: Could add #[optimize] annotation for user-requested optimization)
 
         // 3. Check if parameter is stored in a struct or collection
         if self.is_stored(param_name, body) {
@@ -919,178 +1304,146 @@ impl Analyzer {
             return Ok(OwnershipMode::Owned);
         }
 
-        // 6. For Copy types with read-only access, pass by value (Owned)
-        // For non-Copy types with read-only access, borrow (&)
-        // EXCEPTIONS:
-        // - Copy types should stay owned
-        // - Generic types should stay owned - trait bounds are on T, not &T
+        // 6. Default ownership based on type
+        // THE WINDJAMMER WAY: Respect explicit type annotations
         //
-        // SMART STRING INFERENCE: String parameters that are only read → &str (Borrowed)
-        // This allows: fn process(text: string) with text only read → text: &str
-        // The caller conversion is automatic: process("hello") works for both &str and String
+        // - Copy types → Owned (passed by value)
+        // - Generic types → Owned (trait bounds are on T, not &T)
+        // - String type → Owned (user said String, not &str)
+        // - Other types → Borrowed (optimize by default)
+
         if self.is_copy_type(param_type) {
             Ok(OwnershipMode::Owned)
         } else if Self::is_generic_type_param(param_type) {
             // Keep generic types owned - trait bounds are on T, not &T
             Ok(OwnershipMode::Owned)
+        } else if matches!(param_type, Type::String) {
+            // THE WINDJAMMER WAY: Explicit String type annotation means owned String
+            // User wrote `text: string` → they want `text: String`, not `text: &str`
+            Ok(OwnershipMode::Owned)
         } else {
+            // Other non-Copy types can be borrowed by default
             Ok(OwnershipMode::Borrowed)
         }
     }
 
-    fn is_only_passed_to_read_only_fns(&self, name: &str, statements: &[Statement]) -> bool {
-        // Check if the parameter is ONLY used as an argument to read-only functions
-        // like println, print, format, etc. (functions that take &str)
+    fn is_used_in_if_else_expression(&self, name: &str, statements: &[Statement]) -> bool {
+        // Check if parameter is used in an if/else expression
+        // Example:
+        //   let x = if cond { Thing::new(...) } else { param }
         //
-        // If the parameter is used anywhere else, return false
-
-        let read_only_fns = [
-            "println", "print", "eprint", "eprintln", "format", "write", "writeln",
-        ];
+        // When param is in an if/else that gets assigned or returned,
+        // it needs to be owned to match the other branch's type
 
         for stmt in statements {
-            if !self.stmt_only_uses_in_read_only_fns(name, stmt, &read_only_fns) {
-                return false;
+            if self.stmt_has_if_else_with_param(name, stmt) {
+                return true;
             }
         }
-
-        true
+        false
     }
 
-    fn stmt_only_uses_in_read_only_fns(
-        &self,
-        name: &str,
-        stmt: &Statement,
-        read_only_fns: &[&str],
-    ) -> bool {
+    fn stmt_has_if_else_with_param(&self, name: &str, stmt: &Statement) -> bool {
         match stmt {
-            Statement::Expression { expr, .. } => {
-                self.expr_only_uses_in_read_only_fns(name, expr, read_only_fns)
-            }
             Statement::Let { value, .. } => {
-                self.expr_only_uses_in_read_only_fns(name, value, read_only_fns)
+                // let x = if ... { ... } else { param }
+                self.expr_is_if_else_with_param(name, value)
             }
-            Statement::Return { value, .. } => value
-                .as_ref()
-                .is_none_or(|expr| self.expr_only_uses_in_read_only_fns(name, expr, read_only_fns)),
+            Statement::Return {
+                value: Some(expr), ..
+            } => {
+                // return if ... { ... } else { param }
+                self.expr_is_if_else_with_param(name, expr)
+            }
+            Statement::Expression { expr, .. } => {
+                // Implicit return or assignment
+                self.expr_is_if_else_with_param(name, expr)
+            }
             Statement::If {
-                condition,
                 then_block,
                 else_block,
                 ..
             } => {
-                self.expr_only_uses_in_read_only_fns(name, condition, read_only_fns)
-                    && self.stmts_only_use_in_read_only_fns(name, then_block, read_only_fns)
-                    && else_block.as_ref().is_none_or(|block| {
-                        self.stmts_only_use_in_read_only_fns(name, block, read_only_fns)
-                    })
+                // Check nested if statements
+                self.stmts_have_if_else_with_param(name, then_block)
+                    || else_block
+                        .as_ref()
+                        .is_some_and(|block| self.stmts_have_if_else_with_param(name, block))
             }
-            Statement::While {
-                condition, body, ..
-            } => {
-                self.expr_only_uses_in_read_only_fns(name, condition, read_only_fns)
-                    && self.stmts_only_use_in_read_only_fns(name, body, read_only_fns)
-            }
-            Statement::For { body, .. } => {
-                self.stmts_only_use_in_read_only_fns(name, body, read_only_fns)
-            }
-            Statement::Assignment { target, value, .. } => {
-                // THE WINDJAMMER WAY: Field assignments are NOT read-only!
-                // If assigning parameter to a field: self.name = name
-                // This requires owned String, not &str
-                if let Expression::FieldAccess { object, .. } = target {
-                    if matches!(&**object, Expression::Identifier { name: id, .. } if id == "self") {
-                        if matches!(value, Expression::Identifier { name: id, .. } if id == name) {
-                            // Direct field assignment of parameter → NOT read-only!
-                            return false;
-                        }
-                    }
-                }
-                // Other assignments are considered read-only
-                true
-            }
-            _ => true, // Other statements don't use the parameter
+            _ => false,
         }
     }
 
-    fn stmts_only_use_in_read_only_fns(
-        &self,
-        name: &str,
-        stmts: &[Statement],
-        read_only_fns: &[&str],
-    ) -> bool {
+    fn stmts_have_if_else_with_param(&self, name: &str, stmts: &[Statement]) -> bool {
         stmts
             .iter()
-            .all(|stmt| self.stmt_only_uses_in_read_only_fns(name, stmt, read_only_fns))
+            .any(|stmt| self.stmt_has_if_else_with_param(name, stmt))
     }
 
-    fn expr_only_uses_in_read_only_fns(
-        &self,
-        name: &str,
-        expr: &Expression,
-        read_only_fns: &[&str],
-    ) -> bool {
+    fn expr_is_if_else_with_param(&self, name: &str, expr: &Expression) -> bool {
         match expr {
-            Expression::Identifier { name: id_name, .. } => {
-                // If this is our parameter used directly (not in a call), it's NOT read-only
-                id_name != name
+            Expression::Block { statements, .. } => {
+                // Check if block contains an if statement with the parameter
+                for stmt in statements {
+                    if let Statement::If {
+                        then_block,
+                        else_block,
+                        ..
+                    } = stmt
+                    {
+                        let in_then = self.stmts_mention_identifier(name, then_block);
+                        let in_else = else_block
+                            .as_ref()
+                            .is_some_and(|block| self.stmts_mention_identifier(name, block));
+                        if in_then || in_else {
+                            return true;
+                        }
+                    }
+                }
+                false
             }
+            _ => false,
+        }
+    }
+
+    fn stmts_mention_identifier(&self, name: &str, stmts: &[Statement]) -> bool {
+        stmts
+            .iter()
+            .any(|stmt| self.stmt_mentions_identifier(name, stmt))
+    }
+
+    fn stmt_mentions_identifier(&self, name: &str, stmt: &Statement) -> bool {
+        match stmt {
+            Statement::Expression { expr, .. } => self.expr_mentions_identifier(name, expr),
+            Statement::Return {
+                value: Some(expr), ..
+            } => self.expr_mentions_identifier(name, expr),
+            Statement::Let { value, .. } => self.expr_mentions_identifier(name, value),
+            _ => false,
+        }
+    }
+
+    fn expr_mentions_identifier(&self, name: &str, expr: &Expression) -> bool {
+        match expr {
+            Expression::Identifier { name: id, .. } => id == name,
+            Expression::FieldAccess { object, .. } => self.expr_mentions_identifier(name, object),
             Expression::Call {
                 function,
                 arguments,
                 ..
             } => {
-                // Check if this is a call to a read-only function
-                let is_read_only_call =
-                    if let Expression::Identifier { name: fn_name, .. } = &**function {
-                        read_only_fns.contains(&fn_name.as_str())
-                    } else {
-                        false
-                    };
-
-                if is_read_only_call {
-                    // This is a read-only function - check if our parameter is used as argument
-                    let uses_our_param = arguments
+                self.expr_mentions_identifier(name, function)
+                    || arguments
                         .iter()
-                        .any(|(_, arg)| self.expression_uses_identifier(name, arg));
-
-                    // If this call uses our parameter, it's okay (read-only usage)
-                    // If not, continue checking recursively
-                    uses_our_param
-                        || arguments.iter().all(|(_, arg)| {
-                            self.expr_only_uses_in_read_only_fns(name, arg, read_only_fns)
-                        })
-                } else {
-                    // Not a read-only function - if it uses our parameter, fail
-                    !self.expression_uses_identifier(name, function)
-                        && arguments
-                            .iter()
-                            .all(|(_, arg)| !self.expression_uses_identifier(name, arg))
-                }
-            }
-            Expression::MethodCall {
-                object, arguments, ..
-            } => {
-                // Method calls are NOT read-only (could be .push(), .store(), etc.)
-                // If our parameter is used, fail
-                !self.expression_uses_identifier(name, object)
-                    && arguments
-                        .iter()
-                        .all(|(_, arg)| !self.expression_uses_identifier(name, arg))
+                        .any(|(_, arg)| self.expr_mentions_identifier(name, arg))
             }
             Expression::Binary { left, right, .. } => {
-                !self.expression_uses_identifier(name, left)
-                    && !self.expression_uses_identifier(name, right)
+                self.expr_mentions_identifier(name, left)
+                    || self.expr_mentions_identifier(name, right)
             }
-            _ => {
-                // For other expressions, the parameter must not be used at all
-                !self.expression_uses_identifier_in_expr(name, expr)
-            }
+            Expression::Unary { operand, .. } => self.expr_mentions_identifier(name, operand),
+            _ => false,
         }
-    }
-
-    fn expression_uses_identifier_in_expr(&self, name: &str, expr: &Expression) -> bool {
-        self.expression_uses_identifier(name, expr)
     }
 
     fn is_mutated(&self, name: &str, statements: &[Statement]) -> bool {
@@ -1104,9 +1457,11 @@ impl Analyzer {
                         }
                     }
 
-                    // Check if the assignment target is a field of the parameter
+                    // THE WINDJAMMER WAY: Check if the assignment target is a field of the parameter
                     // e.g., p.x = ... or p.position.x = ...
-                    if self.expression_uses_identifier(name, target) {
+                    // But NOT if the parameter is just used in an index expression!
+                    // e.g., arr[entity.index] = x  <- entity is READ, not mutated
+                    if self.is_direct_mutation_target(name, target) {
                         return true;
                     }
                 }
@@ -1141,6 +1496,35 @@ impl Analyzer {
             }
         }
         false
+    }
+
+    /// Check if a parameter is the DIRECT target of mutation
+    /// Returns true for: p = x, p.field = x, p.field.nested = x
+    /// Returns false for: arr[p.index] = x, obj[p] = x  (p is only READ here)
+    fn is_direct_mutation_target(&self, name: &str, target: &Expression) -> bool {
+        match target {
+            // Direct assignment: p = ...
+            Expression::Identifier { name: id, .. } => id == name,
+
+            // Field access: p.x = ... or p.field.nested = ...
+            Expression::FieldAccess { object, .. } => {
+                // Recursively check if parameter is the object being accessed
+                self.is_direct_mutation_target(name, object)
+            }
+
+            // Index access: arr[i] = ...
+            // The parameter is NOT being mutated if it appears in the index
+            // Example: arr[entity.index] = x  <- entity is READ, not mutated
+            Expression::Index { object, .. } => {
+                // Only check the object, not the index!
+                // If `name` appears in the object, then it's being mutated
+                // e.g., p[0] = x  <- p is mutated
+                // But NOT: arr[p.index] = x  <- p is only READ
+                self.is_direct_mutation_target(name, object)
+            }
+
+            _ => false,
+        }
     }
 
     fn has_mutable_method_call(&self, name: &str, expr: &Expression) -> bool {
@@ -1435,38 +1819,6 @@ impl Analyzer {
         false
     }
 
-    #[allow(clippy::only_used_in_recursion)]
-    fn expression_uses_identifier(&self, name: &str, expr: &Expression) -> bool {
-        match expr {
-            Expression::Identifier { name: id, .. } => id == name,
-            Expression::Binary { left, right, .. } => {
-                self.expression_uses_identifier(name, left)
-                    || self.expression_uses_identifier(name, right)
-            }
-            Expression::Unary { operand, .. } => self.expression_uses_identifier(name, operand),
-            Expression::Call { arguments, .. } => arguments
-                .iter()
-                .any(|(_label, arg)| self.expression_uses_identifier(name, arg)),
-            Expression::MethodCall {
-                object, arguments, ..
-            } => {
-                self.expression_uses_identifier(name, object)
-                    || arguments
-                        .iter()
-                        .any(|(_label, arg)| self.expression_uses_identifier(name, arg))
-            }
-            Expression::FieldAccess { object, .. } => self.expression_uses_identifier(name, object),
-            Expression::TryOp { expr: inner, .. } => self.expression_uses_identifier(name, inner),
-            Expression::StructLiteral { fields, .. } => {
-                // Check if parameter is used in any field of the struct literal
-                fields.iter().any(|(_field_name, field_expr)| {
-                    self.expression_uses_identifier(name, field_expr)
-                })
-            }
-            _ => false,
-        }
-    }
-
     fn is_used_in_binary_op(&self, name: &str, statements: &[Statement]) -> bool {
         for stmt in statements {
             match stmt {
@@ -1694,7 +2046,27 @@ impl Analyzer {
                         OwnershipMode::Owned
                     }
                 } else {
-                    inferred
+                    // THE WINDJAMMER WAY: Respect explicit ownership for non-Copy types
+                    // If a parameter is explicitly declared as `String` (not `&string`),
+                    // it should remain Owned, not be auto-borrowed just because it's read-only.
+                    // This respects the user's explicit API contract.
+                    //
+                    // Only apply inference for implicitly-typed parameters.
+                    match &param.type_ {
+                        Type::String
+                        | Type::Vec(_)
+                        | Type::Array(_, _)
+                        | Type::Custom(_)
+                        | Type::Parameterized(_, _) => {
+                            // Explicitly owned types should stay owned unless mutated
+                            if inferred == OwnershipMode::MutBorrowed {
+                                OwnershipMode::MutBorrowed
+                            } else {
+                                OwnershipMode::Owned
+                            }
+                        }
+                        _ => inferred,
+                    }
                 }
             })
             .collect();
@@ -1707,44 +2079,22 @@ impl Analyzer {
             .map(|p| p.name == "self" || p.name == "mut self")
             .unwrap_or(false);
 
-        // SMART STRING INFERENCE: Convert 'string' type to &str or String based on usage
-        // WINDJAMMER PHILOSOPHY: User writes 'string', compiler infers ownership
+        // THE WINDJAMMER WAY: Respect explicit type annotations
+        // When a user writes `text: string`, they mean `String` (owned).
+        // Do NOT auto-convert to `&str` - that's too aggressive and breaks API contracts.
         //
-        // Rules:
-        // - Parameter only read? → &str (borrowed)
-        // - Parameter stored/returned? → String (owned)
+        // Smart inference should only apply to:
+        // - Local variables (not parameters)
+        // - Return types (when optimizing)
+        //
+        // For parameters, the user's explicit type annotation is the contract.
         let param_types: Vec<Type> = func
             .decl
             .parameters
             .iter()
-            .enumerate()
-            .map(|(i, param)| {
-                // Get the inferred ownership for this parameter
-                let ownership = param_ownership
-                    .get(i)
-                    .cloned()
-                    .unwrap_or(OwnershipMode::Owned);
-
-                // Smart inference for 'string' type
-                if matches!(param.type_, Type::String) {
-                    match ownership {
-                        OwnershipMode::Borrowed => {
-                            // Read-only usage → infer &str
-                            Type::Reference(Box::new(Type::String))
-                        }
-                        OwnershipMode::MutBorrowed => {
-                            // Mutable usage → infer &mut str (rare but possible)
-                            Type::MutableReference(Box::new(Type::String))
-                        }
-                        OwnershipMode::Owned => {
-                            // Stored/returned → infer String
-                            Type::String
-                        }
-                    }
-                } else {
-                    // Not a string type - use as-is
-                    param.type_.clone()
-                }
+            .map(|param| {
+                // Respect explicit type annotations - NO smart inference for parameters
+                param.type_.clone()
             })
             .collect();
 
@@ -1758,6 +2108,7 @@ impl Analyzer {
             return_type,
             return_ownership: OwnershipMode::Owned, // For now, always owned
             has_self_receiver,
+            is_extern: func.decl.is_extern,
         }
     }
 
@@ -2916,26 +3267,38 @@ impl Analyzer {
     fn is_mutating_method(&self, method: &str) -> bool {
         matches!(
             method,
-            "push" | "push_str" | "clear" | "pop" | "remove" | "insert" | "append" | "get_mut" | "allocate" | "free" | "update" | "play" | "reset"
+            "push"
+                | "push_str"
+                | "clear"
+                | "pop"
+                | "remove"
+                | "insert"
+                | "append"
+                | "get_mut"
+                | "allocate"
+                | "free"
+                | "update"
+                | "play"
+                | "reset"
         )
     }
 
     /// Check if a function modifies self fields (for impl methods)
     fn function_modifies_self_fields(&self, func: &FunctionDecl) -> bool {
         // THE WINDJAMMER WAY: Check ALL cases that require &mut self
-        
+
         // Case 1: Return type is &mut T (requires &mut self)
         if let Some(return_type) = &func.return_type {
             if self.type_is_mut_ref(return_type) {
                 return true;
             }
         }
-        
+
         // Case 2: Function calls other methods on self that need &mut self
         if self.function_calls_mutating_self_methods(func) {
             return true;
         }
-        
+
         // Case 3: Function modifies self fields directly
         for stmt in &func.body {
             if self.statement_modifies_self_fields(stmt) {
@@ -2944,7 +3307,7 @@ impl Analyzer {
         }
         false
     }
-    
+
     /// Check if a function modifies self fields WITHOUT checking for method calls
     /// (prevents infinite recursion when analyzing cross-method dependencies)
     fn function_modifies_self_fields_recursive(&self, func: &FunctionDecl) -> bool {
@@ -2954,7 +3317,7 @@ impl Analyzer {
                 return true;
             }
         }
-        
+
         // Case 2: Function modifies self fields directly
         for stmt in &func.body {
             if self.statement_modifies_self_fields(stmt) {
@@ -2978,7 +3341,7 @@ impl Analyzer {
             _ => false,
         }
     }
-    
+
     /// Check if function calls methods on self that require &mut self
     fn function_calls_mutating_self_methods(&self, func: &FunctionDecl) -> bool {
         for stmt in &func.body {
@@ -2988,13 +3351,11 @@ impl Analyzer {
         }
         false
     }
-    
+
     /// Check if statement calls methods on self that require &mut self
     fn statement_calls_mutating_self_methods(&self, stmt: &Statement) -> bool {
         match stmt {
-            Statement::Expression { expr, .. } => {
-                self.expression_calls_mutating_self_methods(expr)
-            }
+            Statement::Expression { expr, .. } => self.expression_calls_mutating_self_methods(expr),
             Statement::If {
                 then_block,
                 else_block,
@@ -3015,7 +3376,7 @@ impl Analyzer {
             _ => false,
         }
     }
-    
+
     /// Check if expression calls methods on self that require &mut self
     fn expression_calls_mutating_self_methods(&self, expr: &Expression) -> bool {
         match expr {
@@ -3028,7 +3389,7 @@ impl Analyzer {
                         if self.is_mutating_method(method) {
                             return true;
                         }
-                        
+
                         // 2. Check methods in current impl block
                         if let Some(impl_functions) = &self.current_impl_functions {
                             if let Some(called_func) = impl_functions.get(method) {
@@ -3049,7 +3410,7 @@ impl Analyzer {
             _ => false,
         }
     }
-    
+
     /// Check if a statement modifies self fields
     fn statement_modifies_self_fields(&self, stmt: &Statement) -> bool {
         match stmt {
@@ -3093,7 +3454,9 @@ impl Analyzer {
             Statement::Return { value, .. } => {
                 // Check if the return expression contains mutations of self fields
                 // e.g., return self.allocator.allocate()
-                value.as_ref().is_some_and(|expr| self.expression_mutates_self_fields(expr))
+                value
+                    .as_ref()
+                    .is_some_and(|expr| self.expression_mutates_self_fields(expr))
             }
             Statement::Let { value, .. } => {
                 // Check if the let binding contains mutations of self fields
@@ -3195,6 +3558,108 @@ impl Analyzer {
         match expr {
             Expression::Identifier { name, .. } if name == "self" => true,
             Expression::StructLiteral { name, .. } if name == type_name => true,
+            _ => false,
+        }
+    }
+
+    /// Check if a function uses a specific identifier (e.g., "self")
+    /// This is used for auto-self inference.
+    fn function_uses_identifier(&self, name: &str, statements: &[Statement]) -> bool {
+        for stmt in statements {
+            if self.statement_uses_identifier(name, stmt) {
+                return true;
+            }
+        }
+        false
+    }
+
+    /// Check if a statement uses a specific identifier
+    fn statement_uses_identifier(&self, name: &str, stmt: &Statement) -> bool {
+        match stmt {
+            Statement::Expression { expr, .. } => self.expression_uses_identifier(name, expr),
+            Statement::Let { value, .. } => self.expression_uses_identifier(name, value),
+            Statement::Assignment { target, value, .. } => {
+                self.expression_uses_identifier(name, target)
+                    || self.expression_uses_identifier(name, value)
+            }
+            Statement::Return {
+                value: Some(expr), ..
+            } => self.expression_uses_identifier(name, expr),
+            Statement::If {
+                condition,
+                then_block,
+                else_block,
+                ..
+            } => {
+                self.expression_uses_identifier(name, condition)
+                    || self.function_uses_identifier(name, then_block)
+                    || else_block
+                        .as_ref()
+                        .map_or(false, |block| self.function_uses_identifier(name, block))
+            }
+            Statement::While {
+                condition, body, ..
+            } => {
+                self.expression_uses_identifier(name, condition)
+                    || self.function_uses_identifier(name, body)
+            }
+            Statement::For { iterable, body, .. } => {
+                self.expression_uses_identifier(name, iterable)
+                    || self.function_uses_identifier(name, body)
+            }
+            Statement::Match { value, arms, .. } => {
+                self.expression_uses_identifier(name, value)
+                    || arms
+                        .iter()
+                        .any(|arm| self.expression_uses_identifier(name, &arm.body))
+            }
+            _ => false,
+        }
+    }
+
+    /// Check if an expression uses a specific identifier
+    fn expression_uses_identifier(&self, name: &str, expr: &Expression) -> bool {
+        match expr {
+            Expression::Identifier { name: id, .. } => id == name,
+            Expression::FieldAccess { object, .. } => self.expression_uses_identifier(name, object),
+            Expression::MethodCall {
+                object, arguments, ..
+            } => {
+                self.expression_uses_identifier(name, object)
+                    || arguments
+                        .iter()
+                        .any(|(_, arg)| self.expression_uses_identifier(name, arg))
+            }
+            Expression::Call { arguments, .. } => arguments
+                .iter()
+                .any(|(_, arg)| self.expression_uses_identifier(name, arg)),
+            Expression::Binary { left, right, .. } => {
+                self.expression_uses_identifier(name, left)
+                    || self.expression_uses_identifier(name, right)
+            }
+            Expression::Unary { operand, .. } => self.expression_uses_identifier(name, operand),
+            Expression::Index { object, index, .. } => {
+                self.expression_uses_identifier(name, object)
+                    || self.expression_uses_identifier(name, index)
+            }
+            Expression::Block { statements, .. } => self.function_uses_identifier(name, statements),
+            Expression::Array { elements, .. } => elements
+                .iter()
+                .any(|el| self.expression_uses_identifier(name, el)),
+            Expression::Tuple { elements, .. } => elements
+                .iter()
+                .any(|el| self.expression_uses_identifier(name, el)),
+            Expression::MapLiteral { pairs, .. } => pairs.iter().any(|(k, v)| {
+                self.expression_uses_identifier(name, k) || self.expression_uses_identifier(name, v)
+            }),
+            Expression::StructLiteral { fields, .. } => fields
+                .iter()
+                .any(|(_, v)| self.expression_uses_identifier(name, v)),
+            Expression::Cast { expr, .. } => self.expression_uses_identifier(name, expr),
+            Expression::Range { start, end, .. } => {
+                self.expression_uses_identifier(name, start)
+                    || self.expression_uses_identifier(name, end)
+            }
             _ => false,
         }
     }
@@ -3334,8 +3799,9 @@ impl Analyzer {
                     // Track the variable being assigned to
                     self.mutated_variables.insert(name.clone());
                 }
-                Statement::Assignment { .. } => {
-                    // Complex target (field access, etc.) - not a simple variable mutation
+                Statement::Assignment { target, .. } => {
+                    // Track field mutations (x.field = ...) or index mutations (x[i] = ...)
+                    self.collect_mutation_target(target);
                 }
                 Statement::If {
                     then_block,
@@ -3371,8 +3837,47 @@ impl Analyzer {
                 Statement::While { body, .. } | Statement::Loop { body, .. } => {
                     self.collect_mutations(body);
                 }
+                // Track method calls that mutate (e.g., vec.push(x))
+                Statement::Expression { expr, .. } => {
+                    self.collect_mutations_in_expression(expr);
+                }
                 _ => {}
             }
+        }
+    }
+
+    /// Track mutations in expressions (method calls that mutate)
+    fn collect_mutations_in_expression(&mut self, expr: &Expression) {
+        match expr {
+            Expression::MethodCall { object, method, .. } => {
+                // Common mutating methods
+                let mutating_methods = [
+                    "push",
+                    "pop",
+                    "insert",
+                    "remove",
+                    "clear",
+                    "append",
+                    "extend",
+                    "truncate",
+                    "resize",
+                    "sort",
+                    "reverse",
+                    "dedup",
+                    "retain",
+                    "drain",
+                    "split_off",
+                    "swap_remove",
+                ];
+
+                if mutating_methods.contains(&method.as_str()) {
+                    // Mark the object as mutated
+                    if let Expression::Identifier { name, .. } = &**object {
+                        self.mutated_variables.insert(name.clone());
+                    }
+                }
+            }
+            _ => {}
         }
     }
 
@@ -3425,6 +3930,26 @@ impl Analyzer {
     /// Check if a variable is mutated (for automatic mut inference)
     pub fn is_variable_mutated(&self, var_name: &str) -> bool {
         self.mutated_variables.contains(var_name)
+    }
+
+    /// Track mutation target (left side of assignment)
+    /// x.field = ... means x is mutated
+    /// arr[i] = ... means arr is mutated
+    fn collect_mutation_target(&mut self, expr: &Expression) {
+        match expr {
+            Expression::Identifier { name, .. } => {
+                self.mutated_variables.insert(name.clone());
+            }
+            Expression::FieldAccess { object, .. } => {
+                // x.field = ... means x is mutated
+                self.collect_mutation_target(object);
+            }
+            Expression::Index { object, .. } => {
+                // arr[i] = ... means arr is mutated
+                self.collect_mutation_target(object);
+            }
+            _ => {}
+        }
     }
 }
 

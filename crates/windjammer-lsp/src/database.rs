@@ -178,6 +178,7 @@ pub fn imports<'db>(db: &'db dyn salsa::Database, file: SourceFile) -> ImportInf
             path,
             alias: _,
             location: _,
+            is_pub: _,
         } = item
         {
             let import_path = path.join(".");

@@ -4,7 +4,6 @@ use std::path::PathBuf;
 use std::process::Command;
 
 #[test]
-#[ignore] // TODO: Fix std::ops import mapping
 fn test_std_ops_imports_map_to_rust_stdlib() {
     let wj_file = PathBuf::from("tests/std_ops_import_test.wj");
     let output_dir = PathBuf::from("./build/tests/std_ops_test");

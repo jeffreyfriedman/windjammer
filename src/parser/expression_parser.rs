@@ -324,11 +324,13 @@ impl Parser {
                         let mut types = vec![self.parse_type()?];
                         while self.current_token() == &Token::Comma {
                             self.advance();
-                            if self.current_token() != &Token::Gt {
+                            if self.current_token() != &Token::Gt
+                                && self.current_token() != &Token::Shr
+                            {
                                 types.push(self.parse_type()?);
                             }
                         }
-                        self.expect(Token::Gt)?;
+                        self.expect_gt_or_split_shr()?; // Handle nested generics
 
                         // Expect function call after turbofish
                         if self.current_token() == &Token::LParen {
@@ -360,11 +362,13 @@ impl Parser {
                                 let mut types = vec![self.parse_type()?];
                                 while self.current_token() == &Token::Comma {
                                     self.advance();
-                                    if self.current_token() != &Token::Gt {
+                                    if self.current_token() != &Token::Gt
+                                        && self.current_token() != &Token::Shr
+                                    {
                                         types.push(self.parse_type()?);
                                     }
                                 }
-                                self.expect(Token::Gt)?;
+                                self.expect_gt_or_split_shr()?; // Handle nested generics
                                 Some(types)
                             } else {
                                 // Not turbofish - don't consume ::, let the loop handle it
@@ -1410,11 +1414,13 @@ impl Parser {
                                     let mut types = vec![self.parse_type()?];
                                     while self.current_token() == &Token::Comma {
                                         self.advance();
-                                        if self.current_token() != &Token::Gt {
+                                        if self.current_token() != &Token::Gt
+                                            && self.current_token() != &Token::Shr
+                                        {
                                             types.push(self.parse_type()?);
                                         }
                                     }
-                                    self.expect(Token::Gt)?;
+                                    self.expect_gt_or_split_shr()?; // Handle nested generics
                                     Some(types)
                                 } else {
                                     // Not turbofish - don't consume ::
@@ -1475,11 +1481,13 @@ impl Parser {
                         let mut types = vec![self.parse_type()?];
                         while self.current_token() == &Token::Comma {
                             self.advance();
-                            if self.current_token() != &Token::Gt {
+                            if self.current_token() != &Token::Gt
+                                && self.current_token() != &Token::Shr
+                            {
                                 types.push(self.parse_type()?);
                             }
                         }
-                        self.expect(Token::Gt)?;
+                        self.expect_gt_or_split_shr()?; // Handle nested generics
 
                         // Now expect either () for call, :: for path continuation, or identifier
                         if self.current_token() == &Token::LParen {
@@ -1565,11 +1573,13 @@ impl Parser {
                                 let mut types = vec![self.parse_type()?];
                                 while self.current_token() == &Token::Comma {
                                     self.advance();
-                                    if self.current_token() != &Token::Gt {
+                                    if self.current_token() != &Token::Gt
+                                        && self.current_token() != &Token::Shr
+                                    {
                                         types.push(self.parse_type()?);
                                     }
                                 }
-                                self.expect(Token::Gt)?;
+                                self.expect_gt_or_split_shr()?; // Handle nested generics
                                 Some(types)
                             } else {
                                 // Not turbofish - don't consume ::

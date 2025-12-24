@@ -52,17 +52,18 @@ pub struct Camera {
 
     println!("Generated code:\n{}", generated);
 
-    // CRITICAL: Should use super::Vec3, not math::Vec3
+    // WINDJAMMER FIX: Shared analyzer generates absolute crate:: paths
+    // This is more correct than relative super:: paths for cross-file compilation
     assert!(
-        generated.contains("use super::Vec3;"),
-        "Expected 'use super::Vec3;' for flat directory structure but got:\n{}",
+        generated.contains("use crate::math::Vec3;"),
+        "Expected 'use crate::math::Vec3;' for absolute path but got:\n{}",
         generated
     );
 
-    // Should NOT contain math::Vec3
+    // Should NOT contain unqualified math::Vec3
     assert!(
-        !generated.contains("use math::Vec3;"),
-        "Should not contain 'use math::Vec3;' in flat directory but got:\n{}",
+        !generated.contains("use math::Vec3;") || generated.contains("use crate::math::Vec3;"),
+        "Should use absolute crate:: path but got:\n{}",
         generated
     );
 

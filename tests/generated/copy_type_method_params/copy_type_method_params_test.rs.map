@@ -9,5 +9,6 @@
       "wj_column": 1
     }
   ],
-  "version": 1
+  "version": 1,
+  "workspace_root": "/Users/jeffreyfriedman/src/wj/windjammer"
 }

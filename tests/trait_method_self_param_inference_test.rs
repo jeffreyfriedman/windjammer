@@ -1,6 +1,6 @@
 /// TDD test for trait method self parameter inference
 /// BUG: Trait methods with self parameter infer &self instead of self
-/// 
+///
 /// Example:
 /// ```windjammer
 /// impl Neg for Vec2 {
@@ -10,14 +10,13 @@
 ///     }
 /// }
 /// ```
-/// 
+///
 /// EXPECTED: fn neg(self) -> Vec2
 /// ACTUAL: fn neg(&self) -> Vec2 ❌
-
 use windjammer::analyzer::Analyzer;
 use windjammer::codegen::rust::CodeGenerator;
-use windjammer::parser::{Parser, Program};
 use windjammer::lexer::Lexer;
+use windjammer::parser::{Parser, Program};
 use windjammer::CompilationTarget;
 
 fn parse_code(code: &str) -> Program {
@@ -49,20 +48,27 @@ impl Neg for Vec2 {
     }
 }
 "#;
-    
+
     let program = parse_code(code);
     let mut analyzer = Analyzer::new();
-    let (analyzed_functions, analyzed_structs) = analyzer.analyze_program(&program).unwrap();
+    let (analyzed_functions, analyzed_structs, _analyzed_trait_methods) =
+        analyzer.analyze_program(&program).unwrap();
     let mut generator = CodeGenerator::new_for_module(analyzed_structs, CompilationTarget::Rust);
     let generated = generator.generate_program(&program, &analyzed_functions);
-    
+
     // ASSERT: Should use owned self, not &self
-    assert!(generated.contains("fn neg(self) -> Vec2"), 
-        "Trait method should use owned self!\nGenerated:\n{}", generated);
-    
+    assert!(
+        generated.contains("fn neg(self) -> Vec2"),
+        "Trait method should use owned self!\nGenerated:\n{}",
+        generated
+    );
+
     // ASSERT: Should NOT use &self
-    assert!(!generated.contains("fn neg(&self) -> Vec2"), 
-        "Trait method should NOT use &self!\nGenerated:\n{}", generated);
+    assert!(
+        !generated.contains("fn neg(&self) -> Vec2"),
+        "Trait method should NOT use &self!\nGenerated:\n{}",
+        generated
+    );
 }
 
 #[test]
@@ -87,16 +93,20 @@ impl Add for Vec2 {
     }
 }
 "#;
-    
+
     let program = parse_code(code);
     let mut analyzer = Analyzer::new();
-    let (analyzed_functions, analyzed_structs) = analyzer.analyze_program(&program).unwrap();
+    let (analyzed_functions, analyzed_structs, _analyzed_trait_methods) =
+        analyzer.analyze_program(&program).unwrap();
     let mut generator = CodeGenerator::new_for_module(analyzed_structs, CompilationTarget::Rust);
     let generated = generator.generate_program(&program, &analyzed_functions);
-    
+
     // ASSERT: Both self and other should be owned
-    assert!(generated.contains("fn add(self, other: Vec2) -> Vec2"), 
-        "Trait method should use owned self and other!\nGenerated:\n{}", generated);
+    assert!(
+        generated.contains("fn add(self, other: Vec2) -> Vec2"),
+        "Trait method should use owned self and other!\nGenerated:\n{}",
+        generated
+    );
 }
 
 #[test]
@@ -113,15 +123,18 @@ impl Vec2 {
     }
 }
 "#;
-    
+
     let program = parse_code(code);
     let mut analyzer = Analyzer::new();
-    let (analyzed_functions, analyzed_structs) = analyzer.analyze_program(&program).unwrap();
+    let (analyzed_functions, analyzed_structs, _analyzed_trait_methods) =
+        analyzer.analyze_program(&program).unwrap();
     let mut generator = CodeGenerator::new_for_module(analyzed_structs, CompilationTarget::Rust);
     let generated = generator.generate_program(&program, &analyzed_functions);
-    
-    // ASSERT: Non-trait methods can infer &self for read-only access
-    assert!(generated.contains("length(&self)"), 
-        "Non-trait read-only method should infer &self!\nGenerated:\n{}", generated);
-}
 
+    // ASSERT: Non-trait methods can infer &self for read-only access
+    assert!(
+        generated.contains("length(&self)"),
+        "Non-trait read-only method should infer &self!\nGenerated:\n{}",
+        generated
+    );
+}

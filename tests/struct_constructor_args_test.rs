@@ -57,7 +57,6 @@ fn compile_and_verify(code: &str) -> (bool, String, String) {
 }
 
 #[test]
-#[ignore] // TODO: Fix struct construction with borrowed string parameters
 fn test_push_struct_with_borrowed_param() {
     // When a method has a borrowed string param and we use it to create a struct,
     // the struct constructor should receive the correct type
@@ -108,6 +107,7 @@ pub fn test_editor() {
 #[test]
 fn test_push_cloned_struct_to_vec() {
     // When iterating and pushing clones, the vec should work correctly
+    // WINDJAMMER FIX: No need for .as_str() when parameter is already inferred to &str
     let code = r#"
 pub struct Item {
     name: string,
@@ -125,7 +125,7 @@ impl Container {
     pub fn filter_items(&self, prefix: string) -> Vec<Item> {
         let mut result = Vec::new()
         for item in self.items.iter() {
-            if item.name.starts_with(prefix.as_str()) {
+            if item.name.starts_with(prefix) {
                 result.push(item.clone())
             }
         }
@@ -180,7 +180,6 @@ pub fn create_person() -> Person {
 }
 
 #[test]
-#[ignore] // TODO: Fix method call chain with borrowed parameters
 fn test_method_call_chain_with_borrowed_params() {
     // Method that takes borrowed params and passes to another method
     let code = r#"

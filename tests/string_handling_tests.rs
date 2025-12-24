@@ -222,7 +222,6 @@ pub fn format_value(opt: Option<string>) -> string {
 // ============================================================================
 
 #[test]
-#[ignore] // TODO: Fix auto-.to_string() for return string literals
 fn test_return_string_literal() {
     let code = r#"
 pub fn get_name() -> string {
