@@ -1,7 +1,0 @@
-    pub fn print_msg(text: string) {
-        println(text)
-    }
-    
-    pub fn run() {
-        print_msg("hello")
-    }

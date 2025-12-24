@@ -11,7 +11,7 @@ fn test_multi_file_no_inline_modules() {
     let temp_dir = TempDir::new().unwrap();
     let src_dir = temp_dir.path().join("src");
     fs::create_dir(&src_dir).unwrap();
-    
+
     // Create math.wj
     fs::write(
         src_dir.join("math.wj"),
@@ -29,7 +29,7 @@ impl Vec2 {
 "#,
     )
     .unwrap();
-    
+
     // Create physics.wj that imports math
     fs::write(
         src_dir.join("physics.wj"),
@@ -42,19 +42,25 @@ pub struct PhysicsBody {
 "#,
     )
     .unwrap();
-    
+
     // Compile project
     let output_dir = temp_dir.path().join("build");
     let status = std::process::Command::new("wj")
-        .args(&["build", src_dir.to_str().unwrap(), "--output", output_dir.to_str().unwrap(), "--no-cargo"])
+        .args(&[
+            "build",
+            src_dir.to_str().unwrap(),
+            "--output",
+            output_dir.to_str().unwrap(),
+            "--no-cargo",
+        ])
         .status()
         .unwrap();
-    
+
     assert!(status.success(), "Compilation failed");
-    
+
     // Read generated physics.rs
     let physics_rs = fs::read_to_string(output_dir.join("physics.rs")).unwrap();
-    
+
     // ASSERT: Should NOT contain "pub mod math {"
     // The module system handles this with lib.rs and imports
     assert!(
@@ -62,7 +68,7 @@ pub struct PhysicsBody {
         "Generated code should not inline module definitions!\nGenerated code:\n{}",
         physics_rs
     );
-    
+
     // ASSERT: Should contain a proper import
     // Either "use crate::math::Vec2;" or "use super::math::Vec2;"
     assert!(
@@ -70,7 +76,7 @@ pub struct PhysicsBody {
         "Generated code should have proper imports!\nGenerated code:\n{}",
         physics_rs
     );
-    
+
     // ASSERT: Should contain PhysicsBody struct
     assert!(
         physics_rs.contains("pub struct PhysicsBody"),

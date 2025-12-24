@@ -1,14 +1,15 @@
 // TDD Test: Parser should support "use self::module" syntax
 // THE WINDJAMMER WAY: Support all Rust import patterns
 
-use windjammer::parser::{Parser, Item};
 use windjammer::lexer::Lexer;
+use windjammer::parser::{Item, Parser};
 
 fn parse_code(code: &str) -> Result<Vec<Item>, String> {
     let mut lexer = Lexer::new(code);
     let tokens = lexer.tokenize_with_locations();
     let mut parser = Parser::new(tokens);
-    parser.parse()
+    parser
+        .parse()
         .map(|prog| prog.items)
         .map_err(|e| format!("{}", e))
 }
@@ -16,18 +17,18 @@ fn parse_code(code: &str) -> Result<Vec<Item>, String> {
 #[test]
 fn test_parse_self_import() {
     let code = "use self::utils";
-    
+
     let result = parse_code(code);
-    
+
     assert!(
         result.is_ok(),
         "Should parse 'use self::utils', got error: {:?}",
         result.err()
     );
-    
+
     let items = result.unwrap();
     assert_eq!(items.len(), 1, "Should have 1 item");
-    
+
     // Verify it's a Use item with "self" in the path
     match &items[0] {
         Item::Use { path, .. } => {
@@ -44,15 +45,15 @@ fn test_parse_self_import() {
 #[test]
 fn test_parse_self_nested_import() {
     let code = "use self::utils::format_string";
-    
+
     let result = parse_code(code);
-    
+
     assert!(
         result.is_ok(),
         "Should parse nested self import, got error: {:?}",
         result.err()
     );
-    
+
     let items = result.unwrap();
     match &items[0] {
         Item::Use { path, .. } => {
@@ -68,11 +69,11 @@ fn test_parse_self_nested_import() {
 #[test]
 fn test_parse_crate_import() {
     let code = "use crate::config::Settings";
-    
+
     let result = parse_code(code);
-    
+
     assert!(result.is_ok(), "Should parse 'use crate::...'");
-    
+
     let items = result.unwrap();
     match &items[0] {
         Item::Use { path, .. } => {
@@ -87,11 +88,11 @@ fn test_parse_crate_import() {
 #[test]
 fn test_parse_super_import() {
     let code = "use super::parent::Module";
-    
+
     let result = parse_code(code);
-    
+
     assert!(result.is_ok(), "Should parse 'use super::...'");
-    
+
     let items = result.unwrap();
     match &items[0] {
         Item::Use { path, .. } => {

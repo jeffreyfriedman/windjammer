@@ -56,7 +56,11 @@ fn test_count_statements_loop_weighted() {
 
 #[test]
 fn test_count_statements_for_weighted() {
-    let statements = vec![stmt_for(Pattern::Identifier("i".to_string()), expr_var("items"), vec![])];
+    let statements = vec![stmt_for(
+        Pattern::Identifier("i".to_string()),
+        expr_var("items"),
+        vec![],
+    )];
     assert_eq!(count_statements(&statements), 3);
 }
 

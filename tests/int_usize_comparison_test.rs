@@ -12,10 +12,10 @@
 //! EXPECTED: Auto-cast to make comparison work
 //! ACTUAL: E0308 mismatched types
 
-use windjammer::lexer::Lexer;
-use windjammer::parser::{Parser, Program};
 use windjammer::analyzer::Analyzer;
 use windjammer::codegen::rust::CodeGenerator;
+use windjammer::lexer::Lexer;
+use windjammer::parser::{Parser, Program};
 use windjammer::CompilationTarget;
 
 fn parse_code(code: &str) -> Program {
@@ -42,10 +42,11 @@ fn test_int_vs_usize_comparison() {
 
     let program = parse_code(source);
     let mut analyzer = Analyzer::new();
-    let (analyzed_functions, analyzed_structs) = analyzer.analyze_program(&program).unwrap();
+    let (analyzed_functions, analyzed_structs, _analyzed_trait_methods) =
+        analyzer.analyze_program(&program).unwrap();
     let mut generator = CodeGenerator::new_for_module(analyzed_structs, CompilationTarget::Rust);
     let rust_code = generator.generate_program(&program, &analyzed_functions);
-    
+
     // Should cast one side to match the other
     assert!(
         rust_code.contains("as i64") || rust_code.contains("as usize"),
@@ -74,10 +75,11 @@ fn test_int_vs_usize_greater_than_or_equal() {
 
     let program = parse_code(source);
     let mut analyzer = Analyzer::new();
-    let (analyzed_functions, analyzed_structs) = analyzer.analyze_program(&program).unwrap();
+    let (analyzed_functions, analyzed_structs, _analyzed_trait_methods) =
+        analyzer.analyze_program(&program).unwrap();
     let mut generator = CodeGenerator::new_for_module(analyzed_structs, CompilationTarget::Rust);
     let rust_code = generator.generate_program(&program, &analyzed_functions);
-    
+
     // Should cast .len() to i64 or index to usize
     assert!(
         rust_code.contains(".len() as i64") || rust_code.contains("self.index as usize"),
@@ -85,4 +87,3 @@ fn test_int_vs_usize_greater_than_or_equal() {
         rust_code
     );
 }
-

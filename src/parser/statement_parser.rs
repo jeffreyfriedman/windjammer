@@ -81,6 +81,7 @@ impl Parser {
                 Ok(Statement::Use {
                     path,
                     alias,
+                    is_pub: false, // Statements are never pub
                     location: self.current_location(),
                 })
             }

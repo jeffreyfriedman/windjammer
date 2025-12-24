@@ -70,4 +70,3 @@ fn render_label(value: Option<f32>) -> string {
         generated
     );
 }
-

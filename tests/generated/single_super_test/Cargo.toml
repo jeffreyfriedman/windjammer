@@ -8,7 +8,6 @@ edition = "2021"
 
 [dependencies]
 smallvec = "1.13"
-super = "*"
 serde = { version = "1.0", features = ["derive"] }
 
 [[bin]]

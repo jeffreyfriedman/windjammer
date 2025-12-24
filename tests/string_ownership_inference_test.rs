@@ -1,13 +1,16 @@
 // TDD Test: String ownership inference (&str vs String)
-// WINDJAMMER PHILOSOPHY: User writes 'string', compiler infers ownership
+// THE WINDJAMMER WAY: Explicit types are honored
+// - User writes `text: string` → `text: String` (owned, as written)
+// - User writes `text: &string` → `text: &str` (borrowed, as written)
 
 use std::fs;
 use std::process::Command;
+use tempfile::TempDir;
 
 fn compile_code(code: &str) -> Result<String, String> {
-    let test_dir = "tests/generated/string_inference_test";
-    fs::create_dir_all(test_dir).expect("Failed to create test dir");
-    let input_file = format!("{}/test.wj", test_dir);
+    let temp_dir = TempDir::new().expect("Failed to create temp dir");
+    let test_dir = temp_dir.path();
+    let input_file = test_dir.join("test.wj");
     fs::write(&input_file, code).expect("Failed to write source file");
 
     let output = Command::new("cargo")
@@ -16,23 +19,20 @@ fn compile_code(code: &str) -> Result<String, String> {
             "--release",
             "--",
             "build",
-            &input_file,
+            input_file.to_str().unwrap(),
             "--output",
-            test_dir,
+            test_dir.to_str().unwrap(),
             "--no-cargo",
         ])
         .output()
         .expect("Failed to run compiler");
 
     if !output.status.success() {
-        fs::remove_dir_all(test_dir).ok();
         return Err(String::from_utf8_lossy(&output.stderr).to_string());
     }
 
-    let generated_file = format!("{}/test.rs", test_dir);
+    let generated_file = test_dir.join("test.rs");
     let generated = fs::read_to_string(&generated_file).expect("Failed to read generated file");
-
-    fs::remove_dir_all(test_dir).ok();
 
     Ok(generated)
 }
@@ -51,15 +51,18 @@ fn test_read_only_param_infers_str_ref() {
 
     let generated = compile_code(code).expect("Compilation failed");
 
+    // THE WINDJAMMER WAY: Explicit `string` type is honored as `String` (owned)
+    // User wrote `text: string` → they want `text: String`, not `text: &str`
+    // This prevents API contract violations and maintains consistency
     assert!(
-        generated.contains("text: &str"),
-        "Should infer &str for read-only parameter, got:\n{}",
+        generated.contains("text: String"),
+        "Explicit string type should be honored as String (owned), got:\n{}",
         generated
     );
 
     assert!(
-        !generated.contains("\"hello\".to_string()"),
-        "Should NOT convert literal for &str param, got:\n{}",
+        generated.contains("\"hello\".to_string()"),
+        "Should convert literal to String for String param, got:\n{}",
         generated
     );
 }

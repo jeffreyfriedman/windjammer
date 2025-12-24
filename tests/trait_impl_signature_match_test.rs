@@ -4,35 +4,48 @@
 
 use std::fs;
 use std::process::Command;
+use tempfile::TempDir;
 
 fn compile_windjammer_and_check(code: &str) -> (bool, String, String) {
-    let test_file = "/tmp/trait_impl_test.wj";
-    let output_file = "/tmp/trait_impl_test.rs";
+    let temp_dir = TempDir::new().expect("Failed to create temp dir");
+    let test_file = temp_dir.path().join("test.wj");
+    let output_dir = temp_dir.path().join("out");
+    fs::create_dir_all(&output_dir).expect("Failed to create output dir");
 
-    fs::write(test_file, code).unwrap();
+    fs::write(&test_file, code).unwrap();
 
     let output = Command::new(env!("CARGO_BIN_EXE_wj"))
-        .args(["build", test_file, "--output", "/tmp", "--no-cargo"])
+        .args([
+            "build",
+            test_file.to_str().unwrap(),
+            "--output",
+            output_dir.to_str().unwrap(),
+            "--no-cargo",
+        ])
         .output()
         .expect("Failed to run wj");
 
-    let generated = fs::read_to_string(output_file).unwrap_or_default();
+    let output_file = output_dir.join("test.rs");
+    let generated = fs::read_to_string(&output_file).unwrap_or_default();
     let stderr = String::from_utf8_lossy(&output.stderr).to_string();
 
     (output.status.success(), generated, stderr)
 }
 
 fn compile_rust(code: &str) -> (bool, String) {
-    let test_file = "/tmp/trait_impl_test_rust.rs";
-    fs::write(test_file, code).unwrap();
+    let temp_dir = TempDir::new().expect("Failed to create temp dir");
+    let test_file = temp_dir.path().join("test.rs");
+    let output_file = temp_dir.path().join("libtest.rlib");
+
+    fs::write(&test_file, code).unwrap();
 
     let output = Command::new("rustc")
         .args([
             "--crate-type",
             "lib",
-            test_file,
+            test_file.to_str().unwrap(),
             "-o",
-            "/tmp/trait_impl_test_rust.rlib",
+            output_file.to_str().unwrap(),
             "--edition",
             "2021",
         ])
@@ -54,7 +67,7 @@ pub struct MyGame {}
 
 impl GameLoop for MyGame {
     fn update(&mut self, delta: f32) {
-        println(delta)
+        let _used = delta + 1.0
     }
 }
 "#;
@@ -180,4 +193,3 @@ impl GameLoop for MyGame {
         rust_stderr
     );
 }
-

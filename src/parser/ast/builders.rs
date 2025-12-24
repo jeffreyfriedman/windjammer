@@ -7,11 +7,11 @@
 //
 // Expected impact: 60-80% reduction in test code lines
 
-use super::types::Type;
-use super::ownership::OwnershipHint;
+use super::core::{Expression, Parameter, Pattern, Statement};
 use super::literals::{Literal, MacroDelimiter};
 use super::operators::{BinaryOp, CompoundOp, UnaryOp};
-use super::core::{Expression, Parameter, Pattern, Statement};
+use super::ownership::OwnershipHint;
+use super::types::Type;
 
 // ============================================================================
 // TYPE BUILDERS
@@ -503,10 +503,7 @@ mod tests {
 
     #[test]
     fn test_type_reference() {
-        assert_eq!(
-            type_ref(Type::Int),
-            Type::Reference(Box::new(Type::Int))
-        );
+        assert_eq!(type_ref(Type::Int), Type::Reference(Box::new(Type::Int)));
     }
 
     #[test]
@@ -561,9 +558,9 @@ mod tests {
 
         assert_eq!(
             complex,
-            Type::Option(Box::new(Type::MutableReference(Box::new(
-                Type::Vec(Box::new(Type::String))
-            ))))
+            Type::Option(Box::new(Type::MutableReference(Box::new(Type::Vec(
+                Box::new(Type::String)
+            )))))
         );
     }
 
@@ -616,11 +613,7 @@ mod tests {
         let param = param_ref("data", type_vec(Type::Int));
 
         assert_eq!(param.name, "data");
-        assert_eq!(
-            param.type_,
-            Type::Vec(Box::new(Type::Int))
-        );
+        assert_eq!(param.type_, Type::Vec(Box::new(Type::Int)));
         assert_eq!(param.ownership, OwnershipHint::Ref);
     }
 }
-

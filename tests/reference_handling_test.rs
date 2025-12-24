@@ -40,7 +40,6 @@ fn compile_fixture(fixture_name: &str) -> Result<String, String> {
 }
 
 #[test]
-#[ignore] // Codegen changed - needs update
 fn test_mut_ref_no_double_borrow() {
     let rust_code = compile_fixture("mut_ref_test").expect("Compilation failed");
 

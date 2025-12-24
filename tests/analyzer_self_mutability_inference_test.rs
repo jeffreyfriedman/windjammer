@@ -27,22 +27,26 @@ fn compile_and_check_rust(code: &str, test_name: &str) -> Result<String, String>
 
     if !output.status.success() {
         fs::remove_dir_all(&test_dir).ok();
-        return Err(format!("Windjammer compilation failed: {}", 
-            String::from_utf8_lossy(&output.stderr)));
+        return Err(format!(
+            "Windjammer compilation failed: {}",
+            String::from_utf8_lossy(&output.stderr)
+        ));
     }
 
     // Check generated Rust compiles
     let rust_check = Command::new("rustc")
         .args([
-            "--crate-type", "lib",
+            "--crate-type",
+            "lib",
             &format!("{}/test.rs", test_dir),
-            "-o", &format!("{}/test.rlib", test_dir),
+            "-o",
+            &format!("{}/test.rlib", test_dir),
         ])
         .output()
         .expect("Failed to run rustc");
 
     let stderr = String::from_utf8_lossy(&rust_check.stderr).to_string();
-    
+
     fs::remove_dir_all(&test_dir).ok();
 
     if rust_check.status.success() {
@@ -71,7 +75,7 @@ fn test_method_returning_mut_ref_needs_mut_self() {
     "#;
 
     let result = compile_and_check_rust(code, "returns_mut_ref");
-    
+
     assert!(
         result.is_ok(),
         "Method returning &mut T should infer &mut self, got error:\n{}",
@@ -95,7 +99,7 @@ fn test_method_mutating_field_needs_mut_self() {
     "#;
 
     let result = compile_and_check_rust(code, "mutates_field");
-    
+
     assert!(
         result.is_ok(),
         "Method mutating field should infer &mut self, got error:\n{}",
@@ -125,7 +129,7 @@ fn test_method_calling_mutating_method_needs_mut_self() {
     "#;
 
     let result = compile_and_check_rust(code, "calls_mutating");
-    
+
     assert!(
         result.is_ok(),
         "Method calling mutating method should infer &mut self, got error:\n{}",
@@ -150,7 +154,7 @@ fn test_read_only_method_uses_ref_self() {
     "#;
 
     let result = compile_and_check_rust(code, "read_only");
-    
+
     assert!(
         result.is_ok(),
         "Read-only method should use &self, got error:\n{}",
@@ -174,7 +178,7 @@ fn test_compound_assignment_needs_mut_self() {
     "#;
 
     let result = compile_and_check_rust(code, "compound_assign");
-    
+
     assert!(
         result.is_ok(),
         "Method with compound assignment should infer &mut self, got error:\n{}",
@@ -198,7 +202,7 @@ fn test_method_mutating_vec_needs_mut_self() {
     "#;
 
     let result = compile_and_check_rust(code, "vec_push");
-    
+
     assert!(
         result.is_ok(),
         "Method calling Vec::push should infer &mut self, got error:\n{}",

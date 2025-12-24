@@ -160,6 +160,7 @@ impl ScopeAnalyzer {
                 target,
                 value,
                 location: _,
+                compound_op: _,
             } => {
                 // Record write to target
                 if let Expression::Identifier { name, location: _ } = target {

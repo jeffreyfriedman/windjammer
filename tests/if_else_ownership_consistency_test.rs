@@ -14,10 +14,10 @@
 //! EXPECTED: Both branches return owned or both return borrowed
 //! ACTUAL: E0308 - mismatched types
 
-use windjammer::lexer::Lexer;
-use windjammer::parser::{Parser, Program};
 use windjammer::analyzer::Analyzer;
 use windjammer::codegen::rust::CodeGenerator;
+use windjammer::lexer::Lexer;
+use windjammer::parser::{Parser, Program};
 use windjammer::CompilationTarget;
 
 fn parse_code(code: &str) -> Program {
@@ -57,12 +57,13 @@ fn test_if_else_return_consistency() {
 
     let program = parse_code(source);
     let mut analyzer = Analyzer::new();
-    let (analyzed_functions, analyzed_structs) = analyzer.analyze_program(&program).unwrap();
+    let (analyzed_functions, analyzed_structs, _analyzed_trait_methods) =
+        analyzer.analyze_program(&program).unwrap();
     let mut generator = CodeGenerator::new_for_module(analyzed_structs, CompilationTarget::Rust);
     let rust_code = generator.generate_program(&program, &analyzed_functions);
-    
+
     println!("Generated Rust:\n{}", rust_code);
-    
+
     // Parameter 'other' is used in field access (other.x, other.y)
     // AND returned in the else branch
     // The analyzer should infer 'other: Region' (owned), not '&Region'
@@ -95,10 +96,11 @@ fn test_if_else_direct_return() {
 
     let program = parse_code(source);
     let mut analyzer = Analyzer::new();
-    let (analyzed_functions, analyzed_structs) = analyzer.analyze_program(&program).unwrap();
+    let (analyzed_functions, analyzed_structs, _analyzed_trait_methods) =
+        analyzer.analyze_program(&program).unwrap();
     let mut generator = CodeGenerator::new_for_module(analyzed_structs, CompilationTarget::Rust);
     let rust_code = generator.generate_program(&program, &analyzed_functions);
-    
+
     // Both parameters should be owned (not borrowed)
     assert!(
         rust_code.contains("other: Vec2") || rust_code.contains("other: Self"),
@@ -106,4 +108,3 @@ fn test_if_else_direct_return() {
         rust_code
     );
 }
-

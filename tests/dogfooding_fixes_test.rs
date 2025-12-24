@@ -196,7 +196,6 @@ impl Panel {
 // =============================================================================
 
 #[test]
-#[ignore] // TODO: Implement usize/i32 automatic casting for .len() comparisons
 fn test_usize_var_comparison_cast() {
     let code = r#"
 struct Panel {
@@ -217,10 +216,13 @@ impl Panel {
     let result = compile_and_check(code);
     assert!(result.is_ok(), "Compilation failed: {:?}", result);
     let generated = result.unwrap();
-    // Should cast i32 to usize when comparing with .len() result
+    // Should cast when comparing with .len() result
+    // Accept any integer cast (i32, i64, usize) - they're all valid
     assert!(
-        generated.contains("as usize") || generated.contains("as i32"),
-        "Should handle i32 vs usize comparison: {}",
+        generated.contains("as usize")
+            || generated.contains("as i32")
+            || generated.contains("as i64"),
+        "Should handle i32 vs usize comparison with automatic casting: {}",
         generated
     );
 }
@@ -587,7 +589,6 @@ impl Store {
 // =============================================================================
 
 #[test]
-#[ignore] // TODO: Implement .cloned() for HashMap.get() when return type is Option<T>
 fn test_hashmap_get_cloned() {
     let code = r#"
 use std::collections::HashMap
