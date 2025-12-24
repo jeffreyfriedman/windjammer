@@ -4,19 +4,31 @@
 
 use std::fs;
 use std::process::Command;
+use tempfile::TempDir;
 
 fn compile_and_check(code: &str) -> (bool, String) {
-    let test_file = "/tmp/compound_test.wj";
-    let output_file = "/tmp/compound_test.rs";
+    let temp_dir = TempDir::new().expect("Failed to create temp dir");
+    let test_file = temp_dir.path().join("test.wj");
+    let output_file = temp_dir.path().join("test.rs");
 
-    fs::write(test_file, code).unwrap();
+    fs::write(&test_file, code).expect("Failed to write test file");
 
-    let output = Command::new(env!("CARGO_BIN_EXE_wj"))
-        .args(["build", test_file, "--output", "/tmp", "--no-cargo"])
+    let output = Command::new("cargo")
+        .args([
+            "run",
+            "--release",
+            "--",
+            "build",
+            test_file.to_str().unwrap(),
+            "--output",
+            temp_dir.path().to_str().unwrap(),
+            "--no-cargo",
+        ])
+        .current_dir(env!("CARGO_MANIFEST_DIR"))
         .output()
         .expect("Failed to run wj");
 
-    let generated = fs::read_to_string(output_file).unwrap_or_default();
+    let generated = fs::read_to_string(&output_file).unwrap_or_default();
     (output.status.success(), generated)
 }
 
@@ -123,4 +135,3 @@ impl Vec2 {
         generated
     );
 }
-

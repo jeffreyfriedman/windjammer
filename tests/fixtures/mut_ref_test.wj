@@ -12,7 +12,7 @@ fn main() {
     let mut vec = Vec::new()
     modify(&mut vec)
     let len = read(&vec)
-    print("Vector length: {len}")
+    println("Vector length: {}", len)
 }
 
 

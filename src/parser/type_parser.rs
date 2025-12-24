@@ -102,7 +102,7 @@ impl Parser {
                     break;
                 }
             }
-            self.expect(Token::Gt)?; // Consume >
+            self.expect_gt_or_split_shr()?; // Consume > (handles >> for nested generics)
         }
         Ok(type_params)
     }
@@ -414,17 +414,17 @@ impl Parser {
                     // Handle Vec<T>, Option<T>, Result<T, E>
                     if type_name == "Vec" {
                         let inner = Box::new(self.parse_type()?);
-                        self.expect(Token::Gt)?;
+                        self.expect_gt_or_split_shr()?;
                         Type::Vec(inner)
                     } else if type_name == "Option" {
                         let inner = Box::new(self.parse_type()?);
-                        self.expect(Token::Gt)?;
+                        self.expect_gt_or_split_shr()?;
                         Type::Option(inner)
                     } else if type_name == "Result" {
                         let ok_type = Box::new(self.parse_type()?);
                         self.expect(Token::Comma)?;
                         let err_type = Box::new(self.parse_type()?);
-                        self.expect(Token::Gt)?;
+                        self.expect_gt_or_split_shr()?;
                         Type::Result(ok_type, err_type)
                     } else {
                         // Generic custom type: Box<T>, HashMap<K, V>, etc.
@@ -435,11 +435,17 @@ impl Parser {
 
                             if self.current_token() == &Token::Comma {
                                 self.advance();
-                            } else if self.current_token() == &Token::Gt {
-                                self.advance();
+                            } else if self.current_token() == &Token::Gt
+                                || self.current_token() == &Token::Shr
+                            {
+                                // Handle both > and >> (for nested generics like HashMap<K, Vec<V>>)
+                                self.expect_gt_or_split_shr()?;
                                 break;
                             } else {
-                                return Err("Expected ',' or '>' in type arguments".to_string());
+                                return Err(format!(
+                                    "Expected ',' or '>' in type arguments, got {:?}",
+                                    self.current_token()
+                                ));
                             }
                         }
 

@@ -488,4 +488,3 @@ pub fn string_len(s: &string) -> usize {
     let (success, generated, err) = compile_and_verify(code);
     assert!(success, "Method on string should compile. Error: {}", err);
 }
-

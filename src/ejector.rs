@@ -188,7 +188,7 @@ impl Ejector {
 
         // Analyze
         let mut analyzer = analyzer::Analyzer::new();
-        let (analyzed, signatures) = analyzer
+        let (analyzed, signatures, _analyzed_trait_methods) = analyzer
             .analyze_program(&program)
             .map_err(|e| anyhow::anyhow!("Analysis error: {}", e))?;
 
