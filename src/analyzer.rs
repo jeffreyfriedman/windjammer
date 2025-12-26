@@ -715,9 +715,10 @@ impl Analyzer {
                         .unwrap_or(OwnershipMode::Borrowed);
 
                     let mut most_permissive_self = initial_self_ownership;
-                    let mut most_permissive_params: HashMap<String, OwnershipMode> = HashMap::new();
 
-                    // Examine ALL implementations to find what they actually need
+                    // Examine ALL implementations to find what they actually need for `self`
+                    // IMPORTANT: We only upgrade `self`, not other parameters
+                    // Parameters stay as the trait defines them (user's explicit choice)
                     for impl_block in &impl_blocks {
                         for func in &impl_block.functions {
                             if func.name == method_name {
@@ -742,54 +743,15 @@ impl Analyzer {
                                         _ => {}
                                     }
                                 }
-
-                                // Upgrade parameter ownership if needed
-                                for param_name in func.parameters.iter().map(|p| &p.name) {
-                                    if param_name == "self" {
-                                        continue;
-                                    }
-
-                                    if let Some(&impl_param_ownership) =
-                                        impl_analysis.inferred_ownership.get(param_name)
-                                    {
-                                        let current = most_permissive_params
-                                            .get(param_name)
-                                            .copied()
-                                            .unwrap_or(OwnershipMode::Owned);
-
-                                        // For params, Borrowed is more permissive than Owned
-                                        let new_ownership = match (current, impl_param_ownership) {
-                                            (OwnershipMode::Owned, OwnershipMode::Borrowed) => {
-                                                OwnershipMode::Borrowed
-                                            }
-                                            (OwnershipMode::Owned, OwnershipMode::MutBorrowed) => {
-                                                OwnershipMode::MutBorrowed
-                                            }
-                                            (
-                                                OwnershipMode::MutBorrowed,
-                                                OwnershipMode::Borrowed,
-                                            ) => OwnershipMode::Borrowed,
-                                            _ => current,
-                                        };
-
-                                        most_permissive_params
-                                            .insert(param_name.clone(), new_ownership);
-                                    }
-                                }
                             }
                         }
                     }
 
-                    // Update trait method with upgraded ownership
+                    // Update trait method with upgraded self ownership
+                    // Parameters stay as originally analyzed (from trait definition)
                     trait_method_analysis
                         .inferred_ownership
                         .insert("self".to_string(), most_permissive_self);
-
-                    for (param_name, param_ownership) in most_permissive_params {
-                        trait_method_analysis
-                            .inferred_ownership
-                            .insert(param_name, param_ownership);
-                    }
 
                     eprintln!(
                         "DEBUG:     Method {} upgraded to self: {:?}",
