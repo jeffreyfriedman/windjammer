@@ -11,9 +11,7 @@
 //
 // This is NOT just copying Rust - it's the Windjammer way!
 
-use std::collections::HashMap;
 use std::fs;
-use std::path::{Path, PathBuf};
 use tempfile::TempDir;
 
 /// Helper: Create a test directory structure
@@ -311,7 +309,6 @@ mod regression_tests {
 
 #[cfg(test)]
 mod file_placement_tests {
-    use super::*;
 
     #[test]
     fn test_preserve_directory_structure_in_output() {

@@ -5,6 +5,7 @@ use windjammer::parser::Parser;
 use windjammer::CompilationTarget;
 
 /// Helper to parse and generate Rust code from Windjammer source
+#[allow(dead_code)]
 fn parse_and_generate(source: &str) -> String {
     let mut lexer = Lexer::new(source);
     let tokens = lexer.tokenize_with_locations();
@@ -52,8 +53,8 @@ fn parse_and_generate_multi_file(files: &[(&str, &str)]) -> String {
 
     // For traits WITHOUT default implementations, add the analyzed trait methods to the analyzed functions
     // This ensures the trait signature uses the impl's inferred ownership
-    for (_trait_name, methods) in &all_analyzed_trait_methods {
-        for (_method_name, analyzed_method) in methods {
+    for methods in all_analyzed_trait_methods.values() {
+        for analyzed_method in methods.values() {
             all_analyzed_functions.push(analyzed_method.clone());
         }
     }

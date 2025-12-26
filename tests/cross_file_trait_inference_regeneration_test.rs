@@ -6,7 +6,6 @@
 /// This is THE WINDJAMMER WAY: The compiler infers the most permissive trait signature
 /// from ALL implementations across the project.
 use std::fs;
-use std::path::PathBuf;
 use tempfile::TempDir;
 
 #[test]
