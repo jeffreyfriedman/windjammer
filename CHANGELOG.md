@@ -1,3 +1,42 @@
+## [0.39.0] - 2025-12-25
+### Added
+- **Automatic Ownership Inference**: Compiler automatically infers `&`, `&mut`, and owned parameters
+- **Automatic Trait Inference**: Compiler determines `self` vs `&self` vs `&mut self` for trait methods
+- **Multi-File Project Support**: Module system with `pub mod`, `use` statements, and cross-file compilation
+- **String Type Inference**: Auto-detect `&str` vs `String` and insert `.to_string()` when needed
+- **Nested Generics Parser**: Support for `HashMap<K, Vec<V>>` and `>>` token splitting
+- **Doc Comments**: `///` style comments for functions, structs, enums, fields, and variants
+- **Path Dependency Resolution**: Auto-detect local crates (e.g., windjammer-game-core)
+- **LSP Integration (PoC)**: Quick-fixes for missing `mut`, auto-add `&` and `&mut`
+
+### Fixed
+- **Operator Precedence**: Fixed binary operator parsing
+- **Array Indexing**: Corrected ownership in `vec[i]` expressions
+- **Parameter Mutability**: Fixed `&mut` inference for function parameters
+- **Trait Implementation Signatures**: Match trait signatures exactly in impl blocks
+- **Binary Op Ownership**: Preserve ownership in binary expressions
+- **Self Field Access**: `self.field` now correctly infers ownership
+- **Nested Field Mutation**: `obj.nested.field = x` works correctly
+- **Binary Ops in Assignments**: `x = a + b` ownership fixed
+- **Assignment Detection**: Distinguishes `=` from `==`
+- **Copy Type Handling**: Correct Copy trait detection and usage
+- **Vec Cloning**: Smart `Vec::clone()` insertion when needed
+- **String Literals**: Auto-`.to_string()` for `&str` → `String` coercion
+- **Method Call Chains**: Ownership through `a.b().c()` chains
+- **Tuple Returns**: Parse and generate tuple types correctly
+- **Generic Bounds**: Infer and generate trait bounds
+- **Return Type Inference**: Infer function return types when unambiguous
+
+### Performance
+- **Compile-time optimizations**: Const propagation, dead code elimination, inline expansion
+- **Runtime optimizations**: SmallVec for small collections, Cow for strings
+- **Memory optimizations**: Stack allocation, arena allocation, string capacity pre-sizing
+
+### Changed
+- **Version**: Bumped to 0.39.0 for significant new features
+- **Explicit Mutability**: Reverted auto-mut inference; `mut` keyword now required (Rust-style)
+- **Type Aliases**: Added `ProgramAnalysisResult` type alias to reduce type complexity
+
 ## [0.38.8] - 2025-11-29
 ### Fixed
 - Add Copy struct detection via @derive(Copy) decorator
