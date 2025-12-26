@@ -1153,7 +1153,7 @@ impl LanguageServer for WindjammerLanguageServer {
         tracing::debug!("Code action request: {} for range {:?}", uri, range);
 
         // Get document content for quick-fixes
-        let content = self.documents.get(&uri).cloned();
+        let content = self.documents.get(&uri).map(|s| s.clone());
 
         // Create refactoring engine on-demand
         let db_lock = self.salsa_db.lock().unwrap();

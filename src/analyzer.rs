@@ -3486,6 +3486,9 @@ impl Analyzer {
                 match &**object {
                     Expression::Identifier { name, .. } if name == "self" => true,
                     Expression::FieldAccess { .. } => self.expression_is_self_field_access(object),
+                    // CRITICAL FIX: Handle index expressions like self.children[i].field
+                    // The object of the field access is an Index, which itself may be a self field access
+                    Expression::Index { .. } => self.expression_is_self_field_index_access(object),
                     _ => false,
                 }
             }

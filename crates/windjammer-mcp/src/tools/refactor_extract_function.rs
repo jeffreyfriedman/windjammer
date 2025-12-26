@@ -200,6 +200,7 @@ fn collect_variable_usage(
         Statement::Assignment {
             target,
             value,
+            compound_op: _,
             location: _,
         } => {
             collect_expr_variables(target, used);
