@@ -77,159 +77,6 @@ pub fn contains_string_literal(expr: &Expression) -> bool {
     }
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use crate::source_map::Location;
-    use std::path::PathBuf;
-
-    fn test_loc() -> Location {
-        Location {
-            file: PathBuf::from(""),
-            line: 0,
-            column: 0,
-        }
-    }
-
-    #[test]
-    fn test_collect_single_expression() {
-        let expr = Expression::Identifier {
-            name: "x".to_string(),
-            location: Some(test_loc()),
-        };
-
-        let parts = collect_concat_parts(&expr);
-        assert_eq!(parts.len(), 1);
-    }
-
-    #[test]
-    fn test_collect_nested_concatenation() {
-        // ("a" + "b") + ("c" + "d")
-        let a = Expression::Literal {
-            value: Literal::String("a".to_string()),
-            location: Some(test_loc()),
-        };
-        let b = Expression::Literal {
-            value: Literal::String("b".to_string()),
-            location: Some(test_loc()),
-        };
-        let c = Expression::Literal {
-            value: Literal::String("c".to_string()),
-            location: Some(test_loc()),
-        };
-        let d = Expression::Literal {
-            value: Literal::String("d".to_string()),
-            location: Some(test_loc()),
-        };
-
-        let ab = Expression::Binary {
-            left: Box::new(a),
-            op: BinaryOp::Add,
-            right: Box::new(b),
-            location: Some(test_loc()),
-        };
-        let cd = Expression::Binary {
-            left: Box::new(c),
-            op: BinaryOp::Add,
-            right: Box::new(d),
-            location: Some(test_loc()),
-        };
-        let expr = Expression::Binary {
-            left: Box::new(ab),
-            op: BinaryOp::Add,
-            right: Box::new(cd),
-            location: Some(test_loc()),
-        };
-
-        let parts = collect_concat_parts(&expr);
-        assert_eq!(parts.len(), 4); // Should flatten to ["a", "b", "c", "d"]
-    }
-
-    #[test]
-    fn test_contains_string_in_nested_expression() {
-        // ((a + b) * c) + "hello"
-        let a = Expression::Identifier {
-            name: "a".to_string(),
-            location: Some(test_loc()),
-        };
-        let b = Expression::Identifier {
-            name: "b".to_string(),
-            location: Some(test_loc()),
-        };
-        let c = Expression::Identifier {
-            name: "c".to_string(),
-            location: Some(test_loc()),
-        };
-        let hello = Expression::Literal {
-            value: Literal::String("hello".to_string()),
-            location: Some(test_loc()),
-        };
-
-        let ab = Expression::Binary {
-            left: Box::new(a),
-            op: BinaryOp::Add,
-            right: Box::new(b),
-            location: Some(test_loc()),
-        };
-        let ab_mul_c = Expression::Binary {
-            left: Box::new(ab),
-            op: BinaryOp::Mul,
-            right: Box::new(c),
-            location: Some(test_loc()),
-        };
-        let expr = Expression::Binary {
-            left: Box::new(ab_mul_c),
-            op: BinaryOp::Add,
-            right: Box::new(hello),
-            location: Some(test_loc()),
-        };
-
-        assert!(contains_string_literal(&expr));
-    }
-
-    #[test]
-    fn test_no_string_in_complex_expression() {
-        // (a + b) * (c - d)
-        let a = Expression::Identifier {
-            name: "a".to_string(),
-            location: Some(test_loc()),
-        };
-        let b = Expression::Identifier {
-            name: "b".to_string(),
-            location: Some(test_loc()),
-        };
-        let c = Expression::Identifier {
-            name: "c".to_string(),
-            location: Some(test_loc()),
-        };
-        let d = Expression::Identifier {
-            name: "d".to_string(),
-            location: Some(test_loc()),
-        };
-
-        let ab = Expression::Binary {
-            left: Box::new(a),
-            op: BinaryOp::Add,
-            right: Box::new(b),
-            location: Some(test_loc()),
-        };
-        let cd = Expression::Binary {
-            left: Box::new(c),
-            op: BinaryOp::Sub,
-            right: Box::new(d),
-            location: Some(test_loc()),
-        };
-        let expr = Expression::Binary {
-            left: Box::new(ab),
-            op: BinaryOp::Mul,
-            right: Box::new(cd),
-            location: Some(test_loc()),
-        };
-
-        assert!(!contains_string_literal(&expr));
-    }
-}
-
 /// Checks if an expression produces a String (not &str)
 ///
 /// Detects expressions that return owned String values like:
@@ -428,5 +275,157 @@ pub fn expression_is_explicit_ref(expr: &Expression) -> bool {
         } => true,
         Expression::Block { statements, .. } => block_has_explicit_ref(statements),
         _ => false,
+    }
+}
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::source_map::Location;
+    use std::path::PathBuf;
+
+    fn test_loc() -> Location {
+        Location {
+            file: PathBuf::from(""),
+            line: 0,
+            column: 0,
+        }
+    }
+
+    #[test]
+    fn test_collect_single_expression() {
+        let expr = Expression::Identifier {
+            name: "x".to_string(),
+            location: Some(test_loc()),
+        };
+
+        let parts = collect_concat_parts(&expr);
+        assert_eq!(parts.len(), 1);
+    }
+
+    #[test]
+    fn test_collect_nested_concatenation() {
+        // ("a" + "b") + ("c" + "d")
+        let a = Expression::Literal {
+            value: Literal::String("a".to_string()),
+            location: Some(test_loc()),
+        };
+        let b = Expression::Literal {
+            value: Literal::String("b".to_string()),
+            location: Some(test_loc()),
+        };
+        let c = Expression::Literal {
+            value: Literal::String("c".to_string()),
+            location: Some(test_loc()),
+        };
+        let d = Expression::Literal {
+            value: Literal::String("d".to_string()),
+            location: Some(test_loc()),
+        };
+
+        let ab = Expression::Binary {
+            left: Box::new(a),
+            op: BinaryOp::Add,
+            right: Box::new(b),
+            location: Some(test_loc()),
+        };
+        let cd = Expression::Binary {
+            left: Box::new(c),
+            op: BinaryOp::Add,
+            right: Box::new(d),
+            location: Some(test_loc()),
+        };
+        let expr = Expression::Binary {
+            left: Box::new(ab),
+            op: BinaryOp::Add,
+            right: Box::new(cd),
+            location: Some(test_loc()),
+        };
+
+        let parts = collect_concat_parts(&expr);
+        assert_eq!(parts.len(), 4); // Should flatten to ["a", "b", "c", "d"]
+    }
+
+    #[test]
+    fn test_contains_string_in_nested_expression() {
+        // ((a + b) * c) + "hello"
+        let a = Expression::Identifier {
+            name: "a".to_string(),
+            location: Some(test_loc()),
+        };
+        let b = Expression::Identifier {
+            name: "b".to_string(),
+            location: Some(test_loc()),
+        };
+        let c = Expression::Identifier {
+            name: "c".to_string(),
+            location: Some(test_loc()),
+        };
+        let hello = Expression::Literal {
+            value: Literal::String("hello".to_string()),
+            location: Some(test_loc()),
+        };
+
+        let ab = Expression::Binary {
+            left: Box::new(a),
+            op: BinaryOp::Add,
+            right: Box::new(b),
+            location: Some(test_loc()),
+        };
+        let ab_mul_c = Expression::Binary {
+            left: Box::new(ab),
+            op: BinaryOp::Mul,
+            right: Box::new(c),
+            location: Some(test_loc()),
+        };
+        let expr = Expression::Binary {
+            left: Box::new(ab_mul_c),
+            op: BinaryOp::Add,
+            right: Box::new(hello),
+            location: Some(test_loc()),
+        };
+
+        assert!(contains_string_literal(&expr));
+    }
+
+    #[test]
+    fn test_no_string_in_complex_expression() {
+        // (a + b) * (c - d)
+        let a = Expression::Identifier {
+            name: "a".to_string(),
+            location: Some(test_loc()),
+        };
+        let b = Expression::Identifier {
+            name: "b".to_string(),
+            location: Some(test_loc()),
+        };
+        let c = Expression::Identifier {
+            name: "c".to_string(),
+            location: Some(test_loc()),
+        };
+        let d = Expression::Identifier {
+            name: "d".to_string(),
+            location: Some(test_loc()),
+        };
+
+        let ab = Expression::Binary {
+            left: Box::new(a),
+            op: BinaryOp::Add,
+            right: Box::new(b),
+            location: Some(test_loc()),
+        };
+        let cd = Expression::Binary {
+            left: Box::new(c),
+            op: BinaryOp::Sub,
+            right: Box::new(d),
+            location: Some(test_loc()),
+        };
+        let expr = Expression::Binary {
+            left: Box::new(ab),
+            op: BinaryOp::Mul,
+            right: Box::new(cd),
+            location: Some(test_loc()),
+        };
+
+        assert!(!contains_string_literal(&expr));
     }
 }

@@ -65,7 +65,7 @@ mod tests {
 
     #[test]
     fn test_float_literal() {
-        assert_eq!(generate_literal(&Literal::Float(3.14)), "3.14");
+        assert_eq!(generate_literal(&Literal::Float(2.5)), "2.5");
         assert_eq!(generate_literal(&Literal::Float(42.0)), "42.0");
         // Integer-like floats should have .0
         let result = generate_literal(&Literal::Float(10.0));
