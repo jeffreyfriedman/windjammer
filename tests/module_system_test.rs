@@ -41,7 +41,7 @@ mod module_discovery_tests {
     #[test]
     fn test_discover_flat_modules() {
         // Flat structure: src_wj/vec2.wj, src_wj/vec3.wj
-        let temp_dir = create_test_project(&[
+        let _temp_dir = create_test_project(&[
             ("vec2.wj", "pub struct Vec2 { pub x: f64, pub y: f64 }"),
             (
                 "vec3.wj",
@@ -68,7 +68,7 @@ mod module_discovery_tests {
         //     vec3.wj
         //   rendering/
         //     color.wj
-        let temp_dir = create_test_project(&[
+        let _temp_dir = create_test_project(&[
             ("mod.wj", "pub mod math\npub mod rendering"),
             ("math/mod.wj", "pub mod vec2\npub mod vec3"),
             ("math/vec2.wj", "pub struct Vec2 { pub x: f64, pub y: f64 }"),
@@ -106,7 +106,7 @@ mod module_discovery_tests {
         //   math/  (no mod.wj!)
         //     vec2.wj
         //     vec3.wj
-        let temp_dir = create_test_project(&[
+        let _temp_dir = create_test_project(&[
             ("math/vec2.wj", "pub struct Vec2 { pub x: f64, pub y: f64 }"),
             (
                 "math/vec3.wj",
@@ -130,7 +130,7 @@ mod lib_rs_generation_tests {
     #[test]
     fn test_generate_lib_rs_flat() {
         // Flat structure should generate simple lib.rs
-        let temp_dir = create_test_project(&[
+        let _temp_dir = create_test_project(&[
             ("vec2.wj", "pub struct Vec2 { pub x: f64, pub y: f64 }"),
             (
                 "vec3.wj",
@@ -155,7 +155,7 @@ mod lib_rs_generation_tests {
     #[test]
     fn test_generate_lib_rs_nested() {
         // Nested structure should generate hierarchical lib.rs
-        let temp_dir = create_test_project(&[
+        let _temp_dir = create_test_project(&[
             ("mod.wj", "pub mod math\npub mod rendering"),
             ("math/mod.wj", "pub mod vec2\npub mod vec3"),
             ("math/vec2.wj", "pub struct Vec2 { pub x: f64, pub y: f64 }"),
@@ -187,7 +187,7 @@ mod lib_rs_generation_tests {
     #[test]
     fn test_preserve_pub_use_from_mod_wj() {
         // THE CRITICAL TEST - Respect explicit declarations!
-        let temp_dir = create_test_project(&[
+        let _temp_dir = create_test_project(&[
             ("mod.wj", "pub mod math\npub use math::Vec2\npub use math::Vec3"),
             ("math/mod.wj", "pub struct Vec2 { pub x: f64, pub y: f64 }\npub struct Vec3 { pub x: f64, pub y: f64, pub z: f64 }"),
         ]);
@@ -216,7 +216,7 @@ mod integration_tests {
     #[test]
     fn test_compile_game_engine_structure() {
         // Realistic game engine structure like windjammer-game!
-        let temp_dir = create_test_project(&[
+        let _temp_dir = create_test_project(&[
             (
                 "mod.wj",
                 r#"
@@ -299,7 +299,7 @@ mod regression_tests {
     #[test]
     fn test_flat_structure_still_works() {
         // Ensure we don't break existing flat projects!
-        let temp_dir = create_test_project(&[
+        let _temp_dir = create_test_project(&[
             ("main.wj", "fn main() { println(\"Hello\") }"),
             ("utils.wj", "pub fn helper() -> i32 { 42 }"),
         ]);

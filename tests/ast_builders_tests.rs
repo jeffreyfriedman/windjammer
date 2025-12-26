@@ -2,8 +2,6 @@
 //
 // Tests FIRST, then implementation (proper TDD)
 
-use windjammer::parser::ast::{OwnershipHint, Parameter, Type};
-
 // ============================================================================
 // TYPE BUILDER TESTS
 // ============================================================================
@@ -164,7 +162,7 @@ fn test_parameter_builder_simple() {
     assert_eq!(p.name, "x");
     assert_eq!(p.type_, Type::Int);
     assert_eq!(p.ownership, OwnershipHint::Inferred);
-    assert_eq!(p.is_mutable, false);
+    assert!(!p.is_mutable);
 }
 
 #[test]
@@ -205,7 +203,7 @@ fn test_parameter_builder_mutable() {
     let p = param_mut("x", Type::Int);
 
     assert_eq!(p.ownership, OwnershipHint::Mut);
-    assert_eq!(p.is_mutable, true);
+    assert!(p.is_mutable);
 }
 
 // ============================================================================
@@ -250,10 +248,10 @@ fn test_expr_literal_int() {
 fn test_expr_literal_float() {
     use windjammer::parser::ast::*;
 
-    let expr = expr_float(3.14);
+    let expr = expr_float(2.5);
 
     if let Expression::Literal { value, .. } = expr {
-        assert_eq!(value, Literal::Float(3.14));
+        assert_eq!(value, Literal::Float(2.5));
     } else {
         panic!("Expected Literal expression");
     }
