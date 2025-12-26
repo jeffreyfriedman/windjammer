@@ -437,10 +437,12 @@ impl CodeGenerator {
                         // WINDJAMMER PHILOSOPHY: Auto-add .cloned() for HashMap.get() and similar methods
                         // When returning Option<T> but method returns Option<&T>, add .cloned()
                         let returns_option_owned = self.returns_option_owned_type();
-                        if returns_option_owned && self.is_method_returning_option_ref(expr) {
-                            if !expr_str.ends_with(".cloned()") && !expr_str.ends_with(".clone()") {
-                                expr_str = format!("{}.cloned()", expr_str);
-                            }
+                        if returns_option_owned
+                            && self.is_method_returning_option_ref(expr)
+                            && !expr_str.ends_with(".cloned()")
+                            && !expr_str.ends_with(".clone()")
+                        {
+                            expr_str = format!("{}.cloned()", expr_str);
                         }
 
                         output.push_str(&expr_str);
@@ -2866,10 +2868,12 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
                     // When returning Option<T> but method returns Option<&T>, add .cloned()
                     // Common case: fn get(&self, key: K) -> Option<V> { self.map.get(&key) }
                     let returns_option_owned = self.returns_option_owned_type();
-                    if returns_option_owned && self.is_method_returning_option_ref(e) {
-                        if !return_str.ends_with(".cloned()") && !return_str.ends_with(".clone()") {
-                            return_str = format!("{}.cloned()", return_str);
-                        }
+                    if returns_option_owned
+                        && self.is_method_returning_option_ref(e)
+                        && !return_str.ends_with(".cloned()")
+                        && !return_str.ends_with(".clone()")
+                    {
+                        return_str = format!("{}.cloned()", return_str);
                     }
 
                     output.push_str(&return_str);
@@ -3201,9 +3205,9 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
                                     self.generating_assignment_target = true;
                                     output.push_str(&self.generate_expression(target));
                                     self.generating_assignment_target = false;
-                                    output.push_str(" ");
+                                    output.push(' ');
                                     output.push_str(op_str);
-                                    output.push_str(" ");
+                                    output.push(' ');
                                     output.push_str(&self.generate_expression(right));
                                     output.push_str(";\n");
                                     return output;
@@ -4144,10 +4148,9 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
                         let mut arg_str = self.generate_expression(arg);
 
                         // AUTO .to_string(): Convert string literals when parameter expects owned String
-                        if matches!(arg, Expression::Literal { value: Literal::String(_), .. }) {
-                            if crate::codegen::rust::method_call_analyzer::MethodCallAnalyzer::should_add_to_string(i, method, &method_signature) {
-                                arg_str = format!("{}.to_string()", arg_str);
-                            }
+                        if matches!(arg, Expression::Literal { value: Literal::String(_), .. })
+                            && crate::codegen::rust::method_call_analyzer::MethodCallAnalyzer::should_add_to_string(i, method, &method_signature) {
+                            arg_str = format!("{}.to_string()", arg_str);
                         }
 
                         // AUTO .clone(): Add .clone() when needed for borrowed values

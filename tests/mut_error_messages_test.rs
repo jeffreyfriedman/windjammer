@@ -8,7 +8,6 @@
 /// 2. Source location (file, line, column)
 /// 3. Code snippet showing the issue
 /// 4. Helpful suggestion: "help: make this binding mutable: `mut x`"
-use std::path::PathBuf;
 use tempfile::TempDir;
 
 fn compile_wj(code: &str) -> Result<String, String> {

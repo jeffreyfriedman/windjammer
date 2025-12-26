@@ -547,7 +547,7 @@ impl Analyzer {
                         let trait_methods = self
                             .analyzed_trait_methods
                             .entry(decl.name.clone())
-                            .or_insert_with(HashMap::new);
+                            .or_default();
 
                         // Only insert if not already present (from global inference)
                         if !trait_methods.contains_key(&func.name) {
@@ -669,14 +669,14 @@ impl Analyzer {
                 if let Some(trait_name) = &impl_block.trait_name {
                     trait_impls
                         .entry(trait_name.clone())
-                        .or_insert_with(Vec::new)
+                        .or_default()
                         .push(impl_block.clone());
                 }
             }
         }
 
         eprintln!("DEBUG: Found {} trait implementations", trait_impls.len());
-        for (trait_name, _) in &trait_impls {
+        for trait_name in trait_impls.keys() {
             eprintln!("DEBUG:   - {}", trait_name);
         }
 
@@ -1237,7 +1237,7 @@ impl Analyzer {
                     let analyzed_trait_methods_for_trait = self
                         .analyzed_trait_methods
                         .entry(trait_key.to_string())
-                        .or_insert_with(std::collections::HashMap::new);
+                        .or_default();
 
                     // Store the impl's analyzed ownership for this trait method
                     analyzed_trait_methods_for_trait.insert(func.name.clone(), analyzed.clone());
@@ -3592,7 +3592,7 @@ impl Analyzer {
                     || self.function_uses_identifier(name, then_block)
                     || else_block
                         .as_ref()
-                        .map_or(false, |block| self.function_uses_identifier(name, block))
+                        .is_some_and(|block| self.function_uses_identifier(name, block))
             }
             Statement::While {
                 condition, body, ..
@@ -3845,36 +3845,33 @@ impl Analyzer {
 
     /// Track mutations in expressions (method calls that mutate)
     fn collect_mutations_in_expression(&mut self, expr: &Expression) {
-        match expr {
-            Expression::MethodCall { object, method, .. } => {
-                // Common mutating methods
-                let mutating_methods = [
-                    "push",
-                    "pop",
-                    "insert",
-                    "remove",
-                    "clear",
-                    "append",
-                    "extend",
-                    "truncate",
-                    "resize",
-                    "sort",
-                    "reverse",
-                    "dedup",
-                    "retain",
-                    "drain",
-                    "split_off",
-                    "swap_remove",
-                ];
+        if let Expression::MethodCall { object, method, .. } = expr {
+            // Common mutating methods
+            let mutating_methods = [
+                "push",
+                "pop",
+                "insert",
+                "remove",
+                "clear",
+                "append",
+                "extend",
+                "truncate",
+                "resize",
+                "sort",
+                "reverse",
+                "dedup",
+                "retain",
+                "drain",
+                "split_off",
+                "swap_remove",
+            ];
 
-                if mutating_methods.contains(&method.as_str()) {
-                    // Mark the object as mutated
-                    if let Expression::Identifier { name, .. } = &**object {
-                        self.mutated_variables.insert(name.clone());
-                    }
+            if mutating_methods.contains(&method.as_str()) {
+                // Mark the object as mutated
+                if let Expression::Identifier { name, .. } = &**object {
+                    self.mutated_variables.insert(name.clone());
                 }
             }
-            _ => {}
         }
     }
 

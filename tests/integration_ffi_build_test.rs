@@ -3,7 +3,6 @@
 /// This test reproduces the actual build process to find why
 /// `use crate::ffi` is missing from generated runtime.rs
 use std::fs;
-use std::path::PathBuf;
 use tempfile::TempDir;
 
 #[test]
