@@ -83,7 +83,7 @@ pub fn identity<T>(x: T) -> T {
     x
 }
 "#;
-    let (success, generated, err) = compile_and_verify(code);
+    let (success, _generated, err) = compile_and_verify(code);
     assert!(success, "Generic function should compile. Error: {}", err);
 }
 
@@ -94,7 +94,7 @@ pub fn pair<A, B>(a: A, b: B) -> (A, B) {
     (a, b)
 }
 "#;
-    let (success, generated, err) = compile_and_verify(code);
+    let (success, _generated, err) = compile_and_verify(code);
     assert!(
         success,
         "Multiple generic params should compile. Error: {}",
@@ -124,7 +124,7 @@ impl<T> Container<T> {
     }
 }
 "#;
-    let (success, generated, err) = compile_and_verify(code);
+    let (success, _generated, err) = compile_and_verify(code);
     assert!(success, "Generic struct should compile. Error: {}", err);
 }
 
@@ -143,7 +143,7 @@ impl<A, B> Pair<A, B> {
     }
 }
 "#;
-    let (success, generated, err) = compile_and_verify(code);
+    let (success, _generated, err) = compile_and_verify(code);
     assert!(
         success,
         "Generic struct multiple should compile. Error: {}",
@@ -162,7 +162,7 @@ pub fn duplicate<T: Clone>(item: T) -> (T, T) {
     (item.clone(), item)
 }
 "#;
-    let (success, generated, err) = compile_and_verify(code);
+    let (success, _generated, err) = compile_and_verify(code);
     assert!(success, "Clone bound should compile. Error: {}", err);
 }
 
@@ -176,7 +176,7 @@ pub fn clone_twice<T: Clone>(item: T) -> (T, T) {
     (a, b)
 }
 "#;
-    let (success, generated, err) = compile_and_verify(code);
+    let (success, _generated, err) = compile_and_verify(code);
     assert!(success, "Multiple bounds should compile. Error: {}", err);
 }
 
@@ -187,7 +187,7 @@ pub fn get_default<T: Default>() -> T {
     T::default()
 }
 "#;
-    let (success, generated, err) = compile_and_verify(code);
+    let (success, _generated, err) = compile_and_verify(code);
     assert!(success, "Default bound should compile. Error: {}", err);
 }
 
@@ -211,7 +211,7 @@ pub fn is_just<T>(m: &Maybe<T>) -> bool {
     }
 }
 "#;
-    let (success, generated, err) = compile_and_verify(code);
+    let (success, _generated, err) = compile_and_verify(code);
     assert!(success, "Generic enum should compile. Error: {}", err);
 }
 
@@ -238,7 +238,7 @@ impl Counter {
     }
 }
 "#;
-    let (success, generated, err) = compile_and_verify(code);
+    let (success, _generated, err) = compile_and_verify(code);
     assert!(success, "Simple impl should compile. Error: {}", err);
 }
 
@@ -261,7 +261,7 @@ impl<T: Clone> Container<T> {
     }
 }
 "#;
-    let (success, generated, err) = compile_and_verify(code);
+    let (success, _generated, err) = compile_and_verify(code);
     assert!(success, "Generic method should compile. Error: {}", err);
 }
 
@@ -276,7 +276,7 @@ pub fn first<T: Clone>(items: &Vec<T>) -> Option<T> {
     items.first().cloned()
 }
 "#;
-    let (success, generated, err) = compile_and_verify(code);
+    let (success, _generated, err) = compile_and_verify(code);
     assert!(success, "Vec generic should compile. Error: {}", err);
 }
 
@@ -291,7 +291,7 @@ pub fn is_some<T>(opt: &Option<T>) -> bool {
     }
 }
 "#;
-    let (success, generated, err) = compile_and_verify(code);
+    let (success, _generated, err) = compile_and_verify(code);
     assert!(success, "Option generic should compile. Error: {}", err);
 }
 
@@ -307,7 +307,7 @@ pub fn count_items(items: &Vec<i32>) -> usize {
     items.iter().count()
 }
 "#;
-    let (success, generated, err) = compile_and_verify(code);
+    let (success, _generated, err) = compile_and_verify(code);
     assert!(success, "Iterator usage should compile. Error: {}", err);
 }
 
@@ -323,6 +323,6 @@ pub fn get_first(items: &Vec<i32>) -> Option<&i32> {
     items.first()
 }
 "#;
-    let (success, generated, err) = compile_and_verify(code);
+    let (success, _generated, err) = compile_and_verify(code);
     assert!(success, "Reference return should compile. Error: {}", err);
 }

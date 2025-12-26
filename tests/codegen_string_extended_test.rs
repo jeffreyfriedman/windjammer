@@ -7,7 +7,6 @@ use windjammer::codegen::rust::string_analysis::{
     expression_produces_string, statement_has_as_str,
 };
 use windjammer::parser::ast::builders::*;
-use windjammer::parser::Pattern;
 
 #[cfg(test)]
 mod expression_produces_string_tests {

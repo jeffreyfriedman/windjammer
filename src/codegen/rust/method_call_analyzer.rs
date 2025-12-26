@@ -103,6 +103,7 @@ impl MethodCallAnalyzer {
     }
 
     /// Determine if we should add .clone() to this argument
+    #[allow(clippy::too_many_arguments)]
     pub fn should_add_clone(
         arg: &Expression,
         arg_str: &str,
