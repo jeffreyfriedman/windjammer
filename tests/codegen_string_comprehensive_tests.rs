@@ -85,7 +85,7 @@ pub fn greeting() -> string {
     s
 }
 "#;
-    let (success, generated, err) = compile_and_verify(code);
+    let (success, _generated, err) = compile_and_verify(code);
     assert!(
         success,
         "String literal assignment should compile. Error: {}",

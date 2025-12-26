@@ -202,7 +202,7 @@ pub struct Point {
     y: i32,
 }
 "#;
-    let (success, generated, err) = compile_and_verify(code);
+    let (success, _generated, err) = compile_and_verify(code);
     // @auto should derive common traits
     assert!(
         success,
@@ -267,7 +267,7 @@ pub fn is_red(c: &Color) -> bool {
     *c == Color::Red
 }
 "#;
-    let (success, generated, err) = compile_and_verify(code);
+    let (success, _generated, err) = compile_and_verify(code);
     assert!(success, "Enum derives should compile. Error: {}", err);
 }
 
@@ -284,7 +284,7 @@ pub fn clone_message(m: &Message) -> Message {
     m.clone()
 }
 "#;
-    let (success, generated, err) = compile_and_verify(code);
+    let (success, _generated, err) = compile_and_verify(code);
     assert!(
         success,
         "Enum with data derives should compile. Error: {}",
@@ -313,7 +313,7 @@ pub fn clone_outer(o: &Outer) -> Outer {
     o.clone()
 }
 "#;
-    let (success, generated, err) = compile_and_verify(code);
+    let (success, _generated, err) = compile_and_verify(code);
     assert!(
         success,
         "Nested struct derives should compile. Error: {}",
@@ -337,7 +337,7 @@ pub fn clone_container<T: Clone>(c: &Container<T>) -> Container<T> {
     c.clone()
 }
 "#;
-    let (success, generated, err) = compile_and_verify(code);
+    let (success, _generated, err) = compile_and_verify(code);
     assert!(
         success,
         "Generic struct derives should compile. Error: {}",

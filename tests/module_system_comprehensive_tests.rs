@@ -85,7 +85,7 @@ pub fn create_map() -> HashMap<i32, i32> {
     HashMap::new()
 }
 "#;
-    let (success, generated, err) = compile_and_verify(code);
+    let (success, _generated, err) = compile_and_verify(code);
     assert!(
         success,
         "use std::collections should compile. Error: {}",
@@ -103,7 +103,7 @@ pub fn create_vec() -> Vec<i32> {
     v
 }
 "#;
-    let (success, generated, err) = compile_and_verify(code);
+    let (success, _generated, err) = compile_and_verify(code);
     assert!(success, "Vec should be in prelude. Error: {}", err);
 }
 
@@ -118,7 +118,7 @@ pub fn wrap(x: i32) -> Option<i32> {
     }
 }
 "#;
-    let (success, generated, err) = compile_and_verify(code);
+    let (success, _generated, err) = compile_and_verify(code);
     assert!(success, "Option should be in prelude. Error: {}", err);
 }
 
@@ -133,7 +133,7 @@ pub fn parse(n: i32) -> Result<i32, i32> {
     }
 }
 "#;
-    let (success, generated, err) = compile_and_verify(code);
+    let (success, _generated, err) = compile_and_verify(code);
     assert!(success, "Result should be in prelude. Error: {}", err);
 }
 
@@ -151,7 +151,7 @@ pub fn test_both() -> (HashMap<i32, i32>, HashSet<i32>) {
     (HashMap::new(), HashSet::new())
 }
 "#;
-    let (success, generated, err) = compile_and_verify(code);
+    let (success, _generated, err) = compile_and_verify(code);
     assert!(success, "Multiple use should compile. Error: {}", err);
 }
 
@@ -170,7 +170,7 @@ pub fn int_items() -> Vec<i32> {
     v
 }
 "#;
-    let (success, generated, err) = compile_and_verify(code);
+    let (success, _generated, err) = compile_and_verify(code);
     assert!(success, "Vec of i32 should compile. Error: {}", err);
 }
 
@@ -185,7 +185,7 @@ pub fn make_some(x: i32) -> Option<i32> {
     Some(x)
 }
 "#;
-    let (success, generated, err) = compile_and_verify(code);
+    let (success, _generated, err) = compile_and_verify(code);
     assert!(success, "Option Some should compile. Error: {}", err);
 }
 
@@ -196,7 +196,7 @@ pub fn make_none() -> Option<i32> {
     None
 }
 "#;
-    let (success, generated, err) = compile_and_verify(code);
+    let (success, _generated, err) = compile_and_verify(code);
     assert!(success, "Option None should compile. Error: {}", err);
 }
 
@@ -207,7 +207,7 @@ pub fn make_ok(x: i32) -> Result<i32, i32> {
     Ok(x)
 }
 "#;
-    let (success, generated, err) = compile_and_verify(code);
+    let (success, _generated, err) = compile_and_verify(code);
     assert!(success, "Result Ok should compile. Error: {}", err);
 }
 
@@ -218,6 +218,6 @@ pub fn make_err(e: i32) -> Result<i32, i32> {
     Err(e)
 }
 "#;
-    let (success, generated, err) = compile_and_verify(code);
+    let (success, _generated, err) = compile_and_verify(code);
     assert!(success, "Result Err should compile. Error: {}", err);
 }

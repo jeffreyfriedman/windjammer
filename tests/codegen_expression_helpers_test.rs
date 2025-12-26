@@ -5,7 +5,7 @@
 
 use windjammer::codegen::rust::expression_helpers::{is_const_evaluable, is_reference_expression};
 use windjammer::parser::ast::builders::*;
-use windjammer::parser::{BinaryOp, Expression, UnaryOp};
+use windjammer::parser::UnaryOp;
 
 // =============================================================================
 // is_reference_expression Tests

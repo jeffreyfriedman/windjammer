@@ -11,7 +11,7 @@ fn parse_code(code: &str) -> Result<Vec<Item>, String> {
     parser
         .parse()
         .map(|prog| prog.items)
-        .map_err(|e| format!("{}", e))
+        .map_err(|e| e.to_string())
 }
 
 #[test]
@@ -33,7 +33,7 @@ fn test_parse_self_import() {
     match &items[0] {
         Item::Use { path, .. } => {
             assert!(
-                path.len() > 0 && path[0] == "self",
+                !path.is_empty() && path[0] == "self",
                 "First path segment should be 'self', got: {:?}",
                 path
             );
