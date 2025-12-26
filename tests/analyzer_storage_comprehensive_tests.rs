@@ -92,7 +92,7 @@ impl Container {
     }
 }
 "#;
-    let (success, generated, err) = compile_and_verify(code);
+    let (success, _generated, err) = compile_and_verify(code);
     // item should be owned because it's pushed
     assert!(success, "Push to vec should compile. Error: {}", err);
 }
@@ -111,7 +111,7 @@ pub fn collect_item(item: Item) -> Vec<Item> {
     items
 }
 "#;
-    let (success, generated, err) = compile_and_verify(code);
+    let (success, _generated, err) = compile_and_verify(code);
     assert!(success, "Push to local vec should compile. Error: {}", err);
 }
 
@@ -132,7 +132,7 @@ pub fn create_map() -> HashMap<i32, i32> {
     map
 }
 "#;
-    let (success, generated, err) = compile_and_verify(code);
+    let (success, _generated, err) = compile_and_verify(code);
     assert!(success, "HashMap basic should compile. Error: {}", err);
 }
 
@@ -159,7 +159,7 @@ impl Outer {
     }
 }
 "#;
-    let (success, generated, err) = compile_and_verify(code);
+    let (success, _generated, err) = compile_and_verify(code);
     assert!(success, "Assign to field should compile. Error: {}", err);
 }
 
@@ -182,7 +182,7 @@ pub fn make_line(start: Point, end: Point) -> Line {
     Line { start: start, end: end }
 }
 "#;
-    let (success, generated, err) = compile_and_verify(code);
+    let (success, _generated, err) = compile_and_verify(code);
     assert!(
         success,
         "Assign in struct literal should compile. Error: {}",
@@ -206,7 +206,7 @@ pub fn identity(item: Item) -> Item {
     item
 }
 "#;
-    let (success, generated, err) = compile_and_verify(code);
+    let (success, _generated, err) = compile_and_verify(code);
     // item should be owned because it's returned
     assert!(success, "Return value should compile. Error: {}", err);
 }
@@ -226,7 +226,7 @@ pub fn maybe_return(item: Item, flag: bool) -> Option<Item> {
     }
 }
 "#;
-    let (success, generated, err) = compile_and_verify(code);
+    let (success, _generated, err) = compile_and_verify(code);
     assert!(success, "Return in match should compile. Error: {}", err);
 }
 
@@ -246,7 +246,7 @@ pub fn get_value(item: Item) -> i32 {
     item.value
 }
 "#;
-    let (success, generated, err) = compile_and_verify(code);
+    let (success, _generated, err) = compile_and_verify(code);
     // Reading a Copy field doesn't require ownership of item
     assert!(success, "Read field should compile. Error: {}", err);
 }
@@ -263,7 +263,7 @@ pub fn print_item(item: Item) {
     println!("{:?}", item)
 }
 "#;
-    let (success, generated, err) = compile_and_verify(code);
+    let (success, _generated, err) = compile_and_verify(code);
     assert!(success, "Print debug should compile. Error: {}", err);
 }
 
@@ -285,7 +285,7 @@ pub fn maybe_store(item: Item, items: &mut Vec<Item>, flag: bool) {
     }
 }
 "#;
-    let (success, generated, err) = compile_and_verify(code);
+    let (success, _generated, err) = compile_and_verify(code);
     // Even if push is conditional, item must be owned
     assert!(success, "Conditional push should compile. Error: {}", err);
 }
@@ -306,7 +306,7 @@ pub fn conditional_return(item: Item, flag: bool) -> Option<Item> {
     }
 }
 "#;
-    let (success, generated, err) = compile_and_verify(code);
+    let (success, _generated, err) = compile_and_verify(code);
     assert!(success, "Conditional return should compile. Error: {}", err);
 }
 
@@ -330,7 +330,7 @@ pub fn collect_items(items: &Vec<Item>) -> Vec<Item> {
     result
 }
 "#;
-    let (success, generated, err) = compile_and_verify(code);
+    let (success, _generated, err) = compile_and_verify(code);
     assert!(success, "Push in loop should compile. Error: {}", err);
 }
 
@@ -351,7 +351,7 @@ pub fn get_value(item: Item) -> i32 {
     item.value
 }
 "#;
-    let (success, generated, err) = compile_and_verify(code);
+    let (success, _generated, err) = compile_and_verify(code);
     assert!(success, "Consuming function should compile. Error: {}", err);
 }
 
@@ -371,7 +371,7 @@ pub fn forward(item: Item) -> i32 {
     borrow(&item)
 }
 "#;
-    let (success, generated, err) = compile_and_verify(code);
+    let (success, _generated, err) = compile_and_verify(code);
     assert!(
         success,
         "Pass to borrowing function should compile. Error: {}",
@@ -395,7 +395,7 @@ pub fn clone_and_store(item: &Item, items: &mut Vec<Item>) {
     items.push(item.clone())
 }
 "#;
-    let (success, generated, err) = compile_and_verify(code);
+    let (success, _generated, err) = compile_and_verify(code);
     assert!(success, "Clone then push should compile. Error: {}", err);
 }
 
@@ -423,7 +423,7 @@ impl Container {
     }
 }
 "#;
-    let (success, generated, err) = compile_and_verify(code);
+    let (success, _generated, err) = compile_and_verify(code);
     assert!(
         success,
         "Nested struct storage should compile. Error: {}",
@@ -471,7 +471,7 @@ pub fn wrap_some(item: Item) -> Option<Item> {
     Some(item)
 }
 "#;
-    let (success, generated, err) = compile_and_verify(code);
+    let (success, _generated, err) = compile_and_verify(code);
     assert!(success, "Wrap in Some should compile. Error: {}", err);
 }
 
@@ -487,6 +487,6 @@ pub fn wrap_ok(item: Item) -> Result<Item, string> {
     Ok(item)
 }
 "#;
-    let (success, generated, err) = compile_and_verify(code);
+    let (success, _generated, err) = compile_and_verify(code);
     assert!(success, "Wrap in Ok should compile. Error: {}", err);
 }

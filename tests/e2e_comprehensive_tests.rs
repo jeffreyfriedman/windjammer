@@ -111,7 +111,7 @@ pub fn test_counter() -> i32 {
     c.get()
 }
 "#;
-    let (success, generated, err) = compile_and_verify(code);
+    let (success, _generated, err) = compile_and_verify(code);
     assert!(success, "Counter program should compile. Error: {}", err);
 }
 
@@ -149,7 +149,7 @@ impl Stack {
     }
 }
 "#;
-    let (success, generated, err) = compile_and_verify(code);
+    let (success, _generated, err) = compile_and_verify(code);
     assert!(success, "Stack program should compile. Error: {}", err);
 }
 
@@ -182,7 +182,7 @@ impl Point {
     }
 }
 "#;
-    let (success, generated, err) = compile_and_verify(code);
+    let (success, _generated, err) = compile_and_verify(code);
     assert!(success, "Point operations should compile. Error: {}", err);
 }
 
@@ -206,7 +206,7 @@ impl Node {
     }
 }
 "#;
-    let (success, generated, err) = compile_and_verify(code);
+    let (success, _generated, err) = compile_and_verify(code);
     assert!(success, "Node should compile. Error: {}", err);
 }
 
@@ -235,7 +235,7 @@ pub fn calculate(a: i32, b: i32, op: Operation) -> Option<i32> {
     }
 }
 "#;
-    let (success, generated, err) = compile_and_verify(code);
+    let (success, _generated, err) = compile_and_verify(code);
     assert!(success, "Calculator should compile. Error: {}", err);
 }
 
@@ -269,7 +269,7 @@ impl EventHandler {
     }
 }
 "#;
-    let (success, generated, err) = compile_and_verify(code);
+    let (success, _generated, err) = compile_and_verify(code);
     assert!(success, "Event handler should compile. Error: {}", err);
 }
 
@@ -321,7 +321,7 @@ impl StateMachine {
     }
 }
 "#;
-    let (success, generated, err) = compile_and_verify(code);
+    let (success, _generated, err) = compile_and_verify(code);
     assert!(success, "State machine should compile. Error: {}", err);
 }
 
@@ -344,7 +344,7 @@ pub fn count_positive(numbers: &Vec<i32>) -> usize {
     numbers.iter().filter(|n| **n > 0).count()
 }
 "#;
-    let (success, generated, err) = compile_and_verify(code);
+    let (success, _generated, err) = compile_and_verify(code);
     assert!(success, "Iterator pipeline should compile. Error: {}", err);
 }
 
@@ -367,7 +367,7 @@ pub fn factorial(n: i32) -> i32 {
     }
 }
 "#;
-    let (success, generated, err) = compile_and_verify(code);
+    let (success, _generated, err) = compile_and_verify(code);
     assert!(
         success,
         "Recursive functions should compile. Error: {}",
@@ -407,7 +407,7 @@ impl Config {
     }
 }
 "#;
-    let (success, generated, err) = compile_and_verify(code);
+    let (success, _generated, err) = compile_and_verify(code);
     assert!(success, "Builder pattern should compile. Error: {}", err);
 }
 
@@ -440,7 +440,7 @@ impl<T: Clone> Pair<T> {
     }
 }
 "#;
-    let (success, generated, err) = compile_and_verify(code);
+    let (success, _generated, err) = compile_and_verify(code);
     assert!(success, "Generic container should compile. Error: {}", err);
 }
 
@@ -478,6 +478,6 @@ impl Entity {
     }
 }
 "#;
-    let (success, generated, err) = compile_and_verify(code);
+    let (success, _generated, err) = compile_and_verify(code);
     assert!(success, "Game entity should compile. Error: {}", err);
 }

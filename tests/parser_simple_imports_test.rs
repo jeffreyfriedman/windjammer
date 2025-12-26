@@ -52,7 +52,9 @@ fn test_rust_style_imports_still_work() {
         let mut lexer = Lexer::new(source);
         let tokens = lexer.tokenize_with_locations();
         let mut parser = Parser::new(tokens);
-        let program = parser.parse().expect(&format!("Should parse: {}", source));
+        let program = parser
+            .parse()
+            .unwrap_or_else(|_| panic!("Should parse: {}", source));
 
         if let Item::Use { path, .. } = &program.items[0] {
             assert_eq!(path, &expected_path, "Failed for: {}", source);

@@ -84,7 +84,7 @@ pub fn use_closure() -> i32 {
     add_one(5)
 }
 "#;
-    let (success, generated, err) = compile_and_verify(code);
+    let (success, _generated, err) = compile_and_verify(code);
     assert!(success, "Simple closure should compile. Error: {}", err);
 }
 
@@ -96,7 +96,7 @@ pub fn use_closure() -> i32 {
     add(3, 4)
 }
 "#;
-    let (success, generated, err) = compile_and_verify(code);
+    let (success, _generated, err) = compile_and_verify(code);
     assert!(
         success,
         "Multiple param closure should compile. Error: {}",
@@ -112,7 +112,7 @@ pub fn use_closure() -> i32 {
     get_five()
 }
 "#;
-    let (success, generated, err) = compile_and_verify(code);
+    let (success, _generated, err) = compile_and_verify(code);
     assert!(success, "No param closure should compile. Error: {}", err);
 }
 
@@ -129,7 +129,7 @@ pub fn use_closure() -> i32 {
     get_x()
 }
 "#;
-    let (success, generated, err) = compile_and_verify(code);
+    let (success, _generated, err) = compile_and_verify(code);
     assert!(success, "Capture immutable should compile. Error: {}", err);
 }
 
@@ -143,7 +143,7 @@ pub fn use_closure() -> i32 {
     sum()
 }
 "#;
-    let (success, generated, err) = compile_and_verify(code);
+    let (success, _generated, err) = compile_and_verify(code);
     assert!(success, "Capture multiple should compile. Error: {}", err);
 }
 
@@ -158,7 +158,7 @@ pub fn double_all(items: Vec<i32>) -> Vec<i32> {
     items.iter().map(|x| x * 2).collect()
 }
 "#;
-    let (success, generated, err) = compile_and_verify(code);
+    let (success, _generated, err) = compile_and_verify(code);
     assert!(success, "Closure map should compile. Error: {}", err);
 }
 
@@ -169,7 +169,7 @@ pub fn positive_only(items: Vec<i32>) -> Vec<i32> {
     items.iter().filter(|x| **x > 0).cloned().collect()
 }
 "#;
-    let (success, generated, err) = compile_and_verify(code);
+    let (success, _generated, err) = compile_and_verify(code);
     assert!(success, "Closure filter should compile. Error: {}", err);
 }
 
@@ -180,7 +180,7 @@ pub fn sum_all(items: Vec<i32>) -> i32 {
     items.iter().fold(0, |acc, x| acc + x)
 }
 "#;
-    let (success, generated, err) = compile_and_verify(code);
+    let (success, _generated, err) = compile_and_verify(code);
     assert!(success, "Closure fold should compile. Error: {}", err);
 }
 
@@ -191,7 +191,7 @@ pub fn print_all(items: Vec<i32>) {
     items.iter().for_each(|x| println!("{}", x))
 }
 "#;
-    let (success, generated, err) = compile_and_verify(code);
+    let (success, _generated, err) = compile_and_verify(code);
     assert!(success, "Closure for_each should compile. Error: {}", err);
 }
 
@@ -209,7 +209,7 @@ pub fn process(items: Vec<i32>) -> i32 {
         .sum()
 }
 "#;
-    let (success, generated, err) = compile_and_verify(code);
+    let (success, _generated, err) = compile_and_verify(code);
     assert!(success, "Closure chain should compile. Error: {}", err);
 }
 
@@ -224,7 +224,7 @@ pub fn transform(items: Vec<i32>) -> Vec<i32> {
         .collect()
 }
 "#;
-    let (success, generated, err) = compile_and_verify(code);
+    let (success, _generated, err) = compile_and_verify(code);
     assert!(success, "Complex chain should compile. Error: {}", err);
 }
 
@@ -244,7 +244,7 @@ pub fn use_closure() -> i32 {
     compute(5)
 }
 "#;
-    let (success, generated, err) = compile_and_verify(code);
+    let (success, _generated, err) = compile_and_verify(code);
     assert!(success, "Closure block body should compile. Error: {}", err);
 }
 
@@ -259,7 +259,7 @@ pub fn sort_descending(items: &mut Vec<i32>) {
     items.sort_by(|a, b| b.cmp(a))
 }
 "#;
-    let (success, generated, err) = compile_and_verify(code);
+    let (success, _generated, err) = compile_and_verify(code);
     assert!(success, "Closure sort_by should compile. Error: {}", err);
 }
 
@@ -275,7 +275,7 @@ pub fn count_positive(items: &Vec<i32>) -> usize {
     items.iter().filter(|x| **x > 0).count()
 }
 "#;
-    let (success, generated, err) = compile_and_verify(code);
+    let (success, _generated, err) = compile_and_verify(code);
     assert!(success, "Closure count should compile. Error: {}", err);
 }
 
@@ -286,7 +286,7 @@ pub fn has_positive(items: &Vec<i32>) -> bool {
     items.iter().any(|x| *x > 0)
 }
 "#;
-    let (success, generated, err) = compile_and_verify(code);
+    let (success, _generated, err) = compile_and_verify(code);
     assert!(success, "Closure any should compile. Error: {}", err);
 }
 
@@ -297,6 +297,6 @@ pub fn all_positive(items: &Vec<i32>) -> bool {
     items.iter().all(|x| *x > 0)
 }
 "#;
-    let (success, generated, err) = compile_and_verify(code);
+    let (success, _generated, err) = compile_and_verify(code);
     assert!(success, "Closure all should compile. Error: {}", err);
 }

@@ -3473,56 +3473,6 @@ pub fn get_relative_output_path(
     Ok(output_path)
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn test_get_relative_output_path_nested() {
-        let source_root = Path::new("src_wj");
-        let input_path = Path::new("src_wj/math/vec2.wj");
-        let output_dir = Path::new("build");
-
-        let result = get_relative_output_path(source_root, input_path, output_dir).unwrap();
-        assert_eq!(result, PathBuf::from("build/math/vec2.rs"));
-    }
-
-    #[test]
-    fn test_get_relative_output_path_flat() {
-        let source_root = Path::new("src_wj");
-        let input_path = Path::new("src_wj/vec2.wj");
-        let output_dir = Path::new("build");
-
-        let result = get_relative_output_path(source_root, input_path, output_dir).unwrap();
-        assert_eq!(result, PathBuf::from("build/vec2.rs"));
-    }
-
-    #[test]
-    fn test_get_relative_output_path_deeply_nested() {
-        let source_root = Path::new("game/src_wj");
-        let input_path = Path::new("game/src_wj/rendering/shaders/vertex.wj");
-        let output_dir = Path::new("build");
-
-        let result = get_relative_output_path(source_root, input_path, output_dir).unwrap();
-        assert_eq!(result, PathBuf::from("build/rendering/shaders/vertex.rs"));
-    }
-
-    #[test]
-    fn test_two_pass_compilation_concept() {
-        // This test documents the two-pass compilation approach:
-        // Pass 1: Parse all files to register trait definitions
-        // Pass 2: Compile all files with traits available
-        //
-        // This approach is robust because:
-        // - No filename conventions required
-        // - Works regardless of file order
-        // - Traits are always available when needed
-        //
-        // The actual implementation is in build_project()
-        // If this test compiles and passes, the concept is sound
-    }
-}
-
 /// Generate nested module structure using the new Windjammer module system
 /// This replaces the old flat generate_mod_file with proper nested support
 pub fn generate_nested_module_structure(source_dir: &Path, output_dir: &Path) -> Result<()> {
@@ -3661,4 +3611,53 @@ pub fn generate_nested_module_structure(source_dir: &Path, output_dir: &Path) ->
     }
 
     Ok(())
+}
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_get_relative_output_path_nested() {
+        let source_root = Path::new("src_wj");
+        let input_path = Path::new("src_wj/math/vec2.wj");
+        let output_dir = Path::new("build");
+
+        let result = get_relative_output_path(source_root, input_path, output_dir).unwrap();
+        assert_eq!(result, PathBuf::from("build/math/vec2.rs"));
+    }
+
+    #[test]
+    fn test_get_relative_output_path_flat() {
+        let source_root = Path::new("src_wj");
+        let input_path = Path::new("src_wj/vec2.wj");
+        let output_dir = Path::new("build");
+
+        let result = get_relative_output_path(source_root, input_path, output_dir).unwrap();
+        assert_eq!(result, PathBuf::from("build/vec2.rs"));
+    }
+
+    #[test]
+    fn test_get_relative_output_path_deeply_nested() {
+        let source_root = Path::new("game/src_wj");
+        let input_path = Path::new("game/src_wj/rendering/shaders/vertex.wj");
+        let output_dir = Path::new("build");
+
+        let result = get_relative_output_path(source_root, input_path, output_dir).unwrap();
+        assert_eq!(result, PathBuf::from("build/rendering/shaders/vertex.rs"));
+    }
+
+    #[test]
+    fn test_two_pass_compilation_concept() {
+        // This test documents the two-pass compilation approach:
+        // Pass 1: Parse all files to register trait definitions
+        // Pass 2: Compile all files with traits available
+        //
+        // This approach is robust because:
+        // - No filename conventions required
+        // - Works regardless of file order
+        // - Traits are always available when needed
+        //
+        // The actual implementation is in build_project()
+        // If this test compiles and passes, the concept is sound
+    }
 }
