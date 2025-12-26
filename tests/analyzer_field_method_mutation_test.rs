@@ -3,10 +3,7 @@
 
 use windjammer::analyzer::Analyzer;
 use windjammer::lexer::Lexer;
-use windjammer::parser::{
-    Expression, FunctionDecl, Item, Parameter, Parser, Program, Statement, StructDecl, StructField,
-    Type,
-};
+use windjammer::parser::{Parser, Program};
 
 fn parse_code(code: &str) -> Program {
     let mut lexer = Lexer::new(code);

@@ -58,13 +58,13 @@ fn test_integer_literal() {
 
 #[test]
 fn test_float_literal() {
-    let expr = parse_expr("3.14");
+    let expr = parse_expr("2.5");
     if let Expression::Literal {
         value: Literal::Float(f),
         ..
     } = expr
     {
-        assert!((f - 3.14).abs() < 0.001);
+        assert!((f - 2.5).abs() < 0.001);
     } else {
         panic!("Expected Float literal");
     }
