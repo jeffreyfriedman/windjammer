@@ -1772,9 +1772,13 @@ fn create_cargo_toml_with_deps(
             continue; // Skip Rust keywords
         }
 
-        // THE WINDJAMMER WAY: Check if game-host is imported
+        // THE WINDJAMMER WAY: Check if game-host or game-host-core is imported
         // If so, add it as a path dependency to the local game framework
-        if crate_name == "game_host" || crate_name == "game-host" {
+        if crate_name == "game_host"
+            || crate_name == "game-host"
+            || crate_name == "game_host_core"
+            || crate_name == "game-host-core"
+        {
             // Try to find game-host in the workspace
             // First, check if game-host_PATH env var is set (for development)
             if let Ok(game_path) = std::env::var("game-host_PATH") {
@@ -1792,18 +1796,41 @@ fn create_cargo_toml_with_deps(
             // This works when compiling from source
             let manifest_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR")); // /path/to/windjammer
             let src_root = manifest_dir.parent().unwrap(); // /path/to (parent of windjammer)
-            let game_path = src_root.join("game-host/game-host");
 
-            if game_path.exists() {
+            // Try both old and new paths for compatibility
+            let game_path = src_root.join("game-host/game-host-core");
+            let legacy_game_path = src_root.join("game-host/game-host");
+
+            let final_path = if game_path.exists() {
+                game_path
+            } else if legacy_game_path.exists() {
+                legacy_game_path
+            } else {
+                PathBuf::new() // Empty path, will fallback to crates.io
+            };
+
+            if final_path.as_os_str().len() > 0 {
+                // Use the actual crate name as it appears in Cargo.toml
+                let crate_name_normalized = if crate_name.contains("_core") {
+                    "game-host-core"
+                } else {
+                    "game-host"
+                };
                 external_deps.push(format!(
-                    "game-host = {{ path = {:?} }}",
-                    game_path.to_str().unwrap()
+                    "{} = {{ path = {:?} }}",
+                    crate_name_normalized,
+                    final_path.to_str().unwrap()
                 ));
                 continue; // Skip the crates.io fallback
             }
 
             // Fallback: assume it's on crates.io (for published version)
-            external_deps.push(format!("{} = \"*\"", "game-host"));
+            let crate_name_normalized = if crate_name.contains("_core") {
+                "game-host-core"
+            } else {
+                "game-host"
+            };
+            external_deps.push(format!("{} = \"*\"", crate_name_normalized));
         } else {
             // All other external crates are assumed to be from crates.io
             external_deps.push(format!("{} = \"*\"", crate_name));
