@@ -389,17 +389,13 @@ impl Analyzer {
         }
     }
 
-    pub fn analyze_program(
-        &mut self,
-        program: &Program,
-    ) -> Result<
-        (
-            Vec<AnalyzedFunction>,
-            SignatureRegistry,
-            std::collections::HashMap<String, std::collections::HashMap<String, AnalyzedFunction>>,
-        ),
-        String,
-    > {
+    type AnalysisResult = (
+        Vec<AnalyzedFunction>,
+        SignatureRegistry,
+        std::collections::HashMap<String, std::collections::HashMap<String, AnalyzedFunction>>,
+    );
+
+    pub fn analyze_program(&mut self, program: &Program) -> Result<AnalysisResult, String> {
         let mut analyzed = Vec::new();
         let mut registry = SignatureRegistry::new();
 
