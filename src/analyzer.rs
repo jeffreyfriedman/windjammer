@@ -702,36 +702,33 @@ impl Analyzer {
                 let mut updated_methods = HashMap::new();
 
                 for (method_name, mut trait_method_analysis) in trait_methods {
-                    // THE WINDJAMMER WAY: Find the most permissive ownership needed across ALL impls
-                    // for BOTH self AND all parameters
-                    let mut most_permissive_self = OwnershipMode::Borrowed; // Start with &self
+                    // WINDJAMMER PHILOSOPHY: Infer optimal trait signature from ALL implementations
+                    // - Start with trait's default implementation inference (if any)
+                    // - Upgrade based on what implementations actually need
+                    // - If any impl needs `&mut self`, upgrade trait to `&mut self`
+                    // - This ensures implementations don't violate borrow checker
+
+                    let initial_self_ownership = trait_method_analysis
+                        .inferred_ownership
+                        .get("self")
+                        .copied()
+                        .unwrap_or(OwnershipMode::Borrowed);
+
+                    let mut most_permissive_self = initial_self_ownership;
                     let mut most_permissive_params: HashMap<String, OwnershipMode> = HashMap::new();
 
+                    // Examine ALL implementations to find what they actually need
                     for impl_block in &impl_blocks {
                         for func in &impl_block.functions {
                             if func.name == method_name {
-                                // THE WINDJAMMER WAY: Analyze impl function WITH impl block context
-                                // This ensures we correctly detect self mutations
-                                eprintln!(
-                                    "DEBUG INFERENCE: Analyzing impl for {}.{}",
-                                    trait_name, method_name
-                                );
                                 let impl_analysis =
                                     self.analyze_function_in_impl(func, impl_block)?;
-                                eprintln!(
-                                    "DEBUG INFERENCE:   Impl inferred ownership: {:?}",
-                                    impl_analysis.inferred_ownership
-                                );
 
-                                // Check what ownership the impl needs for self
+                                // Upgrade self ownership if implementation needs more permission
                                 if let Some(&impl_self_ownership) =
                                     impl_analysis.inferred_ownership.get("self")
                                 {
-                                    eprintln!(
-                                        "DEBUG INFERENCE:   Impl self ownership: {:?}",
-                                        impl_self_ownership
-                                    );
-                                    // Determine which is more permissive
+                                    // Upgrade: Owned > MutBorrowed > Borrowed
                                     match (most_permissive_self, impl_self_ownership) {
                                         (OwnershipMode::Borrowed, OwnershipMode::MutBorrowed) => {
                                             most_permissive_self = OwnershipMode::MutBorrowed;
@@ -742,70 +739,62 @@ impl Analyzer {
                                         (OwnershipMode::MutBorrowed, OwnershipMode::Owned) => {
                                             most_permissive_self = OwnershipMode::Owned;
                                         }
-                                        _ => {
-                                            // Keep current most_permissive_self
-                                        }
+                                        _ => {}
                                     }
                                 }
 
-                                // THE WINDJAMMER WAY: Also check PARAMETER ownership
+                                // Upgrade parameter ownership if needed
                                 for param_name in func.parameters.iter().map(|p| &p.name) {
                                     if param_name == "self" {
-                                        continue; // Already handled above
+                                        continue;
                                     }
 
                                     if let Some(&impl_param_ownership) =
                                         impl_analysis.inferred_ownership.get(param_name)
                                     {
-                                        let current_param_ownership = most_permissive_params
+                                        let current = most_permissive_params
                                             .get(param_name)
                                             .copied()
-                                            .unwrap_or(OwnershipMode::Owned); // Default to Owned (most restrictive for params)
+                                            .unwrap_or(OwnershipMode::Owned);
 
-                                        // For parameters, Borrowed (&) is MORE permissive than Owned
-                                        let new_param_ownership =
-                                            match (current_param_ownership, impl_param_ownership) {
-                                                (OwnershipMode::Owned, OwnershipMode::Borrowed) => {
-                                                    OwnershipMode::Borrowed
-                                                }
-                                                (
-                                                    OwnershipMode::Owned,
-                                                    OwnershipMode::MutBorrowed,
-                                                ) => OwnershipMode::MutBorrowed,
-                                                (
-                                                    OwnershipMode::MutBorrowed,
-                                                    OwnershipMode::Borrowed,
-                                                ) => OwnershipMode::Borrowed,
-                                                _ => current_param_ownership, // Keep current
-                                            };
+                                        // For params, Borrowed is more permissive than Owned
+                                        let new_ownership = match (current, impl_param_ownership) {
+                                            (OwnershipMode::Owned, OwnershipMode::Borrowed) => {
+                                                OwnershipMode::Borrowed
+                                            }
+                                            (OwnershipMode::Owned, OwnershipMode::MutBorrowed) => {
+                                                OwnershipMode::MutBorrowed
+                                            }
+                                            (
+                                                OwnershipMode::MutBorrowed,
+                                                OwnershipMode::Borrowed,
+                                            ) => OwnershipMode::Borrowed,
+                                            _ => current,
+                                        };
 
                                         most_permissive_params
-                                            .insert(param_name.clone(), new_param_ownership);
+                                            .insert(param_name.clone(), new_ownership);
                                     }
                                 }
                             }
                         }
                     }
 
-                    // Update the trait method's self ownership to be most permissive
+                    // Update trait method with upgraded ownership
                     trait_method_analysis
                         .inferred_ownership
                         .insert("self".to_string(), most_permissive_self);
-                    eprintln!(
-                        "DEBUG:     Method {} inferred self: {:?}",
-                        method_name, most_permissive_self
-                    );
 
-                    // Update all parameter ownerships to be most permissive
                     for (param_name, param_ownership) in most_permissive_params {
-                        eprintln!(
-                            "DEBUG:     Method {} inferred param {}: {:?}",
-                            method_name, param_name, param_ownership
-                        );
                         trait_method_analysis
                             .inferred_ownership
                             .insert(param_name, param_ownership);
                     }
+
+                    eprintln!(
+                        "DEBUG:     Method {} upgraded to self: {:?}",
+                        method_name, most_permissive_self
+                    );
 
                     updated_methods.insert(method_name, trait_method_analysis);
                 }
@@ -823,30 +812,30 @@ impl Analyzer {
         // Analyze the function normally first
         let mut analyzed = self.analyze_function(func)?;
 
-        // WINDJAMMER PHILOSOPHY: Trait method ownership inference
-        // - For explicit references (`&self`, `&mut self`, `&Input`): ALWAYS preserve them
-        // - For `self` (Owned): Infer from body analysis (&self or &mut self)
-        // - For non-self params with no explicit `&`: Default to Owned
+        // WINDJAMMER PHILOSOPHY: Ownership is a mechanical detail the compiler handles
+        // - User writes trait methods without thinking about ownership
+        // - Compiler infers optimal ownership from usage
+        // - For explicit `&self` or `&mut self`, preserve them (user explicitly requested)
+        // - For `self` (inferred), analyze body/implementations and optimize
 
-        // Process ALL parameters
         for param in &func.parameters {
             if param.name == "self" {
-                // Check if user explicitly specified & or &mut
                 match &param.ownership {
                     OwnershipHint::Ref => {
-                        // Explicit &self - preserve it
+                        // User explicitly wrote &self - preserve it
                         analyzed
                             .inferred_ownership
                             .insert("self".to_string(), OwnershipMode::Borrowed);
                     }
                     OwnershipHint::Mut => {
-                        // Explicit &mut self - preserve it
+                        // User explicitly wrote &mut self - preserve it
                         analyzed
                             .inferred_ownership
                             .insert("self".to_string(), OwnershipMode::MutBorrowed);
                     }
                     OwnershipHint::Owned | OwnershipHint::Inferred => {
-                        // Written as `self` (no explicit &) - infer from body
+                        // User wrote `self` (inferred) - optimize based on usage
+                        // If body exists, infer from body; otherwise will be refined by infer_trait_signatures_from_impls
                         let modifies_self = self.function_modifies_self_fields(func);
                         let self_ownership = if modifies_self {
                             OwnershipMode::MutBorrowed
@@ -859,18 +848,15 @@ impl Analyzer {
                     }
                 }
             } else {
-                // Non-self parameters: Preserve explicit ownership or default to Owned
-                let explicit_ownership = match &param.ownership {
-                    OwnershipHint::Ref => Some(OwnershipMode::Borrowed),
-                    OwnershipHint::Mut => Some(OwnershipMode::MutBorrowed),
-                    OwnershipHint::Owned | OwnershipHint::Inferred => Some(OwnershipMode::Owned),
+                // Non-self parameters: preserve explicit, infer otherwise
+                let ownership = match &param.ownership {
+                    OwnershipHint::Ref => OwnershipMode::Borrowed,
+                    OwnershipHint::Mut => OwnershipMode::MutBorrowed,
+                    OwnershipHint::Owned | OwnershipHint::Inferred => OwnershipMode::Owned,
                 };
-
-                if let Some(ownership) = explicit_ownership {
-                    analyzed
-                        .inferred_ownership
-                        .insert(param.name.clone(), ownership);
-                }
+                analyzed
+                    .inferred_ownership
+                    .insert(param.name.clone(), ownership);
             }
         }
 
@@ -1193,33 +1179,11 @@ impl Analyzer {
                             )
                         };
 
-                        // Determine final ownership based on whether trait has a body
-                        let final_mode = if trait_method.body.is_none() {
-                            // NO DEFAULT IMPLEMENTATION: Use trait's AST ownership EXACTLY
-                            // The trait signature is the contract - impl must match it precisely
-                            trait_mode
-                        } else {
-                            // HAS DEFAULT IMPLEMENTATION: Use the MORE RESTRICTIVE ownership
-                            // Get the impl's analyzed ownership for this parameter
-                            let impl_mode =
-                                analyzed.inferred_ownership.get(&impl_param.name).copied();
-
-                            // If impl needs &mut self but trait has &self, use &mut self
-                            // If impl needs &self but trait has self (owned), use &self
-                            // Priority: MutBorrowed > Borrowed > Owned
-                            match (trait_mode, impl_mode) {
-                                // If impl needs &mut, always use &mut (most restrictive)
-                                (_, Some(OwnershipMode::MutBorrowed)) => OwnershipMode::MutBorrowed,
-                                (OwnershipMode::MutBorrowed, _) => OwnershipMode::MutBorrowed,
-
-                                // If either needs &, use & (second most restrictive)
-                                (OwnershipMode::Borrowed, _) => OwnershipMode::Borrowed,
-                                (_, Some(OwnershipMode::Borrowed)) => OwnershipMode::Borrowed,
-
-                                // Otherwise use owned
-                                _ => trait_mode,
-                            }
-                        };
+                        // WINDJAMMER PHILOSOPHY: Trait signatures are contracts
+                        // Implementations MUST match the trait signature EXACTLY
+                        // This is true whether or not the trait has a default implementation
+                        // The trait defines the interface - impls conform to it, not vice versa
+                        let final_mode = trait_mode;
 
                         // INSERT or UPDATE with the final ownership mode
                         analyzed

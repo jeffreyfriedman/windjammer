@@ -72,7 +72,17 @@ fn parse_and_generate_multi_file(files: &[(&str, &str)]) -> String {
     let mut parser = Parser::new(tokens);
     let program = parser.parse().unwrap();
 
+    // CRITICAL: Call infer_trait_signatures_from_impls to finalize trait signatures
+    // This is what the real compiler does in ModuleCompiler::finalize_trait_inference()
+    analyzer
+        .infer_trait_signatures_from_impls(&program)
+        .unwrap();
+
+    // Get the updated analyzed_trait_methods after inference
+    let final_analyzed_trait_methods = analyzer.analyzed_trait_methods.clone();
+
     let mut generator = CodeGenerator::new_for_module(merged_registry, CompilationTarget::Rust);
+    generator.set_analyzed_trait_methods(final_analyzed_trait_methods);
     generator.generate_program(&program, &all_analyzed_functions)
 }
 
