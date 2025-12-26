@@ -51,7 +51,7 @@ impl<'a> RefactoringEngine<'a> {
         // Add `mut` quick-fix - check diagnostics for mutability errors
         if let Some(source) = source {
             for diagnostic in &context.diagnostics {
-                if let Some(action) = self.add_mut_action(uri, &diagnostic, source) {
+                if let Some(action) = self.add_mut_action(uri, diagnostic, source) {
                     actions.push(CodeActionOrCommand::CodeAction(action));
                 }
             }
