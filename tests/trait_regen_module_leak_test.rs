@@ -6,7 +6,6 @@
 /// EXPECTED: ecs/mod.rs should ONLY declare local modules (entity, components, etc.)
 /// NOT inline definitions of physics modules (rigidbody2d, collision2d).
 use std::process::Command;
-use tempfile;
 
 #[test]
 fn test_trait_regen_does_not_leak_modules() {
