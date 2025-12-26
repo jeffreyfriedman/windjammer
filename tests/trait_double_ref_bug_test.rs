@@ -5,7 +5,6 @@
 ///
 /// EXPECTED: Explicit `&` in trait parameters should be preserved as-is, not doubled.
 use std::process::Command;
-use tempfile;
 
 #[test]
 fn test_trait_explicit_ref_not_doubled() {
