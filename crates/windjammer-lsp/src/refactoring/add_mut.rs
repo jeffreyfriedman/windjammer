@@ -20,6 +20,7 @@ impl AddMutFix {
     }
 
     /// Create a code action for adding `mut` keyword
+    #[allow(dead_code)]
     pub fn create_action(&self) -> CodeAction {
         CodeAction {
             title: format!("Add `mut` to `{}`", self.variable_name),
