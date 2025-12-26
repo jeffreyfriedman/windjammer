@@ -5,7 +5,10 @@ use std::fs;
 use std::process::Command;
 
 fn compile_and_check_casts(code: &str) -> Result<String, String> {
-    let test_dir = "tests/generated/usize_cast_test";
+    // Use unique temp directory per test to avoid parallel test conflicts
+    let thread_id = format!("{:?}", std::thread::current().id());
+    let temp_dir = std::env::temp_dir().join(format!("usize_cast_test_{}", thread_id));
+    let test_dir = temp_dir.to_str().unwrap();
     fs::create_dir_all(test_dir).expect("Failed to create test dir");
     let input_file = format!("{}/test.wj", test_dir);
     fs::write(&input_file, code).expect("Failed to write source file");
@@ -33,13 +36,12 @@ fn compile_and_check_casts(code: &str) -> Result<String, String> {
     let generated_file = format!("{}/test.rs", test_dir);
     let generated = fs::read_to_string(&generated_file).expect("Failed to read generated file");
 
-    fs::remove_dir_all(test_dir).ok();
+    fs::remove_dir_all(&temp_dir).ok();
 
     Ok(generated)
 }
 
 #[test]
-#[ignore] // TODO: Test infrastructure issue with file locking - needs investigation
 fn test_vec_len_comparison_should_not_cast_to_i32() {
     // BUG: Compiler incorrectly adds (len as i32) when comparing with usize variable
     let code = r#"
@@ -67,7 +69,6 @@ fn test_vec_len_comparison_should_not_cast_to_i32() {
 }
 
 #[test]
-#[ignore] // TODO: Test infrastructure issue with file locking - needs investigation
 fn test_sparse_vec_len_comparison_with_usize() {
     // Real-world case from components.rs
     let code = r#"
@@ -96,7 +97,6 @@ fn test_sparse_vec_len_comparison_with_usize() {
 }
 
 #[test]
-#[ignore] // TODO: Test infrastructure issue with file locking - needs investigation
 fn test_usize_variable_in_comparison_keeps_type() {
     // Ensure usize variables stay usize in comparisons
     let code = r#"
@@ -121,7 +121,6 @@ fn test_usize_variable_in_comparison_keeps_type() {
 }
 
 #[test]
-#[ignore] // TODO: Test infrastructure issue with file locking - needs investigation
 fn test_len_in_while_loop_condition() {
     // Test .len() in while loop conditions
     let code = r#"
