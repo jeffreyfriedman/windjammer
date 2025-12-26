@@ -5,7 +5,7 @@
 use windjammer::analyzer::Analyzer;
 use windjammer::codegen::rust::CodeGenerator;
 use windjammer::lexer::Lexer;
-use windjammer::parser::{Parser, Program};
+use windjammer::parser::Parser;
 use windjammer::CompilationTarget;
 
 fn parse_and_generate(code: &str) -> String {

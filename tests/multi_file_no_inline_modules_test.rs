@@ -2,7 +2,6 @@
 // THE WINDJAMMER WAY: Use imports, not embedded modules!
 
 use std::fs;
-use std::path::PathBuf;
 use tempfile::TempDir;
 
 #[test]
@@ -46,7 +45,7 @@ pub struct PhysicsBody {
     // Compile project
     let output_dir = temp_dir.path().join("build");
     let status = std::process::Command::new("wj")
-        .args(&[
+        .args([
             "build",
             src_dir.to_str().unwrap(),
             "--output",

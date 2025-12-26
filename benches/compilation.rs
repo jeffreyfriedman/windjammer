@@ -217,7 +217,8 @@ fn benchmark_full_compilation(c: &mut Criterion) {
 
                 // Analyze
                 let mut analyzer = analyzer::Analyzer::new();
-                let (analyzed, signatures) = analyzer.analyze_program(&program).unwrap();
+                let (analyzed, signatures, _analyzed_trait_methods) =
+                    analyzer.analyze_program(&program).unwrap();
 
                 // Generate
                 let mut generator =
@@ -237,7 +238,8 @@ fn benchmark_full_compilation(c: &mut Criterion) {
                 let mut parser = parser::Parser::new(tokens);
                 let program = parser.parse().unwrap();
                 let mut analyzer = analyzer::Analyzer::new();
-                let (analyzed, signatures) = analyzer.analyze_program(&program).unwrap();
+                let (analyzed, signatures, _analyzed_trait_methods) =
+                    analyzer.analyze_program(&program).unwrap();
                 let mut generator =
                     codegen::CodeGenerator::new(signatures, CompilationTarget::Wasm);
                 generator.generate_program(&program, &analyzed)
@@ -255,7 +257,8 @@ fn benchmark_full_compilation(c: &mut Criterion) {
                 let mut parser = parser::Parser::new(tokens);
                 let program = parser.parse().unwrap();
                 let mut analyzer = analyzer::Analyzer::new();
-                let (analyzed, signatures) = analyzer.analyze_program(&program).unwrap();
+                let (analyzed, signatures, _analyzed_trait_methods) =
+                    analyzer.analyze_program(&program).unwrap();
                 let mut generator =
                     codegen::CodeGenerator::new(signatures, CompilationTarget::Wasm);
                 generator.generate_program(&program, &analyzed)

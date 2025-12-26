@@ -6,7 +6,6 @@
 /// EXPECTED: Explicit `&mut self` in trait definitions should ALWAYS be preserved,
 /// regardless of what the body does.
 use std::process::Command;
-use tempfile;
 
 #[test]
 fn test_trait_explicit_mut_self_preserved() {
