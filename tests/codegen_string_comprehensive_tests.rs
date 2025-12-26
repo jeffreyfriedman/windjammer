@@ -100,7 +100,7 @@ pub fn hello() -> string {
     "hello"
 }
 "#;
-    let (success, generated, err) = compile_and_verify(code);
+    let (success, _generated, err) = compile_and_verify(code);
 
     // Should convert to String for return
     assert!(success, "String return should compile. Error: {}", err);
@@ -139,7 +139,7 @@ pub fn get_length(s: string) -> i32 {
     s.len() as i32
 }
 "#;
-    let (success, generated, err) = compile_and_verify(code);
+    let (success, _generated, err) = compile_and_verify(code);
     assert!(success, "String param should compile. Error: {}", err);
 }
 
@@ -150,7 +150,7 @@ pub fn length(s: &string) -> i32 {
     s.len() as i32
 }
 "#;
-    let (success, generated, err) = compile_and_verify(code);
+    let (success, _generated, err) = compile_and_verify(code);
     assert!(
         success,
         "Borrowed string param should compile. Error: {}",
@@ -169,7 +169,7 @@ pub fn has_hello(s: string) -> bool {
     s.contains("hello")
 }
 "#;
-    let (success, generated, err) = compile_and_verify(code);
+    let (success, _generated, err) = compile_and_verify(code);
 
     // contains takes &str, so literal should NOT have .to_string()
     assert!(success, "String contains should compile. Error: {}", err);
@@ -182,7 +182,7 @@ pub fn sanitize(s: string) -> string {
     s.replace("bad", "good")
 }
 "#;
-    let (success, generated, err) = compile_and_verify(code);
+    let (success, _generated, err) = compile_and_verify(code);
 
     // replace takes Pattern which &str implements
     assert!(success, "String replace should compile. Error: {}", err);
@@ -212,7 +212,7 @@ pub fn clean(s: string) -> string {
     s.trim().to_string()
 }
 "#;
-    let (success, generated, err) = compile_and_verify(code);
+    let (success, _generated, err) = compile_and_verify(code);
     assert!(success, "String trim should compile. Error: {}", err);
 }
 
@@ -223,7 +223,7 @@ pub fn shout(s: string) -> string {
     s.to_uppercase()
 }
 "#;
-    let (success, generated, err) = compile_and_verify(code);
+    let (success, _generated, err) = compile_and_verify(code);
     assert!(
         success,
         "String to_uppercase should compile. Error: {}",
@@ -242,7 +242,7 @@ pub fn full_name() -> string {
     "John" + " " + "Doe"
 }
 "#;
-    let (success, generated, err) = compile_and_verify(code);
+    let (success, _generated, err) = compile_and_verify(code);
     assert!(success, "String concat should compile. Error: {}", err);
 }
 
@@ -253,7 +253,7 @@ pub fn greet(name: string) -> string {
     "Hello, " + name + "!"
 }
 "#;
-    let (success, generated, err) = compile_and_verify(code);
+    let (success, _generated, err) = compile_and_verify(code);
     assert!(
         success,
         "String concat with variable should compile. Error: {}",
@@ -272,7 +272,7 @@ pub fn build_list() -> string {
     result
 }
 "#;
-    let (success, generated, err) = compile_and_verify(code);
+    let (success, _generated, err) = compile_and_verify(code);
     assert!(
         success,
         "Compound string concat should compile. Error: {}",
@@ -316,7 +316,7 @@ pub fn get_message(code: i32) -> string {
     }
 }
 "#;
-    let (success, generated, err) = compile_and_verify(code);
+    let (success, _generated, err) = compile_and_verify(code);
     assert!(
         success,
         "Match with mixed returns should compile. Error: {}",
@@ -347,7 +347,7 @@ impl Person {
     }
 }
 "#;
-    let (success, generated, err) = compile_and_verify(code);
+    let (success, _generated, err) = compile_and_verify(code);
     assert!(
         success,
         "Struct with string field should compile. Error: {}",
@@ -413,7 +413,7 @@ pub fn join_all(items: Vec<string>) -> string {
     result
 }
 "#;
-    let (success, generated, err) = compile_and_verify(code);
+    let (success, _generated, err) = compile_and_verify(code);
     assert!(
         success,
         "Vec string iteration should compile. Error: {}",
@@ -455,7 +455,7 @@ pub fn has_key(map: &HashMap<string, i32>, key: &string) -> bool {
     map.contains_key(key)
 }
 "#;
-    let (success, generated, err) = compile_and_verify(code);
+    let (success, _generated, err) = compile_and_verify(code);
     assert!(
         success,
         "HashMap get with string should compile. Error: {}",
@@ -474,7 +474,7 @@ pub fn format_greeting(name: string) -> string {
     "Hello, ${name}!"
 }
 "#;
-    let (success, generated, err) = compile_and_verify(code);
+    let (success, _generated, err) = compile_and_verify(code);
 
     // Should generate format!() macro
     assert!(
@@ -491,7 +491,7 @@ pub fn format_sum(a: i32, b: i32) -> string {
     "${a} + ${b} = ${a + b}"
 }
 "#;
-    let (success, generated, err) = compile_and_verify(code);
+    let (success, _generated, err) = compile_and_verify(code);
     assert!(
         success,
         "String interpolation with expr should compile. Error: {}",
@@ -510,7 +510,7 @@ pub fn empty() -> string {
     ""
 }
 "#;
-    let (success, generated, err) = compile_and_verify(code);
+    let (success, _generated, err) = compile_and_verify(code);
     assert!(success, "Empty string should compile. Error: {}", err);
 }
 
@@ -521,7 +521,7 @@ pub fn with_escapes() -> string {
     "line1\nline2\ttab"
 }
 "#;
-    let (success, generated, err) = compile_and_verify(code);
+    let (success, _generated, err) = compile_and_verify(code);
     assert!(
         success,
         "String with escapes should compile. Error: {}",
@@ -536,6 +536,6 @@ pub fn duplicate(s: string) -> string {
     s.clone()
 }
 "#;
-    let (success, generated, err) = compile_and_verify(code);
+    let (success, _generated, err) = compile_and_verify(code);
     assert!(success, "String clone should compile. Error: {}", err);
 }
