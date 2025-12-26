@@ -3,6 +3,13 @@ use crate::auto_clone::AutoCloneAnalysis;
 use crate::parser::*;
 use std::collections::HashMap;
 
+// Type alias for complex return type
+type ProgramAnalysisResult = (
+    Vec<AnalyzedFunction>,
+    SignatureRegistry,
+    HashMap<String, HashMap<String, AnalyzedFunction>>,
+);
+
 #[derive(Debug, Clone)]
 pub struct AnalyzedFunction {
     pub decl: FunctionDecl,
@@ -389,13 +396,7 @@ impl Analyzer {
         }
     }
 
-    type AnalysisResult = (
-        Vec<AnalyzedFunction>,
-        SignatureRegistry,
-        std::collections::HashMap<String, std::collections::HashMap<String, AnalyzedFunction>>,
-    );
-
-    pub fn analyze_program(&mut self, program: &Program) -> Result<AnalysisResult, String> {
+    pub fn analyze_program(&mut self, program: &Program) -> Result<ProgramAnalysisResult, String> {
         let mut analyzed = Vec::new();
         let mut registry = SignatureRegistry::new();
 
