@@ -123,7 +123,7 @@ impl AnalysisDatabase {
                 // Run ownership inference analysis
                 let mut analyzer = Analyzer::new();
                 match analyzer.analyze_program(&program) {
-                    Ok((functions, _registry)) => {
+                    Ok((functions, _registry, _analyzed_trait_methods)) => {
                         tracing::debug!(
                             "Ownership analysis complete: {} functions",
                             functions.len()
