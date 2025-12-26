@@ -1772,9 +1772,13 @@ fn create_cargo_toml_with_deps(
             continue; // Skip Rust keywords
         }
 
-        // THE WINDJAMMER WAY: Check if windjammer-game is imported
+        // THE WINDJAMMER WAY: Check if windjammer-game or windjammer-game-core is imported
         // If so, add it as a path dependency to the local game framework
-        if crate_name == "windjammer_game" || crate_name == "windjammer-game" {
+        if crate_name == "windjammer_game"
+            || crate_name == "windjammer-game"
+            || crate_name == "windjammer_game_core"
+            || crate_name == "windjammer-game-core"
+        {
             // Try to find windjammer-game in the workspace
             // First, check if WINDJAMMER_GAME_PATH env var is set (for development)
             if let Ok(game_path) = std::env::var("WINDJAMMER_GAME_PATH") {
@@ -1792,18 +1796,41 @@ fn create_cargo_toml_with_deps(
             // This works when compiling from source
             let manifest_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR")); // /path/to/windjammer
             let src_root = manifest_dir.parent().unwrap(); // /path/to (parent of windjammer)
-            let game_path = src_root.join("windjammer-game/windjammer-game");
 
-            if game_path.exists() {
+            // Try both old and new paths for compatibility
+            let game_path = src_root.join("windjammer-game/windjammer-game-core");
+            let legacy_game_path = src_root.join("windjammer-game/windjammer-game");
+
+            let final_path = if game_path.exists() {
+                game_path
+            } else if legacy_game_path.exists() {
+                legacy_game_path
+            } else {
+                PathBuf::new() // Empty path, will fallback to crates.io
+            };
+
+            if final_path.as_os_str().len() > 0 {
+                // Use the actual crate name as it appears in Cargo.toml
+                let crate_name_normalized = if crate_name.contains("_core") {
+                    "windjammer-game-core"
+                } else {
+                    "windjammer-game"
+                };
                 external_deps.push(format!(
-                    "windjammer-game = {{ path = {:?} }}",
-                    game_path.to_str().unwrap()
+                    "{} = {{ path = {:?} }}",
+                    crate_name_normalized,
+                    final_path.to_str().unwrap()
                 ));
                 continue; // Skip the crates.io fallback
             }
 
             // Fallback: assume it's on crates.io (for published version)
-            external_deps.push(format!("{} = \"*\"", "windjammer-game"));
+            let crate_name_normalized = if crate_name.contains("_core") {
+                "windjammer-game-core"
+            } else {
+                "windjammer-game"
+            };
+            external_deps.push(format!("{} = \"*\"", crate_name_normalized));
         } else {
             // All other external crates are assumed to be from crates.io
             external_deps.push(format!("{} = \"*\"", crate_name));
