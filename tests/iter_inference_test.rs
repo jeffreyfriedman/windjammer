@@ -43,7 +43,6 @@ fn compile_fixture(fixture_name: &str) -> Result<String, String> {
 }
 
 #[test]
-#[ignore] // TODO: Potential regression from ownership inference - needs investigation
 fn test_iter_inference_field_access() {
     let generated = compile_fixture("iter_inference").expect("Compilation failed");
 
@@ -57,7 +56,6 @@ fn test_iter_inference_field_access() {
 }
 
 #[test]
-#[ignore] // TODO: Potential regression from ownership inference - needs investigation
 fn test_iter_inference_names_field() {
     let generated = compile_fixture("iter_inference").expect("Compilation failed");
 
@@ -70,7 +68,6 @@ fn test_iter_inference_names_field() {
 }
 
 #[test]
-#[ignore] // TODO: Potential regression from ownership inference - needs investigation
 fn test_no_double_iter() {
     let generated = compile_fixture("iter_inference").expect("Compilation failed");
 
@@ -83,7 +80,6 @@ fn test_no_double_iter() {
 }
 
 #[test]
-#[ignore] // TODO: Potential regression from ownership inference - needs investigation
 fn test_no_iter_after_enumerate() {
     let generated = compile_fixture("iter_inference").expect("Compilation failed");
 
@@ -96,7 +92,6 @@ fn test_no_iter_after_enumerate() {
 }
 
 #[test]
-#[ignore] // TODO: Potential regression from ownership inference - needs investigation
 fn test_iter_inference_simple_vec() {
     let generated = compile_fixture("iter_inference").expect("Compilation failed");
 
@@ -109,7 +104,6 @@ fn test_iter_inference_simple_vec() {
 }
 
 #[test]
-#[ignore] // TODO: Potential regression from ownership inference - needs investigation
 fn test_iter_count() {
     let generated = compile_fixture("iter_inference").expect("Compilation failed");
 
