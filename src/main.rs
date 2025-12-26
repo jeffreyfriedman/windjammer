@@ -1810,12 +1810,48 @@ fn create_cargo_toml_with_deps(
             };
 
             if final_path.as_os_str().len() > 0 {
-                // Use the actual crate name as it appears in Cargo.toml
-                let crate_name_normalized = if crate_name.contains("_core") {
-                    "windjammer-game-core"
+                // Read the actual crate name from Cargo.toml at the path
+                let cargo_toml_path = final_path.join("Cargo.toml");
+                let crate_name_normalized = if cargo_toml_path.exists() {
+                    // Try to read the actual crate name from Cargo.toml
+                    if let Ok(content) = std::fs::read_to_string(&cargo_toml_path) {
+                        // Parse name = "..." line
+                        if let Some(line) = content.lines().find(|l| l.trim().starts_with("name")) {
+                            if let Some(name_part) = line.split('"').nth(1) {
+                                name_part.to_string()
+                            } else {
+                                // Fallback: guess based on crate_name
+                                if crate_name.contains("_core") || crate_name.contains("-core") {
+                                    "windjammer-game-core".to_string()
+                                } else {
+                                    "windjammer-game".to_string()
+                                }
+                            }
+                        } else {
+                            // Fallback: guess based on crate_name
+                            if crate_name.contains("_core") || crate_name.contains("-core") {
+                                "windjammer-game-core".to_string()
+                            } else {
+                                "windjammer-game".to_string()
+                            }
+                        }
+                    } else {
+                        // Fallback: guess based on crate_name
+                        if crate_name.contains("_core") || crate_name.contains("-core") {
+                            "windjammer-game-core".to_string()
+                        } else {
+                            "windjammer-game".to_string()
+                        }
+                    }
                 } else {
-                    "windjammer-game"
+                    // Fallback: guess based on crate_name
+                    if crate_name.contains("_core") || crate_name.contains("-core") {
+                        "windjammer-game-core".to_string()
+                    } else {
+                        "windjammer-game".to_string()
+                    }
                 };
+                
                 external_deps.push(format!(
                     "{} = {{ path = {:?} }}",
                     crate_name_normalized,
