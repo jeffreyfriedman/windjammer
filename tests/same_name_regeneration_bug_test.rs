@@ -5,7 +5,6 @@
 ///
 /// EXPECTED: Regeneration should preserve file content, not create empty files.
 use std::process::Command;
-use tempfile;
 
 #[test]
 fn test_same_name_module_regeneration_not_empty() {

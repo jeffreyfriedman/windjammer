@@ -86,7 +86,7 @@ pub fn add(a: i32, b: i32) -> i32 {
     a + b
 }
 "#;
-    let (success, generated, err) = compile_and_verify(code);
+    let (success, _generated, err) = compile_and_verify(code);
     assert!(
         success,
         "Extern-compatible fn should compile. Error: {}",
@@ -109,7 +109,7 @@ pub fn use_ffi_types(
     c
 }
 "#;
-    let (success, generated, err) = compile_and_verify(code);
+    let (success, _generated, err) = compile_and_verify(code);
     assert!(success, "FFI primitives should compile. Error: {}", err);
 }
 
@@ -122,7 +122,7 @@ pub fn use_references(a: &i32, b: &mut i32) -> i32 {
     *a
 }
 "#;
-    let (success, generated, err) = compile_and_verify(code);
+    let (success, _generated, err) = compile_and_verify(code);
     assert!(success, "FFI references should compile. Error: {}", err);
 }
 
@@ -146,7 +146,7 @@ impl FfiSafe {
     }
 }
 "#;
-    let (success, generated, err) = compile_and_verify(code);
+    let (success, _generated, err) = compile_and_verify(code);
     assert!(success, "Rust interop types should compile. Error: {}", err);
 }
 
@@ -163,7 +163,7 @@ pub struct CStruct {
     y: i32,
 }
 "#;
-    let (success, generated, err) = compile_and_verify(code);
+    let (success, generated, _err) = compile_and_verify(code);
     // Should generate #[repr(C)]
     if success {
         assert!(
@@ -204,7 +204,7 @@ pub fn maybe_ref(p: Option<&i32>) -> bool {
     }
 }
 "#;
-    let (success, generated, err) = compile_and_verify(code);
+    let (success, _generated, err) = compile_and_verify(code);
     assert!(success, "Option ref should compile. Error: {}", err);
 }
 
@@ -223,6 +223,6 @@ pub fn ffi_result(success: bool) -> Result<i32, string> {
     }
 }
 "#;
-    let (success, generated, err) = compile_and_verify(code);
+    let (success, _generated, err) = compile_and_verify(code);
     assert!(success, "Result for FFI should compile. Error: {}", err);
 }
