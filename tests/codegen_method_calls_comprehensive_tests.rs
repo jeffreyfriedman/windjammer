@@ -94,7 +94,7 @@ pub fn use_counter(c: &Counter) -> i32 {
     c.get()
 }
 "#;
-    let (success, generated, err) = compile_and_verify(code);
+    let (success, _generated, err) = compile_and_verify(code);
     assert!(success, "&self method should compile. Error: {}", err);
 }
 
@@ -116,7 +116,7 @@ impl Counter {
     }
 }
 "#;
-    let (success, generated, err) = compile_and_verify(code);
+    let (success, _generated, err) = compile_and_verify(code);
     assert!(success, "&self chain should compile. Error: {}", err);
 }
 
@@ -142,7 +142,7 @@ pub fn use_counter(c: &mut Counter) {
     c.increment()
 }
 "#;
-    let (success, generated, err) = compile_and_verify(code);
+    let (success, _generated, err) = compile_and_verify(code);
     assert!(success, "&mut self method should compile. Error: {}", err);
 }
 
@@ -161,7 +161,7 @@ impl Builder {
     }
 }
 "#;
-    let (success, generated, err) = compile_and_verify(code);
+    let (success, _generated, err) = compile_and_verify(code);
     assert!(
         success,
         "&mut self returning self should compile. Error: {}",
@@ -191,7 +191,7 @@ pub fn use_wrapper(w: Wrapper) -> i32 {
     w.unwrap()
 }
 "#;
-    let (success, generated, err) = compile_and_verify(code);
+    let (success, _generated, err) = compile_and_verify(code);
     assert!(success, "Consuming self should compile. Error: {}", err);
 }
 
@@ -218,7 +218,7 @@ pub fn get_origin() -> Point {
     Point::origin()
 }
 "#;
-    let (success, generated, err) = compile_and_verify(code);
+    let (success, _generated, err) = compile_and_verify(code);
     assert!(success, "Static method should compile. Error: {}", err);
 }
 
@@ -241,7 +241,7 @@ pub fn create_point() -> Point {
     Point::new(10, 20)
 }
 "#;
-    let (success, generated, err) = compile_and_verify(code);
+    let (success, _generated, err) = compile_and_verify(code);
     assert!(
         success,
         "Static method with params should compile. Error: {}",
@@ -267,7 +267,7 @@ impl Container {
     }
 }
 "#;
-    let (success, generated, err) = compile_and_verify(code);
+    let (success, _generated, err) = compile_and_verify(code);
     assert!(
         success,
         "Method with borrowed param should compile. Error: {}",
@@ -298,7 +298,7 @@ impl Container {
     }
 }
 "#;
-    let (success, generated, err) = compile_and_verify(code);
+    let (success, _generated, err) = compile_and_verify(code);
     assert!(
         success,
         "Method with owned param should compile. Error: {}",
@@ -317,7 +317,7 @@ pub fn chain_example(items: &Vec<i32>) -> i32 {
     items.iter().filter(|x| **x > 0).count() as i32
 }
 "#;
-    let (success, generated, err) = compile_and_verify(code);
+    let (success, _generated, err) = compile_and_verify(code);
     assert!(
         success,
         "Method chaining on Vec should compile. Error: {}",
@@ -332,7 +332,7 @@ pub fn chain_string(s: &string) -> string {
     s.trim().to_uppercase()
 }
 "#;
-    let (success, generated, err) = compile_and_verify(code);
+    let (success, _generated, err) = compile_and_verify(code);
     assert!(
         success,
         "Method chaining on String should compile. Error: {}",
@@ -369,7 +369,7 @@ impl Outer {
     }
 }
 "#;
-    let (success, generated, err) = compile_and_verify(code);
+    let (success, _generated, err) = compile_and_verify(code);
     assert!(success, "Method on field should compile. Error: {}", err);
 }
 
@@ -395,7 +395,7 @@ pub fn use_container(c: &Container<i32>) -> i32 {
     c.get()
 }
 "#;
-    let (success, generated, err) = compile_and_verify(code);
+    let (success, _generated, err) = compile_and_verify(code);
     assert!(
         success,
         "Generic method call should compile. Error: {}",
@@ -425,7 +425,7 @@ pub fn get_ref(c: &Container) -> i32 {
     *c.value_ref()
 }
 "#;
-    let (success, generated, err) = compile_and_verify(code);
+    let (success, _generated, err) = compile_and_verify(code);
     assert!(
         success,
         "Method returning ref should compile. Error: {}",
@@ -455,7 +455,7 @@ pub fn use_calc(c: &Calculator) -> i32 {
     c.add_multiply(2, 3)
 }
 "#;
-    let (success, generated, err) = compile_and_verify(code);
+    let (success, _generated, err) = compile_and_verify(code);
     assert!(
         success,
         "Method with multiple params should compile. Error: {}",
@@ -474,7 +474,7 @@ pub fn abs_value(n: i32) -> i32 {
     n.abs()
 }
 "#;
-    let (success, generated, err) = compile_and_verify(code);
+    let (success, _generated, err) = compile_and_verify(code);
     assert!(success, "Method on i32 should compile. Error: {}", err);
 }
 
@@ -485,6 +485,6 @@ pub fn string_len(s: &string) -> usize {
     s.len()
 }
 "#;
-    let (success, generated, err) = compile_and_verify(code);
+    let (success, _generated, err) = compile_and_verify(code);
     assert!(success, "Method on string should compile. Error: {}", err);
 }

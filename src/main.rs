@@ -1809,7 +1809,7 @@ fn create_cargo_toml_with_deps(
                 PathBuf::new() // Empty path, will fallback to crates.io
             };
 
-            if final_path.as_os_str().len() > 0 {
+            if !final_path.as_os_str().is_empty() {
                 // Read the actual crate name from Cargo.toml at the path
                 let cargo_toml_path = final_path.join("Cargo.toml");
                 let crate_name_normalized = if cargo_toml_path.exists() {
@@ -1851,7 +1851,7 @@ fn create_cargo_toml_with_deps(
                         "windjammer-game".to_string()
                     }
                 };
-                
+
                 external_deps.push(format!(
                     "{} = {{ path = {:?} }}",
                     crate_name_normalized,
@@ -1927,10 +1927,10 @@ fn create_cargo_toml_with_deps(
 
     let lib_or_bin_section = if has_lib_rs {
         // Library project - generate [lib] section
-        format!("[lib]\nname = \"windjammer_app\"\npath = \"lib.rs\"\n\n")
+        "[lib]\nname = \"windjammer_app\"\npath = \"lib.rs\"\n\n".to_string()
     } else if has_main_rs {
         // Binary project with main.rs - generate [[bin]] section
-        format!("[[bin]]\nname = \"windjammer-app\"\npath = \"main.rs\"\n\n")
+        "[[bin]]\nname = \"windjammer-app\"\npath = \"main.rs\"\n\n".to_string()
     } else {
         // Multiple standalone files - generate [[bin]] sections for each
         let mut bin_sections = Vec::new();
@@ -3564,66 +3564,62 @@ pub fn generate_nested_module_structure(source_dir: &Path, output_dir: &Path) ->
         }
 
         if let Ok(entries) = std::fs::read_dir(copy_dir) {
-            for entry in entries {
-                if let Ok(entry) = entry {
-                    let path = entry.path();
-                    if path.is_file() {
-                        if let Some(name) = path.file_name() {
-                            let name_str = name.to_string_lossy();
-                            // Copy .rs files that aren't lib.rs or mod.rs
-                            if name_str.ends_with(".rs")
-                                && name_str != "lib.rs"
-                                && name_str != "mod.rs"
-                            {
-                                // THE WINDJAMMER WAY: Check if there's a corresponding .wj file
-                                // If runtime.wj exists, don't copy runtime.rs (it would overwrite the generated file!)
-                                let stem = path.file_stem().unwrap().to_string_lossy();
-                                let corresponding_wj = source_dir.join(format!("{}.wj", stem));
+            for entry in entries.flatten() {
+                let path = entry.path();
+                if path.is_file() {
+                    if let Some(name) = path.file_name() {
+                        let name_str = name.to_string_lossy();
+                        // Copy .rs files that aren't lib.rs or mod.rs
+                        if name_str.ends_with(".rs") && name_str != "lib.rs" && name_str != "mod.rs"
+                        {
+                            // THE WINDJAMMER WAY: Check if there's a corresponding .wj file
+                            // If runtime.wj exists, don't copy runtime.rs (it would overwrite the generated file!)
+                            let stem = path.file_stem().unwrap().to_string_lossy();
+                            let corresponding_wj = source_dir.join(format!("{}.wj", stem));
 
-                                if corresponding_wj.exists() {
-                                    continue; // Skip copying - this file is generated from .wj
-                                }
+                            if corresponding_wj.exists() {
+                                continue; // Skip copying - this file is generated from .wj
+                            }
 
-                                // Only copy hand-written .rs files (like ffi.rs)
-                                let dest = output_dir.join(name);
-                                if let Err(e) = std::fs::copy(&path, &dest) {
-                                    eprintln!("Warning: Failed to copy {}: {}", name_str, e);
-                                }
+                            // Only copy hand-written .rs files (like ffi.rs)
+                            let dest = output_dir.join(name);
+                            if let Err(e) = std::fs::copy(&path, &dest) {
+                                eprintln!("Warning: Failed to copy {}: {}", name_str, e);
                             }
                         }
-                    } else if path.is_dir() {
-                        // THE WINDJAMMER WAY: Copy directories with hand-written Rust (like ffi/)
-                        if let Some(dir_name) = path.file_name() {
-                            let dir_name_str = dir_name.to_string_lossy();
-                            let skip_dirs = [
-                                "src_wj",
-                                "target",
-                                "build",
-                                "generated",
-                                "dist",
-                                "node_modules",
-                                ".git",
-                                "src",
-                            ];
+                    }
+                } else if path.is_dir() {
+                    // THE WINDJAMMER WAY: Copy directories with hand-written Rust (like ffi/)
+                    if let Some(dir_name) = path.file_name() {
+                        let dir_name_str = dir_name.to_string_lossy();
+                        let skip_dirs = [
+                            "src_wj",
+                            "target",
+                            "build",
+                            "generated",
+                            "dist",
+                            "node_modules",
+                            ".git",
+                            "src",
+                        ];
 
-                            if !skip_dirs.contains(&dir_name_str.as_ref()) {
-                                // CRITICAL FIX: Don't copy directories that correspond to Windjammer modules!
-                                // Check if there's a corresponding .wj directory in src_wj
-                                let corresponding_wj_dir = source_dir.join(dir_name_str.as_ref());
-                                if corresponding_wj_dir.exists() && corresponding_wj_dir.is_dir() {
-                                    continue; // Skip copying - this is a Windjammer module directory
-                                }
+                        if !skip_dirs.contains(&dir_name_str.as_ref()) {
+                            // CRITICAL FIX: Don't copy directories that correspond to Windjammer modules!
+                            // Check if there's a corresponding .wj directory in src_wj
+                            let corresponding_wj_dir = source_dir.join(dir_name_str.as_ref());
+                            if corresponding_wj_dir.exists() && corresponding_wj_dir.is_dir() {
+                                continue; // Skip copying - this is a Windjammer module directory
+                            }
 
-                                // Check if this directory has a mod.rs (it's a Rust module)
-                                let mod_rs = path.join("mod.rs");
-                                if mod_rs.exists() {
-                                    let dest_dir = output_dir.join(dir_name);
-                                    if let Err(e) = copy_dir_recursive(&path, &dest_dir) {
-                                        eprintln!(
-                                            "Warning: Failed to copy directory {}: {}",
-                                            dir_name_str, e
-                                        );
-                                    }
+                            // Check if this directory has a mod.rs (it's a Rust module)
+                            let mod_rs = path.join("mod.rs");
+                            if mod_rs.exists() {
+                                let dest_dir = output_dir.join(dir_name);
+                                if let Err(e) = copy_dir_recursive(&path, &dest_dir) {
+                                    eprintln!(
+                                        "Warning: Failed to copy directory {}: {}",
+                                        dir_name_str, e
+                                    );
                                 }
                             }
                         }
