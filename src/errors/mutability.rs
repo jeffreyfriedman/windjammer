@@ -87,13 +87,12 @@ impl MutabilityChecker {
         self.declared_variables.clear();
         self.errors.clear();
 
-        // Track parameters
-        for param in &func.parameters {
-            if param.name != "self" {
-                self.declared_variables
-                    .insert(param.name.clone(), param.is_mutable);
-            }
-        }
+        // NOTE: We do NOT track parameters here!
+        // Parameter ownership (including &mut inference) is handled by the Analyzer.
+        // The mutability checker only checks LOCAL VARIABLES declared with `let`.
+        // This prevents false positives where a parameter like `fn foo(x: T)` gets
+        // inferred as `fn foo(x: &mut T)` by the analyzer, but the mutability checker
+        // complains before that inference happens.
 
         // Check function body
         self.check_statements(&func.body);
