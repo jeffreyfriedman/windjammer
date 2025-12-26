@@ -88,7 +88,7 @@ impl Point {
     }
 }
 "#;
-    let (success, generated, err) = compile_and_verify(code);
+    let (success, _generated, err) = compile_and_verify(code);
     assert!(success, "Basic impl should compile. Error: {}", err);
 }
 
@@ -118,7 +118,7 @@ impl Counter {
     }
 }
 "#;
-    let (success, generated, err) = compile_and_verify(code);
+    let (success, _generated, err) = compile_and_verify(code);
     assert!(
         success,
         "Multiple methods impl should compile. Error: {}",
@@ -148,7 +148,7 @@ impl Config {
     }
 }
 "#;
-    let (success, generated, err) = compile_and_verify(code);
+    let (success, _generated, err) = compile_and_verify(code);
     assert!(
         success,
         "Static and instance methods should compile. Error: {}",
@@ -174,7 +174,7 @@ impl<T> Container<T> {
     }
 }
 "#;
-    let (success, generated, err) = compile_and_verify(code);
+    let (success, _generated, err) = compile_and_verify(code);
     assert!(success, "Generic impl should compile. Error: {}", err);
 }
 
@@ -192,7 +192,7 @@ impl<T: Clone> Container<T> {
     }
 }
 "#;
-    let (success, generated, err) = compile_and_verify(code);
+    let (success, _generated, err) = compile_and_verify(code);
     assert!(
         success,
         "Generic impl with bound should compile. Error: {}",
@@ -218,7 +218,7 @@ impl Data {
     }
 }
 "#;
-    let (success, generated, err) = compile_and_verify(code);
+    let (success, _generated, err) = compile_and_verify(code);
     assert!(success, "&self method should compile. Error: {}", err);
 }
 
@@ -236,7 +236,7 @@ impl Data {
     }
 }
 "#;
-    let (success, generated, err) = compile_and_verify(code);
+    let (success, _generated, err) = compile_and_verify(code);
     assert!(success, "&mut self method should compile. Error: {}", err);
 }
 
@@ -254,7 +254,7 @@ impl Wrapper {
     }
 }
 "#;
-    let (success, generated, err) = compile_and_verify(code);
+    let (success, _generated, err) = compile_and_verify(code);
     assert!(success, "Owned self method should compile. Error: {}", err);
 }
 
@@ -285,7 +285,7 @@ impl Point {
     }
 }
 "#;
-    let (success, generated, err) = compile_and_verify(code);
+    let (success, _generated, err) = compile_and_verify(code);
     assert!(
         success,
         "Associated functions should compile. Error: {}",
@@ -319,7 +319,7 @@ impl Direction {
     }
 }
 "#;
-    let (success, generated, err) = compile_and_verify(code);
+    let (success, _generated, err) = compile_and_verify(code);
     assert!(success, "Enum impl should compile. Error: {}", err);
 }
 
@@ -352,7 +352,7 @@ impl Point {
     }
 }
 "#;
-    let (success, generated, err) = compile_and_verify(code);
+    let (success, _generated, err) = compile_and_verify(code);
     assert!(
         success,
         "Multiple impl blocks should compile. Error: {}",
@@ -383,7 +383,7 @@ impl Builder {
     }
 }
 "#;
-    let (success, generated, err) = compile_and_verify(code);
+    let (success, _generated, err) = compile_and_verify(code);
     assert!(success, "Return self type should compile. Error: {}", err);
 }
 
@@ -410,6 +410,6 @@ impl Config {
     }
 }
 "#;
-    let (success, generated, err) = compile_and_verify(code);
+    let (success, _generated, err) = compile_and_verify(code);
     assert!(success, "Impl with Default should compile. Error: {}", err);
 }

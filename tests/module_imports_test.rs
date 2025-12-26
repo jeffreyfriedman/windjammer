@@ -14,7 +14,6 @@
 /// Generated world.rs incorrectly has: `use super::entity::Entity;`
 /// Should be: `use crate::ecs::entity::Entity;` or just `use entity::Entity;`
 use std::fs;
-use std::path::PathBuf;
 use tempfile::TempDir;
 
 #[test]

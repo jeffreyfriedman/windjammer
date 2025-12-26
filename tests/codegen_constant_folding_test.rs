@@ -365,14 +365,14 @@ fn test_fold_unary_neg_int() {
 
 #[test]
 fn test_fold_unary_neg_float() {
-    let expr = unary(UnaryOp::Neg, float_lit(3.14));
+    let expr = unary(UnaryOp::Neg, float_lit(2.5));
     let result = try_fold_constant(&expr);
     assert!(result.is_some());
     match result.unwrap() {
         Expression::Literal {
             value: Literal::Float(f),
             ..
-        } => assert!((f + 3.14).abs() < 0.0001),
+        } => assert!((f + 2.5).abs() < 0.0001),
         _ => panic!("Expected Float literal"),
     }
 }

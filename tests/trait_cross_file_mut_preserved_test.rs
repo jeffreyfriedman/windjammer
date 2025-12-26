@@ -7,7 +7,6 @@
 /// EXPECTED: Explicit ownership in trait definitions should NEVER be overridden,
 /// regardless of what implementations do.
 use std::process::Command;
-use tempfile;
 
 #[test]
 fn test_cross_file_trait_preserves_explicit_mut() {

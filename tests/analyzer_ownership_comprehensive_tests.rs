@@ -140,7 +140,7 @@ pub fn read_counter(c: Counter) -> i32 {
     c.get()
 }
 "#;
-    let (success, generated, err) = compile_and_verify(code);
+    let (success, _generated, err) = compile_and_verify(code);
 
     // read_counter should take &Counter since it only calls a read method
     assert!(success, "Error: {}", err);
@@ -274,7 +274,7 @@ pub fn identity(p: Point) -> Point {
     p
 }
 "#;
-    let (success, generated, err) = compile_and_verify(code);
+    let (success, _generated, err) = compile_and_verify(code);
 
     // identity should take Point by value since it's returned
     assert!(success, "Error: {}", err);
@@ -365,7 +365,7 @@ impl Point {
     }
 }
 "#;
-    let (success, generated, err) = compile_and_verify(code);
+    let (success, _generated, err) = compile_and_verify(code);
 
     // Without explicit &self, should infer &self for read-only
     assert!(success, "Error: {}", err);
@@ -531,7 +531,7 @@ pub fn sum_items(c: Container) -> i32 {
     total
 }
 "#;
-    let (success, generated, err) = compile_and_verify(code);
+    let (success, _generated, err) = compile_and_verify(code);
 
     // Should borrow container for iteration
     assert!(success, "Error: {}", err);
@@ -581,7 +581,7 @@ impl Printable for MyType {
     }
 }
 "#;
-    let (success, generated, err) = compile_and_verify(code);
+    let (success, _generated, err) = compile_and_verify(code);
 
     // Trait impl should match trait signature exactly
     assert!(success, "Error: {}", err);
@@ -603,7 +603,7 @@ pub fn get_value<T>(c: Container<T>) -> T {
     c.value.clone()
 }
 "#;
-    let (success, generated, err) = compile_and_verify(code);
+    let (success, _generated, err) = compile_and_verify(code);
 
     // Generic containers should have sensible inference
     assert!(success, "Error: {}", err);
@@ -616,7 +616,7 @@ pub fn clone_item<T: Clone>(item: T) -> T {
     item.clone()
 }
 "#;
-    let (success, generated, err) = compile_and_verify(code);
+    let (success, _generated, err) = compile_and_verify(code);
 
     // Should work with T: Clone bound
     assert!(success, "Error: {}", err);

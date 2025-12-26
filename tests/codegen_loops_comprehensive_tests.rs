@@ -87,7 +87,7 @@ pub fn sum_to_n(n: i32) -> i32 {
     sum
 }
 "#;
-    let (success, generated, err) = compile_and_verify(code);
+    let (success, _generated, err) = compile_and_verify(code);
     assert!(success, "For range should compile. Error: {}", err);
 }
 
@@ -102,7 +102,7 @@ pub fn sum_to_n_inclusive(n: i32) -> i32 {
     sum
 }
 "#;
-    let (success, generated, err) = compile_and_verify(code);
+    let (success, _generated, err) = compile_and_verify(code);
     assert!(
         success,
         "For range inclusive should compile. Error: {}",
@@ -121,7 +121,7 @@ pub fn sum_vec(items: Vec<i32>) -> i32 {
     sum
 }
 "#;
-    let (success, generated, err) = compile_and_verify(code);
+    let (success, _generated, err) = compile_and_verify(code);
 
     // Should auto-infer .iter() or iterate properly
     assert!(success, "For vec iter should compile. Error: {}", err);
@@ -138,7 +138,7 @@ pub fn process_owned(items: Vec<i32>) -> Vec<i32> {
     result
 }
 "#;
-    let (success, generated, err) = compile_and_verify(code);
+    let (success, _generated, err) = compile_and_verify(code);
     assert!(success, "For vec owned should compile. Error: {}", err);
 }
 
@@ -176,7 +176,7 @@ pub fn increment_all(items: Vec<i32>) -> Vec<i32> {
     result
 }
 "#;
-    let (success, generated, err) = compile_and_verify(code);
+    let (success, _generated, err) = compile_and_verify(code);
     assert!(
         success,
         "For loop var mutation should compile. Error: {}",
@@ -201,7 +201,7 @@ pub fn countdown(n: i32) -> i32 {
     count
 }
 "#;
-    let (success, generated, err) = compile_and_verify(code);
+    let (success, _generated, err) = compile_and_verify(code);
     assert!(success, "While basic should compile. Error: {}", err);
 }
 
@@ -217,7 +217,7 @@ pub fn sum_optional(items: Vec<i32>) -> i32 {
     sum
 }
 "#;
-    let (success, generated, err) = compile_and_verify(code);
+    let (success, _generated, err) = compile_and_verify(code);
     assert!(success, "While let should compile. Error: {}", err);
 }
 
@@ -239,7 +239,7 @@ pub fn find_first(items: &Vec<i32>, target: i32) -> i32 {
     index
 }
 "#;
-    let (success, generated, err) = compile_and_verify(code);
+    let (success, _generated, err) = compile_and_verify(code);
     assert!(success, "Loop with break should compile. Error: {}", err);
 }
 
@@ -257,7 +257,7 @@ pub fn sum_positive(items: &Vec<i32>) -> i32 {
     sum
 }
 "#;
-    let (success, generated, err) = compile_and_verify(code);
+    let (success, _generated, err) = compile_and_verify(code);
     assert!(success, "Loop with continue should compile. Error: {}", err);
 }
 
@@ -275,7 +275,7 @@ pub fn find_value() -> i32 {
     n
 }
 "#;
-    let (success, generated, err) = compile_and_verify(code);
+    let (success, _generated, err) = compile_and_verify(code);
     assert!(
         success,
         "Infinite loop with break should compile. Error: {}",
@@ -301,7 +301,7 @@ pub fn multiply(a: i32, b: i32) -> i32 {
     result
 }
 "#;
-    let (success, generated, err) = compile_and_verify(code);
+    let (success, _generated, err) = compile_and_verify(code);
     assert!(success, "Nested for should compile. Error: {}", err);
 }
 
@@ -322,7 +322,7 @@ pub fn multiply(a: i32, b: i32) -> i32 {
     result
 }
 "#;
-    let (success, generated, err) = compile_and_verify(code);
+    let (success, _generated, err) = compile_and_verify(code);
     assert!(success, "Nested while should compile. Error: {}", err);
 }
 
@@ -337,7 +337,7 @@ pub fn double_all(items: Vec<i32>) -> Vec<i32> {
     items.iter().map(|x| x * 2).collect()
 }
 "#;
-    let (success, generated, err) = compile_and_verify(code);
+    let (success, _generated, err) = compile_and_verify(code);
     assert!(success, "Iter map should compile. Error: {}", err);
 }
 
@@ -349,7 +349,7 @@ pub fn only_positive(items: Vec<i32>) -> Vec<i32> {
     items.iter().filter(|x| **x > 0).cloned().collect()
 }
 "#;
-    let (success, generated, err) = compile_and_verify(code);
+    let (success, _generated, err) = compile_and_verify(code);
     assert!(success, "Iter filter should compile. Error: {}", err);
 }
 
@@ -360,7 +360,7 @@ pub fn sum_all(items: Vec<i32>) -> i32 {
     items.iter().fold(0, |acc, x| acc + x)
 }
 "#;
-    let (success, generated, err) = compile_and_verify(code);
+    let (success, _generated, err) = compile_and_verify(code);
     assert!(success, "Iter fold should compile. Error: {}", err);
 }
 
@@ -374,7 +374,7 @@ pub fn double_filter_sum(items: Vec<i32>) -> i32 {
         .sum()
 }
 "#;
-    let (success, generated, err) = compile_and_verify(code);
+    let (success, _generated, err) = compile_and_verify(code);
     assert!(success, "Iter chain should compile. Error: {}", err);
 }
 
@@ -394,7 +394,7 @@ pub fn find_index(items: Vec<i32>, target: i32) -> i32 {
     -1
 }
 "#;
-    let (success, generated, err) = compile_and_verify(code);
+    let (success, _generated, err) = compile_and_verify(code);
     assert!(success, "Enumerate basic should compile. Error: {}", err);
 }
 
@@ -418,7 +418,7 @@ pub fn sum_items(items: Vec<Item>) -> i32 {
     sum
 }
 "#;
-    let (success, generated, err) = compile_and_verify(code);
+    let (success, _generated, err) = compile_and_verify(code);
     assert!(success, "Iterate struct vec should compile. Error: {}", err);
 }
 
@@ -438,6 +438,6 @@ pub fn copy_all(items: &Vec<Item>) -> Vec<Item> {
     result
 }
 "#;
-    let (success, generated, err) = compile_and_verify(code);
+    let (success, _generated, err) = compile_and_verify(code);
     assert!(success, "Iterate and clone should compile. Error: {}", err);
 }

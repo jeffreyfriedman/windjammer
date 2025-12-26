@@ -87,7 +87,7 @@ pub fn describe_number(n: i32) -> i32 {
     }
 }
 "#;
-    let (success, generated, err) = compile_and_verify(code);
+    let (success, _generated, err) = compile_and_verify(code);
     assert!(success, "Match integer should compile. Error: {}", err);
 }
 
@@ -102,7 +102,7 @@ pub fn number_name(n: i32) -> string {
     }
 }
 "#;
-    let (success, generated, err) = compile_and_verify(code);
+    let (success, _generated, err) = compile_and_verify(code);
     assert!(
         success,
         "Match return string should compile. Error: {}",
@@ -120,7 +120,7 @@ pub fn bool_to_int(b: bool) -> i32 {
     }
 }
 "#;
-    let (success, generated, err) = compile_and_verify(code);
+    let (success, _generated, err) = compile_and_verify(code);
     assert!(success, "Match boolean should compile. Error: {}", err);
 }
 
@@ -138,7 +138,7 @@ pub fn is_vowel(c: char) -> bool {
     }
 }
 "#;
-    let (success, generated, err) = compile_and_verify(code);
+    let (success, _generated, err) = compile_and_verify(code);
     assert!(
         success,
         "Match multiple values should compile. Error: {}",
@@ -157,7 +157,7 @@ pub fn is_zero(n: i32) -> bool {
     }
 }
 "#;
-    let (success, generated, err) = compile_and_verify(code);
+    let (success, _generated, err) = compile_and_verify(code);
     assert!(success, "Match range should compile. Error: {}", err);
 }
 
@@ -176,7 +176,7 @@ pub fn classify(n: i32) -> i32 {
     }
 }
 "#;
-    let (success, generated, err) = compile_and_verify(code);
+    let (success, _generated, err) = compile_and_verify(code);
     assert!(success, "Match with guard should compile. Error: {}", err);
 }
 
@@ -193,7 +193,7 @@ pub fn grade(score: i32) -> char {
     }
 }
 "#;
-    let (success, generated, err) = compile_and_verify(code);
+    let (success, _generated, err) = compile_and_verify(code);
     assert!(
         success,
         "Match guard complex should compile. Error: {}",
@@ -215,7 +215,7 @@ pub fn unwrap_or_default(opt: Option<i32>) -> i32 {
     }
 }
 "#;
-    let (success, generated, err) = compile_and_verify(code);
+    let (success, _generated, err) = compile_and_verify(code);
     assert!(success, "Match option should compile. Error: {}", err);
 }
 
@@ -229,7 +229,7 @@ pub fn is_some(opt: &Option<i32>) -> bool {
     }
 }
 "#;
-    let (success, generated, err) = compile_and_verify(code);
+    let (success, _generated, err) = compile_and_verify(code);
     assert!(success, "Match option ref should compile. Error: {}", err);
 }
 
@@ -278,7 +278,7 @@ pub fn is_origin(p: Point) -> bool {
     }
 }
 "#;
-    let (success, generated, err) = compile_and_verify(code);
+    let (success, _generated, err) = compile_and_verify(code);
     assert!(
         success,
         "Match struct destructure should compile. Error: {}",
@@ -303,7 +303,7 @@ pub fn on_x_axis(p: Point) -> bool {
     }
 }
 "#;
-    let (success, generated, err) = compile_and_verify(code);
+    let (success, _generated, err) = compile_and_verify(code);
     assert!(
         success,
         "Match struct partial should compile. Error: {}",
@@ -327,7 +327,7 @@ pub fn classify_pair(pair: (i32, i32)) -> i32 {
     }
 }
 "#;
-    let (success, generated, err) = compile_and_verify(code);
+    let (success, _generated, err) = compile_and_verify(code);
     assert!(success, "Match tuple should compile. Error: {}", err);
 }
 
@@ -341,7 +341,7 @@ pub fn nested_match(t: (i32, (i32, i32))) -> i32 {
     }
 }
 "#;
-    let (success, generated, err) = compile_and_verify(code);
+    let (success, _generated, err) = compile_and_verify(code);
     assert!(success, "Match tuple nested should compile. Error: {}", err);
 }
 
@@ -366,7 +366,7 @@ pub fn color_value(c: Color) -> i32 {
     }
 }
 "#;
-    let (success, generated, err) = compile_and_verify(code);
+    let (success, _generated, err) = compile_and_verify(code);
     assert!(success, "Match enum should compile. Error: {}", err);
 }
 
@@ -386,7 +386,7 @@ pub fn is_quit(msg: Message) -> bool {
     }
 }
 "#;
-    let (success, generated, err) = compile_and_verify(code);
+    let (success, _generated, err) = compile_and_verify(code);
     assert!(
         success,
         "Match enum with data should compile. Error: {}",
@@ -409,7 +409,7 @@ pub fn compute(n: i32) -> i32 {
     n * multiplier
 }
 "#;
-    let (success, generated, err) = compile_and_verify(code);
+    let (success, _generated, err) = compile_and_verify(code);
     assert!(
         success,
         "Match in expression should compile. Error: {}",
@@ -432,7 +432,7 @@ pub fn process(opt: Option<i32>) -> i32 {
     doubled
 }
 "#;
-    let (success, generated, err) = compile_and_verify(code);
+    let (success, _generated, err) = compile_and_verify(code);
     assert!(success, "Match chained should compile. Error: {}", err);
 }
 
@@ -451,7 +451,7 @@ pub fn describe(n: i32) -> i32 {
     }
 }
 "#;
-    let (success, generated, err) = compile_and_verify(code);
+    let (success, _generated, err) = compile_and_verify(code);
     assert!(success, "Match binding should compile. Error: {}", err);
 }
 
@@ -465,6 +465,6 @@ pub fn first_or_zero(opt: Option<(i32, i32)>) -> i32 {
     }
 }
 "#;
-    let (success, generated, err) = compile_and_verify(code);
+    let (success, _generated, err) = compile_and_verify(code);
     assert!(success, "Match wildcard should compile. Error: {}", err);
 }
