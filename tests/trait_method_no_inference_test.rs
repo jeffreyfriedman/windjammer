@@ -5,9 +5,12 @@
 use std::process::Command;
 
 fn compile_and_check(code: &str) -> (bool, String) {
-    let temp_dir = std::env::temp_dir();
-    let test_file = temp_dir.join("trait_test.wj");
-    let output_dir = temp_dir.join("trait_output");
+    // Use unique temp directory per test to avoid parallel test conflicts
+    // Use thread ID to ensure uniqueness even within same test binary
+    let thread_id = format!("{:?}", std::thread::current().id());
+    let temp_dir = std::env::temp_dir().join(format!("trait_test_{}", thread_id));
+    let test_file = temp_dir.join("test.wj");
+    let output_dir = temp_dir.join("output");
 
     std::fs::create_dir_all(&output_dir).ok();
     std::fs::write(&test_file, code).unwrap();
@@ -23,14 +26,16 @@ fn compile_and_check(code: &str) -> (bool, String) {
         .output()
         .expect("Failed to run wj");
 
-    let generated_file = output_dir.join("trait_test.rs");
+    let generated_file = output_dir.join("test.rs");
     let generated = std::fs::read_to_string(&generated_file).unwrap_or_default();
+
+    // Clean up
+    std::fs::remove_dir_all(&temp_dir).ok();
 
     (output.status.success(), generated)
 }
 
 #[test]
-#[ignore] // TODO: Regression from ownership inference fix - trait signatures need special handling
 fn test_trait_method_no_inference_f32() {
     let code = r#"
 pub trait GameLoop {
@@ -59,7 +64,6 @@ pub trait GameLoop {
 }
 
 #[test]
-#[ignore] // TODO: Regression from ownership inference fix - trait signatures need special handling
 fn test_trait_method_no_inference_struct() {
     let code = r#"
 pub struct Input { pub key: int }
@@ -90,7 +94,6 @@ pub trait GameLoop {
 }
 
 #[test]
-#[ignore] // TODO: Regression from ownership inference fix - trait signatures need special handling
 fn test_trait_impl_can_use_references() {
     let code = r#"
 pub struct Input { pub key: int }
