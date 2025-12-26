@@ -148,7 +148,7 @@ fn discover_modules_recursive(dir_path: &Path, _is_root: bool) -> Result<Vec<Mod
 /// - Respect explicit pub mod / pub use declarations from mod.wj
 /// - Auto-generate pub mod for discovered directories
 /// - Use wildcard re-exports ONLY if no explicit pub use exists
-/// Discover hand-written Rust modules in the project root
+///   Discover hand-written Rust modules in the project root
 ///
 /// THE WINDJAMMER WAY: Allow seamless FFI/interop!
 /// Users can provide hand-written Rust code (like ffi.rs or ffi/mod.rs)
@@ -201,10 +201,9 @@ fn discover_hand_written_modules(
                         && name_str != "mod"  // THE WINDJAMMER WAY: mod.rs is for module declarations, not a module itself
                         && !generated_names.contains(&name_str)
                         && path.extension().and_then(|s| s.to_str()) == Some("rs")
+                        && !modules.contains(&name_str)
                     {
-                        if !modules.contains(&name_str) {
-                            modules.push(name_str);
-                        }
+                        modules.push(name_str);
                     }
                 }
             } else if path.is_dir() {

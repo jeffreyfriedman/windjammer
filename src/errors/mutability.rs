@@ -164,11 +164,12 @@ impl MutabilityChecker {
             Statement::Expression { expr, .. } => {
                 self.check_expression(expr);
             }
-            Statement::Return { value, .. } => {
-                if let Some(expr) = value {
-                    self.check_expression(expr);
-                }
+            Statement::Return {
+                value: Some(expr), ..
+            } => {
+                self.check_expression(expr);
             }
+            Statement::Return { value: None, .. } => {}
             Statement::If {
                 condition,
                 then_block,
