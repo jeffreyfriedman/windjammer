@@ -184,7 +184,7 @@ pub struct Wrapper {
     value: i32,
 }
 "#;
-    let (success, generated, err) = compile_and_verify(code);
+    let (_success, generated, _err) = compile_and_verify(code);
     println!("Generated:\n{}", generated);
     // May not be implemented yet
 }
