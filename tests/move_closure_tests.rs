@@ -20,6 +20,11 @@ fn compile_fixture(fixture_name: &str) -> Result<String, String> {
         .join(fixture_name);
     std::fs::create_dir_all(&output_dir).map_err(|e| e.to_string())?;
 
+    eprintln!("🔧 move_closures: Compiling {}", fixture_name);
+    eprintln!("   Fixture: {}", fixture_path.display());
+    eprintln!("   Output: {}", output_dir.display());
+    eprintln!("   Binary: {}", env!("CARGO_BIN_EXE_wj"));
+
     let compiler_output = Command::new(env!("CARGO_BIN_EXE_wj"))
         .args([
             "build",
@@ -31,7 +36,16 @@ fn compile_fixture(fixture_name: &str) -> Result<String, String> {
         .output()
         .map_err(|e| format!("Failed to run compiler: {}", e))?;
 
+    eprintln!("   Exit code: {:?}", compiler_output.status.code());
+    eprintln!("   STDOUT: {} bytes", compiler_output.stdout.len());
+    eprintln!("   STDERR: {} bytes", compiler_output.stderr.len());
+
     if !compiler_output.status.success() {
+        eprintln!("   Compiler FAILED!");
+        eprintln!(
+            "STDERR:\n{}",
+            String::from_utf8_lossy(&compiler_output.stderr)
+        );
         return Err(format!(
             "Compiler failed: {}",
             String::from_utf8_lossy(&compiler_output.stderr)
@@ -39,6 +53,23 @@ fn compile_fixture(fixture_name: &str) -> Result<String, String> {
     }
 
     let rust_file = output_dir.join(format!("{}.rs", fixture_name));
+    eprintln!("   Reading: {}", rust_file.display());
+    eprintln!("   Exists: {}", rust_file.exists());
+
+    if rust_file.exists() {
+        if let Ok(metadata) = std::fs::metadata(&rust_file) {
+            eprintln!("   Size: {} bytes", metadata.len());
+        }
+    } else {
+        eprintln!("   ⚠️ FILE DOES NOT EXIST!");
+        if let Ok(entries) = std::fs::read_dir(&output_dir) {
+            eprintln!("   Files in output dir:");
+            for entry in entries.flatten() {
+                eprintln!("     - {}", entry.path().display());
+            }
+        }
+    }
+
     std::fs::read_to_string(rust_file).map_err(|e| format!("Failed to read generated code: {}", e))
 }
 
