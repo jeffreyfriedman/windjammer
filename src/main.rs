@@ -1262,6 +1262,37 @@ fn compile_file_with_compiler(
 
     module_compiler.compiling_files.insert(path_key.clone());
 
+    // THE WINDJAMMER WAY: Always cleanup, whether we succeed or fail
+    // Wrap the actual compilation in a closure, then remove path from set regardless of result
+    let result = (|| -> Result<(HashSet<String>, Vec<String>)> {
+        compile_file_impl(
+            source_root,
+            input_path,
+            module_compiler,
+            output_dir,
+            is_multi_file_project,
+            store_program,
+            &path_key,
+        )
+    })();
+
+    // Remove path from compilation set now that we're done (success or failure)
+    module_compiler.compiling_files.remove(&path_key);
+
+    result
+}
+
+/// Internal implementation of compile_file_with_compiler
+/// This is separated out so we can ensure cleanup happens in the outer function
+fn compile_file_impl(
+    source_root: &Path,
+    input_path: &Path,
+    module_compiler: &mut ModuleCompiler,
+    output_dir: &Path,
+    is_multi_file_project: bool,
+    store_program: bool,
+    _path_key: &str,
+) -> Result<(HashSet<String>, Vec<String>)> {
     let target = module_compiler.target;
 
     // Read source file
@@ -1450,8 +1481,6 @@ fn compile_file_with_compiler(
     }
 
     if has_mut_errors {
-        // RECURSION GUARD: Remove file from compiling set before error return
-        module_compiler.compiling_files.remove(&path_key);
         anyhow::bail!("Compilation failed: mutability errors detected");
     }
 
@@ -1538,9 +1567,6 @@ fn compile_file_with_compiler(
                 let file_path = output_dir.join(filename);
                 std::fs::write(file_path, content)?;
             }
-
-            // RECURSION GUARD: Remove file from compiling set before early return
-            module_compiler.compiling_files.remove(&path_key);
 
             // Return empty to signal we've handled everything
             return Ok((HashSet::new(), Vec::new()));
@@ -1654,9 +1680,6 @@ fn compile_file_with_compiler(
     }
 
     std::fs::write(&output_file, &combined_code)?;
-
-    // RECURSION GUARD: Remove file from compiling set now that we're done
-    module_compiler.compiling_files.remove(&path_key);
 
     // Return the set of imported stdlib modules and external crates for Cargo.toml generation
     Ok((
