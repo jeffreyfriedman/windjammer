@@ -3,13 +3,13 @@
 // to "use super::vec2::Vec2" when Vec2 is defined in vec2.wj
 
 use std::fs;
+use std::path::PathBuf;
 use std::process::Command;
 
 #[test]
 #[ignore] // TODO: Fix type registry import generation
 fn test_type_registry_generates_correct_imports() {
-    let wj_compiler =
-        std::env::var("WJ_COMPILER").unwrap_or_else(|_| "./target/release/wj".to_string());
+    let wj_compiler = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("target/release/wj");
 
     // Create a temporary directory structure
     let temp_dir = std::env::temp_dir().join("wj_test_type_registry");
