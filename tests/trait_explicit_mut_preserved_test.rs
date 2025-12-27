@@ -32,12 +32,12 @@ pub trait GameLoop {
     std::fs::write(&input_file, wj_code).unwrap();
 
     let output_dir = temp_dir.path().join("out");
-    
+
     eprintln!("🔧 trait_explicit_mut_preserved: Running compiler");
     eprintln!("   Binary: {}", env!("CARGO_BIN_EXE_wj"));
     eprintln!("   Input: {}", input_file.display());
     eprintln!("   Output: {}", output_dir.display());
-    
+
     let compile_result = Command::new(env!("CARGO_BIN_EXE_wj"))
         .arg("build")
         .arg(&input_file)
@@ -69,7 +69,10 @@ pub trait GameLoop {
         } else {
             eprintln!("     Output dir doesn't exist!");
         }
-        panic!("Compiler failed with exit code {:?}", compile_result.status.code());
+        panic!(
+            "Compiler failed with exit code {:?}",
+            compile_result.status.code()
+        );
     }
 
     let generated_rust = std::fs::read_to_string(output_dir.join("mod.rs"))
