@@ -1228,7 +1228,7 @@ fn compile_file_with_compiler(
             .to_string_lossy()
             .replace("\\\\?\\", "") // Remove Windows UNC prefix
             .replace('\\', "/"); // Normalize to forward slashes
-        
+
         // Only lowercase on Windows (case-insensitive filesystem)
         // macOS/Linux filesystems are case-sensitive!
         #[cfg(target_os = "windows")]

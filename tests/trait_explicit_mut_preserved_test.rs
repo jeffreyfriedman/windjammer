@@ -32,6 +32,12 @@ pub trait GameLoop {
     std::fs::write(&input_file, wj_code).unwrap();
 
     let output_dir = temp_dir.path().join("out");
+    
+    eprintln!("🔧 trait_explicit_mut_preserved: Running compiler");
+    eprintln!("   Binary: {}", env!("CARGO_BIN_EXE_wj"));
+    eprintln!("   Input: {}", input_file.display());
+    eprintln!("   Output: {}", output_dir.display());
+    
     let compile_result = Command::new(env!("CARGO_BIN_EXE_wj"))
         .arg("build")
         .arg(&input_file)
@@ -42,6 +48,10 @@ pub trait GameLoop {
         .output()
         .expect("Failed to execute compiler");
 
+    eprintln!("   Exit code: {:?}", compile_result.status.code());
+    eprintln!("   STDOUT length: {} bytes", compile_result.stdout.len());
+    eprintln!("   STDERR length: {} bytes", compile_result.stderr.len());
+
     if !compile_result.status.success() {
         eprintln!(
             "STDOUT:\n{}",
@@ -51,7 +61,15 @@ pub trait GameLoop {
             "STDERR:\n{}",
             String::from_utf8_lossy(&compile_result.stderr)
         );
-        panic!("Compiler failed");
+        eprintln!("   ⚠️ Checking if output files exist:");
+        if let Ok(entries) = std::fs::read_dir(&output_dir) {
+            for entry in entries.flatten() {
+                eprintln!("     - {}", entry.path().display());
+            }
+        } else {
+            eprintln!("     Output dir doesn't exist!");
+        }
+        panic!("Compiler failed with exit code {:?}", compile_result.status.code());
     }
 
     let generated_rust = std::fs::read_to_string(output_dir.join("mod.rs"))
