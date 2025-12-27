@@ -3248,12 +3248,12 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
                         Some("usize") => {
                             // Target is usize, no cast needed!
                         }
-                        Some("i64") | Some("int") => {
-                            // Target is i64, cast to i64
+                        Some("int") | Some("i64") => {
+                            // Target is i64 (Windjammer's default int type)
                             value_str = format!("(({}) as i64)", value_str);
                         }
                         Some("i32") => {
-                            // Target is i32, cast to i32
+                            // Target is explicit i32, cast to i32
                             value_str = format!("(({}) as i32)", value_str);
                         }
                         _ => {
@@ -3440,6 +3440,8 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
                         }
                         // If not usize, assume it's i64 (int) for numeric types
                         // This is a heuristic - we can't know for sure without more type info
+                        // WINDJAMMER: int type maps to i64 in Rust by default
+                        // For explicit i32 fields, we'd need proper type tracking
                         return Some("i64".to_string());
                     }
                 }
