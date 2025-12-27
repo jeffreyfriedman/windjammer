@@ -15,11 +15,9 @@ fn compile_and_verify(code: &str) -> (bool, String, String) {
     fs::write(&wj_path, code).expect("Failed to write test file");
     fs::create_dir_all(&out_dir).expect("Failed to create output dir");
 
-    let output = Command::new("cargo")
+    // Use the pre-built wj binary directly (much faster than cargo run, especially under tarpaulin)
+    let output = Command::new(env!("CARGO_BIN_EXE_wj"))
         .args([
-            "run",
-            "--release",
-            "--",
             "build",
             wj_path.to_str().unwrap(),
             "-o",
