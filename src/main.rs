@@ -747,6 +747,8 @@ struct ModuleCompiler {
     analyzer: analyzer::Analyzer, // WINDJAMMER FIX: Shared analyzer for cross-file trait analysis
     // THE WINDJAMMER WAY: Track ALL programs for cross-file trait inference
     all_programs: Vec<parser::Program>, // All parsed programs from all files
+    // RECURSION GUARD: Track files currently being compiled to prevent circular dependencies
+    compiling_files: HashSet<PathBuf>, // Files in the current compilation chain
 }
 
 #[allow(dead_code)]
@@ -768,6 +770,7 @@ impl ModuleCompiler {
             copy_structs_registry: HashSet::new(),
             analyzer: analyzer::Analyzer::new(), // WINDJAMMER FIX: Shared analyzer instance
             all_programs: Vec::new(),            // THE WINDJAMMER WAY: Track all programs
+            compiling_files: HashSet::new(),     // RECURSION GUARD: Track compilation chain
         }
     }
 
@@ -1204,6 +1207,14 @@ fn compile_file_with_compiler(
     is_multi_file_project: bool,
     store_program: bool, // Whether to add this program to all_programs for trait inference
 ) -> Result<(HashSet<String>, Vec<String>)> {
+    // RECURSION GUARD: Prevent circular module dependencies from causing stack overflow
+    let canonical_path = input_path.canonicalize().unwrap_or_else(|_| input_path.to_path_buf());
+    if module_compiler.compiling_files.contains(&canonical_path) {
+        // Already compiling this file in the current chain - skip to prevent infinite recursion
+        return Ok((HashSet::new(), Vec::new()));
+    }
+    module_compiler.compiling_files.insert(canonical_path.clone());
+
     let target = module_compiler.target;
 
     // Read source file
@@ -1392,6 +1403,8 @@ fn compile_file_with_compiler(
     }
 
     if has_mut_errors {
+        // RECURSION GUARD: Remove file from compiling set before error return
+        module_compiler.compiling_files.remove(&canonical_path);
         anyhow::bail!("Compilation failed: mutability errors detected");
     }
 
@@ -1478,6 +1491,9 @@ fn compile_file_with_compiler(
                 let file_path = output_dir.join(filename);
                 std::fs::write(file_path, content)?;
             }
+
+            // RECURSION GUARD: Remove file from compiling set before early return
+            module_compiler.compiling_files.remove(&canonical_path);
 
             // Return empty to signal we've handled everything
             return Ok((HashSet::new(), Vec::new()));
@@ -1591,6 +1607,9 @@ fn compile_file_with_compiler(
     }
 
     std::fs::write(&output_file, &combined_code)?;
+
+    // RECURSION GUARD: Remove file from compiling set now that we're done
+    module_compiler.compiling_files.remove(&canonical_path);
 
     // Return the set of imported stdlib modules and external crates for Cargo.toml generation
     Ok((
