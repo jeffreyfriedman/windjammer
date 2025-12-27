@@ -63,7 +63,7 @@ default = []
 
 [dependencies]
 # Parser combinator library
-nom = "7.1"
+nom = "7.1.3"  # Bumped to force CI cache invalidation
 # CLI argument parsing
 clap = { version = "4.5", features = ["derive"] }
 # Error handling
