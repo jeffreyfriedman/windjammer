@@ -26,6 +26,14 @@ fn compile_fixture(fixture_name: &str) -> Result<String, String> {
     std::fs::create_dir_all(&output_dir).map_err(|e| e.to_string())?;
 
     // Run the compiler
+    eprintln!(
+        "🔧 Compiling {} with binary: {}",
+        fixture_name,
+        compiler_path.display()
+    );
+    eprintln!("   Fixture path: {}", fixture_path.display());
+    eprintln!("   Output dir: {}", output_dir.display());
+
     let compiler_output = Command::new(&compiler_path)
         .args([
             "build",
@@ -37,6 +45,10 @@ fn compile_fixture(fixture_name: &str) -> Result<String, String> {
         .output()
         .map_err(|e| format!("Failed to run compiler: {}", e))?;
 
+    eprintln!("   Compiler exit code: {:?}", compiler_output.status.code());
+    eprintln!("   STDOUT length: {} bytes", compiler_output.stdout.len());
+    eprintln!("   STDERR length: {} bytes", compiler_output.stderr.len());
+
     if !compiler_output.status.success() {
         return Err(format!(
             "Compiler failed:\nSTDOUT: {}\nSTDERR: {}",
@@ -47,6 +59,14 @@ fn compile_fixture(fixture_name: &str) -> Result<String, String> {
 
     // Read generated Rust code
     let rust_file = output_dir.join(format!("{}.rs", fixture_name));
+    eprintln!("   Reading generated file: {}", rust_file.display());
+    eprintln!("   File exists: {}", rust_file.exists());
+
+    if rust_file.exists() {
+        let metadata = std::fs::metadata(&rust_file).map_err(|e| e.to_string())?;
+        eprintln!("   File size: {} bytes", metadata.len());
+    }
+
     std::fs::read_to_string(&rust_file).map_err(|e| {
         format!(
             "Failed to read generated code at {:?}: {}",
