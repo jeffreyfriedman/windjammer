@@ -177,7 +177,43 @@ impl MethodCallAnalyzer {
         method: &str,
         method_signature: &Option<crate::analyzer::FunctionSignature>,
     ) -> bool {
-        // Check signature first if available
+        // Check stdlib methods FIRST - these have well-known signatures that must be respected
+        // even if we have a different signature in the registry (might be a user-defined method
+        // with the same name)
+        let is_stdlib_method = matches!(
+            method,
+            "push"
+                | "insert"
+                | "draw_text"
+                | "set_title"
+                | "set_text"
+                | "set_label"
+                | "log"
+                | "print"
+        );
+
+        if is_stdlib_method {
+            // Known stdlib methods that expect owned String
+            // Vec<String>::push(String) - param 0 is owned
+            // HashMap<String, V>::insert(String, V) - param 0 (key) is owned
+            //
+            // THE WINDJAMMER WAY: For external crate methods, we don't have signatures.
+            // Add heuristics for common method patterns that typically take owned strings.
+            return match (method, param_idx) {
+                ("push", 0) => true,   // Vec<String>::push(item: String)
+                ("insert", 0) => true, // HashMap<String, V>::insert(key: String, ...)
+                // UI/Game framework methods that typically take owned String for display text
+                ("draw_text", 0) => true, // RenderContext::draw_text(text: String, ...)
+                ("set_title", 0) => true, // Window::set_title(title: String)
+                ("set_text", 0) => true,  // Label::set_text(text: String)
+                ("set_label", 0) => true, // Button::set_label(label: String)
+                ("log", 0) => true,       // Logger::log(message: String)
+                ("print", 0) => true,     // Custom print(message: String)
+                _ => false,
+            };
+        }
+
+        // Check signature for non-stdlib methods
         if let Some(sig) = method_signature {
             let sig_param_idx = if sig.has_self_receiver {
                 param_idx + 1
@@ -190,24 +226,8 @@ impl MethodCallAnalyzer {
             }
         }
 
-        // Fallback: Known stdlib methods that expect owned String
-        // Vec<String>::push(String) - param 0 is owned
-        // HashMap<String, V>::insert(String, V) - param 0 (key) is owned
-        //
-        // THE WINDJAMMER WAY: For external crate methods, we don't have signatures.
-        // Add heuristics for common method patterns that typically take owned strings.
-        match (method, param_idx) {
-            ("push", 0) => true,   // Vec<String>::push(item: String)
-            ("insert", 0) => true, // HashMap<String, V>::insert(key: String, ...)
-            // UI/Game framework methods that typically take owned String for display text
-            ("draw_text", 0) => true, // RenderContext::draw_text(text: String, ...)
-            ("set_title", 0) => true, // Window::set_title(title: String)
-            ("set_text", 0) => true,  // Label::set_text(text: String)
-            ("set_label", 0) => true, // Button::set_label(label: String)
-            ("log", 0) => true,       // Logger::log(message: String)
-            ("print", 0) => true,     // Custom print(message: String)
-            _ => false,
-        }
+        // Final fallback
+        false
     }
 
     /// Determine if we should add .cloned() for Option<&T> -> Option<T>
