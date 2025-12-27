@@ -1208,13 +1208,29 @@ fn compile_file_with_compiler(
     store_program: bool, // Whether to add this program to all_programs for trait inference
 ) -> Result<(HashSet<String>, Vec<String>)> {
     // RECURSION GUARD: Prevent circular module dependencies from causing stack overflow
-    let canonical_path = input_path
-        .canonicalize()
-        .unwrap_or_else(|_| input_path.to_path_buf());
+    // Use absolute path for comparison to handle Windows path normalization
+    let canonical_path = input_path.canonicalize().unwrap_or_else(|_| {
+        // If canonicalize fails (file doesn't exist yet), use absolute path
+        std::env::current_dir()
+            .ok()
+            .and_then(|cwd| cwd.join(input_path).canonicalize().ok())
+            .unwrap_or_else(|| input_path.to_path_buf())
+    });
+
     if module_compiler.compiling_files.contains(&canonical_path) {
         // Already compiling this file in the current chain - skip to prevent infinite recursion
+        eprintln!(
+            "RECURSION GUARD: Skipping {} (already in compilation chain)",
+            canonical_path.display()
+        );
         return Ok((HashSet::new(), Vec::new()));
     }
+
+    // Check recursion depth as additional safety
+    if module_compiler.compiling_files.len() >= 50 {
+        anyhow::bail!("Maximum module nesting depth exceeded (50 files). Possible circular dependency involving: {}", canonical_path.display());
+    }
+
     module_compiler
         .compiling_files
         .insert(canonical_path.clone());
