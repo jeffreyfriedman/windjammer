@@ -210,7 +210,9 @@ impl MethodCallAnalyzer {
             }
 
             // Heuristics for Copy type variable names
-            if name.contains("usize") || name.contains("index") || name.contains("entity") {
+            // IMPORTANT: Only use heuristics for clearly numeric types
+            // DO NOT assume "entity" is Copy - Entity structs are usually NOT Copy!
+            if name.contains("usize") || name.contains("index") {
                 return true;
             }
 
@@ -327,14 +329,15 @@ mod tests {
             "should detect usize variable"
         );
 
-        // Test entity variable detection
+        // Test that "entity" is NOT assumed to be Copy
+        // Entity structs are usually NOT Copy!
         let expr = Expression::Identifier {
             name: "entity".to_string(),
             location: Default::default(),
         };
         assert!(
-            MethodCallAnalyzer::is_copy_type(&expr, &usize_vars, &params),
-            "should detect entity variable"
+            !MethodCallAnalyzer::is_copy_type(&expr, &usize_vars, &params),
+            "should NOT assume entity is Copy"
         );
 
         // Test index variable detection
