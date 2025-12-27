@@ -65,9 +65,11 @@ fn test_void_return_preserves_semicolon() {
         "insert() should end with semicolon: {}",
         generated
     );
+    // key is already &string in the parameter, so we don't add another &
+    // We just need to verify the semicolon is preserved
     assert!(
-        generated.contains("remove(&key);"),
-        "remove() should end with semicolon (note: & added for ref param): {}",
+        generated.contains("remove(key);"),
+        "remove() should end with semicolon: {}",
         generated
     );
 }
