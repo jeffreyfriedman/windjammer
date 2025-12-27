@@ -748,7 +748,8 @@ struct ModuleCompiler {
     // THE WINDJAMMER WAY: Track ALL programs for cross-file trait inference
     all_programs: Vec<parser::Program>, // All parsed programs from all files
     // RECURSION GUARD: Track files currently being compiled to prevent circular dependencies
-    compiling_files: HashSet<PathBuf>, // Files in the current compilation chain
+    // Use String instead of PathBuf for Windows UNC path compatibility
+    compiling_files: HashSet<String>, // Normalized path strings in the current compilation chain
 }
 
 #[allow(dead_code)]
@@ -1208,7 +1209,10 @@ fn compile_file_with_compiler(
     store_program: bool, // Whether to add this program to all_programs for trait inference
 ) -> Result<(HashSet<String>, Vec<String>)> {
     // RECURSION GUARD: Prevent circular module dependencies from causing stack overflow
-    // Use absolute path for comparison to handle Windows path normalization
+    // THE WINDJAMMER WAY: Use normalized string for cross-platform path comparison
+    // Problem: Windows canonicalize() adds UNC prefixes (\\?\C:\...) inconsistently,
+    // causing PathBuf equality checks to fail even for the same file.
+    // Solution: Convert to lowercase string with forward slashes for consistent comparison.
     let canonical_path = input_path.canonicalize().unwrap_or_else(|_| {
         // If canonicalize fails (file doesn't exist yet), use absolute path
         std::env::current_dir()
@@ -1217,23 +1221,26 @@ fn compile_file_with_compiler(
             .unwrap_or_else(|| input_path.to_path_buf())
     });
 
-    if module_compiler.compiling_files.contains(&canonical_path) {
+    // Normalize path for consistent comparison across platforms
+    // Remove UNC prefix on Windows and use forward slashes
+    let path_key = canonical_path
+        .to_string_lossy()
+        .replace("\\\\?\\", "") // Remove Windows UNC prefix
+        .replace('\\', "/") // Normalize to forward slashes
+        .to_lowercase(); // Case-insensitive on Windows
+
+    if module_compiler.compiling_files.contains(&path_key) {
         // Already compiling this file in the current chain - skip to prevent infinite recursion
-        eprintln!(
-            "RECURSION GUARD: Skipping {} (already in compilation chain)",
-            canonical_path.display()
-        );
+        // This is OK and expected for circular imports that have already been handled
         return Ok((HashSet::new(), Vec::new()));
     }
 
     // Check recursion depth as additional safety
     if module_compiler.compiling_files.len() >= 50 {
-        anyhow::bail!("Maximum module nesting depth exceeded (50 files). Possible circular dependency involving: {}", canonical_path.display());
+        anyhow::bail!("Maximum module nesting depth exceeded (50 files). Possible circular dependency involving: {}", path_key);
     }
 
-    module_compiler
-        .compiling_files
-        .insert(canonical_path.clone());
+    module_compiler.compiling_files.insert(path_key.clone());
 
     let target = module_compiler.target;
 
@@ -1424,7 +1431,7 @@ fn compile_file_with_compiler(
 
     if has_mut_errors {
         // RECURSION GUARD: Remove file from compiling set before error return
-        module_compiler.compiling_files.remove(&canonical_path);
+        module_compiler.compiling_files.remove(&path_key);
         anyhow::bail!("Compilation failed: mutability errors detected");
     }
 
@@ -1513,7 +1520,7 @@ fn compile_file_with_compiler(
             }
 
             // RECURSION GUARD: Remove file from compiling set before early return
-            module_compiler.compiling_files.remove(&canonical_path);
+            module_compiler.compiling_files.remove(&path_key);
 
             // Return empty to signal we've handled everything
             return Ok((HashSet::new(), Vec::new()));
@@ -1629,7 +1636,7 @@ fn compile_file_with_compiler(
     std::fs::write(&output_file, &combined_code)?;
 
     // RECURSION GUARD: Remove file from compiling set now that we're done
-    module_compiler.compiling_files.remove(&canonical_path);
+    module_compiler.compiling_files.remove(&path_key);
 
     // Return the set of imported stdlib modules and external crates for Cargo.toml generation
     Ok((
