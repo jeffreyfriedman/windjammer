@@ -6,6 +6,14 @@ use std::process::Command;
 
 /// Helper to compile a test fixture and return the generated Rust code
 fn compile_fixture(fixture_name: &str) -> Result<String, String> {
+    let compiler_path = PathBuf::from(env!("CARGO_BIN_EXE_wj"));
+    if !compiler_path.exists() {
+        return Err(format!(
+            "Compiler binary not found at: {}",
+            compiler_path.display()
+        ));
+    }
+
     let fixture_path = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
         .join("tests")
         .join("fixtures")
@@ -18,7 +26,7 @@ fn compile_fixture(fixture_name: &str) -> Result<String, String> {
     std::fs::create_dir_all(&output_dir).map_err(|e| e.to_string())?;
 
     // Run the compiler
-    let compiler_output = Command::new(env!("CARGO_BIN_EXE_wj"))
+    let compiler_output = Command::new(&compiler_path)
         .args([
             "build",
             fixture_path.to_str().unwrap(),
@@ -31,14 +39,21 @@ fn compile_fixture(fixture_name: &str) -> Result<String, String> {
 
     if !compiler_output.status.success() {
         return Err(format!(
-            "Compiler failed: {}",
+            "Compiler failed:\nSTDOUT: {}\nSTDERR: {}",
+            String::from_utf8_lossy(&compiler_output.stdout),
             String::from_utf8_lossy(&compiler_output.stderr)
         ));
     }
 
     // Read generated Rust code
     let rust_file = output_dir.join(format!("{}.rs", fixture_name));
-    std::fs::read_to_string(rust_file).map_err(|e| format!("Failed to read generated code: {}", e))
+    std::fs::read_to_string(&rust_file).map_err(|e| {
+        format!(
+            "Failed to read generated code at {:?}: {}",
+            rust_file.display(),
+            e
+        )
+    })
 }
 
 // ============================================================================
