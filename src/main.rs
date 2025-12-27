@@ -1208,12 +1208,16 @@ fn compile_file_with_compiler(
     store_program: bool, // Whether to add this program to all_programs for trait inference
 ) -> Result<(HashSet<String>, Vec<String>)> {
     // RECURSION GUARD: Prevent circular module dependencies from causing stack overflow
-    let canonical_path = input_path.canonicalize().unwrap_or_else(|_| input_path.to_path_buf());
+    let canonical_path = input_path
+        .canonicalize()
+        .unwrap_or_else(|_| input_path.to_path_buf());
     if module_compiler.compiling_files.contains(&canonical_path) {
         // Already compiling this file in the current chain - skip to prevent infinite recursion
         return Ok((HashSet::new(), Vec::new()));
     }
-    module_compiler.compiling_files.insert(canonical_path.clone());
+    module_compiler
+        .compiling_files
+        .insert(canonical_path.clone());
 
     let target = module_compiler.target;
 
