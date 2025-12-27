@@ -249,7 +249,7 @@ fn test_let_tuple_destructuring() {
     let code = r#"
 fn test() -> i32 {
     let (x, y) = (10, 20)
-    return x + y
+    x + y
 }
 "#;
     compile_should_succeed(code, "let_tuple_destructuring");
@@ -260,7 +260,7 @@ fn test_let_nested_tuple_destructuring() {
     let code = r#"
 fn test() -> i32 {
     let ((a, b), (c, d)) = ((1, 2), (3, 4))
-    return a + b + c + d
+    a + b + c + d
 }
 "#;
     compile_should_succeed(code, "let_nested_tuple");
