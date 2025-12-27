@@ -1,13 +1,13 @@
 // Integration test: inline modules with extern fn declarations should generate correct Rust code
 
 use std::fs;
+use std::path::PathBuf;
 use std::process::Command;
 
 #[test]
 #[ignore] // TODO: Implement inline module code generation (separate from extern fn)
 fn test_inline_mod_with_extern_fn_generates_correct_code() {
-    let wj_compiler =
-        std::env::var("WJ_COMPILER").unwrap_or_else(|_| "./target/release/wj".to_string());
+    let wj_compiler = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("target/release/wj");
 
     let wj_file = "tests/inline_mod_extern_fn_test.wj";
 
