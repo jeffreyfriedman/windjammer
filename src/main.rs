@@ -1263,20 +1263,19 @@ fn compile_file_with_compiler(
     module_compiler.compiling_files.insert(path_key.clone());
 
     // THE WINDJAMMER WAY: Always cleanup, whether we succeed or fail
-    // Wrap the actual compilation in a closure, then remove path from set regardless of result
-    let result = (|| -> Result<(HashSet<String>, Vec<String>)> {
-        compile_file_impl(
-            source_root,
-            input_path,
-            module_compiler,
-            output_dir,
-            is_multi_file_project,
-            store_program,
-            &path_key,
-        )
-    })();
+    // Call the implementation, then remove path from set regardless of result
+    let result = compile_file_impl(
+        source_root,
+        input_path,
+        module_compiler,
+        output_dir,
+        is_multi_file_project,
+        store_program,
+        &path_key,
+    );
 
     // Remove path from compilation set now that we're done (success or failure)
+    // This runs whether result is Ok or Err
     module_compiler.compiling_files.remove(&path_key);
 
     result
