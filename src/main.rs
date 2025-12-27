@@ -1232,6 +1232,14 @@ fn compile_file_with_compiler(
     if module_compiler.compiling_files.contains(&path_key) {
         // Already compiling this file in the current chain - skip to prevent infinite recursion
         // This is OK and expected for circular imports that have already been handled
+        eprintln!(
+            "⚠️  RECURSION GUARD: Skipping {} (already in compilation chain)",
+            path_key
+        );
+        eprintln!(
+            "   Currently compiling: {}",
+            module_compiler.compiling_files.len()
+        );
         return Ok((HashSet::new(), Vec::new()));
     }
 

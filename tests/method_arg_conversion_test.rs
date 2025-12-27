@@ -136,11 +136,23 @@ fn test_ends_with_with_literal() {
 fn test_fixture_compiles_successfully() {
     let generated = compile_fixture("method_arg_conversion").expect("Compilation failed");
 
+    // Debug output to understand CI failures
+    if generated.is_empty() {
+        eprintln!("WARNING: Generated code is EMPTY!");
+    } else {
+        eprintln!("Generated code length: {} bytes", generated.len());
+    }
+
     // Basic sanity check - should have the struct
     assert!(
         generated.contains("struct ItemList"),
-        "Should generate ItemList struct: {}",
-        generated
+        "Should generate ItemList struct (length={}): {}",
+        generated.len(),
+        if generated.len() > 500 {
+            &generated[..500]
+        } else {
+            &generated
+        }
     );
 
     // Should have impl block
