@@ -1223,11 +1223,23 @@ fn compile_file_with_compiler(
 
     // Normalize path for consistent comparison across platforms
     // Remove UNC prefix on Windows and use forward slashes
-    let path_key = canonical_path
-        .to_string_lossy()
-        .replace("\\\\?\\", "") // Remove Windows UNC prefix
-        .replace('\\', "/") // Normalize to forward slashes
-        .to_lowercase(); // Case-insensitive on Windows
+    let path_key = {
+        let normalized = canonical_path
+            .to_string_lossy()
+            .replace("\\\\?\\", "") // Remove Windows UNC prefix
+            .replace('\\', "/"); // Normalize to forward slashes
+        
+        // Only lowercase on Windows (case-insensitive filesystem)
+        // macOS/Linux filesystems are case-sensitive!
+        #[cfg(target_os = "windows")]
+        {
+            normalized.to_lowercase()
+        }
+        #[cfg(not(target_os = "windows"))]
+        {
+            normalized
+        }
+    };
 
     if module_compiler.compiling_files.contains(&path_key) {
         // Already compiling this file in the current chain - skip to prevent infinite recursion
