@@ -1,6 +1,7 @@
-//! TDD Test: Auto-cast between usize and i32 in comparisons and assignments
+//! TDD Test: Auto-cast between usize and int in comparisons and assignments
 //!
-//! When comparing/assigning i32 variable with .len() (usize), auto-cast.
+//! When comparing/assigning int variable with .len() (usize), auto-cast.
+//! Note: Windjammer's `int` type maps to `i64` in Rust.
 
 use std::fs;
 use std::process::Command;
@@ -56,13 +57,12 @@ fn compile_and_verify(code: &str) -> (bool, String, String) {
 }
 
 #[test]
-#[ignore] // TODO: Implement smart usize<->i32 casting in binary ops
 fn test_i32_compare_with_len() {
-    // i32 compared with .len() should auto-cast
+    // int compared with .len() should auto-cast
     let code = r#"
 pub struct Container {
     items: Vec<i32>,
-    selected: i32,
+    selected: int,
 }
 
 impl Container {
@@ -87,13 +87,12 @@ impl Container {
 }
 
 #[test]
-#[ignore] // TODO: Implement smart usize<->i32 casting in assignments
 fn test_i32_assign_from_len() {
-    // Assigning len() result to i32 should auto-cast
+    // Assigning len() result to int should auto-cast
     let code = r#"
 pub struct Container {
     items: Vec<i32>,
-    count: i32,
+    count: int,
 }
 
 impl Container {

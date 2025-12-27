@@ -119,9 +119,10 @@ fn test_int_field_compared_with_len_in_if() {
 
     let generated = compile_code(code).expect("Compilation failed");
 
-    // Should cast .len() to i64 in if condition
+    // Should cast .len() to i64 in if condition (since `int` maps to i64)
     assert!(
-        generated.contains("self.data.len() as i64"),
+        generated.contains("self.data.len() as i64")
+            || generated.contains("self.data.len()) as i64"),
         "Should cast .len() to i64 in if condition, got:\n{}",
         generated
     );
