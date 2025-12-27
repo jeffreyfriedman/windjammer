@@ -86,7 +86,26 @@ impl MethodCallAnalyzer {
             }
         }
 
-        // Check signature first (most reliable)
+        // Check stdlib methods FIRST - these have well-known signatures that must be respected
+        // even if we have a different signature in the registry (might be a user-defined method
+        // with the same name)
+        let is_stdlib_method = matches!(
+            method,
+            "remove"
+                | "get"
+                | "contains_key"
+                | "get_mut"
+                | "contains"
+                | "binary_search"
+                | "starts_with"
+                | "ends_with"
+        );
+
+        if is_stdlib_method {
+            return Self::needs_stdlib_ref(method, arg, usize_variables, current_function_params);
+        }
+
+        // Check signature for non-stdlib methods
         if let Some(sig) = method_signature {
             let sig_param_idx = if sig.has_self_receiver {
                 param_idx + 1
@@ -98,8 +117,8 @@ impl MethodCallAnalyzer {
             }
         }
 
-        // Fallback to stdlib heuristics
-        Self::needs_stdlib_ref(method, arg, usize_variables, current_function_params)
+        // Final fallback
+        false
     }
 
     /// Determine if we should add .clone() to this argument
@@ -203,33 +222,58 @@ impl MethodCallAnalyzer {
         usize_variables: &HashSet<String>,
         current_function_params: &[Parameter],
     ) -> bool {
-        if let Expression::Identifier { name, .. } = arg {
-            // Check if it's a known usize variable
-            if usize_variables.contains(name) {
-                return true;
-            }
+        match arg {
+            Expression::Identifier { name, .. } => {
+                // Check if it's a known usize variable
+                if usize_variables.contains(name) {
+                    return true;
+                }
 
-            // Heuristics for Copy type variable names
-            // IMPORTANT: Only use heuristics for clearly numeric types
-            // DO NOT assume "entity" is Copy - Entity structs are usually NOT Copy!
-            if name.contains("usize") || name.contains("index") {
-                return true;
-            }
+                // Heuristics for Copy type variable names
+                // IMPORTANT: Only use heuristics for clearly numeric types
+                // DO NOT assume "entity" is Copy - Entity structs are usually NOT Copy!
+                if name.contains("usize") || name.contains("index") {
+                    return true;
+                }
 
-            if matches!(name.as_str(), "i" | "j" | "k" | "idx" | "pos" | "position") {
-                return true;
-            }
+                if matches!(name.as_str(), "i" | "j" | "k" | "idx" | "pos" | "position") {
+                    return true;
+                }
 
-            // Check if it's a usize parameter
-            if current_function_params
-                .iter()
-                .any(|p| &p.name == name && matches!(&p.type_, Type::Custom(t) if t == "usize"))
-            {
-                return true;
+                // Check if it's a usize parameter
+                if current_function_params
+                    .iter()
+                    .any(|p| &p.name == name && matches!(&p.type_, Type::Custom(t) if t == "usize"))
+                {
+                    return true;
+                }
+
+                false
             }
+            Expression::FieldAccess { field, .. } => {
+                // Field access like entity.id or (*entity_ref).id
+                // Heuristics for Copy type field names
+                matches!(
+                    field.as_str(),
+                    "id" | "idx"
+                        | "index"
+                        | "count"
+                        | "size"
+                        | "len"
+                        | "width"
+                        | "height"
+                        | "x"
+                        | "y"
+                        | "z"
+                        | "w"
+                        | "r"
+                        | "g"
+                        | "b"
+                        | "a"
+                )
+            }
+            _ => false,
         }
-
-        false
     }
 
     /// Check if a Type annotation is a Copy type
