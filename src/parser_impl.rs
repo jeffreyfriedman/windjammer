@@ -138,9 +138,12 @@ impl Parser {
     }
 
     /// Allocate an expression in the arena
-    /// SAFETY: We transmute the lifetime from 'static (arena storage) to 'parser (Parser lifetime)
-    /// This is safe because Parser owns the arena, so references live as long as Parser does
-    pub(crate) fn alloc_expr<'parser>(&'parser self, expr: Expression<'static>) -> &'parser Expression<'parser> {
+    /// SAFETY: We transmute the lifetime from 'static (arena storage) to 'ast (result lifetime)
+    /// This is safe because:
+    /// 1. Parser owns the arena, so references live as long as Parser does
+    /// 2. We use a separate 'ast lifetime (not tied to &self borrow) to allow multiple allocations
+    /// 3. The arena uses interior mutability (Cell), so &self is sufficient
+    pub(crate) fn alloc_expr<'ast>(&self, expr: Expression<'static>) -> &'ast Expression<'ast> {
         unsafe {
             let ptr = self.expr_arena.alloc(expr);
             std::mem::transmute(ptr)
@@ -149,7 +152,7 @@ impl Parser {
 
     /// Allocate a statement in the arena
     /// SAFETY: Same as alloc_expr
-    pub(crate) fn alloc_stmt<'parser>(&'parser self, stmt: Statement<'static>) -> &'parser Statement<'parser> {
+    pub(crate) fn alloc_stmt<'ast>(&self, stmt: Statement<'static>) -> &'ast Statement<'ast> {
         unsafe {
             let ptr = self.stmt_arena.alloc(stmt);
             std::mem::transmute(ptr)
@@ -158,7 +161,7 @@ impl Parser {
 
     /// Allocate a pattern in the arena
     /// SAFETY: Same as alloc_expr
-    pub(crate) fn alloc_pattern<'parser>(&'parser self, pattern: Pattern<'static>) -> &'parser Pattern<'parser> {
+    pub(crate) fn alloc_pattern<'ast>(&self, pattern: Pattern<'static>) -> &'ast Pattern<'ast> {
         unsafe {
             let ptr = self.pattern_arena.alloc(pattern);
             std::mem::transmute(ptr)
