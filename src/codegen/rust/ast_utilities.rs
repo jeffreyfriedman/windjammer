@@ -87,7 +87,7 @@ pub fn extract_field_access_path(expr: &Expression) -> Option<String> {
         Expression::Index { object, index, .. } => {
             // Build path: object[index]
             // For display purposes, we try to show the index value if it's a literal
-            let index_str = match index.as_ref() {
+            let index_str = match index {
                 Expression::Literal { value, .. } => format!("{:?}", value),
                 _ => "_".to_string(), // Non-literal index
             };
