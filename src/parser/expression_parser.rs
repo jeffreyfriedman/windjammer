@@ -526,22 +526,23 @@ impl Parser {
                     let body = self.parse_block_statements()?;
                     self.expect(Token::RBrace)?;
                     // Wrap in a statement expression
-                    Expression::Block {
-                        statements: vec![Statement::Thread {
-                            body,
-                            location: self.current_location(),
-                        }],
+                    let thread_stmt = self.alloc_stmt(Statement::Thread {
+                        body,
                         location: self.current_location(),
-                    }
+                    });
+                    self.alloc_expr(Expression::Block {
+                        statements: vec![thread_stmt],
+                        location: self.current_location(),
+                    })
                 } else {
                     // Module path like thread::sleep_seconds
                     // Parse as identifier and let postfix operators handle ::
                     let name = "thread".to_string();
                     self.advance();
-                    Expression::Identifier {
+                    self.alloc_expr(Expression::Identifier {
                         name,
                         location: self.current_location(),
-                    }
+                    })
                 }
             }
             Token::Async => {
@@ -553,21 +554,22 @@ impl Parser {
                     let body = self.parse_block_statements()?;
                     self.expect(Token::RBrace)?;
                     // Wrap in a statement expression
-                    Expression::Block {
-                        statements: vec![Statement::Async {
-                            body,
-                            location: self.current_location(),
-                        }],
+                    let async_stmt = self.alloc_stmt(Statement::Async {
+                        body,
                         location: self.current_location(),
-                    }
+                    });
+                    self.alloc_expr(Expression::Block {
+                        statements: vec![async_stmt],
+                        location: self.current_location(),
+                    })
                 } else {
                     // Module path like async::something
                     let name = "async".to_string();
                     self.advance();
-                    Expression::Identifier {
+                    self.alloc_expr(Expression::Identifier {
                         name,
                         location: self.current_location(),
-                    }
+                    })
                 }
             }
             Token::LeftArrow => {
@@ -814,10 +816,10 @@ impl Parser {
                             self.parse_expression()?
                         } else {
                             // Shorthand syntax: field (implicitly field: field)
-                            Expression::Identifier {
+                            self.alloc_expr(Expression::Identifier {
                                 name: field_name.clone(),
                                 location: self.current_location(),
-                            }
+                            })
                         };
 
                         fields.push((field_name, field_value));
@@ -876,10 +878,10 @@ impl Parser {
                         }
 
                         self.expect(Token::RParen)?;
-                        Expression::Tuple {
+                        self.alloc_expr(Expression::Tuple {
                             elements: exprs,
                             location: self.current_location(),
-                        }
+                        })
                     } else {
                         // Just a parenthesized expression
                         self.expect(Token::RParen)?;
@@ -894,10 +896,10 @@ impl Parser {
                 // Check for empty array []
                 if self.current_token() == &Token::RBracket {
                     self.advance();
-                    Expression::Array {
+                    self.alloc_expr(Expression::Array {
                         elements: vec![],
                         location: self.current_location(),
-                    }
+                    })
                 } else {
                     let first_element = self.parse_expression()?;
 
@@ -977,7 +979,7 @@ impl Parser {
                 // Convert match arms into a match expression
                 // For now, wrap in a block expression
                 let match_stmt = self.alloc_stmt(Statement::Match {
-                    value: *value,
+                    value,
                     arms,
                     location: self.current_location(),
                 });

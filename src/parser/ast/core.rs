@@ -299,7 +299,7 @@ pub enum Expression<'ast> {
     },
     StructLiteral {
         name: String,
-        fields: Vec<(String, Expression<'ast>)>,
+        fields: Vec<(String, &'ast Expression<'ast>)>,
         location: SourceLocation,
     },
     MapLiteral {
@@ -359,7 +359,7 @@ pub enum Expression<'ast> {
         location: SourceLocation,
     },
     Block {
-        statements: Vec<Statement<'ast>>,
+        statements: Vec<&'ast Statement<'ast>>,
         location: SourceLocation,
     },
 }
