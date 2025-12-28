@@ -4,15 +4,15 @@ use crate::parser::*;
 use std::collections::HashMap;
 
 // Type alias for complex return type
-type ProgramAnalysisResult = (
-    Vec<AnalyzedFunction>,
+type ProgramAnalysisResult<'ast> = (
+    Vec<AnalyzedFunction<'ast>>,
     SignatureRegistry,
-    HashMap<String, HashMap<String, AnalyzedFunction>>,
+    HashMap<String, HashMap<String, AnalyzedFunction<'ast>>>,
 );
 
 #[derive(Debug, Clone)]
-pub struct AnalyzedFunction {
-    pub decl: FunctionDecl,
+pub struct AnalyzedFunction<'ast> {
+    pub decl: FunctionDecl<'ast>,
     pub inferred_ownership: HashMap<String, OwnershipMode>,
     // STRING INFERENCE: Track inferred types for string parameters (&str vs String)
     pub inferred_param_types: Vec<Type>,
@@ -239,7 +239,7 @@ impl SignatureRegistry {
     }
 }
 
-pub struct Analyzer {
+pub struct Analyzer<'ast> {
     // Track variable ownership modes (reserved for future use)
     #[allow(dead_code)]
     variables: HashMap<String, OwnershipMode>,
@@ -248,25 +248,25 @@ pub struct Analyzer {
     // Track struct definitions with @derive(Copy) to determine if they're Copy
     copy_structs: HashSet<String>,
     // Track trait definitions for impl block analysis
-    trait_definitions: HashMap<String, TraitDecl>,
+    trait_definitions: HashMap<String, TraitDecl<'ast>>,
     // Track analyzed trait methods (trait_name -> method_name -> AnalyzedFunction)
     // PUBLIC: The generator needs this for trait signature inference
-    pub analyzed_trait_methods: HashMap<String, HashMap<String, AnalyzedFunction>>,
+    pub analyzed_trait_methods: HashMap<String, HashMap<String, AnalyzedFunction<'ast>>>,
     // Track which local variables are mutated (for automatic mut inference)
     mutated_variables: HashSet<String>,
     // Track functions in the current impl block (for cross-method analysis)
-    current_impl_functions: Option<HashMap<String, crate::parser::ast::FunctionDecl>>,
+    current_impl_functions: Option<HashMap<String, crate::parser::ast::FunctionDecl<'ast>>>,
 }
 
 use std::collections::HashSet;
 
-impl Default for Analyzer {
+impl<'ast> Default for Analyzer<'ast> {
     fn default() -> Self {
         Self::new()
     }
 }
 
-impl Analyzer {
+impl<'ast> Analyzer<'ast> {
     pub fn new() -> Self {
         Self::new_with_copy_structs(HashSet::new())
     }
