@@ -24,17 +24,17 @@ impl WebWorkerGenerator {
                 else_block,
                 ..
             } => {
-                then_block.iter().any(Self::contains_spawn)
+                then_block.iter().any(|s| Self::contains_spawn(s))
                     || else_block
                         .as_ref()
-                        .is_some_and(|b| b.iter().any(Self::contains_spawn))
+                        .is_some_and(|b| b.iter().any(|s| Self::contains_spawn(s)))
             }
             _ => false,
         }
     }
 
     /// Generate Web Worker code for a spawn statement
-    pub fn generate_worker(&mut self, _body: &[Statement]) -> String {
+    pub fn generate_worker<'ast>(&mut self, _body: &[&'ast Statement<'ast>]) -> String {
         self.worker_count += 1;
         let worker_id = self.worker_count;
 
