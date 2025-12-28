@@ -64,6 +64,7 @@
 //   - parser/items.rs - Top-level item parsing
 
 use crate::lexer::Token;
+use typed_arena::Arena;
 
 // Import all AST types from the new parser::ast module
 pub use crate::parser::ast::*;
@@ -78,6 +79,15 @@ pub struct Parser {
     pub(crate) filename: String,
     #[allow(dead_code)]
     pub(crate) source: String,
+    // Arena allocators for AST nodes (eliminates recursive Drop)
+    // When Parser is dropped, these arenas drop all allocated AST nodes at once
+    // without recursive calls to Drop, solving the Windows stack overflow issue
+    //
+    // Note: We use Box<Arena> to avoid the self-referential lifetime issue.
+    // The arenas are heap-allocated and owned by Parser. References allocated
+    // from these arenas will have lifetime tied to Parser via the parse() method.
+    pub(crate) expr_arena: Box<Arena<Expression<'static>>>,
+    pub(crate) stmt_arena: Box<Arena<Statement<'static>>>,
 }
 
 impl Parser {
