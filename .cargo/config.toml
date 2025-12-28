@@ -1,6 +1,8 @@
 # Windows-specific configuration to increase stack size
-# Windows default stack is 1MB, this increases it to 16MB for debug builds
-# Debug builds use more stack due to less optimization and no tail-call optimization
+# NOTE: build.rs dynamically sets stack size based on profile:
+#   - Debug/Test: 16MB (no optimization, deeper call stacks)
+#   - Release: 8MB (optimizations reduce stack usage)
+# These settings are fallback in case build.rs doesn't run
 # This prevents stack overflow during cleanup/Drop of deep AST structures
 
 [target.x86_64-pc-windows-msvc]
