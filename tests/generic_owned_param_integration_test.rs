@@ -7,6 +7,7 @@
 use std::process::Command;
 
 // Skip in coverage runs - subprocess spawning is very slow under tarpaulin instrumentation
+// The tarpaulin cfg is declared in Cargo.toml [lints.rust] section
 #[cfg_attr(tarpaulin, ignore)]
 #[test]
 fn test_generic_owned_param_inference() {
