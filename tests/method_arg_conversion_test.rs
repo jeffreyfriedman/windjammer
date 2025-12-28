@@ -49,6 +49,14 @@ fn compile_fixture(fixture_name: &str) -> Result<String, String> {
     eprintln!("   STDOUT length: {} bytes", compiler_output.stdout.len());
     eprintln!("   STDERR length: {} bytes", compiler_output.stderr.len());
 
+    // Always print STDERR to diagnose empty file issues
+    if !compiler_output.stderr.is_empty() {
+        eprintln!(
+            "   STDERR content:\n{}",
+            String::from_utf8_lossy(&compiler_output.stderr)
+        );
+    }
+
     if !compiler_output.status.success() {
         return Err(format!(
             "Compiler failed:\nSTDOUT: {}\nSTDERR: {}",
@@ -65,6 +73,19 @@ fn compile_fixture(fixture_name: &str) -> Result<String, String> {
     if rust_file.exists() {
         let metadata = std::fs::metadata(&rust_file).map_err(|e| e.to_string())?;
         eprintln!("   File size: {} bytes", metadata.len());
+
+        if metadata.len() == 0 {
+            eprintln!("   WARNING: Generated file is EMPTY!");
+            eprintln!(
+                "   STDOUT content:\n{}",
+                String::from_utf8_lossy(&compiler_output.stdout)
+            );
+            return Err(format!(
+                "Generated file is empty! This suggests the recursion guard or early return is triggering.\nSTDOUT: {}\nSTDERR: {}",
+                String::from_utf8_lossy(&compiler_output.stdout),
+                String::from_utf8_lossy(&compiler_output.stderr)
+            ));
+        }
     }
 
     std::fs::read_to_string(&rust_file).map_err(|e| {
