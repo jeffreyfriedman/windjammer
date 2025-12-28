@@ -216,7 +216,7 @@ impl Default for TreeShaker {
 }
 
 /// Shake the tree - remove unused code
-pub fn shake_tree(program: &Program) -> Program {
+pub fn shake_tree<'ast>(program: &Program<'ast>) -> Program<'ast> {
     TreeShaker::new().shake(program)
 }
 
