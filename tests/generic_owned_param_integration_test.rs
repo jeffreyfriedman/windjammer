@@ -6,6 +6,8 @@
 
 use std::process::Command;
 
+// Skip in coverage runs - subprocess spawning is very slow under tarpaulin instrumentation
+#[cfg_attr(tarpaulin, ignore)]
 #[test]
 fn test_generic_owned_param_inference() {
     // Compile the Windjammer test file
