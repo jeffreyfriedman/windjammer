@@ -9,7 +9,7 @@ use crate::parser_impl::Parser;
 
 impl Parser {
     /// Parse a pattern with OR support: pattern1 | pattern2 | pattern3
-    pub fn parse_pattern_with_or(&mut self) -> Result<Pattern, String> {
+    pub fn parse_pattern_with_or(&mut self) -> Result<Pattern<'static>, String> {
         let first = self.parse_pattern()?;
 
         // Check for OR patterns: pattern1 | pattern2
@@ -28,7 +28,7 @@ impl Parser {
     }
 
     /// Parse a single pattern
-    pub fn parse_pattern(&mut self) -> Result<Pattern, String> {
+    pub fn parse_pattern(&mut self) -> Result<Pattern<'static>, String> {
         match self.current_token() {
             Token::Underscore => {
                 self.advance();
