@@ -387,7 +387,7 @@ impl<'ast> Analyzer<'ast> {
     /// Register trait definitions from an external program (e.g., imported module)
     /// This allows the analyzer to use trait signatures when analyzing impl blocks
     /// in files that import traits from other modules.
-    pub fn register_traits_from_program(&mut self, program: &Program) {
+    pub fn register_traits_from_program(&mut self, program: &Program<'ast>) {
         for item in &program.items {
             if let Item::Trait { decl, .. } = item {
                 self.trait_definitions
@@ -648,7 +648,7 @@ impl<'ast> Analyzer<'ast> {
     /// THE WINDJAMMER WAY: Infer trait method signatures from ALL implementations
     /// If any impl needs &mut self, the trait gets &mut self
     /// The compiler does the work, not the user!
-    pub fn infer_trait_signatures_from_impls(&mut self, program: &Program) -> Result<(), String> {
+    pub fn infer_trait_signatures_from_impls(&mut self, program: &Program<'ast>) -> Result<(), String> {
         use std::collections::HashMap;
 
         eprintln!(
@@ -828,9 +828,9 @@ impl<'ast> Analyzer<'ast> {
     /// Analyze a function within an impl block (has access to other methods for cross-method analysis)
     fn analyze_function_in_impl(
         &mut self,
-        func: &FunctionDecl,
-        impl_block: &crate::parser::ast::ImplBlock,
-    ) -> Result<AnalyzedFunction, String> {
+        func: &FunctionDecl<'ast>,
+        impl_block: &crate::parser::ast::ImplBlock<'ast>,
+    ) -> Result<AnalyzedFunction<'ast>, String> {
         // Store current impl block for cross-method lookups
         self.current_impl_functions = Some(
             impl_block
@@ -848,7 +848,7 @@ impl<'ast> Analyzer<'ast> {
         result
     }
 
-    fn analyze_function(&mut self, func: &FunctionDecl) -> Result<AnalyzedFunction, String> {
+    fn analyze_function(&mut self, func: &FunctionDecl<'ast>) -> Result<AnalyzedFunction<'ast>, String> {
         let mut inferred_ownership = HashMap::new();
 
         // Check if this is a game decorator function
@@ -1178,7 +1178,7 @@ impl<'ast> Analyzer<'ast> {
         &self,
         param_name: &str,
         param_type: &Type,
-        body: &[Statement],
+        body: &[&'ast Statement<'ast>],
         _return_type: &Option<Type>,
     ) -> Result<OwnershipMode, String> {
         // Simple heuristic-based inference
@@ -1250,7 +1250,7 @@ impl<'ast> Analyzer<'ast> {
         }
     }
 
-    fn is_used_in_if_else_expression<'ast>(&self, name: &str, statements: &[&'ast Statement<'ast>]) -> bool {
+    fn is_used_in_if_else_expression(&self, name: &str, statements: &[&'ast Statement<'ast>]) -> bool {
         // Check if parameter is used in an if/else expression
         // Example:
         //   let x = if cond { Thing::new(...) } else { param }
@@ -1297,7 +1297,7 @@ impl<'ast> Analyzer<'ast> {
         }
     }
 
-    fn stmts_have_if_else_with_param<'ast>(&self, name: &str, stmts: &[&'ast Statement<'ast>]) -> bool {
+    fn stmts_have_if_else_with_param(&self, name: &str, stmts: &[&'ast Statement<'ast>]) -> bool {
         stmts
             .iter()
             .any(|stmt| self.stmt_has_if_else_with_param(name, stmt))
@@ -1329,7 +1329,7 @@ impl<'ast> Analyzer<'ast> {
         }
     }
 
-    fn stmts_mention_identifier<'ast>(&self, name: &str, stmts: &[&'ast Statement<'ast>]) -> bool {
+    fn stmts_mention_identifier(&self, name: &str, stmts: &[&'ast Statement<'ast>]) -> bool {
         stmts
             .iter()
             .any(|stmt| self.stmt_mentions_identifier(name, stmt))
@@ -1369,7 +1369,7 @@ impl<'ast> Analyzer<'ast> {
         }
     }
 
-    fn is_mutated<'ast>(&self, name: &str, statements: &[&'ast Statement<'ast>]) -> bool {
+    fn is_mutated(&self, name: &str, statements: &[&'ast Statement<'ast>]) -> bool {
         for stmt in statements {
             match stmt {
                 Statement::Assignment { target, .. } => {
@@ -1469,7 +1469,7 @@ impl<'ast> Analyzer<'ast> {
         }
     }
 
-    fn is_returned<'ast>(&self, name: &str, statements: &[&'ast Statement<'ast>]) -> bool {
+    fn is_returned(&self, name: &str, statements: &[&'ast Statement<'ast>]) -> bool {
         let len = statements.len();
         for (i, stmt) in statements.iter().enumerate() {
             let is_last = i == len - 1;
@@ -1574,7 +1574,7 @@ impl<'ast> Analyzer<'ast> {
         }
     }
 
-    fn is_stored<'ast>(&self, name: &str, statements: &[&'ast Statement<'ast>]) -> bool {
+    fn is_stored(&self, name: &str, statements: &[&'ast Statement<'ast>]) -> bool {
         // Check if the parameter is stored in a struct field or collection
         for stmt in statements {
             match stmt {
@@ -1742,7 +1742,7 @@ impl<'ast> Analyzer<'ast> {
         false
     }
 
-    fn is_used_in_binary_op<'ast>(&self, name: &str, statements: &[&'ast Statement<'ast>]) -> bool {
+    fn is_used_in_binary_op(&self, name: &str, statements: &[&'ast Statement<'ast>]) -> bool {
         for stmt in statements {
             match stmt {
                 Statement::Let { value, .. } => {
@@ -1846,7 +1846,7 @@ impl<'ast> Analyzer<'ast> {
     /// Check if a parameter is pattern matched with field extraction
     /// e.g., `match param { Enum::Variant { field: f } => ... }`
     /// If we borrow the parameter, `f` becomes a reference, breaking calls expecting owned values
-    fn is_pattern_matched_with_fields<'ast>(&self, name: &str, statements: &[&'ast Statement<'ast>]) -> bool {
+    fn is_pattern_matched_with_fields(&self, name: &str, statements: &[&'ast Statement<'ast>]) -> bool {
         for stmt in statements {
             match stmt {
                 #[allow(clippy::collapsible_match)]
@@ -3000,7 +3000,7 @@ impl<'ast> Analyzer<'ast> {
                 ..
             } if method == "new" && arguments.is_empty() => {
                 // Check if the object is an identifier named "Vec"
-                if let Expression::Identifier { name, .. } = object.as_ref() {
+                if let Expression::Identifier { name, .. } = object {
                     if name == "Vec" {
                         return Some(0);
                     }
@@ -3015,9 +3015,9 @@ impl<'ast> Analyzer<'ast> {
                 ..
             } => {
                 // Check if it's Vec::with_capacity or similar
-                if let Expression::FieldAccess { object, field, .. } = function.as_ref() {
+                if let Expression::FieldAccess { object, field, .. } = function {
                     // Ensure the object is "Vec"
-                    if let Expression::Identifier { name, .. } = object.as_ref() {
+                    if let Expression::Identifier { name, .. } = object {
                         if name == "Vec" && field == "with_capacity" {
                             // Try to extract capacity from first argument
                             if let Some((_, arg)) = arguments.first() {
@@ -3032,7 +3032,7 @@ impl<'ast> Analyzer<'ast> {
             // (0..n).collect::<Vec<_>>() patterns
             Expression::MethodCall { object, method, .. } if method == "collect" => {
                 // Check if object is a Range
-                if let Expression::Range { start, end, .. } = object.as_ref() {
+                if let Expression::Range { start, end, .. } = object {
                     // Try to compute range size
                     let start_val = self.extract_literal_int(start).unwrap_or(0);
                     let end_val = self.extract_literal_int(end)?;
@@ -3087,7 +3087,7 @@ impl<'ast> Analyzer<'ast> {
     fn analyze_conditional_modification(
         &self,
         var_name: &str,
-        body: &[Statement],
+        body: &[&'ast Statement<'ast>],
     ) -> Option<CowReason> {
         let mut has_read_only_path = false;
         let mut has_modifying_path = false;
@@ -3157,7 +3157,7 @@ impl<'ast> Analyzer<'ast> {
     }
 
     /// Check if a variable is modified in a block of statements
-    fn is_variable_modified<'ast>(&self, var_name: &str, statements: &[&'ast Statement<'ast>]) -> bool {
+    fn is_variable_modified(&self, var_name: &str, statements: &[&'ast Statement<'ast>]) -> bool {
         for stmt in statements {
             match stmt {
                 // Assignment to the variable
@@ -3173,7 +3173,7 @@ impl<'ast> Analyzer<'ast> {
                     expr: Expression::MethodCall { object, method, .. },
                     ..
                 } => {
-                    if let Expression::Identifier { name, .. } = object.as_ref() {
+                    if let Expression::Identifier { name, .. } = object {
                         if name == var_name && self.is_mutating_method(method) {
                             return true;
                         }
@@ -3490,7 +3490,7 @@ impl<'ast> Analyzer<'ast> {
 
     /// Check if a function uses a specific identifier (e.g., "self")
     /// This is used for auto-self inference.
-    fn function_uses_identifier<'ast>(&self, name: &str, statements: &[&'ast Statement<'ast>]) -> bool {
+    fn function_uses_identifier(&self, name: &str, statements: &[&'ast Statement<'ast>]) -> bool {
         for stmt in statements {
             if self.statement_uses_identifier(name, stmt) {
                 return true;
@@ -3709,13 +3709,13 @@ impl<'ast> Analyzer<'ast> {
 
     /// Track which local variables are mutated in a function body
     /// This enables automatic `mut` inference - users don't need to write `let mut x`
-    pub fn track_mutations<'ast>(&mut self, statements: &[&'ast Statement<'ast>]) {
+    pub fn track_mutations(&mut self, statements: &[&'ast Statement<'ast>]) {
         self.mutated_variables.clear();
         self.collect_mutations(statements);
     }
 
     /// Recursively collect all variable mutations
-    fn collect_mutations<'ast>(&mut self, statements: &[&'ast Statement<'ast>]) {
+    fn collect_mutations(&mut self, statements: &[&'ast Statement<'ast>]) {
         for stmt in statements {
             match stmt {
                 Statement::Assignment {
@@ -3805,7 +3805,7 @@ impl<'ast> Analyzer<'ast> {
     }
 
     /// Check if a variable is mutated within a specific set of statements
-    fn is_variable_mutated_in_statements<'ast>(&self, var_name: &str, statements: &[&'ast Statement<'ast>]) -> bool {
+    fn is_variable_mutated_in_statements(&self, var_name: &str, statements: &[&'ast Statement<'ast>]) -> bool {
         for stmt in statements {
             match stmt {
                 Statement::Assignment { target, .. } => {
