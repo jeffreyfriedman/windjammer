@@ -35,7 +35,7 @@ impl TreeShaker {
     }
 
     /// Shake the tree - remove unused code from the program
-    pub fn shake(&mut self, program: &Program) -> Program {
+    pub fn shake<'ast>(&mut self, program: &Program<'ast>) -> Program<'ast> {
         // Phase 1: Mark all used items starting from entry points
         self.mark_used(program);
 
@@ -51,7 +51,7 @@ impl TreeShaker {
     }
 
     /// Mark all used items starting from entry points
-    fn mark_used(&mut self, program: &Program) {
+    fn mark_used<'ast>(&mut self, program: &Program<'ast>) {
         // Start with entry points
         for entry in &self.entry_points.clone() {
             self.used_functions.insert(entry.clone());
@@ -79,7 +79,7 @@ impl TreeShaker {
     }
 
     /// Find all function calls in a block of statements
-    fn find_function_calls(&self, statements: &[Statement]) -> Vec<String> {
+    fn find_function_calls<'ast>(&self, statements: &[&'ast Statement<'ast>]) -> Vec<String> {
         let mut calls = Vec::new();
 
         for stmt in statements {
@@ -147,7 +147,7 @@ impl TreeShaker {
                 ..
             } => {
                 // Check if it's a direct function call
-                if let Expression::Identifier { name, .. } = function.as_ref() {
+                if let Expression::Identifier { name, .. } = function {
                     calls.push(name.clone());
                 }
                 calls.extend(self.find_calls_in_expression(function));
