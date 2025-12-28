@@ -238,7 +238,7 @@ impl Parser {
                         // [..end] - slice from beginning
                         self.advance(); // consume '..'
                         let end = if self.current_token() != &Token::RBracket {
-                            Some(Box::new(self.parse_expression()?))
+                            Some(self.alloc_expr(self.parse_expression()?))
                         } else {
                             None
                         };
@@ -246,8 +246,8 @@ impl Parser {
 
                         // Desugar [..end] to .slice(0, end)
                         let end_expr = end.unwrap_or_else(|| {
-                            Box::new(Expression::MethodCall {
-                                object: Box::new(left.clone()),
+                            self.alloc_expr(Expression::MethodCall {
+                                object: self.alloc_expr(left.clone()),
                                 method: "len".to_string(),
                                 type_args: None,
                                 arguments: vec![],
@@ -256,7 +256,7 @@ impl Parser {
                         });
 
                         left = Expression::MethodCall {
-                            object: Box::new(left),
+                            object: self.alloc_expr(left),
                             method: "slice".to_string(),
                             type_args: None,
                             arguments: vec![
@@ -272,14 +272,14 @@ impl Parser {
                             location: self.current_location(),
                         };
                     } else {
-                        let start_or_index = Box::new(self.parse_expression()?);
+                        let start_or_index = self.alloc_expr(self.parse_expression()?);
 
                         // Check if this is a slice or regular index
                         if self.current_token() == &Token::DotDot {
                             // [start..] or [start..end] - slice syntax
                             self.advance(); // consume '..'
                             let end = if self.current_token() != &Token::RBracket {
-                                Some(Box::new(self.parse_expression()?))
+                                Some(self.alloc_expr(self.parse_expression()?))
                             } else {
                                 None
                             };
@@ -287,8 +287,8 @@ impl Parser {
 
                             // Desugar [start..end] to .slice(start, end)
                             let end_expr = end.unwrap_or_else(|| {
-                                Box::new(Expression::MethodCall {
-                                    object: Box::new(left.clone()),
+                                self.alloc_expr(Expression::MethodCall {
+                                    object: self.alloc_expr(left.clone()),
                                     method: "len".to_string(),
                                     type_args: None,
                                     arguments: vec![],
@@ -297,7 +297,7 @@ impl Parser {
                             });
 
                             left = Expression::MethodCall {
-                                object: Box::new(left),
+                                object: self.alloc_expr(left),
                                 method: "slice".to_string(),
                                 type_args: None,
                                 arguments: vec![(None, *start_or_index), (None, *end_expr)],
@@ -307,7 +307,7 @@ impl Parser {
                             // Regular index: [i]
                             self.expect(Token::RBracket)?;
                             left = Expression::Index {
-                                object: Box::new(left),
+                                object: self.alloc_expr(left),
                                 index: start_or_index,
                                 location: self.current_location(),
                             };
@@ -338,7 +338,7 @@ impl Parser {
                             let arguments = self.parse_arguments()?;
                             self.expect(Token::RParen)?;
                             left = Expression::MethodCall {
-                                object: Box::new(left),
+                                object: self.alloc_expr(left),
                                 method: String::new(), // Empty method name signals turbofish call
                                 type_args: Some(types),
                                 arguments,
@@ -383,7 +383,7 @@ impl Parser {
                             let arguments = self.parse_arguments()?;
                             self.expect(Token::RParen)?;
                             left = Expression::MethodCall {
-                                object: Box::new(left),
+                                object: self.alloc_expr(left),
                                 method,
                                 type_args,
                                 arguments,
@@ -392,7 +392,7 @@ impl Parser {
                         } else {
                             // Just a path, treat as field access
                             left = Expression::FieldAccess {
-                                object: Box::new(left),
+                                object: self.alloc_expr(left),
                                 field: method,
                                 location: self.current_location(),
                             };
@@ -414,7 +414,7 @@ impl Parser {
                     }
                     self.expect(Token::RParen)?;
                     left = Expression::Call {
-                        function: Box::new(left),
+                        function: self.alloc_expr(left),
                         arguments,
                         location: self.current_location(),
                     };
@@ -428,9 +428,9 @@ impl Parser {
             self.advance();
             let right = self.parse_binary_expression(precedence + 1)?;
             left = Expression::Binary {
-                left: Box::new(left),
+                left: self.alloc_expr(left),
                 op,
-                right: Box::new(right),
+                right: self.alloc_expr(right),
                 location: self.current_location(),
             };
         }
@@ -451,7 +451,7 @@ impl Parser {
 
                 // Transform: left |> func becomes func(left)
                 left = Expression::Call {
-                    function: Box::new(func),
+                    function: self.alloc_expr(func),
                     arguments: vec![(None, left)], // No label for piped argument
                     location: self.current_location(),
                 };
@@ -463,8 +463,8 @@ impl Parser {
                 self.advance();
                 let value = self.parse_expression()?;
                 left = Expression::ChannelSend {
-                    channel: Box::new(left),
-                    value: Box::new(value),
+                    channel: self.alloc_expr(left),
+                    value: self.alloc_expr(value),
                     location: self.current_location(),
                 };
                 continue;
@@ -479,9 +479,9 @@ impl Parser {
                 let right = self.parse_binary_expression(precedence + 1)?;
 
                 left = Expression::Binary {
-                    left: Box::new(left),
+                    left: self.alloc_expr(left),
                     op,
-                    right: Box::new(right),
+                    right: self.alloc_expr(right),
                     location: self.current_location(),
                 };
             } else {
@@ -576,7 +576,7 @@ impl Parser {
                 self.advance();
                 let channel = self.parse_primary_expression()?;
                 Expression::ChannelRecv {
-                    channel: Box::new(channel),
+                    channel: self.alloc_expr(channel),
                     location: self.current_location(),
                 }
             }
@@ -596,7 +596,7 @@ impl Parser {
                     } else {
                         UnaryOp::Ref
                     },
-                    operand: Box::new(operand),
+                    operand: self.alloc_expr(operand),
                     location: self.current_location(),
                 }
             }
@@ -606,7 +606,7 @@ impl Parser {
                 let operand = self.parse_primary_expression()?;
                 Expression::Unary {
                     op: UnaryOp::Deref,
-                    operand: Box::new(operand),
+                    operand: self.alloc_expr(operand),
                     location: self.current_location(),
                 }
             }
@@ -616,7 +616,7 @@ impl Parser {
                 let operand = self.parse_primary_expression()?;
                 Expression::Unary {
                     op: UnaryOp::Neg,
-                    operand: Box::new(operand),
+                    operand: self.alloc_expr(operand),
                     location: self.current_location(),
                 }
             }
@@ -626,7 +626,7 @@ impl Parser {
                 let operand = self.parse_primary_expression()?;
                 Expression::Unary {
                     op: UnaryOp::Not,
-                    operand: Box::new(operand),
+                    operand: self.alloc_expr(operand),
                     location: self.current_location(),
                 }
             }
@@ -942,7 +942,7 @@ impl Parser {
                 self.advance();
                 // Parse the value to match on, but don't allow struct literals here
                 // (since we need to see the { for the match arms)
-                let value = Box::new(self.parse_match_value()?);
+                let value = self.alloc_expr(self.parse_match_value()?);
 
                 self.expect(Token::LBrace)?;
 
@@ -1108,7 +1108,7 @@ impl Parser {
                     } else {
                         // Reset and parse as a normal expression
                         self.position = checkpoint;
-                        Box::new(self.parse_expression()?)
+                        self.alloc_expr(self.parse_expression()?)
                     }
                 };
 
@@ -1134,7 +1134,7 @@ impl Parser {
                     })
                 } else {
                     // Expression closure: || expr
-                    Box::new(self.parse_expression()?)
+                    self.alloc_expr(self.parse_expression()?)
                 };
 
                 Expression::Closure {
@@ -1214,7 +1214,7 @@ impl Parser {
                 } else {
                     // Regular if expression
                     // Use parse_match_value to avoid struct literal ambiguity
-                    let condition = Box::new(self.parse_match_value()?);
+                    let condition = self.alloc_expr(self.parse_match_value()?);
 
                     self.expect(Token::LBrace)?;
                     let then_block = self.parse_block_statements()?;
@@ -1346,7 +1346,7 @@ impl Parser {
                 ) {
                     None
                 } else {
-                    Some(Box::new(self.parse_expression()?))
+                    Some(self.alloc_expr(self.parse_expression()?))
                 };
                 // Wrap in a block with a return statement
                 Expression::Block {
@@ -1390,7 +1390,7 @@ impl Parser {
                         self.advance(); // consume '.'
                         self.advance(); // consume 'await'
                         Expression::Await {
-                            expr: Box::new(expr),
+                            expr: self.alloc_expr(expr),
                             location: self.current_location(),
                         }
                     } else {
@@ -1436,7 +1436,7 @@ impl Parser {
                                     // ASI: This LParen starts a new statement, not a method call
                                     // Create a field access and break
                                     Expression::FieldAccess {
-                                        object: Box::new(expr),
+                                        object: self.alloc_expr(expr),
                                         field,
                                         location: self.current_location(),
                                     }
@@ -1446,7 +1446,7 @@ impl Parser {
                                     let arguments = self.parse_arguments()?;
                                     self.expect(Token::RParen)?;
                                     Expression::MethodCall {
-                                        object: Box::new(expr),
+                                        object: self.alloc_expr(expr),
                                         method: field,
                                         type_args,
                                         arguments,
@@ -1460,7 +1460,7 @@ impl Parser {
                             } else {
                                 // Field access
                                 Expression::FieldAccess {
-                                    object: Box::new(expr),
+                                    object: self.alloc_expr(expr),
                                     field,
                                     location: self.current_location(),
                                 }
@@ -1497,7 +1497,7 @@ impl Parser {
                             // Convert to method call with turbofish
                             // For func::<T>(), treat as a special method call on the function
                             Expression::MethodCall {
-                                object: Box::new(expr),
+                                object: self.alloc_expr(expr),
                                 method: String::new(), // Empty method name signals turbofish call
                                 type_args: Some(types),
                                 arguments,
@@ -1536,7 +1536,7 @@ impl Parser {
                             let method = method.clone();
                             self.advance();
                             Expression::MethodCall {
-                                object: Box::new(expr),
+                                object: self.alloc_expr(expr),
                                 method,
                                 type_args: None,
                                 arguments: vec![],
@@ -1594,7 +1594,7 @@ impl Parser {
                             let arguments = self.parse_arguments()?;
                             self.expect(Token::RParen)?;
                             Expression::MethodCall {
-                                object: Box::new(expr),
+                                object: self.alloc_expr(expr),
                                 method,
                                 type_args,
                                 arguments,
@@ -1603,7 +1603,7 @@ impl Parser {
                         } else {
                             // Just a path, treat as field access
                             Expression::FieldAccess {
-                                object: Box::new(expr),
+                                object: self.alloc_expr(expr),
                                 field: method,
                                 location: self.current_location(),
                             }
@@ -1623,7 +1623,7 @@ impl Parser {
                     let arguments = self.parse_arguments()?;
                     self.expect(Token::RParen)?;
                     Expression::Call {
-                        function: Box::new(expr),
+                        function: self.alloc_expr(expr),
                         arguments,
                         location: self.current_location(),
                     }
@@ -1633,7 +1633,7 @@ impl Parser {
                     // No ambiguity since we removed ternary operator
                     self.advance();
                     Expression::TryOp {
-                        expr: Box::new(expr),
+                        expr: self.alloc_expr(expr),
                         location: self.current_location(),
                     }
                 }
@@ -1645,7 +1645,7 @@ impl Parser {
                         // [..end] - slice from beginning
                         self.advance(); // consume '..'
                         let end = if self.current_token() != &Token::RBracket {
-                            Some(Box::new(self.parse_expression()?))
+                            Some(self.alloc_expr(self.parse_expression()?))
                         } else {
                             None
                         };
@@ -1663,7 +1663,7 @@ impl Parser {
                         });
 
                         Expression::MethodCall {
-                            object: Box::new(expr),
+                            object: self.alloc_expr(expr),
                             method: "slice".to_string(),
                             type_args: None,
                             arguments: vec![
@@ -1689,7 +1689,7 @@ impl Parser {
                             // [start..] or [start..end] - slice syntax
                             self.advance(); // consume '..'
                             let end = if self.current_token() != &Token::RBracket {
-                                Some(Box::new(self.parse_expression()?))
+                                Some(self.alloc_expr(self.parse_expression()?))
                             } else {
                                 None
                             };
@@ -1707,7 +1707,7 @@ impl Parser {
                             });
 
                             Expression::MethodCall {
-                                object: Box::new(expr),
+                                object: self.alloc_expr(expr),
                                 method: "slice".to_string(),
                                 type_args: None,
                                 arguments: vec![(None, start_or_index), (None, *end_expr)],
@@ -1717,8 +1717,8 @@ impl Parser {
                             // Regular index: [i]
                             self.expect(Token::RBracket)?;
                             Expression::Index {
-                                object: Box::new(expr),
-                                index: Box::new(start_or_index),
+                                object: self.alloc_expr(expr),
+                                index: self.alloc_expr(start_or_index),
                                 location: self.current_location(),
                             }
                         }
@@ -1738,8 +1738,8 @@ impl Parser {
                     self.advance();
                     let end = self.parse_primary_expression()?;
                     Expression::Range {
-                        start: Box::new(expr),
-                        end: Box::new(end),
+                        start: self.alloc_expr(expr),
+                        end: self.alloc_expr(end),
                         inclusive,
                         location: self.current_location(),
                     }
@@ -1748,7 +1748,7 @@ impl Parser {
                     self.advance();
                     let type_ = self.parse_type()?;
                     Expression::Cast {
-                        expr: Box::new(expr),
+                        expr: self.alloc_expr(expr),
                         type_,
                         location: self.current_location(),
                     }
