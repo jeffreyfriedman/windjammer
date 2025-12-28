@@ -1714,10 +1714,11 @@ fn compile_file_impl(
     // Write the file using standard library (cross-platform compatible)
     std::fs::write(&output_file, &combined_code)?;
 
-    // CRITICAL FIX (Unix only): Sync file to disk to prevent race conditions in CI
+    // CRITICAL FIX (Linux only): Sync file to disk to prevent race conditions in CI
     // Ubuntu CI has aggressive file system caching - tests can read empty files
-    // Windows doesn't need this and has different file I/O behavior
-    #[cfg(not(target_os = "windows"))]
+    // Windows and macOS don't need this
+    // TEMPORARILY DISABLED ON MACOS to debug CI issues
+    #[cfg(target_os = "linux")]
     {
         let file = std::fs::File::open(&output_file)?;
         file.sync_data()?;
