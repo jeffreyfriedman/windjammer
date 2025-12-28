@@ -9,17 +9,17 @@ use crate::parser::ast::*;
 use crate::parser_impl::Parser;
 
 impl Parser {
-    pub(crate) fn parse_expression(&mut self) -> Result<Expression, String> {
+    pub(crate) fn parse_expression<'parser>(&'parser mut self) -> Result<Expression<'parser>, String> {
         self.parse_ternary_expression()
     }
 
-    fn parse_ternary_expression(&mut self) -> Result<Expression, String> {
+    fn parse_ternary_expression<'parser>(&'parser mut self) -> Result<Expression<'parser>, String> {
         // Ternary operator removed - use if/else expressions instead
         // This simplifies the parser and eliminates ambiguity with TryOp (?)
         self.parse_binary_expression(0)
     }
 
-    pub(crate) fn parse_match_value(&mut self) -> Result<Expression, String> {
+    pub(crate) fn parse_match_value<'parser>(&'parser mut self) -> Result<Expression<'parser>, String> {
         // Parse a non-struct-literal expression for match values
         // This is basically parse_binary_expression but without struct literal support
         let mut left = match self.current_token() {
@@ -131,7 +131,7 @@ impl Parser {
                     } else {
                         UnaryOp::Ref
                     },
-                    operand: Box::new(inner),
+                    operand: self.alloc_expr(inner),
                     location: self.current_location(),
                 }
             }
@@ -141,7 +141,7 @@ impl Parser {
                 let inner = self.parse_match_value()?;
                 Expression::Unary {
                     op: UnaryOp::Deref,
-                    operand: Box::new(inner),
+                    operand: self.alloc_expr(inner),
                     location: self.current_location(),
                 }
             }
@@ -151,7 +151,7 @@ impl Parser {
                 let inner = self.parse_match_value()?;
                 Expression::Unary {
                     op: UnaryOp::Neg,
-                    operand: Box::new(inner),
+                    operand: self.alloc_expr(inner),
                     location: self.current_location(),
                 }
             }
@@ -161,7 +161,7 @@ impl Parser {
                 let inner = self.parse_match_value()?;
                 Expression::Unary {
                     op: UnaryOp::Not,
-                    operand: Box::new(inner),
+                    operand: self.alloc_expr(inner),
                     location: self.current_location(),
                 }
             }
@@ -211,7 +211,7 @@ impl Parser {
                         self.advance(); // consume '.'
                         self.advance(); // consume 'await'
                         left = Expression::Await {
-                            expr: Box::new(left),
+                            expr: self.alloc_expr(left),
                             location: self.current_location(),
                         };
                     } else {
@@ -224,7 +224,7 @@ impl Parser {
                             return Err("Expected field name after .".to_string());
                         };
                         left = Expression::FieldAccess {
-                            object: Box::new(left),
+                            object: self.alloc_expr(left),
                             field,
                             location: self.current_location(),
                         };
@@ -438,7 +438,7 @@ impl Parser {
         Ok(left)
     }
 
-    fn parse_binary_expression(&mut self, min_precedence: u8) -> Result<Expression, String> {
+    fn parse_binary_expression<'parser>(&'parser mut self, min_precedence: u8) -> Result<Expression<'parser>, String> {
         let mut left = self.parse_primary_expression()?;
 
         loop {
@@ -516,7 +516,7 @@ impl Parser {
         }
     }
 
-    fn parse_primary_expression(&mut self) -> Result<Expression, String> {
+    fn parse_primary_expression<'parser>(&'parser mut self) -> Result<Expression<'parser>, String> {
         let mut expr = match self.current_token() {
             Token::Thread => {
                 // Check if this is a thread block or a module path
@@ -1802,7 +1802,7 @@ impl Parser {
         self.tokens.get(self.position + offset).map(|t| &t.token)
     }
 
-    fn parse_arguments(&mut self) -> Result<Vec<(Option<String>, Expression)>, String> {
+    fn parse_arguments<'parser>(&'parser mut self) -> Result<Vec<(Option<String>, Expression<'parser>)>, String> {
         let mut args = Vec::new();
 
         while self.current_token() != &Token::RParen {
