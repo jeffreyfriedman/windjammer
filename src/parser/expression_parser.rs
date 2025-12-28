@@ -575,10 +575,10 @@ impl Parser {
                 // Channel receive: <-ch
                 self.advance();
                 let channel = self.parse_primary_expression()?;
-                Expression::ChannelRecv {
-                    channel: self.alloc_expr(channel),
+                self.alloc_expr(Expression::ChannelRecv {
+                    channel,
                     location: self.current_location(),
-                }
+                })
             }
             Token::Ampersand => {
                 // Reference: &expr or &mut expr
@@ -590,85 +590,85 @@ impl Parser {
                     false
                 };
                 let operand = self.parse_primary_expression()?;
-                Expression::Unary {
+                self.alloc_expr(Expression::Unary {
                     op: if is_mut {
                         UnaryOp::MutRef
                     } else {
                         UnaryOp::Ref
                     },
-                    operand: self.alloc_expr(operand),
+                    operand,
                     location: self.current_location(),
-                }
+                })
             }
             Token::Star => {
                 // Dereference: *expr
                 self.advance();
                 let operand = self.parse_primary_expression()?;
-                Expression::Unary {
+                self.alloc_expr(Expression::Unary {
                     op: UnaryOp::Deref,
-                    operand: self.alloc_expr(operand),
+                    operand,
                     location: self.current_location(),
-                }
+                })
             }
             Token::Minus => {
                 // Negation: -expr
                 self.advance();
                 let operand = self.parse_primary_expression()?;
-                Expression::Unary {
+                self.alloc_expr(Expression::Unary {
                     op: UnaryOp::Neg,
-                    operand: self.alloc_expr(operand),
+                    operand,
                     location: self.current_location(),
-                }
+                })
             }
             Token::Bang => {
                 // Logical not: !expr
                 self.advance();
                 let operand = self.parse_primary_expression()?;
-                Expression::Unary {
+                self.alloc_expr(Expression::Unary {
                     op: UnaryOp::Not,
-                    operand: self.alloc_expr(operand),
+                    operand,
                     location: self.current_location(),
-                }
+                })
             }
             Token::Self_ => {
                 // self keyword used in expressions
                 self.advance();
-                Expression::Identifier {
+                self.alloc_expr(Expression::Identifier {
                     name: "self".to_string(),
                     location: self.current_location(),
-                }
+                })
             }
             Token::IntLiteral(n) => {
                 let n = *n;
                 self.advance();
-                Expression::Literal {
+                self.alloc_expr(Expression::Literal {
                     value: Literal::Int(n),
                     location: self.current_location(),
-                }
+                })
             }
             Token::FloatLiteral(f) => {
                 let f = *f;
                 self.advance();
-                Expression::Literal {
+                self.alloc_expr(Expression::Literal {
                     value: Literal::Float(f),
                     location: self.current_location(),
-                }
+                })
             }
             Token::StringLiteral(s) => {
                 let s = s.clone();
                 self.advance();
-                Expression::Literal {
+                self.alloc_expr(Expression::Literal {
                     value: Literal::String(s),
                     location: self.current_location(),
-                }
+                })
             }
             Token::CharLiteral(c) => {
                 let c = *c;
                 self.advance();
-                Expression::Literal {
+                self.alloc_expr(Expression::Literal {
                     value: Literal::Char(c),
                     location: self.current_location(),
-                }
+                })
             }
             Token::InterpolatedString(parts) => {
                 // Convert interpolated string to format! macro call
@@ -707,26 +707,27 @@ impl Parser {
                 }
 
                 // Create format! macro invocation
-                let mut macro_args = vec![Expression::Literal {
+                let format_lit = self.alloc_expr(Expression::Literal {
                     value: Literal::String(format_string),
                     location: self.current_location(),
-                }];
+                });
+                let mut macro_args = vec![format_lit];
                 macro_args.extend(args);
 
-                Expression::MacroInvocation {
+                self.alloc_expr(Expression::MacroInvocation {
                     name: "format".to_string(),
                     args: macro_args,
                     delimiter: MacroDelimiter::Parens,
                     location: self.current_location(),
-                }
+                })
             }
             Token::BoolLiteral(b) => {
                 let b = *b;
                 self.advance();
-                Expression::Literal {
+                self.alloc_expr(Expression::Literal {
                     value: Literal::Bool(b),
                     location: self.current_location(),
-                }
+                })
             }
             Token::Ident(name) => {
                 let mut qualified_name = name.clone();
