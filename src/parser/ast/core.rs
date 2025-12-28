@@ -49,7 +49,7 @@ pub struct FunctionDecl<'ast> {
     pub is_async: bool,
     pub parameters: Vec<Parameter>,
     pub return_type: Option<Type>,
-    pub body: Vec<Statement<'ast>>,        // Empty for extern functions
+    pub body: Vec<&'ast Statement<'ast>>,        // Empty for extern functions
     pub parent_type: Option<String>, // The type name if this function is in an impl block
     pub doc_comment: Option<String>, // Documentation comment (/// lines)
 }
