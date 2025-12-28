@@ -336,13 +336,13 @@ impl Parser {
                             self.advance();
                             let arguments = self.parse_arguments()?;
                             self.expect(Token::RParen)?;
-                            left = Expression::MethodCall {
-                                object: self.alloc_expr(left),
+                            left = self.alloc_expr(Expression::MethodCall {
+                                object: left,
                                 method: String::new(), // Empty method name signals turbofish call
                                 type_args: Some(types),
                                 arguments,
                                 location: self.current_location(),
-                            };
+                            });
                         } else {
                             return Err("Expected '(' after turbofish".to_string());
                         }
@@ -381,20 +381,20 @@ impl Parser {
                             self.advance();
                             let arguments = self.parse_arguments()?;
                             self.expect(Token::RParen)?;
-                            left = Expression::MethodCall {
-                                object: self.alloc_expr(left),
+                            left = self.alloc_expr(Expression::MethodCall {
+                                object: left,
                                 method,
                                 type_args,
                                 arguments,
                                 location: self.current_location(),
-                            };
+                            });
                         } else {
                             // Just a path, treat as field access
-                            left = Expression::FieldAccess {
-                                object: self.alloc_expr(left),
+                            left = self.alloc_expr(Expression::FieldAccess {
+                                object: left,
                                 field: method,
                                 location: self.current_location(),
-                            };
+                            });
                         }
                     } else {
                         return Err("Expected '<' or identifier after '::'".to_string());
@@ -412,11 +412,11 @@ impl Parser {
                         }
                     }
                     self.expect(Token::RParen)?;
-                    left = Expression::Call {
-                        function: self.alloc_expr(left),
+                    left = self.alloc_expr(Expression::Call {
+                        function: left,
                         arguments,
                         location: self.current_location(),
-                    };
+                    });
                 }
                 _ => break,
             }
@@ -426,12 +426,12 @@ impl Parser {
         while let Some((op, precedence)) = self.get_binary_op() {
             self.advance();
             let right = self.parse_binary_expression(precedence + 1)?;
-            left = Expression::Binary {
-                left: self.alloc_expr(left),
+            left = self.alloc_expr(Expression::Binary {
+                left,
                 op,
-                right: self.alloc_expr(right),
+                right,
                 location: self.current_location(),
-            };
+            });
         }
 
         Ok(left)
@@ -449,11 +449,11 @@ impl Parser {
                 let func = self.parse_primary_expression()?;
 
                 // Transform: left |> func becomes func(left)
-                left = Expression::Call {
-                    function: self.alloc_expr(func),
+                left = self.alloc_expr(Expression::Call {
+                    function: func,
                     arguments: vec![(None, left)], // No label for piped argument
                     location: self.current_location(),
-                };
+                });
                 continue;
             }
 
@@ -461,11 +461,11 @@ impl Parser {
             if self.current_token() == &Token::LeftArrow {
                 self.advance();
                 let value = self.parse_expression()?;
-                left = Expression::ChannelSend {
-                    channel: self.alloc_expr(left),
-                    value: self.alloc_expr(value),
+                left = self.alloc_expr(Expression::ChannelSend {
+                    channel: left,
+                    value,
                     location: self.current_location(),
-                };
+                });
                 continue;
             }
 
@@ -477,12 +477,12 @@ impl Parser {
                 self.advance();
                 let right = self.parse_binary_expression(precedence + 1)?;
 
-                left = Expression::Binary {
-                    left: self.alloc_expr(left),
+                left = self.alloc_expr(Expression::Binary {
+                    left,
                     op,
-                    right: self.alloc_expr(right),
+                    right,
                     location: self.current_location(),
-                };
+                });
             } else {
                 break;
             }
