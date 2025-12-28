@@ -1108,7 +1108,7 @@ impl Parser {
                     } else {
                         // Reset and parse as a normal expression
                         self.position = checkpoint;
-                        self.alloc_expr(self.parse_expression()?)
+                        self.parse_expression()?
                     }
                 };
 
@@ -1134,7 +1134,7 @@ impl Parser {
                     })
                 } else {
                     // Expression closure: || expr
-                    self.alloc_expr(self.parse_expression()?)
+                    self.parse_expression()?
                 };
 
                 self.alloc_expr(Expression::Closure {
@@ -1181,40 +1181,43 @@ impl Parser {
                     //     pattern => { then_block }
                     //     _ => { else_block }
                     // }
+                    let then_body = self.alloc_expr(Expression::Block {
+                        statements: then_block,
+                        location: self.current_location(),
+                    });
+                    
                     let mut arms = vec![MatchArm {
                         pattern,
                         guard: None,
-                        body: Expression::Block {
-                            statements: then_block,
-                            location: self.current_location(),
-                        },
+                        body: then_body,
                     }];
 
                     if let Some(else_block) = else_block {
+                        let else_body = self.alloc_expr(Expression::Block {
+                            statements: else_block,
+                            location: self.current_location(),
+                        });
                         arms.push(MatchArm {
                             pattern: Pattern::Wildcard,
                             guard: None,
-                            body: Expression::Block {
-                                statements: else_block,
-                                location: self.current_location(),
-                            },
+                            body: else_body,
                         });
                     }
 
-                    let match_stmt = Statement::Match {
+                    let match_stmt = self.alloc_stmt(Statement::Match {
                         value: expr,
                         arms,
                         location: self.current_location(),
-                    };
+                    });
 
-                    Expression::Block {
+                    self.alloc_expr(Expression::Block {
                         statements: vec![match_stmt],
                         location: self.current_location(),
-                    }
+                    })
                 } else {
                     // Regular if expression
                     // Use parse_match_value to avoid struct literal ambiguity
-                    let condition = self.alloc_expr(self.parse_match_value()?);
+                    let condition = self.parse_match_value()?;
 
                     self.expect(Token::LBrace)?;
                     let then_block = self.parse_block_statements()?;
@@ -1240,17 +1243,17 @@ impl Parser {
 
                     // Convert to expression by wrapping in a block with an if statement
                     // that returns the value
-                    let if_stmt = Statement::If {
-                        condition: *condition,
+                    let if_stmt = self.alloc_stmt(Statement::If {
+                        condition,
                         then_block,
                         else_block,
                         location: self.current_location(),
-                    };
+                    });
 
-                    Expression::Block {
+                    self.alloc_expr(Expression::Block {
                         statements: vec![if_stmt],
                         location: self.current_location(),
-                    }
+                    })
                 }
             }
             Token::Unsafe => {

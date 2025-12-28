@@ -303,7 +303,7 @@ pub enum Expression<'ast> {
         location: SourceLocation,
     },
     MapLiteral {
-        pairs: Vec<(Expression<'ast>, Expression<'ast>)>, // {key: value, ...}
+        pairs: Vec<(&'ast Expression<'ast>, &'ast Expression<'ast>)>, // {key: value, ...}
         location: SourceLocation,
     },
     Range {
