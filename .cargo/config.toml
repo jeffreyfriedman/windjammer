@@ -1,16 +1,14 @@
 # Cross-platform stack size configuration
-# This affects ALL binaries and tests, not just the main binary
 
-# Windows: Increase stack from default 1MB to prevent overflow
-# - Debug/Test builds need 16MB (no tail-call optimization)
-# - These settings apply to all executables including tests
+# Windows: Massively increase stack size to handle deep AST Drop chains
+# The compiler has deeply nested AST structures that overflow during cleanup
+# Try 64MB - if this doesn't work, the problem is structural, not size
 [target.x86_64-pc-windows-msvc]
-rustflags = ["-C", "link-arg=/STACK:16777216"]
+rustflags = ["-C", "link-arg=/STACK:67108864", "-C", "link-arg=/DEBUG"]
 
 [target.x86_64-pc-windows-gnu]
-rustflags = ["-C", "link-arg=-Wl,--stack,16777216"]
+rustflags = ["-C", "link-arg=-Wl,--stack,67108864"]
 
-# Set minimum stack size for all threads (including test threads)
-# This environment variable is read by the Rust runtime
+# Set minimum stack size for worker threads
 [env]
-RUST_MIN_STACK = "16777216"
+RUST_MIN_STACK = "67108864"
