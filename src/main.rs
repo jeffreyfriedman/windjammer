@@ -1711,21 +1711,22 @@ fn compile_file_impl(
         eprintln!("    rust_code length: check generator output");
     }
 
-    // Write the file using standard library (cross-platform compatible)
-    std::fs::write(&output_file, &combined_code)?;
-
-    // CRITICAL FIX: Sync file to disk to prevent race conditions (Linux only)
-    // macOS and Windows don't have the same aggressive caching issues
-    // The sync + sleep was interfering with macOS file system operations
-    #[cfg(target_os = "linux")]
+    // Write file with explicit control over flush and sync
+    // This ensures the write completes before we return, preventing race conditions
+    // where tests read the file before the OS has flushed buffers
     {
         use std::io::Write;
-        let mut file = std::fs::OpenOptions::new().write(true).open(&output_file)?;
-        file.flush()?;
+        let mut file = std::fs::File::create(&output_file)?;
+        file.write_all(combined_code.as_bytes())?;
+        file.flush()?; // Ensure data is written to OS buffers
+
+        // On Linux, also force OS to write buffers to disk (Ubuntu CI has aggressive caching)
+        // On macOS/Windows, flush() is sufficient
+        #[cfg(target_os = "linux")]
         file.sync_all()?;
+
+        // Explicit drop to ensure file handle is closed before we return
         drop(file);
-        // Small delay only on Linux where caching is very aggressive
-        std::thread::sleep(std::time::Duration::from_millis(5));
     }
 
     // Return the set of imported stdlib modules and external crates for Cargo.toml generation
