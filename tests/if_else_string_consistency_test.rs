@@ -2,6 +2,9 @@
 //!
 //! When one branch returns a string literal and another returns a field,
 //! both should be String for consistency.
+//!
+//! NOTE: All tests in this file spawn subprocesses (cargo run) which are very slow
+//! under tarpaulin instrumentation, so they're skipped in coverage runs.
 
 use std::fs;
 use std::process::Command;
@@ -56,6 +59,8 @@ fn compile_and_verify(code: &str) -> (bool, String, String) {
     }
 }
 
+// Skip in coverage - spawns subprocess (very slow under tarpaulin)
+#[cfg_attr(tarpaulin, ignore)]
 #[test]
 fn test_if_else_literal_vs_field() {
     // If one branch returns literal, the other returns field
@@ -89,6 +94,8 @@ impl Item {
     );
 }
 
+// Skip in coverage - spawns subprocess (very slow under tarpaulin)
+#[cfg_attr(tarpaulin, ignore)]
 #[test]
 fn test_if_else_both_literals() {
     // Both branches return literals
@@ -116,6 +123,8 @@ pub fn get_status(active: bool) -> string {
     );
 }
 
+// Skip in coverage - spawns subprocess (very slow under tarpaulin)
+#[cfg_attr(tarpaulin, ignore)]
 #[test]
 fn test_if_else_field_vs_literal() {
     // Reversed: field first, literal second
@@ -149,6 +158,8 @@ impl Config {
     );
 }
 
+// Skip in coverage - spawns subprocess (very slow under tarpaulin)
+#[cfg_attr(tarpaulin, ignore)]
 #[test]
 fn test_nested_if_else_strings() {
     // Nested if-else with strings
