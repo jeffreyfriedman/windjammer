@@ -385,7 +385,7 @@ impl Parser {
         })
     }
 
-    pub(crate) fn parse_decorator(&mut self) -> Result<Decorator, String> {
+    pub(crate) fn parse_decorator<'parser>(&'parser mut self) -> Result<Decorator<'parser>, String> {
         if let Token::Decorator(name) = self.current_token() {
             let name = name.clone();
             self.advance();
@@ -404,7 +404,7 @@ impl Parser {
         }
     }
 
-    fn parse_decorator_arguments(&mut self) -> Result<Vec<(String, Expression)>, String> {
+    fn parse_decorator_arguments<'parser>(&'parser mut self) -> Result<Vec<(String, Expression<'parser>)>, String> {
         let mut args = Vec::new();
 
         while self.current_token() != &Token::RParen {
