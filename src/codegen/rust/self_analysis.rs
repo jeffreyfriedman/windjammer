@@ -15,7 +15,7 @@ use std::collections::HashSet;
 /// Context needed for field/self analysis
 pub struct AnalysisContext<'a> {
     /// Current function parameters (to distinguish params from fields)
-    pub current_function_params: &'a [crate::parser::Parameter],
+    pub current_function_params: &'a [crate::parser::Parameter<'static>],
     /// Fields of the current struct (if in impl block)
     pub current_struct_fields: &'a HashSet<String>,
 }
@@ -115,13 +115,13 @@ pub fn statement_modifies_self(stmt: &Statement) -> bool {
             else_block,
             ..
         } => {
-            then_block.iter().any(statement_modifies_self)
+            then_block.iter().any(|s| statement_modifies_self(s))
                 || else_block
                     .as_ref()
-                    .is_some_and(|block| block.iter().any(statement_modifies_self))
+                    .is_some_and(|block| block.iter().any(|s| statement_modifies_self(s)))
         }
         Statement::While { body, .. } | Statement::For { body, .. } => {
-            body.iter().any(statement_modifies_self)
+            body.iter().any(|s| statement_modifies_self(s))
         }
         Statement::Match { arms, .. } => arms.iter().any(|arm| {
             // Match arms have a body expression, check if it contains modifications
@@ -253,7 +253,7 @@ pub fn expression_is_self_field_modification(expr: &Expression) -> bool {
 /// Check if an expression modifies self
 pub fn expression_modifies_self(expr: &Expression) -> bool {
     match expr {
-        Expression::Block { statements, .. } => statements.iter().any(statement_modifies_self),
+        Expression::Block { statements, .. } => statements.iter().any(|s| statement_modifies_self(s)),
         Expression::MethodCall { object, method, .. } => {
             // Check if this is a mutating method call on self.field
             // Common mutating methods: push, pop, remove, insert, clear, etc.
