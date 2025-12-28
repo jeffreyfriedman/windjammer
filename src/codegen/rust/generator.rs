@@ -98,9 +98,43 @@ pub struct CodeGenerator {
     generating_assignment_target: bool,
     // RECURSION GUARD: Track traits currently being generated to prevent infinite recursion
     generating_traits: std::collections::HashSet<String>,
+    // RECURSION DEPTH: Track recursion depth to prevent stack overflow
+    recursion_depth: usize,
 }
 
+// RECURSION GUARD MACRO: Check depth before entering recursive functions
+const MAX_RECURSION_DEPTH: usize = 500; // Conservative limit to prevent stack overflow
+
 impl CodeGenerator {
+    /// Increment recursion depth and check if we've exceeded the limit
+    fn enter_recursion(&mut self, context: &str) -> Result<(), String> {
+        self.recursion_depth += 1;
+        if self.recursion_depth > MAX_RECURSION_DEPTH {
+            eprintln!(
+                "🚨 RECURSION DEPTH EXCEEDED in {}: {} levels",
+                context, self.recursion_depth
+            );
+            return Err(format!(
+                "Maximum recursion depth ({}) exceeded in {}. Possible infinite recursion.",
+                MAX_RECURSION_DEPTH, context
+            ));
+        }
+        if self.recursion_depth.is_multiple_of(100) {
+            eprintln!(
+                "⚠️  High recursion depth in {}: {} levels",
+                context, self.recursion_depth
+            );
+        }
+        Ok(())
+    }
+
+    /// Decrement recursion depth when exiting a recursive function
+    fn exit_recursion(&mut self) {
+        if self.recursion_depth > 0 {
+            self.recursion_depth -= 1;
+        }
+    }
+
     pub fn new(registry: SignatureRegistry, target: CompilationTarget) -> Self {
         CodeGenerator {
             indent_level: 0,
@@ -151,6 +185,7 @@ impl CodeGenerator {
             in_expression_context: false,
             analyzed_trait_methods: std::collections::HashMap::new(),
             generating_traits: std::collections::HashSet::new(),
+            recursion_depth: 0,
         }
     }
 
@@ -1479,14 +1514,25 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
         // This can happen if the same trait is generated multiple times in a cycle
         if self.generating_traits.contains(&trait_decl.name) {
             eprintln!(
-                "⚠️  RECURSION GUARD (CODEGEN): Skipping trait {} (already generating)",
+                "⚠️  TRAIT RECURSION GUARD: Skipping trait {} (already generating)",
                 trait_decl.name
             );
+            eprintln!(
+                "   Currently generating {} traits: {:?}",
+                self.generating_traits.len(),
+                self.generating_traits
+            );
+            eprintln!("   🚨 WARNING: Returning EMPTY STRING for this trait!");
             return String::new(); // Return empty to break the cycle
         }
 
         // Add to generating set
         self.generating_traits.insert(trait_decl.name.clone());
+        eprintln!(
+            "✅ TRAIT GUARD: Started generating trait {} ({} traits in progress)",
+            trait_decl.name,
+            self.generating_traits.len()
+        );
 
         let mut output = String::new();
 
@@ -1735,6 +1781,11 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
 
         // Remove from generating set before returning
         self.generating_traits.remove(&trait_decl.name);
+        eprintln!(
+            "✅ TRAIT GUARD: Finished generating trait {} ({} traits still in progress)",
+            trait_decl.name,
+            self.generating_traits.len()
+        );
 
         output
     }
@@ -2527,11 +2578,23 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
     }
 
     fn generate_statement(&mut self, stmt: &Statement) -> String {
+        // RECURSION GUARD: Check depth before processing statement
+        if let Err(e) = self.enter_recursion("generate_statement") {
+            eprintln!("{}", e);
+            return format!("/* {} */", e);
+        }
+
         // Record source mapping if location info is available
         if let Some(location) = codegen_helpers::get_statement_location(stmt) {
             self.record_mapping(&location);
         }
 
+        let result = self.generate_statement_impl(stmt);
+        self.exit_recursion();
+        result
+    }
+
+    fn generate_statement_impl(&mut self, stmt: &Statement) -> String {
         match stmt {
             Statement::Let {
                 pattern,
@@ -3576,10 +3639,22 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
 
     // PHASE 7: Constant folding - evaluate constant expressions at compile time
     fn generate_expression(&mut self, expr: &Expression) -> String {
+        // RECURSION GUARD: Check depth before processing expression
+        if let Err(e) = self.enter_recursion("generate_expression") {
+            eprintln!("{}", e);
+            return format!("/* {} */", e);
+        }
+
         // PHASE 7: Try constant folding first
         let folded_expr = constant_folding::try_fold_constant(expr);
         let expr_to_generate = folded_expr.as_ref().unwrap_or(expr);
 
+        let result = self.generate_expression_impl(expr_to_generate);
+        self.exit_recursion();
+        result
+    }
+
+    fn generate_expression_impl(&mut self, expr_to_generate: &Expression) -> String {
         match expr_to_generate {
             Expression::Literal { value: lit, .. } => self.generate_literal(lit),
             Expression::Identifier { name, .. } => {
@@ -4372,7 +4447,7 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
                 );
 
                 // AUTO-CLONE: Check if this method call needs to be cloned
-                if let Some(path) = ast_utilities::extract_field_access_path(expr) {
+                if let Some(path) = ast_utilities::extract_field_access_path(expr_to_generate) {
                     if let Some(ref analysis) = self.auto_clone_analysis {
                         if analysis
                             .needs_clone(&path, self.current_statement_idx)
@@ -4414,7 +4489,7 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
 
                 // AUTO-CLONE: Check if this field access needs to be cloned
                 // Extract the full path (e.g., "config.paths")
-                if let Some(path) = ast_utilities::extract_field_access_path(expr) {
+                if let Some(path) = ast_utilities::extract_field_access_path(expr_to_generate) {
                     if let Some(ref analysis) = self.auto_clone_analysis {
                         if analysis
                             .needs_clone(&path, self.current_statement_idx)
@@ -4646,7 +4721,7 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
                 // 3. Context-aware code generation
                 //
                 // AUTO-CLONE: Check if this index expression needs to be cloned
-                if let Some(path) = ast_utilities::extract_field_access_path(expr) {
+                if let Some(path) = ast_utilities::extract_field_access_path(expr_to_generate) {
                     if let Some(ref analysis) = self.auto_clone_analysis {
                         if analysis
                             .needs_clone(&path, self.current_statement_idx)
