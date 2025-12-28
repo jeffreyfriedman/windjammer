@@ -39,8 +39,8 @@ use crate::parser::FunctionDecl;
 
 /// Result of string interning optimization
 #[derive(Debug, Clone)]
-pub struct StringInterningResult {
-    pub program: Program,
+pub struct StringInterningResult<'ast> {
+    pub program: Program<'ast>,
     pub strings_interned: usize,
     pub memory_saved: usize,
 }
@@ -273,10 +273,10 @@ fn create_pool_map(pool: &[StringPoolEntry]) -> HashMap<String, String> {
 }
 
 /// Replace string literals in an expression with pool references
-fn replace_strings_in_expression(
-    expr: Expression,
+fn replace_strings_in_expression<'ast>(
+    expr: Expression<'ast>,
     pool_map: &HashMap<String, String>,
-) -> Expression {
+) -> Expression<'ast> {
     match expr {
         Expression::Literal {
             value: Literal::String(s),
@@ -459,7 +459,7 @@ fn replace_strings_in_expression(
 }
 
 /// Replace string literals in a statement with pool references
-fn replace_strings_in_statement(stmt: Statement, pool_map: &HashMap<String, String>) -> Statement {
+fn replace_strings_in_statement<'ast>(stmt: Statement<'ast>, pool_map: &HashMap<String, String>) -> Statement<'ast> {
     match stmt {
         Statement::Let {
             pattern,
@@ -595,7 +595,7 @@ fn replace_strings_in_statement(stmt: Statement, pool_map: &HashMap<String, Stri
 }
 
 /// Replace string literals in an item with pool references
-fn replace_strings_in_item(item: Item, pool_map: &HashMap<String, String>) -> Item {
+fn replace_strings_in_item<'ast>(item: Item<'ast>, pool_map: &HashMap<String, String>) -> Item<'ast> {
     match item {
         Item::Function {
             decl: mut func,
