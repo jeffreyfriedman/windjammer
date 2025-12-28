@@ -16,7 +16,7 @@ enum VariableUsage {
     Moved,           // Variable moved (returned, passed to function, used by itself)
 }
 
-pub struct CodeGenerator {
+pub struct CodeGenerator<'ast> {
     indent_level: usize,
     signature_registry: SignatureRegistry,
     in_wasm_bindgen_impl: bool,
@@ -69,10 +69,10 @@ pub struct CodeGenerator {
     // WINDJAMMER TRAIT INFERENCE: Analyzed trait methods with inferred signatures from ALL impls
     analyzed_trait_methods: std::collections::HashMap<
         String,
-        std::collections::HashMap<String, crate::analyzer::AnalyzedFunction>,
+        std::collections::HashMap<String, crate::analyzer::AnalyzedFunction<'ast>>,
     >,
     // FUNCTION CONTEXT: Track current function body for data flow analysis
-    current_function_body: Vec<Statement>, // Body of the current function being generated
+    current_function_body: Vec<Statement<'ast>>, // Body of the current function being generated
     // Workspace root for source maps
     workspace_root: Option<std::path::PathBuf>,
     // BRANCH TYPE CONSISTENCY: Suppress auto string conversion when any branch uses .as_str()
@@ -105,7 +105,7 @@ pub struct CodeGenerator {
 // RECURSION GUARD MACRO: Check depth before entering recursive functions
 const MAX_RECURSION_DEPTH: usize = 500; // Conservative limit to prevent stack overflow
 
-impl CodeGenerator {
+impl<'ast> CodeGenerator<'ast> {
     /// Increment recursion depth and check if we've exceeded the limit
     fn enter_recursion(&mut self, context: &str) -> Result<(), String> {
         self.recursion_depth += 1;
