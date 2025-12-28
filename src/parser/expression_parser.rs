@@ -838,16 +838,16 @@ impl Parser {
                     }
 
                     self.expect(Token::RBrace)?;
-                    Expression::StructLiteral {
+                    self.alloc_expr(Expression::StructLiteral {
                         name: qualified_name,
                         fields,
                         location: self.current_location(),
-                    }
+                    })
                 } else {
-                    Expression::Identifier {
+                    self.alloc_expr(Expression::Identifier {
                         name: qualified_name,
                         location: self.current_location(),
-                    }
+                    })
                 }
             }
             Token::LParen => {
@@ -856,10 +856,10 @@ impl Parser {
                 // Check for empty tuple ()
                 if self.current_token() == &Token::RParen {
                     self.advance();
-                    Expression::Tuple {
+                    self.alloc_expr(Expression::Tuple {
                         elements: vec![],
                         location: self.current_location(),
-                    }
+                    })
                 } else {
                     let first_expr = self.parse_expression()?;
 
@@ -910,12 +910,12 @@ impl Parser {
                         self.expect(Token::RBracket)?;
 
                         // Represent as a macro invocation: vec![value; count]
-                        Expression::MacroInvocation {
+                        self.alloc_expr(Expression::MacroInvocation {
                             name: "vec".to_string(),
                             args: vec![first_element, count],
                             delimiter: MacroDelimiter::Brackets,
                             location: self.current_location(),
-                        }
+                        })
                     } else {
                         // Regular array literal
                         let mut elements = vec![first_element];
@@ -932,10 +932,10 @@ impl Parser {
                         }
 
                         self.expect(Token::RBracket)?;
-                        Expression::Array {
+                        self.alloc_expr(Expression::Array {
                             elements,
                             location: self.current_location(),
-                        }
+                        })
                     }
                 }
             }
@@ -1395,10 +1395,10 @@ impl Parser {
                     if self.peek(1) == Some(&Token::Await) {
                         self.advance(); // consume '.'
                         self.advance(); // consume 'await'
-                        Expression::Await {
-                            expr: self.alloc_expr(expr),
+                        self.alloc_expr(Expression::Await {
+                            expr,
                             location: self.current_location(),
-                        }
+                        })
                     } else {
                         self.advance();
                         // Allow keywords as field names (e.g., std.thread, std.async)
@@ -1441,23 +1441,23 @@ impl Parser {
                                 if self.had_newline_before_current() {
                                     // ASI: This LParen starts a new statement, not a method call
                                     // Create a field access and break
-                                    Expression::FieldAccess {
-                                        object: self.alloc_expr(expr),
+                                    self.alloc_expr(Expression::FieldAccess {
+                                        object: expr,
                                         field,
                                         location: self.current_location(),
-                                    }
+                                    })
                                 } else {
                                     // Method call (possibly with turbofish)
                                     self.advance();
                                     let arguments = self.parse_arguments()?;
                                     self.expect(Token::RParen)?;
-                                    Expression::MethodCall {
-                                        object: self.alloc_expr(expr),
+                                    self.alloc_expr(Expression::MethodCall {
+                                        object: expr,
                                         method: field,
                                         type_args,
                                         arguments,
                                         location: self.current_location(),
-                                    }
+                                    })
                                 }
                             } else if type_args.is_some() {
                                 return Err(
@@ -1465,11 +1465,11 @@ impl Parser {
                                 );
                             } else {
                                 // Field access
-                                Expression::FieldAccess {
-                                    object: self.alloc_expr(expr),
+                                self.alloc_expr(Expression::FieldAccess {
+                                    object: expr,
                                     field,
                                     location: self.current_location(),
-                                }
+                                })
                             }
                         } else {
                             return Err(format!(
@@ -1502,13 +1502,13 @@ impl Parser {
                             self.expect(Token::RParen)?;
                             // Convert to method call with turbofish
                             // For func::<T>(), treat as a special method call on the function
-                            Expression::MethodCall {
-                                object: self.alloc_expr(expr),
+                            self.alloc_expr(Expression::MethodCall {
+                                object: expr,
                                 method: String::new(), // Empty method name signals turbofish call
                                 type_args: Some(types),
                                 arguments,
                                 location: self.current_location(),
-                            }
+                            })
                         } else if self.current_token() == &Token::ColonColon {
                             // Vec::<int>::new() - another :: after turbofish
                             // Continue parsing in the loop, the :: will be handled on next iteration
@@ -1526,10 +1526,10 @@ impl Parser {
 
                             // Update the expression to include the turbofish
                             if let Expression::Identifier { name, .. } = expr {
-                                expr = Expression::Identifier {
+                                expr = self.alloc_expr(Expression::Identifier {
                                     name: format!("{}{}", name, type_str),
                                     location: self.current_location(),
-                                };
+                                });
                             } else {
                                 return Err(
                                     "Turbofish can only be applied to identifiers".to_string()
@@ -1541,13 +1541,13 @@ impl Parser {
                             // Type::method or module::function continuation
                             let method = method.clone();
                             self.advance();
-                            Expression::MethodCall {
-                                object: self.alloc_expr(expr),
+                            self.alloc_expr(Expression::MethodCall {
+                                object: expr,
                                 method,
                                 type_args: None,
                                 arguments: vec![],
                                 location: self.current_location(),
-                            }
+                            })
                         } else {
                             return Err(format!(
                                 "Expected '(', '::', or identifier after '::<Type>', got {:?}",
@@ -1599,20 +1599,20 @@ impl Parser {
                             self.advance();
                             let arguments = self.parse_arguments()?;
                             self.expect(Token::RParen)?;
-                            Expression::MethodCall {
-                                object: self.alloc_expr(expr),
+                            self.alloc_expr(Expression::MethodCall {
+                                object: expr,
                                 method,
                                 type_args,
                                 arguments,
                                 location: self.current_location(),
-                            }
+                            })
                         } else {
                             // Just a path, treat as field access
-                            Expression::FieldAccess {
-                                object: self.alloc_expr(expr),
+                            self.alloc_expr(Expression::FieldAccess {
+                                object: expr,
                                 field: method,
                                 location: self.current_location(),
-                            }
+                            })
                         }
                     }
                 }
@@ -1628,20 +1628,20 @@ impl Parser {
                     self.advance();
                     let arguments = self.parse_arguments()?;
                     self.expect(Token::RParen)?;
-                    Expression::Call {
-                        function: self.alloc_expr(expr),
+                    self.alloc_expr(Expression::Call {
+                        function: expr,
                         arguments,
                         location: self.current_location(),
-                    }
+                    })
                 }
                 Token::Question => {
                     // TryOp: expr?
                     // No ambiguity since we removed ternary operator
                     self.advance();
-                    Expression::TryOp {
-                        expr: self.alloc_expr(expr),
+                    self.alloc_expr(Expression::TryOp {
+                        expr,
                         location: self.current_location(),
-                    }
+                    })
                 }
                 Token::LBracket => {
                     self.advance();
@@ -1668,22 +1668,22 @@ impl Parser {
                             })
                         });
 
-                        Expression::MethodCall {
-                            object: self.alloc_expr(expr),
+                        self.alloc_expr(Expression::MethodCall {
+                            object: expr,
                             method: "slice".to_string(),
                             type_args: None,
                             arguments: vec![
                                 (
                                     None,
-                                    Expression::Literal {
+                                    self.alloc_expr(Expression::Literal {
                                         value: Literal::Int(0),
                                         location: self.current_location(),
-                                    },
+                                    }),
                                 ),
-                                (None, *end_expr),
+                                (None, end_expr),
                             ],
                             location: self.current_location(),
-                        }
+                        })
                     } else {
                         // Parse the first expression
                         // We need to parse without consuming .. as a range operator
@@ -1695,7 +1695,7 @@ impl Parser {
                             // [start..] or [start..end] - slice syntax
                             self.advance(); // consume '..'
                             let end = if self.current_token() != &Token::RBracket {
-                                Some(self.alloc_expr(self.parse_expression()?))
+                                Some(self.parse_expression()?)
                             } else {
                                 None
                             };
@@ -1704,7 +1704,7 @@ impl Parser {
                             // Desugar [start..end] to .slice(start, end)
                             let end_expr = end.unwrap_or_else(|| {
                                 self.alloc_expr(Expression::MethodCall {
-                                    object: self.alloc_expr(expr.clone()),
+                                    object: expr,
                                     method: "len".to_string(),
                                     type_args: None,
                                     arguments: vec![],
@@ -1712,13 +1712,13 @@ impl Parser {
                                 })
                             });
 
-                            Expression::MethodCall {
-                                object: self.alloc_expr(expr),
+                            self.alloc_expr(Expression::MethodCall {
+                                object: expr,
                                 method: "slice".to_string(),
                                 type_args: None,
-                                arguments: vec![(None, start_or_index), (None, *end_expr)],
+                                arguments: vec![(None, start_or_index), (None, end_expr)],
                                 location: self.current_location(),
-                            }
+                            })
                         } else {
                             // Regular index: [i]
                             self.expect(Token::RBracket)?;
