@@ -742,11 +742,11 @@ struct ModuleCompiler {
     source_roots: Vec<PathBuf>, // Additional source roots (e.g., ../windjammer-game-core/src_wj)
     imported_stdlib_modules: HashSet<String>, // Track which stdlib modules are used
     external_crates: Vec<String>, // Track external crates (e.g., windjammer_ui)
-    trait_registry: HashMap<String, parser::TraitDecl>, // Global trait registry for cross-file trait resolution
+    trait_registry: HashMap<String, parser::TraitDecl<'static>>, // Global trait registry for cross-file trait resolution
     copy_structs_registry: HashSet<String>, // Global Copy struct registry for proper Copy detection across files
-    analyzer: analyzer::Analyzer, // WINDJAMMER FIX: Shared analyzer for cross-file trait analysis
+    analyzer: analyzer::Analyzer<'static>, // WINDJAMMER FIX: Shared analyzer for cross-file trait analysis
     // THE WINDJAMMER WAY: Track ALL programs for cross-file trait inference
-    all_programs: Vec<parser::Program>, // All parsed programs from all files
+    all_programs: Vec<parser::Program<'static>>, // All parsed programs from all files
     // RECURSION GUARD: Track files currently being compiled to prevent circular dependencies
     // Use String instead of PathBuf for Windows UNC path compatibility
     compiling_files: HashSet<String>, // Normalized path strings in the current compilation chain
