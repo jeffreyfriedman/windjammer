@@ -17,14 +17,14 @@ use crate::parser::{BinaryOp, Expression, Literal};
 /// // "a" + variable → ["a", variable]
 /// // a * b → [a * b] (not a concatenation)
 /// ```
-pub fn collect_concat_parts(expr: &Expression) -> Vec<Expression> {
+pub fn collect_concat_parts<'ast>(expr: &Expression<'ast>) -> Vec<Expression<'ast>> {
     let mut parts = Vec::new();
     collect_concat_parts_recursive(expr, &mut parts);
     parts
 }
 
 /// Recursively collect string concatenation parts
-fn collect_concat_parts_recursive(expr: &Expression, parts: &mut Vec<Expression>) {
+fn collect_concat_parts_recursive<'ast>(expr: &Expression<'ast>, parts: &mut Vec<Expression<'ast>>) {
     match expr {
         Expression::Binary {
             left,
