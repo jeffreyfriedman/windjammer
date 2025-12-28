@@ -269,30 +269,30 @@ pub struct TokenStream<'db> {
 #[salsa::tracked]
 pub struct ParsedProgram<'db> {
     #[returns(ref)]
-    pub program: parser::Program,
+    pub program: parser::Program<'static>,
 }
 
 /// A type-checked program with analysis metadata
 ///
 /// Note: We store analysis results separately to avoid Salsa Hash requirements
-pub struct AnalysisResults {
-    pub analyzed_functions: Vec<analyzer::AnalyzedFunction>,
+pub struct AnalysisResults<'ast> {
+    pub analyzed_functions: Vec<analyzer::AnalyzedFunction<'ast>>,
     pub inferred_bounds: std::collections::HashMap<String, inference::InferredBounds>,
-    pub signatures: analyzer::SignatureRegistry,
+    pub signatures: analyzer::SignatureRegistry<'ast>,
 }
 
 /// A type-checked program
 #[salsa::tracked]
 pub struct TypedProgram<'db> {
     #[returns(ref)]
-    pub program: parser::Program,
+    pub program: parser::Program<'static>,
 }
 
 /// An optimized program
 #[salsa::tracked]
 pub struct OptimizedProgram<'db> {
     #[returns(ref)]
-    pub program: parser::Program,
+    pub program: parser::Program<'static>,
 }
 
 /// Generated Rust code
