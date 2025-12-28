@@ -112,73 +112,73 @@ pub struct EnumDecl {
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum Statement<'ast> {
     Let {
-        pattern: Pattern,
+        pattern: Pattern<'ast>,
         mutable: bool,
         type_: Option<Type>,
-        value: Expression<'ast>,
+        value: &'ast Expression<'ast>,
         /// Optional else block for let-else patterns (e.g., `let Some(x) = opt else { return }`)
-        else_block: Option<Vec<Statement<'ast>>>,
+        else_block: Option<Vec<&'ast Statement<'ast>>>,
         location: SourceLocation,
     },
     Const {
         name: String,
         type_: Type,
-        value: Expression<'ast>,
+        value: &'ast Expression<'ast>,
         location: SourceLocation,
     },
     Static {
         name: String,
         mutable: bool,
         type_: Type,
-        value: Expression<'ast>,
+        value: &'ast Expression<'ast>,
         location: SourceLocation,
     },
     Assignment {
-        target: Expression<'ast>,
-        value: Expression<'ast>,
+        target: &'ast Expression<'ast>,
+        value: &'ast Expression<'ast>,
         compound_op: Option<CompoundOp>,
         location: SourceLocation,
     },
     Return {
-        value: Option<Expression<'ast>>,
+        value: Option<&'ast Expression<'ast>>,
         location: SourceLocation,
     },
     Expression {
-        expr: Expression<'ast>,
+        expr: &'ast Expression<'ast>,
         location: SourceLocation,
     },
     If {
-        condition: Expression<'ast>,
-        then_block: Vec<Statement<'ast>>,
-        else_block: Option<Vec<Statement<'ast>>>,
+        condition: &'ast Expression<'ast>,
+        then_block: Vec<&'ast Statement<'ast>>,
+        else_block: Option<Vec<&'ast Statement<'ast>>>,
         location: SourceLocation,
     },
     Match {
-        value: Expression<'ast>,
+        value: &'ast Expression<'ast>,
         arms: Vec<MatchArm<'ast>>,
         location: SourceLocation,
     },
     For {
-        pattern: Pattern,
-        iterable: Expression<'ast>,
-        body: Vec<Statement<'ast>>,
+        pattern: Pattern<'ast>,
+        iterable: &'ast Expression<'ast>,
+        body: Vec<&'ast Statement<'ast>>,
         location: SourceLocation,
     },
     Loop {
-        body: Vec<Statement<'ast>>,
+        body: Vec<&'ast Statement<'ast>>,
         location: SourceLocation,
     },
     While {
-        condition: Expression<'ast>,
-        body: Vec<Statement<'ast>>,
+        condition: &'ast Expression<'ast>,
+        body: Vec<&'ast Statement<'ast>>,
         location: SourceLocation,
     },
     Thread {
-        body: Vec<Statement<'ast>>,
+        body: Vec<&'ast Statement<'ast>>,
         location: SourceLocation,
     },
     Async {
-        body: Vec<Statement<'ast>>,
+        body: Vec<&'ast Statement<'ast>>,
         location: SourceLocation,
     },
     Defer {
@@ -226,9 +226,9 @@ impl<'ast> Statement<'ast> {
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct MatchArm<'ast> {
-    pub pattern: Pattern,
-    pub guard: Option<Expression<'ast>>, // Optional guard: if condition
-    pub body: Expression<'ast>,
+    pub pattern: Pattern<'ast>,
+    pub guard: Option<&'ast Expression<'ast>>, // Optional guard: if condition
+    pub body: &'ast Expression<'ast>,
 }
 
 // ============================================================================
@@ -245,14 +245,14 @@ pub enum EnumPatternBinding {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub enum Pattern {
+pub enum Pattern<'ast> {
     Wildcard,
     Identifier(String),
     EnumVariant(String, EnumPatternBinding), // Enum name, binding type
     Literal(Literal),
-    Tuple(Vec<Pattern>),     // Tuple pattern: (a, b, c)
-    Or(Vec<Pattern>),        // Or pattern: pattern1 | pattern2 | pattern3
-    Reference(Box<Pattern>), // Reference pattern: &x
+    Tuple(Vec<Pattern<'ast>>),         // Tuple pattern: (a, b, c)
+    Or(Vec<Pattern<'ast>>),            // Or pattern: pattern1 | pattern2 | pattern3
+    Reference(&'ast Pattern<'ast>),     // Reference pattern: &x
 }
 
 // ============================================================================
