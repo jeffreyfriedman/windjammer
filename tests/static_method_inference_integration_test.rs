@@ -6,13 +6,8 @@ use std::process::Command;
 #[test]
 fn test_static_method_inference() {
     // Compile the Windjammer test file
-    let output = Command::new("cargo")
+    let output = Command::new(env!("CARGO_BIN_EXE_wj"))
         .args([
-            "run",
-            "--release",
-            "--bin",
-            "wj",
-            "--",
             "build",
             "tests/static_method_inference_test.wj",
             "--output",
