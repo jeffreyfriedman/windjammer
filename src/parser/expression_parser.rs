@@ -1722,11 +1722,11 @@ impl Parser {
                         } else {
                             // Regular index: [i]
                             self.expect(Token::RBracket)?;
-                            Expression::Index {
-                                object: self.alloc_expr(expr),
-                                index: self.alloc_expr(start_or_index),
+                            self.alloc_expr(Expression::Index {
+                                object: expr,
+                                index: start_or_index,
                                 location: self.current_location(),
-                            }
+                            })
                         }
                     }
                 }
@@ -1743,21 +1743,21 @@ impl Parser {
                     let inclusive = self.current_token() == &Token::DotDotEq;
                     self.advance();
                     let end = self.parse_primary_expression()?;
-                    Expression::Range {
-                        start: self.alloc_expr(expr),
-                        end: self.alloc_expr(end),
+                    self.alloc_expr(Expression::Range {
+                        start: expr,
+                        end,
                         inclusive,
                         location: self.current_location(),
-                    }
+                    })
                 }
                 Token::As => {
                     self.advance();
                     let type_ = self.parse_type()?;
-                    Expression::Cast {
-                        expr: self.alloc_expr(expr),
+                    self.alloc_expr(Expression::Cast {
+                        expr,
                         type_,
                         location: self.current_location(),
-                    }
+                    })
                 }
                 Token::Bang => {
                     // Macro invocation: name!(...) or name![...] or name!{...}
@@ -1786,12 +1786,12 @@ impl Parser {
 
                         self.expect(end_token)?;
 
-                        Expression::MacroInvocation {
-                            name,
+                        self.alloc_expr(Expression::MacroInvocation {
+                            name: name.clone(),
                             args,
                             delimiter,
                             location: self.current_location(),
-                        }
+                        })
                     } else {
                         // Not a macro invocation, break out of postfix loop
                         break;
