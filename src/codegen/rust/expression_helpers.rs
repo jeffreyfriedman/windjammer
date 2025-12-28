@@ -72,10 +72,10 @@ pub fn is_const_evaluable(expr: &Expression) -> bool {
             .all(|(key, val)| is_const_evaluable(key) && is_const_evaluable(val)),
 
         // Array literals with const elements are const
-        Expression::Array { elements, .. } => elements.iter().all(is_const_evaluable),
+        Expression::Array { elements, .. } => elements.iter().all(|e| is_const_evaluable(e)),
 
         // Tuple literals with const elements are const
-        Expression::Tuple { elements, .. } => elements.iter().all(is_const_evaluable),
+        Expression::Tuple { elements, .. } => elements.iter().all(|e| is_const_evaluable(e)),
 
         // Everything else (identifiers, calls, field access, etc.) is not const
         _ => false,
