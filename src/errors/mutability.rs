@@ -100,7 +100,7 @@ impl MutabilityChecker {
         self.errors.clone()
     }
 
-    fn check_statements(&mut self, statements: &[Statement]) {
+    fn check_statements<'ast>(&mut self, statements: &[&'ast Statement<'ast>]) {
         for stmt in statements {
             self.check_statement(stmt);
         }

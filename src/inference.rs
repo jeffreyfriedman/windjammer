@@ -170,9 +170,9 @@ impl InferenceEngine {
     }
 
     /// Collect constraints from a list of statements
-    fn collect_constraints_from_statements(
+    fn collect_constraints_from_statements<'ast>(
         &self,
-        statements: &[Statement],
+        statements: &[&'ast Statement<'ast>],
         bounds: &mut InferredBounds,
     ) {
         for stmt in statements {
@@ -316,9 +316,9 @@ impl InferenceEngine {
                         ..
                     }) = args.first()
                     {
-                        // Convert Vec<Expression> to Vec<(Option<String>, Expression)>
-                        let labeled_args: Vec<(Option<String>, Expression)> =
-                            args[1..].iter().map(|e| (None, e.clone())).collect();
+                        // Convert Vec<&Expression> to Vec<(Option<String>, &Expression)>
+                        let labeled_args: Vec<(Option<String>, &Expression)> =
+                            args[1..].iter().map(|e| (None, *e)).collect();
                         self.analyze_format_string(fmt, &labeled_args, bounds);
                     }
                 }
@@ -357,10 +357,10 @@ impl InferenceEngine {
     }
 
     /// Analyze a format string to determine required traits
-    fn analyze_format_string(
+    fn analyze_format_string<'ast>(
         &self,
         format_str: &str,
-        arguments: &[(Option<String>, Expression)],
+        arguments: &[(Option<String>, &'ast Expression<'ast>)],
         bounds: &mut InferredBounds,
     ) {
         // Simple heuristic: check for {:?} (Debug) vs {} (Display)
