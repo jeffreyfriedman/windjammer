@@ -977,15 +977,15 @@ impl Parser {
 
                 // Convert match arms into a match expression
                 // For now, wrap in a block expression
-                let match_stmt = Statement::Match {
+                let match_stmt = self.alloc_stmt(Statement::Match {
                     value: *value,
                     arms,
                     location: self.current_location(),
-                };
-                Expression::Block {
+                });
+                self.alloc_expr(Expression::Block {
                     statements: vec![match_stmt],
                     location: self.current_location(),
-                }
+                })
             }
             Token::Pipe => {
                 // Closure: |params| body
@@ -1113,11 +1113,11 @@ impl Parser {
                     }
                 };
 
-                Expression::Closure {
+                self.alloc_expr(Expression::Closure {
                     parameters,
                     body,
                     location: self.current_location(),
-                }
+                })
             }
             Token::Or => {
                 // Closure with no parameters: || body
@@ -1138,11 +1138,11 @@ impl Parser {
                     self.alloc_expr(self.parse_expression()?)
                 };
 
-                Expression::Closure {
+                self.alloc_expr(Expression::Closure {
                     parameters: Vec::new(), // No parameters
                     body,
                     location: self.current_location(),
-                }
+                })
             }
             Token::If => {
                 // If expression: if cond { ... } else { ... }
@@ -1260,10 +1260,10 @@ impl Parser {
                 self.expect(Token::LBrace)?;
                 let body = self.parse_block_statements()?;
                 self.expect(Token::RBrace)?;
-                Expression::Block {
+                self.alloc_expr(Expression::Block {
                     statements: body,
                     location: self.current_location(),
-                }
+                })
             }
             Token::LBrace => {
                 // Could be block expression or map literal
@@ -1276,10 +1276,10 @@ impl Parser {
                 if self.current_token() == &Token::RBrace {
                     self.advance();
                     // Empty block (not empty map - use HashMap::new() or map{} for that)
-                    return Ok(Expression::Block {
+                    return Ok(self.alloc_expr(Expression::Block {
                         statements: vec![],
                         location: self.current_location(),
-                    });
+                    }));
                 }
 
                 // Try to detect map literal by parsing first item
@@ -1324,18 +1324,18 @@ impl Parser {
                     }
 
                     self.expect(Token::RBrace)?;
-                    Expression::MapLiteral {
+                    self.alloc_expr(Expression::MapLiteral {
                         pairs,
                         location: self.current_location(),
-                    }
+                    })
                 } else {
                     // Parse as block expression
                     let body = self.parse_block_statements()?;
                     self.expect(Token::RBrace)?;
-                    Expression::Block {
+                    self.alloc_expr(Expression::Block {
                         statements: body,
                         location: self.current_location(),
-                    }
+                    })
                 }
             }
             Token::Return => {
@@ -1350,28 +1350,29 @@ impl Parser {
                     Some(self.alloc_expr(self.parse_expression()?))
                 };
                 // Wrap in a block with a return statement
-                Expression::Block {
-                    statements: vec![Statement::Return {
-                        value: return_value.map(|b| *b),
-                        location: self.current_location(),
-                    }],
+                let return_stmt = self.alloc_stmt(Statement::Return {
+                    value: return_value.map(|b| *b),
                     location: self.current_location(),
-                }
+                });
+                self.alloc_expr(Expression::Block {
+                    statements: vec![return_stmt],
+                    location: self.current_location(),
+                })
             }
             // Allow certain keywords as identifiers in expression context (e.g., HTML attributes)
             Token::For => {
                 self.advance();
-                Expression::Identifier {
+                self.alloc_expr(Expression::Identifier {
                     name: "for".to_string(),
                     location: self.current_location(),
-                }
+                })
             }
             Token::Type => {
                 self.advance();
-                Expression::Identifier {
+                self.alloc_expr(Expression::Identifier {
                     name: "type".to_string(),
                     location: self.current_location(),
-                }
+                })
             }
             _ => {
                 return Err(format!(
