@@ -125,45 +125,45 @@ impl Parser {
                     false
                 };
                 let inner = self.parse_match_value()?;
-                Expression::Unary {
+                self.alloc_expr(Expression::Unary {
                     op: if is_mut {
                         UnaryOp::MutRef
                     } else {
                         UnaryOp::Ref
                     },
-                    operand: self.alloc_expr(inner),
+                    operand: inner,
                     location: self.current_location(),
-                }
+                })
             }
             Token::Star => {
                 // Handle * dereference operator
                 self.advance();
                 let inner = self.parse_match_value()?;
-                Expression::Unary {
+                self.alloc_expr(Expression::Unary {
                     op: UnaryOp::Deref,
-                    operand: self.alloc_expr(inner),
+                    operand: inner,
                     location: self.current_location(),
-                }
+                })
             }
             Token::Minus => {
                 // Handle - negation operator
                 self.advance();
                 let inner = self.parse_match_value()?;
-                Expression::Unary {
+                self.alloc_expr(Expression::Unary {
                     op: UnaryOp::Neg,
-                    operand: self.alloc_expr(inner),
+                    operand: inner,
                     location: self.current_location(),
-                }
+                })
             }
             Token::Bang => {
                 // Handle ! not operator
                 self.advance();
                 let inner = self.parse_match_value()?;
-                Expression::Unary {
+                self.alloc_expr(Expression::Unary {
                     op: UnaryOp::Not,
-                    operand: self.alloc_expr(inner),
+                    operand: inner,
                     location: self.current_location(),
-                }
+                })
             }
             Token::Ident(name) => {
                 let mut qualified_name = name.clone();
@@ -194,10 +194,10 @@ impl Parser {
 
                 // Don't check for { here - just create the identifier
                 // and continue to postfix operators
-                Expression::Identifier {
+                self.alloc_expr(Expression::Identifier {
                     name: qualified_name,
                     location: self.current_location(),
-                }
+                })
             }
             _ => self.parse_primary_expression()?,
         };
@@ -210,10 +210,10 @@ impl Parser {
                     if self.peek(1) == Some(&Token::Await) {
                         self.advance(); // consume '.'
                         self.advance(); // consume 'await'
-                        left = Expression::Await {
-                            expr: self.alloc_expr(left),
+                        left = self.alloc_expr(Expression::Await {
+                            expr: left,
                             location: self.current_location(),
-                        };
+                        });
                     } else {
                         self.advance();
                         let field = if let Token::Ident(name) = self.current_token() {
@@ -223,11 +223,11 @@ impl Parser {
                         } else {
                             return Err("Expected field name after .".to_string());
                         };
-                        left = Expression::FieldAccess {
-                            object: self.alloc_expr(left),
+                        left = self.alloc_expr(Expression::FieldAccess {
+                            object: left,
                             field,
                             location: self.current_location(),
-                        };
+                        });
                     }
                 }
                 Token::LBracket => {
