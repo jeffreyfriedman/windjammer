@@ -119,7 +119,10 @@ impl CodeGenerator {
                 MAX_RECURSION_DEPTH, context
             ));
         }
-        if self.recursion_depth.is_multiple_of(100) {
+        // CI FIX: Use % instead of is_multiple_of() for Rust <1.83 compatibility
+        // is_multiple_of() was added in Rust 1.83 (Dec 26, 2024), but CI runs on stable (1.82)
+        #[allow(clippy::manual_is_multiple_of)]
+        if self.recursion_depth % 100 == 0 {
             eprintln!(
                 "⚠️  High recursion depth in {}: {} levels",
                 context, self.recursion_depth
