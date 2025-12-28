@@ -602,7 +602,7 @@ impl Parser {
         Ok((path, alias))
     }
 
-    pub(crate) fn parse_mod(&mut self) -> Result<(String, Vec<Item>, bool), String> {
+    pub(crate) fn parse_mod(&mut self) -> Result<(String, Vec<Item<'static>>, bool), String> {
         // Note: Token::Mod already consumed in parse_item
 
         // Get module name

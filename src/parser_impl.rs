@@ -243,7 +243,7 @@ impl Parser {
     // SECTION 3: TOP-LEVEL PARSING
     // ========================================================================
 
-    pub fn parse<'parser>(&'parser mut self) -> Result<Program<'parser>, String> {
+    pub fn parse(&mut self) -> Result<Program<'static>, String> {
         let mut items = Vec::new();
 
         while self.current_token() != &Token::Eof {
@@ -253,7 +253,7 @@ impl Parser {
         Ok(Program { items })
     }
 
-    pub(crate) fn parse_item<'parser>(&'parser mut self) -> Result<Item<'parser>, String> {
+    pub(crate) fn parse_item(&mut self) -> Result<Item<'static>, String> {
         // Collect doc comments (/// lines) that appear before the item
         let mut doc_lines = Vec::new();
         while let Token::DocComment(content) = self.current_token() {
@@ -427,7 +427,7 @@ impl Parser {
         }
     }
 
-    fn parse_bound_alias(&mut self) -> Result<Item, String> {
+    fn parse_bound_alias(&mut self) -> Result<Item<'static>, String> {
         // bound Name = Trait + Trait + ...
         let name = if let Token::Ident(n) = self.current_token() {
             let name = n.clone();
