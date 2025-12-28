@@ -404,7 +404,7 @@ impl Parser {
         }
     }
 
-    fn parse_decorator_arguments<'parser>(&'parser mut self) -> Result<Vec<(String, Expression<'parser>)>, String> {
+    fn parse_decorator_arguments(&mut self) -> Result<Vec<(String, &'static Expression<'static>)>, String> {
         let mut args = Vec::new();
 
         while self.current_token() != &Token::RParen {
@@ -420,10 +420,10 @@ impl Parser {
                 } else {
                     // Positional argument (just a string or expression)
                     // Reparse as expression
-                    let expr = Expression::Identifier {
+                    let expr = self.alloc_expr(Expression::Identifier {
                         name: key,
                         location: self.current_location(),
-                    };
+                    });
                     args.push((String::new(), expr));
                 }
             } else {
