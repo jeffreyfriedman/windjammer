@@ -826,11 +826,11 @@ impl<'ast> Analyzer<'ast> {
     }
 
     /// Analyze a function within an impl block (has access to other methods for cross-method analysis)
-    fn analyze_function_in_impl(
+    fn analyze_function_in_impl<'a>(
         &mut self,
-        func: &FunctionDecl<'ast>,
-        impl_block: &crate::parser::ast::ImplBlock<'ast>,
-    ) -> Result<AnalyzedFunction<'ast>, String> {
+        func: &FunctionDecl<'a>,
+        impl_block: &crate::parser::ast::ImplBlock<'a>,
+    ) -> Result<AnalyzedFunction<'a>, String> {
         // Store current impl block for cross-method lookups
         self.current_impl_functions = Some(
             impl_block
@@ -848,7 +848,7 @@ impl<'ast> Analyzer<'ast> {
         result
     }
 
-    fn analyze_function(&mut self, func: &FunctionDecl<'ast>) -> Result<AnalyzedFunction<'ast>, String> {
+    fn analyze_function<'a>(&mut self, func: &FunctionDecl<'a>) -> Result<AnalyzedFunction<'a>, String> {
         let mut inferred_ownership = HashMap::new();
 
         // Check if this is a game decorator function
@@ -1048,11 +1048,11 @@ impl<'ast> Analyzer<'ast> {
 
     /// Analyze a function that implements a trait method
     /// Use the trait's method signature instead of inferring
-    fn analyze_trait_impl_function(
+    fn analyze_trait_impl_function<'a>(
         &mut self,
-        func: &FunctionDecl,
+        func: &FunctionDecl<'a>,
         trait_name: &str,
-    ) -> Result<AnalyzedFunction, String> {
+    ) -> Result<AnalyzedFunction<'a>, String> {
         // Start with regular analysis
         let mut analyzed = self.analyze_function(func)?;
 
