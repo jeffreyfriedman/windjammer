@@ -238,7 +238,7 @@ impl Parser {
                         // [..end] - slice from beginning
                         self.advance(); // consume '..'
                         let end = if self.current_token() != &Token::RBracket {
-                            Some(self.alloc_expr(self.parse_expression()?))
+                            Some(self.parse_expression()?)
                         } else {
                             None
                         };
@@ -1646,7 +1646,7 @@ impl Parser {
                         // [..end] - slice from beginning
                         self.advance(); // consume '..'
                         let end = if self.current_token() != &Token::RBracket {
-                            Some(self.alloc_expr(self.parse_expression()?))
+                            Some(self.parse_expression()?)
                         } else {
                             None
                         };
