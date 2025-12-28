@@ -1074,7 +1074,7 @@ impl Parser {
                     self.advance();
                     let statements = self.parse_block_statements()?;
                     self.expect(Token::RBrace)?;
-                    Box::new(Expression::Block {
+                    self.alloc_expr(Expression::Block {
                         statements,
                         location: self.current_location(),
                     })
@@ -1101,7 +1101,7 @@ impl Parser {
                         // Reset and parse as a statement
                         self.position = checkpoint;
                         let stmt = self.parse_statement()?;
-                        Box::new(Expression::Block {
+                        self.alloc_expr(Expression::Block {
                             statements: vec![stmt],
                             location: self.current_location(),
                         })
@@ -1128,7 +1128,7 @@ impl Parser {
                     self.advance();
                     let statements = self.parse_block_statements()?;
                     self.expect(Token::RBrace)?;
-                    Box::new(Expression::Block {
+                    self.alloc_expr(Expression::Block {
                         statements,
                         location: self.current_location(),
                     })
@@ -1653,8 +1653,8 @@ impl Parser {
 
                         // Desugar [..end] to .slice(0, end)
                         let end_expr = end.unwrap_or_else(|| {
-                            Box::new(Expression::MethodCall {
-                                object: Box::new(expr.clone()),
+                            self.alloc_expr(Expression::MethodCall {
+                                object: self.alloc_expr(expr.clone()),
                                 method: "len".to_string(),
                                 type_args: None,
                                 arguments: vec![],
@@ -1697,8 +1697,8 @@ impl Parser {
 
                             // Desugar [start..end] to .slice(start, end)
                             let end_expr = end.unwrap_or_else(|| {
-                                Box::new(Expression::MethodCall {
-                                    object: Box::new(expr.clone()),
+                                self.alloc_expr(Expression::MethodCall {
+                                    object: self.alloc_expr(expr.clone()),
                                     method: "len".to_string(),
                                     type_args: None,
                                     arguments: vec![],
