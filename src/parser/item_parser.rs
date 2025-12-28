@@ -8,7 +8,7 @@ use crate::parser::ast::*;
 use crate::parser_impl::Parser;
 
 impl Parser {
-    pub(crate) fn parse_impl(&mut self) -> Result<ImplBlock, String> {
+    pub(crate) fn parse_impl<'parser>(&'parser mut self) -> Result<ImplBlock<'parser>, String> {
         // Parse: impl<T> Type { } or impl Trait for Type { } or impl Trait<TypeArgs> for Type { }
 
         // Parse type parameters: impl<T, U> Box<T, U> { ... }
@@ -220,7 +220,7 @@ impl Parser {
         })
     }
 
-    pub(crate) fn parse_trait(&mut self) -> Result<TraitDecl, String> {
+    pub(crate) fn parse_trait<'parser>(&'parser mut self) -> Result<TraitDecl<'parser>, String> {
         // Parse: trait Name<T, U> { methods }
         let name = if let Token::Ident(n) = self.current_token() {
             let n = n.clone();
@@ -645,7 +645,7 @@ impl Parser {
         }
     }
 
-    pub(crate) fn parse_function(&mut self) -> Result<FunctionDecl, String> {
+    pub(crate) fn parse_function<'parser>(&'parser mut self) -> Result<FunctionDecl<'parser>, String> {
         // Note: Token::Fn already consumed in parse_item
 
         let name = if let Token::Ident(n) = self.current_token() {
@@ -837,7 +837,7 @@ impl Parser {
     // TYPE PARSING (used by multiple sections above)
     // ------------------------------------------------------------------------
 
-    pub(crate) fn parse_struct(&mut self) -> Result<StructDecl, String> {
+    pub(crate) fn parse_struct<'parser>(&'parser mut self) -> Result<StructDecl<'parser>, String> {
         // Token::Struct already consumed in parse_item
 
         let name = if let Token::Ident(n) = self.current_token() {
