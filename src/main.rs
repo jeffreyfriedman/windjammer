@@ -1714,20 +1714,19 @@ fn compile_file_impl(
     // Write the file using standard library (cross-platform compatible)
     std::fs::write(&output_file, &combined_code)?;
 
-    // CRITICAL FIX: Sync file to disk to prevent race conditions in ALL CI environments
-    // Tests can read files before OS flushes buffers, especially on Linux
-    // Use sync_all() instead of sync_data() to ensure both data AND metadata are synced
+    // CRITICAL FIX: Sync file to disk to prevent race conditions (Linux only)
+    // macOS and Windows don't have the same aggressive caching issues
+    // The sync + sleep was interfering with macOS file system operations
+    #[cfg(target_os = "linux")]
     {
         use std::io::Write;
         let mut file = std::fs::OpenOptions::new().write(true).open(&output_file)?;
         file.flush()?;
         file.sync_all()?;
-        drop(file); // Explicitly close the file
+        drop(file);
+        // Small delay only on Linux where caching is very aggressive
+        std::thread::sleep(std::time::Duration::from_millis(5));
     }
-
-    // Add a small delay to ensure file system operations complete
-    // This prevents race conditions where tests read immediately after write
-    std::thread::sleep(std::time::Duration::from_millis(10));
 
     // Return the set of imported stdlib modules and external crates for Cargo.toml generation
     Ok((
