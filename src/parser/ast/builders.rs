@@ -117,7 +117,7 @@ pub fn type_uint() -> Type {
 // ============================================================================
 
 /// Build simple parameter with inferred ownership
-pub fn param(name: impl Into<String>, type_: Type) -> Parameter {
+pub fn param<'ast>(name: impl Into<String>, type_: Type) -> Parameter<'ast> {
     Parameter {
         name: name.into(),
         pattern: None,
@@ -128,7 +128,7 @@ pub fn param(name: impl Into<String>, type_: Type) -> Parameter {
 }
 
 /// Build reference parameter
-pub fn param_ref(name: impl Into<String>, type_: Type) -> Parameter {
+pub fn param_ref<'ast>(name: impl Into<String>, type_: Type) -> Parameter<'ast> {
     Parameter {
         name: name.into(),
         pattern: None,
@@ -139,7 +139,7 @@ pub fn param_ref(name: impl Into<String>, type_: Type) -> Parameter {
 }
 
 /// Build mutable reference parameter
-pub fn param_mut(name: impl Into<String>, type_: Type) -> Parameter {
+pub fn param_mut<'ast>(name: impl Into<String>, type_: Type) -> Parameter<'ast> {
     Parameter {
         name: name.into(),
         pattern: None,
@@ -150,7 +150,7 @@ pub fn param_mut(name: impl Into<String>, type_: Type) -> Parameter {
 }
 
 /// Build owned parameter
-pub fn param_owned(name: impl Into<String>, type_: Type) -> Parameter {
+pub fn param_owned<'ast>(name: impl Into<String>, type_: Type) -> Parameter<'ast> {
     Parameter {
         name: name.into(),
         pattern: None,
