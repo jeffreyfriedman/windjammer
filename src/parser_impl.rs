@@ -463,7 +463,7 @@ impl Parser {
         })
     }
 
-    pub(crate) fn parse_const_or_static(&mut self) -> Result<(String, Type, Expression), String> {
+    pub(crate) fn parse_const_or_static(&mut self) -> Result<(String, Type, &'static Expression<'static>), String> {
         let name = if let Token::Ident(n) = self.current_token() {
             let name = n.clone();
             self.advance();
@@ -484,11 +484,11 @@ impl Parser {
     // Helper: Extract a name from a pattern for backward compatibility
 
     // Public wrapper methods for component compiler
-    pub fn parse_expression_public<'parser>(&'parser mut self) -> Result<Expression<'parser>, String> {
+    pub fn parse_expression_public(&mut self) -> Result<&'static Expression<'static>, String> {
         self.parse_expression()
     }
 
-    pub fn parse_function_public<'parser>(&'parser mut self) -> Result<FunctionDecl<'parser>, String> {
+    pub fn parse_function_public(&mut self) -> Result<FunctionDecl<'static>, String> {
         self.parse_function()
     }
 }
