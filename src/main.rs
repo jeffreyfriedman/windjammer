@@ -1711,11 +1711,17 @@ fn compile_file_impl(
         eprintln!("    rust_code length: check generator output");
     }
 
-    std::fs::write(&output_file, &combined_code)?;
-    // CRITICAL FIX: Explicitly sync the file to disk to prevent race conditions in CI
-    // Without this, tests may read an empty file before the OS flushes the buffer
-    // This is especially important on Ubuntu CI where file system caching is aggressive
-    std::fs::File::open(&output_file)?.sync_all()?;
+    // Write the file and ensure it's flushed to disk
+    // CRITICAL FIX: Prevents race conditions in CI where tests read before OS flushes buffers
+    {
+        use std::io::Write;
+        let mut file = std::fs::File::create(&output_file)?;
+        file.write_all(combined_code.as_bytes())?;
+        file.flush()?;
+        // sync_data() instead of sync_all() - syncs content but not metadata (faster, less intrusive)
+        #[cfg(not(target_os = "windows"))]
+        file.sync_data()?;
+    } // File handle explicitly closed here
 
     // Return the set of imported stdlib modules and external crates for Cargo.toml generation
     Ok((
