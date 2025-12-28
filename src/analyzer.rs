@@ -1250,7 +1250,7 @@ impl<'ast> Analyzer<'ast> {
         }
     }
 
-    fn is_used_in_if_else_expression(&self, name: &str, statements: &[Statement]) -> bool {
+    fn is_used_in_if_else_expression<'ast>(&self, name: &str, statements: &[&'ast Statement<'ast>]) -> bool {
         // Check if parameter is used in an if/else expression
         // Example:
         //   let x = if cond { Thing::new(...) } else { param }
@@ -1297,7 +1297,7 @@ impl<'ast> Analyzer<'ast> {
         }
     }
 
-    fn stmts_have_if_else_with_param(&self, name: &str, stmts: &[Statement]) -> bool {
+    fn stmts_have_if_else_with_param<'ast>(&self, name: &str, stmts: &[&'ast Statement<'ast>]) -> bool {
         stmts
             .iter()
             .any(|stmt| self.stmt_has_if_else_with_param(name, stmt))
@@ -1329,7 +1329,7 @@ impl<'ast> Analyzer<'ast> {
         }
     }
 
-    fn stmts_mention_identifier(&self, name: &str, stmts: &[Statement]) -> bool {
+    fn stmts_mention_identifier<'ast>(&self, name: &str, stmts: &[&'ast Statement<'ast>]) -> bool {
         stmts
             .iter()
             .any(|stmt| self.stmt_mentions_identifier(name, stmt))
@@ -1369,7 +1369,7 @@ impl<'ast> Analyzer<'ast> {
         }
     }
 
-    fn is_mutated(&self, name: &str, statements: &[Statement]) -> bool {
+    fn is_mutated<'ast>(&self, name: &str, statements: &[&'ast Statement<'ast>]) -> bool {
         for stmt in statements {
             match stmt {
                 Statement::Assignment { target, .. } => {
@@ -1469,7 +1469,7 @@ impl<'ast> Analyzer<'ast> {
         }
     }
 
-    fn is_returned(&self, name: &str, statements: &[Statement]) -> bool {
+    fn is_returned<'ast>(&self, name: &str, statements: &[&'ast Statement<'ast>]) -> bool {
         let len = statements.len();
         for (i, stmt) in statements.iter().enumerate() {
             let is_last = i == len - 1;
@@ -1574,7 +1574,7 @@ impl<'ast> Analyzer<'ast> {
         }
     }
 
-    fn is_stored(&self, name: &str, statements: &[Statement]) -> bool {
+    fn is_stored<'ast>(&self, name: &str, statements: &[&'ast Statement<'ast>]) -> bool {
         // Check if the parameter is stored in a struct field or collection
         for stmt in statements {
             match stmt {
@@ -1742,7 +1742,7 @@ impl<'ast> Analyzer<'ast> {
         false
     }
 
-    fn is_used_in_binary_op(&self, name: &str, statements: &[Statement]) -> bool {
+    fn is_used_in_binary_op<'ast>(&self, name: &str, statements: &[&'ast Statement<'ast>]) -> bool {
         for stmt in statements {
             match stmt {
                 Statement::Let { value, .. } => {
@@ -1846,7 +1846,7 @@ impl<'ast> Analyzer<'ast> {
     /// Check if a parameter is pattern matched with field extraction
     /// e.g., `match param { Enum::Variant { field: f } => ... }`
     /// If we borrow the parameter, `f` becomes a reference, breaking calls expecting owned values
-    fn is_pattern_matched_with_fields(&self, name: &str, statements: &[Statement]) -> bool {
+    fn is_pattern_matched_with_fields<'ast>(&self, name: &str, statements: &[&'ast Statement<'ast>]) -> bool {
         for stmt in statements {
             match stmt {
                 #[allow(clippy::collapsible_match)]
@@ -3157,7 +3157,7 @@ impl<'ast> Analyzer<'ast> {
     }
 
     /// Check if a variable is modified in a block of statements
-    fn is_variable_modified(&self, var_name: &str, statements: &[Statement]) -> bool {
+    fn is_variable_modified<'ast>(&self, var_name: &str, statements: &[&'ast Statement<'ast>]) -> bool {
         for stmt in statements {
             match stmt {
                 // Assignment to the variable
@@ -3490,7 +3490,7 @@ impl<'ast> Analyzer<'ast> {
 
     /// Check if a function uses a specific identifier (e.g., "self")
     /// This is used for auto-self inference.
-    fn function_uses_identifier(&self, name: &str, statements: &[Statement]) -> bool {
+    fn function_uses_identifier<'ast>(&self, name: &str, statements: &[&'ast Statement<'ast>]) -> bool {
         for stmt in statements {
             if self.statement_uses_identifier(name, stmt) {
                 return true;
@@ -3709,13 +3709,13 @@ impl<'ast> Analyzer<'ast> {
 
     /// Track which local variables are mutated in a function body
     /// This enables automatic `mut` inference - users don't need to write `let mut x`
-    pub fn track_mutations(&mut self, statements: &[Statement]) {
+    pub fn track_mutations<'ast>(&mut self, statements: &[&'ast Statement<'ast>]) {
         self.mutated_variables.clear();
         self.collect_mutations(statements);
     }
 
     /// Recursively collect all variable mutations
-    fn collect_mutations(&mut self, statements: &[Statement]) {
+    fn collect_mutations<'ast>(&mut self, statements: &[&'ast Statement<'ast>]) {
         for stmt in statements {
             match stmt {
                 Statement::Assignment {
@@ -3805,7 +3805,7 @@ impl<'ast> Analyzer<'ast> {
     }
 
     /// Check if a variable is mutated within a specific set of statements
-    fn is_variable_mutated_in_statements(&self, var_name: &str, statements: &[Statement]) -> bool {
+    fn is_variable_mutated_in_statements<'ast>(&self, var_name: &str, statements: &[&'ast Statement<'ast>]) -> bool {
         for stmt in statements {
             match stmt {
                 Statement::Assignment { target, .. } => {
