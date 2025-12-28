@@ -47,7 +47,7 @@ fn collect_concat_parts_recursive<'ast>(expr: &Expression<'ast>, parts: &mut Vec
 ///
 /// This is the same as `collect_concat_parts` but uses a mutable reference
 /// instead of returning a Vec, avoiding unnecessary allocation in some contexts.
-pub fn collect_concat_parts_static(expr: &Expression, parts: &mut Vec<Expression>) {
+pub fn collect_concat_parts_static<'ast>(expr: &Expression<'ast>, parts: &mut Vec<Expression<'ast>>) {
     collect_concat_parts_recursive(expr, parts);
 }
 
@@ -215,8 +215,8 @@ pub fn statement_has_as_str(stmt: &crate::parser::Statement) -> bool {
 /// // { let x = 1; s.as_str(); } → true
 /// // {} → false
 /// ```
-pub fn block_has_as_str(stmts: &[crate::parser::Statement]) -> bool {
-    stmts.iter().any(statement_has_as_str)
+pub fn block_has_as_str<'ast>(stmts: &[&'ast crate::parser::Statement<'ast>]) -> bool {
+    stmts.iter().any(|s| statement_has_as_str(s))
 }
 
 // =============================================================================
@@ -235,7 +235,7 @@ pub fn block_has_as_str(stmts: &[crate::parser::Statement]) -> bool {
 /// // { x } → false
 /// // {} → false
 /// ```
-pub fn block_has_explicit_ref(stmts: &[crate::parser::Statement]) -> bool {
+pub fn block_has_explicit_ref<'ast>(stmts: &[&'ast crate::parser::Statement<'ast>]) -> bool {
     use crate::parser::Statement;
     if stmts.is_empty() {
         return false;
