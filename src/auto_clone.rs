@@ -68,7 +68,7 @@ impl AutoCloneAnalysis {
     }
 
     /// Build a map of all variable usages in the function
-    fn build_usage_map(statements: &[Statement]) -> HashMap<String, Vec<Usage>> {
+    fn build_usage_map<'ast>(statements: &[&'ast Statement<'ast>]) -> HashMap<String, Vec<Usage>> {
         let mut map = HashMap::new();
 
         for (idx, stmt) in statements.iter().enumerate() {
@@ -181,7 +181,7 @@ impl AutoCloneAnalysis {
                 // might vary (e.g., items[0], items[i])
                 if let Some(base_path) = Self::extract_expression_path(object) {
                     // Try to get a more specific index if it's a literal
-                    let index_str = match index.as_ref() {
+                    let index_str = match index {
                         Expression::Literal {
                             value: crate::parser::Literal::Int(n),
                             ..
@@ -392,7 +392,7 @@ impl AutoCloneAnalysis {
 
     /// Find variables that are bound to string literals
     /// These don't need .clone() because they're just &str references
-    fn find_string_literal_vars(&mut self, statements: &[Statement]) {
+    fn find_string_literal_vars<'ast>(&mut self, statements: &[&'ast Statement<'ast>]) {
         for stmt in statements {
             match stmt {
                 Statement::Let {
