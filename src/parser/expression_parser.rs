@@ -29,10 +29,10 @@ impl Parser {
                 // Check for empty tuple ()
                 if self.current_token() == &Token::RParen {
                     self.advance();
-                    return Ok(Expression::Tuple {
+                    return Ok(self.alloc_expr(Expression::Tuple {
                         elements: vec![],
                         location: self.current_location(),
-                    });
+                    }));
                 }
 
                 // Parse the first expression inside parentheses
@@ -55,10 +55,10 @@ impl Parser {
                     }
 
                     self.expect(Token::RParen)?;
-                    Expression::Tuple {
+                    self.alloc_expr(Expression::Tuple {
                         elements,
                         location: self.current_location(),
-                    }
+                    })
                 } else {
                     // Just a parenthesized expression
                     self.expect(Token::RParen)?;
@@ -72,10 +72,10 @@ impl Parser {
                 // Check for empty array []
                 if self.current_token() == &Token::RBracket {
                     self.advance();
-                    return Ok(Expression::Array {
+                    return Ok(self.alloc_expr(Expression::Array {
                         elements: vec![],
                         location: self.current_location(),
-                    });
+                    }));
                 }
 
                 let first_element = self.parse_expression()?;
@@ -87,12 +87,12 @@ impl Parser {
                     self.expect(Token::RBracket)?;
 
                     // Represent as a macro invocation: vec![value; count]
-                    return Ok(Expression::MacroInvocation {
+                    return Ok(self.alloc_expr(Expression::MacroInvocation {
                         name: "vec".to_string(),
                         args: vec![first_element, count],
                         delimiter: MacroDelimiter::Brackets,
                         location: self.current_location(),
-                    });
+                    }));
                 }
 
                 // Regular array literal
@@ -110,10 +110,10 @@ impl Parser {
                 }
 
                 self.expect(Token::RBracket)?;
-                Expression::Array {
+                self.alloc_expr(Expression::Array {
                     elements,
                     location: self.current_location(),
-                }
+                })
             }
             Token::Ampersand => {
                 // Handle & and &mut unary operators
