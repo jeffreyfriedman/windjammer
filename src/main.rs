@@ -1712,6 +1712,11 @@ fn compile_file_impl(
     }
 
     std::fs::write(&output_file, &combined_code)?;
+    
+    // CRITICAL FIX: Explicitly sync the file to disk to prevent race conditions in CI
+    // Without this, tests may read an empty file before the OS flushes the buffer
+    // This is especially important on Ubuntu CI where file system caching is aggressive
+    std::fs::File::open(&output_file)?.sync_all()?;
 
     // Return the set of imported stdlib modules and external crates for Cargo.toml generation
     Ok((
