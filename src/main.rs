@@ -1257,13 +1257,14 @@ fn compile_file_with_compiler(
         // Already compiling this file in the current chain - skip to prevent infinite recursion
         // This is OK and expected for circular imports that have already been handled
         eprintln!(
-            "⚠️  RECURSION GUARD: Skipping {} (already in compilation chain)",
+            "⚠️  RECURSION GUARD TRIGGERED: Skipping {} (already in compilation chain)",
             path_key
         );
         eprintln!(
             "   Currently compiling: {}",
             module_compiler.compiling_files.len()
         );
+        eprintln!("   🚨 WARNING: This will cause an EMPTY FILE to be written!");
         return Ok((HashSet::new(), Vec::new()));
     }
 
@@ -1273,6 +1274,11 @@ fn compile_file_with_compiler(
     }
 
     module_compiler.compiling_files.insert(path_key.clone());
+    eprintln!(
+        "✅ RECURSION GUARD: Added {} to compilation set (now {} files)",
+        path_key,
+        module_compiler.compiling_files.len()
+    );
 
     // THE WINDJAMMER WAY: Always cleanup, whether we succeed or fail
     // Call the implementation, then remove path from set regardless of result
@@ -1289,6 +1295,11 @@ fn compile_file_with_compiler(
     // Remove path from compilation set now that we're done (success or failure)
     // This runs whether result is Ok or Err
     module_compiler.compiling_files.remove(&path_key);
+    eprintln!(
+        "✅ RECURSION GUARD: Removed {} from compilation set (now {} files)",
+        path_key,
+        module_compiler.compiling_files.len()
+    );
 
     result
 }
@@ -1688,6 +1699,16 @@ fn compile_file_impl(
     // Create parent directories if needed
     if let Some(parent) = output_file.parent() {
         std::fs::create_dir_all(parent)?;
+    }
+
+    eprintln!(
+        "📝 WRITING FILE: {} ({} bytes)",
+        output_file.display(),
+        combined_code.len()
+    );
+    if combined_code.is_empty() {
+        eprintln!("    🚨 WARNING: Writing EMPTY file!");
+        eprintln!("    rust_code length: check generator output");
     }
 
     std::fs::write(&output_file, &combined_code)?;
