@@ -704,7 +704,7 @@ impl Parser {
         })
     }
 
-    fn parse_parameters(&mut self) -> Result<Vec<Parameter>, String> {
+    fn parse_parameters(&mut self) -> Result<Vec<Parameter<'static>>, String> {
         let mut params = Vec::new();
 
         while self.current_token() != &Token::RParen {
