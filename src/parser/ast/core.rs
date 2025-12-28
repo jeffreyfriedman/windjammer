@@ -31,7 +31,7 @@ pub struct Parameter {
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct Decorator<'ast> {
     pub name: String,
-    pub arguments: Vec<(String, Expression<'ast>)>, // Named arguments
+    pub arguments: Vec<(String, &'ast Expression<'ast>)>, // Named arguments
 }
 
 // ============================================================================
@@ -282,14 +282,14 @@ pub enum Expression<'ast> {
     },
     Call {
         function: &'ast Expression<'ast>,
-        arguments: Vec<(Option<String>, Expression<'ast>)>, // (label, expr)
+        arguments: Vec<(Option<String>, &'ast Expression<'ast>)>, // (label, expr)
         location: SourceLocation,
     },
     MethodCall {
         object: &'ast Expression<'ast>,
         method: String,
         type_args: Option<Vec<Type>>, // Turbofish: Vec::<int>::new()
-        arguments: Vec<(Option<String>, Expression<'ast>)>, // (label, expr)
+        arguments: Vec<(Option<String>, &'ast Expression<'ast>)>, // (label, expr)
         location: SourceLocation,
     },
     FieldAccess {
@@ -328,16 +328,16 @@ pub enum Expression<'ast> {
         location: SourceLocation,
     },
     Tuple {
-        elements: Vec<Expression<'ast>>, // Tuple expression: (a, b, c)
+        elements: Vec<&'ast Expression<'ast>>, // Tuple expression: (a, b, c)
         location: SourceLocation,
     },
     Array {
-        elements: Vec<Expression<'ast>>, // Array expression: [a, b, c]
+        elements: Vec<&'ast Expression<'ast>>, // Array expression: [a, b, c]
         location: SourceLocation,
     },
     MacroInvocation {
         name: String,
-        args: Vec<Expression<'ast>>,
+        args: Vec<&'ast Expression<'ast>>,
         delimiter: MacroDelimiter, // (), [], or {}
         location: SourceLocation,
     },
