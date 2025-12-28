@@ -1726,7 +1726,7 @@ fn compile_file_impl(
         {
             file.sync_all()?; // Sync file data AND metadata
             drop(file); // Close file handle before syncing directory
-
+            
             // CRITICAL: On Linux, we must also sync the PARENT DIRECTORY
             // to ensure the directory entry is persisted. Without this,
             // a crash could leave the directory without the file entry.
@@ -1736,7 +1736,7 @@ fn compile_file_impl(
                 dir.sync_all()?;
             }
         }
-
+        
         #[cfg(not(target_os = "linux"))]
         drop(file); // Close file handle on non-Linux systems
     }
