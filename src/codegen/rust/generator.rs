@@ -96,6 +96,8 @@ pub struct CodeGenerator {
     inferred_borrowed_params: std::collections::HashSet<String>,
     // ASSIGNMENT TARGET: Flag to suppress auto-clone when generating assignment targets
     generating_assignment_target: bool,
+    // RECURSION GUARD: Track traits currently being generated to prevent infinite recursion
+    generating_traits: std::collections::HashSet<String>,
 }
 
 impl CodeGenerator {
@@ -148,6 +150,7 @@ impl CodeGenerator {
             local_variable_scopes: Vec::new(),
             in_expression_context: false,
             analyzed_trait_methods: std::collections::HashMap::new(),
+            generating_traits: std::collections::HashSet::new(),
         }
     }
 
@@ -1472,6 +1475,19 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
         trait_decl: &crate::parser::TraitDecl,
         analyzed: &[AnalyzedFunction],
     ) -> String {
+        // RECURSION GUARD: Prevent infinite recursion during trait generation
+        // This can happen if the same trait is generated multiple times in a cycle
+        if self.generating_traits.contains(&trait_decl.name) {
+            eprintln!(
+                "⚠️  RECURSION GUARD (CODEGEN): Skipping trait {} (already generating)",
+                trait_decl.name
+            );
+            return String::new(); // Return empty to break the cycle
+        }
+
+        // Add to generating set
+        self.generating_traits.insert(trait_decl.name.clone());
+
         let mut output = String::new();
 
         // TODO: Add is_pub field to TraitDecl and check it properly
@@ -1716,6 +1732,10 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
 
         self.indent_level -= 1;
         output.push('}');
+
+        // Remove from generating set before returning
+        self.generating_traits.remove(&trait_decl.name);
+
         output
     }
 

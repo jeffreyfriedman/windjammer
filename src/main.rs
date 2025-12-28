@@ -1241,6 +1241,18 @@ fn compile_file_with_compiler(
         }
     };
 
+    // DEBUG: Print ALL currently compiling files for Windows debugging
+    if !module_compiler.compiling_files.is_empty() {
+        eprintln!(
+            "🔍 Currently compiling {} files:",
+            module_compiler.compiling_files.len()
+        );
+        for (idx, file) in module_compiler.compiling_files.iter().enumerate() {
+            eprintln!("   [{}] {}", idx, file);
+        }
+        eprintln!("🔍 Checking: {}", path_key);
+    }
+
     if module_compiler.compiling_files.contains(&path_key) {
         // Already compiling this file in the current chain - skip to prevent infinite recursion
         // This is OK and expected for circular imports that have already been handled
