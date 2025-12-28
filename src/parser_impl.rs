@@ -88,6 +88,7 @@ pub struct Parser {
     // returned from parse() will have lifetime 'parser tied to &'parser self.
     pub(crate) expr_arena: Arena<Expression<'static>>,
     pub(crate) stmt_arena: Arena<Statement<'static>>,
+    pub(crate) pattern_arena: Arena<Pattern<'static>>,
 }
 
 impl Parser {
@@ -116,6 +117,7 @@ impl Parser {
             source: String::new(),
             expr_arena: Arena::new(),
             stmt_arena: Arena::new(),
+            pattern_arena: Arena::new(),
         }
     }
 
@@ -131,6 +133,7 @@ impl Parser {
             source,
             expr_arena: Arena::new(),
             stmt_arena: Arena::new(),
+            pattern_arena: Arena::new(),
         }
     }
 
@@ -149,6 +152,15 @@ impl Parser {
     pub(crate) fn alloc_stmt<'parser>(&'parser self, stmt: Statement<'static>) -> &'parser Statement<'parser> {
         unsafe {
             let ptr = self.stmt_arena.alloc(stmt);
+            std::mem::transmute(ptr)
+        }
+    }
+
+    /// Allocate a pattern in the arena
+    /// SAFETY: Same as alloc_expr
+    pub(crate) fn alloc_pattern<'parser>(&'parser self, pattern: Pattern<'static>) -> &'parser Pattern<'parser> {
+        unsafe {
+            let ptr = self.pattern_arena.alloc(pattern);
             std::mem::transmute(ptr)
         }
     }
