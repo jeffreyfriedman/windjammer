@@ -1,12 +1,16 @@
-# Windows-specific configuration to increase stack size
-# NOTE: build.rs dynamically sets stack size based on profile:
-#   - Debug/Test: 16MB (no optimization, deeper call stacks)
-#   - Release: 8MB (optimizations reduce stack usage)
-# These settings are fallback in case build.rs doesn't run
-# This prevents stack overflow during cleanup/Drop of deep AST structures
+# Cross-platform stack size configuration
+# This affects ALL binaries and tests, not just the main binary
 
+# Windows: Increase stack from default 1MB to prevent overflow
+# - Debug/Test builds need 16MB (no tail-call optimization)
+# - These settings apply to all executables including tests
 [target.x86_64-pc-windows-msvc]
-rustflags = ["-C", "link-args=/STACK:16777216"]
+rustflags = ["-C", "link-arg=/STACK:16777216"]
 
 [target.x86_64-pc-windows-gnu]
-rustflags = ["-C", "link-args=-Wl,--stack,16777216"]
+rustflags = ["-C", "link-arg=-Wl,--stack,16777216"]
+
+# Set minimum stack size for all threads (including test threads)
+# This environment variable is read by the Rust runtime
+[env]
+RUST_MIN_STACK = "16777216"
