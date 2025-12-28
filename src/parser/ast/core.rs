@@ -29,9 +29,9 @@ pub struct Parameter {
 // ============================================================================
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub struct Decorator {
+pub struct Decorator<'ast> {
     pub name: String,
-    pub arguments: Vec<(String, Expression)>, // Named arguments
+    pub arguments: Vec<(String, Expression<'ast>)>, // Named arguments
 }
 
 // ============================================================================
@@ -39,17 +39,17 @@ pub struct Decorator {
 // ============================================================================
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub struct FunctionDecl {
+pub struct FunctionDecl<'ast> {
     pub name: String,
     pub is_pub: bool,                // Whether this function has pub visibility
     pub is_extern: bool,             // Whether this is an extern function (FFI)
     pub type_params: Vec<TypeParam>, // Generic type parameters with optional bounds: <T: Display, U>
     pub where_clause: Vec<(String, Vec<String>)>, // Where clause: [(type_param, [trait_bounds])]
-    pub decorators: Vec<Decorator>,
+    pub decorators: Vec<Decorator<'ast>>,
     pub is_async: bool,
     pub parameters: Vec<Parameter>,
     pub return_type: Option<Type>,
-    pub body: Vec<Statement>,        // Empty for extern functions
+    pub body: Vec<Statement<'ast>>,        // Empty for extern functions
     pub parent_type: Option<String>, // The type name if this function is in an impl block
     pub doc_comment: Option<String>, // Documentation comment (/// lines)
 }
@@ -59,22 +59,22 @@ pub struct FunctionDecl {
 // ============================================================================
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub struct StructField {
+pub struct StructField<'ast> {
     pub name: String,
     pub field_type: Type,
-    pub decorators: Vec<Decorator>,
+    pub decorators: Vec<Decorator<'ast>>,
     pub is_pub: bool,
     pub doc_comment: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub struct StructDecl {
+pub struct StructDecl<'ast> {
     pub name: String,
     pub is_pub: bool,                // Whether this struct has pub visibility
     pub type_params: Vec<TypeParam>, // Generic type parameters with optional bounds: <T: Clone>
     pub where_clause: Vec<(String, Vec<String>)>, // Where clause: [(type_param, [trait_bounds])]
-    pub fields: Vec<StructField>,
-    pub decorators: Vec<Decorator>,
+    pub fields: Vec<StructField<'ast>>,
+    pub decorators: Vec<Decorator<'ast>>,
     pub doc_comment: Option<String>, // Documentation comment (/// lines)
 }
 
@@ -110,79 +110,79 @@ pub struct EnumDecl {
 // ============================================================================
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub enum Statement {
+pub enum Statement<'ast> {
     Let {
         pattern: Pattern,
         mutable: bool,
         type_: Option<Type>,
-        value: Expression,
+        value: Expression<'ast>,
         /// Optional else block for let-else patterns (e.g., `let Some(x) = opt else { return }`)
-        else_block: Option<Vec<Statement>>,
+        else_block: Option<Vec<Statement<'ast>>>,
         location: SourceLocation,
     },
     Const {
         name: String,
         type_: Type,
-        value: Expression,
+        value: Expression<'ast>,
         location: SourceLocation,
     },
     Static {
         name: String,
         mutable: bool,
         type_: Type,
-        value: Expression,
+        value: Expression<'ast>,
         location: SourceLocation,
     },
     Assignment {
-        target: Expression,
-        value: Expression,
+        target: Expression<'ast>,
+        value: Expression<'ast>,
         compound_op: Option<CompoundOp>,
         location: SourceLocation,
     },
     Return {
-        value: Option<Expression>,
+        value: Option<Expression<'ast>>,
         location: SourceLocation,
     },
     Expression {
-        expr: Expression,
+        expr: Expression<'ast>,
         location: SourceLocation,
     },
     If {
-        condition: Expression,
-        then_block: Vec<Statement>,
-        else_block: Option<Vec<Statement>>,
+        condition: Expression<'ast>,
+        then_block: Vec<Statement<'ast>>,
+        else_block: Option<Vec<Statement<'ast>>>,
         location: SourceLocation,
     },
     Match {
-        value: Expression,
-        arms: Vec<MatchArm>,
+        value: Expression<'ast>,
+        arms: Vec<MatchArm<'ast>>,
         location: SourceLocation,
     },
     For {
         pattern: Pattern,
-        iterable: Expression,
-        body: Vec<Statement>,
+        iterable: Expression<'ast>,
+        body: Vec<Statement<'ast>>,
         location: SourceLocation,
     },
     Loop {
-        body: Vec<Statement>,
+        body: Vec<Statement<'ast>>,
         location: SourceLocation,
     },
     While {
-        condition: Expression,
-        body: Vec<Statement>,
+        condition: Expression<'ast>,
+        body: Vec<Statement<'ast>>,
         location: SourceLocation,
     },
     Thread {
-        body: Vec<Statement>,
+        body: Vec<Statement<'ast>>,
         location: SourceLocation,
     },
     Async {
-        body: Vec<Statement>,
+        body: Vec<Statement<'ast>>,
         location: SourceLocation,
     },
     Defer {
-        statement: Box<Statement>,
+        statement: &'ast Statement<'ast>,
         location: SourceLocation,
     },
     Break {
@@ -199,7 +199,7 @@ pub enum Statement {
     },
 }
 
-impl Statement {
+impl<'ast> Statement<'ast> {
     /// Get the source location of this statement (if available)
     pub fn location(&self) -> SourceLocation {
         match self {
@@ -225,10 +225,10 @@ impl Statement {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub struct MatchArm {
+pub struct MatchArm<'ast> {
     pub pattern: Pattern,
-    pub guard: Option<Expression>, // Optional guard: if condition
-    pub body: Expression,
+    pub guard: Option<Expression<'ast>>, // Optional guard: if condition
+    pub body: Expression<'ast>,
 }
 
 // ============================================================================
@@ -260,7 +260,7 @@ pub enum Pattern {
 // ============================================================================
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub enum Expression {
+pub enum Expression<'ast> {
     Literal {
         value: Literal,
         location: SourceLocation,
@@ -270,101 +270,101 @@ pub enum Expression {
         location: SourceLocation,
     },
     Binary {
-        left: Box<Expression>,
+        left: &'ast Expression<'ast>,
         op: BinaryOp,
-        right: Box<Expression>,
+        right: &'ast Expression<'ast>,
         location: SourceLocation,
     },
     Unary {
         op: UnaryOp,
-        operand: Box<Expression>,
+        operand: &'ast Expression<'ast>,
         location: SourceLocation,
     },
     Call {
-        function: Box<Expression>,
-        arguments: Vec<(Option<String>, Expression)>, // (label, expr)
+        function: &'ast Expression<'ast>,
+        arguments: Vec<(Option<String>, Expression<'ast>)>, // (label, expr)
         location: SourceLocation,
     },
     MethodCall {
-        object: Box<Expression>,
+        object: &'ast Expression<'ast>,
         method: String,
         type_args: Option<Vec<Type>>, // Turbofish: Vec::<int>::new()
-        arguments: Vec<(Option<String>, Expression)>, // (label, expr)
+        arguments: Vec<(Option<String>, Expression<'ast>)>, // (label, expr)
         location: SourceLocation,
     },
     FieldAccess {
-        object: Box<Expression>,
+        object: &'ast Expression<'ast>,
         field: String,
         location: SourceLocation,
     },
     StructLiteral {
         name: String,
-        fields: Vec<(String, Expression)>,
+        fields: Vec<(String, Expression<'ast>)>,
         location: SourceLocation,
     },
     MapLiteral {
-        pairs: Vec<(Expression, Expression)>, // {key: value, ...}
+        pairs: Vec<(Expression<'ast>, Expression<'ast>)>, // {key: value, ...}
         location: SourceLocation,
     },
     Range {
-        start: Box<Expression>,
-        end: Box<Expression>,
+        start: &'ast Expression<'ast>,
+        end: &'ast Expression<'ast>,
         inclusive: bool,
         location: SourceLocation,
     },
     Closure {
         parameters: Vec<String>,
-        body: Box<Expression>,
+        body: &'ast Expression<'ast>,
         location: SourceLocation,
     },
     Cast {
-        expr: Box<Expression>,
+        expr: &'ast Expression<'ast>,
         type_: Type,
         location: SourceLocation,
     },
     Index {
-        object: Box<Expression>,
-        index: Box<Expression>,
+        object: &'ast Expression<'ast>,
+        index: &'ast Expression<'ast>,
         location: SourceLocation,
     },
     Tuple {
-        elements: Vec<Expression>, // Tuple expression: (a, b, c)
+        elements: Vec<Expression<'ast>>, // Tuple expression: (a, b, c)
         location: SourceLocation,
     },
     Array {
-        elements: Vec<Expression>, // Array expression: [a, b, c]
+        elements: Vec<Expression<'ast>>, // Array expression: [a, b, c]
         location: SourceLocation,
     },
     MacroInvocation {
         name: String,
-        args: Vec<Expression>,
+        args: Vec<Expression<'ast>>,
         delimiter: MacroDelimiter, // (), [], or {}
         location: SourceLocation,
     },
     TryOp {
-        expr: Box<Expression>, // The ? operator
+        expr: &'ast Expression<'ast>, // The ? operator
         location: SourceLocation,
     },
     Await {
-        expr: Box<Expression>, // The .await
+        expr: &'ast Expression<'ast>, // The .await
         location: SourceLocation,
     },
     ChannelSend {
-        channel: Box<Expression>,
-        value: Box<Expression>,
+        channel: &'ast Expression<'ast>,
+        value: &'ast Expression<'ast>,
         location: SourceLocation,
     },
     ChannelRecv {
-        channel: Box<Expression>,
+        channel: &'ast Expression<'ast>,
         location: SourceLocation,
     },
     Block {
-        statements: Vec<Statement>,
+        statements: Vec<Statement<'ast>>,
         location: SourceLocation,
     },
 }
 
-impl Expression {
+impl<'ast> Expression<'ast> {
     /// Get the source location of this expression (if available)
     pub fn location(&self) -> SourceLocation {
         match self {
@@ -427,22 +427,22 @@ impl std::hash::Hash for Literal {
 // ============================================================================
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub struct TraitDecl {
+pub struct TraitDecl<'ast> {
     pub name: String,
     pub generics: Vec<String>,    // Generic parameters like <T, U>
     pub supertraits: Vec<String>, // Supertrait bounds: trait Manager: Employee
     pub associated_types: Vec<AssociatedType>, // Associated type declarations: type Item;
-    pub methods: Vec<TraitMethod>,
+    pub methods: Vec<TraitMethod<'ast>>,
     pub doc_comment: Option<String>, // Documentation comment (/// lines)
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub struct TraitMethod {
+pub struct TraitMethod<'ast> {
     pub name: String,
     pub parameters: Vec<Parameter>,
     pub return_type: Option<Type>,
     pub is_async: bool,
-    pub body: Option<Vec<Statement>>, // None for trait definitions, Some for default impls
+    pub body: Option<Vec<Statement<'ast>>>, // None for trait definitions, Some for default impls
     pub doc_comment: Option<String>,  // Documentation comment (/// lines)
 }
 
@@ -451,15 +451,15 @@ pub struct TraitMethod {
 // ============================================================================
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub struct ImplBlock {
+pub struct ImplBlock<'ast> {
     pub type_name: String,
     pub type_params: Vec<TypeParam>, // Generic type parameters with optional bounds: impl<T: Display> Box<T>
     pub where_clause: Vec<(String, Vec<String>)>, // Where clause: [(type_param, [trait_bounds])]
     pub trait_name: Option<String>, // None for inherent impl, Some for trait impl (without type args)
     pub trait_type_args: Option<Vec<Type>>, // Type arguments for generic trait impl: From<int> -> Some([Type::Int])
     pub associated_types: Vec<AssociatedType>, // Associated type implementations: type Item = i32;
-    pub functions: Vec<FunctionDecl>,
-    pub decorators: Vec<Decorator>,
+    pub functions: Vec<FunctionDecl<'ast>>,
+    pub decorators: Vec<Decorator<'ast>>,
 }
 
 // ============================================================================
@@ -467,13 +467,13 @@ pub struct ImplBlock {
 // ============================================================================
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub enum Item {
+pub enum Item<'ast> {
     Function {
-        decl: FunctionDecl,
+        decl: FunctionDecl<'ast>,
         location: SourceLocation,
     },
     Struct {
-        decl: StructDecl,
+        decl: StructDecl<'ast>,
         location: SourceLocation,
     },
     Enum {
@@ -481,24 +481,24 @@ pub enum Item {
         location: SourceLocation,
     },
     Trait {
-        decl: TraitDecl,
+        decl: TraitDecl<'ast>,
         location: SourceLocation,
     },
     Impl {
-        block: ImplBlock,
+        block: ImplBlock<'ast>,
         location: SourceLocation,
     },
     Const {
         name: String,
         type_: Type,
-        value: Expression,
+        value: Expression<'ast>,
         location: SourceLocation,
     },
     Static {
         name: String,
         mutable: bool,
         type_: Type,
-        value: Expression,
+        value: Expression<'ast>,
         location: SourceLocation,
     },
     Use {
@@ -509,7 +509,7 @@ pub enum Item {
     }, // use std::fs as fs -> path=["std", "fs"], alias=Some("fs")
     Mod {
         name: String,
-        items: Vec<Item>,
+        items: Vec<Item<'ast>>,
         is_public: bool,
         location: SourceLocation,
     }, // mod ffi { ... }
@@ -520,7 +520,7 @@ pub enum Item {
     }, // bound Printable = Display + Debug
 }
 
-impl Item {
+impl<'ast> Item<'ast> {
     /// Get the source location of this item (if available)
     pub fn location(&self) -> SourceLocation {
         match self {
@@ -543,6 +543,6 @@ impl Item {
 // ============================================================================
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub struct Program {
-    pub items: Vec<Item>,
+pub struct Program<'ast> {
+    pub items: Vec<Item<'ast>>,
 }
