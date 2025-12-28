@@ -491,14 +491,14 @@ pub enum Item<'ast> {
     Const {
         name: String,
         type_: Type,
-        value: Expression<'ast>,
+        value: &'ast Expression<'ast>,
         location: SourceLocation,
     },
     Static {
         name: String,
         mutable: bool,
         type_: Type,
-        value: Expression<'ast>,
+        value: &'ast Expression<'ast>,
         location: SourceLocation,
     },
     Use {
