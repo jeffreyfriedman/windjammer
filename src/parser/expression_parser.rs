@@ -247,7 +247,7 @@ impl Parser {
                         // Desugar [..end] to .slice(0, end)
                         let end_expr = end.unwrap_or_else(|| {
                             self.alloc_expr(Expression::MethodCall {
-                                object: self.alloc_expr(left.clone()),
+                                object: left,
                                 method: "len".to_string(),
                                 type_args: None,
                                 arguments: vec![],
@@ -255,31 +255,30 @@ impl Parser {
                             })
                         });
 
-                        left = Expression::MethodCall {
-                            object: self.alloc_expr(left),
+                        let zero_lit = self.alloc_expr(Expression::Literal {
+                            value: Literal::Int(0),
+                            location: self.current_location(),
+                        });
+
+                        left = self.alloc_expr(Expression::MethodCall {
+                            object: left,
                             method: "slice".to_string(),
                             type_args: None,
                             arguments: vec![
-                                (
-                                    None,
-                                    Expression::Literal {
-                                        value: Literal::Int(0),
-                                        location: self.current_location(),
-                                    },
-                                ),
-                                (None, *end_expr),
+                                (None, zero_lit),
+                                (None, end_expr),
                             ],
                             location: self.current_location(),
-                        };
+                        });
                     } else {
-                        let start_or_index = self.alloc_expr(self.parse_expression()?);
+                        let start_or_index = self.parse_expression()?;
 
                         // Check if this is a slice or regular index
                         if self.current_token() == &Token::DotDot {
                             // [start..] or [start..end] - slice syntax
                             self.advance(); // consume '..'
                             let end = if self.current_token() != &Token::RBracket {
-                                Some(self.alloc_expr(self.parse_expression()?))
+                                Some(self.parse_expression()?)
                             } else {
                                 None
                             };
@@ -288,7 +287,7 @@ impl Parser {
                             // Desugar [start..end] to .slice(start, end)
                             let end_expr = end.unwrap_or_else(|| {
                                 self.alloc_expr(Expression::MethodCall {
-                                    object: self.alloc_expr(left.clone()),
+                                    object: left,
                                     method: "len".to_string(),
                                     type_args: None,
                                     arguments: vec![],
@@ -296,21 +295,21 @@ impl Parser {
                                 })
                             });
 
-                            left = Expression::MethodCall {
-                                object: self.alloc_expr(left),
+                            left = self.alloc_expr(Expression::MethodCall {
+                                object: left,
                                 method: "slice".to_string(),
                                 type_args: None,
-                                arguments: vec![(None, *start_or_index), (None, *end_expr)],
+                                arguments: vec![(None, start_or_index), (None, end_expr)],
                                 location: self.current_location(),
-                            };
+                            });
                         } else {
                             // Regular index: [i]
                             self.expect(Token::RBracket)?;
-                            left = Expression::Index {
-                                object: self.alloc_expr(left),
+                            left = self.alloc_expr(Expression::Index {
+                                object: left,
                                 index: start_or_index,
                                 location: self.current_location(),
-                            };
+                            });
                         }
                     }
                 }
