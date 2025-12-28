@@ -54,8 +54,8 @@ impl JavaScriptGenerator {
         }
     }
 
-    fn contains_await_in_body(&self, statements: &[Statement]) -> bool {
-        statements.iter().any(Self::contains_await_stmt)
+    fn contains_await_in_body<'ast>(&self, statements: &[&'ast Statement<'ast>]) -> bool {
+        statements.iter().any(|s| Self::contains_await_stmt(s))
     }
 
     fn contains_await_stmt(stmt: &Statement) -> bool {
@@ -72,10 +72,10 @@ impl JavaScriptGenerator {
                 ..
             } => {
                 Self::contains_await_expr(condition)
-                    || then_block.iter().any(Self::contains_await_stmt)
+                    || then_block.iter().any(|s| Self::contains_await_stmt(s))
                     || else_block
                         .as_ref()
-                        .is_some_and(|block| block.iter().any(Self::contains_await_stmt))
+                        .is_some_and(|block| block.iter().any(|s| Self::contains_await_stmt(s)))
             }
             _ => false,
         }
