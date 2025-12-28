@@ -35,7 +35,7 @@ use crate::parser::{BinaryOp, Expression, Literal, UnaryOp};
 /// let expr = Binary { left: Int(2), op: Add, right: Int(3) };
 /// let folded = try_fold_constant(&expr); // Some(Int(5))
 /// ```
-pub fn try_fold_constant(expr: &Expression) -> Option<Expression> {
+pub fn try_fold_constant<'ast>(expr: &Expression<'ast>) -> Option<Expression<'ast>> {
     match expr {
         Expression::Binary {
             left, op, right, ..
