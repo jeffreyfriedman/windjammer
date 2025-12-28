@@ -16,9 +16,9 @@ use crate::parser::ast::types::{AssociatedType, SourceLocation, Type, TypeParam}
 // ============================================================================
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub struct Parameter {
+pub struct Parameter<'ast> {
     pub name: String,             // For simple parameters and backward compatibility
-    pub pattern: Option<Pattern>, // For pattern matching parameters
+    pub pattern: Option<Pattern<'ast>>, // For pattern matching parameters
     pub type_: Type,
     pub ownership: OwnershipHint,
     pub is_mutable: bool, // Whether parameter is declared with 'mut' keyword
@@ -236,19 +236,19 @@ pub struct MatchArm<'ast> {
 // ============================================================================
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub enum EnumPatternBinding {
+pub enum EnumPatternBinding<'ast> {
     None,                                 // No parentheses: None, Empty
     Wildcard,                             // Parentheses with wildcard: Some(_)
     Single(String),                       // Single binding: Some(x)
-    Tuple(Vec<Pattern>),                  // Multiple bindings: Rgb(r, g, b)
-    Struct(Vec<(String, Pattern)>, bool), // Struct pattern: Box { width: w, height: h }, bool=has_wildcard (..)
+    Tuple(Vec<Pattern<'ast>>),                  // Multiple bindings: Rgb(r, g, b)
+    Struct(Vec<(String, Pattern<'ast>)>, bool), // Struct pattern: Box { width: w, height: h }, bool=has_wildcard (..)
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum Pattern<'ast> {
     Wildcard,
     Identifier(String),
-    EnumVariant(String, EnumPatternBinding), // Enum name, binding type
+    EnumVariant(String, EnumPatternBinding<'ast>), // Enum name, binding type
     Literal(Literal),
     Tuple(Vec<Pattern<'ast>>),         // Tuple pattern: (a, b, c)
     Or(Vec<Pattern<'ast>>),            // Or pattern: pattern1 | pattern2 | pattern3
