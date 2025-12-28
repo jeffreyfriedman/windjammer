@@ -551,7 +551,7 @@ impl Parser {
             });
             
             let match_stmt = self.alloc_stmt(Statement::Match {
-                value: expr.clone(),
+                value: expr,
                 arms: vec![
                     MatchArm {
                         pattern,

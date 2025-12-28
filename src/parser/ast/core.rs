@@ -47,7 +47,7 @@ pub struct FunctionDecl<'ast> {
     pub where_clause: Vec<(String, Vec<String>)>, // Where clause: [(type_param, [trait_bounds])]
     pub decorators: Vec<Decorator<'ast>>,
     pub is_async: bool,
-    pub parameters: Vec<Parameter>,
+    pub parameters: Vec<Parameter<'ast>>,
     pub return_type: Option<Type>,
     pub body: Vec<&'ast Statement<'ast>>,        // Empty for extern functions
     pub parent_type: Option<String>, // The type name if this function is in an impl block
@@ -439,7 +439,7 @@ pub struct TraitDecl<'ast> {
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct TraitMethod<'ast> {
     pub name: String,
-    pub parameters: Vec<Parameter>,
+    pub parameters: Vec<Parameter<'ast>>,
     pub return_type: Option<Type>,
     pub is_async: bool,
     pub body: Option<Vec<&'ast Statement<'ast>>>, // None for trait definitions, Some for default impls
