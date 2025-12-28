@@ -1,9 +1,10 @@
 # Windows-specific configuration to increase stack size
-# Windows default stack is 1MB, this increases it to 8MB to match Unix defaults
+# Windows default stack is 1MB, this increases it to 16MB for debug builds
+# Debug builds use more stack due to less optimization and no tail-call optimization
 # This prevents stack overflow during cleanup/Drop of deep AST structures
 
 [target.x86_64-pc-windows-msvc]
-rustflags = ["-C", "link-args=/STACK:8388608"]
+rustflags = ["-C", "link-args=/STACK:16777216"]
 
 [target.x86_64-pc-windows-gnu]
-rustflags = ["-C", "link-args=-Wl,-z,stack-size=8388608"]
+rustflags = ["-C", "link-args=-Wl,--stack,16777216"]
