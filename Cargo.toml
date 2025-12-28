@@ -88,6 +88,8 @@ toml = "0.9"
 tempfile = "3.8"
 # Incremental compilation with Salsa
 salsa = "0.24"
+# Arena allocation for AST (eliminates Drop recursion, improves performance)
+typed-arena = "2.0"
 
 [dev-dependencies]
 # Benchmarking
