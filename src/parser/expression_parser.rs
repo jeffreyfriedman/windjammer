@@ -245,15 +245,15 @@ impl Parser {
                         self.expect(Token::RBracket)?;
 
                         // Desugar [..end] to .slice(0, end)
-                        let end_expr = end.unwrap_or_else(|| {
-                            self.alloc_expr(Expression::MethodCall {
-                                object: left,
-                                method: "len".to_string(),
-                                type_args: None,
-                                arguments: vec![],
-                                location: self.current_location(),
-                            })
+                        // We need to compute end_expr without holding onto left
+                        let len_call = self.alloc_expr(Expression::MethodCall {
+                            object: left,
+                            method: "len".to_string(),
+                            type_args: None,
+                            arguments: vec![],
+                            location: self.current_location(),
                         });
+                        let end_expr = end.unwrap_or(len_call);
 
                         let zero_lit = self.alloc_expr(Expression::Literal {
                             value: Literal::Int(0),
@@ -944,7 +944,7 @@ impl Parser {
                 self.advance();
                 // Parse the value to match on, but don't allow struct literals here
                 // (since we need to see the { for the match arms)
-                let value = self.alloc_expr(self.parse_match_value()?);
+                let value = self.parse_match_value()?;
 
                 self.expect(Token::LBrace)?;
 
@@ -1351,11 +1351,11 @@ impl Parser {
                 ) {
                     None
                 } else {
-                    Some(self.alloc_expr(self.parse_expression()?))
+                    Some(self.parse_expression()?)
                 };
                 // Wrap in a block with a return statement
                 let return_stmt = self.alloc_stmt(Statement::Return {
-                    value: return_value.map(|b| *b),
+                    value: return_value,
                     location: self.current_location(),
                 });
                 self.alloc_expr(Expression::Block {
