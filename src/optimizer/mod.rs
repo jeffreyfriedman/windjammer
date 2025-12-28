@@ -57,9 +57,9 @@ impl Default for OptimizerConfig {
 
 /// Result of optimization pass
 #[derive(Debug, Clone)]
-pub struct OptimizationResult {
+pub struct OptimizationResult<'ast> {
     /// Optimized program
-    pub program: Program,
+    pub program: Program<'ast>,
     /// Optimization statistics
     pub stats: OptimizationStats,
 }
