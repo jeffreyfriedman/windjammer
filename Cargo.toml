@@ -127,3 +127,7 @@ harness = false
 name = "regression_benchmarks"
 harness = false
 
+# Allow tarpaulin cfg for coverage testing
+# Tarpaulin sets this cfg when running, so we need to tell Rust it's expected
+[lints.rust]
+unexpected_cfgs = { level = "warn", check-cfg = ['cfg(tarpaulin)'] }
