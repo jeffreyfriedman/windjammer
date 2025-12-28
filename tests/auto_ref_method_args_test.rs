@@ -57,6 +57,7 @@ fn compile_and_verify(code: &str) -> (bool, String, String) {
 }
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_auto_ref_vec_arg() {
     // Method expects &Vec<T> but we pass Vec<T>
     let code = r#"
@@ -91,6 +92,7 @@ pub fn test() -> i32 {
 }
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_auto_ref_option_arg() {
     // Method expects &Option<String> but we pass Option<String>
     let code = r#"
