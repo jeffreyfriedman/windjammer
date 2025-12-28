@@ -442,7 +442,7 @@ pub struct TraitMethod<'ast> {
     pub parameters: Vec<Parameter>,
     pub return_type: Option<Type>,
     pub is_async: bool,
-    pub body: Option<Vec<Statement<'ast>>>, // None for trait definitions, Some for default impls
+    pub body: Option<Vec<&'ast Statement<'ast>>>, // None for trait definitions, Some for default impls
     pub doc_comment: Option<String>,  // Documentation comment (/// lines)
 }
 
