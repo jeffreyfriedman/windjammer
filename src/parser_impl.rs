@@ -83,11 +83,11 @@ pub struct Parser {
     // When Parser is dropped, these arenas drop all allocated AST nodes at once
     // without recursive calls to Drop, solving the Windows stack overflow issue
     //
-    // Note: We use Box<Arena> to avoid the self-referential lifetime issue.
-    // The arenas are heap-allocated and owned by Parser. References allocated
-    // from these arenas will have lifetime tied to Parser via the parse() method.
-    pub(crate) expr_arena: Box<Arena<Expression<'static>>>,
-    pub(crate) stmt_arena: Box<Arena<Statement<'static>>>,
+    // SAFETY: We use 'static here because the arena owns the memory. The actual
+    // lifetime is tied to Parser through the parse() method signature. References
+    // returned from parse() will have lifetime 'parser tied to &'parser self.
+    pub(crate) expr_arena: Arena<Expression<'static>>,
+    pub(crate) stmt_arena: Arena<Statement<'static>>,
 }
 
 impl Parser {
@@ -114,6 +114,8 @@ impl Parser {
             position: 0,
             filename: String::new(),
             source: String::new(),
+            expr_arena: Arena::new(),
+            stmt_arena: Arena::new(),
         }
     }
 
@@ -127,6 +129,27 @@ impl Parser {
             position: 0,
             filename,
             source,
+            expr_arena: Arena::new(),
+            stmt_arena: Arena::new(),
+        }
+    }
+
+    /// Allocate an expression in the arena
+    /// SAFETY: We transmute the lifetime from 'static (arena storage) to 'parser (Parser lifetime)
+    /// This is safe because Parser owns the arena, so references live as long as Parser does
+    pub(crate) fn alloc_expr<'parser>(&'parser self, expr: Expression<'static>) -> &'parser Expression<'parser> {
+        unsafe {
+            let ptr = self.expr_arena.alloc(expr);
+            std::mem::transmute(ptr)
+        }
+    }
+
+    /// Allocate a statement in the arena
+    /// SAFETY: Same as alloc_expr
+    pub(crate) fn alloc_stmt<'parser>(&'parser self, stmt: Statement<'static>) -> &'parser Statement<'parser> {
+        unsafe {
+            let ptr = self.stmt_arena.alloc(stmt);
+            std::mem::transmute(ptr)
         }
     }
 
@@ -205,7 +228,7 @@ impl Parser {
     // SECTION 3: TOP-LEVEL PARSING
     // ========================================================================
 
-    pub fn parse(&mut self) -> Result<Program, String> {
+    pub fn parse<'parser>(&'parser mut self) -> Result<Program<'parser>, String> {
         let mut items = Vec::new();
 
         while self.current_token() != &Token::Eof {
@@ -215,7 +238,7 @@ impl Parser {
         Ok(Program { items })
     }
 
-    pub(crate) fn parse_item(&mut self) -> Result<Item, String> {
+    pub(crate) fn parse_item<'parser>(&'parser mut self) -> Result<Item<'parser>, String> {
         // Collect doc comments (/// lines) that appear before the item
         let mut doc_lines = Vec::new();
         while let Token::DocComment(content) = self.current_token() {
@@ -446,11 +469,11 @@ impl Parser {
     // Helper: Extract a name from a pattern for backward compatibility
 
     // Public wrapper methods for component compiler
-    pub fn parse_expression_public(&mut self) -> Result<Expression, String> {
+    pub fn parse_expression_public<'parser>(&'parser mut self) -> Result<Expression<'parser>, String> {
         self.parse_expression()
     }
 
-    pub fn parse_function_public(&mut self) -> Result<FunctionDecl, String> {
+    pub fn parse_function_public<'parser>(&'parser mut self) -> Result<FunctionDecl<'parser>, String> {
         self.parse_function()
     }
 }
