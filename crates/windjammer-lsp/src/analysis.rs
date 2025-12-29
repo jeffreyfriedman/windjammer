@@ -30,9 +30,9 @@ struct FileAnalysis {
     /// Source code (kept for future use in incremental parsing)
     source: String,
     /// Parsed AST
-    program: Option<Program>,
+    program: Option<Program<'static>>,
     /// Analyzed functions with ownership inference
-    analyzed_functions: Vec<AnalyzedFunction>,
+    analyzed_functions: Vec<AnalyzedFunction<'static>>,
     /// Symbol table for go-to-definition
     symbol_table: SymbolTable,
     /// Analysis diagnostics
