@@ -65,32 +65,34 @@ impl Default for LoopOptimizationConfig {
 }
 
 /// Optimize loops in a program
-pub fn optimize_loops(program: &Program) -> (Program, LoopOptimizationStats) {
-    optimize_loops_with_config(program, &LoopOptimizationConfig::default())
+pub fn optimize_loops<'ast>(program: &Program<'ast>, optimizer: &crate::optimizer::Optimizer) -> (Program<'ast>, LoopOptimizationStats) {
+    optimize_loops_with_config(program, &LoopOptimizationConfig::default(), optimizer)
 }
 
 /// Optimize loops with custom configuration
-pub fn optimize_loops_with_config(
-    program: &Program,
+pub fn optimize_loops_with_config<'ast>(
+    program: &Program<'ast>,
     config: &LoopOptimizationConfig,
-) -> (Program, LoopOptimizationStats) {
+    optimizer: &crate::optimizer::Optimizer,
+) -> (Program<'ast>, LoopOptimizationStats) {
     let mut stats = LoopOptimizationStats::default();
 
     let new_items = program
         .items
         .iter()
-        .map(|item| optimize_loops_in_item(item, config, &mut stats))
+        .map(|item| optimize_loops_in_item(item, config, &mut stats, optimizer))
         .collect();
 
     (Program { items: new_items }, stats)
 }
 
 /// Optimize loops in a single item
-fn optimize_loops_in_item(
-    item: &Item,
+fn optimize_loops_in_item<'ast>(
+    item: &'ast Item<'ast>,
     config: &LoopOptimizationConfig,
     stats: &mut LoopOptimizationStats,
-) -> Item {
+    optimizer: &crate::optimizer::Optimizer,
+) -> Item<'ast> {
     match item {
         Item::Function {
             decl: func,
@@ -181,11 +183,12 @@ fn optimize_loops_in_item(
 }
 
 /// Optimize loops in a list of statements
-fn optimize_loops_in_statements(
-    statements: &[Statement],
+fn optimize_loops_in_statements<'ast>(
+    statements: &[&'ast Statement<'ast>],
     config: &LoopOptimizationConfig,
     stats: &mut LoopOptimizationStats,
-) -> Vec<Statement> {
+    optimizer: &crate::optimizer::Optimizer,
+) -> Vec<&'ast Statement<'ast>> {
     let mut result = Vec::new();
 
     for stmt in statements {
@@ -279,11 +282,12 @@ fn optimize_loops_in_statements(
 }
 
 /// Optimize loops in a single statement
-fn optimize_loops_in_statement(
-    stmt: &Statement,
+fn optimize_loops_in_statement<'ast>(
+    stmt: &'ast Statement<'ast>,
     config: &LoopOptimizationConfig,
     stats: &mut LoopOptimizationStats,
-) -> Statement {
+    optimizer: &crate::optimizer::Optimizer,
+) -> &'ast Statement<'ast> {
     match stmt {
         Statement::Expression { expr, location } => Statement::Expression {
             expr: optimize_loops_in_expression(expr, config, stats),
@@ -364,11 +368,12 @@ fn optimize_loops_in_statement(
 }
 
 /// Optimize loops in an expression
-fn optimize_loops_in_expression(
-    expr: &Expression,
+fn optimize_loops_in_expression<'ast>(
+    expr: &'ast Expression<'ast>,
     config: &LoopOptimizationConfig,
     stats: &mut LoopOptimizationStats,
-) -> Expression {
+    optimizer: &crate::optimizer::Optimizer,
+) -> &'ast Expression<'ast> {
     match expr {
         Expression::Call {
             function,
@@ -635,7 +640,7 @@ fn hoist_loop_invariants(
 }
 
 /// Check if a statement is loop-invariant (doesn't depend on loop variable)
-fn is_loop_invariant(stmt: &Statement, loop_var: &str) -> bool {
+fn is_loop_invariant<'ast>(stmt: &'ast Statement<'ast>, loop_var: &str) -> bool {
     // Only hoist Let statements that don't depend on the loop variable
     match stmt {
         Statement::Let { value, .. } => !expression_uses_variable(value, loop_var),
@@ -644,7 +649,7 @@ fn is_loop_invariant(stmt: &Statement, loop_var: &str) -> bool {
 }
 
 /// Check if an expression uses a specific variable
-fn expression_uses_variable(expr: &Expression, var_name: &str) -> bool {
+fn expression_uses_variable<'ast>(expr: &'ast Expression<'ast>, var_name: &str) -> bool {
     match expr {
         Expression::Identifier { name, .. } => name == var_name,
         Expression::Binary { left, right, .. } => {
@@ -702,7 +707,7 @@ fn expression_uses_variable(expr: &Expression, var_name: &str) -> bool {
 }
 
 /// Check if a statement uses a specific variable
-fn statement_uses_variable(stmt: &Statement, var_name: &str) -> bool {
+fn statement_uses_variable<'ast>(stmt: &'ast Statement<'ast>, var_name: &str) -> bool {
     match stmt {
         Statement::Expression { expr, .. }
         | Statement::Return {
@@ -765,11 +770,12 @@ fn statement_uses_variable(stmt: &Statement, var_name: &str) -> bool {
 }
 
 /// Replace all occurrences of a variable in a statement with an expression
-fn replace_variable_in_statement(
-    stmt: &Statement,
+fn replace_variable_in_statement<'ast>(
+    stmt: &'ast Statement<'ast>,
     var_name: &str,
-    replacement: &Expression,
-) -> Statement {
+    replacement: &'ast Expression<'ast>,
+    optimizer: &crate::optimizer::Optimizer,
+) -> &'ast Statement<'ast> {
     match stmt {
         Statement::Expression { expr, .. } => Statement::Expression {
             expr: replace_variable_in_expression(expr, var_name, replacement),
@@ -807,11 +813,12 @@ fn replace_variable_in_statement(
 }
 
 /// Replace all occurrences of a variable in an expression with another expression
-fn replace_variable_in_expression(
-    expr: &Expression,
+fn replace_variable_in_expression<'ast>(
+    expr: &'ast Expression<'ast>,
     var_name: &str,
-    replacement: &Expression,
-) -> Expression {
+    replacement: &'ast Expression<'ast>,
+    optimizer: &crate::optimizer::Optimizer,
+) -> &'ast Expression<'ast> {
     match expr {
         Expression::Identifier { name, .. } if name == var_name => replacement.clone(),
         Expression::Binary {

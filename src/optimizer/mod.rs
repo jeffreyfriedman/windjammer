@@ -155,8 +155,8 @@ impl Optimizer {
         // Phase 12: Dead Code Elimination
         if self.config.enable_dead_code_elimination {
             let (optimized_program, dce_stats) =
-                phase12_dead_code_elimination::eliminate_dead_code(&program);
-            program = optimized_program;
+                phase12_dead_code_elimination::eliminate_dead_code(&program, self);
+            program = &optimized_program;
             stats.dead_functions_removed = dce_stats.unused_functions_removed;
             stats.dead_code_bytes_saved =
                 dce_stats.unreachable_statements_removed + dce_stats.empty_blocks_removed;
@@ -165,8 +165,8 @@ impl Optimizer {
         // Phase 13: Loop Optimization
         if self.config.enable_loop_optimization {
             let (optimized_program, loop_stats) =
-                phase13_loop_optimization::optimize_loops(&program);
-            program = optimized_program;
+                phase13_loop_optimization::optimize_loops(&program, self);
+            program = &optimized_program;
             stats.loops_optimized = loop_stats.loops_optimized;
             stats.invariants_hoisted = loop_stats.invariants_hoisted;
             stats.loops_unrolled = loop_stats.loops_unrolled;
@@ -175,8 +175,8 @@ impl Optimizer {
         // Phase 14: Escape Analysis
         if self.config.enable_escape_analysis {
             let (optimized_program, esc_stats) =
-                phase14_escape_analysis::optimize_escape_analysis(&program);
-            program = optimized_program;
+                phase14_escape_analysis::optimize_escape_analysis(&program, self);
+            program = &optimized_program;
             stats.heap_to_stack_conversions = esc_stats.vectors_stack_allocated
                 + esc_stats.strings_inlined
                 + esc_stats.boxes_unboxed;
@@ -185,12 +185,12 @@ impl Optimizer {
         // Phase 15: SIMD Vectorization
         if self.config.enable_simd_vectorization {
             let (optimized_program, simd_stats) =
-                phase15_simd_vectorization::optimize_simd_vectorization(&program);
-            program = optimized_program;
+                phase15_simd_vectorization::optimize_simd_vectorization(&program, self);
+            program = &optimized_program;
             stats.loops_vectorized += simd_stats.loops_vectorized;
         }
 
-        OptimizationResult { program, stats }
+        OptimizationResult { program: program.clone(), stats }
     }
 }
 
