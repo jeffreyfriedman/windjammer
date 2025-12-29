@@ -53,7 +53,7 @@ pub fn eliminate_dead_code<'ast>(
                 }
 
                 // Process function body to remove dead code
-                let (new_body, func_stats) = eliminate_dead_code_in_statements(&func.body);
+                let (new_body, func_stats) = eliminate_dead_code_in_statements(&func.body, optimizer);
                 stats.unreachable_statements_removed += func_stats.unreachable_statements_removed;
                 stats.unused_variables_removed += func_stats.unused_variables_removed;
                 stats.empty_blocks_removed += func_stats.empty_blocks_removed;
@@ -82,7 +82,7 @@ pub fn eliminate_dead_code<'ast>(
                 location,
             } => {
                 // Process impl block methods
-                let new_impl = eliminate_dead_code_in_impl(impl_block, &mut stats);
+                let new_impl = eliminate_dead_code_in_impl(impl_block, &mut stats, optimizer);
                 new_items.push(Item::Impl {
                     block: new_impl,
                     location: location.clone(),
@@ -96,7 +96,7 @@ pub fn eliminate_dead_code<'ast>(
                 location,
             } => {
                 // Process static initializers
-                let new_value = eliminate_dead_code_in_expression(value);
+                let new_value = eliminate_dead_code_in_expression(value, optimizer);
                 new_items.push(Item::Static {
                     name: name.clone(),
                     mutable: *mutable,
@@ -112,7 +112,7 @@ pub fn eliminate_dead_code<'ast>(
                 location,
             } => {
                 // Process const initializers
-                let new_value = eliminate_dead_code_in_expression(value);
+                let new_value = eliminate_dead_code_in_expression(value, optimizer);
                 new_items.push(Item::Const {
                     name: name.clone(),
                     type_: type_.clone(),
@@ -326,7 +326,7 @@ fn eliminate_dead_code_in_impl<'ast>(
     let mut new_functions = Vec::new();
 
     for func in &impl_block.functions {
-        let (new_body, func_stats) = eliminate_dead_code_in_statements(&func.body);
+        let (new_body, func_stats) = eliminate_dead_code_in_statements(&func.body, optimizer);
         stats.unreachable_statements_removed += func_stats.unreachable_statements_removed;
         stats.unused_variables_removed += func_stats.unused_variables_removed;
         stats.empty_blocks_removed += func_stats.empty_blocks_removed;
@@ -377,7 +377,7 @@ fn eliminate_dead_code_in_statements<'ast>(
         }
 
         // Process the statement
-        let new_stmt = eliminate_dead_code_in_statement(stmt, &mut stats);
+        let new_stmt = eliminate_dead_code_in_statement(stmt, &mut stats, optimizer);
 
         // Check if this statement terminates control flow
         if is_terminator(&new_stmt) {
@@ -404,14 +404,14 @@ fn eliminate_dead_code_in_statement<'ast>(
 ) -> &'ast Statement<'ast> {
     match stmt {
         Statement::Expression { expr, location } => Statement::Expression {
-            expr: eliminate_dead_code_in_expression(expr),
+            expr: eliminate_dead_code_in_expression(expr, optimizer),
             location: location.clone(),
         },
         Statement::Return {
             value: Some(expr),
             location,
         } => Statement::Return {
-            value: Some(eliminate_dead_code_in_expression(expr)),
+            value: Some(eliminate_dead_code_in_expression(expr, optimizer)),
             location: location.clone(),
         },
         Statement::Return {
@@ -432,11 +432,11 @@ fn eliminate_dead_code_in_statement<'ast>(
             pattern: pattern.clone(),
             mutable: *mutable,
             type_: type_.clone(),
-            value: eliminate_dead_code_in_expression(value),
+            value: eliminate_dead_code_in_expression(value, optimizer),
             else_block: else_block.as_ref().map(|stmts| {
                 stmts
                     .iter()
-                    .map(|s| eliminate_dead_code_in_statement(s, stats))
+                    .map(|s| eliminate_dead_code_in_statement(s, stats, optimizer))
                     .collect()
             }),
             location: location.clone(),
@@ -448,7 +448,7 @@ fn eliminate_dead_code_in_statement<'ast>(
             location,
         } => Statement::Assignment {
             target: target.clone(),
-            value: eliminate_dead_code_in_expression(value),
+            value: eliminate_dead_code_in_expression(value, optimizer),
             compound_op: *compound_op,
             location: location.clone(),
         },
@@ -458,13 +458,13 @@ fn eliminate_dead_code_in_statement<'ast>(
             else_block,
             location,
         } => {
-            let new_condition = eliminate_dead_code_in_expression(condition);
-            let (new_then, then_stats) = eliminate_dead_code_in_statements(then_block);
+            let new_condition = eliminate_dead_code_in_expression(condition, optimizer);
+            let (new_then, then_stats) = eliminate_dead_code_in_statements(then_block, optimizer);
             stats.unreachable_statements_removed += then_stats.unreachable_statements_removed;
             stats.empty_blocks_removed += then_stats.empty_blocks_removed;
 
             let new_else = if let Some(else_stmts) = else_block {
-                let (new_else_stmts, else_stats) = eliminate_dead_code_in_statements(else_stmts);
+                let (new_else_stmts, else_stats) = eliminate_dead_code_in_statements(else_stmts, optimizer);
                 stats.unreachable_statements_removed += else_stats.unreachable_statements_removed;
                 stats.empty_blocks_removed += else_stats.empty_blocks_removed;
                 Some(new_else_stmts)
@@ -484,8 +484,8 @@ fn eliminate_dead_code_in_statement<'ast>(
             body,
             location,
         } => {
-            let new_condition = eliminate_dead_code_in_expression(condition);
-            let (new_body, body_stats) = eliminate_dead_code_in_statements(body);
+            let new_condition = eliminate_dead_code_in_expression(condition, optimizer);
+            let (new_body, body_stats) = eliminate_dead_code_in_statements(body, optimizer);
             stats.unreachable_statements_removed += body_stats.unreachable_statements_removed;
             stats.empty_blocks_removed += body_stats.empty_blocks_removed;
 
@@ -501,8 +501,8 @@ fn eliminate_dead_code_in_statement<'ast>(
             body,
             location,
         } => {
-            let new_iterable = eliminate_dead_code_in_expression(iterable);
-            let (new_body, body_stats) = eliminate_dead_code_in_statements(body);
+            let new_iterable = eliminate_dead_code_in_expression(iterable, optimizer);
+            let (new_body, body_stats) = eliminate_dead_code_in_statements(body, optimizer);
             stats.unreachable_statements_removed += body_stats.unreachable_statements_removed;
             stats.empty_blocks_removed += body_stats.empty_blocks_removed;
 
@@ -518,11 +518,11 @@ fn eliminate_dead_code_in_statement<'ast>(
             arms,
             location,
         } => {
-            let new_value = eliminate_dead_code_in_expression(value);
+            let new_value = eliminate_dead_code_in_expression(value, optimizer);
             let mut new_arms = Vec::new();
 
             for arm in arms {
-                let new_body = eliminate_dead_code_in_expression(&arm.body);
+                let new_body = eliminate_dead_code_in_expression(&arm.body, optimizer);
                 let new_guard = arm.guard.as_ref().map(eliminate_dead_code_in_expression);
 
                 new_arms.push(MatchArm {
@@ -546,7 +546,7 @@ fn eliminate_dead_code_in_statement<'ast>(
         } => Statement::Const {
             name: name.clone(),
             type_: type_.clone(),
-            value: eliminate_dead_code_in_expression(value),
+            value: eliminate_dead_code_in_expression(value, optimizer),
             location: location.clone(),
         },
         Statement::Static {
@@ -559,7 +559,7 @@ fn eliminate_dead_code_in_statement<'ast>(
             name: name.clone(),
             mutable: *mutable,
             type_: type_.clone(),
-            value: eliminate_dead_code_in_expression(value),
+            value: eliminate_dead_code_in_expression(value, optimizer),
             location: location.clone(),
         },
         _ => stmt.clone(),
@@ -577,10 +577,10 @@ fn eliminate_dead_code_in_expression<'ast>(
             arguments,
             location,
         } => Expression::Call {
-            function: Box::new(eliminate_dead_code_in_expression(function)),
+            function: Box::new(eliminate_dead_code_in_expression(function, optimizer)),
             arguments: arguments
                 .iter()
-                .map(|(label, arg)| (label.clone(), eliminate_dead_code_in_expression(arg)))
+                .map(|(label, arg)| (label.clone(), eliminate_dead_code_in_expression(arg, optimizer)))
                 .collect(),
             location: location.clone(),
         },
@@ -591,12 +591,12 @@ fn eliminate_dead_code_in_expression<'ast>(
             arguments,
             location,
         } => Expression::MethodCall {
-            object: Box::new(eliminate_dead_code_in_expression(object)),
+            object: Box::new(eliminate_dead_code_in_expression(object, optimizer)),
             method: method.clone(),
             type_args: type_args.clone(),
             arguments: arguments
                 .iter()
-                .map(|(label, arg)| (label.clone(), eliminate_dead_code_in_expression(arg)))
+                .map(|(label, arg)| (label.clone(), eliminate_dead_code_in_expression(arg, optimizer)))
                 .collect(),
             location: location.clone(),
         },
@@ -606,9 +606,9 @@ fn eliminate_dead_code_in_expression<'ast>(
             right,
             location,
         } => Expression::Binary {
-            left: Box::new(eliminate_dead_code_in_expression(left)),
+            left: Box::new(eliminate_dead_code_in_expression(left, optimizer)),
             op: *op,
-            right: Box::new(eliminate_dead_code_in_expression(right)),
+            right: Box::new(eliminate_dead_code_in_expression(right, optimizer)),
             location: location.clone(),
         },
         Expression::Unary {
@@ -617,7 +617,7 @@ fn eliminate_dead_code_in_expression<'ast>(
             location,
         } => Expression::Unary {
             op: *op,
-            operand: Box::new(eliminate_dead_code_in_expression(operand)),
+            operand: Box::new(eliminate_dead_code_in_expression(operand, optimizer)),
             location: location.clone(),
         },
         Expression::Tuple { elements, location } => Expression::Tuple {
@@ -632,8 +632,8 @@ fn eliminate_dead_code_in_expression<'ast>(
             index,
             location,
         } => Expression::Index {
-            object: Box::new(eliminate_dead_code_in_expression(object)),
-            index: Box::new(eliminate_dead_code_in_expression(index)),
+            object: Box::new(eliminate_dead_code_in_expression(object, optimizer)),
+            index: Box::new(eliminate_dead_code_in_expression(index, optimizer)),
             location: location.clone(),
         },
         Expression::FieldAccess {
@@ -641,7 +641,7 @@ fn eliminate_dead_code_in_expression<'ast>(
             field,
             location,
         } => Expression::FieldAccess {
-            object: Box::new(eliminate_dead_code_in_expression(object)),
+            object: Box::new(eliminate_dead_code_in_expression(object, optimizer)),
             field: field.clone(),
             location: location.clone(),
         },
@@ -650,7 +650,7 @@ fn eliminate_dead_code_in_expression<'ast>(
             type_,
             location,
         } => Expression::Cast {
-            expr: Box::new(eliminate_dead_code_in_expression(expr)),
+            expr: Box::new(eliminate_dead_code_in_expression(expr, optimizer)),
             type_: type_.clone(),
             location: location.clone(),
         },
@@ -658,7 +658,7 @@ fn eliminate_dead_code_in_expression<'ast>(
             statements,
             location,
         } => {
-            let (new_statements, _) = eliminate_dead_code_in_statements(statements);
+            let (new_statements, _) = eliminate_dead_code_in_statements(statements, optimizer);
             Expression::Block {
                 statements: new_statements,
                 location: location.clone(),
@@ -670,7 +670,7 @@ fn eliminate_dead_code_in_expression<'ast>(
             location,
         } => Expression::Closure {
             parameters: parameters.clone(),
-            body: Box::new(eliminate_dead_code_in_expression(body)),
+            body: Box::new(eliminate_dead_code_in_expression(body, optimizer)),
             location: location.clone(),
         },
         Expression::StructLiteral {
@@ -681,7 +681,7 @@ fn eliminate_dead_code_in_expression<'ast>(
             name: name.clone(),
             fields: fields
                 .iter()
-                .map(|(k, v)| (k.clone(), eliminate_dead_code_in_expression(v)))
+                .map(|(k, v)| (k.clone(), eliminate_dead_code_in_expression(v, optimizer)))
                 .collect(),
             location: location.clone(),
         },
@@ -691,8 +691,8 @@ fn eliminate_dead_code_in_expression<'ast>(
             inclusive,
             location,
         } => Expression::Range {
-            start: Box::new(eliminate_dead_code_in_expression(start)),
-            end: Box::new(eliminate_dead_code_in_expression(end)),
+            start: Box::new(eliminate_dead_code_in_expression(start, optimizer)),
+            end: Box::new(eliminate_dead_code_in_expression(end, optimizer)),
             inclusive: *inclusive,
             location: location.clone(),
         },
@@ -701,20 +701,20 @@ fn eliminate_dead_code_in_expression<'ast>(
             value,
             location,
         } => Expression::ChannelSend {
-            channel: Box::new(eliminate_dead_code_in_expression(channel)),
-            value: Box::new(eliminate_dead_code_in_expression(value)),
+            channel: Box::new(eliminate_dead_code_in_expression(channel, optimizer)),
+            value: Box::new(eliminate_dead_code_in_expression(value, optimizer)),
             location: location.clone(),
         },
         Expression::ChannelRecv { channel, location } => Expression::ChannelRecv {
-            channel: Box::new(eliminate_dead_code_in_expression(channel)),
+            channel: Box::new(eliminate_dead_code_in_expression(channel, optimizer)),
             location: location.clone(),
         },
         Expression::Await { expr, location } => Expression::Await {
-            expr: Box::new(eliminate_dead_code_in_expression(expr)),
+            expr: Box::new(eliminate_dead_code_in_expression(expr, optimizer)),
             location: location.clone(),
         },
         Expression::TryOp { expr, location } => Expression::TryOp {
-            expr: Box::new(eliminate_dead_code_in_expression(expr)),
+            expr: Box::new(eliminate_dead_code_in_expression(expr, optimizer)),
             location: location.clone(),
         },
         Expression::MacroInvocation {
