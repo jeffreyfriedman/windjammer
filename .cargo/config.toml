@@ -1,14 +1,13 @@
 # Cross-platform stack size configuration
 
-# Windows: Massively increase stack size to handle deep AST Drop chains
-# The compiler has deeply nested AST structures that overflow during cleanup
-# Try 64MB - if this doesn't work, the problem is structural, not size
+# STACK SIZE: Arena allocation eliminates recursive drops, allowing much smaller stacks
+# 8MB is sufficient with arena allocation (was 64MB before)
 [target.x86_64-pc-windows-msvc]
-rustflags = ["-C", "link-arg=/STACK:67108864", "-C", "link-arg=/DEBUG"]
+rustflags = ["-C", "link-arg=/STACK:8388608", "-C", "link-arg=/DEBUG"]
 
 [target.x86_64-pc-windows-gnu]
-rustflags = ["-C", "link-arg=-Wl,--stack,67108864"]
+rustflags = ["-C", "link-arg=-Wl,--stack,8388608"]
 
-# Set minimum stack size for worker threads
+# Set minimum stack size for worker threads (8MB with arena allocation)
 [env]
-RUST_MIN_STACK = "67108864"
+RUST_MIN_STACK = "8388608"

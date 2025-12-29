@@ -24,7 +24,9 @@ pub mod error_tui; // Interactive TUI for error navigation
 pub mod fuzzy_matcher; // Fuzzy string matching for typo suggestions
 pub mod inference;
 pub mod lexer;
-pub mod optimizer;
+// TODO(arena): Optimizer temporarily disabled due to arena lifetime architecture issues
+// See docs/ARENA_SESSION6_FINAL.md for details
+// pub mod optimizer;
 pub mod parser; // Parser module (refactored structure)
 pub mod parser_impl; // Parser implementation (being migrated to parser/)
 pub mod parser_recovery;
