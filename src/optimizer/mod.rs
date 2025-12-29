@@ -26,7 +26,8 @@ pub mod phase13_loop_optimization;
 pub mod phase14_escape_analysis;
 pub mod phase15_simd_vectorization;
 
-use crate::parser::Program;
+use crate::parser::{Expression, Pattern, Program, Statement};
+use typed_arena::Arena;
 
 /// Configuration for optimizer
 #[derive(Debug, Clone)]
