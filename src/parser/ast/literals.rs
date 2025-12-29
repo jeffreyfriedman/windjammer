@@ -13,7 +13,7 @@ pub enum Literal {
 impl Eq for Literal {}
 
 // MacroDelimiter for macro invocations
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum MacroDelimiter {
     Parens,   // println!()
     Brackets, // vec![]
