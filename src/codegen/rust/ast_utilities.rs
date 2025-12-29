@@ -15,7 +15,7 @@ use crate::parser::{Expression, Statement};
 /// - Control flow (if, while, loop, for): 3
 /// - Match statements: 5
 /// - Thread/async spawns: 2
-pub fn count_statements(body: &[Statement]) -> usize {
+pub fn count_statements<'ast>(body: &[&'ast Statement<'ast>]) -> usize {
     let mut count = 0;
     for stmt in body {
         count += match stmt {

@@ -63,7 +63,7 @@ pub struct CodeGenerator<'ast> {
     // USIZE DETECTION: Track which struct fields have type usize (for auto-casting)
     usize_struct_fields: std::collections::HashMap<String, std::collections::HashSet<String>>, // Struct name -> usize field names
     // FUNCTION CONTEXT: Track current function parameters for compound assignment optimization
-    current_function_params: Vec<crate::parser::Parameter>, // Parameters of the current function
+    current_function_params: Vec<crate::parser::Parameter<'ast>>, // Parameters of the current function
     // FUNCTION CONTEXT: Track current function return type for string literal conversion
     current_function_return_type: Option<Type>,
     // WINDJAMMER TRAIT INFERENCE: Analyzed trait methods with inferred signatures from ALL impls
@@ -72,7 +72,7 @@ pub struct CodeGenerator<'ast> {
         std::collections::HashMap<String, crate::analyzer::AnalyzedFunction<'ast>>,
     >,
     // FUNCTION CONTEXT: Track current function body for data flow analysis
-    current_function_body: Vec<Statement<'ast>>, // Body of the current function being generated
+    current_function_body: Vec<&'ast Statement<'ast>>, // Body of the current function being generated
     // Workspace root for source maps
     workspace_root: Option<std::path::PathBuf>,
     // BRANCH TYPE CONSISTENCY: Suppress auto string conversion when any branch uses .as_str()
@@ -197,7 +197,7 @@ impl<'ast> CodeGenerator<'ast> {
         &mut self,
         methods: std::collections::HashMap<
             String,
-            std::collections::HashMap<String, crate::analyzer::AnalyzedFunction>,
+            std::collections::HashMap<String, crate::analyzer::AnalyzedFunction<'ast>>,
         >,
     ) {
         self.analyzed_trait_methods = methods;
@@ -231,8 +231,8 @@ impl<'ast> CodeGenerator<'ast> {
     /// Generate an item inside an inline module
     fn generate_inline_module_item(
         &mut self,
-        item: &Item,
-        analyzed: &[AnalyzedFunction],
+        item: &Item<'ast>,
+        analyzed: &[AnalyzedFunction<'ast>],
     ) -> String {
         match item {
             Item::Function { decl, .. } => {
@@ -339,7 +339,7 @@ impl<'ast> CodeGenerator<'ast> {
 
     /// Generate a statement with automatic source tracking
     #[allow(dead_code)]
-    fn generate_statement_tracked(&mut self, stmt: &Statement) -> String {
+    fn generate_statement_tracked(&mut self, stmt: &Statement<'ast>) -> String {
         let code = self.generate_statement(stmt);
         self.track_generated_lines(&code);
         code
@@ -387,7 +387,7 @@ impl<'ast> CodeGenerator<'ast> {
     #[allow(dead_code, clippy::only_used_in_recursion)]
     /// Check if a method is a builder method that returns Self (for chaining)
     #[allow(dead_code)]
-    fn generate_block(&mut self, stmts: &[Statement]) -> String {
+    fn generate_block(&mut self, stmts: &[&'ast Statement<'ast>]) -> String {
         let mut output = String::new();
         let len = stmts.len();
         for (i, stmt) in stmts.iter().enumerate() {
@@ -532,7 +532,7 @@ impl<'ast> CodeGenerator<'ast> {
         output
     }
 
-    pub fn generate_program(&mut self, program: &Program, analyzed: &[AnalyzedFunction]) -> String {
+    pub fn generate_program(&mut self, program: &Program<'ast>, analyzed: &[AnalyzedFunction<'ast>]) -> String {
         let mut imports = String::new();
         let mut body = String::new();
 
@@ -1510,8 +1510,8 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
 
     fn generate_trait_with_analysis(
         &mut self,
-        trait_decl: &crate::parser::TraitDecl,
-        analyzed: &[AnalyzedFunction],
+        trait_decl: &crate::parser::TraitDecl<'ast>,
+        analyzed: &[AnalyzedFunction<'ast>],
     ) -> String {
         // RECURSION GUARD: Prevent infinite recursion during trait generation
         // This can happen if the same trait is generated multiple times in a cycle
@@ -1793,7 +1793,7 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
         output
     }
 
-    fn generate_impl(&mut self, impl_block: &ImplBlock, analyzed: &[AnalyzedFunction]) -> String {
+    fn generate_impl(&mut self, impl_block: &ImplBlock<'ast>, analyzed: &[AnalyzedFunction<'ast>]) -> String {
         let mut output = String::new();
 
         // Check if this impl block has @export or @wasm_bindgen decorator
@@ -2055,7 +2055,7 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
         output
     }
 
-    fn generate_function(&mut self, analyzed: &AnalyzedFunction) -> String {
+    fn generate_function(&mut self, analyzed: &AnalyzedFunction<'ast>) -> String {
         let func = &analyzed.decl;
         let mut output = String::new();
 
@@ -2580,7 +2580,7 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
         }
     }
 
-    fn generate_statement(&mut self, stmt: &Statement) -> String {
+    fn generate_statement(&mut self, stmt: &Statement<'ast>) -> String {
         // RECURSION GUARD: Check depth before processing statement
         if let Err(e) = self.enter_recursion("generate_statement") {
             eprintln!("{}", e);
@@ -2597,7 +2597,7 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
         result
     }
 
-    fn generate_statement_impl(&mut self, stmt: &Statement) -> String {
+    fn generate_statement_impl(&mut self, stmt: &Statement<'ast>) -> String {
         match stmt {
             Statement::Let {
                 pattern,
@@ -3623,7 +3623,7 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
         }
     }
 
-    fn generate_expression_with_precedence(&mut self, expr: &Expression) -> String {
+    fn generate_expression_with_precedence(&mut self, expr: &Expression<'ast>) -> String {
         // Wrap expressions in parentheses if they need them for proper precedence
         // when used as the object of a method call or field access
         match expr {
@@ -3641,7 +3641,7 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
     }
 
     // PHASE 7: Constant folding - evaluate constant expressions at compile time
-    fn generate_expression(&mut self, expr: &Expression) -> String {
+    fn generate_expression(&mut self, expr: &Expression<'ast>) -> String {
         // RECURSION GUARD: Check depth before processing expression
         if let Err(e) = self.enter_recursion("generate_expression") {
             eprintln!("{}", e);
@@ -3657,7 +3657,7 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
         result
     }
 
-    fn generate_expression_impl(&mut self, expr_to_generate: &Expression) -> String {
+    fn generate_expression_impl(&mut self, expr_to_generate: &Expression<'ast>) -> String {
         match expr_to_generate {
             Expression::Literal { value: lit, .. } => self.generate_literal(lit),
             Expression::Identifier { name, .. } => {
@@ -3715,13 +3715,13 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
                 if matches!(op, BinaryOp::Add) {
                     // Only treat as string concat if at least one operand is definitely a string literal
                     let has_string_literal = matches!(
-                        left.as_ref(),
+                        left,
                         Expression::Literal {
                             value: Literal::String(_),
                             ..
                         }
                     ) || matches!(
-                        right.as_ref(),
+                        right,
                         Expression::Literal {
                             value: Literal::String(_),
                             ..
@@ -3752,14 +3752,14 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
                 let left_is_usize = self.expression_produces_usize(left);
                 let right_is_usize = self.expression_produces_usize(right);
                 let right_is_int_literal = matches!(
-                    right.as_ref(),
+                    right,
                     Expression::Literal {
                         value: Literal::Int(_),
                         ..
                     }
                 );
                 let left_is_int_literal = matches!(
-                    left.as_ref(),
+                    left,
                     Expression::Literal {
                         value: Literal::Int(_),
                         ..
@@ -3767,9 +3767,9 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
                 );
 
                 // Wrap operands in parens if they have lower precedence
-                let mut left_str = match left.as_ref() {
+                let mut left_str = match left {
                     Expression::Binary { op: left_op, .. } => {
-                        if operators::op_precedence(left_op) < operators::op_precedence(op) {
+                        if operators::op_precedence(&left_op) < operators::op_precedence(&op) {
                             format!("({})", self.generate_expression(left))
                         } else {
                             self.generate_expression(left)
@@ -3777,9 +3777,9 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
                     }
                     _ => self.generate_expression(left),
                 };
-                let mut right_str = match right.as_ref() {
+                let mut right_str = match right {
                     Expression::Binary { op: right_op, .. } => {
-                        if operators::op_precedence(right_op) < operators::op_precedence(op) {
+                        if operators::op_precedence(&right_op) < operators::op_precedence(&op) {
                             format!("({})", self.generate_expression(right))
                         } else {
                             self.generate_expression(right)
@@ -3907,13 +3907,13 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
                             // Check if this is string concatenation
                             let has_string_literal =
                                 matches!(
-                                    left.as_ref(),
+                                    left,
                                     Expression::Literal {
                                         value: Literal::String(_),
                                         ..
                                     }
                                 ) || matches!(
-                                    right.as_ref(),
+                                    right,
                                     Expression::Literal {
                                         value: Literal::String(_),
                                         ..
@@ -4399,7 +4399,7 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
                         // Check if this is a module path (e.g., std::fs) or a field access (e.g., self.count)
                         // If the object is an identifier that looks like a module, use ::
                         // Otherwise, use . for instance methods on fields
-                        match object.as_ref() {
+                        match object {
                             Expression::Identifier { name, .. } => {
                                 if name.chars().next().is_some_and(|c| c.is_uppercase())
                                     || name == "std"
@@ -5150,7 +5150,7 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
     }
 
     /// Generate efficient string concatenation using format! macro
-    fn generate_string_concat(&mut self, left: &Expression, right: &Expression) -> String {
+    fn generate_string_concat(&mut self, left: &Expression<'ast>, right: &Expression<'ast>) -> String {
         // Collect all parts of the concatenation chain
         let mut parts = Vec::new();
         string_analysis::collect_concat_parts_static(left, &mut parts);
@@ -5541,7 +5541,7 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
 
     /// Extract the identifier from a pattern (for for-loop variable names)
     /// Check if a loop body modifies a variable
-    fn loop_body_modifies_variable(&self, body: &[Statement], var_name: &str) -> bool {
+    fn loop_body_modifies_variable(&self, body: &[&'ast Statement<'ast>], var_name: &str) -> bool {
         for stmt in body {
             if self.statement_modifies_variable(stmt, var_name) {
                 return true;
