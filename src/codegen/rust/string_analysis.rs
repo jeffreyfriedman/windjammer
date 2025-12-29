@@ -281,6 +281,7 @@ pub fn expression_is_explicit_ref(expr: &Expression) -> bool {
 mod tests {
     use super::*;
     use crate::source_map::Location;
+    use crate::test_utils::test_alloc_expr;
     use std::path::PathBuf;
 
     fn test_loc() -> Location {
@@ -322,22 +323,27 @@ mod tests {
             location: Some(test_loc()),
         };
 
-        let ab = Expression::Binary {
-            left: Box::new(a),
+        let a_ref = test_alloc_expr(a);
+        let b_ref = test_alloc_expr(b);
+        let c_ref = test_alloc_expr(c);
+        let d_ref = test_alloc_expr(d);
+
+        let ab = test_alloc_expr(Expression::Binary {
+            left: a_ref,
             op: BinaryOp::Add,
-            right: Box::new(b),
+            right: b_ref,
             location: Some(test_loc()),
-        };
-        let cd = Expression::Binary {
-            left: Box::new(c),
+        });
+        let cd = test_alloc_expr(Expression::Binary {
+            left: c_ref,
             op: BinaryOp::Add,
-            right: Box::new(d),
+            right: d_ref,
             location: Some(test_loc()),
-        };
+        });
         let expr = Expression::Binary {
-            left: Box::new(ab),
+            left: ab,
             op: BinaryOp::Add,
-            right: Box::new(cd),
+            right: cd,
             location: Some(test_loc()),
         };
 
@@ -348,39 +354,39 @@ mod tests {
     #[test]
     fn test_contains_string_in_nested_expression() {
         // ((a + b) * c) + "hello"
-        let a = Expression::Identifier {
+        let a = test_alloc_expr(Expression::Identifier {
             name: "a".to_string(),
             location: Some(test_loc()),
-        };
-        let b = Expression::Identifier {
+        });
+        let b = test_alloc_expr(Expression::Identifier {
             name: "b".to_string(),
             location: Some(test_loc()),
-        };
-        let c = Expression::Identifier {
+        });
+        let c = test_alloc_expr(Expression::Identifier {
             name: "c".to_string(),
             location: Some(test_loc()),
-        };
-        let hello = Expression::Literal {
+        });
+        let hello = test_alloc_expr(Expression::Literal {
             value: Literal::String("hello".to_string()),
             location: Some(test_loc()),
-        };
+        });
 
-        let ab = Expression::Binary {
-            left: Box::new(a),
+        let ab = test_alloc_expr(Expression::Binary {
+            left: a,
             op: BinaryOp::Add,
-            right: Box::new(b),
+            right: b,
             location: Some(test_loc()),
-        };
-        let ab_mul_c = Expression::Binary {
-            left: Box::new(ab),
+        });
+        let ab_mul_c = test_alloc_expr(Expression::Binary {
+            left: ab,
             op: BinaryOp::Mul,
-            right: Box::new(c),
+            right: c,
             location: Some(test_loc()),
-        };
+        });
         let expr = Expression::Binary {
-            left: Box::new(ab_mul_c),
+            left: ab_mul_c,
             op: BinaryOp::Add,
-            right: Box::new(hello),
+            right: hello,
             location: Some(test_loc()),
         };
 
@@ -390,39 +396,39 @@ mod tests {
     #[test]
     fn test_no_string_in_complex_expression() {
         // (a + b) * (c - d)
-        let a = Expression::Identifier {
+        let a = test_alloc_expr(Expression::Identifier {
             name: "a".to_string(),
             location: Some(test_loc()),
-        };
-        let b = Expression::Identifier {
+        });
+        let b = test_alloc_expr(Expression::Identifier {
             name: "b".to_string(),
             location: Some(test_loc()),
-        };
-        let c = Expression::Identifier {
+        });
+        let c = test_alloc_expr(Expression::Identifier {
             name: "c".to_string(),
             location: Some(test_loc()),
-        };
-        let d = Expression::Identifier {
+        });
+        let d = test_alloc_expr(Expression::Identifier {
             name: "d".to_string(),
             location: Some(test_loc()),
-        };
+        });
 
-        let ab = Expression::Binary {
-            left: Box::new(a),
+        let ab = test_alloc_expr(Expression::Binary {
+            left: a,
             op: BinaryOp::Add,
-            right: Box::new(b),
+            right: b,
             location: Some(test_loc()),
-        };
-        let cd = Expression::Binary {
-            left: Box::new(c),
+        });
+        let cd = test_alloc_expr(Expression::Binary {
+            left: c,
             op: BinaryOp::Sub,
-            right: Box::new(d),
+            right: d,
             location: Some(test_loc()),
-        };
+        });
         let expr = Expression::Binary {
-            left: Box::new(ab),
+            left: ab,
             op: BinaryOp::Mul,
-            right: Box::new(cd),
+            right: cd,
             location: Some(test_loc()),
         };
 
