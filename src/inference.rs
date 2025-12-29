@@ -460,6 +460,7 @@ impl Default for InferenceEngine {
 mod tests {
     use super::*;
     use crate::parser::{Literal, OwnershipHint, Parameter, Type};
+    use crate::test_utils::{test_alloc_expr, test_alloc_stmt};
 
     #[test]
     fn test_infer_display_from_println() {
@@ -483,24 +484,24 @@ mod tests {
             }],
             return_type: None,
             is_async: false,
-            body: vec![Statement::Expression {
-                expr: Expression::MacroInvocation {
+            body: vec![test_alloc_stmt(Statement::Expression {
+                expr: test_alloc_expr(Expression::MacroInvocation {
                     name: "println".to_string(),
                     args: vec![
-                        Expression::Literal {
+                        test_alloc_expr(Expression::Literal {
                             value: Literal::String("{}".to_string()),
                             location: None,
-                        },
-                        Expression::Identifier {
+                        }),
+                        test_alloc_expr(Expression::Identifier {
                             name: "x".to_string(),
                             location: None,
-                        },
+                        }),
                     ],
                     delimiter: crate::parser::MacroDelimiter::Parens,
                     location: None,
-                },
+                }),
                 location: None,
-            }],
+            })],
             where_clause: vec![],
             parent_type: None,
             doc_comment: None,
@@ -535,9 +536,9 @@ mod tests {
             }],
             return_type: Some(Type::Generic("T".to_string())),
             is_async: false,
-            body: vec![Statement::Expression {
-                expr: Expression::MethodCall {
-                    object: Box::new(Expression::Identifier {
+            body: vec![test_alloc_stmt(Statement::Expression {
+                expr: test_alloc_expr(Expression::MethodCall {
+                    object: test_alloc_expr(Expression::Identifier {
                         name: "x".to_string(),
                         location: None,
                     }),
@@ -545,9 +546,9 @@ mod tests {
                     type_args: None,
                     arguments: vec![],
                     location: None,
-                },
+                }),
                 location: None,
-            }],
+            })],
             where_clause: vec![],
             parent_type: None,
             doc_comment: None,
@@ -591,21 +592,21 @@ mod tests {
             ],
             return_type: Some(Type::Generic("T".to_string())),
             is_async: false,
-            body: vec![Statement::Expression {
-                expr: Expression::Binary {
+            body: vec![test_alloc_stmt(Statement::Expression {
+                expr: test_alloc_expr(Expression::Binary {
                     op: BinaryOp::Add,
-                    left: Box::new(Expression::Identifier {
+                    left: test_alloc_expr(Expression::Identifier {
                         name: "x".to_string(),
                         location: None,
                     }),
-                    right: Box::new(Expression::Identifier {
+                    right: test_alloc_expr(Expression::Identifier {
                         name: "y".to_string(),
                         location: None,
                     }),
                     location: None,
-                },
+                }),
                 location: None,
-            }],
+            })],
             where_clause: vec![],
             parent_type: None,
             doc_comment: None,
