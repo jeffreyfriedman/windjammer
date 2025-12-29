@@ -331,133 +331,137 @@ fn replace_strings_in_expression<'ast>(
             type_args,
             arguments,
             location,
-        } => Expression::MethodCall {
-            object: Box::new(replace_strings_in_expression(*object, pool_map)),
-            method,
-            type_args,
+        } => optimizer.alloc_expr(Expression::MethodCall {
+            object: replace_strings_in_expression(object, pool_map, optimizer),
+            method: method.clone(),
+            type_args: type_args.clone(),
             arguments: arguments
-                .into_iter()
-                .map(|(label, arg)| (label, replace_strings_in_expression(arg, pool_map)))
+                .iter()
+                .map(|(label, arg)| (label.clone(), replace_strings_in_expression(arg, pool_map, optimizer)))
                 .collect(),
-            location,
-        },
+            location: *location,
+        }),
         Expression::FieldAccess {
             object,
             field,
             location,
-        } => Expression::FieldAccess {
-            object: Box::new(replace_strings_in_expression(*object, pool_map)),
-            field,
-            location,
-        },
+        } => optimizer.alloc_expr(Expression::FieldAccess {
+            object: replace_strings_in_expression(object, pool_map, optimizer),
+            field: field.clone(),
+            location: *location,
+        }),
         Expression::StructLiteral {
             name,
             fields,
             location,
-        } => Expression::StructLiteral {
-            name,
+        } => optimizer.alloc_expr(Expression::StructLiteral {
+            name: name.clone(),
             fields: fields
-                .into_iter()
-                .map(|(name, value)| (name, replace_strings_in_expression(value, pool_map)))
+                .iter()
+                .map(|(name, value)| (name.clone(), replace_strings_in_expression(value, pool_map, optimizer)))
                 .collect(),
-            location,
-        },
+            location: *location,
+        }),
         Expression::Range {
             start,
             end,
             inclusive,
             location,
-        } => Expression::Range {
-            start: Box::new(replace_strings_in_expression(*start, pool_map)),
-            end: Box::new(replace_strings_in_expression(*end, pool_map)),
-            inclusive,
-            location,
-        },
+        } => optimizer.alloc_expr(Expression::Range {
+            start: replace_strings_in_expression(start, pool_map, optimizer),
+            end: replace_strings_in_expression(end, pool_map, optimizer),
+            inclusive: *inclusive,
+            location: *location,
+        }),
         Expression::Closure {
             parameters,
             body,
             location,
-        } => Expression::Closure {
-            parameters,
-            body: Box::new(replace_strings_in_expression(*body, pool_map)),
-            location,
-        },
+        } => optimizer.alloc_expr(Expression::Closure {
+            parameters: parameters.clone(),
+            body: replace_strings_in_expression(body, pool_map, optimizer),
+            location: *location,
+        }),
         Expression::Cast {
             expr,
             type_,
             location,
-        } => Expression::Cast {
-            expr: Box::new(replace_strings_in_expression(*expr, pool_map)),
-            type_,
-            location,
-        },
+        } => optimizer.alloc_expr(Expression::Cast {
+            expr: replace_strings_in_expression(expr, pool_map, optimizer),
+            type_: type_.clone(),
+            location: *location,
+        }),
         Expression::Index {
             object,
             index,
             location,
-        } => Expression::Index {
-            object: Box::new(replace_strings_in_expression(*object, pool_map)),
-            index: Box::new(replace_strings_in_expression(*index, pool_map)),
-            location,
-        },
-        Expression::Tuple { elements, location } => Expression::Tuple {
+        } => optimizer.alloc_expr(Expression::Index {
+            object: replace_strings_in_expression(object, pool_map, optimizer),
+            index: replace_strings_in_expression(index, pool_map, optimizer),
+            location: *location,
+        }),
+        Expression::Tuple { elements, location } => optimizer.alloc_expr(Expression::Tuple {
             elements: elements
-                .into_iter()
-                .map(|e| replace_strings_in_expression(e, pool_map))
+                .iter()
+                .map(|e| replace_strings_in_expression(e, pool_map, optimizer))
                 .collect(),
-            location,
-        },
+            location: *location,
+        }),
         Expression::MacroInvocation {
             name,
             args,
             delimiter,
             location,
-        } => Expression::MacroInvocation {
-            name,
+        } => optimizer.alloc_expr(Expression::MacroInvocation {
+            name: name.clone(),
             args: args
-                .into_iter()
-                .map(|arg| replace_strings_in_expression(arg, pool_map))
+                .iter()
+                .map(|arg| replace_strings_in_expression(arg, pool_map, optimizer))
                 .collect(),
-            delimiter,
-            location,
-        },
-        Expression::TryOp { expr, location } => Expression::TryOp {
-            expr: Box::new(replace_strings_in_expression(*expr, pool_map)),
-            location,
-        },
-        Expression::Await { expr, location } => Expression::Await {
-            expr: Box::new(replace_strings_in_expression(*expr, pool_map)),
-            location,
-        },
+            delimiter: *delimiter,
+            location: *location,
+        }),
+        Expression::TryOp { expr, location } => optimizer.alloc_expr(Expression::TryOp {
+            expr: replace_strings_in_expression(expr, pool_map, optimizer),
+            location: *location,
+        }),
+        Expression::Await { expr, location } => optimizer.alloc_expr(Expression::Await {
+            expr: replace_strings_in_expression(expr, pool_map, optimizer),
+            location: *location,
+        }),
         Expression::ChannelSend {
             channel,
             value,
             location,
-        } => Expression::ChannelSend {
-            channel: Box::new(replace_strings_in_expression(*channel, pool_map)),
-            value: Box::new(replace_strings_in_expression(*value, pool_map)),
-            location,
-        },
-        Expression::ChannelRecv { channel, location } => Expression::ChannelRecv {
-            channel: Box::new(replace_strings_in_expression(*channel, pool_map)),
-            location,
-        },
+        } => optimizer.alloc_expr(Expression::ChannelSend {
+            channel: replace_strings_in_expression(channel, pool_map, optimizer),
+            value: replace_strings_in_expression(value, pool_map, optimizer),
+            location: *location,
+        }),
+        Expression::ChannelRecv { channel, location } => optimizer.alloc_expr(Expression::ChannelRecv {
+            channel: replace_strings_in_expression(channel, pool_map, optimizer),
+            location: *location,
+        }),
         Expression::Block {
             statements,
             location,
-        } => Expression::Block {
+        } => optimizer.alloc_expr(Expression::Block {
             statements: statements
-                .into_iter()
-                .map(|stmt| replace_strings_in_statement(stmt, pool_map))
+                .iter()
+                .map(|stmt| replace_strings_in_statement(stmt, pool_map, optimizer))
                 .collect(),
-            location,
-        },
+            location: *location,
+        }),
         other => other,
     }
 }
 
 /// Replace string literals in a statement with pool references
-fn replace_strings_in_statement<'ast>(stmt: Statement<'ast>, pool_map: &HashMap<String, String>) -> Statement<'ast> {
+fn replace_strings_in_statement<'ast>(
+    stmt: &'ast Statement<'ast>,
+    pool_map: &HashMap<String, String>,
+    optimizer: &crate::optimizer::Optimizer,
+) -> &'ast Statement<'ast> {
     match stmt {
         Statement::Let {
             pattern,
