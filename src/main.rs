@@ -1482,7 +1482,7 @@ fn compile_file_impl(
             .register_traits_from_program(&dummy_program);
     }
 
-    let (analyzed, signatures, mut analyzed_trait_methods) = module_compiler
+    let (analyzed, signatures, analyzed_trait_methods) = module_compiler
         .analyzer
         .analyze_program(&program)
         .map_err(|e| anyhow::anyhow!("Analysis error: {}", e))?;
@@ -1513,9 +1513,9 @@ fn compile_file_impl(
         eprintln!("DEBUG REGEN: Using global trait methods for regeneration");
         eprintln!(
             "DEBUG REGEN: Global trait methods has {} traits",
-            module_compiler.analyzer.analyzed_trait_methods.len()
+            analyzed_trait_methods.len()
         );
-        for (trait_name, methods) in &module_compiler.analyzer.analyzed_trait_methods {
+        for (trait_name, methods) in &analyzed_trait_methods {
             eprintln!(
                 "DEBUG REGEN:   GLOBAL Trait {} has {} methods",
                 trait_name,
@@ -1531,7 +1531,8 @@ fn compile_file_impl(
                 }
             }
         }
-        analyzed_trait_methods = module_compiler.analyzer.analyzed_trait_methods.clone();
+        // Note: analyzed_trait_methods is already synchronized with module_compiler.analyzer
+        // No need to clone - we're using the same HashMap that was returned from analyze_program
         eprintln!(
             "DEBUG REGEN: After clone, analyzed_trait_methods has {} traits",
             analyzed_trait_methods.len()
