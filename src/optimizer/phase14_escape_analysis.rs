@@ -79,7 +79,7 @@ impl EscapeAnalysisStats {
 }
 
 /// Perform escape analysis optimization on a program
-pub fn optimize_escape_analysis(program: &Program) -> (Program, EscapeAnalysisStats) {
+pub fn optimize_escape_analysis<'ast>(program: &Program<'ast>, optimizer: &crate::optimizer::Optimizer) -> (Program<'ast>, EscapeAnalysisStats) {
     let mut stats = EscapeAnalysisStats::default();
     let mut new_items = Vec::new();
 
