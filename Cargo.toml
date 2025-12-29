@@ -129,6 +129,10 @@ harness = false
 name = "regression_benchmarks"
 harness = false
 
+[[bench]]
+name = "arena_performance"
+harness = false
+
 # Allow tarpaulin cfg for coverage testing
 # Tarpaulin sets this cfg when running, so we need to tell Rust it's expected
 [lints.rust]
