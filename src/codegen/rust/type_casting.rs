@@ -60,11 +60,12 @@ pub fn cast_for_usize_binary_op(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::test_utils::test_alloc_expr;
 
     #[test]
     fn test_expression_produces_usize() {
         let expr = Expression::MethodCall {
-            object: Box::new(Expression::Identifier {
+            object: test_alloc_expr(Expression::Identifier {
                 name: "vec".to_string(),
                 location: None,
             }),

@@ -196,6 +196,7 @@ pub fn transform_spawn_to_workers(statements: &[Statement]) -> String {
 mod tests {
     use super::*;
     use crate::parser::Expression;
+    use crate::test_utils::test_alloc_expr;
 
     #[test]
     fn test_generate_helpers() {
@@ -230,10 +231,10 @@ mod tests {
         assert!(WebWorkerGenerator::contains_spawn(&async_stmt));
 
         let regular_stmt = Statement::Expression {
-            expr: Expression::Literal {
+            expr: test_alloc_expr(Expression::Literal {
                 value: crate::parser::Literal::Int(42),
                 location: None,
-            },
+            }),
             location: None,
         };
 

@@ -255,6 +255,7 @@ pub fn analyze_usage(program: &Program) -> UsageAnalysis {
 mod tests {
     use super::*;
     use crate::parser::FunctionDecl;
+    use crate::test_utils::{test_alloc_expr, test_alloc_stmt};
 
     #[test]
     fn test_tree_shaker_basic() {
@@ -271,17 +272,17 @@ mod tests {
                         is_async: false,
                         parameters: vec![],
                         return_type: None,
-                        body: vec![Statement::Expression {
-                            expr: Expression::Call {
-                                function: Box::new(Expression::Identifier {
+                        body: vec![test_alloc_stmt(Statement::Expression {
+                            expr: test_alloc_expr(Expression::Call {
+                                function: test_alloc_expr(Expression::Identifier {
                                     name: "used".to_string(),
                                     location: None,
                                 }),
                                 arguments: vec![],
                                 location: None,
-                            },
+                            }),
                             location: None,
-                        }],
+                        })],
                         parent_type: None,
                         doc_comment: None,
                     },
