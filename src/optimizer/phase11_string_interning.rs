@@ -677,7 +677,7 @@ fn create_pool_statics(pool: &[StringPoolEntry]) -> Vec<Item> {
 }
 
 /// Main optimization function
-pub fn optimize_string_interning(program: &Program) -> StringInterningResult {
+pub fn optimize_string_interning<'ast>(program: &Program<'ast>) -> StringInterningResult<'ast> {
     // Step 1: Analyze string literals
     let frequency = analyze_string_literals(program);
 

@@ -24,22 +24,7 @@ pub mod error_tui; // Interactive TUI for error navigation
 pub mod fuzzy_matcher; // Fuzzy string matching for typo suggestions
 pub mod inference;
 pub mod lexer;
-// OPTIMIZER INTENTIONALLY DISABLED: Requires architectural refactoring for arena allocation
-// 
-// The optimizer has 150 lifetime errors due to arena ownership architecture:
-// - Optimizer owns an arena and returns Program<'arena> references
-// - But caller expects Program<'static> or other lifetimes
-// - This is a fundamental architecture issue, not a simple fix
-//
-// SOLUTION PATHS (see docs/ARENA_SESSION6_FINAL.md):
-// 1. Optimizer clones output (owns arena, returns owned Program)
-// 2. Higher-level arena (passed to optimizer as parameter)
-// 3. Skip optimization phase (current approach - compilation works fine)
-//
-// DECISION: Defer to separate PR. Core compiler is 100% arena-allocated and working.
-// The 87.5% stack reduction and elimination of recursive drops is the critical win.
-//
-// pub mod optimizer;  // Re-enable after architectural refactoring
+pub mod optimizer;
 pub mod parser; // Parser module (refactored structure)
 pub mod parser_impl; // Parser implementation (being migrated to parser/)
 #[cfg(test)]

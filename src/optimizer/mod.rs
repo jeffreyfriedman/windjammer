@@ -93,19 +93,53 @@ pub struct OptimizationStats {
 /// Main optimizer entry point
 pub struct Optimizer {
     config: OptimizerConfig,
+    // Arena allocators for optimized AST nodes
+    expr_arena: typed_arena::Arena<crate::parser::Expression<'static>>,
+    stmt_arena: typed_arena::Arena<crate::parser::Statement<'static>>,
+    pattern_arena: typed_arena::Arena<crate::parser::Pattern<'static>>,
 }
 
 impl Optimizer {
     pub fn new(config: OptimizerConfig) -> Self {
-        Self { config }
+        Self {
+            config,
+            expr_arena: Arena::new(),
+            stmt_arena: Arena::new(),
+            pattern_arena: Arena::new(),
+        }
     }
 
     pub fn with_defaults() -> Self {
         Self::new(OptimizerConfig::default())
     }
 
+    /// Allocate an expression in the arena
+    /// Returns a reference with free lifetime 'ast (not tied to &self)
+    pub fn alloc_expr<'ast>(&self, expr: Expression<'static>) -> &'ast Expression<'ast> {
+        unsafe {
+            let ptr = self.expr_arena.alloc(expr);
+            std::mem::transmute(ptr)
+        }
+    }
+
+    /// Allocate a statement in the arena
+    pub fn alloc_stmt<'ast>(&self, stmt: Statement<'static>) -> &'ast Statement<'ast> {
+        unsafe {
+            let ptr = self.stmt_arena.alloc(stmt);
+            std::mem::transmute(ptr)
+        }
+    }
+
+    /// Allocate a pattern in the arena
+    pub fn alloc_pattern<'ast>(&self, pattern: Pattern<'static>) -> &'ast Pattern<'ast> {
+        unsafe {
+            let ptr = self.pattern_arena.alloc(pattern);
+            std::mem::transmute(ptr)
+        }
+    }
+
     /// Run all enabled optimization passes
-    pub fn optimize(&self, program: Program) -> OptimizationResult {
+    pub fn optimize<'ast>(&self, program: &Program<'ast>) -> OptimizationResult<'ast> {
         let mut program = program;
         let mut stats = OptimizationStats::default();
 
