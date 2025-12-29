@@ -29,7 +29,10 @@ pub struct DeadCodeStats {
 }
 
 /// Perform dead code elimination on a program
-pub fn eliminate_dead_code(program: &Program) -> (Program, DeadCodeStats) {
+pub fn eliminate_dead_code<'ast>(
+    program: &Program<'ast>,
+    optimizer: &crate::optimizer::Optimizer,
+) -> (Program<'ast>, DeadCodeStats) {
     let mut stats = DeadCodeStats::default();
 
     // Step 1: Find all called functions (used to identify unused functions)
@@ -315,7 +318,11 @@ fn is_unused_function(func: &FunctionDecl, called_functions: &HashSet<String>) -
 }
 
 /// Eliminate dead code in impl block methods
-fn eliminate_dead_code_in_impl(impl_block: &ImplBlock, stats: &mut DeadCodeStats) -> ImplBlock {
+fn eliminate_dead_code_in_impl<'ast>(
+    impl_block: &ImplBlock<'ast>,
+    stats: &mut DeadCodeStats,
+    optimizer: &crate::optimizer::Optimizer,
+) -> ImplBlock<'ast> {
     let mut new_functions = Vec::new();
 
     for func in &impl_block.functions {
@@ -354,7 +361,10 @@ fn eliminate_dead_code_in_impl(impl_block: &ImplBlock, stats: &mut DeadCodeStats
 }
 
 /// Eliminate dead code in a list of statements
-fn eliminate_dead_code_in_statements(statements: &[Statement]) -> (Vec<Statement>, DeadCodeStats) {
+fn eliminate_dead_code_in_statements<'ast>(
+    statements: &[&'ast Statement<'ast>],
+    optimizer: &crate::optimizer::Optimizer,
+) -> (Vec<&'ast Statement<'ast>>, DeadCodeStats) {
     let mut stats = DeadCodeStats::default();
     let mut new_statements = Vec::new();
     let mut found_terminator = false;
@@ -387,7 +397,11 @@ fn eliminate_dead_code_in_statements(statements: &[Statement]) -> (Vec<Statement
 }
 
 /// Eliminate dead code in a single statement
-fn eliminate_dead_code_in_statement(stmt: &Statement, stats: &mut DeadCodeStats) -> Statement {
+fn eliminate_dead_code_in_statement<'ast>(
+    stmt: &'ast Statement<'ast>,
+    stats: &mut DeadCodeStats,
+    optimizer: &crate::optimizer::Optimizer,
+) -> &'ast Statement<'ast> {
     match stmt {
         Statement::Expression { expr, location } => Statement::Expression {
             expr: eliminate_dead_code_in_expression(expr),
@@ -553,7 +567,10 @@ fn eliminate_dead_code_in_statement(stmt: &Statement, stats: &mut DeadCodeStats)
 }
 
 /// Eliminate dead code in an expression
-fn eliminate_dead_code_in_expression(expr: &Expression) -> Expression {
+fn eliminate_dead_code_in_expression<'ast>(
+    expr: &'ast Expression<'ast>,
+    optimizer: &crate::optimizer::Optimizer,
+) -> &'ast Expression<'ast> {
     match expr {
         Expression::Call {
             function,
