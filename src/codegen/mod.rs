@@ -90,7 +90,7 @@ pub fn generate_wasm(program: &Program) -> Result<CodegenOutput> {
 mod tests {
     use super::*;
 
-    fn create_test_program() -> Program {
+    fn create_test_program() -> Program<'static> {
         Program { items: vec![] }
     }
 
