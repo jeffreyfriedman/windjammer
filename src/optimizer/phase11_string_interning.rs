@@ -470,168 +470,190 @@ fn replace_strings_in_statement<'ast>(
             value,
             else_block,
             location,
-        } => Statement::Let {
-            pattern,
-            mutable,
-            type_,
-            value: replace_strings_in_expression(value, pool_map),
-            else_block: else_block.map(|stmts| {
+        } => optimizer.alloc_stmt(Statement::Let {
+            pattern: pattern.clone(),
+            mutable: *mutable,
+            type_: type_.clone(),
+            value: replace_strings_in_expression(value, pool_map, optimizer),
+            else_block: else_block.as_ref().map(|stmts| {
                 stmts
-                    .into_iter()
-                    .map(|s| replace_strings_in_statement(s, pool_map))
+                    .iter()
+                    .map(|s| replace_strings_in_statement(s, pool_map, optimizer))
                     .collect()
             }),
-            location,
-        },
+            location: *location,
+        }),
         Statement::Const {
             name,
             type_,
             value,
             location,
-        } => Statement::Const {
-            name,
-            type_,
-            value: replace_strings_in_expression(value, pool_map),
-            location,
-        },
+        } => optimizer.alloc_stmt(Statement::Const {
+            name: name.clone(),
+            type_: type_.clone(),
+            value: replace_strings_in_expression(value, pool_map, optimizer),
+            location: *location,
+        }),
         Statement::Static {
             name,
             mutable,
             type_,
             value,
             location,
-        } => Statement::Static {
-            name,
-            mutable,
-            type_,
-            value: replace_strings_in_expression(value, pool_map),
-            location,
-        },
-        Statement::Expression { expr, location } => Statement::Expression {
-            expr: replace_strings_in_expression(expr, pool_map),
-            location,
-        },
+        } => optimizer.alloc_stmt(Statement::Static {
+            name: name.clone(),
+            mutable: *mutable,
+            type_: type_.clone(),
+            value: replace_strings_in_expression(value, pool_map, optimizer),
+            location: *location,
+        }),
+        Statement::Expression { expr, location } => optimizer.alloc_stmt(Statement::Expression {
+            expr: replace_strings_in_expression(expr, pool_map, optimizer),
+            location: *location,
+        }),
         Statement::Return {
             value: Some(expr),
             location,
-        } => Statement::Return {
-            value: Some(replace_strings_in_expression(expr, pool_map)),
-            location,
-        },
+        } => optimizer.alloc_stmt(Statement::Return {
+            value: Some(replace_strings_in_expression(expr, pool_map, optimizer)),
+            location: *location,
+        }),
         Statement::Assignment {
             target,
             value,
             compound_op,
             location,
-        } => Statement::Assignment {
-            target: replace_strings_in_expression(target, pool_map),
-            value: replace_strings_in_expression(value, pool_map),
-            compound_op,
-            location,
-        },
+        } => optimizer.alloc_stmt(Statement::Assignment {
+            target: replace_strings_in_expression(target, pool_map, optimizer),
+            value: replace_strings_in_expression(value, pool_map, optimizer),
+            compound_op: *compound_op,
+            location: *location,
+        }),
         Statement::If {
             condition,
             then_block,
             else_block,
             location,
-        } => Statement::If {
-            condition: replace_strings_in_expression(condition, pool_map),
+        } => optimizer.alloc_stmt(Statement::If {
+            condition: replace_strings_in_expression(condition, pool_map, optimizer),
             then_block: then_block
-                .into_iter()
-                .map(|stmt| replace_strings_in_statement(stmt, pool_map))
+                .iter()
+                .map(|stmt| replace_strings_in_statement(stmt, pool_map, optimizer))
                 .collect(),
-            else_block: else_block.map(|stmts| {
+            else_block: else_block.as_ref().map(|stmts| {
                 stmts
-                    .into_iter()
-                    .map(|stmt| replace_strings_in_statement(stmt, pool_map))
+                    .iter()
+                    .map(|stmt| replace_strings_in_statement(stmt, pool_map, optimizer))
                     .collect()
             }),
-            location,
-        },
+            location: *location,
+        }),
         Statement::While {
             condition,
             body,
             location,
-        } => Statement::While {
-            condition: replace_strings_in_expression(condition, pool_map),
+        } => optimizer.alloc_stmt(Statement::While {
+            condition: replace_strings_in_expression(condition, pool_map, optimizer),
             body: body
-                .into_iter()
-                .map(|stmt| replace_strings_in_statement(stmt, pool_map))
+                .iter()
+                .map(|stmt| replace_strings_in_statement(stmt, pool_map, optimizer))
                 .collect(),
-            location,
-        },
+            location: *location,
+        }),
         Statement::For {
             pattern,
             iterable,
             body,
             location,
-        } => Statement::For {
-            pattern,
-            iterable: replace_strings_in_expression(iterable, pool_map),
+        } => optimizer.alloc_stmt(Statement::For {
+            pattern: pattern.clone(),
+            iterable: replace_strings_in_expression(iterable, pool_map, optimizer),
             body: body
-                .into_iter()
-                .map(|stmt| replace_strings_in_statement(stmt, pool_map))
+                .iter()
+                .map(|stmt| replace_strings_in_statement(stmt, pool_map, optimizer))
                 .collect(),
-            location,
-        },
+            location: *location,
+        }),
         Statement::Match {
             value,
             arms,
             location,
-        } => Statement::Match {
-            value: replace_strings_in_expression(value, pool_map),
+        } => optimizer.alloc_stmt(Statement::Match {
+            value: replace_strings_in_expression(value, pool_map, optimizer),
             arms: arms
-                .into_iter()
+                .iter()
                 .map(|arm| MatchArm {
-                    pattern: arm.pattern,
+                    pattern: arm.pattern.clone(),
                     guard: arm
                         .guard
-                        .map(|g| replace_strings_in_expression(g, pool_map)),
-                    body: replace_strings_in_expression(arm.body, pool_map),
+                        .map(|g| replace_strings_in_expression(g, pool_map, optimizer)),
+                    body: replace_strings_in_expression(arm.body, pool_map, optimizer),
+                    location: arm.location,
                 })
                 .collect(),
-            location,
-        },
-        other => other,
+            location: *location,
+        }),
+        other => stmt, // Return as-is for other statement types
     }
 }
 
 /// Replace string literals in an item with pool references
-fn replace_strings_in_item<'ast>(item: Item<'ast>, pool_map: &HashMap<String, String>) -> Item<'ast> {
+fn replace_strings_in_item<'ast>(
+    item: &Item<'ast>,
+    pool_map: &HashMap<String, String>,
+    optimizer: &crate::optimizer::Optimizer,
+) -> Item<'ast> {
     match item {
-        Item::Function {
-            decl: mut func,
-            location,
-        } => {
-            func.body = func
+        Item::Function { decl, location } => {
+            let new_body: Vec<&'ast Statement<'ast>> = decl
                 .body
-                .into_iter()
-                .map(|stmt| replace_strings_in_statement(stmt, pool_map))
+                .iter()
+                .map(|stmt| replace_strings_in_statement(stmt, pool_map, optimizer))
                 .collect();
             Item::Function {
-                decl: func,
-                location,
+                decl: FunctionDecl {
+                    name: decl.name.clone(),
+                    parameters: decl.parameters.clone(),
+                    return_type: decl.return_type.clone(),
+                    body: new_body,
+                    is_pub: decl.is_pub,
+                    is_async: decl.is_async,
+                    decorators: decl.decorators.clone(),
+                    location: decl.location,
+                },
+                location: *location,
             }
         }
-        Item::Impl {
-            block: mut impl_block,
-            location,
-        } => {
-            impl_block.functions = impl_block
+        Item::Impl { block, location } => {
+            let new_functions: Vec<FunctionDecl<'ast>> = block
                 .functions
-                .into_iter()
-                .map(|mut func| {
-                    func.body = func
+                .iter()
+                .map(|func| {
+                    let new_body: Vec<&'ast Statement<'ast>> = func
                         .body
-                        .into_iter()
-                        .map(|stmt| replace_strings_in_statement(stmt, pool_map))
+                        .iter()
+                        .map(|stmt| replace_strings_in_statement(stmt, pool_map, optimizer))
                         .collect();
-                    func
+                    FunctionDecl {
+                        name: func.name.clone(),
+                        parameters: func.parameters.clone(),
+                        return_type: func.return_type.clone(),
+                        body: new_body,
+                        is_pub: func.is_pub,
+                        is_async: func.is_async,
+                        decorators: func.decorators.clone(),
+                        location: func.location,
+                    }
                 })
                 .collect();
             Item::Impl {
-                block: impl_block,
-                location,
+                block: ImplBlock {
+                    trait_name: block.trait_name.clone(),
+                    type_name: block.type_name.clone(),
+                    functions: new_functions,
+                    decorators: block.decorators.clone(),
+                },
+                location: *location,
             }
         }
         Item::Static {
@@ -641,11 +663,11 @@ fn replace_strings_in_item<'ast>(item: Item<'ast>, pool_map: &HashMap<String, St
             value,
             location,
         } => Item::Static {
-            name,
-            mutable,
-            type_,
-            value: replace_strings_in_expression(value, pool_map),
-            location,
+            name: name.clone(),
+            mutable: *mutable,
+            type_: type_.clone(),
+            value: replace_strings_in_expression(value, pool_map, optimizer),
+            location: *location,
         },
         Item::Const {
             name,
@@ -653,12 +675,12 @@ fn replace_strings_in_item<'ast>(item: Item<'ast>, pool_map: &HashMap<String, St
             value,
             location,
         } => Item::Const {
-            name,
-            type_,
-            value: replace_strings_in_expression(value, pool_map),
-            location,
+            name: name.clone(),
+            type_: type_.clone(),
+            value: replace_strings_in_expression(value, pool_map, optimizer),
+            location: *location,
         },
-        other => other,
+        other => item.clone(),
     }
 }
 
@@ -703,10 +725,10 @@ pub fn optimize_string_interning<'ast>(
     let pool_statics = create_pool_statics(&pool);
 
     // Step 5: Transform program items
-    let transformed_items: Vec<Item> = program
+    let transformed_items: Vec<Item<'ast>> = program
         .items
         .iter()
-        .map(|item| replace_strings_in_item(item.clone(), &pool_map))
+        .map(|item| replace_strings_in_item(item, &pool_map, optimizer))
         .collect();
 
     // Step 6: Combine pool statics + transformed items
