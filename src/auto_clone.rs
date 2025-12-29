@@ -471,6 +471,7 @@ enum UsageKind {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::test_utils::{test_alloc_expr, test_alloc_stmt};
 
     #[test]
     fn test_simple_move_and_reuse() {
@@ -491,50 +492,50 @@ mod tests {
             parent_type: None,
             doc_comment: None,
             body: vec![
-                Statement::Let {
+                test_alloc_stmt(Statement::Let {
                     pattern: Pattern::Identifier("x".to_string()),
                     mutable: false,
                     type_: None,
-                    value: Expression::Array {
+                    value: test_alloc_expr(Expression::Array {
                         elements: vec![
-                            Expression::Literal {
+                            test_alloc_expr(Expression::Literal {
                                 value: Literal::Int(1),
                                 location: None,
-                            },
-                            Expression::Literal {
+                            }),
+                            test_alloc_expr(Expression::Literal {
                                 value: Literal::Int(2),
                                 location: None,
-                            },
-                            Expression::Literal {
+                            }),
+                            test_alloc_expr(Expression::Literal {
                                 value: Literal::Int(3),
                                 location: None,
-                            },
+                            }),
                         ],
                         location: None,
-                    },
+                    }),
                     else_block: None,
                     location: None,
-                },
-                Statement::Expression {
-                    expr: Expression::Call {
-                        function: Box::new(Expression::Identifier {
+                }),
+                test_alloc_stmt(Statement::Expression {
+                    expr: test_alloc_expr(Expression::Call {
+                        function: test_alloc_expr(Expression::Identifier {
                             name: "takes_ownership".to_string(),
                             location: None,
                         }),
                         arguments: vec![(
                             None,
-                            Expression::Identifier {
+                            test_alloc_expr(Expression::Identifier {
                                 name: "x".to_string(),
                                 location: None,
-                            },
+                            }),
                         )],
                         location: None,
-                    },
+                    }),
                     location: None,
-                },
-                Statement::Expression {
-                    expr: Expression::MethodCall {
-                        object: Box::new(Expression::Identifier {
+                }),
+                test_alloc_stmt(Statement::Expression {
+                    expr: test_alloc_expr(Expression::MethodCall {
+                        object: test_alloc_expr(Expression::Identifier {
                             name: "x".to_string(),
                             location: None,
                         }),
@@ -542,9 +543,9 @@ mod tests {
                         arguments: vec![],
                         type_args: None,
                         location: None,
-                    },
+                    }),
                     location: None,
-                },
+                }),
             ],
         };
 
@@ -576,34 +577,34 @@ mod tests {
             parent_type: None,
             doc_comment: None,
             body: vec![
-                Statement::Let {
+                test_alloc_stmt(Statement::Let {
                     pattern: Pattern::Identifier("x".to_string()),
                     mutable: false,
                     type_: None,
-                    value: Expression::Array {
+                    value: test_alloc_expr(Expression::Array {
                         elements: vec![],
                         location: None,
-                    },
+                    }),
                     else_block: None,
                     location: None,
-                },
-                Statement::Expression {
-                    expr: Expression::Call {
-                        function: Box::new(Expression::Identifier {
+                }),
+                test_alloc_stmt(Statement::Expression {
+                    expr: test_alloc_expr(Expression::Call {
+                        function: test_alloc_expr(Expression::Identifier {
                             name: "takes_ownership".to_string(),
                             location: None,
                         }),
                         arguments: vec![(
                             None,
-                            Expression::Identifier {
+                            test_alloc_expr(Expression::Identifier {
                                 name: "x".to_string(),
                                 location: None,
-                            },
+                            }),
                         )],
                         location: None,
-                    },
+                    }),
                     location: None,
-                },
+                }),
             ],
         };
 
