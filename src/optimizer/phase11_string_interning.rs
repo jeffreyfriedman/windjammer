@@ -283,7 +283,7 @@ fn replace_strings_in_expression<'ast>(
             if let Some(pool_name) = pool_map.get(s) {
                 optimizer.alloc_expr(Expression::Identifier {
                     name: pool_name.clone(),
-                    location: *location,
+                    location: location.clone(),
                 })
             } else {
                 expr // Return as-is if not interned
@@ -298,7 +298,7 @@ fn replace_strings_in_expression<'ast>(
             left: replace_strings_in_expression(left, pool_map, optimizer),
             right: replace_strings_in_expression(right, pool_map, optimizer),
             op: *op,
-            location: *location,
+            location: location.clone(),
         }),
         Expression::Unary {
             op,
@@ -307,7 +307,7 @@ fn replace_strings_in_expression<'ast>(
         } => optimizer.alloc_expr(Expression::Unary {
             op: *op,
             operand: replace_strings_in_expression(operand, pool_map, optimizer),
-            location: *location,
+            location: location.clone(),
         }),
         Expression::Call {
             function,
@@ -319,7 +319,7 @@ fn replace_strings_in_expression<'ast>(
                 .iter()
                 .map(|(label, arg)| (label.clone(), replace_strings_in_expression(arg, pool_map, optimizer)))
                 .collect(),
-            location: *location,
+            location: location.clone(),
         }),
         Expression::MethodCall {
             object,
@@ -335,7 +335,7 @@ fn replace_strings_in_expression<'ast>(
                 .iter()
                 .map(|(label, arg)| (label.clone(), replace_strings_in_expression(arg, pool_map, optimizer)))
                 .collect(),
-            location: *location,
+            location: location.clone(),
         }),
         Expression::FieldAccess {
             object,
@@ -344,7 +344,7 @@ fn replace_strings_in_expression<'ast>(
         } => optimizer.alloc_expr(Expression::FieldAccess {
             object: replace_strings_in_expression(object, pool_map, optimizer),
             field: field.clone(),
-            location: *location,
+            location: location.clone(),
         }),
         Expression::StructLiteral {
             name,
@@ -356,7 +356,7 @@ fn replace_strings_in_expression<'ast>(
                 .iter()
                 .map(|(name, value)| (name.clone(), replace_strings_in_expression(value, pool_map, optimizer)))
                 .collect(),
-            location: *location,
+            location: location.clone(),
         }),
         Expression::Range {
             start,
@@ -367,7 +367,7 @@ fn replace_strings_in_expression<'ast>(
             start: replace_strings_in_expression(start, pool_map, optimizer),
             end: replace_strings_in_expression(end, pool_map, optimizer),
             inclusive: *inclusive,
-            location: *location,
+            location: location.clone(),
         }),
         Expression::Closure {
             parameters,
@@ -376,7 +376,7 @@ fn replace_strings_in_expression<'ast>(
         } => optimizer.alloc_expr(Expression::Closure {
             parameters: parameters.clone(),
             body: replace_strings_in_expression(body, pool_map, optimizer),
-            location: *location,
+            location: location.clone(),
         }),
         Expression::Cast {
             expr,
@@ -385,7 +385,7 @@ fn replace_strings_in_expression<'ast>(
         } => optimizer.alloc_expr(Expression::Cast {
             expr: replace_strings_in_expression(expr, pool_map, optimizer),
             type_: type_.clone(),
-            location: *location,
+            location: location.clone(),
         }),
         Expression::Index {
             object,
@@ -394,14 +394,14 @@ fn replace_strings_in_expression<'ast>(
         } => optimizer.alloc_expr(Expression::Index {
             object: replace_strings_in_expression(object, pool_map, optimizer),
             index: replace_strings_in_expression(index, pool_map, optimizer),
-            location: *location,
+            location: location.clone(),
         }),
         Expression::Tuple { elements, location } => optimizer.alloc_expr(Expression::Tuple {
             elements: elements
                 .iter()
                 .map(|e| replace_strings_in_expression(e, pool_map, optimizer))
                 .collect(),
-            location: *location,
+            location: location.clone(),
         }),
         Expression::MacroInvocation {
             name,
@@ -415,15 +415,15 @@ fn replace_strings_in_expression<'ast>(
                 .map(|arg| replace_strings_in_expression(arg, pool_map, optimizer))
                 .collect(),
             delimiter: *delimiter,
-            location: *location,
+            location: location.clone(),
         }),
         Expression::TryOp { expr, location } => optimizer.alloc_expr(Expression::TryOp {
             expr: replace_strings_in_expression(expr, pool_map, optimizer),
-            location: *location,
+            location: location.clone(),
         }),
         Expression::Await { expr, location } => optimizer.alloc_expr(Expression::Await {
             expr: replace_strings_in_expression(expr, pool_map, optimizer),
-            location: *location,
+            location: location.clone(),
         }),
         Expression::ChannelSend {
             channel,
@@ -432,11 +432,11 @@ fn replace_strings_in_expression<'ast>(
         } => optimizer.alloc_expr(Expression::ChannelSend {
             channel: replace_strings_in_expression(channel, pool_map, optimizer),
             value: replace_strings_in_expression(value, pool_map, optimizer),
-            location: *location,
+            location: location.clone(),
         }),
         Expression::ChannelRecv { channel, location } => optimizer.alloc_expr(Expression::ChannelRecv {
             channel: replace_strings_in_expression(channel, pool_map, optimizer),
-            location: *location,
+            location: location.clone(),
         }),
         Expression::Block {
             statements,
@@ -446,7 +446,7 @@ fn replace_strings_in_expression<'ast>(
                 .iter()
                 .map(|stmt| replace_strings_in_statement(stmt, pool_map, optimizer))
                 .collect(),
-            location: *location,
+            location: location.clone(),
         }),
         other => other,
     }
@@ -477,7 +477,7 @@ fn replace_strings_in_statement<'ast>(
                     .map(|s| replace_strings_in_statement(s, pool_map, optimizer))
                     .collect()
             }),
-            location: *location,
+            location: location.clone(),
         }),
         Statement::Const {
             name,
@@ -488,7 +488,7 @@ fn replace_strings_in_statement<'ast>(
             name: name.clone(),
             type_: type_.clone(),
             value: replace_strings_in_expression(value, pool_map, optimizer),
-            location: *location,
+            location: location.clone(),
         }),
         Statement::Static {
             name,
@@ -501,18 +501,18 @@ fn replace_strings_in_statement<'ast>(
             mutable: *mutable,
             type_: type_.clone(),
             value: replace_strings_in_expression(value, pool_map, optimizer),
-            location: *location,
+            location: location.clone(),
         }),
         Statement::Expression { expr, location } => optimizer.alloc_stmt(Statement::Expression {
             expr: replace_strings_in_expression(expr, pool_map, optimizer),
-            location: *location,
+            location: location.clone(),
         }),
         Statement::Return {
             value: Some(expr),
             location,
         } => optimizer.alloc_stmt(Statement::Return {
             value: Some(replace_strings_in_expression(expr, pool_map, optimizer)),
-            location: *location,
+            location: location.clone(),
         }),
         Statement::Assignment {
             target,
@@ -523,7 +523,7 @@ fn replace_strings_in_statement<'ast>(
             target: replace_strings_in_expression(target, pool_map, optimizer),
             value: replace_strings_in_expression(value, pool_map, optimizer),
             compound_op: *compound_op,
-            location: *location,
+            location: location.clone(),
         }),
         Statement::If {
             condition,
@@ -542,7 +542,7 @@ fn replace_strings_in_statement<'ast>(
                     .map(|stmt| replace_strings_in_statement(stmt, pool_map, optimizer))
                     .collect()
             }),
-            location: *location,
+            location: location.clone(),
         }),
         Statement::While {
             condition,
@@ -554,7 +554,7 @@ fn replace_strings_in_statement<'ast>(
                 .iter()
                 .map(|stmt| replace_strings_in_statement(stmt, pool_map, optimizer))
                 .collect(),
-            location: *location,
+            location: location.clone(),
         }),
         Statement::For {
             pattern,
@@ -568,7 +568,7 @@ fn replace_strings_in_statement<'ast>(
                 .iter()
                 .map(|stmt| replace_strings_in_statement(stmt, pool_map, optimizer))
                 .collect(),
-            location: *location,
+            location: location.clone(),
         }),
         Statement::Match {
             value,
@@ -587,7 +587,7 @@ fn replace_strings_in_statement<'ast>(
                     location: arm.location,
                 })
                 .collect(),
-            location: *location,
+            location: location.clone(),
         }),
         other => stmt, // Return as-is for other statement types
     }
@@ -617,7 +617,7 @@ fn replace_strings_in_item<'ast>(
                     decorators: decl.decorators.clone(),
                     location: decl.location,
                 },
-                location: *location,
+                location: location.clone(),
             }
         }
         Item::Impl { block, location } => {
@@ -649,7 +649,7 @@ fn replace_strings_in_item<'ast>(
                     functions: new_functions,
                     decorators: block.decorators.clone(),
                 },
-                location: *location,
+                location: location.clone(),
             }
         }
         Item::Static {
@@ -663,7 +663,7 @@ fn replace_strings_in_item<'ast>(
             mutable: *mutable,
             type_: type_.clone(),
             value: replace_strings_in_expression(value, pool_map, optimizer),
-            location: *location,
+            location: location.clone(),
         },
         Item::Const {
             name,
@@ -674,7 +674,7 @@ fn replace_strings_in_item<'ast>(
             name: name.clone(),
             type_: type_.clone(),
             value: replace_strings_in_expression(value, pool_map, optimizer),
-            location: *location,
+            location: location.clone(),
         },
         other => item.clone(),
     }
