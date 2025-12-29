@@ -79,11 +79,11 @@ impl ScopeAnalyzer {
     }
 
     /// Analyze a selection of statements
-    pub fn analyze(
+    pub fn analyze<'ast>(
         &mut self,
-        before_statements: &[Statement],
-        selected_statements: &[Statement],
-        after_statements: &[Statement],
+        before_statements: &[&'ast Statement<'ast>],
+        selected_statements: &[&'ast Statement<'ast>],
+        after_statements: &[&'ast Statement<'ast>],
     ) -> ScopeAnalysis {
         // Phase 1: Build outer scope from statements before selection
         self.collect_outer_scope(before_statements);
@@ -99,21 +99,21 @@ impl ScopeAnalyzer {
     }
 
     /// Collect variables defined before the selection
-    fn collect_outer_scope(&mut self, statements: &[Statement]) {
+    fn collect_outer_scope<'ast>(&mut self, statements: &[&'ast Statement<'ast>]) {
         for stmt in statements {
             Self::collect_definitions_in_statement(stmt, &mut self.outer_scope);
         }
     }
 
     /// Collect variables used after the selection
-    fn collect_used_after(&mut self, statements: &[Statement]) {
+    fn collect_used_after<'ast>(&mut self, statements: &[&'ast Statement<'ast>]) {
         for stmt in statements {
             Self::collect_usages_in_statement(stmt, &mut self.used_after);
         }
     }
 
     /// Analyze the selected statements
-    fn analyze_statements(&mut self, statements: &[Statement]) {
+    fn analyze_statements<'ast>(&mut self, statements: &[&'ast Statement<'ast>]) {
         for stmt in statements {
             self.analyze_statement(stmt);
         }
