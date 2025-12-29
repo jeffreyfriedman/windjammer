@@ -11,28 +11,30 @@ use windjammer::parser_impl::Parser;
 // HELPER FUNCTIONS
 // ============================================================================
 
-fn parse_stmt(input: &str) -> Statement {
+fn parse_stmt(input: &str) -> &'static Statement<'static> {
     // Wrap statement in a function to make it a valid program
     let full_code = format!("fn test() {{ {} }}", input);
     let mut lexer = Lexer::new(&full_code);
     let tokens = lexer.tokenize_with_locations();
-    let mut parser = Parser::new(tokens);
+    // Leak parser to keep arena alive for 'static lifetime (acceptable in tests)
+    let parser = Box::leak(Box::new(Parser::new(tokens)));
     let program = parser.parse().expect("Failed to parse program");
 
     // Extract the statement from the function body
     if let Some(Item::Function { decl, .. }) = program.items.first() {
         if let Some(stmt) = decl.body.first() {
-            return stmt.clone();
+            return *stmt;
         }
     }
     panic!("Failed to extract statement from: {}", input);
 }
 
 #[allow(dead_code)]
-fn parse_program(input: &str) -> Program {
+fn parse_program(input: &str) -> Program<'static> {
     let mut lexer = Lexer::new(input);
     let tokens = lexer.tokenize_with_locations();
-    let mut parser = Parser::new(tokens);
+    // Leak parser to keep arena alive for 'static lifetime (acceptable in tests)
+    let parser = Box::leak(Box::new(Parser::new(tokens)));
     parser.parse().expect("Failed to parse program")
 }
 
