@@ -9,6 +9,7 @@ use windjammer::codegen::rust::pattern_analysis::{
     extract_pattern_identifier, pattern_extracts_value, pattern_has_string_literal,
 };
 use windjammer::parser::{EnumPatternBinding, Literal, Pattern};
+use windjammer::test_utils::test_alloc_pattern;
 
 #[cfg(test)]
 mod pattern_has_string_literal_tests {
@@ -112,14 +113,16 @@ mod pattern_extracts_value_tests {
     #[test]
     fn test_reference_propagates() {
         // Test: &x → true (still extracts through reference)
-        let pattern = Pattern::Reference(Box::new(Pattern::Identifier("x".to_string())));
+        let inner = test_alloc_pattern(Pattern::Identifier("x".to_string()));
+        let pattern = Pattern::Reference(inner);
         assert!(pattern_extracts_value(&pattern));
     }
 
     #[test]
     fn test_reference_wildcard() {
         // Test: &_ → false
-        let pattern = Pattern::Reference(Box::new(Pattern::Wildcard));
+        let inner = test_alloc_pattern(Pattern::Wildcard);
+        let pattern = Pattern::Reference(inner);
         assert!(!pattern_extracts_value(&pattern));
     }
 
