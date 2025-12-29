@@ -76,7 +76,7 @@ fn test_float_literal() {
 fn test_string_literal() {
     let expr = parse_expr(r#""hello""#);
     if let Expression::Literal {
-        value: Literal::String(s),
+        value: Literal::String(ref s),
         ..
     } = *expr
     {
@@ -135,7 +135,7 @@ fn test_char_literal() {
 #[test]
 fn test_identifier() {
     let expr = parse_expr("foo");
-    if let Expression::Identifier { name, .. } = *expr {
+    if let Expression::Identifier { ref name, .. } = *expr {
         assert_eq!(name, "foo");
     } else {
         panic!("Expected Identifier");
@@ -145,7 +145,7 @@ fn test_identifier() {
 #[test]
 fn test_identifier_with_underscores() {
     let expr = parse_expr("foo_bar_baz");
-    if let Expression::Identifier { name, .. } = *expr {
+    if let Expression::Identifier { ref name, .. } = *expr {
         assert_eq!(name, "foo_bar_baz");
     } else {
         panic!("Expected Identifier");
@@ -393,7 +393,7 @@ fn test_function_call_no_args() {
     let expr = parse_expr("foo()");
     if let Expression::Call {
         function,
-        arguments,
+        ref arguments,
         ..
     } = *expr
     {
@@ -407,7 +407,7 @@ fn test_function_call_no_args() {
 #[test]
 fn test_function_call_one_arg() {
     let expr = parse_expr("foo(1)");
-    if let Expression::Call { arguments, .. } = *expr {
+    if let Expression::Call { ref arguments, .. } = *expr {
         assert_eq!(arguments.len(), 1);
     } else {
         panic!("Expected Call");
@@ -417,7 +417,7 @@ fn test_function_call_one_arg() {
 #[test]
 fn test_function_call_multiple_args() {
     let expr = parse_expr("foo(1, 2, 3)");
-    if let Expression::Call { arguments, .. } = *expr {
+    if let Expression::Call { ref arguments, .. } = *expr {
         assert_eq!(arguments.len(), 3);
     } else {
         panic!("Expected Call");
@@ -427,7 +427,7 @@ fn test_function_call_multiple_args() {
 #[test]
 fn test_function_call_nested() {
     let expr = parse_expr("foo(bar(x))");
-    if let Expression::Call { arguments, .. } = *expr {
+    if let Expression::Call { ref arguments, .. } = *expr {
         assert_eq!(arguments.len(), 1);
         // Each argument is (Option<String>, Expression)
         let (_, inner) = &arguments[0];
@@ -451,7 +451,7 @@ fn test_method_call_no_args() {
 fn test_method_call_with_args() {
     let expr = parse_expr("obj.method(1, 2)");
     if let Expression::MethodCall {
-        method, arguments, ..
+        ref method, ref arguments, ..
     } = *expr
     {
         assert_eq!(method, "method");
@@ -465,7 +465,7 @@ fn test_method_call_with_args() {
 fn test_method_call_chained() {
     let expr = parse_expr("obj.first().second()");
     // The outer call should be .second()
-    if let Expression::MethodCall { method, object, .. } = *expr {
+    if let Expression::MethodCall { ref method, object, .. } = *expr {
         assert_eq!(method, "second");
         // object should be obj.first()
         assert!(matches!(*object, Expression::MethodCall { .. }));
@@ -481,7 +481,7 @@ fn test_method_call_chained() {
 #[test]
 fn test_field_access() {
     let expr = parse_expr("obj.field");
-    if let Expression::FieldAccess { field, .. } = *expr {
+    if let Expression::FieldAccess { ref field, .. } = *expr {
         assert_eq!(field, "field");
     } else {
         panic!("Expected FieldAccess");
@@ -491,10 +491,10 @@ fn test_field_access() {
 #[test]
 fn test_field_access_nested() {
     let expr = parse_expr("a.b.c");
-    if let Expression::FieldAccess { field, object, .. } = *expr {
+    if let Expression::FieldAccess { ref field, object, .. } = *expr {
         assert_eq!(field, "c");
         if let Expression::FieldAccess {
-            field: inner_field, ..
+            field: ref inner_field, ..
         } = *object
         {
             assert_eq!(inner_field, "b");
@@ -535,7 +535,7 @@ fn test_index_access_expression() {
 #[test]
 fn test_struct_literal_empty() {
     let expr = parse_expr("Point {}");
-    if let Expression::StructLiteral { name, .. } = *expr {
+    if let Expression::StructLiteral { ref name, .. } = *expr {
         assert_eq!(name, "Point");
     } else {
         panic!("Expected StructLiteral, got {:?}", expr);
@@ -545,7 +545,7 @@ fn test_struct_literal_empty() {
 #[test]
 fn test_struct_literal_with_fields() {
     let expr = parse_expr("Point { x: 1, y: 2 }");
-    if let Expression::StructLiteral { name, fields, .. } = *expr {
+    if let Expression::StructLiteral { ref name, ref fields, .. } = *expr {
         assert_eq!(name, "Point");
         assert_eq!(fields.len(), 2);
     } else {
@@ -560,7 +560,7 @@ fn test_struct_literal_with_fields() {
 #[test]
 fn test_array_literal_empty() {
     let expr = parse_expr("[]");
-    if let Expression::Array { elements, .. } = *expr {
+    if let Expression::Array { ref elements, .. } = *expr {
         assert!(elements.is_empty());
     } else {
         panic!("Expected Array");
@@ -570,7 +570,7 @@ fn test_array_literal_empty() {
 #[test]
 fn test_array_literal_with_elements() {
     let expr = parse_expr("[1, 2, 3]");
-    if let Expression::Array { elements, .. } = *expr {
+    if let Expression::Array { ref elements, .. } = *expr {
         assert_eq!(elements.len(), 3);
     } else {
         panic!("Expected Array");
@@ -584,7 +584,7 @@ fn test_array_literal_with_elements() {
 #[test]
 fn test_tuple_expression() {
     let expr = parse_expr("(1, 2, 3)");
-    if let Expression::Tuple { elements, .. } = *expr {
+    if let Expression::Tuple { ref elements, .. } = *expr {
         assert_eq!(elements.len(), 3);
     } else {
         panic!("Expected Tuple, got {:?}", expr);
@@ -628,7 +628,7 @@ fn test_closure_no_params() {
 #[test]
 fn test_closure_one_param() {
     let expr = parse_expr("|x| x + 1");
-    if let Expression::Closure { parameters, .. } = *expr {
+    if let Expression::Closure { ref parameters, .. } = *expr {
         assert_eq!(parameters.len(), 1);
     } else {
         panic!("Expected Closure");
@@ -638,7 +638,7 @@ fn test_closure_one_param() {
 #[test]
 fn test_closure_multiple_params() {
     let expr = parse_expr("|a, b| a + b");
-    if let Expression::Closure { parameters, .. } = *expr {
+    if let Expression::Closure { ref parameters, .. } = *expr {
         assert_eq!(parameters.len(), 2);
     } else {
         panic!("Expected Closure");
@@ -738,7 +738,7 @@ fn test_complex_expression_chain() {
 #[test]
 fn test_complex_expression_with_calls() {
     let expr = parse_expr("foo(bar(x + y), baz.qux())");
-    if let Expression::Call { arguments, .. } = *expr {
+    if let Expression::Call { ref arguments, .. } = *expr {
         assert_eq!(arguments.len(), 2);
     } else {
         panic!("Expected Call");
