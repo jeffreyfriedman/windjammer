@@ -11,30 +11,32 @@ use windjammer::parser_impl::Parser;
 // HELPER FUNCTIONS
 // ============================================================================
 
-fn parse_expr(input: &str) -> Expression {
+fn parse_expr(input: &str) -> &'static Expression<'static> {
     // Wrap expression in a function to make it a valid program
     let full_code = format!("fn test() {{ {} }}", input);
     let mut lexer = Lexer::new(&full_code);
     let tokens = lexer.tokenize_with_locations();
-    let mut parser = Parser::new(tokens);
+    // Leak parser to keep arena alive for 'static lifetime (acceptable in tests)
+    let parser = Box::leak(Box::new(Parser::new(tokens)));
     let program = parser.parse().expect("Failed to parse program");
 
     // Extract the expression from the function body
     if let Some(Item::Function { decl, .. }) = program.items.first() {
         if let Some(Statement::Expression { expr, .. }) = decl.body.first() {
-            return expr.clone();
+            return *expr;
         }
         if let Some(Statement::Let { value, .. }) = decl.body.first() {
-            return value.clone();
+            return *value;
         }
     }
     panic!("Failed to extract expression from: {}", input);
 }
 
-fn parse_program(input: &str) -> Program {
+fn parse_program(input: &str) -> Program<'static> {
     let mut lexer = Lexer::new(input);
     let tokens = lexer.tokenize_with_locations();
-    let mut parser = Parser::new(tokens);
+    // Leak parser to keep arena alive for 'static lifetime (acceptable in tests)
+    let parser = Box::leak(Box::new(Parser::new(tokens)));
     parser.parse().expect("Failed to parse program")
 }
 
@@ -48,9 +50,9 @@ fn test_integer_literal() {
     if let Expression::Literal {
         value: Literal::Int(n),
         ..
-    } = expr
+    } = *expr
     {
-        assert_eq!(n, 42);
+        assert_eq!(*n, 42);
     } else {
         panic!("Expected Int literal, got {:?}", expr);
     }
