@@ -274,25 +274,23 @@ fn create_pool_map(pool: &[StringPoolEntry]) -> HashMap<String, String> {
 
 /// Replace string literals in an expression with pool references
 fn replace_strings_in_expression<'ast>(
-    expr: Expression<'ast>,
+    expr: &'ast Expression<'ast>,
     pool_map: &HashMap<String, String>,
-) -> Expression<'ast> {
+    optimizer: &crate::optimizer::Optimizer,
+) -> &'ast Expression<'ast> {
     match expr {
         Expression::Literal {
             value: Literal::String(s),
             location,
         } => {
             // Replace with pool reference if interned
-            if let Some(pool_name) = pool_map.get(&s) {
-                Expression::Identifier {
+            if let Some(pool_name) = pool_map.get(s) {
+                optimizer.alloc_expr(Expression::Identifier {
                     name: pool_name.clone(),
-                    location,
-                }
+                    location: *location,
+                })
             } else {
-                Expression::Literal {
-                    value: Literal::String(s),
-                    location,
-                }
+                expr // Return as-is if not interned
             }
         }
         Expression::Binary {
@@ -300,33 +298,33 @@ fn replace_strings_in_expression<'ast>(
             right,
             op,
             location,
-        } => Expression::Binary {
-            left: Box::new(replace_strings_in_expression(*left, pool_map)),
-            right: Box::new(replace_strings_in_expression(*right, pool_map)),
-            op,
-            location,
-        },
+        } => optimizer.alloc_expr(Expression::Binary {
+            left: replace_strings_in_expression(left, pool_map, optimizer),
+            right: replace_strings_in_expression(right, pool_map, optimizer),
+            op: *op,
+            location: *location,
+        }),
         Expression::Unary {
             op,
             operand,
             location,
-        } => Expression::Unary {
-            op,
-            operand: Box::new(replace_strings_in_expression(*operand, pool_map)),
-            location,
-        },
+        } => optimizer.alloc_expr(Expression::Unary {
+            op: *op,
+            operand: replace_strings_in_expression(operand, pool_map, optimizer),
+            location: *location,
+        }),
         Expression::Call {
             function,
             arguments,
             location,
-        } => Expression::Call {
-            function: Box::new(replace_strings_in_expression(*function, pool_map)),
+        } => optimizer.alloc_expr(Expression::Call {
+            function: replace_strings_in_expression(function, pool_map, optimizer),
             arguments: arguments
-                .into_iter()
-                .map(|(label, arg)| (label, replace_strings_in_expression(arg, pool_map)))
+                .iter()
+                .map(|(label, arg)| (label.clone(), replace_strings_in_expression(arg, pool_map, optimizer)))
                 .collect(),
-            location,
-        },
+            location: *location,
+        }),
         Expression::MethodCall {
             object,
             method,
@@ -677,7 +675,10 @@ fn create_pool_statics(pool: &[StringPoolEntry]) -> Vec<Item> {
 }
 
 /// Main optimization function
-pub fn optimize_string_interning<'ast>(program: &Program<'ast>) -> StringInterningResult<'ast> {
+pub fn optimize_string_interning<'ast>(
+    program: &Program<'ast>,
+    optimizer: &crate::optimizer::Optimizer,
+) -> StringInterningResult<'ast> {
     // Step 1: Analyze string literals
     let frequency = analyze_string_literals(program);
 
