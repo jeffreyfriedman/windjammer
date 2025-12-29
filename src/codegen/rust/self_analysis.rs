@@ -13,15 +13,15 @@ use crate::parser::{Expression, FunctionDecl, Statement};
 use std::collections::HashSet;
 
 /// Context needed for field/self analysis
-pub struct AnalysisContext<'a> {
+pub struct AnalysisContext<'a, 'ast> {
     /// Current function parameters (to distinguish params from fields)
-    pub current_function_params: &'a [crate::parser::Parameter<'static>],
+    pub current_function_params: &'a [crate::parser::Parameter<'ast>],
     /// Fields of the current struct (if in impl block)
     pub current_struct_fields: &'a HashSet<String>,
 }
 
-impl<'a> AnalysisContext<'a> {
-    pub fn new(params: &'a [crate::parser::Parameter], fields: &'a HashSet<String>) -> Self {
+impl<'a, 'ast> AnalysisContext<'a, 'ast> {
+    pub fn new(params: &'a [crate::parser::Parameter<'ast>], fields: &'a HashSet<String>) -> Self {
         Self {
             current_function_params: params,
             current_struct_fields: fields,
