@@ -30,12 +30,8 @@
 //! - String length >= 10 characters (threshold)
 //! - Not applied to format strings or interpolated strings
 
-use crate::parser::{Expression, Item, Literal, MatchArm, Program, Statement, Type};
+use crate::parser::{Expression, FunctionDecl, ImplBlock, Item, Literal, MatchArm, Program, Statement, Type};
 use std::collections::HashMap;
-
-#[cfg(test)]
-#[allow(unused_imports)]
-use crate::parser::FunctionDecl;
 
 /// Result of string interning optimization
 #[derive(Debug, Clone)]
@@ -685,16 +681,19 @@ fn replace_strings_in_item<'ast>(
 }
 
 /// Create static declarations for string pool
-fn create_pool_statics(pool: &[StringPoolEntry]) -> Vec<Item> {
+fn create_pool_statics<'ast>(
+    pool: &[StringPoolEntry],
+    optimizer: &crate::optimizer::Optimizer,
+) -> Vec<Item<'ast>> {
     pool.iter()
         .map(|entry| Item::Static {
             name: entry.pool_name.clone(),
             mutable: false,
             type_: Type::Reference(Box::new(Type::Custom("str".to_string()))),
-            value: Expression::Literal {
+            value: optimizer.alloc_expr(Expression::Literal {
                 value: Literal::String(entry.value.clone()),
                 location: None,
-            },
+            }),
             location: None,
         })
         .collect()
@@ -722,7 +721,7 @@ pub fn optimize_string_interning<'ast>(
     let pool_map = create_pool_map(&pool);
 
     // Step 4: Create static declarations
-    let pool_statics = create_pool_statics(&pool);
+    let pool_statics = create_pool_statics(&pool, optimizer);
 
     // Step 5: Transform program items
     let transformed_items: Vec<Item<'ast>> = program
