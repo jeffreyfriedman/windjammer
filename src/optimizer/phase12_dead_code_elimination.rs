@@ -160,14 +160,14 @@ fn find_called_functions(program: &Program) -> HashSet<String> {
 }
 
 /// Find function calls in a list of statements
-fn find_calls_in_statements(statements: &[Statement], called: &mut HashSet<String>) {
+fn find_calls_in_statements<'ast>(statements: &[&'ast Statement<'ast>], called: &mut HashSet<String>) {
     for stmt in statements {
         find_calls_in_statement(stmt, called);
     }
 }
 
 /// Find function calls in a statement
-fn find_calls_in_statement(stmt: &Statement, called: &mut HashSet<String>) {
+fn find_calls_in_statement<'ast>(stmt: &'ast Statement<'ast>, called: &mut HashSet<String>) {
     match stmt {
         Statement::Expression { expr, .. } => {
             find_calls_in_expression(expr, called);
@@ -223,7 +223,7 @@ fn find_calls_in_statement(stmt: &Statement, called: &mut HashSet<String>) {
 }
 
 /// Find function calls in an expression
-fn find_calls_in_expression(expr: &Expression, called: &mut HashSet<String>) {
+fn find_calls_in_expression<'ast>(expr: &'ast Expression<'ast>, called: &mut HashSet<String>) {
     match expr {
         Expression::Call {
             function,
