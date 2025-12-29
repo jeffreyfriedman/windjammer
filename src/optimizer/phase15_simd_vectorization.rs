@@ -95,7 +95,7 @@ impl SimdStats {
 }
 
 /// Perform SIMD vectorization optimization on a program
-pub fn optimize_simd_vectorization(program: &Program) -> (Program, SimdStats) {
+pub fn optimize_simd_vectorization<'ast>(program: &Program<'ast>, optimizer: &crate::optimizer::Optimizer) -> (Program<'ast>, SimdStats) {
     let mut stats = SimdStats::default();
     let mut new_items = Vec::new();
 
