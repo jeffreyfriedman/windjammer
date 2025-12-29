@@ -396,7 +396,7 @@ impl<'ast> Analyzer<'ast> {
         }
     }
 
-    pub fn analyze_program(&mut self, program: &Program) -> Result<ProgramAnalysisResult, String> {
+    pub fn analyze_program(&mut self, program: &Program<'ast>) -> Result<ProgramAnalysisResult<'ast>, String> {
         let mut analyzed = Vec::new();
         let mut registry = SignatureRegistry::new();
 
