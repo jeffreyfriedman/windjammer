@@ -403,24 +403,24 @@ fn eliminate_dead_code_in_statement<'ast>(
     optimizer: &crate::optimizer::Optimizer,
 ) -> &'ast Statement<'ast> {
     match stmt {
-        Statement::Expression { expr, location } => Statement::Expression {
+        Statement::Expression { expr, location } => optimizer.alloc_stmt(Statement::Expression {
             expr: eliminate_dead_code_in_expression(expr, optimizer),
             location: location.clone(),
-        },
+        }),
         Statement::Return {
             value: Some(expr),
             location,
-        } => Statement::Return {
+        } => optimizer.alloc_stmt(Statement::Return {
             value: Some(eliminate_dead_code_in_expression(expr, optimizer)),
             location: location.clone(),
-        },
+        }),
         Statement::Return {
             value: None,
             location,
-        } => Statement::Return {
+        } => optimizer.alloc_stmt(Statement::Return {
             value: None,
             location: location.clone(),
-        },
+        }),
         Statement::Let {
             pattern,
             mutable,
@@ -428,7 +428,7 @@ fn eliminate_dead_code_in_statement<'ast>(
             value,
             else_block,
             location,
-        } => Statement::Let {
+        } => optimizer.alloc_stmt(Statement::Let {
             pattern: pattern.clone(),
             mutable: *mutable,
             type_: type_.clone(),
@@ -440,18 +440,18 @@ fn eliminate_dead_code_in_statement<'ast>(
                     .collect()
             }),
             location: location.clone(),
-        },
+        }),
         Statement::Assignment {
             target,
             value,
             compound_op,
             location,
-        } => Statement::Assignment {
+        } => optimizer.alloc_stmt(Statement::Assignment {
             target: target.clone(),
             value: eliminate_dead_code_in_expression(value, optimizer),
             compound_op: *compound_op,
             location: location.clone(),
-        },
+        }),
         Statement::If {
             condition,
             then_block,
@@ -459,12 +459,12 @@ fn eliminate_dead_code_in_statement<'ast>(
             location,
         } => {
             let new_condition = eliminate_dead_code_in_expression(condition, optimizer);
-            let (new_then, then_stats) = eliminate_dead_code_in_statements(then_block, optimizer);
+            let (new_then, then_stats) = eliminate_dead_code_in_statements(then_block, stats, optimizer);
             stats.unreachable_statements_removed += then_stats.unreachable_statements_removed;
             stats.empty_blocks_removed += then_stats.empty_blocks_removed;
 
             let new_else = if let Some(else_stmts) = else_block {
-                let (new_else_stmts, else_stats) = eliminate_dead_code_in_statements(else_stmts, optimizer);
+                let (new_else_stmts, else_stats) = eliminate_dead_code_in_statements(else_stmts, stats, optimizer);
                 stats.unreachable_statements_removed += else_stats.unreachable_statements_removed;
                 stats.empty_blocks_removed += else_stats.empty_blocks_removed;
                 Some(new_else_stmts)
@@ -472,12 +472,12 @@ fn eliminate_dead_code_in_statement<'ast>(
                 None
             };
 
-            Statement::If {
+            optimizer.alloc_stmt(Statement::If {
                 condition: new_condition,
                 then_block: new_then,
                 else_block: new_else,
                 location: location.clone(),
-            }
+            })
         }
         Statement::While {
             condition,
@@ -485,15 +485,15 @@ fn eliminate_dead_code_in_statement<'ast>(
             location,
         } => {
             let new_condition = eliminate_dead_code_in_expression(condition, optimizer);
-            let (new_body, body_stats) = eliminate_dead_code_in_statements(body, optimizer);
+            let (new_body, body_stats) = eliminate_dead_code_in_statements(body, stats, optimizer);
             stats.unreachable_statements_removed += body_stats.unreachable_statements_removed;
             stats.empty_blocks_removed += body_stats.empty_blocks_removed;
 
-            Statement::While {
+            optimizer.alloc_stmt(Statement::While {
                 condition: new_condition,
                 body: new_body,
                 location: location.clone(),
-            }
+            })
         }
         Statement::For {
             pattern,
@@ -502,16 +502,16 @@ fn eliminate_dead_code_in_statement<'ast>(
             location,
         } => {
             let new_iterable = eliminate_dead_code_in_expression(iterable, optimizer);
-            let (new_body, body_stats) = eliminate_dead_code_in_statements(body, optimizer);
+            let (new_body, body_stats) = eliminate_dead_code_in_statements(body, stats, optimizer);
             stats.unreachable_statements_removed += body_stats.unreachable_statements_removed;
             stats.empty_blocks_removed += body_stats.empty_blocks_removed;
 
-            Statement::For {
+            optimizer.alloc_stmt(Statement::For {
                 pattern: pattern.clone(),
                 iterable: new_iterable,
                 body: new_body,
                 location: location.clone(),
-            }
+            })
         }
         Statement::Match {
             value,
@@ -523,46 +523,47 @@ fn eliminate_dead_code_in_statement<'ast>(
 
             for arm in arms {
                 let new_body = eliminate_dead_code_in_expression(&arm.body, optimizer);
-                let new_guard = arm.guard.as_ref().map(eliminate_dead_code_in_expression);
+                let new_guard = arm.guard.as_ref().map(|g| eliminate_dead_code_in_expression(g, optimizer));
 
                 new_arms.push(MatchArm {
                     pattern: arm.pattern.clone(),
                     guard: new_guard,
                     body: new_body,
+                    location: arm.location.clone(),
                 });
             }
 
-            Statement::Match {
+            optimizer.alloc_stmt(Statement::Match {
                 value: new_value,
                 arms: new_arms,
                 location: location.clone(),
-            }
+            })
         }
         Statement::Const {
             name,
             type_,
             value,
             location,
-        } => Statement::Const {
+        } => optimizer.alloc_stmt(Statement::Const {
             name: name.clone(),
             type_: type_.clone(),
             value: eliminate_dead_code_in_expression(value, optimizer),
             location: location.clone(),
-        },
+        }),
         Statement::Static {
             name,
             mutable,
             type_,
             value,
             location,
-        } => Statement::Static {
+        } => optimizer.alloc_stmt(Statement::Static {
             name: name.clone(),
             mutable: *mutable,
             type_: type_.clone(),
             value: eliminate_dead_code_in_expression(value, optimizer),
             location: location.clone(),
-        },
-        _ => stmt.clone(),
+        }),
+        _ => stmt,
     }
 }
 
