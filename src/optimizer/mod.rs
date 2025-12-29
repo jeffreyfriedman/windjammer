@@ -145,8 +145,8 @@ impl Optimizer {
 
         // Phase 11: String Interning
         if self.config.enable_string_interning {
-            let result = phase11_string_interning::optimize_string_interning(&program);
-            program = result.program;
+            let result = phase11_string_interning::optimize_string_interning(&program, self);
+            program = &result.program;
             stats.strings_interned = result.strings_interned;
             stats.string_memory_saved = result.memory_saved;
         }
