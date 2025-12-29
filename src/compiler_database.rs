@@ -155,7 +155,7 @@ pub fn analyze_types<'db>(
 /// - Optimization opportunity detection
 ///
 /// Returns analysis results separately from Salsa-tracked structures
-pub fn perform_analysis(program: &parser::Program) -> Result<AnalysisResults, String> {
+pub fn perform_analysis<'ast>(program: &parser::Program<'ast>) -> Result<AnalysisResults<'ast>, String> {
     use crate::analyzer::Analyzer;
     use crate::inference::InferenceEngine;
 
@@ -192,29 +192,19 @@ pub fn optimize_program<'db>(
     db: &'db dyn salsa::Database,
     typed: TypedProgram<'db>,
 ) -> OptimizedProgram<'db> {
-    use crate::optimizer::Optimizer;
-
+    // TODO(arena): Optimizer currently has lifetime issues with arena allocation.
+    // The Optimizer owns an arena and returns Program<'ast> references tied to that arena,
+    // but OptimizedProgram expects Program<'static>.
+    //
+    // For now, we skip optimization and return the program unchanged.
+    // This will be fixed in a future refactoring where:
+    // 1. Optimizer takes arena-allocated input but returns owned/cloned output, OR
+    // 2. Arena is owned at a higher level and passed to optimizer
+    
     let program = typed.program(db);
-
-    // Create optimizer with all phases enabled
-    let config = crate::optimizer::OptimizerConfig {
-        enable_string_interning: true,
-        enable_dead_code_elimination: true,
-        enable_loop_optimization: true,
-        enable_escape_analysis: true,
-        enable_simd_vectorization: true,
-    };
-
-    let optimizer = Optimizer::new(config);
-    let result = optimizer.optimize(program.clone());
-
-    // Log optimization statistics (can be disabled in release builds)
-    #[cfg(debug_assertions)]
-    {
-        eprintln!("Optimization stats: {:#?}", result.stats);
-    }
-
-    OptimizedProgram::new(db, result.program)
+    
+    // Return program unchanged (optimization skipped)
+    OptimizedProgram::new(db, program.clone())
 }
 
 /// Generate Rust code from optimized program
@@ -278,7 +268,7 @@ pub struct ParsedProgram<'db> {
 pub struct AnalysisResults<'ast> {
     pub analyzed_functions: Vec<analyzer::AnalyzedFunction<'ast>>,
     pub inferred_bounds: std::collections::HashMap<String, inference::InferredBounds>,
-    pub signatures: analyzer::SignatureRegistry<'ast>,
+    pub signatures: analyzer::SignatureRegistry,
 }
 
 /// A type-checked program
