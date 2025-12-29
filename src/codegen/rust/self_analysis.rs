@@ -449,6 +449,7 @@ pub fn loop_body_modifies_variable(body: &[Statement], var_name: &str) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::test_utils::test_alloc_expr;
 
     // Basic smoke tests - comprehensive tests are in tests/codegen_self_analysis_test.rs
 
@@ -463,7 +464,7 @@ mod tests {
             line: 1,
             column: 1,
         };
-        let self_expr = Box::new(Expression::Identifier {
+        let self_expr = test_alloc_expr(Expression::Identifier {
             name: "self".to_string(),
             location: Some(loc.clone()),
         });
@@ -487,7 +488,7 @@ mod tests {
             line: 1,
             column: 1,
         };
-        let other_expr = Box::new(Expression::Identifier {
+        let other_expr = test_alloc_expr(Expression::Identifier {
             name: "other".to_string(),
             location: Some(loc.clone()),
         });
