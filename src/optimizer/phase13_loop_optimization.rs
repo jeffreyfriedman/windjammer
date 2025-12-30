@@ -555,13 +555,14 @@ fn optimize_loops_in_expression<'ast>(
 }
 
 /// Try to unroll a loop if it's a small constant range
-fn try_unroll_loop(
+fn try_unroll_loop<'ast>(
     variable: &str,
-    iterable: &Expression,
-    body: &[Statement],
+    iterable: &'ast Expression<'ast>,
+    body: &[&'ast Statement<'ast>],
     config: &LoopOptimizationConfig,
     _stats: &mut LoopOptimizationStats,
-) -> Option<Vec<Statement>> {
+    optimizer: &crate::optimizer::Optimizer,
+) -> Option<Vec<&'ast Statement<'ast>>> {
     // Only unroll simple range expressions: 0..n or 0..=n
     if let Expression::Range {
         start,
@@ -619,11 +620,12 @@ fn try_unroll_loop(
 }
 
 /// Hoist loop-invariant statements outside the loop
-fn hoist_loop_invariants(
-    body: &[Statement],
+fn hoist_loop_invariants<'ast>(
+    body: &[&'ast Statement<'ast>],
     loop_var: &str,
     stats: &mut LoopOptimizationStats,
-) -> (Vec<Statement>, Vec<Statement>) {
+    optimizer: &crate::optimizer::Optimizer,
+) -> (Vec<&'ast Statement<'ast>>, Vec<&'ast Statement<'ast>>) {
     let mut hoisted = Vec::new();
     let mut remaining = Vec::new();
 
@@ -852,13 +854,14 @@ fn replace_variable_in_expression<'ast>(
 }
 
 /// Try to apply strength reduction to binary operations
-fn try_strength_reduction(
-    _left: &Expression,
+fn try_strength_reduction<'ast>(
+    _left: &'ast Expression<'ast>,
     _op: &BinaryOp,
-    _right: &Expression,
+    _right: &'ast Expression<'ast>,
     _config: &LoopOptimizationConfig,
     _stats: &mut LoopOptimizationStats,
-) -> Option<Expression> {
+    _optimizer: &crate::optimizer::Optimizer,
+) -> Option<&'ast Expression<'ast>> {
     // Note: Strength reduction like x * 2 -> x << 1 would require additional operators in BinaryOp
     // For now, we return None but this is a placeholder for future optimizations
     // such as replacing expensive operations with cheaper ones (e.g., x * 1 -> x, x * 0 -> 0)

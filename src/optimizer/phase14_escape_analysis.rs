@@ -112,7 +112,7 @@ pub fn optimize_escape_analysis<'ast>(program: &Program<'ast>, optimizer: &crate
 }
 
 /// Optimize a function with escape analysis
-fn optimize_function_escape_analysis(func: &FunctionDecl) -> (FunctionDecl, EscapeAnalysisStats) {
+fn optimize_function_escape_analysis<'ast>(func: &FunctionDecl<'ast>, optimizer: &crate::optimizer::Optimizer) -> (FunctionDecl<'ast>, EscapeAnalysisStats) {
     let mut stats = EscapeAnalysisStats::default();
 
     // Analyze which variables escape
