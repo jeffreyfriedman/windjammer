@@ -130,7 +130,7 @@ pub fn optimize_simd_vectorization<'ast>(program: &Program<'ast>, optimizer: &cr
 /// Optimize a function with SIMD vectorization
 fn optimize_function_simd(func: &FunctionDecl) -> (FunctionDecl, SimdStats) {
     let mut stats = SimdStats::default();
-    let new_body = optimize_statements_simd(&func.body, &mut stats);
+    let new_body = optimize_statements_simd(&func.body, &mut stats, optimizer);
 
     (
         FunctionDecl {
@@ -190,7 +190,7 @@ fn optimize_statements_simd<'ast>(stmts: &[&'ast Statement<'ast>], stats: &mut S
     let mut result = Vec::new();
 
     for stmt in stmts {
-        let optimized = optimize_statement_simd(stmt, stats);
+        let optimized = optimize_statement_simd(stmt, stats, optimizer);
         result.push(optimized);
     }
 
