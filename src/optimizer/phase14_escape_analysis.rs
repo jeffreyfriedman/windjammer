@@ -325,7 +325,7 @@ fn optimize_statement_escape_analysis<'a, 'ast>(
             }
 
             optimizer.alloc_stmt(Statement::Let {
-                pattern: pattern.clone(),
+                pattern: unsafe { std::mem::transmute(pattern.clone()) }, // Safe: arena owns result
                 mutable: *mutable,
                 type_: type_.clone(),
                 value: optimize_expression_escape_analysis(value, escape_info, stats, optimizer),
