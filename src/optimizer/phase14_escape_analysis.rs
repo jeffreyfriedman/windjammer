@@ -312,19 +312,19 @@ fn optimize_statement_escape_analysis<'ast>(
                     if let Some(new_value) = try_optimize_vec_to_smallvec(value, optimizer) {
                         stats.vectors_stack_allocated += 1;
                         stats.total_optimizations += 1;
-                        return Statement::Let {
+                        return optimizer.alloc_stmt(Statement::Let {
                             pattern: Pattern::Identifier(name.to_string()),
                             mutable: *mutable,
                             type_: type_.clone(),
                             value: new_value,
                             else_block: else_block.clone(),
                             location: None,
-                        };
+                        });
                     }
                 }
             }
 
-            Statement::Let {
+            optimizer.alloc_stmt(Statement::Let {
                 pattern: pattern.clone(),
                 mutable: *mutable,
                 type_: type_.clone(),
@@ -333,40 +333,41 @@ fn optimize_statement_escape_analysis<'ast>(
                     .as_ref()
                     .map(|stmts| optimize_statements_escape_analysis(stmts, escape_info, stats, optimizer)),
                 location: None,
-            }
+            })
         }
         Statement::If {
             condition,
             then_block,
             else_block,
             ..
-        } => Statement::If {
+        } => optimizer.alloc_stmt(Statement::If {
             condition: optimize_expression_escape_analysis(condition, escape_info, stats, optimizer),
             then_block: optimize_statements_escape_analysis(then_block, escape_info, stats, optimizer),
             else_block: else_block
                 .as_ref()
                 .map(|stmts| optimize_statements_escape_analysis(stmts, escape_info, stats, optimizer)),
             location: None,
-        },
+        }),
         Statement::While {
             condition, body, ..
-        } => Statement::While {
+        } => optimizer.alloc_stmt(Statement::While {
             condition: optimize_expression_escape_analysis(condition, escape_info, stats, optimizer),
             body: optimize_statements_escape_analysis(body, escape_info, stats, optimizer),
             location: None,
-        },
+        }),
         Statement::For {
             pattern,
             iterable,
             body,
             ..
-        } => Statement::For {
+        } => optimizer.alloc_stmt(Statement::For {
             pattern: pattern.clone(),
             iterable: optimize_expression_escape_analysis(iterable, escape_info, stats, optimizer),
             body: optimize_statements_escape_analysis(body, escape_info, stats, optimizer),
             location: None,
-        },
-        _ => stmt.clone(),
+        }),
+        _ => stmt, // Already a reference, no allocation needed
+
     }
 }
 
@@ -381,30 +382,33 @@ fn optimize_expression_escape_analysis<'ast>(
     match expr {
         Expression::Binary {
             left, op, right, ..
-        } => Expression::Binary {
-            left: Box::new(optimize_expression_escape_analysis(
+        } => optimizer.alloc_expr(Expression::Binary {
+            left: optimize_expression_escape_analysis(
                 left,
                 escape_info,
                 stats,
-            )),
+                optimizer,
+            ),
             op: *op,
-            right: Box::new(optimize_expression_escape_analysis(
+            right: optimize_expression_escape_analysis(
                 right,
                 escape_info,
                 stats,
-            )),
+                optimizer,
+            ),
             location: None,
-        },
-        Expression::Unary { op, operand, .. } => Expression::Unary {
+        }),
+        Expression::Unary { op, operand, .. } => optimizer.alloc_expr(Expression::Unary {
             op: *op,
-            operand: Box::new(optimize_expression_escape_analysis(
+            operand: optimize_expression_escape_analysis(
                 operand,
                 escape_info,
                 stats,
-            )),
+                optimizer,
+            ),
             location: None,
-        },
-        _ => expr.clone(),
+        }),
+        _ => expr,
     }
 }
 
