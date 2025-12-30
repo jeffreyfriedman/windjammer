@@ -340,14 +340,14 @@ fn optimize_statement_escape_analysis<'a, 'ast>(
             then_block,
             else_block,
             ..
-        } => optimizer.alloc_stmt(Statement::If {
+        } => optimizer.alloc_stmt(unsafe { std::mem::transmute(Statement::If {
             condition: optimize_expression_escape_analysis(condition, escape_info, stats, optimizer),
             then_block: optimize_statements_escape_analysis(then_block, escape_info, stats, optimizer),
             else_block: else_block
                 .as_ref()
                 .map(|stmts| optimize_statements_escape_analysis(stmts, escape_info, stats, optimizer)),
             location: None,
-        }),
+        }) }),
         Statement::While {
             condition, body, ..
         } => optimizer.alloc_stmt(unsafe { std::mem::transmute(Statement::While {
