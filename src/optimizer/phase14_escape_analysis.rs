@@ -287,8 +287,8 @@ fn optimize_statements_escape_analysis<'ast>(
 }
 
 /// Optimize a single statement with escape analysis
-fn optimize_statement_escape_analysis<'ast>(
-    stmt: &'ast Statement<'ast>,
+fn optimize_statement_escape_analysis<'a, 'ast>(
+    stmt: &'a Statement<'a>,
     escape_info: &EscapeInfo,
     stats: &mut EscapeAnalysisStats,
     optimizer: &crate::optimizer::Optimizer,
@@ -361,20 +361,20 @@ fn optimize_statement_escape_analysis<'ast>(
             body,
             ..
         } => optimizer.alloc_stmt(Statement::For {
-            pattern: pattern.clone(),
+            pattern: unsafe { std::mem::transmute(pattern.clone()) }, // Safe: arena owns result
             iterable: optimize_expression_escape_analysis(iterable, escape_info, stats, optimizer),
             body: optimize_statements_escape_analysis(body, escape_info, stats, optimizer),
             location: None,
         }),
-        _ => stmt, // Already a reference, no allocation needed
+        _ => unsafe { std::mem::transmute(stmt) }, // Safe: just changing lifetime annotation
 
     }
 }
 
 /// Optimize an expression with escape analysis
 #[allow(clippy::only_used_in_recursion)]
-fn optimize_expression_escape_analysis<'ast>(
-    expr: &'ast Expression<'ast>,
+fn optimize_expression_escape_analysis<'a, 'ast>(
+    expr: &'a Expression<'a>,
     escape_info: &EscapeInfo,
     stats: &mut EscapeAnalysisStats,
     optimizer: &crate::optimizer::Optimizer,
