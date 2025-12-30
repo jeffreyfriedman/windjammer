@@ -143,11 +143,15 @@ impl Optimizer {
     pub fn optimize<'ast>(&self, program: &Program<'ast>) -> OptimizationResult<'ast> {
         let mut program = program;
         let mut stats = OptimizationStats::default();
+        
+        // Keep intermediate programs alive to prevent dangling references
+        let mut intermediate_programs: Vec<Program<'ast>> = Vec::new();
 
         // Phase 11: String Interning
         if self.config.enable_string_interning {
             let result = phase11_string_interning::optimize_string_interning(&program, self);
-            program = &result.program;
+            intermediate_programs.push(result.program);
+            program = intermediate_programs.last().unwrap();
             stats.strings_interned = result.strings_interned;
             stats.string_memory_saved = result.memory_saved;
         }
@@ -156,7 +160,8 @@ impl Optimizer {
         if self.config.enable_dead_code_elimination {
             let (optimized_program, dce_stats) =
                 phase12_dead_code_elimination::eliminate_dead_code(&program, self);
-            program = &optimized_program;
+            intermediate_programs.push(optimized_program);
+            program = intermediate_programs.last().unwrap();
             stats.dead_functions_removed = dce_stats.unused_functions_removed;
             stats.dead_code_bytes_saved =
                 dce_stats.unreachable_statements_removed + dce_stats.empty_blocks_removed;
@@ -166,7 +171,8 @@ impl Optimizer {
         if self.config.enable_loop_optimization {
             let (optimized_program, loop_stats) =
                 phase13_loop_optimization::optimize_loops(&program, self);
-            program = &optimized_program;
+            intermediate_programs.push(optimized_program);
+            program = intermediate_programs.last().unwrap();
             stats.loops_optimized = loop_stats.loops_optimized;
             stats.invariants_hoisted = loop_stats.invariants_hoisted;
             stats.loops_unrolled = loop_stats.loops_unrolled;
@@ -176,7 +182,8 @@ impl Optimizer {
         if self.config.enable_escape_analysis {
             let (optimized_program, esc_stats) =
                 phase14_escape_analysis::optimize_escape_analysis(&program, self);
-            program = &optimized_program;
+            intermediate_programs.push(optimized_program);
+            program = intermediate_programs.last().unwrap();
             stats.heap_to_stack_conversions = esc_stats.vectors_stack_allocated
                 + esc_stats.strings_inlined
                 + esc_stats.boxes_unboxed;
@@ -186,7 +193,8 @@ impl Optimizer {
         if self.config.enable_simd_vectorization {
             let (optimized_program, simd_stats) =
                 phase15_simd_vectorization::optimize_simd_vectorization(&program, self);
-            program = &optimized_program;
+            intermediate_programs.push(optimized_program);
+            program = intermediate_programs.last().unwrap();
             stats.loops_vectorized += simd_stats.loops_vectorized;
         }
 
