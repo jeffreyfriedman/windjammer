@@ -268,11 +268,11 @@ fn optimize_loops_in_statements<'ast>(
                 // Recursively optimize the loop body
                 let final_body = optimize_loops_in_statements(&optimized_body, config, stats, optimizer);
 
-                result.push(optimizer.alloc_stmt(Statement::While {
+                result.push(optimizer.alloc_stmt(unsafe { std::mem::transmute(Statement::While {
                     condition: optimize_loops_in_expression(condition, config, stats, optimizer),
                     body: final_body,
                     location: location.clone(),
-                }));
+                }) }));
             }
             _ => result.push(optimize_loops_in_statement(stmt, config, stats, optimizer)),
         }
@@ -336,14 +336,14 @@ fn optimize_loops_in_statement<'ast>(
             then_block,
             else_block,
             location,
-        } => optimizer.alloc_stmt(Statement::If {
+        } => optimizer.alloc_stmt(unsafe { std::mem::transmute(Statement::If {
             condition: optimize_loops_in_expression(condition, config, stats, optimizer),
             then_block: optimize_loops_in_statements(then_block, config, stats, optimizer),
             else_block: else_block
                 .as_ref()
                 .map(|stmts| optimize_loops_in_statements(stmts, config, stats, optimizer)),
             location: location.clone(),
-        }),
+        }) }),
         Statement::Match {
             value,
             arms,
@@ -524,10 +524,10 @@ fn optimize_loops_in_expression<'ast>(
             value: optimize_loops_in_expression(value, config, stats, optimizer),
             location: location.clone(),
         }),
-        Expression::ChannelRecv { channel, location } => optimizer.alloc_expr(Expression::ChannelRecv {
+        Expression::ChannelRecv { channel, location } => optimizer.alloc_expr(unsafe { std::mem::transmute(Expression::ChannelRecv {
             channel: optimize_loops_in_expression(channel, config, stats, optimizer),
             location: location.clone(),
-        }),
+        }) }),
         Expression::Await { expr, location } => optimizer.alloc_expr(unsafe { std::mem::transmute(Expression::Await {
             expr: optimize_loops_in_expression(expr, config, stats, optimizer),
             location: location.clone(),
