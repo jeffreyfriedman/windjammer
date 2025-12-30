@@ -359,7 +359,6 @@ fn optimize_loops_in_statement<'ast>(
                         .as_ref()
                         .map(|g| optimize_loops_in_expression(g, config, stats, optimizer)),
                     body: optimize_loops_in_expression(&arm.body, config, stats, optimizer),
-                    location: arm.location.clone(),
                 })
                 .collect(),
             location: location.clone(),
@@ -780,16 +779,16 @@ fn replace_variable_in_statement<'ast>(
     optimizer: &crate::optimizer::Optimizer,
 ) -> &'ast Statement<'ast> {
     match stmt {
-        Statement::Expression { expr, .. } => Statement::Expression {
+        Statement::Expression { expr, .. } => optimizer.alloc_stmt(Statement::Expression {
             expr: replace_variable_in_expression(expr, var_name, replacement, optimizer),
             location: None,
-        },
+        }),
         Statement::Return {
             value: Some(expr), ..
-        } => Statement::Return {
+        } => optimizer.alloc_stmt(Statement::Return {
             value: Some(replace_variable_in_expression(expr, var_name, replacement, optimizer)),
             location: None,
-        },
+        }),
         Statement::Let {
             pattern,
             mutable,
@@ -797,21 +796,21 @@ fn replace_variable_in_statement<'ast>(
             value,
             else_block,
             ..
-        } => Statement::Let {
+        } => optimizer.alloc_stmt(Statement::Let {
             pattern: pattern.clone(),
             mutable: *mutable,
             type_: type_.clone(),
             value: replace_variable_in_expression(value, var_name, replacement, optimizer),
             else_block: else_block.clone(),
             location: None,
-        },
-        Statement::Assignment { target, value, .. } => Statement::Assignment {
+        }),
+        Statement::Assignment { target, value, .. } => optimizer.alloc_stmt(Statement::Assignment {
             target: replace_variable_in_expression(target, var_name, replacement, optimizer),
             value: replace_variable_in_expression(value, var_name, replacement, optimizer),
             compound_op: None,
             location: None,
-        },
-        _ => stmt.clone(),
+        }),
+        _ => stmt,
     }
 }
 
@@ -823,34 +822,36 @@ fn replace_variable_in_expression<'ast>(
     optimizer: &crate::optimizer::Optimizer,
 ) -> &'ast Expression<'ast> {
     match expr {
-        Expression::Identifier { name, .. } if name == var_name => replacement.clone(),
+        Expression::Identifier { name, .. } if name == var_name => replacement,
         Expression::Binary {
             left, op, right, ..
-        } => Expression::Binary {
-            left: Box::new(replace_variable_in_expression(left, var_name, replacement, optimizer)),
+        } => optimizer.alloc_expr(Expression::Binary {
+            left: replace_variable_in_expression(left, var_name, replacement, optimizer),
             op: *op,
-            right: Box::new(replace_variable_in_expression(right, var_name, replacement, optimizer)),
+            right: replace_variable_in_expression(right, var_name, replacement, optimizer),
             location: None,
-        },
-        Expression::Unary { op, operand, .. } => Expression::Unary {
+        }),
+        Expression::Unary { op, operand, .. } => optimizer.alloc_expr(Expression::Unary {
             op: *op,
-            operand: Box::new(replace_variable_in_expression(
+            operand: replace_variable_in_expression(
                 operand,
                 var_name,
                 replacement,
-            )),
+                optimizer,
+            ),
             location: None,
-        },
-        Expression::Index { object, index, .. } => Expression::Index {
-            object: Box::new(replace_variable_in_expression(
+        }),
+        Expression::Index { object, index, .. } => optimizer.alloc_expr(Expression::Index {
+            object: replace_variable_in_expression(
                 object,
                 var_name,
                 replacement,
-            )),
-            index: Box::new(replace_variable_in_expression(index, var_name, replacement, optimizer)),
+                optimizer,
+            ),
+            index: replace_variable_in_expression(index, var_name, replacement, optimizer),
             location: None,
-        },
-        _ => expr.clone(),
+        }),
+        _ => expr,
     }
 }
 
