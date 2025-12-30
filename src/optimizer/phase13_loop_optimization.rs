@@ -239,12 +239,12 @@ fn optimize_loops_in_statements<'ast>(
                 } else {
                     // For complex patterns (tuples, etc.), just recursively optimize the body
                     let final_body = optimize_loops_in_statements(body, config, stats, optimizer);
-                    result.push(optimizer.alloc_stmt(Statement::For {
+                    result.push(optimizer.alloc_stmt(unsafe { std::mem::transmute(Statement::For {
                         pattern: pattern.clone(),
                         iterable: optimize_loops_in_expression(iterable, config, stats, optimizer),
                         body: final_body,
                         location: location.clone(),
-                    }));
+                    }) }));
                 }
             }
             Statement::While {
@@ -348,7 +348,7 @@ fn optimize_loops_in_statement<'ast>(
             value,
             arms,
             location,
-        } => optimizer.alloc_stmt(Statement::Match {
+        } => optimizer.alloc_stmt(unsafe { std::mem::transmute(Statement::Match {
             value: optimize_loops_in_expression(value, config, stats, optimizer),
             arms: arms
                 .iter()
@@ -362,7 +362,7 @@ fn optimize_loops_in_statement<'ast>(
                 })
                 .collect(),
             location: location.clone(),
-        }),
+        }) }),
         _ => stmt,
     }
 }
@@ -528,10 +528,10 @@ fn optimize_loops_in_expression<'ast>(
             channel: optimize_loops_in_expression(channel, config, stats, optimizer),
             location: location.clone(),
         }),
-        Expression::Await { expr, location } => optimizer.alloc_expr(Expression::Await {
+        Expression::Await { expr, location } => optimizer.alloc_expr(unsafe { std::mem::transmute(Expression::Await {
             expr: optimize_loops_in_expression(expr, config, stats, optimizer),
             location: location.clone(),
-        }),
+        }) }),
         Expression::TryOp { expr, location } => optimizer.alloc_expr(unsafe { std::mem::transmute(Expression::TryOp {
             expr: optimize_loops_in_expression(expr, config, stats, optimizer),
             location: location.clone(),
