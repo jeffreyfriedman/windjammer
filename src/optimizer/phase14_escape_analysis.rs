@@ -163,7 +163,7 @@ struct EscapeInfo {
 }
 
 /// Analyze which variables escape in a function
-fn analyze_escapes(body: &[Statement], parameters: &[Parameter]) -> EscapeInfo {
+fn analyze_escapes<'ast>(body: &[&'ast Statement<'ast>], parameters: &[Parameter<'ast>]) -> EscapeInfo {
     let mut info = EscapeInfo {
         escaped_vars: HashSet::new(),
         returned_vars: HashSet::new(),
@@ -189,7 +189,7 @@ fn analyze_escapes(body: &[Statement], parameters: &[Parameter]) -> EscapeInfo {
 }
 
 /// Analyze statements to find escaping variables
-fn analyze_statements_for_escapes(stmts: &[Statement], info: &mut EscapeInfo) {
+fn analyze_statements_for_escapes<'ast>(stmts: &[&'ast Statement<'ast>], info: &mut EscapeInfo) {
     for stmt in stmts {
         match stmt {
             Statement::Return {
@@ -233,7 +233,7 @@ fn analyze_statements_for_escapes(stmts: &[Statement], info: &mut EscapeInfo) {
 }
 
 /// Collect all variable identifiers in an expression
-fn collect_variables_in_expression(expr: &Expression, vars: &mut HashSet<String>) {
+fn collect_variables_in_expression<'ast>(expr: &'ast Expression<'ast>, vars: &mut HashSet<String>) {
     match expr {
         Expression::Identifier { name, .. } => {
             vars.insert(name.clone());
@@ -274,11 +274,12 @@ fn collect_variables_in_expression(expr: &Expression, vars: &mut HashSet<String>
 
 /// Optimize statements with escape analysis
 #[allow(clippy::only_used_in_recursion)]
-fn optimize_statements_escape_analysis(
-    stmts: &[Statement],
+fn optimize_statements_escape_analysis<'ast>(
+    stmts: &[&'ast Statement<'ast>],
     escape_info: &EscapeInfo,
     stats: &mut EscapeAnalysisStats,
-) -> Vec<Statement> {
+    optimizer: &crate::optimizer::Optimizer,
+) -> Vec<&'ast Statement<'ast>> {
     stmts
         .iter()
         .map(|stmt| optimize_statement_escape_analysis(stmt, escape_info, stats))
@@ -406,7 +407,7 @@ fn optimize_expression_escape_analysis(
 }
 
 /// Try to optimize vec! macro to SmallVec
-fn try_optimize_vec_to_smallvec(expr: &Expression) -> Option<Expression> {
+fn try_optimize_vec_to_smallvec<'ast>(expr: &'ast Expression<'ast>, optimizer: &crate::optimizer::Optimizer) -> Option<&'ast Expression<'ast>> {
     match expr {
         Expression::MacroInvocation { name, args, .. } if name == "vec" => {
             // Only optimize if the vec has a small number of elements (< 8)
