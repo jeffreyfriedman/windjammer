@@ -312,20 +312,20 @@ fn optimize_statement_escape_analysis<'a, 'ast>(
                     if let Some(new_value) = try_optimize_vec_to_smallvec(value, optimizer) {
                         stats.vectors_stack_allocated += 1;
                         stats.total_optimizations += 1;
-                        return optimizer.alloc_stmt(Statement::Let {
+                        return optimizer.alloc_stmt(unsafe { std::mem::transmute(Statement::Let {
                             pattern: Pattern::Identifier(name.to_string()),
                             mutable: *mutable,
                             type_: type_.clone(),
                             value: new_value,
                             else_block: else_block.clone(),
                             location: None,
-                        });
+                        }) });
                     }
                 }
             }
 
-            optimizer.alloc_stmt(Statement::Let {
-                pattern: unsafe { std::mem::transmute(pattern.clone()) }, // Safe: arena owns result
+            optimizer.alloc_stmt(unsafe { std::mem::transmute(Statement::Let {
+                pattern: pattern.clone(),
                 mutable: *mutable,
                 type_: type_.clone(),
                 value: optimize_expression_escape_analysis(value, escape_info, stats, optimizer),
@@ -333,7 +333,7 @@ fn optimize_statement_escape_analysis<'a, 'ast>(
                     .as_ref()
                     .map(|stmts| optimize_statements_escape_analysis(stmts, escape_info, stats, optimizer)),
                 location: None,
-            })
+            }) })
         }
         Statement::If {
             condition,
