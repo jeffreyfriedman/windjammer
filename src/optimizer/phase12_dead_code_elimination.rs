@@ -660,10 +660,10 @@ fn eliminate_dead_code_in_expression<'a, 'ast>(
             location,
         } => {
             let (new_statements, _) = eliminate_dead_code_in_statements(statements, optimizer);
-            optimizer.alloc_expr(Expression::Block {
+            optimizer.alloc_expr(unsafe { std::mem::transmute(Expression::Block {
                 statements: new_statements,
                 location: location.clone(),
-            })
+            }) })
         }
         Expression::Closure {
             parameters,
