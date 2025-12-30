@@ -350,11 +350,11 @@ fn optimize_statement_escape_analysis<'a, 'ast>(
         }),
         Statement::While {
             condition, body, ..
-        } => optimizer.alloc_stmt(Statement::While {
+        } => optimizer.alloc_stmt(unsafe { std::mem::transmute(Statement::While {
             condition: optimize_expression_escape_analysis(condition, escape_info, stats, optimizer),
             body: optimize_statements_escape_analysis(body, escape_info, stats, optimizer),
             location: None,
-        }),
+        }) }),
         Statement::For {
             pattern,
             iterable,
