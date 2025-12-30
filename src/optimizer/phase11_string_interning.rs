@@ -584,7 +584,6 @@ fn replace_strings_in_statement<'ast>(
                         .guard
                         .map(|g| replace_strings_in_expression(g, pool_map, optimizer)),
                     body: replace_strings_in_expression(arm.body, pool_map, optimizer),
-                    location: arm.location,
                 })
                 .collect(),
             location: location.clone(),
@@ -615,7 +614,11 @@ fn replace_strings_in_item<'ast>(
                     is_pub: decl.is_pub,
                     is_async: decl.is_async,
                     decorators: decl.decorators.clone(),
-                    location: decl.location,
+                    is_extern: decl.is_extern,
+                    type_params: decl.type_params.clone(),
+                    where_clause: decl.where_clause.clone(),
+                    parent_type: decl.parent_type.clone(),
+                    doc_comment: decl.doc_comment.clone(),
                 },
                 location: location.clone(),
             }
@@ -638,7 +641,11 @@ fn replace_strings_in_item<'ast>(
                         is_pub: func.is_pub,
                         is_async: func.is_async,
                         decorators: func.decorators.clone(),
-                        location: func.location,
+                        is_extern: func.is_extern,
+                        type_params: func.type_params.clone(),
+                        where_clause: func.where_clause.clone(),
+                        parent_type: func.parent_type.clone(),
+                        doc_comment: func.doc_comment.clone(),
                     }
                 })
                 .collect();
