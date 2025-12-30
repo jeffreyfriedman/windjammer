@@ -86,7 +86,7 @@ pub fn optimize_escape_analysis<'ast>(program: &Program<'ast>, optimizer: &crate
     for item in &program.items {
         let new_item = match item {
             Item::Function { decl: func, .. } => {
-                let (new_func, func_stats) = optimize_function_escape_analysis(func);
+                let (new_func, func_stats) = optimize_function_escape_analysis(func, optimizer);
                 stats.add(&func_stats);
                 Item::Function {
                     decl: new_func,
@@ -136,7 +136,7 @@ fn optimize_impl_escape_analysis(impl_block: &ImplBlock) -> (ImplBlock, EscapeAn
     let mut new_functions = Vec::new();
 
     for func in &impl_block.functions {
-        let (new_func, func_stats) = optimize_function_escape_analysis(func);
+        let (new_func, func_stats) = optimize_function_escape_analysis(func, optimizer);
         stats.add(&func_stats);
         new_functions.push(new_func);
     }
@@ -330,7 +330,7 @@ fn optimize_statement_escape_analysis(
                 value: optimize_expression_escape_analysis(value, escape_info, stats),
                 else_block: else_block
                     .as_ref()
-                    .map(|stmts| optimize_statements_escape_analysis(stmts, escape_info, stats)),
+                    .map(|stmts| optimize_statements_escape_analysis(stmts, escape_info, stats, optimizer)),
                 location: None,
             }
         }
@@ -341,17 +341,17 @@ fn optimize_statement_escape_analysis(
             ..
         } => Statement::If {
             condition: optimize_expression_escape_analysis(condition, escape_info, stats),
-            then_block: optimize_statements_escape_analysis(then_block, escape_info, stats),
+            then_block: optimize_statements_escape_analysis(then_block, escape_info, stats, optimizer),
             else_block: else_block
                 .as_ref()
-                .map(|stmts| optimize_statements_escape_analysis(stmts, escape_info, stats)),
+                .map(|stmts| optimize_statements_escape_analysis(stmts, escape_info, stats, optimizer)),
             location: None,
         },
         Statement::While {
             condition, body, ..
         } => Statement::While {
             condition: optimize_expression_escape_analysis(condition, escape_info, stats),
-            body: optimize_statements_escape_analysis(body, escape_info, stats),
+            body: optimize_statements_escape_analysis(body, escape_info, stats, optimizer),
             location: None,
         },
         Statement::For {
@@ -362,7 +362,7 @@ fn optimize_statement_escape_analysis(
         } => Statement::For {
             pattern: pattern.clone(),
             iterable: optimize_expression_escape_analysis(iterable, escape_info, stats),
-            body: optimize_statements_escape_analysis(body, escape_info, stats),
+            body: optimize_statements_escape_analysis(body, escape_info, stats, optimizer),
             location: None,
         },
         _ => stmt.clone(),
