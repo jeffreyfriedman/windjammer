@@ -287,19 +287,19 @@ fn optimize_loops_in_statement<'ast>(
     config: &LoopOptimizationConfig,
     stats: &mut LoopOptimizationStats,
     optimizer: &crate::optimizer::Optimizer,
-) -> &'ast Statement<'ast> {
+)-> &'ast Statement<'ast> {
     match stmt {
-        Statement::Expression { expr, location } => Statement::Expression {
+        Statement::Expression { expr, location } => optimizer.alloc_stmt(Statement::Expression {
             expr: optimize_loops_in_expression(expr, config, stats, optimizer),
             location: location.clone(),
-        },
+        }),
         Statement::Return {
             value: Some(expr),
             location,
-        } => Statement::Return {
+        } => optimizer.alloc_stmt(Statement::Return {
             value: Some(optimize_loops_in_expression(expr, config, stats, optimizer)),
             location: location.clone(),
-        },
+        }),
         Statement::Let {
             pattern,
             mutable,
@@ -307,7 +307,7 @@ fn optimize_loops_in_statement<'ast>(
             value,
             else_block,
             location,
-        } => Statement::Let {
+        } => optimizer.alloc_stmt(Statement::Let {
             pattern: pattern.clone(),
             mutable: *mutable,
             type_: type_.clone(),
@@ -319,36 +319,36 @@ fn optimize_loops_in_statement<'ast>(
                     .collect()
             }),
             location: location.clone(),
-        },
+        }),
         Statement::Assignment {
             target,
             value,
             compound_op,
             location,
-        } => Statement::Assignment {
+        } => optimizer.alloc_stmt(Statement::Assignment {
             target: target.clone(),
             value: optimize_loops_in_expression(value, config, stats, optimizer),
             compound_op: *compound_op,
             location: location.clone(),
-        },
+        }),
         Statement::If {
             condition,
             then_block,
             else_block,
             location,
-        } => Statement::If {
+        } => optimizer.alloc_stmt(Statement::If {
             condition: optimize_loops_in_expression(condition, config, stats, optimizer),
             then_block: optimize_loops_in_statements(then_block, config, stats, optimizer),
             else_block: else_block
                 .as_ref()
                 .map(|stmts| optimize_loops_in_statements(stmts, config, stats, optimizer)),
             location: location.clone(),
-        },
+        }),
         Statement::Match {
             value,
             arms,
             location,
-        } => Statement::Match {
+        } => optimizer.alloc_stmt(Statement::Match {
             value: optimize_loops_in_expression(value, config, stats, optimizer),
             arms: arms
                 .iter()
@@ -359,11 +359,12 @@ fn optimize_loops_in_statement<'ast>(
                         .as_ref()
                         .map(|g| optimize_loops_in_expression(g, config, stats, optimizer)),
                     body: optimize_loops_in_expression(&arm.body, config, stats, optimizer),
+                    location: arm.location.clone(),
                 })
                 .collect(),
             location: location.clone(),
-        },
-        _ => stmt.clone(),
+        }),
+        _ => stmt,
     }
 }
 
