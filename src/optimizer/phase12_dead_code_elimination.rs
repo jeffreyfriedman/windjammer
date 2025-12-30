@@ -606,130 +606,130 @@ fn eliminate_dead_code_in_expression<'ast>(
             op,
             right,
             location,
-        } => Expression::Binary {
-            left: Box::new(eliminate_dead_code_in_expression(left, optimizer)),
+        } => optimizer.alloc_expr(Expression::Binary {
+            left: eliminate_dead_code_in_expression(left, optimizer),
             op: *op,
-            right: Box::new(eliminate_dead_code_in_expression(right, optimizer)),
+            right: eliminate_dead_code_in_expression(right, optimizer),
             location: location.clone(),
-        },
+        }),
         Expression::Unary {
             op,
             operand,
             location,
-        } => Expression::Unary {
+        } => optimizer.alloc_expr(Expression::Unary {
             op: *op,
-            operand: Box::new(eliminate_dead_code_in_expression(operand, optimizer)),
+            operand: eliminate_dead_code_in_expression(operand, optimizer),
             location: location.clone(),
-        },
-        Expression::Tuple { elements, location } => Expression::Tuple {
+        }),
+        Expression::Tuple { elements, location } => optimizer.alloc_expr(Expression::Tuple {
             elements: elements
                 .iter()
-                .map(eliminate_dead_code_in_expression)
+                .map(|e| eliminate_dead_code_in_expression(e, optimizer))
                 .collect(),
             location: location.clone(),
-        },
+        }),
         Expression::Index {
             object,
             index,
             location,
-        } => Expression::Index {
-            object: Box::new(eliminate_dead_code_in_expression(object, optimizer)),
-            index: Box::new(eliminate_dead_code_in_expression(index, optimizer)),
+        } => optimizer.alloc_expr(Expression::Index {
+            object: eliminate_dead_code_in_expression(object, optimizer),
+            index: eliminate_dead_code_in_expression(index, optimizer),
             location: location.clone(),
-        },
+        }),
         Expression::FieldAccess {
             object,
             field,
             location,
-        } => Expression::FieldAccess {
-            object: Box::new(eliminate_dead_code_in_expression(object, optimizer)),
+        } => optimizer.alloc_expr(Expression::FieldAccess {
+            object: eliminate_dead_code_in_expression(object, optimizer),
             field: field.clone(),
             location: location.clone(),
-        },
+        }),
         Expression::Cast {
             expr,
             type_,
             location,
-        } => Expression::Cast {
-            expr: Box::new(eliminate_dead_code_in_expression(expr, optimizer)),
+        } => optimizer.alloc_expr(Expression::Cast {
+            expr: eliminate_dead_code_in_expression(expr, optimizer),
             type_: type_.clone(),
             location: location.clone(),
-        },
+        }),
         Expression::Block {
             statements,
             location,
         } => {
-            let (new_statements, _) = eliminate_dead_code_in_statements(statements, optimizer);
-            Expression::Block {
+            let (new_statements, _) = eliminate_dead_code_in_statements(statements, &mut DeadCodeStats::default(), optimizer);
+            optimizer.alloc_expr(Expression::Block {
                 statements: new_statements,
                 location: location.clone(),
-            }
+            })
         }
         Expression::Closure {
             parameters,
             body,
             location,
-        } => Expression::Closure {
+        } => optimizer.alloc_expr(Expression::Closure {
             parameters: parameters.clone(),
-            body: Box::new(eliminate_dead_code_in_expression(body, optimizer)),
+            body: eliminate_dead_code_in_expression(body, optimizer),
             location: location.clone(),
-        },
+        }),
         Expression::StructLiteral {
             name,
             fields,
             location,
-        } => Expression::StructLiteral {
+        } => optimizer.alloc_expr(Expression::StructLiteral {
             name: name.clone(),
             fields: fields
                 .iter()
                 .map(|(k, v)| (k.clone(), eliminate_dead_code_in_expression(v, optimizer)))
                 .collect(),
             location: location.clone(),
-        },
+        }),
         Expression::Range {
             start,
             end,
             inclusive,
             location,
-        } => Expression::Range {
-            start: Box::new(eliminate_dead_code_in_expression(start, optimizer)),
-            end: Box::new(eliminate_dead_code_in_expression(end, optimizer)),
+        } => optimizer.alloc_expr(Expression::Range {
+            start: eliminate_dead_code_in_expression(start, optimizer),
+            end: eliminate_dead_code_in_expression(end, optimizer),
             inclusive: *inclusive,
             location: location.clone(),
-        },
+        }),
         Expression::ChannelSend {
             channel,
             value,
             location,
-        } => Expression::ChannelSend {
-            channel: Box::new(eliminate_dead_code_in_expression(channel, optimizer)),
-            value: Box::new(eliminate_dead_code_in_expression(value, optimizer)),
+        } => optimizer.alloc_expr(Expression::ChannelSend {
+            channel: eliminate_dead_code_in_expression(channel, optimizer),
+            value: eliminate_dead_code_in_expression(value, optimizer),
             location: location.clone(),
-        },
-        Expression::ChannelRecv { channel, location } => Expression::ChannelRecv {
-            channel: Box::new(eliminate_dead_code_in_expression(channel, optimizer)),
+        }),
+        Expression::ChannelRecv { channel, location } => optimizer.alloc_expr(Expression::ChannelRecv {
+            channel: eliminate_dead_code_in_expression(channel, optimizer),
             location: location.clone(),
-        },
-        Expression::Await { expr, location } => Expression::Await {
-            expr: Box::new(eliminate_dead_code_in_expression(expr, optimizer)),
+        }),
+        Expression::Await { expr, location } => optimizer.alloc_expr(Expression::Await {
+            expr: eliminate_dead_code_in_expression(expr, optimizer),
             location: location.clone(),
-        },
-        Expression::TryOp { expr, location } => Expression::TryOp {
-            expr: Box::new(eliminate_dead_code_in_expression(expr, optimizer)),
+        }),
+        Expression::TryOp { expr, location } => optimizer.alloc_expr(Expression::TryOp {
+            expr: eliminate_dead_code_in_expression(expr, optimizer),
             location: location.clone(),
-        },
+        }),
         Expression::MacroInvocation {
             name,
             args,
             delimiter,
             location,
-        } => Expression::MacroInvocation {
+        } => optimizer.alloc_expr(Expression::MacroInvocation {
             name: name.clone(),
-            args: args.iter().map(eliminate_dead_code_in_expression).collect(),
-            delimiter: delimiter.clone(),
+            args: args.iter().map(|a| eliminate_dead_code_in_expression(a, optimizer)).collect(),
+            delimiter: *delimiter,
             location: location.clone(),
-        },
-        _ => expr.clone(),
+        }),
+        _ => expr,
     }
 }
 
