@@ -568,8 +568,8 @@ fn eliminate_dead_code_in_statement<'ast>(
 }
 
 /// Eliminate dead code in an expression
-fn eliminate_dead_code_in_expression<'ast>(
-    expr: &'ast Expression<'ast>,
+fn eliminate_dead_code_in_expression<'a, 'ast>(
+    expr: &'a Expression<'a>,
     optimizer: &crate::optimizer::Optimizer,
 ) -> &'ast Expression<'ast> {
     match expr {
