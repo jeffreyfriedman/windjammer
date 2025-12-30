@@ -71,7 +71,7 @@ pub fn optimize_loops<'ast>(program: &Program<'ast>, optimizer: &crate::optimize
 
 /// Optimize loops with custom configuration
 pub fn optimize_loops_with_config<'ast>(
-    program: &Program<'ast>,
+    program: &'ast Program<'ast>,
     config: &LoopOptimizationConfig,
     optimizer: &crate::optimizer::Optimizer,
 ) -> (Program<'ast>, LoopOptimizationStats) {

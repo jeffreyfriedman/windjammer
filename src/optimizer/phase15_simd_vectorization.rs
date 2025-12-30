@@ -186,7 +186,7 @@ enum VectorOperation {
 }
 
 /// Optimize statements with SIMD vectorization
-fn optimize_statements_simd(stmts: &[Statement], stats: &mut SimdStats) -> Vec<Statement> {
+fn optimize_statements_simd<'ast>(stmts: &[&'ast Statement<'ast>], stats: &mut SimdStats, optimizer: &crate::optimizer::Optimizer) -> Vec<&'ast Statement<'ast>> {
     let mut result = Vec::new();
 
     for stmt in stmts {
@@ -262,10 +262,10 @@ fn optimize_statement_simd(stmt: &Statement, stats: &mut SimdStats) -> Statement
 }
 
 /// Analyze if a loop can be vectorized
-fn analyze_loop_vectorizability(
+fn analyze_loop_vectorizability<'ast>(
     variable: &str,
-    iterable: &Expression,
-    body: &[Statement],
+    iterable: &'ast Expression<'ast>,
+    body: &[&'ast Statement<'ast>],
 ) -> Option<VectorizableLoop> {
     // Check if we're iterating over a range or array
     let is_range_or_array = matches!(
@@ -367,12 +367,13 @@ fn is_numeric_operation(op: &VectorOperation) -> bool {
 }
 
 /// Create a vectorized version of the loop
-fn create_vectorized_loop(
+fn create_vectorized_loop<'ast>(
     variable: &str,
-    iterable: &Expression,
-    body: &[Statement],
+    iterable: &'ast Expression<'ast>,
+    body: &[&'ast Statement<'ast>],
     _info: &VectorizableLoop,
-) -> Statement {
+    optimizer: &crate::optimizer::Optimizer,
+) -> &'ast Statement<'ast> {
     // In the real implementation, codegen would recognize vectorizable patterns
     // and generate SIMD code. For now, we just preserve the loop structure
     // and track it in stats.
