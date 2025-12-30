@@ -98,7 +98,7 @@ fn optimize_loops_in_item<'ast>(
             decl: func,
             location,
         } => {
-            let new_body = optimize_loops_in_statements(&func.body, config, stats);
+            let new_body = optimize_loops_in_statements(&func.body, config, stats, optimizer);
             Item::Function {
                 decl: FunctionDecl {
                     name: func.name.clone(),
@@ -134,7 +134,7 @@ fn optimize_loops_in_item<'ast>(
                     is_async: func.is_async,
                     parameters: func.parameters.clone(),
                     return_type: func.return_type.clone(),
-                    body: optimize_loops_in_statements(&func.body, config, stats),
+                    body: optimize_loops_in_statements(&func.body, config, stats, optimizer),
                     parent_type: func.parent_type.clone(),
                     doc_comment: func.doc_comment.clone(),
                 })
@@ -164,7 +164,7 @@ fn optimize_loops_in_item<'ast>(
             name: name.clone(),
             mutable: *mutable,
             type_: type_.clone(),
-            value: optimize_loops_in_expression(value, config, stats),
+            value: optimize_loops_in_expression(value, config, stats, optimizer),
             location: location.clone(),
         },
         Item::Const {
@@ -175,7 +175,7 @@ fn optimize_loops_in_item<'ast>(
         } => Item::Const {
             name: name.clone(),
             type_: type_.clone(),
-            value: optimize_loops_in_expression(value, config, stats),
+            value: optimize_loops_in_expression(value, config, stats, optimizer),
             location: location.clone(),
         },
         _ => item.clone(),
@@ -205,7 +205,7 @@ fn optimize_loops_in_statements<'ast>(
                     // Try to unroll the loop if it's a small constant range
                     if config.enable_unrolling {
                         if let Some(unrolled) =
-                            try_unroll_loop(variable, iterable, body, config, stats)
+                            try_unroll_loop(variable, iterable, body, config, stats, optimizer)
                         {
                             result.extend(unrolled);
                             stats.loops_unrolled += 1;
@@ -216,7 +216,7 @@ fn optimize_loops_in_statements<'ast>(
 
                     // Apply LICM if enabled
                     let optimized_body = if config.enable_licm {
-                        let (hoisted, new_body) = hoist_loop_invariants(body, variable, stats);
+                        let (hoisted, new_body) = hoist_loop_invariants(body, variable, stats, optimizer);
                         let has_hoisted = !hoisted.is_empty();
                         result.extend(hoisted);
                         if has_hoisted {
@@ -228,20 +228,20 @@ fn optimize_loops_in_statements<'ast>(
                     };
 
                     // Recursively optimize the loop body
-                    let final_body = optimize_loops_in_statements(&optimized_body, config, stats);
+                    let final_body = optimize_loops_in_statements(&optimized_body, config, stats, optimizer);
 
                     result.push(Statement::For {
                         pattern: pattern.clone(),
-                        iterable: optimize_loops_in_expression(iterable, config, stats),
+                        iterable: optimize_loops_in_expression(iterable, config, stats, optimizer),
                         body: final_body,
                         location: location.clone(),
                     });
                 } else {
                     // For complex patterns (tuples, etc.), just recursively optimize the body
-                    let final_body = optimize_loops_in_statements(body, config, stats);
+                    let final_body = optimize_loops_in_statements(body, config, stats, optimizer);
                     result.push(Statement::For {
                         pattern: pattern.clone(),
-                        iterable: optimize_loops_in_expression(iterable, config, stats),
+                        iterable: optimize_loops_in_expression(iterable, config, stats, optimizer),
                         body: final_body,
                         location: location.clone(),
                     });
@@ -254,7 +254,7 @@ fn optimize_loops_in_statements<'ast>(
             } => {
                 // Apply LICM if enabled
                 let optimized_body = if config.enable_licm {
-                    let (hoisted, new_body) = hoist_loop_invariants(body, "", stats);
+                    let (hoisted, new_body) = hoist_loop_invariants(body, "", stats, optimizer);
                     let has_hoisted = !hoisted.is_empty();
                     result.extend(hoisted);
                     if has_hoisted {
@@ -266,15 +266,15 @@ fn optimize_loops_in_statements<'ast>(
                 };
 
                 // Recursively optimize the loop body
-                let final_body = optimize_loops_in_statements(&optimized_body, config, stats);
+                let final_body = optimize_loops_in_statements(&optimized_body, config, stats, optimizer);
 
                 result.push(Statement::While {
-                    condition: optimize_loops_in_expression(condition, config, stats),
+                    condition: optimize_loops_in_expression(condition, config, stats, optimizer),
                     body: final_body,
                     location: location.clone(),
                 });
             }
-            _ => result.push(optimize_loops_in_statement(stmt, config, stats)),
+            _ => result.push(optimize_loops_in_statement(stmt, config, stats, optimizer)),
         }
     }
 
@@ -290,14 +290,14 @@ fn optimize_loops_in_statement<'ast>(
 ) -> &'ast Statement<'ast> {
     match stmt {
         Statement::Expression { expr, location } => Statement::Expression {
-            expr: optimize_loops_in_expression(expr, config, stats),
+            expr: optimize_loops_in_expression(expr, config, stats, optimizer),
             location: location.clone(),
         },
         Statement::Return {
             value: Some(expr),
             location,
         } => Statement::Return {
-            value: Some(optimize_loops_in_expression(expr, config, stats)),
+            value: Some(optimize_loops_in_expression(expr, config, stats, optimizer)),
             location: location.clone(),
         },
         Statement::Let {
@@ -311,11 +311,11 @@ fn optimize_loops_in_statement<'ast>(
             pattern: pattern.clone(),
             mutable: *mutable,
             type_: type_.clone(),
-            value: optimize_loops_in_expression(value, config, stats),
+            value: optimize_loops_in_expression(value, config, stats, optimizer),
             else_block: else_block.as_ref().map(|stmts| {
                 stmts
                     .iter()
-                    .map(|s| optimize_loops_in_statement(s, config, stats))
+                    .map(|s| optimize_loops_in_statement(s, config, stats, optimizer))
                     .collect()
             }),
             location: location.clone(),
@@ -327,7 +327,7 @@ fn optimize_loops_in_statement<'ast>(
             location,
         } => Statement::Assignment {
             target: target.clone(),
-            value: optimize_loops_in_expression(value, config, stats),
+            value: optimize_loops_in_expression(value, config, stats, optimizer),
             compound_op: *compound_op,
             location: location.clone(),
         },
@@ -337,11 +337,11 @@ fn optimize_loops_in_statement<'ast>(
             else_block,
             location,
         } => Statement::If {
-            condition: optimize_loops_in_expression(condition, config, stats),
-            then_block: optimize_loops_in_statements(then_block, config, stats),
+            condition: optimize_loops_in_expression(condition, config, stats, optimizer),
+            then_block: optimize_loops_in_statements(then_block, config, stats, optimizer),
             else_block: else_block
                 .as_ref()
-                .map(|stmts| optimize_loops_in_statements(stmts, config, stats)),
+                .map(|stmts| optimize_loops_in_statements(stmts, config, stats, optimizer)),
             location: location.clone(),
         },
         Statement::Match {
@@ -349,7 +349,7 @@ fn optimize_loops_in_statement<'ast>(
             arms,
             location,
         } => Statement::Match {
-            value: optimize_loops_in_expression(value, config, stats),
+            value: optimize_loops_in_expression(value, config, stats, optimizer),
             arms: arms
                 .iter()
                 .map(|arm| crate::parser::MatchArm {
@@ -357,8 +357,8 @@ fn optimize_loops_in_statement<'ast>(
                     guard: arm
                         .guard
                         .as_ref()
-                        .map(|g| optimize_loops_in_expression(g, config, stats)),
-                    body: optimize_loops_in_expression(&arm.body, config, stats),
+                        .map(|g| optimize_loops_in_expression(g, config, stats, optimizer)),
+                    body: optimize_loops_in_expression(&arm.body, config, stats, optimizer),
                 })
                 .collect(),
             location: location.clone(),
@@ -380,13 +380,13 @@ fn optimize_loops_in_expression<'ast>(
             arguments,
             location,
         } => Expression::Call {
-            function: Box::new(optimize_loops_in_expression(function, config, stats)),
+            function: Box::new(optimize_loops_in_expression(function, config, stats, optimizer)),
             arguments: arguments
                 .iter()
                 .map(|(label, arg)| {
                     (
                         label.clone(),
-                        optimize_loops_in_expression(arg, config, stats),
+                        optimize_loops_in_expression(arg, config, stats, optimizer),
                     )
                 })
                 .collect(),
@@ -399,7 +399,7 @@ fn optimize_loops_in_expression<'ast>(
             arguments,
             location,
         } => Expression::MethodCall {
-            object: Box::new(optimize_loops_in_expression(object, config, stats)),
+            object: Box::new(optimize_loops_in_expression(object, config, stats, optimizer)),
             method: method.clone(),
             type_args: type_args.clone(),
             arguments: arguments
@@ -407,7 +407,7 @@ fn optimize_loops_in_expression<'ast>(
                 .map(|(label, arg)| {
                     (
                         label.clone(),
-                        optimize_loops_in_expression(arg, config, stats),
+                        optimize_loops_in_expression(arg, config, stats, optimizer),
                     )
                 })
                 .collect(),
@@ -421,15 +421,15 @@ fn optimize_loops_in_expression<'ast>(
         } => {
             // Apply strength reduction if enabled
             if config.enable_strength_reduction {
-                if let Some(reduced) = try_strength_reduction(left, op, right, config, stats) {
+                if let Some(reduced) = try_strength_reduction(left, op, right, config, stats, optimizer) {
                     return reduced;
                 }
             }
 
             Expression::Binary {
-                left: Box::new(optimize_loops_in_expression(left, config, stats)),
+                left: Box::new(optimize_loops_in_expression(left, config, stats, optimizer)),
                 op: *op,
-                right: Box::new(optimize_loops_in_expression(right, config, stats)),
+                right: Box::new(optimize_loops_in_expression(right, config, stats, optimizer)),
                 location: location.clone(),
             }
         }
@@ -439,14 +439,14 @@ fn optimize_loops_in_expression<'ast>(
             location,
         } => Expression::Unary {
             op: *op,
-            operand: Box::new(optimize_loops_in_expression(operand, config, stats)),
+            operand: Box::new(optimize_loops_in_expression(operand, config, stats, optimizer)),
             location: location.clone(),
         },
         Expression::Block {
             statements,
             location,
         } => Expression::Block {
-            statements: optimize_loops_in_statements(statements, config, stats),
+            statements: optimize_loops_in_statements(statements, config, stats, optimizer),
             location: location.clone(),
         },
         Expression::Closure {
@@ -455,7 +455,7 @@ fn optimize_loops_in_expression<'ast>(
             location,
         } => Expression::Closure {
             parameters: parameters.clone(),
-            body: Box::new(optimize_loops_in_expression(body, config, stats)),
+            body: Box::new(optimize_loops_in_expression(body, config, stats, optimizer)),
             location: location.clone(),
         },
         Expression::Index {
@@ -463,8 +463,8 @@ fn optimize_loops_in_expression<'ast>(
             index,
             location,
         } => Expression::Index {
-            object: Box::new(optimize_loops_in_expression(object, config, stats)),
-            index: Box::new(optimize_loops_in_expression(index, config, stats)),
+            object: Box::new(optimize_loops_in_expression(object, config, stats, optimizer)),
+            index: Box::new(optimize_loops_in_expression(index, config, stats, optimizer)),
             location: location.clone(),
         },
         Expression::FieldAccess {
@@ -472,7 +472,7 @@ fn optimize_loops_in_expression<'ast>(
             field,
             location,
         } => Expression::FieldAccess {
-            object: Box::new(optimize_loops_in_expression(object, config, stats)),
+            object: Box::new(optimize_loops_in_expression(object, config, stats, optimizer)),
             field: field.clone(),
             location: location.clone(),
         },
@@ -481,7 +481,7 @@ fn optimize_loops_in_expression<'ast>(
             type_,
             location,
         } => Expression::Cast {
-            expr: Box::new(optimize_loops_in_expression(expr, config, stats)),
+            expr: Box::new(optimize_loops_in_expression(expr, config, stats, optimizer)),
             type_: type_.clone(),
             location: location.clone(),
         },
@@ -493,14 +493,14 @@ fn optimize_loops_in_expression<'ast>(
             name: name.clone(),
             fields: fields
                 .iter()
-                .map(|(k, v)| (k.clone(), optimize_loops_in_expression(v, config, stats)))
+                .map(|(k, v)| (k.clone(), optimize_loops_in_expression(v, config, stats, optimizer)))
                 .collect(),
             location: location.clone(),
         },
         Expression::Tuple { elements, location } => Expression::Tuple {
             elements: elements
                 .iter()
-                .map(|e| optimize_loops_in_expression(e, config, stats))
+                .map(|e| optimize_loops_in_expression(e, config, stats, optimizer))
                 .collect(),
             location: location.clone(),
         },
@@ -510,8 +510,8 @@ fn optimize_loops_in_expression<'ast>(
             inclusive,
             location,
         } => Expression::Range {
-            start: Box::new(optimize_loops_in_expression(start, config, stats)),
-            end: Box::new(optimize_loops_in_expression(end, config, stats)),
+            start: Box::new(optimize_loops_in_expression(start, config, stats, optimizer)),
+            end: Box::new(optimize_loops_in_expression(end, config, stats, optimizer)),
             inclusive: *inclusive,
             location: location.clone(),
         },
@@ -520,20 +520,20 @@ fn optimize_loops_in_expression<'ast>(
             value,
             location,
         } => Expression::ChannelSend {
-            channel: Box::new(optimize_loops_in_expression(channel, config, stats)),
-            value: Box::new(optimize_loops_in_expression(value, config, stats)),
+            channel: Box::new(optimize_loops_in_expression(channel, config, stats, optimizer)),
+            value: Box::new(optimize_loops_in_expression(value, config, stats, optimizer)),
             location: location.clone(),
         },
         Expression::ChannelRecv { channel, location } => Expression::ChannelRecv {
-            channel: Box::new(optimize_loops_in_expression(channel, config, stats)),
+            channel: Box::new(optimize_loops_in_expression(channel, config, stats, optimizer)),
             location: location.clone(),
         },
         Expression::Await { expr, location } => Expression::Await {
-            expr: Box::new(optimize_loops_in_expression(expr, config, stats)),
+            expr: Box::new(optimize_loops_in_expression(expr, config, stats, optimizer)),
             location: location.clone(),
         },
         Expression::TryOp { expr, location } => Expression::TryOp {
-            expr: Box::new(optimize_loops_in_expression(expr, config, stats)),
+            expr: Box::new(optimize_loops_in_expression(expr, config, stats, optimizer)),
             location: location.clone(),
         },
         Expression::MacroInvocation {
@@ -545,7 +545,7 @@ fn optimize_loops_in_expression<'ast>(
             name: name.clone(),
             args: args
                 .iter()
-                .map(|a| optimize_loops_in_expression(a, config, stats))
+                .map(|a| optimize_loops_in_expression(a, config, stats, optimizer))
                 .collect(),
             delimiter: delimiter.clone(),
             location: location.clone(),
@@ -607,7 +607,7 @@ fn try_unroll_loop<'ast>(
                         location: None,
                     };
                     for stmt in body {
-                        unrolled.push(replace_variable_in_statement(stmt, variable, &iter_expr));
+                        unrolled.push(replace_variable_in_statement(stmt, variable, &iter_expr, optimizer));
                     }
                 }
 
@@ -780,13 +780,13 @@ fn replace_variable_in_statement<'ast>(
 ) -> &'ast Statement<'ast> {
     match stmt {
         Statement::Expression { expr, .. } => Statement::Expression {
-            expr: replace_variable_in_expression(expr, var_name, replacement),
+            expr: replace_variable_in_expression(expr, var_name, replacement, optimizer),
             location: None,
         },
         Statement::Return {
             value: Some(expr), ..
         } => Statement::Return {
-            value: Some(replace_variable_in_expression(expr, var_name, replacement)),
+            value: Some(replace_variable_in_expression(expr, var_name, replacement, optimizer)),
             location: None,
         },
         Statement::Let {
@@ -800,13 +800,13 @@ fn replace_variable_in_statement<'ast>(
             pattern: pattern.clone(),
             mutable: *mutable,
             type_: type_.clone(),
-            value: replace_variable_in_expression(value, var_name, replacement),
+            value: replace_variable_in_expression(value, var_name, replacement, optimizer),
             else_block: else_block.clone(),
             location: None,
         },
         Statement::Assignment { target, value, .. } => Statement::Assignment {
-            target: replace_variable_in_expression(target, var_name, replacement),
-            value: replace_variable_in_expression(value, var_name, replacement),
+            target: replace_variable_in_expression(target, var_name, replacement, optimizer),
+            value: replace_variable_in_expression(value, var_name, replacement, optimizer),
             compound_op: None,
             location: None,
         },
@@ -826,9 +826,9 @@ fn replace_variable_in_expression<'ast>(
         Expression::Binary {
             left, op, right, ..
         } => Expression::Binary {
-            left: Box::new(replace_variable_in_expression(left, var_name, replacement)),
+            left: Box::new(replace_variable_in_expression(left, var_name, replacement, optimizer)),
             op: *op,
-            right: Box::new(replace_variable_in_expression(right, var_name, replacement)),
+            right: Box::new(replace_variable_in_expression(right, var_name, replacement, optimizer)),
             location: None,
         },
         Expression::Unary { op, operand, .. } => Expression::Unary {
@@ -846,7 +846,7 @@ fn replace_variable_in_expression<'ast>(
                 var_name,
                 replacement,
             )),
-            index: Box::new(replace_variable_in_expression(index, var_name, replacement)),
+            index: Box::new(replace_variable_in_expression(index, var_name, replacement, optimizer)),
             location: None,
         },
         _ => expr.clone(),
