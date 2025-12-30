@@ -360,12 +360,12 @@ fn optimize_statement_escape_analysis<'a, 'ast>(
             iterable,
             body,
             ..
-        } => optimizer.alloc_stmt(Statement::For {
-            pattern: unsafe { std::mem::transmute(pattern.clone()) }, // Safe: arena owns result
+        } => optimizer.alloc_stmt(unsafe { std::mem::transmute(Statement::For {
+            pattern: pattern.clone(),
             iterable: optimize_expression_escape_analysis(iterable, escape_info, stats, optimizer),
             body: optimize_statements_escape_analysis(body, escape_info, stats, optimizer),
             location: None,
-        }),
+        }) }),
         _ => unsafe { std::mem::transmute(stmt) }, // Safe: just changing lifetime annotation
 
     }
