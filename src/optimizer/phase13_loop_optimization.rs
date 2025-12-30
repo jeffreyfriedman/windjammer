@@ -230,21 +230,21 @@ fn optimize_loops_in_statements<'ast>(
                     // Recursively optimize the loop body
                     let final_body = optimize_loops_in_statements(&optimized_body, config, stats, optimizer);
 
-                    result.push(Statement::For {
+                    result.push(optimizer.alloc_stmt(Statement::For {
                         pattern: pattern.clone(),
                         iterable: optimize_loops_in_expression(iterable, config, stats, optimizer),
                         body: final_body,
                         location: location.clone(),
-                    });
+                    }));
                 } else {
                     // For complex patterns (tuples, etc.), just recursively optimize the body
                     let final_body = optimize_loops_in_statements(body, config, stats, optimizer);
-                    result.push(Statement::For {
+                    result.push(optimizer.alloc_stmt(Statement::For {
                         pattern: pattern.clone(),
                         iterable: optimize_loops_in_expression(iterable, config, stats, optimizer),
                         body: final_body,
                         location: location.clone(),
-                    });
+                    }));
                 }
             }
             Statement::While {
@@ -268,11 +268,11 @@ fn optimize_loops_in_statements<'ast>(
                 // Recursively optimize the loop body
                 let final_body = optimize_loops_in_statements(&optimized_body, config, stats, optimizer);
 
-                result.push(Statement::While {
+                result.push(optimizer.alloc_stmt(Statement::While {
                     condition: optimize_loops_in_expression(condition, config, stats, optimizer),
                     body: final_body,
                     location: location.clone(),
-                });
+                }));
             }
             _ => result.push(optimize_loops_in_statement(stmt, config, stats, optimizer)),
         }
