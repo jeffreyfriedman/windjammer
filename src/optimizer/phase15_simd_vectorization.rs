@@ -224,7 +224,7 @@ fn optimize_statement_simd(stmt: &Statement, stats: &mut SimdStats) -> Statement
 
                         // Add a decorator to mark this loop as vectorizable
                         // The codegen phase will see this and generate SIMD code
-                        return create_vectorized_loop(variable, iterable, body, &vectorizable);
+                        return create_vectorized_loop(variable, iterable, body, &vectorizable, optimizer);
                     }
                 }
             }
@@ -233,7 +233,7 @@ fn optimize_statement_simd(stmt: &Statement, stats: &mut SimdStats) -> Statement
             Statement::For {
                 pattern: pattern.clone(),
                 iterable: iterable.clone(),
-                body: optimize_statements_simd(body, stats),
+                body: optimize_statements_simd(body, stats, optimizer),
                 location: None,
             }
         }
@@ -244,17 +244,17 @@ fn optimize_statement_simd(stmt: &Statement, stats: &mut SimdStats) -> Statement
             ..
         } => Statement::If {
             condition: condition.clone(),
-            then_block: optimize_statements_simd(then_block, stats),
+            then_block: optimize_statements_simd(then_block, stats, optimizer),
             else_block: else_block
                 .as_ref()
-                .map(|stmts| optimize_statements_simd(stmts, stats)),
+                .map(|stmts| optimize_statements_simd(stmts, stats, optimizer)),
             location: None,
         },
         Statement::While {
             condition, body, ..
         } => Statement::While {
             condition: condition.clone(),
-            body: optimize_statements_simd(body, stats),
+            body: optimize_statements_simd(body, stats, optimizer),
             location: None,
         },
         _ => stmt.clone(),

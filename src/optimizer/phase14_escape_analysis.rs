@@ -96,7 +96,7 @@ pub fn optimize_escape_analysis<'ast>(program: &Program<'ast>, optimizer: &crate
             Item::Impl {
                 block: impl_block, ..
             } => {
-                let (new_impl, impl_stats) = optimize_impl_escape_analysis(impl_block);
+                let (new_impl, impl_stats) = optimize_impl_escape_analysis(impl_block, optimizer);
                 stats.add(&impl_stats);
                 Item::Impl {
                     block: new_impl,
