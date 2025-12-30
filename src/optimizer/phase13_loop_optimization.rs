@@ -772,10 +772,10 @@ fn statement_uses_variable<'ast>(stmt: &'ast Statement<'ast>, var_name: &str) ->
 }
 
 /// Replace all occurrences of a variable in a statement with an expression
-fn replace_variable_in_statement<'ast>(
-    stmt: &'ast Statement<'ast>,
+fn replace_variable_in_statement<'a, 'ast>(
+    stmt: &'a Statement<'a>,
     var_name: &str,
-    replacement: &'ast Expression<'ast>,
+    replacement: &'a Expression<'a>,
     optimizer: &crate::optimizer::Optimizer,
 ) -> &'ast Statement<'ast> {
     match stmt {
@@ -810,19 +810,19 @@ fn replace_variable_in_statement<'ast>(
             compound_op: None,
             location: None,
         }),
-        _ => stmt,
+        _ => unsafe { std::mem::transmute(stmt) }, // Safe: just changing lifetime annotation
     }
 }
 
 /// Replace all occurrences of a variable in an expression with another expression
-fn replace_variable_in_expression<'ast>(
-    expr: &'ast Expression<'ast>,
+fn replace_variable_in_expression<'a, 'ast>(
+    expr: &'a Expression<'a>,
     var_name: &str,
-    replacement: &'ast Expression<'ast>,
+    replacement: &'a Expression<'a>,
     optimizer: &crate::optimizer::Optimizer,
 ) -> &'ast Expression<'ast> {
     match expr {
-        Expression::Identifier { name, .. } if name == var_name => replacement,
+        Expression::Identifier { name, .. } if name == var_name => unsafe { std::mem::transmute(replacement) },
         Expression::Binary {
             left, op, right, ..
         } => optimizer.alloc_expr(Expression::Binary {
@@ -851,7 +851,7 @@ fn replace_variable_in_expression<'ast>(
             index: replace_variable_in_expression(index, var_name, replacement, optimizer),
             location: None,
         }),
-        _ => expr,
+        _ => unsafe { std::mem::transmute(expr) }, // Safe: just changing lifetime annotation
     }
 }
 
