@@ -119,7 +119,7 @@ fn optimize_function_escape_analysis<'ast>(func: &FunctionDecl<'ast>, optimizer:
     let escape_info = analyze_escapes(&func.body, &func.parameters);
 
     // Transform statements based on escape info
-    let new_body = optimize_statements_escape_analysis(&func.body, &escape_info, &mut stats);
+    let new_body = optimize_statements_escape_analysis(&func.body, &escape_info, optimize_statements_escape_analysis(&func.body, &escape_info, &mut stats)mut stats, optimizer);
 
     (
         FunctionDecl {
@@ -308,7 +308,7 @@ fn optimize_statement_escape_analysis(
             };
             if let Some(name) = var_name {
                 if !escape_info.escaped_vars.contains(name) {
-                    if let Some(new_value) = try_optimize_vec_to_smallvec(value) {
+                    if let Some(new_value) = try_optimize_vec_to_smallvec(value, optimizer) {
                         stats.vectors_stack_allocated += 1;
                         stats.total_optimizations += 1;
                         return Statement::Let {
