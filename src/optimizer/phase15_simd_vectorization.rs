@@ -198,7 +198,7 @@ fn optimize_statements_simd<'ast>(stmts: &[&'ast Statement<'ast>], stats: &mut S
 }
 
 /// Optimize a single statement with SIMD vectorization
-fn optimize_statement_simd(stmt: &Statement, stats: &mut SimdStats) -> Statement {
+fn optimize_statement_simd<'a, 'ast>(stmt: &'a Statement<'a>, stats: &mut SimdStats, optimizer: &crate::optimizer::Optimizer) -> &'ast Statement<'ast> {
     match stmt {
         Statement::For {
             pattern,
