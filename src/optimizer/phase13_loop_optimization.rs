@@ -796,14 +796,14 @@ fn replace_variable_in_statement<'a, 'ast>(
             value,
             else_block,
             ..
-        } => optimizer.alloc_stmt(Statement::Let {
+        } => optimizer.alloc_stmt(unsafe { std::mem::transmute(Statement::Let {
             pattern: pattern.clone(),
             mutable: *mutable,
             type_: type_.clone(),
             value: replace_variable_in_expression(value, var_name, replacement, optimizer),
             else_block: else_block.clone(),
             location: None,
-        }),
+        }) }),
         Statement::Assignment { target, value, .. } => optimizer.alloc_stmt(Statement::Assignment {
             target: replace_variable_in_expression(target, var_name, replacement, optimizer),
             value: replace_variable_in_expression(value, var_name, replacement, optimizer),
