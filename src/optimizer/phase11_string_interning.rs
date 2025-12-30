@@ -269,8 +269,8 @@ fn create_pool_map(pool: &[StringPoolEntry]) -> HashMap<String, String> {
 }
 
 /// Replace string literals in an expression with pool references
-fn replace_strings_in_expression<'ast>(
-    expr: &'ast Expression<'ast>,
+fn replace_strings_in_expression<'a, 'ast>(
+    expr: &'a Expression<'a>,
     pool_map: &HashMap<String, String>,
     optimizer: &crate::optimizer::Optimizer,
 ) -> &'ast Expression<'ast> {
@@ -453,11 +453,10 @@ fn replace_strings_in_expression<'ast>(
 }
 
 /// Replace string literals in a statement with pool references
-fn replace_strings_in_statement<'ast>(
-    stmt: &'ast Statement<'ast>,
+fn replace_strings_in_statement<'a, 'ast>(
+    stmt: &'a Statement<'a>,
     pool_map: &HashMap<String, String>,
-    optimizer: &crate::optimizer::Optimizer,
-) -> &'ast Statement<'ast> {
+    optimizer: &crate::optimizer::Optimizer) -> &'ast Statement<'ast> {
     match stmt {
         Statement::Let {
             pattern,
