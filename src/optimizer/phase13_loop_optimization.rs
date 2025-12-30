@@ -427,131 +427,131 @@ fn optimize_loops_in_expression<'ast>(
                 }
             }
 
-            Expression::Binary {
-                left: Box::new(optimize_loops_in_expression(left, config, stats, optimizer)),
+            optimizer.alloc_expr(Expression::Binary {
+                left: optimize_loops_in_expression(left, config, stats, optimizer),
                 op: *op,
-                right: Box::new(optimize_loops_in_expression(right, config, stats, optimizer)),
+                right: optimize_loops_in_expression(right, config, stats, optimizer),
                 location: location.clone(),
-            }
+            })
         }
         Expression::Unary {
             op,
             operand,
             location,
-        } => Expression::Unary {
+        } => optimizer.alloc_expr(Expression::Unary {
             op: *op,
-            operand: Box::new(optimize_loops_in_expression(operand, config, stats, optimizer)),
+            operand: optimize_loops_in_expression(operand, config, stats, optimizer),
             location: location.clone(),
-        },
+        }),
         Expression::Block {
             statements,
             location,
-        } => Expression::Block {
+        } => optimizer.alloc_expr(Expression::Block {
             statements: optimize_loops_in_statements(statements, config, stats, optimizer),
             location: location.clone(),
-        },
+        }),
         Expression::Closure {
             parameters,
             body,
             location,
-        } => Expression::Closure {
+        } => optimizer.alloc_expr(Expression::Closure {
             parameters: parameters.clone(),
-            body: Box::new(optimize_loops_in_expression(body, config, stats, optimizer)),
+            body: optimize_loops_in_expression(body, config, stats, optimizer),
             location: location.clone(),
-        },
+        }),
         Expression::Index {
             object,
             index,
             location,
-        } => Expression::Index {
-            object: Box::new(optimize_loops_in_expression(object, config, stats, optimizer)),
-            index: Box::new(optimize_loops_in_expression(index, config, stats, optimizer)),
+        } => optimizer.alloc_expr(Expression::Index {
+            object: optimize_loops_in_expression(object, config, stats, optimizer),
+            index: optimize_loops_in_expression(index, config, stats, optimizer),
             location: location.clone(),
-        },
+        }),
         Expression::FieldAccess {
             object,
             field,
             location,
-        } => Expression::FieldAccess {
-            object: Box::new(optimize_loops_in_expression(object, config, stats, optimizer)),
+        } => optimizer.alloc_expr(Expression::FieldAccess {
+            object: optimize_loops_in_expression(object, config, stats, optimizer),
             field: field.clone(),
             location: location.clone(),
-        },
+        }),
         Expression::Cast {
             expr,
             type_,
             location,
-        } => Expression::Cast {
-            expr: Box::new(optimize_loops_in_expression(expr, config, stats, optimizer)),
+        } => optimizer.alloc_expr(Expression::Cast {
+            expr: optimize_loops_in_expression(expr, config, stats, optimizer),
             type_: type_.clone(),
             location: location.clone(),
-        },
+        }),
         Expression::StructLiteral {
             name,
             fields,
             location,
-        } => Expression::StructLiteral {
+        } => optimizer.alloc_expr(Expression::StructLiteral {
             name: name.clone(),
             fields: fields
                 .iter()
                 .map(|(k, v)| (k.clone(), optimize_loops_in_expression(v, config, stats, optimizer)))
                 .collect(),
             location: location.clone(),
-        },
-        Expression::Tuple { elements, location } => Expression::Tuple {
+        }),
+        Expression::Tuple { elements, location } => optimizer.alloc_expr(Expression::Tuple {
             elements: elements
                 .iter()
                 .map(|e| optimize_loops_in_expression(e, config, stats, optimizer))
                 .collect(),
             location: location.clone(),
-        },
+        }),
         Expression::Range {
             start,
             end,
             inclusive,
             location,
-        } => Expression::Range {
-            start: Box::new(optimize_loops_in_expression(start, config, stats, optimizer)),
-            end: Box::new(optimize_loops_in_expression(end, config, stats, optimizer)),
+        } => optimizer.alloc_expr(Expression::Range {
+            start: optimize_loops_in_expression(start, config, stats, optimizer),
+            end: optimize_loops_in_expression(end, config, stats, optimizer),
             inclusive: *inclusive,
             location: location.clone(),
-        },
+        }),
         Expression::ChannelSend {
             channel,
             value,
             location,
-        } => Expression::ChannelSend {
-            channel: Box::new(optimize_loops_in_expression(channel, config, stats, optimizer)),
-            value: Box::new(optimize_loops_in_expression(value, config, stats, optimizer)),
+        } => optimizer.alloc_expr(Expression::ChannelSend {
+            channel: optimize_loops_in_expression(channel, config, stats, optimizer),
+            value: optimize_loops_in_expression(value, config, stats, optimizer),
             location: location.clone(),
-        },
-        Expression::ChannelRecv { channel, location } => Expression::ChannelRecv {
-            channel: Box::new(optimize_loops_in_expression(channel, config, stats, optimizer)),
+        }),
+        Expression::ChannelRecv { channel, location } => optimizer.alloc_expr(Expression::ChannelRecv {
+            channel: optimize_loops_in_expression(channel, config, stats, optimizer),
             location: location.clone(),
-        },
-        Expression::Await { expr, location } => Expression::Await {
-            expr: Box::new(optimize_loops_in_expression(expr, config, stats, optimizer)),
+        }),
+        Expression::Await { expr, location } => optimizer.alloc_expr(Expression::Await {
+            expr: optimize_loops_in_expression(expr, config, stats, optimizer),
             location: location.clone(),
-        },
-        Expression::TryOp { expr, location } => Expression::TryOp {
-            expr: Box::new(optimize_loops_in_expression(expr, config, stats, optimizer)),
+        }),
+        Expression::TryOp { expr, location } => optimizer.alloc_expr(Expression::TryOp {
+            expr: optimize_loops_in_expression(expr, config, stats, optimizer),
             location: location.clone(),
-        },
+        }),
         Expression::MacroInvocation {
             name,
             args,
             delimiter,
             location,
-        } => Expression::MacroInvocation {
+        } => optimizer.alloc_expr(Expression::MacroInvocation {
             name: name.clone(),
             args: args
                 .iter()
                 .map(|a| optimize_loops_in_expression(a, config, stats, optimizer))
                 .collect(),
-            delimiter: delimiter.clone(),
+            delimiter: *delimiter,
             location: location.clone(),
-        },
-        _ => expr.clone(),
+        }),
+        _ => expr,
     }
 }
 
