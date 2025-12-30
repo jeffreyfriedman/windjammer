@@ -380,8 +380,8 @@ fn optimize_loops_in_expression<'ast>(
             function,
             arguments,
             location,
-        } => Expression::Call {
-            function: Box::new(optimize_loops_in_expression(function, config, stats, optimizer)),
+        } => optimizer.alloc_expr(Expression::Call {
+            function: optimize_loops_in_expression(function, config, stats, optimizer),
             arguments: arguments
                 .iter()
                 .map(|(label, arg)| {
@@ -392,15 +392,15 @@ fn optimize_loops_in_expression<'ast>(
                 })
                 .collect(),
             location: location.clone(),
-        },
+        }),
         Expression::MethodCall {
             object,
             method,
             type_args,
             arguments,
             location,
-        } => Expression::MethodCall {
-            object: Box::new(optimize_loops_in_expression(object, config, stats, optimizer)),
+        } => optimizer.alloc_expr(Expression::MethodCall {
+            object: optimize_loops_in_expression(object, config, stats, optimizer),
             method: method.clone(),
             type_args: type_args.clone(),
             arguments: arguments
@@ -413,7 +413,7 @@ fn optimize_loops_in_expression<'ast>(
                 })
                 .collect(),
             location: location.clone(),
-        },
+        }),
         Expression::Binary {
             left,
             op,
