@@ -282,7 +282,7 @@ fn optimize_statements_escape_analysis<'ast>(
 ) -> Vec<&'ast Statement<'ast>> {
     stmts
         .iter()
-        .map(|stmt| optimize_statement_escape_analysis(stmt, escape_info, stats))
+        .map(|stmt| optimize_statement_escape_analysis(stmt, escape_info, stats, optimizer))
         .collect()
 }
 
@@ -328,7 +328,7 @@ fn optimize_statement_escape_analysis<'ast>(
                 pattern: pattern.clone(),
                 mutable: *mutable,
                 type_: type_.clone(),
-                value: optimize_expression_escape_analysis(value, escape_info, stats),
+                value: optimize_expression_escape_analysis(value, escape_info, stats, optimizer),
                 else_block: else_block
                     .as_ref()
                     .map(|stmts| optimize_statements_escape_analysis(stmts, escape_info, stats, optimizer)),
@@ -341,7 +341,7 @@ fn optimize_statement_escape_analysis<'ast>(
             else_block,
             ..
         } => Statement::If {
-            condition: optimize_expression_escape_analysis(condition, escape_info, stats),
+            condition: optimize_expression_escape_analysis(condition, escape_info, stats, optimizer),
             then_block: optimize_statements_escape_analysis(then_block, escape_info, stats, optimizer),
             else_block: else_block
                 .as_ref()
@@ -351,7 +351,7 @@ fn optimize_statement_escape_analysis<'ast>(
         Statement::While {
             condition, body, ..
         } => Statement::While {
-            condition: optimize_expression_escape_analysis(condition, escape_info, stats),
+            condition: optimize_expression_escape_analysis(condition, escape_info, stats, optimizer),
             body: optimize_statements_escape_analysis(body, escape_info, stats, optimizer),
             location: None,
         },
@@ -362,7 +362,7 @@ fn optimize_statement_escape_analysis<'ast>(
             ..
         } => Statement::For {
             pattern: pattern.clone(),
-            iterable: optimize_expression_escape_analysis(iterable, escape_info, stats),
+            iterable: optimize_expression_escape_analysis(iterable, escape_info, stats, optimizer),
             body: optimize_statements_escape_analysis(body, escape_info, stats, optimizer),
             location: None,
         },
