@@ -459,12 +459,12 @@ fn eliminate_dead_code_in_statement<'ast>(
             location,
         } => {
             let new_condition = eliminate_dead_code_in_expression(condition, optimizer);
-            let (new_then, then_stats) = eliminate_dead_code_in_statements(then_block, stats, optimizer);
+            let (new_then, then_stats) = eliminate_dead_code_in_statements(then_block, optimizer);
             stats.unreachable_statements_removed += then_stats.unreachable_statements_removed;
             stats.empty_blocks_removed += then_stats.empty_blocks_removed;
 
             let new_else = if let Some(else_stmts) = else_block {
-                let (new_else_stmts, else_stats) = eliminate_dead_code_in_statements(else_stmts, stats, optimizer);
+                let (new_else_stmts, else_stats) = eliminate_dead_code_in_statements(else_stmts, optimizer);
                 stats.unreachable_statements_removed += else_stats.unreachable_statements_removed;
                 stats.empty_blocks_removed += else_stats.empty_blocks_removed;
                 Some(new_else_stmts)
@@ -485,7 +485,7 @@ fn eliminate_dead_code_in_statement<'ast>(
             location,
         } => {
             let new_condition = eliminate_dead_code_in_expression(condition, optimizer);
-            let (new_body, body_stats) = eliminate_dead_code_in_statements(body, stats, optimizer);
+            let (new_body, body_stats) = eliminate_dead_code_in_statements(body, optimizer);
             stats.unreachable_statements_removed += body_stats.unreachable_statements_removed;
             stats.empty_blocks_removed += body_stats.empty_blocks_removed;
 
@@ -502,7 +502,7 @@ fn eliminate_dead_code_in_statement<'ast>(
             location,
         } => {
             let new_iterable = eliminate_dead_code_in_expression(iterable, optimizer);
-            let (new_body, body_stats) = eliminate_dead_code_in_statements(body, stats, optimizer);
+            let (new_body, body_stats) = eliminate_dead_code_in_statements(body, optimizer);
             stats.unreachable_statements_removed += body_stats.unreachable_statements_removed;
             stats.empty_blocks_removed += body_stats.empty_blocks_removed;
 
@@ -659,7 +659,7 @@ fn eliminate_dead_code_in_expression<'ast>(
             statements,
             location,
         } => {
-            let (new_statements, _) = eliminate_dead_code_in_statements(statements, &mut DeadCodeStats::default(), optimizer);
+            let (new_statements, _) = eliminate_dead_code_in_statements(statements, optimizer);
             optimizer.alloc_expr(Expression::Block {
                 statements: new_statements,
                 location: location.clone(),
