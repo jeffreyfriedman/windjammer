@@ -577,22 +577,22 @@ fn eliminate_dead_code_in_expression<'ast>(
             function,
             arguments,
             location,
-        } => Expression::Call {
-            function: Box::new(eliminate_dead_code_in_expression(function, optimizer)),
+        } => optimizer.alloc_expr(Expression::Call {
+            function: eliminate_dead_code_in_expression(function, optimizer),
             arguments: arguments
                 .iter()
                 .map(|(label, arg)| (label.clone(), eliminate_dead_code_in_expression(arg, optimizer)))
                 .collect(),
             location: location.clone(),
-        },
+        }),
         Expression::MethodCall {
             object,
             method,
             type_args,
             arguments,
             location,
-        } => Expression::MethodCall {
-            object: Box::new(eliminate_dead_code_in_expression(object, optimizer)),
+        } => optimizer.alloc_expr(Expression::MethodCall {
+            object: eliminate_dead_code_in_expression(object, optimizer),
             method: method.clone(),
             type_args: type_args.clone(),
             arguments: arguments
@@ -600,7 +600,7 @@ fn eliminate_dead_code_in_expression<'ast>(
                 .map(|(label, arg)| (label.clone(), eliminate_dead_code_in_expression(arg, optimizer)))
                 .collect(),
             location: location.clone(),
-        },
+        }),
         Expression::Binary {
             left,
             op,
