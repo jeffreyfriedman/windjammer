@@ -465,7 +465,7 @@ fn replace_strings_in_statement<'a, 'ast>(
             value,
             else_block,
             location,
-        } => optimizer.alloc_stmt(Statement::Let {
+        } => optimizer.alloc_stmt(unsafe { std::mem::transmute(Statement::Let {
             pattern: pattern.clone(),
             mutable: *mutable,
             type_: type_.clone(),
@@ -477,7 +477,7 @@ fn replace_strings_in_statement<'a, 'ast>(
                     .collect()
             }),
             location: location.clone(),
-        }),
+        }) }),
         Statement::Const {
             name,
             type_,
@@ -560,7 +560,7 @@ fn replace_strings_in_statement<'a, 'ast>(
             iterable,
             body,
             location,
-        } => optimizer.alloc_stmt(Statement::For {
+        } => optimizer.alloc_stmt(unsafe { std::mem::transmute(Statement::For {
             pattern: pattern.clone(),
             iterable: replace_strings_in_expression(iterable, pool_map, optimizer),
             body: body
@@ -568,7 +568,7 @@ fn replace_strings_in_statement<'a, 'ast>(
                 .map(|stmt| replace_strings_in_statement(stmt, pool_map, optimizer))
                 .collect(),
             location: location.clone(),
-        }),
+        }) }),
         Statement::Match {
             value,
             arms,

@@ -230,12 +230,12 @@ fn optimize_loops_in_statements<'ast>(
                     // Recursively optimize the loop body
                     let final_body = optimize_loops_in_statements(&optimized_body, config, stats, optimizer);
 
-                    result.push(optimizer.alloc_stmt(Statement::For {
+                    result.push(optimizer.alloc_stmt(unsafe { std::mem::transmute(Statement::For {
                         pattern: pattern.clone(),
                         iterable: optimize_loops_in_expression(iterable, config, stats, optimizer),
                         body: final_body,
                         location: location.clone(),
-                    }));
+                    }) }));
                 } else {
                     // For complex patterns (tuples, etc.), just recursively optimize the body
                     let final_body = optimize_loops_in_statements(body, config, stats, optimizer);
@@ -307,7 +307,7 @@ fn optimize_loops_in_statement<'ast>(
             value,
             else_block,
             location,
-        } => optimizer.alloc_stmt(Statement::Let {
+        } => optimizer.alloc_stmt(unsafe { std::mem::transmute(Statement::Let {
             pattern: pattern.clone(),
             mutable: *mutable,
             type_: type_.clone(),
@@ -319,7 +319,7 @@ fn optimize_loops_in_statement<'ast>(
                     .collect()
             }),
             location: location.clone(),
-        }),
+        }) }),
         Statement::Assignment {
             target,
             value,
@@ -532,10 +532,10 @@ fn optimize_loops_in_expression<'ast>(
             expr: optimize_loops_in_expression(expr, config, stats, optimizer),
             location: location.clone(),
         }),
-        Expression::TryOp { expr, location } => optimizer.alloc_expr(Expression::TryOp {
+        Expression::TryOp { expr, location } => optimizer.alloc_expr(unsafe { std::mem::transmute(Expression::TryOp {
             expr: optimize_loops_in_expression(expr, config, stats, optimizer),
             location: location.clone(),
-        }),
+        }) }),
         Expression::MacroInvocation {
             name,
             args,
