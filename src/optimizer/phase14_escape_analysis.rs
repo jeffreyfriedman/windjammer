@@ -131,7 +131,7 @@ fn optimize_function_escape_analysis<'ast>(func: &FunctionDecl<'ast>, optimizer:
 }
 
 /// Optimize an impl block with escape analysis
-fn optimize_impl_escape_analysis(impl_block: &ImplBlock) -> (ImplBlock, EscapeAnalysisStats) {
+fn optimize_impl_escape_analysis<'ast>(impl_block: &ImplBlock<'ast>, optimizer: &crate::optimizer::Optimizer) -> (ImplBlock<'ast>, EscapeAnalysisStats) {
     let mut stats = EscapeAnalysisStats::default();
     let mut new_functions = Vec::new();
 
@@ -287,11 +287,12 @@ fn optimize_statements_escape_analysis<'ast>(
 }
 
 /// Optimize a single statement with escape analysis
-fn optimize_statement_escape_analysis(
-    stmt: &Statement,
+fn optimize_statement_escape_analysis<'ast>(
+    stmt: &'ast Statement<'ast>,
     escape_info: &EscapeInfo,
     stats: &mut EscapeAnalysisStats,
-) -> Statement {
+    optimizer: &crate::optimizer::Optimizer,
+) -> &'ast Statement<'ast> {
     match stmt {
         Statement::Let {
             pattern,
@@ -371,11 +372,12 @@ fn optimize_statement_escape_analysis(
 
 /// Optimize an expression with escape analysis
 #[allow(clippy::only_used_in_recursion)]
-fn optimize_expression_escape_analysis(
-    expr: &Expression,
+fn optimize_expression_escape_analysis<'ast>(
+    expr: &'ast Expression<'ast>,
     escape_info: &EscapeInfo,
     stats: &mut EscapeAnalysisStats,
-) -> Expression {
+    optimizer: &crate::optimizer::Optimizer,
+) -> &'ast Expression<'ast> {
     match expr {
         Expression::Binary {
             left, op, right, ..
