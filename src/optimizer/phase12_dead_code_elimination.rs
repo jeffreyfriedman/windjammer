@@ -529,7 +529,6 @@ fn eliminate_dead_code_in_statement<'ast>(
                     pattern: arm.pattern.clone(),
                     guard: new_guard,
                     body: new_body,
-                    location: arm.location.clone(),
                 });
             }
 
