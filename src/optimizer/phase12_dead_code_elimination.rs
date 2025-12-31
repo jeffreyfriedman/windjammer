@@ -590,7 +590,7 @@ fn eliminate_dead_code_in_expression<'a: 'ast, 'ast>(
             type_args,
             arguments,
             location,
-        } => optimizer.alloc_expr(Expression::MethodCall {
+        } => optimizer.alloc_expr(unsafe { std::mem::transmute(Expression::MethodCall {
             object: eliminate_dead_code_in_expression(object, optimizer),
             method: method.clone(),
             type_args: type_args.clone(),
@@ -599,27 +599,27 @@ fn eliminate_dead_code_in_expression<'a: 'ast, 'ast>(
                 .map(|(label, arg)| (label.clone(), eliminate_dead_code_in_expression(arg, optimizer)))
                 .collect(),
             location: location.clone(),
-        }),
+        }) }),
         Expression::Binary {
             left,
             op,
             right,
             location,
-        } => optimizer.alloc_expr(Expression::Binary {
+        } => optimizer.alloc_expr(unsafe { std::mem::transmute(Expression::Binary {
             left: eliminate_dead_code_in_expression(left, optimizer),
             op: *op,
             right: eliminate_dead_code_in_expression(right, optimizer),
             location: location.clone(),
-        }),
+        }) }),
         Expression::Unary {
             op,
             operand,
             location,
-        } => optimizer.alloc_expr(Expression::Unary {
+        } => optimizer.alloc_expr(unsafe { std::mem::transmute(Expression::Unary {
             op: *op,
             operand: eliminate_dead_code_in_expression(operand, optimizer),
             location: location.clone(),
-        }),
+        }) }),
         Expression::Tuple { elements, location } => optimizer.alloc_expr(Expression::Tuple {
             elements: elements
                 .iter()
@@ -631,20 +631,20 @@ fn eliminate_dead_code_in_expression<'a: 'ast, 'ast>(
             object,
             index,
             location,
-        } => optimizer.alloc_expr(Expression::Index {
+        } => optimizer.alloc_expr(unsafe { std::mem::transmute(Expression::Index {
             object: eliminate_dead_code_in_expression(object, optimizer),
             index: eliminate_dead_code_in_expression(index, optimizer),
             location: location.clone(),
-        }),
+        }) }),
         Expression::FieldAccess {
             object,
             field,
             location,
-        } => optimizer.alloc_expr(Expression::FieldAccess {
+        } => optimizer.alloc_expr(unsafe { std::mem::transmute(Expression::FieldAccess {
             object: eliminate_dead_code_in_expression(object, optimizer),
             field: field.clone(),
             location: location.clone(),
-        }),
+        }) }),
         Expression::Cast {
             expr,
             type_,

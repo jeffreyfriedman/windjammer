@@ -304,30 +304,30 @@ fn replace_strings_in_expression<'a: 'ast, 'ast>(
             op,
             operand,
             location,
-        } => optimizer.alloc_expr(Expression::Unary {
+        } => optimizer.alloc_expr(unsafe { std::mem::transmute(Expression::Unary {
             op: *op,
             operand: replace_strings_in_expression(operand, pool_map, optimizer),
             location: location.clone(),
-        }),
+        }) }),
         Expression::Call {
             function,
             arguments,
             location,
-        } => optimizer.alloc_expr(Expression::Call {
+        } => optimizer.alloc_expr(unsafe { std::mem::transmute(Expression::Call {
             function: replace_strings_in_expression(function, pool_map, optimizer),
             arguments: arguments
                 .iter()
                 .map(|(label, arg)| (label.clone(), replace_strings_in_expression(arg, pool_map, optimizer)))
                 .collect(),
             location: location.clone(),
-        }),
+        }) }),
         Expression::MethodCall {
             object,
             method,
             type_args,
             arguments,
             location,
-        } => optimizer.alloc_expr(Expression::MethodCall {
+        } => optimizer.alloc_expr(unsafe { std::mem::transmute(Expression::MethodCall {
             object: replace_strings_in_expression(object, pool_map, optimizer),
             method: method.clone(),
             type_args: type_args.clone(),
@@ -336,16 +336,16 @@ fn replace_strings_in_expression<'a: 'ast, 'ast>(
                 .map(|(label, arg)| (label.clone(), replace_strings_in_expression(arg, pool_map, optimizer)))
                 .collect(),
             location: location.clone(),
-        }),
+        }) }),
         Expression::FieldAccess {
             object,
             field,
             location,
-        } => optimizer.alloc_expr(Expression::FieldAccess {
+        } => optimizer.alloc_expr(unsafe { std::mem::transmute(Expression::FieldAccess {
             object: replace_strings_in_expression(object, pool_map, optimizer),
             field: field.clone(),
             location: location.clone(),
-        }),
+        }) }),
         Expression::StructLiteral {
             name,
             fields,
@@ -363,12 +363,12 @@ fn replace_strings_in_expression<'a: 'ast, 'ast>(
             end,
             inclusive,
             location,
-        } => optimizer.alloc_expr(Expression::Range {
+        } => optimizer.alloc_expr(unsafe { std::mem::transmute(Expression::Range {
             start: replace_strings_in_expression(start, pool_map, optimizer),
             end: replace_strings_in_expression(end, pool_map, optimizer),
             inclusive: *inclusive,
             location: location.clone(),
-        }),
+        }) }),
         Expression::Closure {
             parameters,
             body,
@@ -509,10 +509,10 @@ fn replace_strings_in_statement<'a: 'ast, 'ast>(
         Statement::Return {
             value: Some(expr),
             location,
-        } => optimizer.alloc_stmt(Statement::Return {
+        } => optimizer.alloc_stmt(unsafe { std::mem::transmute(Statement::Return {
             value: Some(replace_strings_in_expression(expr, pool_map, optimizer)),
             location: location.clone(),
-        }),
+        }) }),
         Statement::Assignment {
             target,
             value,
