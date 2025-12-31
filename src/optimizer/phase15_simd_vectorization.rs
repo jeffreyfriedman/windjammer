@@ -102,7 +102,7 @@ pub fn optimize_simd_vectorization<'ast>(program: &Program<'ast>, optimizer: &cr
     for item in &program.items {
         let new_item = match item {
             Item::Function { decl: func, .. } => {
-                let (new_func, func_stats) = optimize_function_simd(func);
+                let (new_func, func_stats) = optimize_function_simd(func, optimizer);
                 stats.add(&func_stats);
                 Item::Function {
                     decl: new_func,
@@ -112,7 +112,7 @@ pub fn optimize_simd_vectorization<'ast>(program: &Program<'ast>, optimizer: &cr
             Item::Impl {
                 block: impl_block, ..
             } => {
-                let (new_impl, impl_stats) = optimize_impl_simd(impl_block);
+                let (new_impl, impl_stats) = optimize_impl_simd(impl_block, optimizer);
                 stats.add(&impl_stats);
                 Item::Impl {
                     block: new_impl,
@@ -128,7 +128,7 @@ pub fn optimize_simd_vectorization<'ast>(program: &Program<'ast>, optimizer: &cr
 }
 
 /// Optimize a function with SIMD vectorization
-fn optimize_function_simd(func: &FunctionDecl) -> (FunctionDecl, SimdStats) {
+fn optimize_function_simd<'ast>(func: &FunctionDecl<'ast>, optimizer: &crate::optimizer::Optimizer) -> (FunctionDecl<'ast>, SimdStats) {
     let mut stats = SimdStats::default();
     let new_body = optimize_statements_simd(&func.body, &mut stats, optimizer);
 
@@ -142,12 +142,12 @@ fn optimize_function_simd(func: &FunctionDecl) -> (FunctionDecl, SimdStats) {
 }
 
 /// Optimize an impl block with SIMD vectorization
-fn optimize_impl_simd(impl_block: &ImplBlock) -> (ImplBlock, SimdStats) {
+fn optimize_impl_simd<'ast>(impl_block: &ImplBlock<'ast>, optimizer: &crate::optimizer::Optimizer) -> (ImplBlock<'ast>, SimdStats) {
     let mut stats = SimdStats::default();
     let mut new_functions = Vec::new();
 
     for func in &impl_block.functions {
-        let (new_func, func_stats) = optimize_function_simd(func);
+        let (new_func, func_stats) = optimize_function_simd(func, optimizer);
         stats.add(&func_stats);
         new_functions.push(new_func);
     }
