@@ -119,7 +119,7 @@ fn optimize_function_escape_analysis<'ast>(func: &FunctionDecl<'ast>, optimizer:
     let escape_info = analyze_escapes(&func.body, &func.parameters);
 
     // Transform statements based on escape info
-    let new_body = optimize_statements_escape_analysis(&func.body, &escape_info, optimize_statements_escape_analysis(&func.body, &escape_info, &mut stats)mut stats, optimizer);
+    let new_body = optimize_statements_escape_analysis(&func.body, &escape_info, &mut stats, optimizer);
 
     (
         FunctionDecl {
@@ -373,7 +373,7 @@ fn optimize_statement_escape_analysis<'a, 'ast>(
 
 /// Optimize an expression with escape analysis
 #[allow(clippy::only_used_in_recursion)]
-fn optimize_expression_escape_analysis<'a, 'ast>(
+fn optimize_expression_escape_analysis<'a: 'ast, 'ast>(
     expr: &'a Expression<'a>,
     escape_info: &EscapeInfo,
     stats: &mut EscapeAnalysisStats,
@@ -398,7 +398,7 @@ fn optimize_expression_escape_analysis<'a, 'ast>(
             ),
             location: None,
         }),
-        Expression::Unary { op, operand, .. } => optimizer.alloc_expr(Expression::Unary {
+        Expression::Unary { op, operand, .. } => optimizer.alloc_expr(unsafe { std::mem::transmute(Expression::Unary {
             op: *op,
             operand: optimize_expression_escape_analysis(
                 operand,
@@ -407,7 +407,7 @@ fn optimize_expression_escape_analysis<'a, 'ast>(
                 optimizer,
             ),
             location: None,
-        }),
+        }) }),
         _ => expr,
     }
 }

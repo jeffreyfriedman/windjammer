@@ -198,7 +198,7 @@ fn optimize_statements_simd<'ast>(stmts: &[&'ast Statement<'ast>], stats: &mut S
 }
 
 /// Optimize a single statement with SIMD vectorization
-fn optimize_statement_simd<'a, 'ast>(stmt: &'a Statement<'a>, stats: &mut SimdStats, optimizer: &crate::optimizer::Optimizer) -> &'ast Statement<'ast> {
+fn optimize_statement_simd<'a: 'ast, 'ast>(stmt: &'a Statement<'a>, stats: &mut SimdStats, optimizer: &crate::optimizer::Optimizer) -> &'ast Statement<'ast> {
     match stmt {
         Statement::For {
             pattern,
@@ -242,22 +242,22 @@ fn optimize_statement_simd<'a, 'ast>(stmt: &'a Statement<'a>, stats: &mut SimdSt
             then_block,
             else_block,
             ..
-        } => Statement::If {
+        } => optimizer.alloc_stmt(unsafe { std::mem::transmute(Statement::If {
             condition: condition.clone(),
             then_block: optimize_statements_simd(then_block, stats, optimizer),
             else_block: else_block
                 .as_ref()
                 .map(|stmts| optimize_statements_simd(stmts, stats, optimizer)),
             location: None,
-        },
+        }) }),
         Statement::While {
             condition, body, ..
-        } => Statement::While {
+        } => optimizer.alloc_stmt(unsafe { std::mem::transmute(Statement::While {
             condition: condition.clone(),
             body: optimize_statements_simd(body, stats, optimizer),
             location: None,
-        },
-        _ => stmt.clone(),
+        }) }),
+        _ => stmt,
     }
 }
 
