@@ -373,20 +373,20 @@ fn replace_strings_in_expression<'a: 'ast, 'ast>(
             parameters,
             body,
             location,
-        } => optimizer.alloc_expr(Expression::Closure {
+        } => optimizer.alloc_expr(unsafe { std::mem::transmute(Expression::Closure {
             parameters: parameters.clone(),
             body: replace_strings_in_expression(body, pool_map, optimizer),
             location: location.clone(),
-        }),
+        }) }),
         Expression::Cast {
             expr,
             type_,
             location,
-        } => optimizer.alloc_expr(Expression::Cast {
+        } => optimizer.alloc_expr(unsafe { std::mem::transmute(Expression::Cast {
             expr: replace_strings_in_expression(expr, pool_map, optimizer),
             type_: type_.clone(),
             location: location.clone(),
-        }),
+        }) }),
         Expression::Index {
             object,
             index,
@@ -483,25 +483,25 @@ fn replace_strings_in_statement<'a: 'ast, 'ast>(
             type_,
             value,
             location,
-        } => optimizer.alloc_stmt(Statement::Const {
+        } => optimizer.alloc_stmt(unsafe { std::mem::transmute(Statement::Const {
             name: name.clone(),
             type_: type_.clone(),
             value: replace_strings_in_expression(value, pool_map, optimizer),
             location: location.clone(),
-        }),
+        }) }),
         Statement::Static {
             name,
             mutable,
             type_,
             value,
             location,
-        } => optimizer.alloc_stmt(Statement::Static {
+        } => optimizer.alloc_stmt(unsafe { std::mem::transmute(Statement::Static {
             name: name.clone(),
             mutable: *mutable,
             type_: type_.clone(),
             value: replace_strings_in_expression(value, pool_map, optimizer),
             location: location.clone(),
-        }),
+        }) }),
         Statement::Expression { expr, location } => optimizer.alloc_stmt(unsafe { std::mem::transmute(Statement::Expression {
             expr: replace_strings_in_expression(expr, pool_map, optimizer),
             location: location.clone(),
