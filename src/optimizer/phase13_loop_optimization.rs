@@ -71,7 +71,7 @@ pub fn optimize_loops<'ast>(program: &Program<'ast>, optimizer: &crate::optimize
 
 /// Optimize loops with custom configuration
 pub fn optimize_loops_with_config<'ast>(
-    program: &'ast Program<'ast>,
+    program: &Program<'ast>,
     config: &LoopOptimizationConfig,
     optimizer: &crate::optimizer::Optimizer,
 ) -> (Program<'ast>, LoopOptimizationStats) {
@@ -83,7 +83,7 @@ pub fn optimize_loops_with_config<'ast>(
         .map(|item| optimize_loops_in_item(item, config, &mut stats, optimizer))
         .collect();
 
-    (Program { items: new_items }, stats)
+    (unsafe { std::mem::transmute(Program { items: new_items }) }, stats)
 }
 
 /// Optimize loops in a single item
@@ -282,17 +282,17 @@ fn optimize_loops_in_statements<'ast>(
 }
 
 /// Optimize loops in a single statement
-fn optimize_loops_in_statement<'a, 'ast>(
+fn optimize_loops_in_statement<'a: 'ast, 'ast>(
     stmt: &'a Statement<'a>,
     config: &LoopOptimizationConfig,
     stats: &mut LoopOptimizationStats,
     optimizer: &crate::optimizer::Optimizer,
 )-> &'ast Statement<'ast> {
     match stmt {
-        Statement::Expression { expr, location } => optimizer.alloc_stmt(Statement::Expression {
+        Statement::Expression { expr, location } => optimizer.alloc_stmt(unsafe { std::mem::transmute(Statement::Expression {
             expr: optimize_loops_in_expression(expr, config, stats, optimizer),
             location: location.clone(),
-        }),
+        }) }),
         Statement::Return {
             value: Some(expr),
             location,
@@ -368,7 +368,7 @@ fn optimize_loops_in_statement<'a, 'ast>(
 }
 
 /// Optimize loops in an expression
-fn optimize_loops_in_expression<'a, 'ast>(
+fn optimize_loops_in_expression<'a: 'ast, 'ast>(
     expr: &'a Expression<'a>,
     config: &LoopOptimizationConfig,
     stats: &mut LoopOptimizationStats,
@@ -509,12 +509,12 @@ fn optimize_loops_in_expression<'a, 'ast>(
             end,
             inclusive,
             location,
-        } => optimizer.alloc_expr(Expression::Range {
+        } => optimizer.alloc_expr(unsafe { std::mem::transmute(Expression::Range {
             start: optimize_loops_in_expression(start, config, stats, optimizer),
             end: optimize_loops_in_expression(end, config, stats, optimizer),
             inclusive: *inclusive,
             location: location.clone(),
-        }),
+        }) }),
         Expression::ChannelSend {
             channel,
             value,

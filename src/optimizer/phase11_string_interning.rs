@@ -269,7 +269,7 @@ fn create_pool_map(pool: &[StringPoolEntry]) -> HashMap<String, String> {
 }
 
 /// Replace string literals in an expression with pool references
-fn replace_strings_in_expression<'a, 'ast>(
+fn replace_strings_in_expression<'a: 'ast, 'ast>(
     expr: &'a Expression<'a>,
     pool_map: &HashMap<String, String>,
     optimizer: &crate::optimizer::Optimizer,
@@ -434,10 +434,10 @@ fn replace_strings_in_expression<'a, 'ast>(
             value: replace_strings_in_expression(value, pool_map, optimizer),
             location: location.clone(),
         }),
-        Expression::ChannelRecv { channel, location } => optimizer.alloc_expr(Expression::ChannelRecv {
+        Expression::ChannelRecv { channel, location } => optimizer.alloc_expr(unsafe { std::mem::transmute(Expression::ChannelRecv {
             channel: replace_strings_in_expression(channel, pool_map, optimizer),
             location: location.clone(),
-        }),
+        }) }),
         Expression::Block {
             statements,
             location,
@@ -453,7 +453,7 @@ fn replace_strings_in_expression<'a, 'ast>(
 }
 
 /// Replace string literals in a statement with pool references
-fn replace_strings_in_statement<'a, 'ast>(
+fn replace_strings_in_statement<'a: 'ast, 'ast>(
     stmt: &'a Statement<'a>,
     pool_map: &HashMap<String, String>,
     optimizer: &crate::optimizer::Optimizer) -> &'ast Statement<'ast> {
@@ -573,7 +573,7 @@ fn replace_strings_in_statement<'a, 'ast>(
             value,
             arms,
             location,
-        } => optimizer.alloc_stmt(Statement::Match {
+        } => optimizer.alloc_stmt(unsafe { std::mem::transmute(Statement::Match {
             value: replace_strings_in_expression(value, pool_map, optimizer),
             arms: arms
                 .iter()
@@ -586,7 +586,7 @@ fn replace_strings_in_statement<'a, 'ast>(
                 })
                 .collect(),
             location: location.clone(),
-        }),
+        }) }),
         other => stmt, // Return as-is for other statement types
     }
 }
