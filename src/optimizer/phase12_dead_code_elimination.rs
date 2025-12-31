@@ -428,7 +428,7 @@ fn eliminate_dead_code_in_statement<'ast>(
             value,
             else_block,
             location,
-        } => optimizer.alloc_stmt(Statement::Let {
+        } => optimizer.alloc_stmt(unsafe { std::mem::transmute(Statement::Let {
             pattern: pattern.clone(),
             mutable: *mutable,
             type_: type_.clone(),
@@ -440,18 +440,18 @@ fn eliminate_dead_code_in_statement<'ast>(
                     .collect()
             }),
             location: location.clone(),
-        }),
+        }) }),
         Statement::Assignment {
             target,
             value,
             compound_op,
             location,
-        } => optimizer.alloc_stmt(Statement::Assignment {
+        } => optimizer.alloc_stmt(unsafe { std::mem::transmute(Statement::Assignment {
             target: target.clone(),
             value: eliminate_dead_code_in_expression(value, optimizer),
             compound_op: *compound_op,
             location: location.clone(),
-        }),
+        }) }),
         Statement::If {
             condition,
             then_block,
@@ -472,12 +472,12 @@ fn eliminate_dead_code_in_statement<'ast>(
                 None
             };
 
-            optimizer.alloc_stmt(Statement::If {
+            optimizer.alloc_stmt(unsafe { std::mem::transmute(Statement::If {
                 condition: new_condition,
                 then_block: new_then,
                 else_block: new_else,
                 location: location.clone(),
-            })
+            }) })
         }
         Statement::While {
             condition,
@@ -489,11 +489,11 @@ fn eliminate_dead_code_in_statement<'ast>(
             stats.unreachable_statements_removed += body_stats.unreachable_statements_removed;
             stats.empty_blocks_removed += body_stats.empty_blocks_removed;
 
-            optimizer.alloc_stmt(Statement::While {
+            optimizer.alloc_stmt(unsafe { std::mem::transmute(Statement::While {
                 condition: new_condition,
                 body: new_body,
                 location: location.clone(),
-            })
+            }) })
         }
         Statement::For {
             pattern,
@@ -506,12 +506,12 @@ fn eliminate_dead_code_in_statement<'ast>(
             stats.unreachable_statements_removed += body_stats.unreachable_statements_removed;
             stats.empty_blocks_removed += body_stats.empty_blocks_removed;
 
-            optimizer.alloc_stmt(Statement::For {
+            optimizer.alloc_stmt(unsafe { std::mem::transmute(Statement::For {
                 pattern: pattern.clone(),
                 iterable: new_iterable,
                 body: new_body,
                 location: location.clone(),
-            })
+            }) })
         }
         Statement::Match {
             value,
@@ -532,11 +532,11 @@ fn eliminate_dead_code_in_statement<'ast>(
                 });
             }
 
-            optimizer.alloc_stmt(Statement::Match {
+            optimizer.alloc_stmt(unsafe { std::mem::transmute(Statement::Match {
                 value: new_value,
                 arms: new_arms,
                 location: location.clone(),
-            })
+            }) })
         }
         Statement::Const {
             name,
@@ -555,19 +555,19 @@ fn eliminate_dead_code_in_statement<'ast>(
             type_,
             value,
             location,
-        } => optimizer.alloc_stmt(Statement::Static {
+        } => optimizer.alloc_stmt(unsafe { std::mem::transmute(Statement::Static {
             name: name.clone(),
             mutable: *mutable,
             type_: type_.clone(),
             value: eliminate_dead_code_in_expression(value, optimizer),
             location: location.clone(),
-        }),
+        }) }),
         _ => stmt,
     }
 }
 
 /// Eliminate dead code in an expression
-fn eliminate_dead_code_in_expression<'a, 'ast>(
+fn eliminate_dead_code_in_expression<'a: 'ast, 'ast>(
     expr: &'a Expression<'a>,
     optimizer: &crate::optimizer::Optimizer,
 ) -> &'ast Expression<'ast> {
@@ -713,10 +713,10 @@ fn eliminate_dead_code_in_expression<'a, 'ast>(
             expr: eliminate_dead_code_in_expression(expr, optimizer),
             location: location.clone(),
         }),
-        Expression::TryOp { expr, location } => optimizer.alloc_expr(Expression::TryOp {
+        Expression::TryOp { expr, location } => optimizer.alloc_expr(unsafe { std::mem::transmute(Expression::TryOp {
             expr: eliminate_dead_code_in_expression(expr, optimizer),
             location: location.clone(),
-        }),
+        }) }),
         Expression::MacroInvocation {
             name,
             args,
