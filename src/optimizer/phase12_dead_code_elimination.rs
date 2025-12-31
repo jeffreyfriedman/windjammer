@@ -649,11 +649,11 @@ fn eliminate_dead_code_in_expression<'a: 'ast, 'ast>(
             expr,
             type_,
             location,
-        } => optimizer.alloc_expr(Expression::Cast {
+        } => optimizer.alloc_expr(unsafe { std::mem::transmute(Expression::Cast {
             expr: eliminate_dead_code_in_expression(expr, optimizer),
             type_: type_.clone(),
             location: location.clone(),
-        }),
+        }) }),
         Expression::Block {
             statements,
             location,
@@ -668,11 +668,11 @@ fn eliminate_dead_code_in_expression<'a: 'ast, 'ast>(
             parameters,
             body,
             location,
-        } => optimizer.alloc_expr(Expression::Closure {
+        } => optimizer.alloc_expr(unsafe { std::mem::transmute(Expression::Closure {
             parameters: parameters.clone(),
             body: eliminate_dead_code_in_expression(body, optimizer),
             location: location.clone(),
-        }),
+        }) }),
         Expression::StructLiteral {
             name,
             fields,
