@@ -291,7 +291,7 @@ fn analyze_loop_vectorizability<'ast>(
 }
 
 /// Classify what type of vector operation the loop performs
-fn classify_loop_operation(variable: &str, body: &[Statement]) -> VectorOperation {
+fn classify_loop_operation<'ast>(variable: &str, body: &[&'ast Statement<'ast>]) -> VectorOperation {
     // Simple heuristic: look for common patterns
     for stmt in body {
         match stmt {
@@ -315,7 +315,7 @@ fn classify_loop_operation(variable: &str, body: &[Statement]) -> VectorOperatio
 }
 
 /// Check if vectorization is safe (no loop-carried dependencies, function calls, etc.)
-fn check_vectorization_safety(body: &[Statement]) -> bool {
+fn check_vectorization_safety<'ast>(body: &[&'ast Statement<'ast>]) -> bool {
     // For safety, we'll be conservative and only vectorize simple loops
     // No function calls, no control flow, no early returns
     for stmt in body {
