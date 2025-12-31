@@ -420,12 +420,12 @@ fn try_optimize_vec_to_smallvec<'ast>(expr: &'ast Expression<'ast>, optimizer: &
             if args.len() < 8 && !args.is_empty() {
                 // Transform vec![...] to smallvec![...]
                 // This is a marker that codegen will handle
-                return Some(Expression::MacroInvocation {
+                return Some(optimizer.alloc_expr(unsafe { std::mem::transmute(Expression::MacroInvocation {
                     name: "smallvec".to_string(),
                     args: args.clone(),
                     delimiter: MacroDelimiter::Brackets,
                     location: None,
-                });
+                }) }));
             }
         }
         _ => {}
