@@ -382,7 +382,7 @@ fn optimize_expression_escape_analysis<'a: 'ast, 'ast>(
     match expr {
         Expression::Binary {
             left, op, right, ..
-        } => optimizer.alloc_expr(Expression::Binary {
+        } => optimizer.alloc_expr(unsafe { std::mem::transmute(Expression::Binary {
             left: optimize_expression_escape_analysis(
                 left,
                 escape_info,
@@ -397,7 +397,7 @@ fn optimize_expression_escape_analysis<'a: 'ast, 'ast>(
                 optimizer,
             ),
             location: None,
-        }),
+        }) }),
         Expression::Unary { op, operand, .. } => optimizer.alloc_expr(unsafe { std::mem::transmute(Expression::Unary {
             op: *op,
             operand: optimize_expression_escape_analysis(

@@ -296,10 +296,10 @@ fn optimize_loops_in_statement<'a: 'ast, 'ast>(
         Statement::Return {
             value: Some(expr),
             location,
-        } => optimizer.alloc_stmt(Statement::Return {
+        } => optimizer.alloc_stmt(unsafe { std::mem::transmute(Statement::Return {
             value: Some(optimize_loops_in_expression(expr, config, stats, optimizer)),
             location: location.clone(),
-        }),
+        }) }),
         Statement::Let {
             pattern,
             mutable,
@@ -471,20 +471,20 @@ fn optimize_loops_in_expression<'a: 'ast, 'ast>(
             object,
             field,
             location,
-        } => optimizer.alloc_expr(Expression::FieldAccess {
+        } => optimizer.alloc_expr(unsafe { std::mem::transmute(Expression::FieldAccess {
             object: optimize_loops_in_expression(object, config, stats, optimizer),
             field: field.clone(),
             location: location.clone(),
-        }),
+        }) }),
         Expression::Cast {
             expr,
             type_,
             location,
-        } => optimizer.alloc_expr(Expression::Cast {
+        } => optimizer.alloc_expr(unsafe { std::mem::transmute(Expression::Cast {
             expr: optimize_loops_in_expression(expr, config, stats, optimizer),
             type_: type_.clone(),
             location: location.clone(),
-        }),
+        }) }),
         Expression::StructLiteral {
             name,
             fields,
