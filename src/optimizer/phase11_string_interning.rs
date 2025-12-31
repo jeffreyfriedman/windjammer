@@ -421,19 +421,19 @@ fn replace_strings_in_expression<'a: 'ast, 'ast>(
             expr: replace_strings_in_expression(expr, pool_map, optimizer),
             location: location.clone(),
         }),
-        Expression::Await { expr, location } => optimizer.alloc_expr(Expression::Await {
+        Expression::Await { expr, location } => optimizer.alloc_expr(unsafe { std::mem::transmute(Expression::Await {
             expr: replace_strings_in_expression(expr, pool_map, optimizer),
             location: location.clone(),
-        }),
+        }) }),
         Expression::ChannelSend {
             channel,
             value,
             location,
-        } => optimizer.alloc_expr(Expression::ChannelSend {
+        } => optimizer.alloc_expr(unsafe { std::mem::transmute(Expression::ChannelSend {
             channel: replace_strings_in_expression(channel, pool_map, optimizer),
             value: replace_strings_in_expression(value, pool_map, optimizer),
             location: location.clone(),
-        }),
+        }) }),
         Expression::ChannelRecv { channel, location } => optimizer.alloc_expr(unsafe { std::mem::transmute(Expression::ChannelRecv {
             channel: replace_strings_in_expression(channel, pool_map, optimizer),
             location: location.clone(),
@@ -529,7 +529,7 @@ fn replace_strings_in_statement<'a: 'ast, 'ast>(
             then_block,
             else_block,
             location,
-        } => optimizer.alloc_stmt(Statement::If {
+        } => optimizer.alloc_stmt(unsafe { std::mem::transmute(Statement::If {
             condition: replace_strings_in_expression(condition, pool_map, optimizer),
             then_block: then_block
                 .iter()
@@ -542,19 +542,19 @@ fn replace_strings_in_statement<'a: 'ast, 'ast>(
                     .collect()
             }),
             location: location.clone(),
-        }),
+        }) }),
         Statement::While {
             condition,
             body,
             location,
-        } => optimizer.alloc_stmt(Statement::While {
+        } => optimizer.alloc_stmt(unsafe { std::mem::transmute(Statement::While {
             condition: replace_strings_in_expression(condition, pool_map, optimizer),
             body: body
                 .iter()
                 .map(|stmt| replace_strings_in_statement(stmt, pool_map, optimizer))
                 .collect(),
             location: location.clone(),
-        }),
+        }) }),
         Statement::For {
             pattern,
             iterable,
