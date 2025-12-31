@@ -379,7 +379,7 @@ fn optimize_loops_in_expression<'a: 'ast, 'ast>(
             function,
             arguments,
             location,
-        } => optimizer.alloc_expr(Expression::Call {
+        } => optimizer.alloc_expr(unsafe { std::mem::transmute(Expression::Call {
             function: optimize_loops_in_expression(function, config, stats, optimizer),
             arguments: arguments
                 .iter()
@@ -391,14 +391,14 @@ fn optimize_loops_in_expression<'a: 'ast, 'ast>(
                 })
                 .collect(),
             location: location.clone(),
-        }),
+        }) }),
         Expression::MethodCall {
             object,
             method,
             type_args,
             arguments,
             location,
-        } => optimizer.alloc_expr(Expression::MethodCall {
+        } => optimizer.alloc_expr(unsafe { std::mem::transmute(Expression::MethodCall {
             object: optimize_loops_in_expression(object, config, stats, optimizer),
             method: method.clone(),
             type_args: type_args.clone(),
@@ -412,7 +412,7 @@ fn optimize_loops_in_expression<'a: 'ast, 'ast>(
                 })
                 .collect(),
             location: location.clone(),
-        }),
+        }) }),
         Expression::Binary {
             left,
             op,
@@ -497,13 +497,13 @@ fn optimize_loops_in_expression<'a: 'ast, 'ast>(
                 .collect(),
             location: location.clone(),
         }),
-        Expression::Tuple { elements, location } => optimizer.alloc_expr(Expression::Tuple {
+        Expression::Tuple { elements, location } => optimizer.alloc_expr(unsafe { std::mem::transmute(Expression::Tuple {
             elements: elements
                 .iter()
                 .map(|e| optimize_loops_in_expression(e, config, stats, optimizer))
                 .collect(),
             location: location.clone(),
-        }),
+        }) }),
         Expression::Range {
             start,
             end,
@@ -541,7 +541,7 @@ fn optimize_loops_in_expression<'a: 'ast, 'ast>(
             args,
             delimiter,
             location,
-        } => optimizer.alloc_expr(Expression::MacroInvocation {
+        } => optimizer.alloc_expr(unsafe { std::mem::transmute(Expression::MacroInvocation {
             name: name.clone(),
             args: args
                 .iter()
@@ -549,7 +549,7 @@ fn optimize_loops_in_expression<'a: 'ast, 'ast>(
                 .collect(),
             delimiter: *delimiter,
             location: location.clone(),
-        }),
+        }) }),
         _ => expr,
     }
 }
