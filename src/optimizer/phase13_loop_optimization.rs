@@ -426,22 +426,22 @@ fn optimize_loops_in_expression<'a: 'ast, 'ast>(
                 }
             }
 
-            optimizer.alloc_expr(Expression::Binary {
+            optimizer.alloc_expr(unsafe { std::mem::transmute(Expression::Binary {
                 left: optimize_loops_in_expression(left, config, stats, optimizer),
                 op: *op,
                 right: optimize_loops_in_expression(right, config, stats, optimizer),
                 location: location.clone(),
-            })
+            }) })
         }
         Expression::Unary {
             op,
             operand,
             location,
-        } => optimizer.alloc_expr(Expression::Unary {
+        } => optimizer.alloc_expr(unsafe { std::mem::transmute(Expression::Unary {
             op: *op,
             operand: optimize_loops_in_expression(operand, config, stats, optimizer),
             location: location.clone(),
-        }),
+        }) }),
         Expression::Block {
             statements,
             location,
