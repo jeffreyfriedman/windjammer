@@ -391,11 +391,11 @@ fn replace_strings_in_expression<'a: 'ast, 'ast>(
             object,
             index,
             location,
-        } => optimizer.alloc_expr(Expression::Index {
+        } => optimizer.alloc_expr(unsafe { std::mem::transmute(Expression::Index {
             object: replace_strings_in_expression(object, pool_map, optimizer),
             index: replace_strings_in_expression(index, pool_map, optimizer),
             location: location.clone(),
-        }),
+        }) }),
         Expression::Tuple { elements, location } => optimizer.alloc_expr(Expression::Tuple {
             elements: elements
                 .iter()
@@ -417,10 +417,10 @@ fn replace_strings_in_expression<'a: 'ast, 'ast>(
             delimiter: *delimiter,
             location: location.clone(),
         }),
-        Expression::TryOp { expr, location } => optimizer.alloc_expr(Expression::TryOp {
+        Expression::TryOp { expr, location } => optimizer.alloc_expr(unsafe { std::mem::transmute(Expression::TryOp {
             expr: replace_strings_in_expression(expr, pool_map, optimizer),
             location: location.clone(),
-        }),
+        }) }),
         Expression::Await { expr, location } => optimizer.alloc_expr(unsafe { std::mem::transmute(Expression::Await {
             expr: replace_strings_in_expression(expr, pool_map, optimizer),
             location: location.clone(),
@@ -502,10 +502,10 @@ fn replace_strings_in_statement<'a: 'ast, 'ast>(
             value: replace_strings_in_expression(value, pool_map, optimizer),
             location: location.clone(),
         }),
-        Statement::Expression { expr, location } => optimizer.alloc_stmt(Statement::Expression {
+        Statement::Expression { expr, location } => optimizer.alloc_stmt(unsafe { std::mem::transmute(Statement::Expression {
             expr: replace_strings_in_expression(expr, pool_map, optimizer),
             location: location.clone(),
-        }),
+        }) }),
         Statement::Return {
             value: Some(expr),
             location,
@@ -518,12 +518,12 @@ fn replace_strings_in_statement<'a: 'ast, 'ast>(
             value,
             compound_op,
             location,
-        } => optimizer.alloc_stmt(Statement::Assignment {
+        } => optimizer.alloc_stmt(unsafe { std::mem::transmute(Statement::Assignment {
             target: replace_strings_in_expression(target, pool_map, optimizer),
             value: replace_strings_in_expression(value, pool_map, optimizer),
             compound_op: *compound_op,
             location: location.clone(),
-        }),
+        }) }),
         Statement::If {
             condition,
             then_block,
