@@ -230,12 +230,12 @@ fn optimize_statement_simd<'a, 'ast>(stmt: &'a Statement<'a>, stats: &mut SimdSt
             }
 
             // Not vectorizable, recurse into body
-            Statement::For {
+            optimizer.alloc_stmt(unsafe { std::mem::transmute(Statement::For {
                 pattern: pattern.clone(),
                 iterable: iterable.clone(),
                 body: optimize_statements_simd(body, stats, optimizer),
                 location: None,
-            }
+            }) })
         }
         Statement::If {
             condition,
@@ -377,12 +377,12 @@ fn create_vectorized_loop<'ast>(
     // In the real implementation, codegen would recognize vectorizable patterns
     // and generate SIMD code. For now, we just preserve the loop structure
     // and track it in stats.
-    Statement::For {
+    optimizer.alloc_stmt(unsafe { std::mem::transmute(Statement::For {
         pattern: Pattern::Identifier(variable.to_string()),
-        iterable: iterable.clone(),
+        iterable: iterable,
         body: body.to_vec(),
         location: None,
-    }
+    }) })
 }
 
 #[cfg(test)]
