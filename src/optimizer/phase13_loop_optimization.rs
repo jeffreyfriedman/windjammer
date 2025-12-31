@@ -453,20 +453,20 @@ fn optimize_loops_in_expression<'a: 'ast, 'ast>(
             parameters,
             body,
             location,
-        } => optimizer.alloc_expr(Expression::Closure {
+        } => optimizer.alloc_expr(unsafe { std::mem::transmute(Expression::Closure {
             parameters: parameters.clone(),
             body: optimize_loops_in_expression(body, config, stats, optimizer),
             location: location.clone(),
-        }),
+        }) }),
         Expression::Index {
             object,
             index,
             location,
-        } => optimizer.alloc_expr(Expression::Index {
+        } => optimizer.alloc_expr(unsafe { std::mem::transmute(Expression::Index {
             object: optimize_loops_in_expression(object, config, stats, optimizer),
             index: optimize_loops_in_expression(index, config, stats, optimizer),
             location: location.clone(),
-        }),
+        }) }),
         Expression::FieldAccess {
             object,
             field,

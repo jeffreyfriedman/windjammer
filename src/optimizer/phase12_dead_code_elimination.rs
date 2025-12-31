@@ -410,10 +410,10 @@ fn eliminate_dead_code_in_statement<'ast>(
         Statement::Return {
             value: Some(expr),
             location,
-        } => optimizer.alloc_stmt(Statement::Return {
+        } => optimizer.alloc_stmt(unsafe { std::mem::transmute(Statement::Return {
             value: Some(eliminate_dead_code_in_expression(expr, optimizer)),
             location: location.clone(),
-        }),
+        }) }),
         Statement::Return {
             value: None,
             location,
@@ -690,21 +690,21 @@ fn eliminate_dead_code_in_expression<'a: 'ast, 'ast>(
             end,
             inclusive,
             location,
-        } => optimizer.alloc_expr(Expression::Range {
+        } => optimizer.alloc_expr(unsafe { std::mem::transmute(Expression::Range {
             start: eliminate_dead_code_in_expression(start, optimizer),
             end: eliminate_dead_code_in_expression(end, optimizer),
             inclusive: *inclusive,
             location: location.clone(),
-        }),
+        }) }),
         Expression::ChannelSend {
             channel,
             value,
             location,
-        } => optimizer.alloc_expr(Expression::ChannelSend {
+        } => optimizer.alloc_expr(unsafe { std::mem::transmute(Expression::ChannelSend {
             channel: eliminate_dead_code_in_expression(channel, optimizer),
             value: eliminate_dead_code_in_expression(value, optimizer),
             location: location.clone(),
-        }),
+        }) }),
         Expression::ChannelRecv { channel, location } => optimizer.alloc_expr(unsafe { std::mem::transmute(Expression::ChannelRecv {
             channel: eliminate_dead_code_in_expression(channel, optimizer),
             location: location.clone(),
