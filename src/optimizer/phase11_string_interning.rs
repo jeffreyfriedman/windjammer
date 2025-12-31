@@ -650,8 +650,12 @@ fn replace_strings_in_item<'ast>(
                 .collect();
             Item::Impl {
                 block: ImplBlock {
-                    trait_name: block.trait_name.clone(),
                     type_name: block.type_name.clone(),
+                    type_params: block.type_params.clone(),
+                    where_clause: block.where_clause.clone(),
+                    trait_name: block.trait_name.clone(),
+                    trait_type_args: block.trait_type_args.clone(),
+                    associated_types: block.associated_types.clone(),
                     functions: new_functions,
                     decorators: block.decorators.clone(),
                 },
