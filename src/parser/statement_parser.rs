@@ -9,7 +9,9 @@ use crate::parser::ast::*;
 use crate::parser_impl::Parser;
 
 impl Parser {
-    pub(crate) fn parse_block_statements(&mut self) -> Result<Vec<&'static Statement<'static>>, String> {
+    pub(crate) fn parse_block_statements(
+        &mut self,
+    ) -> Result<Vec<&'static Statement<'static>>, String> {
         let mut statements = Vec::new();
 
         while self.current_token() != &Token::RBrace && self.current_token() != &Token::Eof {
@@ -383,7 +385,7 @@ impl Parser {
                 statements: then_block,
                 location: self.current_location(),
             });
-            
+
             let mut arms = vec![MatchArm {
                 pattern,
                 guard: None,
@@ -540,16 +542,16 @@ impl Parser {
                 statements: body.clone(),
                 location: self.current_location(),
             });
-            
+
             let break_stmt = self.alloc_stmt(Statement::Break {
                 location: self.current_location(),
             });
-            
+
             let break_block = self.alloc_expr(Expression::Block {
                 statements: vec![break_stmt],
                 location: self.current_location(),
             });
-            
+
             let match_stmt = self.alloc_stmt(Statement::Match {
                 value: expr,
                 arms: vec![

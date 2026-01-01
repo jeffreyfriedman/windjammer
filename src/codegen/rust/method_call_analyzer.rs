@@ -1,3 +1,6 @@
+#![allow(clippy::collapsible_if)]
+#![allow(clippy::collapsible_match)]
+
 /// Method Call Analyzer - Smart auto-conversions for method arguments
 ///
 /// The Windjammer Philosophy: The compiler should handle mechanical transformations

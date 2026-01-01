@@ -1,3 +1,6 @@
+#![allow(clippy::collapsible_if)]
+#![allow(clippy::collapsible_match)]
+
 // Self/Field Analysis Module
 //
 // This module provides functions to analyze AST nodes and determine if they:
@@ -8,7 +11,6 @@
 //
 // These functions are used by the ownership inference system to determine
 // whether methods need `&self`, `&mut self`, or `self` parameters.
-
 use crate::parser::{Expression, FunctionDecl, Statement};
 use std::collections::HashSet;
 
@@ -253,7 +255,9 @@ pub fn expression_is_self_field_modification(expr: &Expression) -> bool {
 /// Check if an expression modifies self
 pub fn expression_modifies_self(expr: &Expression) -> bool {
     match expr {
-        Expression::Block { statements, .. } => statements.iter().any(|s| statement_modifies_self(s)),
+        Expression::Block { statements, .. } => {
+            statements.iter().any(|s| statement_modifies_self(s))
+        }
         Expression::MethodCall { object, method, .. } => {
             // Check if this is a mutating method call on self.field
             // Common mutating methods: push, pop, remove, insert, clear, etc.

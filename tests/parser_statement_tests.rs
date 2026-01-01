@@ -3,6 +3,8 @@
 //! These tests verify that the parser correctly parses all statement types.
 //! They serve as documentation for the statement grammar of Windjammer.
 
+#![allow(clippy::explicit_auto_deref)]
+
 use windjammer::lexer::Lexer;
 use windjammer::parser::ast::*;
 use windjammer::parser_impl::Parser;

@@ -23,10 +23,10 @@ fn parse_expr(input: &str) -> &'static Expression<'static> {
     // Extract the expression from the function body
     if let Some(Item::Function { decl, .. }) = program.items.first() {
         if let Some(Statement::Expression { expr, .. }) = decl.body.first() {
-            return *expr;
+            return expr;
         }
         if let Some(Statement::Let { value, .. }) = decl.body.first() {
-            return *value;
+            return value;
         }
     }
     panic!("Failed to extract expression from: {}", input);
@@ -451,7 +451,9 @@ fn test_method_call_no_args() {
 fn test_method_call_with_args() {
     let expr = parse_expr("obj.method(1, 2)");
     if let Expression::MethodCall {
-        ref method, ref arguments, ..
+        ref method,
+        ref arguments,
+        ..
     } = *expr
     {
         assert_eq!(method, "method");
@@ -465,7 +467,10 @@ fn test_method_call_with_args() {
 fn test_method_call_chained() {
     let expr = parse_expr("obj.first().second()");
     // The outer call should be .second()
-    if let Expression::MethodCall { ref method, object, .. } = *expr {
+    if let Expression::MethodCall {
+        ref method, object, ..
+    } = *expr
+    {
         assert_eq!(method, "second");
         // object should be obj.first()
         assert!(matches!(*object, Expression::MethodCall { .. }));
@@ -491,10 +496,14 @@ fn test_field_access() {
 #[test]
 fn test_field_access_nested() {
     let expr = parse_expr("a.b.c");
-    if let Expression::FieldAccess { ref field, object, .. } = *expr {
+    if let Expression::FieldAccess {
+        ref field, object, ..
+    } = *expr
+    {
         assert_eq!(field, "c");
         if let Expression::FieldAccess {
-            field: ref inner_field, ..
+            field: ref inner_field,
+            ..
         } = *object
         {
             assert_eq!(inner_field, "b");
@@ -545,7 +554,12 @@ fn test_struct_literal_empty() {
 #[test]
 fn test_struct_literal_with_fields() {
     let expr = parse_expr("Point { x: 1, y: 2 }");
-    if let Expression::StructLiteral { ref name, ref fields, .. } = *expr {
+    if let Expression::StructLiteral {
+        ref name,
+        ref fields,
+        ..
+    } = *expr
+    {
         assert_eq!(name, "Point");
         assert_eq!(fields.len(), 2);
     } else {

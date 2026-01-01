@@ -3,33 +3,36 @@
 //
 // UPDATED: Now using AST builder functions!
 
+#![allow(clippy::needless_borrow)]
+
 use windjammer::codegen::rust::arm_string_analysis::*;
 use windjammer::parser::ast::builders::*;
 use windjammer::parser::{Expression, Statement};
+use windjammer::test_utils::*;
 
 // Helper wrappers using builders
-fn string_lit(s: &str) -> Expression {
-    expr_string(s)
+fn alloc_string(s: &str) -> &'static Expression<'static> {
+    test_alloc_expr(expr_string(s))
 }
 
-fn int_lit(n: i64) -> Expression {
-    expr_int(n)
+fn alloc_int(n: i64) -> &'static Expression<'static> {
+    test_alloc_expr(expr_int(n))
 }
 
-fn block_expr(statements: Vec<Statement>) -> Expression {
-    expr_block(statements)
+fn alloc_block(statements: Vec<&'static Statement<'static>>) -> &'static Expression<'static> {
+    test_alloc_expr(expr_block(statements))
 }
 
-fn expr_stmt(expr: Expression) -> Statement {
-    stmt_expr(expr)
+fn alloc_stmt_expr(expr: &'static Expression<'static>) -> &'static Statement<'static> {
+    test_alloc_stmt(stmt_expr(expr))
 }
 
-fn if_stmt(
-    condition: Expression,
-    then_block: Vec<Statement>,
-    else_block: Option<Vec<Statement>>,
-) -> Statement {
-    stmt_if(condition, then_block, else_block)
+fn alloc_stmt_if(
+    condition: &'static Expression<'static>,
+    then_block: Vec<&'static Statement<'static>>,
+    else_block: Option<Vec<&'static Statement<'static>>>,
+) -> &'static Statement<'static> {
+    test_alloc_stmt(stmt_if(condition, then_block, else_block))
 }
 
 // ============================================================================
@@ -39,54 +42,58 @@ fn if_stmt(
 #[test]
 fn test_block_with_if_else_both_string_literals() {
     // { if cond { "yes" } else { "no" } }
-    let if_statement = if_stmt(
-        int_lit(1), // condition (doesn't matter for this test)
-        vec![expr_stmt(string_lit("yes"))],
-        Some(vec![expr_stmt(string_lit("no"))]),
+    let if_statement = alloc_stmt_if(
+        alloc_int(1), // condition (doesn't matter for this test)
+        vec![alloc_stmt_expr(alloc_string("yes"))],
+        Some(vec![alloc_stmt_expr(alloc_string("no"))]),
     );
 
-    let expr = block_expr(vec![if_statement]);
+    let expr = alloc_block(vec![if_statement]);
 
-    assert!(arm_returns_converted_string(&expr));
+    assert!(arm_returns_converted_string(expr));
 }
 
 #[test]
 fn test_block_with_if_else_then_string_else_int() {
     // { if cond { "yes" } else { 42 } }
-    let if_statement = if_stmt(
-        int_lit(1),
-        vec![expr_stmt(string_lit("yes"))],
-        Some(vec![expr_stmt(int_lit(42))]),
+    let if_statement = alloc_stmt_if(
+        alloc_int(1),
+        vec![alloc_stmt_expr(alloc_string("yes"))],
+        Some(vec![alloc_stmt_expr(alloc_int(42))]),
     );
 
-    let expr = block_expr(vec![if_statement]);
+    let expr = alloc_block(vec![if_statement]);
 
-    assert!(!arm_returns_converted_string(&expr));
+    assert!(!arm_returns_converted_string(expr));
 }
 
 #[test]
 fn test_block_with_if_else_then_int_else_string() {
     // { if cond { 42 } else { "no" } }
-    let if_statement = if_stmt(
-        int_lit(1),
-        vec![expr_stmt(int_lit(42))],
-        Some(vec![expr_stmt(string_lit("no"))]),
+    let if_statement = alloc_stmt_if(
+        alloc_int(1),
+        vec![alloc_stmt_expr(alloc_int(42))],
+        Some(vec![alloc_stmt_expr(alloc_string("no"))]),
     );
 
-    let expr = block_expr(vec![if_statement]);
+    let expr = alloc_block(vec![if_statement]);
 
-    assert!(!arm_returns_converted_string(&expr));
+    assert!(!arm_returns_converted_string(expr));
 }
 
 #[test]
 fn test_block_with_if_no_else() {
     // { if cond { "yes" } }
-    let if_statement = if_stmt(int_lit(1), vec![expr_stmt(string_lit("yes"))], None);
+    let if_statement = alloc_stmt_if(
+        alloc_int(1),
+        vec![alloc_stmt_expr(alloc_string("yes"))],
+        None,
+    );
 
-    let expr = block_expr(vec![if_statement]);
+    let expr = alloc_block(vec![if_statement]);
 
     assert!(
-        !arm_returns_converted_string(&expr),
+        !arm_returns_converted_string(expr),
         "If without else should return false"
     );
 }
@@ -94,15 +101,15 @@ fn test_block_with_if_no_else() {
 #[test]
 fn test_block_with_if_else_both_ints() {
     // { if cond { 1 } else { 2 } }
-    let if_statement = if_stmt(
-        int_lit(1),
-        vec![expr_stmt(int_lit(1))],
-        Some(vec![expr_stmt(int_lit(2))]),
+    let if_statement = alloc_stmt_if(
+        alloc_int(1),
+        vec![alloc_stmt_expr(alloc_int(1))],
+        Some(vec![alloc_stmt_expr(alloc_int(2))]),
     );
 
-    let expr = block_expr(vec![if_statement]);
+    let expr = alloc_block(vec![if_statement]);
 
-    assert!(!arm_returns_converted_string(&expr));
+    assert!(!arm_returns_converted_string(expr));
 }
 
 // ============================================================================
@@ -112,24 +119,24 @@ fn test_block_with_if_else_both_ints() {
 #[test]
 fn test_block_with_string_literal_expression() {
     // { "hello" }
-    let expr = block_expr(vec![expr_stmt(string_lit("hello"))]);
+    let expr = alloc_block(vec![alloc_stmt_expr(alloc_string("hello"))]);
 
-    assert!(arm_returns_converted_string(&expr));
+    assert!(arm_returns_converted_string(expr));
 }
 
 #[test]
 fn test_block_with_int_literal_expression() {
     // { 42 }
-    let expr = block_expr(vec![expr_stmt(int_lit(42))]);
+    let expr = alloc_block(vec![alloc_stmt_expr(alloc_int(42))]);
 
-    assert!(!arm_returns_converted_string(&expr));
+    assert!(!arm_returns_converted_string(expr));
 }
 
 #[test]
 fn test_block_with_nested_block_string_literal() {
     // { { "nested" } }
-    let inner_block = block_expr(vec![expr_stmt(string_lit("nested"))]);
-    let outer_block = block_expr(vec![expr_stmt(inner_block)]);
+    let inner_block = alloc_block(vec![alloc_stmt_expr(alloc_string("nested"))]);
+    let outer_block = alloc_block(vec![alloc_stmt_expr(inner_block)]);
 
     assert!(arm_returns_converted_string(&outer_block));
 }
@@ -137,8 +144,8 @@ fn test_block_with_nested_block_string_literal() {
 #[test]
 fn test_block_with_nested_block_int_literal() {
     // { { 42 } }
-    let inner_block = block_expr(vec![expr_stmt(int_lit(42))]);
-    let outer_block = block_expr(vec![expr_stmt(inner_block)]);
+    let inner_block = alloc_block(vec![alloc_stmt_expr(alloc_int(42))]);
+    let outer_block = alloc_block(vec![alloc_stmt_expr(inner_block)]);
 
     assert!(!arm_returns_converted_string(&outer_block));
 }
@@ -150,9 +157,9 @@ fn test_block_with_nested_block_int_literal() {
 #[test]
 fn test_empty_block() {
     // { }
-    let expr = block_expr(vec![]);
+    let expr = alloc_block(vec![]);
 
-    assert!(!arm_returns_converted_string(&expr));
+    assert!(!arm_returns_converted_string(expr));
 }
 
 // ============================================================================
@@ -162,7 +169,7 @@ fn test_empty_block() {
 #[test]
 fn test_non_block_string_literal() {
     // Just "hello" (not in a block)
-    let expr = string_lit("hello");
+    let expr = alloc_string("hello");
 
     assert!(
         !arm_returns_converted_string(&expr),
@@ -173,9 +180,9 @@ fn test_non_block_string_literal() {
 #[test]
 fn test_non_block_int_literal() {
     // Just 42 (not in a block)
-    let expr = int_lit(42);
+    let expr = alloc_int(42);
 
-    assert!(!arm_returns_converted_string(&expr));
+    assert!(!arm_returns_converted_string(expr));
 }
 
 // ============================================================================
@@ -185,57 +192,57 @@ fn test_non_block_int_literal() {
 #[test]
 fn test_block_with_if_else_nested_string_literals() {
     // { if cond { if inner { "a" } else { "b" } } else { "c" } }
-    let inner_if = if_stmt(
-        int_lit(1),
-        vec![expr_stmt(string_lit("a"))],
-        Some(vec![expr_stmt(string_lit("b"))]),
+    let inner_if = alloc_stmt_if(
+        alloc_int(1),
+        vec![alloc_stmt_expr(alloc_string("a"))],
+        Some(vec![alloc_stmt_expr(alloc_string("b"))]),
     );
 
-    let outer_if = if_stmt(
-        int_lit(1),
+    let outer_if = alloc_stmt_if(
+        alloc_int(1),
         vec![inner_if],
-        Some(vec![expr_stmt(string_lit("c"))]),
+        Some(vec![alloc_stmt_expr(alloc_string("c"))]),
     );
 
-    let expr = block_expr(vec![outer_if]);
+    let expr = alloc_block(vec![outer_if]);
 
     // The outer if's then branch doesn't end with a string literal expression,
     // it ends with an if statement, so this should return false
-    assert!(!arm_returns_converted_string(&expr));
+    assert!(!arm_returns_converted_string(expr));
 }
 
 #[test]
 fn test_block_with_multiple_statements_last_is_string() {
     // { let x = 1; "result" }
-    let let_stmt = Statement::Let {
+    let let_stmt = test_alloc_stmt(Statement::Let {
         pattern: windjammer::parser::Pattern::Identifier("x".to_string()),
         mutable: false,
         type_: None,
-        value: int_lit(1),
+        value: alloc_int(1),
         else_block: None,
         location: None,
-    };
+    });
 
-    let expr = block_expr(vec![let_stmt, expr_stmt(string_lit("result"))]);
+    let expr = alloc_block(vec![let_stmt, alloc_stmt_expr(alloc_string("result"))]);
 
-    assert!(arm_returns_converted_string(&expr));
+    assert!(arm_returns_converted_string(expr));
 }
 
 #[test]
 fn test_block_with_multiple_statements_last_is_int() {
     // { let x = 1; 42 }
-    let let_stmt = Statement::Let {
+    let let_stmt = test_alloc_stmt(Statement::Let {
         pattern: windjammer::parser::Pattern::Identifier("x".to_string()),
         mutable: false,
         type_: None,
-        value: int_lit(1),
+        value: alloc_int(1),
         else_block: None,
         location: None,
-    };
+    });
 
-    let expr = block_expr(vec![let_stmt, expr_stmt(int_lit(42))]);
+    let expr = alloc_block(vec![let_stmt, alloc_stmt_expr(alloc_int(42))]);
 
-    assert!(!arm_returns_converted_string(&expr));
+    assert!(!arm_returns_converted_string(expr));
 }
 
 // ============================================================================
@@ -245,32 +252,40 @@ fn test_block_with_multiple_statements_last_is_int() {
 #[test]
 fn test_block_with_if_empty_then_block() {
     // { if cond { } else { "no" } }
-    let if_statement = if_stmt(int_lit(1), vec![], Some(vec![expr_stmt(string_lit("no"))]));
+    let if_statement = alloc_stmt_if(
+        alloc_int(1),
+        vec![],
+        Some(vec![alloc_stmt_expr(alloc_string("no"))]),
+    );
 
-    let expr = block_expr(vec![if_statement]);
+    let expr = alloc_block(vec![if_statement]);
 
-    assert!(!arm_returns_converted_string(&expr));
+    assert!(!arm_returns_converted_string(expr));
 }
 
 #[test]
 fn test_block_with_if_empty_else_block() {
     // { if cond { "yes" } else { } }
-    let if_statement = if_stmt(int_lit(1), vec![expr_stmt(string_lit("yes"))], Some(vec![]));
+    let if_statement = alloc_stmt_if(
+        alloc_int(1),
+        vec![alloc_stmt_expr(alloc_string("yes"))],
+        Some(vec![]),
+    );
 
-    let expr = block_expr(vec![if_statement]);
+    let expr = alloc_block(vec![if_statement]);
 
-    assert!(!arm_returns_converted_string(&expr));
+    assert!(!arm_returns_converted_string(expr));
 }
 
 #[test]
 fn test_block_with_return_statement() {
     // { return "value"; }
-    let return_stmt = Statement::Return {
-        value: Some(string_lit("value")),
+    let return_stmt = test_alloc_stmt(Statement::Return {
+        value: Some(alloc_string("value")),
         location: None,
-    };
+    });
 
-    let expr = block_expr(vec![return_stmt]);
+    let expr = alloc_block(vec![return_stmt]);
 
     assert!(
         !arm_returns_converted_string(&expr),

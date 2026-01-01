@@ -95,7 +95,10 @@ impl SimdStats {
 }
 
 /// Perform SIMD vectorization optimization on a program
-pub fn optimize_simd_vectorization<'ast>(program: &Program<'ast>, optimizer: &crate::optimizer::Optimizer) -> (Program<'ast>, SimdStats) {
+pub fn optimize_simd_vectorization<'ast>(
+    program: &Program<'ast>,
+    optimizer: &crate::optimizer::Optimizer,
+) -> (Program<'ast>, SimdStats) {
     let mut stats = SimdStats::default();
     let mut new_items = Vec::new();
 
@@ -128,7 +131,10 @@ pub fn optimize_simd_vectorization<'ast>(program: &Program<'ast>, optimizer: &cr
 }
 
 /// Optimize a function with SIMD vectorization
-fn optimize_function_simd<'ast>(func: &FunctionDecl<'ast>, optimizer: &crate::optimizer::Optimizer) -> (FunctionDecl<'ast>, SimdStats) {
+fn optimize_function_simd<'ast>(
+    func: &FunctionDecl<'ast>,
+    optimizer: &crate::optimizer::Optimizer,
+) -> (FunctionDecl<'ast>, SimdStats) {
     let mut stats = SimdStats::default();
     let new_body = optimize_statements_simd(&func.body, &mut stats, optimizer);
 
@@ -142,7 +148,10 @@ fn optimize_function_simd<'ast>(func: &FunctionDecl<'ast>, optimizer: &crate::op
 }
 
 /// Optimize an impl block with SIMD vectorization
-fn optimize_impl_simd<'ast>(impl_block: &ImplBlock<'ast>, optimizer: &crate::optimizer::Optimizer) -> (ImplBlock<'ast>, SimdStats) {
+fn optimize_impl_simd<'ast>(
+    impl_block: &ImplBlock<'ast>,
+    optimizer: &crate::optimizer::Optimizer,
+) -> (ImplBlock<'ast>, SimdStats) {
     let mut stats = SimdStats::default();
     let mut new_functions = Vec::new();
 
@@ -186,7 +195,11 @@ enum VectorOperation {
 }
 
 /// Optimize statements with SIMD vectorization
-fn optimize_statements_simd<'ast>(stmts: &[&'ast Statement<'ast>], stats: &mut SimdStats, optimizer: &crate::optimizer::Optimizer) -> Vec<&'ast Statement<'ast>> {
+fn optimize_statements_simd<'ast>(
+    stmts: &[&'ast Statement<'ast>],
+    stats: &mut SimdStats,
+    optimizer: &crate::optimizer::Optimizer,
+) -> Vec<&'ast Statement<'ast>> {
     let mut result = Vec::new();
 
     for stmt in stmts {
@@ -198,7 +211,11 @@ fn optimize_statements_simd<'ast>(stmts: &[&'ast Statement<'ast>], stats: &mut S
 }
 
 /// Optimize a single statement with SIMD vectorization
-fn optimize_statement_simd<'a: 'ast, 'ast>(stmt: &'a Statement<'a>, stats: &mut SimdStats, optimizer: &crate::optimizer::Optimizer) -> &'ast Statement<'ast> {
+fn optimize_statement_simd<'a: 'ast, 'ast>(
+    stmt: &'a Statement<'a>,
+    stats: &mut SimdStats,
+    optimizer: &crate::optimizer::Optimizer,
+) -> &'ast Statement<'ast> {
     match stmt {
         Statement::For {
             pattern,
@@ -224,39 +241,51 @@ fn optimize_statement_simd<'a: 'ast, 'ast>(stmt: &'a Statement<'a>, stats: &mut 
 
                         // Add a decorator to mark this loop as vectorizable
                         // The codegen phase will see this and generate SIMD code
-                        return create_vectorized_loop(variable, iterable, body, &vectorizable, optimizer);
+                        return create_vectorized_loop(
+                            variable,
+                            iterable,
+                            body,
+                            &vectorizable,
+                            optimizer,
+                        );
                     }
                 }
             }
 
             // Not vectorizable, recurse into body
-            optimizer.alloc_stmt(unsafe { std::mem::transmute(Statement::For {
-                pattern: pattern.clone(),
-                iterable,
-                body: optimize_statements_simd(body, stats, optimizer),
-                location: None,
-            }) })
+            optimizer.alloc_stmt(unsafe {
+                std::mem::transmute::<Statement<'_>, Statement<'_>>(Statement::For {
+                    pattern: pattern.clone(),
+                    iterable,
+                    body: optimize_statements_simd(body, stats, optimizer),
+                    location: None,
+                })
+            })
         }
         Statement::If {
             condition,
             then_block,
             else_block,
             ..
-        } => optimizer.alloc_stmt(unsafe { std::mem::transmute(Statement::If {
-            condition,
-            then_block: optimize_statements_simd(then_block, stats, optimizer),
-            else_block: else_block
-                .as_ref()
-                .map(|stmts| optimize_statements_simd(stmts, stats, optimizer)),
-            location: None,
-        }) }),
+        } => optimizer.alloc_stmt(unsafe {
+            std::mem::transmute::<Statement<'_>, Statement<'_>>(Statement::If {
+                condition,
+                then_block: optimize_statements_simd(then_block, stats, optimizer),
+                else_block: else_block
+                    .as_ref()
+                    .map(|stmts| optimize_statements_simd(stmts, stats, optimizer)),
+                location: None,
+            })
+        }),
         Statement::While {
             condition, body, ..
-        } => optimizer.alloc_stmt(unsafe { std::mem::transmute(Statement::While {
-            condition,
-            body: optimize_statements_simd(body, stats, optimizer),
-            location: None,
-        }) }),
+        } => optimizer.alloc_stmt(unsafe {
+            std::mem::transmute::<Statement<'_>, Statement<'_>>(Statement::While {
+                condition,
+                body: optimize_statements_simd(body, stats, optimizer),
+                location: None,
+            })
+        }),
         _ => stmt,
     }
 }
@@ -291,7 +320,10 @@ fn analyze_loop_vectorizability<'ast>(
 }
 
 /// Classify what type of vector operation the loop performs
-fn classify_loop_operation<'ast>(variable: &str, body: &[&'ast Statement<'ast>]) -> VectorOperation {
+fn classify_loop_operation<'ast>(
+    variable: &str,
+    body: &[&'ast Statement<'ast>],
+) -> VectorOperation {
     // Simple heuristic: look for common patterns
     for stmt in body {
         match stmt {
@@ -377,12 +409,14 @@ fn create_vectorized_loop<'ast>(
     // In the real implementation, codegen would recognize vectorizable patterns
     // and generate SIMD code. For now, we just preserve the loop structure
     // and track it in stats.
-    optimizer.alloc_stmt(unsafe { std::mem::transmute(Statement::For {
-        pattern: Pattern::Identifier(variable.to_string()),
-        iterable,
-        body: body.to_vec(),
-        location: None,
-    }) })
+    optimizer.alloc_stmt(unsafe {
+        std::mem::transmute::<Statement<'_>, Statement<'_>>(Statement::For {
+            pattern: Pattern::Identifier(variable.to_string()),
+            iterable,
+            body: body.to_vec(),
+            location: None,
+        })
+    })
 }
 
 #[cfg(test)]
@@ -391,6 +425,7 @@ mod tests {
 
     #[cfg(test)]
     use crate::parser::{Literal, Type};
+    use crate::test_utils::{test_alloc_expr, test_alloc_stmt};
 
     #[test]
     #[allow(unused_comparisons, clippy::absurd_extreme_comparisons)]

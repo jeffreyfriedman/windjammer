@@ -7,7 +7,7 @@
 //!
 //! IMPORTANT: Only use these helpers in `#[cfg(test)]` code!
 
-use crate::parser::{Expression, Statement, Pattern};
+use crate::parser::{Expression, Pattern, Statement};
 
 /// Allocate an expression with 'static lifetime for testing
 ///
@@ -26,16 +26,12 @@ pub fn test_alloc_expr<'a>(expr: Expression<'static>) -> &'a Expression<'a> {
 
 /// Allocate a statement with 'static lifetime for testing
 pub fn test_alloc_stmt<'a>(stmt: Statement<'static>) -> &'a Statement<'a> {
-    unsafe {
-        std::mem::transmute(Box::leak(Box::new(stmt)))
-    }
+    unsafe { std::mem::transmute(Box::leak(Box::new(stmt))) }
 }
 
 /// Allocate a pattern with 'static lifetime for testing
 pub fn test_alloc_pattern<'a>(pattern: Pattern<'static>) -> &'a Pattern<'a> {
-    unsafe {
-        std::mem::transmute(Box::leak(Box::new(pattern)))
-    }
+    unsafe { std::mem::transmute(Box::leak(Box::new(pattern))) }
 }
 
 /// Helper macro to create test expressions more ergonomically
@@ -81,9 +77,12 @@ mod tests {
             value: Literal::Int(42),
             location: None,
         });
-        
+
         match expr {
-            Expression::Literal { value: Literal::Int(n), .. } => assert_eq!(*n, 42),
+            Expression::Literal {
+                value: Literal::Int(n),
+                ..
+            } => assert_eq!(*n, 42),
             _ => panic!("Wrong expression type"),
         }
     }
@@ -94,13 +93,15 @@ mod tests {
             value: Literal::String("test".to_string()),
             location: None,
         });
-        
+
         match expr {
-            Expression::Literal { value: Literal::String(s), .. } => {
+            Expression::Literal {
+                value: Literal::String(s),
+                ..
+            } => {
                 assert_eq!(s, "test");
             }
             _ => panic!("Wrong expression type"),
         }
     }
 }
-

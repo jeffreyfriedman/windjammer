@@ -79,7 +79,10 @@ impl EscapeAnalysisStats {
 }
 
 /// Perform escape analysis optimization on a program
-pub fn optimize_escape_analysis<'ast>(program: &Program<'ast>, optimizer: &crate::optimizer::Optimizer) -> (Program<'ast>, EscapeAnalysisStats) {
+pub fn optimize_escape_analysis<'ast>(
+    program: &Program<'ast>,
+    optimizer: &crate::optimizer::Optimizer,
+) -> (Program<'ast>, EscapeAnalysisStats) {
     let mut stats = EscapeAnalysisStats::default();
     let mut new_items = Vec::new();
 
@@ -112,14 +115,18 @@ pub fn optimize_escape_analysis<'ast>(program: &Program<'ast>, optimizer: &crate
 }
 
 /// Optimize a function with escape analysis
-fn optimize_function_escape_analysis<'ast>(func: &FunctionDecl<'ast>, optimizer: &crate::optimizer::Optimizer) -> (FunctionDecl<'ast>, EscapeAnalysisStats) {
+fn optimize_function_escape_analysis<'ast>(
+    func: &FunctionDecl<'ast>,
+    optimizer: &crate::optimizer::Optimizer,
+) -> (FunctionDecl<'ast>, EscapeAnalysisStats) {
     let mut stats = EscapeAnalysisStats::default();
 
     // Analyze which variables escape
     let escape_info = analyze_escapes(&func.body, &func.parameters);
 
     // Transform statements based on escape info
-    let new_body = optimize_statements_escape_analysis(&func.body, &escape_info, &mut stats, optimizer);
+    let new_body =
+        optimize_statements_escape_analysis(&func.body, &escape_info, &mut stats, optimizer);
 
     (
         FunctionDecl {
@@ -131,7 +138,10 @@ fn optimize_function_escape_analysis<'ast>(func: &FunctionDecl<'ast>, optimizer:
 }
 
 /// Optimize an impl block with escape analysis
-fn optimize_impl_escape_analysis<'ast>(impl_block: &ImplBlock<'ast>, optimizer: &crate::optimizer::Optimizer) -> (ImplBlock<'ast>, EscapeAnalysisStats) {
+fn optimize_impl_escape_analysis<'ast>(
+    impl_block: &ImplBlock<'ast>,
+    optimizer: &crate::optimizer::Optimizer,
+) -> (ImplBlock<'ast>, EscapeAnalysisStats) {
     let mut stats = EscapeAnalysisStats::default();
     let mut new_functions = Vec::new();
 
@@ -163,7 +173,10 @@ struct EscapeInfo {
 }
 
 /// Analyze which variables escape in a function
-fn analyze_escapes<'ast>(body: &[&'ast Statement<'ast>], parameters: &[Parameter<'ast>]) -> EscapeInfo {
+fn analyze_escapes<'ast>(
+    body: &[&'ast Statement<'ast>],
+    parameters: &[Parameter<'ast>],
+) -> EscapeInfo {
     let mut info = EscapeInfo {
         escaped_vars: HashSet::new(),
         returned_vars: HashSet::new(),
@@ -312,62 +325,96 @@ fn optimize_statement_escape_analysis<'a, 'ast>(
                     if let Some(new_value) = try_optimize_vec_to_smallvec(value, optimizer) {
                         stats.vectors_stack_allocated += 1;
                         stats.total_optimizations += 1;
-                        return optimizer.alloc_stmt(unsafe { std::mem::transmute(Statement::Let {
-                            pattern: Pattern::Identifier(name.to_string()),
-                            mutable: *mutable,
-                            type_: type_.clone(),
-                            value: new_value,
-                            else_block: else_block.clone(),
-                            location: None,
-                        }) });
+                        return optimizer.alloc_stmt(unsafe {
+                            std::mem::transmute::<Statement<'_>, Statement<'_>>(Statement::Let {
+                                pattern: Pattern::Identifier(name.to_string()),
+                                mutable: *mutable,
+                                type_: type_.clone(),
+                                value: new_value,
+                                else_block: else_block.clone(),
+                                location: None,
+                            })
+                        });
                     }
                 }
             }
 
-            optimizer.alloc_stmt(unsafe { std::mem::transmute(Statement::Let {
-                pattern: pattern.clone(),
-                mutable: *mutable,
-                type_: type_.clone(),
-                value: optimize_expression_escape_analysis(value, escape_info, stats, optimizer),
-                else_block: else_block
-                    .as_ref()
-                    .map(|stmts| optimize_statements_escape_analysis(stmts, escape_info, stats, optimizer)),
-                location: None,
-            }) })
+            optimizer.alloc_stmt(unsafe {
+                std::mem::transmute::<Statement<'_>, Statement<'_>>(Statement::Let {
+                    pattern: pattern.clone(),
+                    mutable: *mutable,
+                    type_: type_.clone(),
+                    value: optimize_expression_escape_analysis(
+                        value,
+                        escape_info,
+                        stats,
+                        optimizer,
+                    ),
+                    else_block: else_block.as_ref().map(|stmts| {
+                        optimize_statements_escape_analysis(stmts, escape_info, stats, optimizer)
+                    }),
+                    location: None,
+                })
+            })
         }
         Statement::If {
             condition,
             then_block,
             else_block,
             ..
-        } => optimizer.alloc_stmt(unsafe { std::mem::transmute(Statement::If {
-            condition: optimize_expression_escape_analysis(condition, escape_info, stats, optimizer),
-            then_block: optimize_statements_escape_analysis(then_block, escape_info, stats, optimizer),
-            else_block: else_block
-                .as_ref()
-                .map(|stmts| optimize_statements_escape_analysis(stmts, escape_info, stats, optimizer)),
-            location: None,
-        }) }),
+        } => optimizer.alloc_stmt(unsafe {
+            std::mem::transmute::<Statement<'_>, Statement<'_>>(Statement::If {
+                condition: optimize_expression_escape_analysis(
+                    condition,
+                    escape_info,
+                    stats,
+                    optimizer,
+                ),
+                then_block: optimize_statements_escape_analysis(
+                    then_block,
+                    escape_info,
+                    stats,
+                    optimizer,
+                ),
+                else_block: else_block.as_ref().map(|stmts| {
+                    optimize_statements_escape_analysis(stmts, escape_info, stats, optimizer)
+                }),
+                location: None,
+            })
+        }),
         Statement::While {
             condition, body, ..
-        } => optimizer.alloc_stmt(unsafe { std::mem::transmute(Statement::While {
-            condition: optimize_expression_escape_analysis(condition, escape_info, stats, optimizer),
-            body: optimize_statements_escape_analysis(body, escape_info, stats, optimizer),
-            location: None,
-        }) }),
+        } => optimizer.alloc_stmt(unsafe {
+            std::mem::transmute::<Statement<'_>, Statement<'_>>(Statement::While {
+                condition: optimize_expression_escape_analysis(
+                    condition,
+                    escape_info,
+                    stats,
+                    optimizer,
+                ),
+                body: optimize_statements_escape_analysis(body, escape_info, stats, optimizer),
+                location: None,
+            })
+        }),
         Statement::For {
             pattern,
             iterable,
             body,
             ..
-        } => optimizer.alloc_stmt(unsafe { std::mem::transmute(Statement::For {
-            pattern: pattern.clone(),
-            iterable: optimize_expression_escape_analysis(iterable, escape_info, stats, optimizer),
-            body: optimize_statements_escape_analysis(body, escape_info, stats, optimizer),
-            location: None,
-        }) }),
-        _ => unsafe { std::mem::transmute(stmt) }, // Safe: just changing lifetime annotation
-
+        } => optimizer.alloc_stmt(unsafe {
+            std::mem::transmute::<Statement<'_>, Statement<'_>>(Statement::For {
+                pattern: pattern.clone(),
+                iterable: optimize_expression_escape_analysis(
+                    iterable,
+                    escape_info,
+                    stats,
+                    optimizer,
+                ),
+                body: optimize_statements_escape_analysis(body, escape_info, stats, optimizer),
+                location: None,
+            })
+        }),
+        _ => unsafe { std::mem::transmute::<&Statement<'_>, &Statement<'_>>(stmt) }, // Safe: just changing lifetime annotation
     }
 }
 
@@ -382,50 +429,51 @@ fn optimize_expression_escape_analysis<'a: 'ast, 'ast>(
     match expr {
         Expression::Binary {
             left, op, right, ..
-        } => optimizer.alloc_expr(unsafe { std::mem::transmute(Expression::Binary {
-            left: optimize_expression_escape_analysis(
-                left,
-                escape_info,
-                stats,
-                optimizer,
-            ),
-            op: *op,
-            right: optimize_expression_escape_analysis(
-                right,
-                escape_info,
-                stats,
-                optimizer,
-            ),
-            location: None,
-        }) }),
-        Expression::Unary { op, operand, .. } => optimizer.alloc_expr(unsafe { std::mem::transmute(Expression::Unary {
-            op: *op,
-            operand: optimize_expression_escape_analysis(
-                operand,
-                escape_info,
-                stats,
-                optimizer,
-            ),
-            location: None,
-        }) }),
+        } => optimizer.alloc_expr(unsafe {
+            std::mem::transmute::<Expression<'_>, Expression<'_>>(Expression::Binary {
+                left: optimize_expression_escape_analysis(left, escape_info, stats, optimizer),
+                op: *op,
+                right: optimize_expression_escape_analysis(right, escape_info, stats, optimizer),
+                location: None,
+            })
+        }),
+        Expression::Unary { op, operand, .. } => optimizer.alloc_expr(unsafe {
+            std::mem::transmute::<Expression<'_>, Expression<'_>>(Expression::Unary {
+                op: *op,
+                operand: optimize_expression_escape_analysis(
+                    operand,
+                    escape_info,
+                    stats,
+                    optimizer,
+                ),
+                location: None,
+            })
+        }),
         _ => expr,
     }
 }
 
 /// Try to optimize vec! macro to SmallVec
-fn try_optimize_vec_to_smallvec<'ast>(expr: &'ast Expression<'ast>, optimizer: &crate::optimizer::Optimizer) -> Option<&'ast Expression<'ast>> {
+fn try_optimize_vec_to_smallvec<'ast>(
+    expr: &'ast Expression<'ast>,
+    optimizer: &crate::optimizer::Optimizer,
+) -> Option<&'ast Expression<'ast>> {
     match expr {
         Expression::MacroInvocation { name, args, .. } if name == "vec" => {
             // Only optimize if the vec has a small number of elements (< 8)
             if args.len() < 8 && !args.is_empty() {
                 // Transform vec![...] to smallvec![...]
                 // This is a marker that codegen will handle
-                return Some(optimizer.alloc_expr(unsafe { std::mem::transmute(Expression::MacroInvocation {
-                    name: "smallvec".to_string(),
-                    args: args.clone(),
-                    delimiter: MacroDelimiter::Brackets,
-                    location: None,
-                }) }));
+                return Some(optimizer.alloc_expr(unsafe {
+                    std::mem::transmute::<Expression<'_>, Expression<'_>>(
+                        Expression::MacroInvocation {
+                            name: "smallvec".to_string(),
+                            args: args.clone(),
+                            delimiter: MacroDelimiter::Brackets,
+                            location: None,
+                        },
+                    )
+                }));
             }
         }
         _ => {}
@@ -492,12 +540,9 @@ mod tests {
         assert_eq!(stats.total_optimizations, 1);
 
         // Verify the optimization was applied
+        #[allow(clippy::collapsible_match)]
         if let Item::Function { decl: func, .. } = &optimized.items[0] {
-            if let Statement::Let {
-                value,
-                ..
-            } = func.body[0]
-            {
+            if let Statement::Let { value, .. } = func.body[0] {
                 if let Expression::MacroInvocation { name, .. } = value {
                     assert_eq!(name, "smallvec");
                 }

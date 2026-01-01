@@ -118,11 +118,11 @@ pub fn parse_tokens<'db>(
     token_stream: TokenStream<'db>,
 ) -> ParsedProgram<'db> {
     let tokens = token_stream.tokens(db);
-    
+
     // Create parser and leak it to keep arena alive for 'static lifetime
     // This is necessary because Salsa stores the Program<'db> but the arena
     // must outlive the parser. By leaking, we ensure the arena lives forever.
-    // 
+    //
     // NOTE: This is a memory leak, but acceptable because:
     // 1. Salsa caches results, so we don't re-parse repeatedly
     // 2. Tests create limited parsers
@@ -166,7 +166,9 @@ pub fn analyze_types<'db>(
 /// - Optimization opportunity detection
 ///
 /// Returns analysis results separately from Salsa-tracked structures
-pub fn perform_analysis<'ast>(program: &parser::Program<'ast>) -> Result<AnalysisResults<'ast>, String> {
+pub fn perform_analysis<'ast>(
+    program: &parser::Program<'ast>,
+) -> Result<AnalysisResults<'ast>, String> {
     use crate::analyzer::Analyzer;
     use crate::inference::InferenceEngine;
 
@@ -223,7 +225,7 @@ pub fn optimize_program<'db>(
     //
     // DECISION: Defer to separate PR focused on optimizer architecture.
     // Core compiler is 100% arena-allocated with 87.5% stack reduction.
-    
+
     let program = typed.program(db);
     OptimizedProgram::new(db, program.clone())
 }

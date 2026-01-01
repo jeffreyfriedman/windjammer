@@ -75,7 +75,7 @@ pub async fn handle(
     // Find variable declaration at position
     let var_info = find_variable_at_position(&program, &request.position);
 
-    let (var_name, var_value) = match var_info {
+    let (var_name, var_value): (String, Expression<'_>) = match var_info {
         Some((name, value)) => (name, value),
         None => {
             let response = InlineVariableResponse {
@@ -122,10 +122,10 @@ pub async fn handle(
 }
 
 /// Find variable declaration at position
-fn find_variable_at_position(
-    _program: &windjammer::parser::Program,
-    _position: &Position,
-) -> Option<(String, Expression)> {
+fn find_variable_at_position<'a>(
+    _program: &'a windjammer::parser::Program<'a>,
+    _position: &'a Position,
+) -> Option<(String, Expression<'a>)> {
     // TODO: Implement actual position-based lookup
     // For now, return None
     None
@@ -208,6 +208,8 @@ mod tests {
 
     #[test]
     fn test_is_safe_to_inline() {
+        use windjammer::test_utils::test_alloc_expr;
+
         // Literal is safe
         assert!(is_safe_to_inline(&Expression::Literal {
             value: Literal::Int(42),
@@ -221,14 +223,14 @@ mod tests {
         }));
 
         // Function call is not safe
-        assert!(!is_safe_to_inline(&Expression::Call {
-            function: Box::new(Expression::Identifier {
+        assert!(!is_safe_to_inline(test_alloc_expr(Expression::Call {
+            function: test_alloc_expr(Expression::Identifier {
                 name: "foo".to_string(),
                 location: None
             }),
             arguments: vec![],
             location: None,
-        }));
+        })));
 
         // Macro invocation is not safe
         assert!(!is_safe_to_inline(&Expression::MacroInvocation {

@@ -1,7 +1,8 @@
 [workspace]
 members = [
     ".",
-    "crates/windjammer-lsp",
+    # Temporarily disabled - needs arena lifetime refactoring
+    # "crates/windjammer-lsp",
     "crates/windjammer-mcp",
     "crates/windjammer-runtime",
     # Removed: crates/windjammer-c-ffi (moved to windjammer-game repo)

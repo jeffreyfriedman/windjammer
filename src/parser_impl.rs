@@ -463,7 +463,9 @@ impl Parser {
         })
     }
 
-    pub(crate) fn parse_const_or_static(&mut self) -> Result<(String, Type, &'static Expression<'static>), String> {
+    pub(crate) fn parse_const_or_static(
+        &mut self,
+    ) -> Result<(String, Type, &'static Expression<'static>), String> {
         let name = if let Token::Ident(n) = self.current_token() {
             let name = n.clone();
             self.advance();

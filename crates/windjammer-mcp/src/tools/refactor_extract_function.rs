@@ -137,10 +137,10 @@ pub async fn handle(
 }
 
 /// Extract statements within a given range
-fn extract_statements_in_range(
-    _program: &windjammer::parser::Program,
-    _range: &Range,
-) -> Vec<Statement> {
+fn extract_statements_in_range<'a>(
+    _program: &'a windjammer::parser::Program<'a>,
+    _range: &'a Range,
+) -> Vec<Statement<'a>> {
     // TODO: Implement actual statement extraction based on line/column range
     // For now, return empty vec
     vec![]

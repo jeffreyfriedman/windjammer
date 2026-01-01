@@ -6,6 +6,8 @@
 //
 // UPDATED: Now using AST builder functions for cleaner, more readable tests!
 
+#![allow(clippy::needless_borrow)]
+
 use windjammer::codegen::rust::string_analysis::{collect_concat_parts, contains_string_literal};
 use windjammer::parser::ast::builders::*;
 use windjammer::parser::{BinaryOp, Expression, Literal};
@@ -20,11 +22,17 @@ fn alloc_var(name: &str) -> &'static Expression<'static> {
     test_alloc_expr(expr_var(name))
 }
 
-fn alloc_add(left: &'static Expression<'static>, right: &'static Expression<'static>) -> &'static Expression<'static> {
+fn alloc_add(
+    left: &'static Expression<'static>,
+    right: &'static Expression<'static>,
+) -> &'static Expression<'static> {
     test_alloc_expr(expr_add(left, right))
 }
 
-fn alloc_mul(left: &'static Expression<'static>, right: &'static Expression<'static>) -> &'static Expression<'static> {
+fn alloc_mul(
+    left: &'static Expression<'static>,
+    right: &'static Expression<'static>,
+) -> &'static Expression<'static> {
     test_alloc_expr(expr_binary(BinaryOp::Mul, left, right))
 }
 
@@ -56,7 +64,7 @@ mod collect_concat_parts_tests {
         // Test: "hello" + "world" → ["hello", "world"]
         let expr = alloc_add(alloc_string("hello"), alloc_string("world"));
 
-        let parts = collect_concat_parts(&expr);
+        let parts = collect_concat_parts(expr);
         assert_eq!(parts.len(), 2);
 
         match (&parts[0], &parts[1]) {
@@ -95,7 +103,7 @@ mod collect_concat_parts_tests {
         // Test: "hello" + variable_name → ["hello", variable_name]
         let expr = alloc_add(alloc_string("hello"), alloc_var("name"));
 
-        let parts = collect_concat_parts(&expr);
+        let parts = collect_concat_parts(expr);
         assert_eq!(parts.len(), 2);
 
         match (&parts[0], &parts[1]) {
@@ -118,7 +126,7 @@ mod collect_concat_parts_tests {
         // Test: a * b → [a * b] (not a concatenation)
         let expr = alloc_mul(alloc_var("a"), alloc_var("b"));
 
-        let parts = collect_concat_parts(&expr);
+        let parts = collect_concat_parts(expr);
         assert_eq!(parts.len(), 1); // Whole expression, not split
 
         match &parts[0] {
@@ -181,7 +189,10 @@ mod contains_string_literal_tests {
     #[test]
     fn test_nested_binary_with_string() {
         // Test: (a + b) + "hello" → true
-        let expr = alloc_add(alloc_add(alloc_var("a"), alloc_var("b")), alloc_string("hello"));
+        let expr = alloc_add(
+            alloc_add(alloc_var("a"), alloc_var("b")),
+            alloc_string("hello"),
+        );
         assert!(contains_string_literal(&expr));
     }
 }
