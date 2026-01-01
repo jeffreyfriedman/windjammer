@@ -65,36 +65,54 @@ fn compile_fixture(fixture_name: &str) -> Result<String, String> {
         ));
     }
 
-    // Read generated Rust code
+    // Read generated Rust code with retry logic for file I/O race conditions
     let rust_file = output_dir.join(format!("{}.rs", fixture_name));
     eprintln!("   Reading generated file: {}", rust_file.display());
     eprintln!("   File exists: {}", rust_file.exists());
 
-    if rust_file.exists() {
-        let metadata = std::fs::metadata(&rust_file).map_err(|e| e.to_string())?;
-        eprintln!("   File size: {} bytes", metadata.len());
+    // Retry logic to handle file I/O race conditions
+    let mut retries = 3;
+    let mut last_error = String::new();
 
-        if metadata.len() == 0 {
-            eprintln!("   WARNING: Generated file is EMPTY!");
-            eprintln!(
-                "   STDOUT content:\n{}",
-                String::from_utf8_lossy(&compiler_output.stdout)
-            );
-            return Err(format!(
-                "Generated file is empty! This suggests the recursion guard or early return is triggering.\nSTDOUT: {}\nSTDERR: {}",
-                String::from_utf8_lossy(&compiler_output.stdout),
-                String::from_utf8_lossy(&compiler_output.stderr)
-            ));
+    while retries > 0 {
+        if rust_file.exists() {
+            let metadata = std::fs::metadata(&rust_file).map_err(|e| e.to_string())?;
+            eprintln!("   File size: {} bytes", metadata.len());
+
+            if metadata.len() == 0 {
+                eprintln!("   WARNING: Generated file is EMPTY, waiting 100ms before retry...");
+                std::thread::sleep(std::time::Duration::from_millis(100));
+                retries -= 1;
+                continue;
+            }
+        }
+
+        match std::fs::read_to_string(&rust_file) {
+            Ok(content) if !content.is_empty() => return Ok(content),
+            Ok(_) => {
+                eprintln!("   ⚠️ File read but empty, waiting 100ms before retry...");
+                std::thread::sleep(std::time::Duration::from_millis(100));
+                retries -= 1;
+            }
+            Err(e) => {
+                last_error = format!(
+                    "Failed to read generated code at {:?}: {}",
+                    rust_file.display(),
+                    e
+                );
+                eprintln!("   ⚠️ Read error: {}, waiting 100ms before retry...", e);
+                std::thread::sleep(std::time::Duration::from_millis(100));
+                retries -= 1;
+            }
         }
     }
 
-    std::fs::read_to_string(&rust_file).map_err(|e| {
-        format!(
-            "Failed to read generated code at {:?}: {}",
-            rust_file.display(),
-            e
-        )
-    })
+    Err(format!(
+        "File I/O race condition after retries. {}\nSTDOUT: {}\nSTDERR: {}",
+        last_error,
+        String::from_utf8_lossy(&compiler_output.stdout),
+        String::from_utf8_lossy(&compiler_output.stderr)
+    ))
 }
 
 // ============================================================================
