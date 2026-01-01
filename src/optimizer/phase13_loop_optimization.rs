@@ -489,14 +489,14 @@ fn optimize_loops_in_expression<'a: 'ast, 'ast>(
             name,
             fields,
             location,
-        } => optimizer.alloc_expr(Expression::StructLiteral {
+        } => optimizer.alloc_expr(unsafe { std::mem::transmute(Expression::StructLiteral {
             name: name.clone(),
             fields: fields
                 .iter()
                 .map(|(k, v)| (k.clone(), optimize_loops_in_expression(v, config, stats, optimizer)))
                 .collect(),
             location: location.clone(),
-        }),
+        }) }),
         Expression::Tuple { elements, location } => optimizer.alloc_expr(unsafe { std::mem::transmute(Expression::Tuple {
             elements: elements
                 .iter()
