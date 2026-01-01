@@ -1,0 +1,50 @@
+// Test: Operator precedence with negation and logical OR
+// Bug: Compiler was stripping parentheses from !(a || b)
+// Generated: !a || b (wrong precedence)
+// Expected: !(a || b) (correct precedence)
+
+fn test_negation_with_or() -> bool {
+    let a = true
+    let b = false
+    
+    // This should negate the entire OR expression
+    // !(true || false) = !true = false
+    return !(a || b)
+}
+
+fn test_negation_with_and() -> bool {
+    let a = true
+    let b = false
+    
+    // This should negate the entire AND expression
+    // !(true && false) = !false = true
+    return !(a && b)
+}
+
+fn test_negation_complex() -> bool {
+    let x = 5.0
+    let y = 10.0
+    let min = 0.0
+    let max = 20.0
+    
+    // Check if value is OUT OF BOUNDS (negation of in-bounds check)
+    // !(x >= min && x <= max && y >= min && y <= max)
+    return !(x >= min && x <= max && y >= min && y <= max)
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

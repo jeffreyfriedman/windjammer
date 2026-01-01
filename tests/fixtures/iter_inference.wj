@@ -1,0 +1,68 @@
+// Test fixture for .iter() inference
+// Windjammer should automatically add .iter() or .iter_mut()
+
+struct TestData {
+    items: Vec<i32>,
+    names: Vec<string>,
+}
+
+impl TestData {
+    fn new() -> TestData {
+        TestData {
+            items: Vec::new(),
+            names: Vec::new(),
+        }
+    }
+    
+    // Should infer .iter() - read-only iteration
+    fn sum_items(&self) -> i32 {
+        let mut total = 0
+        for item in self.items {
+            total = total + item
+        }
+        total
+    }
+    
+    // Should infer .iter() - field access
+    fn print_names(&self) {
+        for name in self.names {
+            println!("{}", name)
+        }
+    }
+    
+    // Should NOT double .iter() when already present
+    fn count_positive(&self) -> i32 {
+        let mut count = 0
+        for item in self.items {
+            if item > 0 {
+                count = count + 1
+            }
+        }
+        count
+    }
+    
+    // Should NOT add .iter() after .enumerate()
+    fn print_with_index(&self) {
+        for (i, item) in self.items.iter().enumerate() {
+            println!("{}: {}", i, item)
+        }
+    }
+}
+
+// Simple vec iteration
+fn process_vec(items: Vec<i32>) {
+    for item in items {
+        println!("{}", item)
+    }
+}
+
+fn main() {
+    let data = TestData::new()
+    println!("Sum: {}", data.sum_items())
+    data.print_names()
+    println!("Positive count: {}", data.count_positive())
+    data.print_with_index()
+    
+    let items = Vec::new()
+    process_vec(items)
+}

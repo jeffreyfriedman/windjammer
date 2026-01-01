@@ -130,15 +130,34 @@ impl InferenceEngine {
 
     /// Infer trait bounds for a function
     pub fn infer_function_bounds(&mut self, func: &FunctionDecl) -> InferredBounds {
+        // If function has explicit where clause, skip inference to avoid conflicts
+        // This is important for associated type bounds like `where P::Output: Display`
+        // where we don't want to accidentally infer `P: Display` for the base type
+        if !func.where_clause.is_empty() {
+            return InferredBounds::new();
+        }
+
         // Collect type parameter names
         self.type_params = func.type_params.iter().map(|p| p.name.clone()).collect();
 
         // Map function parameters to their type parameters
         self.var_to_type_param.clear();
         for param in &func.parameters {
-            if let crate::parser::Type::Generic(type_param) = &param.type_ {
-                self.var_to_type_param
-                    .insert(param.name.clone(), type_param.clone());
+            // Check for Type::Generic OR Type::Custom with a type parameter name
+            let type_param_name = match &param.type_ {
+                crate::parser::Type::Generic(name) => Some(name.clone()),
+                crate::parser::Type::Custom(name) => {
+                    // If the custom type name is one of our type parameters, treat it as generic
+                    if self.type_params.contains(name) {
+                        Some(name.clone())
+                    } else {
+                        None
+                    }
+                }
+                _ => None,
+            };
+            if let Some(tp_name) = type_param_name {
+                self.var_to_type_param.insert(param.name.clone(), tp_name);
             }
         }
 
@@ -151,9 +170,9 @@ impl InferenceEngine {
     }
 
     /// Collect constraints from a list of statements
-    fn collect_constraints_from_statements(
+    fn collect_constraints_from_statements<'ast>(
         &self,
-        statements: &[Statement],
+        statements: &[&'ast Statement<'ast>],
         bounds: &mut InferredBounds,
     ) {
         for stmt in statements {
@@ -193,7 +212,7 @@ impl InferenceEngine {
             Statement::Match { value, arms, .. } => {
                 self.collect_constraints_from_expression(value, bounds);
                 for arm in arms {
-                    self.collect_constraints_from_expression(&arm.body, bounds);
+                    self.collect_constraints_from_expression(arm.body, bounds);
                     if let Some(guard) = &arm.guard {
                         self.collect_constraints_from_expression(guard, bounds);
                     }
@@ -231,20 +250,17 @@ impl InferenceEngine {
             } => {
                 match op {
                     BinaryOp::Add => {
-                        self.infer_trait_for_expression(left, "Add", bounds);
-                        self.infer_trait_for_expression(right, "Add", bounds);
+                        // For T + T operations, we need Add<Output = T>
+                        self.infer_operator_trait(left, right, "Add", bounds);
                     }
                     BinaryOp::Sub => {
-                        self.infer_trait_for_expression(left, "Sub", bounds);
-                        self.infer_trait_for_expression(right, "Sub", bounds);
+                        self.infer_operator_trait(left, right, "Sub", bounds);
                     }
                     BinaryOp::Mul => {
-                        self.infer_trait_for_expression(left, "Mul", bounds);
-                        self.infer_trait_for_expression(right, "Mul", bounds);
+                        self.infer_operator_trait(left, right, "Mul", bounds);
                     }
                     BinaryOp::Div => {
-                        self.infer_trait_for_expression(left, "Div", bounds);
-                        self.infer_trait_for_expression(right, "Div", bounds);
+                        self.infer_operator_trait(left, right, "Div", bounds);
                     }
                     BinaryOp::Eq | BinaryOp::Ne => {
                         self.infer_trait_for_expression(left, "PartialEq", bounds);
@@ -300,9 +316,9 @@ impl InferenceEngine {
                         ..
                     }) = args.first()
                     {
-                        // Convert Vec<Expression> to Vec<(Option<String>, Expression)>
-                        let labeled_args: Vec<(Option<String>, Expression)> =
-                            args[1..].iter().map(|e| (None, e.clone())).collect();
+                        // Convert Vec<&Expression> to Vec<(Option<String>, &Expression)>
+                        let labeled_args: Vec<(Option<String>, &Expression)> =
+                            args[1..].iter().map(|e| (None, *e)).collect();
                         self.analyze_format_string(fmt, &labeled_args, bounds);
                     }
                 }
@@ -341,10 +357,10 @@ impl InferenceEngine {
     }
 
     /// Analyze a format string to determine required traits
-    fn analyze_format_string(
+    fn analyze_format_string<'ast>(
         &self,
         format_str: &str,
-        arguments: &[(Option<String>, Expression)],
+        arguments: &[(Option<String>, &'ast Expression<'ast>)],
         bounds: &mut InferredBounds,
     ) {
         // Simple heuristic: check for {:?} (Debug) vs {} (Display)
@@ -360,6 +376,41 @@ impl InferenceEngine {
             for (_, arg) in arguments {
                 self.infer_trait_for_expression(arg, "Display", bounds);
             }
+        }
+    }
+
+    /// Infer an operator trait (Add, Sub, Mul, Div) with proper Output type
+    /// For T + T, we need T: Add<Output = T> + Copy not just T: Add
+    fn infer_operator_trait(
+        &self,
+        left: &Expression,
+        right: &Expression,
+        trait_name: &str,
+        bounds: &mut InferredBounds,
+    ) {
+        let left_type_param = self.extract_type_param(left);
+        let right_type_param = self.extract_type_param(right);
+
+        // If both operands are the same type parameter (e.g., T + T),
+        // we need the trait with Output = T AND Copy (because x is used twice)
+        if let (Some(left_tp), Some(right_tp)) = (&left_type_param, &right_type_param) {
+            if left_tp == right_tp {
+                // T + T requires T: Add<Output = T> + Copy
+                let full_bound = format!("{}<Output = {}>", trait_name, left_tp);
+                bounds.add_constraint(left_tp.clone(), full_bound);
+                // Also need Copy because the same variable is used twice
+                bounds.add_constraint(left_tp.clone(), "Copy".to_string());
+                return;
+            }
+        }
+
+        // If left is a type parameter, it needs the operator trait
+        if let Some(tp) = left_type_param {
+            bounds.add_constraint(tp, trait_name.to_string());
+        }
+        // If right is a type parameter, it needs the operator trait
+        if let Some(tp) = right_type_param {
+            bounds.add_constraint(tp, trait_name.to_string());
         }
     }
 
@@ -409,6 +460,7 @@ impl Default for InferenceEngine {
 mod tests {
     use super::*;
     use crate::parser::{Literal, OwnershipHint, Parameter, Type};
+    use crate::test_utils::{test_alloc_expr, test_alloc_stmt};
 
     #[test]
     fn test_infer_display_from_println() {
@@ -417,6 +469,7 @@ mod tests {
         let func = FunctionDecl {
             name: "print".to_string(),
             is_pub: false,
+            is_extern: false,
             decorators: vec![],
             type_params: vec![TypeParam {
                 name: "T".to_string(),
@@ -427,29 +480,31 @@ mod tests {
                 pattern: None,
                 type_: Type::Generic("T".to_string()),
                 ownership: OwnershipHint::Inferred,
+                is_mutable: false,
             }],
             return_type: None,
             is_async: false,
-            body: vec![Statement::Expression {
-                expr: Expression::MacroInvocation {
+            body: vec![test_alloc_stmt(Statement::Expression {
+                expr: test_alloc_expr(Expression::MacroInvocation {
                     name: "println".to_string(),
                     args: vec![
-                        Expression::Literal {
+                        test_alloc_expr(Expression::Literal {
                             value: Literal::String("{}".to_string()),
                             location: None,
-                        },
-                        Expression::Identifier {
+                        }),
+                        test_alloc_expr(Expression::Identifier {
                             name: "x".to_string(),
                             location: None,
-                        },
+                        }),
                     ],
                     delimiter: crate::parser::MacroDelimiter::Parens,
                     location: None,
-                },
+                }),
                 location: None,
-            }],
+            })],
             where_clause: vec![],
             parent_type: None,
+            doc_comment: None,
         };
 
         let bounds = engine.infer_function_bounds(&func);
@@ -466,6 +521,7 @@ mod tests {
         let func = FunctionDecl {
             name: "duplicate".to_string(),
             is_pub: false,
+            is_extern: false,
             decorators: vec![],
             type_params: vec![TypeParam {
                 name: "T".to_string(),
@@ -476,12 +532,13 @@ mod tests {
                 pattern: None,
                 type_: Type::Generic("T".to_string()),
                 ownership: OwnershipHint::Inferred,
+                is_mutable: false,
             }],
             return_type: Some(Type::Generic("T".to_string())),
             is_async: false,
-            body: vec![Statement::Expression {
-                expr: Expression::MethodCall {
-                    object: Box::new(Expression::Identifier {
+            body: vec![test_alloc_stmt(Statement::Expression {
+                expr: test_alloc_expr(Expression::MethodCall {
+                    object: test_alloc_expr(Expression::Identifier {
                         name: "x".to_string(),
                         location: None,
                     }),
@@ -489,11 +546,12 @@ mod tests {
                     type_args: None,
                     arguments: vec![],
                     location: None,
-                },
+                }),
                 location: None,
-            }],
+            })],
             where_clause: vec![],
             parent_type: None,
+            doc_comment: None,
         };
 
         let bounds = engine.infer_function_bounds(&func);
@@ -509,6 +567,7 @@ mod tests {
 
         let func = FunctionDecl {
             is_pub: false,
+            is_extern: false,
             name: "add".to_string(),
             decorators: vec![],
             type_params: vec![TypeParam {
@@ -521,39 +580,47 @@ mod tests {
                     pattern: None,
                     type_: Type::Generic("T".to_string()),
                     ownership: OwnershipHint::Inferred,
+                    is_mutable: false,
                 },
                 Parameter {
                     name: "y".to_string(),
                     pattern: None,
                     type_: Type::Generic("T".to_string()),
                     ownership: OwnershipHint::Inferred,
+                    is_mutable: false,
                 },
             ],
             return_type: Some(Type::Generic("T".to_string())),
             is_async: false,
-            body: vec![Statement::Expression {
-                expr: Expression::Binary {
+            body: vec![test_alloc_stmt(Statement::Expression {
+                expr: test_alloc_expr(Expression::Binary {
                     op: BinaryOp::Add,
-                    left: Box::new(Expression::Identifier {
+                    left: test_alloc_expr(Expression::Identifier {
                         name: "x".to_string(),
                         location: None,
                     }),
-                    right: Box::new(Expression::Identifier {
+                    right: test_alloc_expr(Expression::Identifier {
                         name: "y".to_string(),
                         location: None,
                     }),
                     location: None,
-                },
+                }),
                 location: None,
-            }],
+            })],
             where_clause: vec![],
             parent_type: None,
+            doc_comment: None,
         };
 
         let bounds = engine.infer_function_bounds(&func);
 
         assert!(!bounds.is_empty());
         let t_bounds = bounds.get_bounds("T");
-        assert!(t_bounds.contains(&"Add".to_string()));
+        // Now infers Add<Output = T> instead of just Add for same-type operands
+        assert!(
+            t_bounds.iter().any(|b| b.starts_with("Add")),
+            "Expected Add bound, got: {:?}",
+            t_bounds
+        );
     }
 }

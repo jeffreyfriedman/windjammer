@@ -26,7 +26,7 @@ pub fn metrics(req: Request) -> Response {
     output.push_str(&format!("# TYPE http_requests_total counter\n"))
     
     unsafe {
-        for (endpoint, count) in REQUEST_COUNT.iter() {
+        for (endpoint, count) in REQUEST_COUNT {
             output.push_str(&format!("http_requests_total{{endpoint=\"{}\"}} {}\n", endpoint, count))
         }
     }
@@ -37,7 +37,7 @@ pub fn metrics(req: Request) -> Response {
     output.push_str(&format!("# TYPE http_request_duration_seconds summary\n"))
     
     unsafe {
-        for (endpoint, duration_sum) in REQUEST_DURATION_SUM.iter() {
+        for (endpoint, duration_sum) in REQUEST_DURATION_SUM {
             let count = REQUEST_COUNT.get(endpoint).unwrap_or(&0)
             if *count > 0 {
                 let avg_duration = (*duration_sum as f64) / (*count as f64) / 1000.0
@@ -53,7 +53,7 @@ pub fn metrics(req: Request) -> Response {
     output.push_str(&format!("# TYPE http_errors_total counter\n"))
     
     unsafe {
-        for (endpoint, count) in ERROR_COUNT.iter() {
+        for (endpoint, count) in ERROR_COUNT {
             output.push_str(&format!("http_errors_total{{endpoint=\"{}\"}} {}\n", endpoint, count))
         }
     }
@@ -126,17 +126,17 @@ pub fn metrics_json(req: Request) -> Response {
     
     unsafe {
         // Add request counts
-        for (endpoint, count) in REQUEST_COUNT.iter() {
+        for (endpoint, count) in REQUEST_COUNT {
             metrics["requests"][endpoint] = json!(count)
         }
         
         // Add error counts
-        for (endpoint, count) in ERROR_COUNT.iter() {
+        for (endpoint, count) in ERROR_COUNT {
             metrics["errors"][endpoint] = json!(count)
         }
         
         // Add average durations
-        for (endpoint, duration_sum) in REQUEST_DURATION_SUM.iter() {
+        for (endpoint, duration_sum) in REQUEST_DURATION_SUM {
             let count = REQUEST_COUNT.get(endpoint).unwrap_or(&0)
             if *count > 0 {
                 let avg_duration = (*duration_sum as f64) / (*count as f64)

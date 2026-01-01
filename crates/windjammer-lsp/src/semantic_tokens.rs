@@ -30,7 +30,7 @@ fn token_type_to_index(token_type: SemanticTokenType) -> u32 {
 
 /// Provides semantic token information for syntax highlighting
 pub struct SemanticTokensProvider {
-    program: Option<Program>,
+    program: Option<Program<'static>>,
     source: String,
 }
 
@@ -42,7 +42,7 @@ impl SemanticTokensProvider {
         }
     }
 
-    pub fn update_program(&mut self, program: Program, source: String) {
+    pub fn update_program(&mut self, program: Program<'static>, source: String) {
         self.program = Some(program);
         self.source = source;
     }

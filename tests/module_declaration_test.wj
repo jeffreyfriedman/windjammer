@@ -1,0 +1,34 @@
+// Test: Module Declarations
+// Tests that the parser supports module declarations
+
+// Simple module declaration
+mod utils;
+
+// Public module declaration
+pub mod math;
+pub mod physics;
+
+// Multiple modules
+pub mod rendering;
+pub mod audio;
+pub mod world;
+
+// Private module
+mod internal;
+mod helpers;
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

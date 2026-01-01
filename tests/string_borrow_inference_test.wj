@@ -1,0 +1,35 @@
+// Test: String parameter inference 
+// Tests that stored parameters are kept as owned String
+
+pub struct Logger {
+    prefix: string,
+}
+
+impl Logger {
+    // Takes owned String for storage - should remain String
+    pub fn new(name: string) -> Logger {
+        Logger { prefix: name }
+    }
+}
+
+// Function that stores the parameter
+pub fn store_path(paths: &mut Vec<string>, path: string) {
+    paths.push(path)
+}
+
+pub fn test_string_storage() {
+    // Logger::new stores the name, so it should be owned String
+    let logger = Logger::new("App")
+    
+    // store_path pushes the path, so it should be owned String
+    let mut paths = Vec::new()
+    store_path(&mut paths, "file.txt")
+    
+    println!("Logger prefix: {}", logger.prefix)
+}
+
+fn main() {
+    test_string_storage()
+}
+
+
