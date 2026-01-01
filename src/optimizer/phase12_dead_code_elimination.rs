@@ -803,32 +803,33 @@ mod tests {
                 decl: make_pub_func(
                     "test",
                     vec![
-                        Statement::Return {
-                            value: Some(Expression::Literal {
+                        test_alloc_stmt(Statement::Return {
+                            value: Some(test_alloc_expr(Expression::Literal {
                                 value: Literal::Int(42),
+                                location: None,
+                            })),
+                            location: None,
+                        }),
+                        test_alloc_stmt(Statement::Expression {
+                            expr: test_alloc_expr(Expression::MacroInvocation {
+                                name: "println".to_string(),
+                                args: vec![test_alloc_expr(Expression::Literal {
+                                    value: Literal::String("unreachable".to_string()),
+                                    location: None,
+                                })],
+                                delimiter: crate::parser::MacroDelimiter::Parens,
                                 location: None,
                             }),
                             location: None,
-                        },
-                        Statement::Expression {
-                            expr: Expression::MacroInvocation {
-                                name: "println".to_string(),
-                                args: vec![Expression::Literal {
-                                    value: Literal::String("unreachable".to_string()),
-                                    location: None,
-                                }],
-                                delimiter: crate::parser::MacroDelimiter::Parens,
-                                location: None,
-                            },
-                            location: None,
-                        },
+                        }),
                     ],
                 ),
                 location: None,
             }],
         };
 
-        let (optimized, stats) = eliminate_dead_code(&program);
+        let optimizer = crate::optimizer::Optimizer::with_defaults();
+        let (optimized, stats) = eliminate_dead_code(&program, &optimizer);
         assert_eq!(stats.unreachable_statements_removed, 1);
 
         let func = match &optimized.items[0] {
@@ -845,27 +846,28 @@ mod tests {
                 Item::Function {
                     decl: make_pub_func(
                         "main",
-                        vec![Statement::Return {
+                        vec![test_alloc_stmt(Statement::Return {
                             value: None,
                             location: None,
-                        }],
+                        })],
                     ),
                     location: None,
                 },
                 Item::Function {
                     decl: make_private_func(
                         "unused_helper",
-                        vec![Statement::Return {
+                        vec![test_alloc_stmt(Statement::Return {
                             value: None,
                             location: None,
-                        }],
+                        })],
                     ),
                     location: None,
                 },
             ],
         };
 
-        let (optimized, stats) = eliminate_dead_code(&program);
+        let optimizer = crate::optimizer::Optimizer::with_defaults();
+        let (optimized, stats) = eliminate_dead_code(&program, &optimizer);
         assert_eq!(stats.unused_functions_removed, 1);
         assert_eq!(optimized.items.len(), 1);
     }
@@ -877,34 +879,35 @@ mod tests {
                 Item::Function {
                     decl: make_pub_func(
                         "main",
-                        vec![Statement::Expression {
-                            expr: Expression::Call {
-                                function: Box::new(Expression::Identifier {
+                        vec![test_alloc_stmt(Statement::Expression {
+                            expr: test_alloc_expr(Expression::Call {
+                                function: test_alloc_expr(Expression::Identifier {
                                     name: "helper".to_string(),
                                     location: None,
                                 }),
                                 arguments: vec![],
                                 location: None,
-                            },
+                            }),
                             location: None,
-                        }],
+                        })],
                     ),
                     location: None,
                 },
                 Item::Function {
                     decl: make_private_func(
                         "helper",
-                        vec![Statement::Return {
+                        vec![test_alloc_stmt(Statement::Return {
                             value: None,
                             location: None,
-                        }],
+                        })],
                     ),
                     location: None,
                 },
             ],
         };
 
-        let (optimized, stats) = eliminate_dead_code(&program);
+        let optimizer = crate::optimizer::Optimizer::with_defaults();
+        let (optimized, stats) = eliminate_dead_code(&program, &optimizer);
         assert_eq!(stats.unused_functions_removed, 0);
         assert_eq!(optimized.items.len(), 2);
     }
@@ -916,26 +919,27 @@ mod tests {
                 decl: make_pub_func(
                     "test",
                     vec![
-                        Statement::If {
-                            condition: Expression::Literal {
+                        test_alloc_stmt(Statement::If {
+                            condition: test_alloc_expr(Expression::Literal {
                                 value: Literal::Bool(true),
                                 location: None,
-                            },
+                            }),
                             then_block: vec![],
                             else_block: Some(vec![]),
                             location: None,
-                        },
-                        Statement::Return {
+                        }),
+                        test_alloc_stmt(Statement::Return {
                             value: None,
                             location: None,
-                        },
+                        }),
                     ],
                 ),
                 location: None,
             }],
         };
 
-        let (optimized, stats) = eliminate_dead_code(&program);
+        let optimizer = crate::optimizer::Optimizer::with_defaults();
+        let (optimized, stats) = eliminate_dead_code(&program, &optimizer);
         assert_eq!(stats.empty_blocks_removed, 1);
 
         let func = match &optimized.items[0] {
@@ -951,51 +955,52 @@ mod tests {
             items: vec![Item::Function {
                 decl: make_pub_func(
                     "test",
-                    vec![Statement::If {
-                        condition: Expression::Literal {
+                    vec![test_alloc_stmt(Statement::If {
+                        condition: test_alloc_expr(Expression::Literal {
                             value: Literal::Bool(true),
                             location: None,
-                        },
+                        }),
                         then_block: vec![
-                            Statement::Return {
-                                value: Some(Expression::Literal {
+                            test_alloc_stmt(Statement::Return {
+                                value: Some(test_alloc_expr(Expression::Literal {
                                     value: Literal::Int(1),
                                     location: None,
-                                }),
+                                })),
                                 location: None,
-                            },
-                            Statement::Expression {
-                                expr: Expression::Literal {
+                            }),
+                            test_alloc_stmt(Statement::Expression {
+                                expr: test_alloc_expr(Expression::Literal {
                                     value: Literal::Int(2),
                                     location: None,
-                                },
+                                }),
                                 location: None,
-                            },
+                            }),
                         ],
                         else_block: Some(vec![
-                            Statement::Return {
-                                value: Some(Expression::Literal {
+                            test_alloc_stmt(Statement::Return {
+                                value: Some(test_alloc_expr(Expression::Literal {
                                     value: Literal::Int(3),
+                                    location: None,
+                                })),
+                                location: None,
+                            }),
+                            test_alloc_stmt(Statement::Expression {
+                                expr: test_alloc_expr(Expression::Literal {
+                                    value: Literal::Int(4),
                                     location: None,
                                 }),
                                 location: None,
-                            },
-                            Statement::Expression {
-                                expr: Expression::Literal {
-                                    value: Literal::Int(4),
-                                    location: None,
-                                },
-                                location: None,
-                            },
+                            }),
                         ]),
                         location: None,
-                    }],
+                    })],
                 ),
                 location: None,
             }],
         };
 
-        let (optimized, stats) = eliminate_dead_code(&program);
+        let optimizer = crate::optimizer::Optimizer::with_defaults();
+        let (optimized, stats) = eliminate_dead_code(&program, &optimizer);
         assert_eq!(stats.unreachable_statements_removed, 2);
 
         let func = match &optimized.items[0] {
@@ -1006,7 +1011,7 @@ mod tests {
             then_block,
             else_block,
             ..
-        } = &func.body[0]
+        } = func.body[0]
         {
             assert_eq!(then_block.len(), 1);
             assert_eq!(else_block.as_ref().unwrap().len(), 1);
@@ -1022,31 +1027,32 @@ mod tests {
                 decl: make_pub_func(
                     "test",
                     vec![
-                        Statement::Let {
+                        test_alloc_stmt(Statement::Let {
                             pattern: Pattern::Identifier("x".to_string()),
                             mutable: false,
                             type_: None,
-                            value: Expression::Literal {
+                            value: test_alloc_expr(Expression::Literal {
                                 value: Literal::Int(42),
                                 location: None,
-                            },
+                            }),
                             else_block: None,
                             location: None,
-                        },
-                        Statement::Return {
-                            value: Some(Expression::Identifier {
+                        }),
+                        test_alloc_stmt(Statement::Return {
+                            value: Some(test_alloc_expr(Expression::Identifier {
                                 name: "x".to_string(),
                                 location: None,
-                            }),
+                            })),
                             location: None,
-                        },
+                        }),
                     ],
                 ),
                 location: None,
             }],
         };
 
-        let (_, stats) = eliminate_dead_code(&program);
+        let optimizer = crate::optimizer::Optimizer::with_defaults();
+        let (_, stats) = eliminate_dead_code(&program, &optimizer);
         assert_eq!(stats.unreachable_statements_removed, 0);
         assert_eq!(stats.unused_functions_removed, 0);
         assert_eq!(stats.empty_blocks_removed, 0);
