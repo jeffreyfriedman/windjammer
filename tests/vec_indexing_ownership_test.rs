@@ -12,10 +12,10 @@ use windjammer::lexer::Lexer;
 use windjammer::parser::{Parser, Program};
 use windjammer::CompilationTarget;
 
-fn parse_code(code: &str) -> Program {
+fn parse_code(code: &str) -> Program<'static> {
     let mut lexer = Lexer::new(code);
     let tokens = lexer.tokenize_with_locations();
-    let mut parser = Parser::new(tokens);
+    let parser = Box::leak(Box::new(Parser::new(tokens)));
     parser.parse().unwrap()
 }
 

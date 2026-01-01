@@ -25,35 +25,71 @@ fn alloc_var(name: &str) -> &'static windjammer::parser::Expression<'static> {
     test_alloc_expr(windjammer::parser::ast::builders::expr_var(name))
 }
 
-fn alloc_binary(op: windjammer::parser::BinaryOp, left: &'static windjammer::parser::Expression<'static>, right: &'static windjammer::parser::Expression<'static>) -> &'static windjammer::parser::Expression<'static> {
-    test_alloc_expr(windjammer::parser::ast::builders::expr_binary(op, left, right))
+fn alloc_binary(
+    op: windjammer::parser::BinaryOp,
+    left: &'static windjammer::parser::Expression<'static>,
+    right: &'static windjammer::parser::Expression<'static>,
+) -> &'static windjammer::parser::Expression<'static> {
+    test_alloc_expr(windjammer::parser::ast::builders::expr_binary(
+        op, left, right,
+    ))
 }
 
-fn alloc_add(left: &'static windjammer::parser::Expression<'static>, right: &'static windjammer::parser::Expression<'static>) -> &'static windjammer::parser::Expression<'static> {
+fn alloc_add(
+    left: &'static windjammer::parser::Expression<'static>,
+    right: &'static windjammer::parser::Expression<'static>,
+) -> &'static windjammer::parser::Expression<'static> {
     test_alloc_expr(windjammer::parser::ast::builders::expr_add(left, right))
 }
 
-fn alloc_call(func: &str, args: Vec<&'static windjammer::parser::Expression<'static>>) -> &'static windjammer::parser::Expression<'static> {
+fn alloc_call(
+    func: &str,
+    args: Vec<&'static windjammer::parser::Expression<'static>>,
+) -> &'static windjammer::parser::Expression<'static> {
     let func_expr = alloc_var(func);
-    let args_with_names: Vec<(Option<String>, &'static windjammer::parser::Expression<'static>)> = args.into_iter().map(|e| (None, e)).collect();
-    test_alloc_expr(windjammer::parser::ast::builders::expr_call(func_expr, args_with_names))
+    let args_with_names: Vec<(
+        Option<String>,
+        &'static windjammer::parser::Expression<'static>,
+    )> = args.into_iter().map(|e| (None, e)).collect();
+    test_alloc_expr(windjammer::parser::ast::builders::expr_call(
+        func_expr,
+        args_with_names,
+    ))
 }
 
-fn alloc_method(obj: &'static windjammer::parser::Expression<'static>, method: &str, args: Vec<&'static windjammer::parser::Expression<'static>>) -> &'static windjammer::parser::Expression<'static> {
-    let args_with_names: Vec<(Option<String>, &'static windjammer::parser::Expression<'static>)> = args.into_iter().map(|e| (None, e)).collect();
-    test_alloc_expr(windjammer::parser::ast::builders::expr_method(obj, method, args_with_names))
+fn alloc_method(
+    obj: &'static windjammer::parser::Expression<'static>,
+    method: &str,
+    args: Vec<&'static windjammer::parser::Expression<'static>>,
+) -> &'static windjammer::parser::Expression<'static> {
+    let args_with_names: Vec<(
+        Option<String>,
+        &'static windjammer::parser::Expression<'static>,
+    )> = args.into_iter().map(|e| (None, e)).collect();
+    test_alloc_expr(windjammer::parser::ast::builders::expr_method(
+        obj,
+        method,
+        args_with_names,
+    ))
 }
 
-fn alloc_field(obj: &'static windjammer::parser::Expression<'static>, field: &str) -> &'static windjammer::parser::Expression<'static> {
+fn alloc_field(
+    obj: &'static windjammer::parser::Expression<'static>,
+    field: &str,
+) -> &'static windjammer::parser::Expression<'static> {
     test_alloc_expr(windjammer::parser::ast::builders::expr_field(obj, field))
 }
 
 // Statement wrappers
-fn alloc_stmt_return(value: Option<&'static windjammer::parser::Expression<'static>>) -> &'static windjammer::parser::Statement<'static> {
+fn alloc_stmt_return(
+    value: Option<&'static windjammer::parser::Expression<'static>>,
+) -> &'static windjammer::parser::Statement<'static> {
     test_alloc_stmt(windjammer::parser::ast::builders::stmt_return(value))
 }
 
-fn alloc_stmt_expr(expr: &'static windjammer::parser::Expression<'static>) -> &'static windjammer::parser::Statement<'static> {
+fn alloc_stmt_expr(
+    expr: &'static windjammer::parser::Expression<'static>,
+) -> &'static windjammer::parser::Statement<'static> {
     test_alloc_stmt(windjammer::parser::ast::builders::stmt_expr(expr))
 }
 
@@ -669,7 +705,10 @@ fn test_stmt_if_else() {
 fn test_stmt_while() {
     use windjammer::parser::ast::*;
 
-    let stmt = stmt_while(alloc_bool(true), vec![alloc_stmt_expr(alloc_call("work", vec![]))]);
+    let stmt = stmt_while(
+        alloc_bool(true),
+        vec![alloc_stmt_expr(alloc_call("work", vec![]))],
+    );
 
     if let Statement::While { body, .. } = stmt {
         assert_eq!(body.len(), 1);

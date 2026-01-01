@@ -483,10 +483,7 @@ if (import.meta.url === `file://${process.argv[1]}`) {
 
                     self.indent_level += 1;
                     output.push_str(&self.indent());
-                    output.push_str(&format!(
-                        "return {};\n",
-                        self.generate_expression(arm.body)
-                    ));
+                    output.push_str(&format!("return {};\n", self.generate_expression(arm.body)));
                     self.indent_level -= 1;
 
                     output.push_str(&self.indent());

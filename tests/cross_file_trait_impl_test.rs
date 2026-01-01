@@ -9,7 +9,7 @@ use windjammer::CompilationTarget;
 fn parse_and_generate(source: &str) -> String {
     let mut lexer = Lexer::new(source);
     let tokens = lexer.tokenize_with_locations();
-    let mut parser = Parser::new(tokens);
+    let parser = Box::leak(Box::new(Parser::new(tokens)));
     let program = parser.parse().unwrap();
     let mut analyzer = Analyzer::new();
     let (analyzed_functions, analyzed_structs, _analyzed_trait_methods) =
@@ -31,7 +31,7 @@ fn parse_and_generate_multi_file(files: &[(&str, &str)]) -> String {
     for (_filename, source) in files {
         let mut lexer = Lexer::new(source);
         let tokens = lexer.tokenize_with_locations();
-        let mut parser = Parser::new(tokens);
+        let parser = Box::leak(Box::new(Parser::new(tokens)));
         let program = parser.parse().unwrap();
 
         // Analyze this file's program with the SHARED analyzer
