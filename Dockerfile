@@ -22,6 +22,7 @@ RUN mkdir -p src/bin benches crates/windjammer-lsp/src crates/windjammer-lsp/ben
     echo "fn main() {}" > benches/defer_drop_latency.rs && \
     echo "fn main() {}" > benches/incremental_compilation.rs && \
     echo "fn main() {}" > benches/regression_benchmarks.rs && \
+    echo "fn main() {}" > benches/arena_performance.rs && \
     echo "pub fn dummy() {}" > crates/windjammer-lsp/src/lib.rs && \
     echo "fn main() {}" > crates/windjammer-lsp/benches/salsa_performance.rs && \
     echo "pub fn dummy() {}" > crates/windjammer-mcp/src/lib.rs && \
