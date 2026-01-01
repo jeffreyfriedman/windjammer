@@ -47,6 +47,9 @@ temp_*.wj
 *.profraw
 *.profdata
 
+# Code coverage
+/coverage/
+
 # Debugging
 *.dSYM/
 

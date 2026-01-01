@@ -30,9 +30,9 @@ struct FileAnalysis {
     /// Source code (kept for future use in incremental parsing)
     source: String,
     /// Parsed AST
-    program: Option<Program>,
+    program: Option<Program<'static>>,
     /// Analyzed functions with ownership inference
-    analyzed_functions: Vec<AnalyzedFunction>,
+    analyzed_functions: Vec<AnalyzedFunction<'static>>,
     /// Symbol table for go-to-definition
     symbol_table: SymbolTable,
     /// Analysis diagnostics
@@ -105,7 +105,11 @@ impl AnalysisDatabase {
     fn full_analysis(
         &self,
         content: &str,
-    ) -> (Vec<Diagnostic>, Option<Program>, Vec<AnalyzedFunction>) {
+    ) -> (
+        Vec<Diagnostic>,
+        Option<Program<'static>>,
+        Vec<AnalyzedFunction<'static>>,
+    ) {
         let mut diagnostics = Vec::new();
         let mut program_result = None;
         let mut analyzed_functions = Vec::new();
@@ -115,7 +119,8 @@ impl AnalysisDatabase {
         let tokens = lexer.tokenize_with_locations();
 
         // Parse the file
-        let mut parser = Parser::new(tokens);
+        // Leak parser to keep arena alive for 'static lifetime
+        let parser = Box::leak(Box::new(Parser::new(tokens)));
         match parser.parse() {
             Ok(program) => {
                 tracing::debug!("File parsed successfully");
@@ -123,7 +128,7 @@ impl AnalysisDatabase {
                 // Run ownership inference analysis
                 let mut analyzer = Analyzer::new();
                 match analyzer.analyze_program(&program) {
-                    Ok((functions, _registry)) => {
+                    Ok((functions, _registry, _analyzed_trait_methods)) => {
                         tracing::debug!(
                             "Ownership analysis complete: {} functions",
                             functions.len()
@@ -181,7 +186,7 @@ impl AnalysisDatabase {
     }
 
     /// Get cached program for a file
-    pub fn get_program(&self, uri: &Url) -> Option<Program> {
+    pub fn get_program(&self, uri: &Url) -> Option<Program<'static>> {
         self.cache
             .read()
             .unwrap()
@@ -190,7 +195,7 @@ impl AnalysisDatabase {
     }
 
     /// Get cached analyzed functions for a file
-    pub fn get_analyzed_functions(&self, uri: &Url) -> Vec<AnalyzedFunction> {
+    pub fn get_analyzed_functions(&self, uri: &Url) -> Vec<AnalyzedFunction<'static>> {
         self.cache
             .read()
             .unwrap()

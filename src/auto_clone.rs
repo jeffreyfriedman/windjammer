@@ -68,7 +68,7 @@ impl AutoCloneAnalysis {
     }
 
     /// Build a map of all variable usages in the function
-    fn build_usage_map(statements: &[Statement]) -> HashMap<String, Vec<Usage>> {
+    fn build_usage_map<'ast>(statements: &[&'ast Statement<'ast>]) -> HashMap<String, Vec<Usage>> {
         let mut map = HashMap::new();
 
         for (idx, stmt) in statements.iter().enumerate() {
@@ -154,7 +154,7 @@ impl AutoCloneAnalysis {
                 Self::collect_usages_from_expression(value, idx, UsageKind::Read, map);
                 for arm in arms {
                     // MatchArm.body is an Expression, not Vec<Statement>
-                    Self::collect_usages_from_expression(&arm.body, idx, UsageKind::Read, map);
+                    Self::collect_usages_from_expression(arm.body, idx, UsageKind::Read, map);
                 }
             }
             _ => {}
@@ -181,7 +181,7 @@ impl AutoCloneAnalysis {
                 // might vary (e.g., items[0], items[i])
                 if let Some(base_path) = Self::extract_expression_path(object) {
                     // Try to get a more specific index if it's a literal
-                    let index_str = match index.as_ref() {
+                    let index_str = match index {
                         Expression::Literal {
                             value: crate::parser::Literal::Int(n),
                             ..
@@ -392,7 +392,7 @@ impl AutoCloneAnalysis {
 
     /// Find variables that are bound to string literals
     /// These don't need .clone() because they're just &str references
-    fn find_string_literal_vars(&mut self, statements: &[Statement]) {
+    fn find_string_literal_vars<'ast>(&mut self, statements: &[&'ast Statement<'ast>]) {
         for stmt in statements {
             match stmt {
                 Statement::Let {
@@ -443,7 +443,7 @@ impl AutoCloneAnalysis {
                 // Check if the block ends with a match statement that returns string literals
                 if let Some(Statement::Match { arms, .. }) = statements.last() {
                     arms.iter()
-                        .all(|arm| Self::expr_returns_string_literal(&arm.body))
+                        .all(|arm| Self::expr_returns_string_literal(arm.body))
                 } else {
                     false
                 }
@@ -471,6 +471,7 @@ enum UsageKind {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::test_utils::{test_alloc_expr, test_alloc_stmt};
 
     #[test]
     fn test_simple_move_and_reuse() {
@@ -481,6 +482,7 @@ mod tests {
         let func = FunctionDecl {
             name: "test".to_string(),
             is_pub: false,
+            is_extern: false,
             parameters: vec![],
             return_type: None,
             type_params: vec![],
@@ -488,50 +490,52 @@ mod tests {
             decorators: vec![],
             is_async: false,
             parent_type: None,
+            doc_comment: None,
             body: vec![
-                Statement::Let {
+                test_alloc_stmt(Statement::Let {
                     pattern: Pattern::Identifier("x".to_string()),
                     mutable: false,
                     type_: None,
-                    value: Expression::Array {
+                    value: test_alloc_expr(Expression::Array {
                         elements: vec![
-                            Expression::Literal {
+                            test_alloc_expr(Expression::Literal {
                                 value: Literal::Int(1),
                                 location: None,
-                            },
-                            Expression::Literal {
+                            }),
+                            test_alloc_expr(Expression::Literal {
                                 value: Literal::Int(2),
                                 location: None,
-                            },
-                            Expression::Literal {
+                            }),
+                            test_alloc_expr(Expression::Literal {
                                 value: Literal::Int(3),
                                 location: None,
-                            },
+                            }),
                         ],
                         location: None,
-                    },
+                    }),
+                    else_block: None,
                     location: None,
-                },
-                Statement::Expression {
-                    expr: Expression::Call {
-                        function: Box::new(Expression::Identifier {
+                }),
+                test_alloc_stmt(Statement::Expression {
+                    expr: test_alloc_expr(Expression::Call {
+                        function: test_alloc_expr(Expression::Identifier {
                             name: "takes_ownership".to_string(),
                             location: None,
                         }),
                         arguments: vec![(
                             None,
-                            Expression::Identifier {
+                            test_alloc_expr(Expression::Identifier {
                                 name: "x".to_string(),
                                 location: None,
-                            },
+                            }),
                         )],
                         location: None,
-                    },
+                    }),
                     location: None,
-                },
-                Statement::Expression {
-                    expr: Expression::MethodCall {
-                        object: Box::new(Expression::Identifier {
+                }),
+                test_alloc_stmt(Statement::Expression {
+                    expr: test_alloc_expr(Expression::MethodCall {
+                        object: test_alloc_expr(Expression::Identifier {
                             name: "x".to_string(),
                             location: None,
                         }),
@@ -539,9 +543,9 @@ mod tests {
                         arguments: vec![],
                         type_args: None,
                         location: None,
-                    },
+                    }),
                     location: None,
-                },
+                }),
             ],
         };
 
@@ -563,6 +567,7 @@ mod tests {
         let func = FunctionDecl {
             name: "test".to_string(),
             is_pub: false,
+            is_extern: false,
             parameters: vec![],
             return_type: None,
             type_params: vec![],
@@ -570,34 +575,36 @@ mod tests {
             decorators: vec![],
             is_async: false,
             parent_type: None,
+            doc_comment: None,
             body: vec![
-                Statement::Let {
+                test_alloc_stmt(Statement::Let {
                     pattern: Pattern::Identifier("x".to_string()),
                     mutable: false,
                     type_: None,
-                    value: Expression::Array {
+                    value: test_alloc_expr(Expression::Array {
                         elements: vec![],
                         location: None,
-                    },
+                    }),
+                    else_block: None,
                     location: None,
-                },
-                Statement::Expression {
-                    expr: Expression::Call {
-                        function: Box::new(Expression::Identifier {
+                }),
+                test_alloc_stmt(Statement::Expression {
+                    expr: test_alloc_expr(Expression::Call {
+                        function: test_alloc_expr(Expression::Identifier {
                             name: "takes_ownership".to_string(),
                             location: None,
                         }),
                         arguments: vec![(
                             None,
-                            Expression::Identifier {
+                            test_alloc_expr(Expression::Identifier {
                                 name: "x".to_string(),
                                 location: None,
-                            },
+                            }),
                         )],
                         location: None,
-                    },
+                    }),
                     location: None,
-                },
+                }),
             ],
         };
 
