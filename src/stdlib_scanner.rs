@@ -90,8 +90,12 @@ fn parse_function_signature(line: &str, module: &str) -> Option<FunctionSignatur
 
     Some(FunctionSignature {
         name: full_name,
+        param_types: vec![], // TODO: Extract from Rust AST
         param_ownership,
+        return_type: None,                      // TODO: Extract from Rust AST
         return_ownership: OwnershipMode::Owned, // Default
+        has_self_receiver: false,               // Stdlib functions don't have self
+        is_extern: false,                       // Stdlib functions are not extern
     })
 }
 
@@ -123,15 +127,34 @@ fn parse_parameters(params_str: &str) -> Vec<OwnershipMode> {
 
 /// Fallback signatures when runtime source isn't available
 fn populate_fallback_signatures(registry: &mut SignatureRegistry) -> Result<(), String> {
+    use crate::parser::Type;
     use OwnershipMode::*;
+
+    // Windjammer builtins - println macro/function
+    registry.add_function(
+        "println".to_string(),
+        FunctionSignature {
+            name: "println".to_string(),
+            param_types: vec![Type::Reference(Box::new(Type::String))], // Takes &str
+            param_ownership: vec![Borrowed],
+            return_type: None,
+            return_ownership: Owned,
+            has_self_receiver: false,
+            is_extern: false,
+        },
+    );
 
     // std::game - ECS functions
     registry.add_function(
         "game::create_entity".to_string(),
         FunctionSignature {
             name: "game::create_entity".to_string(),
+            param_types: vec![],
             param_ownership: vec![MutBorrowed],
+            return_type: None,
             return_ownership: Owned,
+            has_self_receiver: false,
+            is_extern: false,
         },
     );
 
@@ -139,8 +162,12 @@ fn populate_fallback_signatures(registry: &mut SignatureRegistry) -> Result<(), 
         "game::add_transform".to_string(),
         FunctionSignature {
             name: "game::add_transform".to_string(),
+            param_types: vec![],
             param_ownership: vec![MutBorrowed, Owned, Owned],
+            return_type: None,
             return_ownership: Owned,
+            has_self_receiver: false,
+            is_extern: false,
         },
     );
 
@@ -148,8 +175,12 @@ fn populate_fallback_signatures(registry: &mut SignatureRegistry) -> Result<(), 
         "game::add_velocity".to_string(),
         FunctionSignature {
             name: "game::add_velocity".to_string(),
+            param_types: vec![],
             param_ownership: vec![MutBorrowed, Owned, Owned],
+            return_type: None,
             return_ownership: Owned,
+            has_self_receiver: false,
+            is_extern: false,
         },
     );
 
@@ -157,8 +188,12 @@ fn populate_fallback_signatures(registry: &mut SignatureRegistry) -> Result<(), 
         "game::add_mesh".to_string(),
         FunctionSignature {
             name: "game::add_mesh".to_string(),
+            param_types: vec![],
             param_ownership: vec![MutBorrowed, Owned, Owned],
+            return_type: None,
             return_ownership: Owned,
+            has_self_receiver: false,
+            is_extern: false,
         },
     );
 

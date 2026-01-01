@@ -1,3 +1,5 @@
+#![allow(clippy::collapsible_match)]
+
 //! Phase 13: Loop Optimization
 //!
 //! This optimization improves loop performance through several techniques:
@@ -25,7 +27,6 @@
 //! // After unrolling:
 //! array[0] = 0; array[1] = 1; array[2] = 2; array[3] = 3;
 //! ```
-
 use crate::parser::{
     BinaryOp, Expression, FunctionDecl, ImplBlock, Item, Pattern, Program, Statement,
 };
@@ -65,42 +66,51 @@ impl Default for LoopOptimizationConfig {
 }
 
 /// Optimize loops in a program
-pub fn optimize_loops(program: &Program) -> (Program, LoopOptimizationStats) {
-    optimize_loops_with_config(program, &LoopOptimizationConfig::default())
+pub fn optimize_loops<'ast>(
+    program: &Program<'ast>,
+    optimizer: &crate::optimizer::Optimizer,
+) -> (Program<'ast>, LoopOptimizationStats) {
+    optimize_loops_with_config(program, &LoopOptimizationConfig::default(), optimizer)
 }
 
 /// Optimize loops with custom configuration
-pub fn optimize_loops_with_config(
-    program: &Program,
+pub fn optimize_loops_with_config<'ast>(
+    program: &Program<'ast>,
     config: &LoopOptimizationConfig,
-) -> (Program, LoopOptimizationStats) {
+    optimizer: &crate::optimizer::Optimizer,
+) -> (Program<'ast>, LoopOptimizationStats) {
     let mut stats = LoopOptimizationStats::default();
 
     let new_items = program
         .items
         .iter()
-        .map(|item| optimize_loops_in_item(item, config, &mut stats))
+        .map(|item| optimize_loops_in_item(item, config, &mut stats, optimizer))
         .collect();
 
-    (Program { items: new_items }, stats)
+    (
+        unsafe { std::mem::transmute::<Program<'_>, Program<'_>>(Program { items: new_items }) },
+        stats,
+    )
 }
 
 /// Optimize loops in a single item
-fn optimize_loops_in_item(
-    item: &Item,
+fn optimize_loops_in_item<'ast>(
+    item: &'ast Item<'ast>,
     config: &LoopOptimizationConfig,
     stats: &mut LoopOptimizationStats,
-) -> Item {
+    optimizer: &crate::optimizer::Optimizer,
+) -> Item<'ast> {
     match item {
         Item::Function {
             decl: func,
             location,
         } => {
-            let new_body = optimize_loops_in_statements(&func.body, config, stats);
+            let new_body = optimize_loops_in_statements(&func.body, config, stats, optimizer);
             Item::Function {
                 decl: FunctionDecl {
                     name: func.name.clone(),
                     is_pub: func.is_pub,
+                    is_extern: func.is_extern,
                     type_params: func.type_params.clone(),
                     where_clause: func.where_clause.clone(),
                     decorators: func.decorators.clone(),
@@ -109,6 +119,7 @@ fn optimize_loops_in_item(
                     return_type: func.return_type.clone(),
                     body: new_body,
                     parent_type: func.parent_type.clone(),
+                    doc_comment: func.doc_comment.clone(),
                 },
                 location: location.clone(),
             }
@@ -123,14 +134,16 @@ fn optimize_loops_in_item(
                 .map(|func| FunctionDecl {
                     name: func.name.clone(),
                     is_pub: func.is_pub,
+                    is_extern: func.is_extern,
                     type_params: func.type_params.clone(),
                     where_clause: func.where_clause.clone(),
                     decorators: func.decorators.clone(),
                     is_async: func.is_async,
                     parameters: func.parameters.clone(),
                     return_type: func.return_type.clone(),
-                    body: optimize_loops_in_statements(&func.body, config, stats),
+                    body: optimize_loops_in_statements(&func.body, config, stats, optimizer),
                     parent_type: func.parent_type.clone(),
+                    doc_comment: func.doc_comment.clone(),
                 })
                 .collect();
 
@@ -158,7 +171,7 @@ fn optimize_loops_in_item(
             name: name.clone(),
             mutable: *mutable,
             type_: type_.clone(),
-            value: optimize_loops_in_expression(value, config, stats),
+            value: optimize_loops_in_expression(value, config, stats, optimizer),
             location: location.clone(),
         },
         Item::Const {
@@ -169,7 +182,7 @@ fn optimize_loops_in_item(
         } => Item::Const {
             name: name.clone(),
             type_: type_.clone(),
-            value: optimize_loops_in_expression(value, config, stats),
+            value: optimize_loops_in_expression(value, config, stats, optimizer),
             location: location.clone(),
         },
         _ => item.clone(),
@@ -177,11 +190,12 @@ fn optimize_loops_in_item(
 }
 
 /// Optimize loops in a list of statements
-fn optimize_loops_in_statements(
-    statements: &[Statement],
+fn optimize_loops_in_statements<'ast>(
+    statements: &[&'ast Statement<'ast>],
     config: &LoopOptimizationConfig,
     stats: &mut LoopOptimizationStats,
-) -> Vec<Statement> {
+    optimizer: &crate::optimizer::Optimizer,
+) -> Vec<&'ast Statement<'ast>> {
     let mut result = Vec::new();
 
     for stmt in statements {
@@ -198,7 +212,7 @@ fn optimize_loops_in_statements(
                     // Try to unroll the loop if it's a small constant range
                     if config.enable_unrolling {
                         if let Some(unrolled) =
-                            try_unroll_loop(variable, iterable, body, config, stats)
+                            try_unroll_loop(variable, iterable, body, config, stats, optimizer)
                         {
                             result.extend(unrolled);
                             stats.loops_unrolled += 1;
@@ -209,7 +223,8 @@ fn optimize_loops_in_statements(
 
                     // Apply LICM if enabled
                     let optimized_body = if config.enable_licm {
-                        let (hoisted, new_body) = hoist_loop_invariants(body, variable, stats);
+                        let (hoisted, new_body) =
+                            hoist_loop_invariants(body, variable, stats, optimizer);
                         let has_hoisted = !hoisted.is_empty();
                         result.extend(hoisted);
                         if has_hoisted {
@@ -221,23 +236,32 @@ fn optimize_loops_in_statements(
                     };
 
                     // Recursively optimize the loop body
-                    let final_body = optimize_loops_in_statements(&optimized_body, config, stats);
+                    let final_body =
+                        optimize_loops_in_statements(&optimized_body, config, stats, optimizer);
 
-                    result.push(Statement::For {
-                        pattern: pattern.clone(),
-                        iterable: optimize_loops_in_expression(iterable, config, stats),
-                        body: final_body,
-                        location: location.clone(),
-                    });
+                    result.push(optimizer.alloc_stmt(unsafe {
+                        std::mem::transmute::<Statement<'_>, Statement<'_>>(Statement::For {
+                            pattern: pattern.clone(),
+                            iterable: optimize_loops_in_expression(
+                                iterable, config, stats, optimizer,
+                            ),
+                            body: final_body,
+                            location: location.clone(),
+                        })
+                    }));
                 } else {
                     // For complex patterns (tuples, etc.), just recursively optimize the body
-                    let final_body = optimize_loops_in_statements(body, config, stats);
-                    result.push(Statement::For {
-                        pattern: pattern.clone(),
-                        iterable: optimize_loops_in_expression(iterable, config, stats),
-                        body: final_body,
-                        location: location.clone(),
-                    });
+                    let final_body = optimize_loops_in_statements(body, config, stats, optimizer);
+                    result.push(optimizer.alloc_stmt(unsafe {
+                        std::mem::transmute::<Statement<'_>, Statement<'_>>(Statement::For {
+                            pattern: pattern.clone(),
+                            iterable: optimize_loops_in_expression(
+                                iterable, config, stats, optimizer,
+                            ),
+                            body: final_body,
+                            location: location.clone(),
+                        })
+                    }));
                 }
             }
             Statement::While {
@@ -247,7 +271,7 @@ fn optimize_loops_in_statements(
             } => {
                 // Apply LICM if enabled
                 let optimized_body = if config.enable_licm {
-                    let (hoisted, new_body) = hoist_loop_invariants(body, "", stats);
+                    let (hoisted, new_body) = hoist_loop_invariants(body, "", stats, optimizer);
                     let has_hoisted = !hoisted.is_empty();
                     result.extend(hoisted);
                     if has_hoisted {
@@ -259,15 +283,20 @@ fn optimize_loops_in_statements(
                 };
 
                 // Recursively optimize the loop body
-                let final_body = optimize_loops_in_statements(&optimized_body, config, stats);
+                let final_body =
+                    optimize_loops_in_statements(&optimized_body, config, stats, optimizer);
 
-                result.push(Statement::While {
-                    condition: optimize_loops_in_expression(condition, config, stats),
-                    body: final_body,
-                    location: location.clone(),
-                });
+                result.push(optimizer.alloc_stmt(unsafe {
+                    std::mem::transmute::<Statement<'_>, Statement<'_>>(Statement::While {
+                        condition: optimize_loops_in_expression(
+                            condition, config, stats, optimizer,
+                        ),
+                        body: final_body,
+                        location: location.clone(),
+                    })
+                }));
             }
-            _ => result.push(optimize_loops_in_statement(stmt, config, stats)),
+            _ => result.push(optimize_loops_in_statement(stmt, config, stats, optimizer)),
         }
     }
 
@@ -275,126 +304,153 @@ fn optimize_loops_in_statements(
 }
 
 /// Optimize loops in a single statement
-fn optimize_loops_in_statement(
-    stmt: &Statement,
+fn optimize_loops_in_statement<'a: 'ast, 'ast>(
+    stmt: &'a Statement<'a>,
     config: &LoopOptimizationConfig,
     stats: &mut LoopOptimizationStats,
-) -> Statement {
+    optimizer: &crate::optimizer::Optimizer,
+) -> &'ast Statement<'ast> {
     match stmt {
-        Statement::Expression { expr, location } => Statement::Expression {
-            expr: optimize_loops_in_expression(expr, config, stats),
-            location: location.clone(),
-        },
+        Statement::Expression { expr, location } => optimizer.alloc_stmt(unsafe {
+            std::mem::transmute::<Statement<'_>, Statement<'_>>(Statement::Expression {
+                expr: optimize_loops_in_expression(expr, config, stats, optimizer),
+                location: location.clone(),
+            })
+        }),
         Statement::Return {
             value: Some(expr),
             location,
-        } => Statement::Return {
-            value: Some(optimize_loops_in_expression(expr, config, stats)),
-            location: location.clone(),
-        },
+        } => optimizer.alloc_stmt(unsafe {
+            std::mem::transmute::<Statement<'_>, Statement<'_>>(Statement::Return {
+                value: Some(optimize_loops_in_expression(expr, config, stats, optimizer)),
+                location: location.clone(),
+            })
+        }),
         Statement::Let {
             pattern,
             mutable,
             type_,
             value,
+            else_block,
             location,
-        } => Statement::Let {
-            pattern: pattern.clone(),
-            mutable: *mutable,
-            type_: type_.clone(),
-            value: optimize_loops_in_expression(value, config, stats),
-            location: location.clone(),
-        },
+        } => optimizer.alloc_stmt(unsafe {
+            std::mem::transmute::<Statement<'_>, Statement<'_>>(Statement::Let {
+                pattern: pattern.clone(),
+                mutable: *mutable,
+                type_: type_.clone(),
+                value: optimize_loops_in_expression(value, config, stats, optimizer),
+                else_block: else_block.as_ref().map(|stmts| {
+                    stmts
+                        .iter()
+                        .map(|s| optimize_loops_in_statement(s, config, stats, optimizer))
+                        .collect()
+                }),
+                location: location.clone(),
+            })
+        }),
         Statement::Assignment {
             target,
             value,
+            compound_op,
             location,
-        } => Statement::Assignment {
-            target: target.clone(),
-            value: optimize_loops_in_expression(value, config, stats),
-            location: location.clone(),
-        },
+        } => optimizer.alloc_stmt(unsafe {
+            std::mem::transmute::<Statement<'_>, Statement<'_>>(Statement::Assignment {
+                target,
+                value: optimize_loops_in_expression(value, config, stats, optimizer),
+                compound_op: *compound_op,
+                location: location.clone(),
+            })
+        }),
         Statement::If {
             condition,
             then_block,
             else_block,
             location,
-        } => Statement::If {
-            condition: optimize_loops_in_expression(condition, config, stats),
-            then_block: optimize_loops_in_statements(then_block, config, stats),
-            else_block: else_block
-                .as_ref()
-                .map(|stmts| optimize_loops_in_statements(stmts, config, stats)),
-            location: location.clone(),
-        },
+        } => optimizer.alloc_stmt(unsafe {
+            std::mem::transmute::<Statement<'_>, Statement<'_>>(Statement::If {
+                condition: optimize_loops_in_expression(condition, config, stats, optimizer),
+                then_block: optimize_loops_in_statements(then_block, config, stats, optimizer),
+                else_block: else_block
+                    .as_ref()
+                    .map(|stmts| optimize_loops_in_statements(stmts, config, stats, optimizer)),
+                location: location.clone(),
+            })
+        }),
         Statement::Match {
             value,
             arms,
             location,
-        } => Statement::Match {
-            value: optimize_loops_in_expression(value, config, stats),
-            arms: arms
-                .iter()
-                .map(|arm| crate::parser::MatchArm {
-                    pattern: arm.pattern.clone(),
-                    guard: arm
-                        .guard
-                        .as_ref()
-                        .map(|g| optimize_loops_in_expression(g, config, stats)),
-                    body: optimize_loops_in_expression(&arm.body, config, stats),
-                })
-                .collect(),
-            location: location.clone(),
-        },
-        _ => stmt.clone(),
+        } => optimizer.alloc_stmt(unsafe {
+            std::mem::transmute::<Statement<'_>, Statement<'_>>(Statement::Match {
+                value: optimize_loops_in_expression(value, config, stats, optimizer),
+                arms: arms
+                    .iter()
+                    .map(|arm| crate::parser::MatchArm {
+                        pattern: arm.pattern.clone(),
+                        guard: arm
+                            .guard
+                            .as_ref()
+                            .map(|g| optimize_loops_in_expression(g, config, stats, optimizer)),
+                        body: optimize_loops_in_expression(arm.body, config, stats, optimizer),
+                    })
+                    .collect(),
+                location: location.clone(),
+            })
+        }),
+        _ => stmt,
     }
 }
 
 /// Optimize loops in an expression
-fn optimize_loops_in_expression(
-    expr: &Expression,
+fn optimize_loops_in_expression<'a: 'ast, 'ast>(
+    expr: &'a Expression<'a>,
     config: &LoopOptimizationConfig,
     stats: &mut LoopOptimizationStats,
-) -> Expression {
+    optimizer: &crate::optimizer::Optimizer,
+) -> &'ast Expression<'ast> {
     match expr {
         Expression::Call {
             function,
             arguments,
             location,
-        } => Expression::Call {
-            function: Box::new(optimize_loops_in_expression(function, config, stats)),
-            arguments: arguments
-                .iter()
-                .map(|(label, arg)| {
-                    (
-                        label.clone(),
-                        optimize_loops_in_expression(arg, config, stats),
-                    )
-                })
-                .collect(),
-            location: location.clone(),
-        },
+        } => optimizer.alloc_expr(unsafe {
+            std::mem::transmute::<Expression<'_>, Expression<'_>>(Expression::Call {
+                function: optimize_loops_in_expression(function, config, stats, optimizer),
+                arguments: arguments
+                    .iter()
+                    .map(|(label, arg)| {
+                        (
+                            label.clone(),
+                            optimize_loops_in_expression(arg, config, stats, optimizer),
+                        )
+                    })
+                    .collect(),
+                location: location.clone(),
+            })
+        }),
         Expression::MethodCall {
             object,
             method,
             type_args,
             arguments,
             location,
-        } => Expression::MethodCall {
-            object: Box::new(optimize_loops_in_expression(object, config, stats)),
-            method: method.clone(),
-            type_args: type_args.clone(),
-            arguments: arguments
-                .iter()
-                .map(|(label, arg)| {
-                    (
-                        label.clone(),
-                        optimize_loops_in_expression(arg, config, stats),
-                    )
-                })
-                .collect(),
-            location: location.clone(),
-        },
+        } => optimizer.alloc_expr(unsafe {
+            std::mem::transmute::<Expression<'_>, Expression<'_>>(Expression::MethodCall {
+                object: optimize_loops_in_expression(object, config, stats, optimizer),
+                method: method.clone(),
+                type_args: type_args.clone(),
+                arguments: arguments
+                    .iter()
+                    .map(|(label, arg)| {
+                        (
+                            label.clone(),
+                            optimize_loops_in_expression(arg, config, stats, optimizer),
+                        )
+                    })
+                    .collect(),
+                location: location.clone(),
+            })
+        }),
         Expression::Binary {
             left,
             op,
@@ -403,147 +459,185 @@ fn optimize_loops_in_expression(
         } => {
             // Apply strength reduction if enabled
             if config.enable_strength_reduction {
-                if let Some(reduced) = try_strength_reduction(left, op, right, config, stats) {
+                if let Some(reduced) =
+                    try_strength_reduction(left, op, right, config, stats, optimizer)
+                {
                     return reduced;
                 }
             }
 
-            Expression::Binary {
-                left: Box::new(optimize_loops_in_expression(left, config, stats)),
-                op: *op,
-                right: Box::new(optimize_loops_in_expression(right, config, stats)),
-                location: location.clone(),
-            }
+            optimizer.alloc_expr(unsafe {
+                std::mem::transmute::<Expression<'_>, Expression<'_>>(Expression::Binary {
+                    left: optimize_loops_in_expression(left, config, stats, optimizer),
+                    op: *op,
+                    right: optimize_loops_in_expression(right, config, stats, optimizer),
+                    location: location.clone(),
+                })
+            })
         }
         Expression::Unary {
             op,
             operand,
             location,
-        } => Expression::Unary {
-            op: *op,
-            operand: Box::new(optimize_loops_in_expression(operand, config, stats)),
-            location: location.clone(),
-        },
+        } => optimizer.alloc_expr(unsafe {
+            std::mem::transmute::<Expression<'_>, Expression<'_>>(Expression::Unary {
+                op: *op,
+                operand: optimize_loops_in_expression(operand, config, stats, optimizer),
+                location: location.clone(),
+            })
+        }),
         Expression::Block {
             statements,
             location,
-        } => Expression::Block {
-            statements: optimize_loops_in_statements(statements, config, stats),
-            location: location.clone(),
-        },
+        } => optimizer.alloc_expr(unsafe {
+            std::mem::transmute::<Expression<'_>, Expression<'_>>(Expression::Block {
+                statements: optimize_loops_in_statements(statements, config, stats, optimizer),
+                location: location.clone(),
+            })
+        }),
         Expression::Closure {
             parameters,
             body,
             location,
-        } => Expression::Closure {
-            parameters: parameters.clone(),
-            body: Box::new(optimize_loops_in_expression(body, config, stats)),
-            location: location.clone(),
-        },
+        } => optimizer.alloc_expr(unsafe {
+            std::mem::transmute::<Expression<'_>, Expression<'_>>(Expression::Closure {
+                parameters: parameters.clone(),
+                body: optimize_loops_in_expression(body, config, stats, optimizer),
+                location: location.clone(),
+            })
+        }),
         Expression::Index {
             object,
             index,
             location,
-        } => Expression::Index {
-            object: Box::new(optimize_loops_in_expression(object, config, stats)),
-            index: Box::new(optimize_loops_in_expression(index, config, stats)),
-            location: location.clone(),
-        },
+        } => optimizer.alloc_expr(unsafe {
+            std::mem::transmute::<Expression<'_>, Expression<'_>>(Expression::Index {
+                object: optimize_loops_in_expression(object, config, stats, optimizer),
+                index: optimize_loops_in_expression(index, config, stats, optimizer),
+                location: location.clone(),
+            })
+        }),
         Expression::FieldAccess {
             object,
             field,
             location,
-        } => Expression::FieldAccess {
-            object: Box::new(optimize_loops_in_expression(object, config, stats)),
-            field: field.clone(),
-            location: location.clone(),
-        },
+        } => optimizer.alloc_expr(unsafe {
+            std::mem::transmute::<Expression<'_>, Expression<'_>>(Expression::FieldAccess {
+                object: optimize_loops_in_expression(object, config, stats, optimizer),
+                field: field.clone(),
+                location: location.clone(),
+            })
+        }),
         Expression::Cast {
             expr,
             type_,
             location,
-        } => Expression::Cast {
-            expr: Box::new(optimize_loops_in_expression(expr, config, stats)),
-            type_: type_.clone(),
-            location: location.clone(),
-        },
+        } => optimizer.alloc_expr(unsafe {
+            std::mem::transmute::<Expression<'_>, Expression<'_>>(Expression::Cast {
+                expr: optimize_loops_in_expression(expr, config, stats, optimizer),
+                type_: type_.clone(),
+                location: location.clone(),
+            })
+        }),
         Expression::StructLiteral {
             name,
             fields,
             location,
-        } => Expression::StructLiteral {
-            name: name.clone(),
-            fields: fields
-                .iter()
-                .map(|(k, v)| (k.clone(), optimize_loops_in_expression(v, config, stats)))
-                .collect(),
-            location: location.clone(),
-        },
-        Expression::Tuple { elements, location } => Expression::Tuple {
-            elements: elements
-                .iter()
-                .map(|e| optimize_loops_in_expression(e, config, stats))
-                .collect(),
-            location: location.clone(),
-        },
+        } => optimizer.alloc_expr(unsafe {
+            std::mem::transmute::<Expression<'_>, Expression<'_>>(Expression::StructLiteral {
+                name: name.clone(),
+                fields: fields
+                    .iter()
+                    .map(|(k, v)| {
+                        (
+                            k.clone(),
+                            optimize_loops_in_expression(v, config, stats, optimizer),
+                        )
+                    })
+                    .collect(),
+                location: location.clone(),
+            })
+        }),
+        Expression::Tuple { elements, location } => optimizer.alloc_expr(unsafe {
+            std::mem::transmute::<Expression<'_>, Expression<'_>>(Expression::Tuple {
+                elements: elements
+                    .iter()
+                    .map(|e| optimize_loops_in_expression(e, config, stats, optimizer))
+                    .collect(),
+                location: location.clone(),
+            })
+        }),
         Expression::Range {
             start,
             end,
             inclusive,
             location,
-        } => Expression::Range {
-            start: Box::new(optimize_loops_in_expression(start, config, stats)),
-            end: Box::new(optimize_loops_in_expression(end, config, stats)),
-            inclusive: *inclusive,
-            location: location.clone(),
-        },
+        } => optimizer.alloc_expr(unsafe {
+            std::mem::transmute::<Expression<'_>, Expression<'_>>(Expression::Range {
+                start: optimize_loops_in_expression(start, config, stats, optimizer),
+                end: optimize_loops_in_expression(end, config, stats, optimizer),
+                inclusive: *inclusive,
+                location: location.clone(),
+            })
+        }),
         Expression::ChannelSend {
             channel,
             value,
             location,
-        } => Expression::ChannelSend {
-            channel: Box::new(optimize_loops_in_expression(channel, config, stats)),
-            value: Box::new(optimize_loops_in_expression(value, config, stats)),
-            location: location.clone(),
-        },
-        Expression::ChannelRecv { channel, location } => Expression::ChannelRecv {
-            channel: Box::new(optimize_loops_in_expression(channel, config, stats)),
-            location: location.clone(),
-        },
-        Expression::Await { expr, location } => Expression::Await {
-            expr: Box::new(optimize_loops_in_expression(expr, config, stats)),
-            location: location.clone(),
-        },
-        Expression::TryOp { expr, location } => Expression::TryOp {
-            expr: Box::new(optimize_loops_in_expression(expr, config, stats)),
-            location: location.clone(),
-        },
+        } => optimizer.alloc_expr(unsafe {
+            std::mem::transmute::<Expression<'_>, Expression<'_>>(Expression::ChannelSend {
+                channel: optimize_loops_in_expression(channel, config, stats, optimizer),
+                value: optimize_loops_in_expression(value, config, stats, optimizer),
+                location: location.clone(),
+            })
+        }),
+        Expression::ChannelRecv { channel, location } => optimizer.alloc_expr(unsafe {
+            std::mem::transmute::<Expression<'_>, Expression<'_>>(Expression::ChannelRecv {
+                channel: optimize_loops_in_expression(channel, config, stats, optimizer),
+                location: location.clone(),
+            })
+        }),
+        Expression::Await { expr, location } => optimizer.alloc_expr(unsafe {
+            std::mem::transmute::<Expression<'_>, Expression<'_>>(Expression::Await {
+                expr: optimize_loops_in_expression(expr, config, stats, optimizer),
+                location: location.clone(),
+            })
+        }),
+        Expression::TryOp { expr, location } => optimizer.alloc_expr(unsafe {
+            std::mem::transmute::<Expression<'_>, Expression<'_>>(Expression::TryOp {
+                expr: optimize_loops_in_expression(expr, config, stats, optimizer),
+                location: location.clone(),
+            })
+        }),
         Expression::MacroInvocation {
             name,
             args,
             delimiter,
             location,
-        } => Expression::MacroInvocation {
-            name: name.clone(),
-            args: args
-                .iter()
-                .map(|a| optimize_loops_in_expression(a, config, stats))
-                .collect(),
-            delimiter: delimiter.clone(),
-            location: location.clone(),
-        },
-        _ => expr.clone(),
+        } => optimizer.alloc_expr(unsafe {
+            std::mem::transmute::<Expression<'_>, Expression<'_>>(Expression::MacroInvocation {
+                name: name.clone(),
+                args: args
+                    .iter()
+                    .map(|a| optimize_loops_in_expression(a, config, stats, optimizer))
+                    .collect(),
+                delimiter: *delimiter,
+                location: location.clone(),
+            })
+        }),
+        _ => expr,
     }
 }
 
 /// Try to unroll a loop if it's a small constant range
-fn try_unroll_loop(
+fn try_unroll_loop<'ast>(
     variable: &str,
-    iterable: &Expression,
-    body: &[Statement],
+    iterable: &'ast Expression<'ast>,
+    body: &[&'ast Statement<'ast>],
     config: &LoopOptimizationConfig,
     _stats: &mut LoopOptimizationStats,
-) -> Option<Vec<Statement>> {
+    optimizer: &crate::optimizer::Optimizer,
+) -> Option<Vec<&'ast Statement<'ast>>> {
     // Only unroll simple range expressions: 0..n or 0..=n
     if let Expression::Range {
         start,
@@ -588,7 +682,9 @@ fn try_unroll_loop(
                         location: None,
                     };
                     for stmt in body {
-                        unrolled.push(replace_variable_in_statement(stmt, variable, &iter_expr));
+                        unrolled.push(replace_variable_in_statement(
+                            stmt, variable, &iter_expr, optimizer,
+                        ));
                     }
                 }
 
@@ -601,20 +697,21 @@ fn try_unroll_loop(
 }
 
 /// Hoist loop-invariant statements outside the loop
-fn hoist_loop_invariants(
-    body: &[Statement],
+fn hoist_loop_invariants<'ast>(
+    body: &[&'ast Statement<'ast>],
     loop_var: &str,
     stats: &mut LoopOptimizationStats,
-) -> (Vec<Statement>, Vec<Statement>) {
+    _optimizer: &crate::optimizer::Optimizer,
+) -> (Vec<&'ast Statement<'ast>>, Vec<&'ast Statement<'ast>>) {
     let mut hoisted = Vec::new();
     let mut remaining = Vec::new();
 
     for stmt in body {
         if is_loop_invariant(stmt, loop_var) {
-            hoisted.push(stmt.clone());
+            hoisted.push(*stmt);
             stats.invariants_hoisted += 1;
         } else {
-            remaining.push(stmt.clone());
+            remaining.push(*stmt);
         }
     }
 
@@ -622,7 +719,7 @@ fn hoist_loop_invariants(
 }
 
 /// Check if a statement is loop-invariant (doesn't depend on loop variable)
-fn is_loop_invariant(stmt: &Statement, loop_var: &str) -> bool {
+fn is_loop_invariant<'ast>(stmt: &'ast Statement<'ast>, loop_var: &str) -> bool {
     // Only hoist Let statements that don't depend on the loop variable
     match stmt {
         Statement::Let { value, .. } => !expression_uses_variable(value, loop_var),
@@ -631,7 +728,7 @@ fn is_loop_invariant(stmt: &Statement, loop_var: &str) -> bool {
 }
 
 /// Check if an expression uses a specific variable
-fn expression_uses_variable(expr: &Expression, var_name: &str) -> bool {
+fn expression_uses_variable<'ast>(expr: &'ast Expression<'ast>, var_name: &str) -> bool {
     match expr {
         Expression::Identifier { name, .. } => name == var_name,
         Expression::Binary { left, right, .. } => {
@@ -689,7 +786,7 @@ fn expression_uses_variable(expr: &Expression, var_name: &str) -> bool {
 }
 
 /// Check if a statement uses a specific variable
-fn statement_uses_variable(stmt: &Statement, var_name: &str) -> bool {
+fn statement_uses_variable<'ast>(stmt: &'ast Statement<'ast>, var_name: &str) -> bool {
     match stmt {
         Statement::Expression { expr, .. }
         | Statement::Return {
@@ -744,7 +841,7 @@ fn statement_uses_variable(stmt: &Statement, var_name: &str) -> bool {
                     arm.guard
                         .as_ref()
                         .is_some_and(|g| expression_uses_variable(g, var_name))
-                        || expression_uses_variable(&arm.body, var_name)
+                        || expression_uses_variable(arm.body, var_name)
                 })
         }
         _ => false,
@@ -752,90 +849,99 @@ fn statement_uses_variable(stmt: &Statement, var_name: &str) -> bool {
 }
 
 /// Replace all occurrences of a variable in a statement with an expression
-fn replace_variable_in_statement(
-    stmt: &Statement,
+fn replace_variable_in_statement<'a, 'ast>(
+    stmt: &'a Statement<'a>,
     var_name: &str,
-    replacement: &Expression,
-) -> Statement {
+    replacement: &'a Expression<'a>,
+    optimizer: &crate::optimizer::Optimizer,
+) -> &'ast Statement<'ast> {
     match stmt {
-        Statement::Expression { expr, .. } => Statement::Expression {
-            expr: replace_variable_in_expression(expr, var_name, replacement),
+        Statement::Expression { expr, .. } => optimizer.alloc_stmt(Statement::Expression {
+            expr: replace_variable_in_expression(expr, var_name, replacement, optimizer),
             location: None,
-        },
+        }),
         Statement::Return {
             value: Some(expr), ..
-        } => Statement::Return {
-            value: Some(replace_variable_in_expression(expr, var_name, replacement)),
+        } => optimizer.alloc_stmt(Statement::Return {
+            value: Some(replace_variable_in_expression(
+                expr,
+                var_name,
+                replacement,
+                optimizer,
+            )),
             location: None,
-        },
+        }),
         Statement::Let {
             pattern,
             mutable,
             type_,
             value,
+            else_block,
             ..
-        } => Statement::Let {
-            pattern: pattern.clone(),
-            mutable: *mutable,
-            type_: type_.clone(),
-            value: replace_variable_in_expression(value, var_name, replacement),
-            location: None,
-        },
-        Statement::Assignment { target, value, .. } => Statement::Assignment {
-            target: replace_variable_in_expression(target, var_name, replacement),
-            value: replace_variable_in_expression(value, var_name, replacement),
-            location: None,
-        },
-        _ => stmt.clone(),
+        } => optimizer.alloc_stmt(unsafe {
+            std::mem::transmute::<Statement<'_>, Statement<'_>>(Statement::Let {
+                pattern: pattern.clone(),
+                mutable: *mutable,
+                type_: type_.clone(),
+                value: replace_variable_in_expression(value, var_name, replacement, optimizer),
+                else_block: else_block.clone(),
+                location: None,
+            })
+        }),
+        Statement::Assignment { target, value, .. } => {
+            optimizer.alloc_stmt(Statement::Assignment {
+                target: replace_variable_in_expression(target, var_name, replacement, optimizer),
+                value: replace_variable_in_expression(value, var_name, replacement, optimizer),
+                compound_op: None,
+                location: None,
+            })
+        }
+        _ => unsafe { std::mem::transmute::<&Statement<'_>, &Statement<'_>>(stmt) }, // Safe: just changing lifetime annotation
     }
 }
 
 /// Replace all occurrences of a variable in an expression with another expression
-fn replace_variable_in_expression(
-    expr: &Expression,
+fn replace_variable_in_expression<'a, 'ast>(
+    expr: &'a Expression<'a>,
     var_name: &str,
-    replacement: &Expression,
-) -> Expression {
+    replacement: &'a Expression<'a>,
+    optimizer: &crate::optimizer::Optimizer,
+) -> &'ast Expression<'ast> {
     match expr {
-        Expression::Identifier { name, .. } if name == var_name => replacement.clone(),
+        Expression::Identifier { name, .. } if name == var_name => unsafe {
+            std::mem::transmute::<&Expression<'_>, &Expression<'_>>(replacement)
+        },
         Expression::Binary {
             left, op, right, ..
-        } => Expression::Binary {
-            left: Box::new(replace_variable_in_expression(left, var_name, replacement)),
+        } => optimizer.alloc_expr(Expression::Binary {
+            left: replace_variable_in_expression(left, var_name, replacement, optimizer),
             op: *op,
-            right: Box::new(replace_variable_in_expression(right, var_name, replacement)),
+            right: replace_variable_in_expression(right, var_name, replacement, optimizer),
             location: None,
-        },
-        Expression::Unary { op, operand, .. } => Expression::Unary {
+        }),
+        Expression::Unary { op, operand, .. } => optimizer.alloc_expr(Expression::Unary {
             op: *op,
-            operand: Box::new(replace_variable_in_expression(
-                operand,
-                var_name,
-                replacement,
-            )),
+            operand: replace_variable_in_expression(operand, var_name, replacement, optimizer),
             location: None,
-        },
-        Expression::Index { object, index, .. } => Expression::Index {
-            object: Box::new(replace_variable_in_expression(
-                object,
-                var_name,
-                replacement,
-            )),
-            index: Box::new(replace_variable_in_expression(index, var_name, replacement)),
+        }),
+        Expression::Index { object, index, .. } => optimizer.alloc_expr(Expression::Index {
+            object: replace_variable_in_expression(object, var_name, replacement, optimizer),
+            index: replace_variable_in_expression(index, var_name, replacement, optimizer),
             location: None,
-        },
-        _ => expr.clone(),
+        }),
+        _ => unsafe { std::mem::transmute::<&Expression<'_>, &Expression<'_>>(expr) }, // Safe: just changing lifetime annotation
     }
 }
 
 /// Try to apply strength reduction to binary operations
-fn try_strength_reduction(
-    _left: &Expression,
+fn try_strength_reduction<'ast>(
+    _left: &'ast Expression<'ast>,
     _op: &BinaryOp,
-    _right: &Expression,
+    _right: &'ast Expression<'ast>,
     _config: &LoopOptimizationConfig,
     _stats: &mut LoopOptimizationStats,
-) -> Option<Expression> {
+    _optimizer: &crate::optimizer::Optimizer,
+) -> Option<&'ast Expression<'ast>> {
     // Note: Strength reduction like x * 2 -> x << 1 would require additional operators in BinaryOp
     // For now, we return None but this is a placeholder for future optimizations
     // such as replacing expensive operations with cheaper ones (e.g., x * 1 -> x, x * 0 -> 0)
@@ -846,6 +952,7 @@ fn try_strength_reduction(
 mod tests {
     use super::*;
     use crate::parser::{Decorator, Literal, Type};
+    use crate::test_utils::{test_alloc_expr, test_alloc_stmt};
 
     #[test]
     fn test_loop_unrolling_simple() {
@@ -853,6 +960,7 @@ mod tests {
             items: vec![Item::Function {
                 decl: FunctionDecl {
                     is_pub: false,
+                    is_extern: false,
                     name: "test".to_string(),
                     type_params: vec![],
                     where_clause: vec![],
@@ -862,42 +970,44 @@ mod tests {
                     }],
                     is_async: false,
                     parent_type: None,
+                    doc_comment: None,
                     parameters: vec![],
                     return_type: None,
-                    body: vec![Statement::For {
+                    body: vec![test_alloc_stmt(Statement::For {
                         pattern: Pattern::Identifier("i".to_string()),
-                        iterable: Expression::Range {
-                            start: Box::new(Expression::Literal {
+                        iterable: test_alloc_expr(Expression::Range {
+                            start: test_alloc_expr(Expression::Literal {
                                 value: Literal::Int(0),
                                 location: None,
                             }),
-                            end: Box::new(Expression::Literal {
+                            end: test_alloc_expr(Expression::Literal {
                                 value: Literal::Int(3),
                                 location: None,
                             }),
                             inclusive: false,
                             location: None,
-                        },
-                        body: vec![Statement::Expression {
-                            expr: Expression::MacroInvocation {
+                        }),
+                        body: vec![test_alloc_stmt(Statement::Expression {
+                            expr: test_alloc_expr(Expression::MacroInvocation {
                                 name: "println".to_string(),
-                                args: vec![Expression::Identifier {
+                                args: vec![test_alloc_expr(Expression::Identifier {
                                     name: "i".to_string(),
                                     location: None,
-                                }],
+                                })],
                                 delimiter: crate::parser::MacroDelimiter::Parens,
                                 location: None,
-                            },
+                            }),
                             location: None,
-                        }],
+                        })],
                         location: None,
-                    }],
+                    })],
                 },
                 location: None,
             }],
         };
 
-        let (optimized, stats) = optimize_loops(&program);
+        let optimizer = crate::optimizer::Optimizer::with_defaults();
+        let (optimized, stats) = optimize_loops(&program, &optimizer);
         assert_eq!(stats.loops_unrolled, 1);
 
         let func = match &optimized.items[0] {
@@ -914,65 +1024,69 @@ mod tests {
             items: vec![Item::Function {
                 decl: FunctionDecl {
                     is_pub: false,
+                    is_extern: false,
                     name: "test".to_string(),
                     type_params: vec![],
                     where_clause: vec![],
                     decorators: vec![],
                     is_async: false,
                     parent_type: None,
+                    doc_comment: None,
                     parameters: vec![],
                     return_type: None,
-                    body: vec![Statement::For {
+                    body: vec![test_alloc_stmt(Statement::For {
                         pattern: Pattern::Identifier("i".to_string()),
-                        iterable: Expression::Range {
-                            start: Box::new(Expression::Literal {
+                        iterable: test_alloc_expr(Expression::Range {
+                            start: test_alloc_expr(Expression::Literal {
                                 value: Literal::Int(0),
                                 location: None,
                             }),
-                            end: Box::new(Expression::Literal {
+                            end: test_alloc_expr(Expression::Literal {
                                 value: Literal::Int(100),
                                 location: None,
                             }),
                             inclusive: false,
                             location: None,
-                        },
+                        }),
                         body: vec![
                             // Loop-invariant: doesn't use 'i'
-                            Statement::Let {
+                            test_alloc_stmt(Statement::Let {
                                 pattern: Pattern::Identifier("x".to_string()),
                                 mutable: false,
                                 type_: None,
-                                value: Expression::Literal {
+                                value: test_alloc_expr(Expression::Literal {
                                     value: Literal::Int(42),
                                     location: None,
-                                },
+                                }),
+                                else_block: None,
                                 location: None,
-                            },
+                            }),
                             // Loop-variant: uses 'i'
-                            Statement::Expression {
-                                expr: Expression::Binary {
-                                    left: Box::new(Expression::Identifier {
+                            test_alloc_stmt(Statement::Expression {
+                                expr: test_alloc_expr(Expression::Binary {
+                                    left: test_alloc_expr(Expression::Identifier {
                                         name: "x".to_string(),
                                         location: None,
                                     }),
                                     op: BinaryOp::Add,
-                                    right: Box::new(Expression::Identifier {
+                                    right: test_alloc_expr(Expression::Identifier {
                                         name: "i".to_string(),
                                         location: None,
                                     }),
                                     location: None,
-                                },
+                                }),
                                 location: None,
-                            },
+                            }),
                         ],
                         location: None,
-                    }],
+                    })],
                 },
                 location: None,
             }],
         };
 
-        let (optimized, stats) = optimize_loops(&program);
+        let optimizer = crate::optimizer::Optimizer::with_defaults();
+        let (optimized, stats) = optimize_loops(&program, &optimizer);
         assert_eq!(stats.invariants_hoisted, 1);
         assert_eq!(stats.loops_optimized, 1);
 
@@ -992,35 +1106,38 @@ mod tests {
             items: vec![Item::Function {
                 decl: FunctionDecl {
                     is_pub: false,
+                    is_extern: false,
                     name: "test".to_string(),
                     type_params: vec![],
                     where_clause: vec![],
                     decorators: vec![],
                     is_async: false,
                     parent_type: None,
+                    doc_comment: None,
                     parameters: vec![],
                     return_type: Some(Type::Custom("i32".to_string())),
-                    body: vec![Statement::Return {
-                        value: Some(Expression::Binary {
-                            left: Box::new(Expression::Identifier {
+                    body: vec![test_alloc_stmt(Statement::Return {
+                        value: Some(test_alloc_expr(Expression::Binary {
+                            left: test_alloc_expr(Expression::Identifier {
                                 name: "x".to_string(),
                                 location: None,
                             }),
                             op: BinaryOp::Mul,
-                            right: Box::new(Expression::Literal {
+                            right: test_alloc_expr(Expression::Literal {
                                 value: Literal::Int(4),
                                 location: None,
                             }),
                             location: None,
-                        }),
+                        })),
                         location: None,
-                    }],
+                    })],
                 },
                 location: None,
             }],
         };
 
-        let (_, stats) = optimize_loops(&program);
+        let optimizer = crate::optimizer::Optimizer::with_defaults();
+        let (_, stats) = optimize_loops(&program, &optimizer);
         // No strength reductions implemented yet
         assert_eq!(stats.strength_reductions, 0);
     }
@@ -1031,43 +1148,46 @@ mod tests {
             items: vec![Item::Function {
                 decl: FunctionDecl {
                     is_pub: false,
+                    is_extern: false,
                     name: "test".to_string(),
                     type_params: vec![],
                     where_clause: vec![],
                     decorators: vec![],
                     is_async: false,
                     parent_type: None,
+                    doc_comment: None,
                     parameters: vec![],
                     return_type: None,
-                    body: vec![Statement::For {
+                    body: vec![test_alloc_stmt(Statement::For {
                         pattern: Pattern::Identifier("i".to_string()),
-                        iterable: Expression::Range {
-                            start: Box::new(Expression::Literal {
+                        iterable: test_alloc_expr(Expression::Range {
+                            start: test_alloc_expr(Expression::Literal {
                                 value: Literal::Int(0),
                                 location: None,
                             }),
-                            end: Box::new(Expression::Literal {
+                            end: test_alloc_expr(Expression::Literal {
                                 value: Literal::Int(1000),
                                 location: None,
                             }), // Too large
                             inclusive: false,
                             location: None,
-                        },
-                        body: vec![Statement::Expression {
-                            expr: Expression::Identifier {
+                        }),
+                        body: vec![test_alloc_stmt(Statement::Expression {
+                            expr: test_alloc_expr(Expression::Identifier {
                                 name: "i".to_string(),
                                 location: None,
-                            },
+                            }),
                             location: None,
-                        }],
+                        })],
                         location: None,
-                    }],
+                    })],
                 },
                 location: None,
             }],
         };
 
-        let (optimized, stats) = optimize_loops(&program);
+        let optimizer = crate::optimizer::Optimizer::with_defaults();
+        let (optimized, stats) = optimize_loops(&program, &optimizer);
         assert_eq!(stats.loops_unrolled, 0); // Should not unroll
 
         let func = match &optimized.items[0] {
@@ -1085,57 +1205,61 @@ mod tests {
             items: vec![Item::Function {
                 decl: FunctionDecl {
                     is_pub: false,
+                    is_extern: false,
                     name: "test".to_string(),
                     type_params: vec![],
                     where_clause: vec![],
                     decorators: vec![],
                     is_async: false,
                     parent_type: None,
+                    doc_comment: None,
                     parameters: vec![],
                     return_type: None,
-                    body: vec![Statement::For {
+                    body: vec![test_alloc_stmt(Statement::For {
                         pattern: Pattern::Identifier("i".to_string()),
-                        iterable: Expression::Range {
-                            start: Box::new(Expression::Literal {
+                        iterable: test_alloc_expr(Expression::Range {
+                            start: test_alloc_expr(Expression::Literal {
                                 value: Literal::Int(0),
                                 location: None,
                             }),
-                            end: Box::new(Expression::Literal {
+                            end: test_alloc_expr(Expression::Literal {
                                 value: Literal::Int(10),
                                 location: None,
                             }),
                             inclusive: false,
                             location: None,
-                        },
+                        }),
                         body: vec![
                             // Loop-variant: uses 'i'
-                            Statement::Let {
+                            test_alloc_stmt(Statement::Let {
                                 pattern: Pattern::Identifier("x".to_string()),
                                 mutable: false,
                                 type_: None,
-                                value: Expression::Binary {
-                                    left: Box::new(Expression::Identifier {
+                                value: test_alloc_expr(Expression::Binary {
+                                    left: test_alloc_expr(Expression::Identifier {
                                         name: "i".to_string(),
                                         location: None,
                                     }),
                                     op: BinaryOp::Mul,
-                                    right: Box::new(Expression::Literal {
+                                    right: test_alloc_expr(Expression::Literal {
                                         value: Literal::Int(2),
                                         location: None,
                                     }),
                                     location: None,
-                                },
+                                }),
+                                else_block: None,
                                 location: None,
-                            },
+                            }),
                         ],
                         location: None,
-                    }],
+                    })],
                 },
                 location: None,
             }],
         };
 
-        let (_, stats) = optimize_loops(&program);
+        let optimizer = crate::optimizer::Optimizer::with_defaults();
+        let (_, stats) = optimize_loops(&program, &optimizer);
         assert_eq!(stats.invariants_hoisted, 0); // Should not hoist
     }
 }

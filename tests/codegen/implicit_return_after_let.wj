@@ -1,0 +1,16 @@
+// Test: Implicit return after let statements with newline-sensitive parsing
+// This verifies that the parser correctly handles automatic semicolon insertion (ASI)
+// and doesn't treat a parenthesized expression on the next line as a method call
+
+pub struct Vec2 {
+    pub x: f32,
+    pub y: f32,
+}
+
+impl Vec2 {
+    pub fn distance(self, other: Vec2) -> f32 {
+        let dx = self.x - other.x
+        let dy = self.y - other.y
+        (dx * dx + dy * dy).sqrt()
+    }
+}

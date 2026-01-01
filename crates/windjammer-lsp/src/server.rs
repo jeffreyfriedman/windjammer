@@ -1152,16 +1152,15 @@ impl LanguageServer for WindjammerLanguageServer {
 
         tracing::debug!("Code action request: {} for range {:?}", uri, range);
 
+        // Get document content for quick-fixes
+        let content = self.documents.get(&uri).map(|s| s.clone());
+
         // Create refactoring engine on-demand
         let db_lock = self.salsa_db.lock().unwrap();
         let engine = RefactoringEngine::new(&db_lock);
 
-        let context = CodeActionContext {
-            diagnostics: vec![],
-            only: None,
-            trigger_kind: None,
-        };
-        let actions = engine.code_actions(&uri, range, &context);
+        // Pass the actual diagnostics from the request context
+        let actions = engine.code_actions(&uri, range, &params.context, content.as_deref());
 
         if !actions.is_empty() {
             return Ok(Some(actions));

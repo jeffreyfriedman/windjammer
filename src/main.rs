@@ -1,3 +1,7 @@
+// Allow recursive functions that use self only for recursion
+// This is common in AST traversal code
+#![allow(clippy::only_used_in_recursion)]
+
 pub mod analyzer;
 pub mod auto_clone; // Automatic clone insertion for ergonomics
 pub mod auto_fix; // Automatic error fixing
@@ -5,12 +9,15 @@ pub mod cli;
 pub mod codegen;
 pub mod component_analyzer;
 pub mod error;
-// Removed: codegen_legacy is now codegen::rust::generator
+pub mod errors; // High-quality error messages (mutability, etc.)
+                // Removed: codegen_legacy is now codegen::rust::generator
 pub mod compiler_database;
 pub mod config;
 pub mod ejector;
 pub mod error_catalog; // Error catalog generation and documentation
-pub mod error_codes; // Windjammer error codes (WJ0001, etc.)
+pub mod error_codes;
+pub mod module_system; // Nested module system - The Windjammer Way! // Windjammer error codes (WJ0001, etc.)
+
 pub mod error_mapper;
 pub mod error_statistics; // Error statistics tracking and analysis
 pub mod error_tui; // Interactive TUI for error navigation
@@ -20,15 +27,13 @@ pub mod lexer;
 pub mod optimizer;
 pub mod parser; // Parser module (refactored structure)
 pub mod parser_impl; // Parser implementation (being migrated to parser/)
+                     // Test utilities for arena-allocated AST construction (available for integration tests)
 pub mod parser_recovery;
 pub mod source_map; // Source map for error message translation
 pub mod source_map_cache; // Source map caching for performance
 pub mod stdlib_scanner;
-pub mod syntax_highlighter; // Syntax highlighting for error snippets
-
-// UI component compilation
-pub mod component;
-pub mod ui; // Windjammer UI compilation (desktop + web)
+pub mod syntax_highlighter;
+pub mod test_utils; // Syntax highlighting for error snippets
 
 use anyhow::Result;
 use clap::{Parser, Subcommand, ValueEnum};
@@ -304,8 +309,7 @@ fn main() -> Result<()> {
     Ok(())
 }
 
-#[allow(dead_code)]
-fn build_project(path: &Path, output: &Path, target: CompilationTarget) -> Result<()> {
+pub fn build_project(path: &Path, output: &Path, target: CompilationTarget) -> Result<()> {
     use colored::*;
 
     println!(
@@ -336,6 +340,102 @@ fn build_project(path: &Path, output: &Path, target: CompilationTarget) -> Resul
     // Create a single ModuleCompiler for all files to share trait registry
     let mut module_compiler = ModuleCompiler::new(target);
 
+    // Load windjammer.toml if it exists (search up directory tree)
+    let mut search_dir = if path.is_file() {
+        path.parent().unwrap_or(Path::new("."))
+    } else {
+        path
+    };
+
+    let mut config_loaded = false;
+    for _ in 0..5 {
+        let config_path = search_dir.join("windjammer.toml");
+        if config_path.exists() {
+            match config::WjConfig::load_from_file(&config_path) {
+                Ok(config) => {
+                    // Add configured source roots
+                    if let Some(sources) = &config.sources {
+                        for root in &sources.roots {
+                            // Resolve path relative to config file directory
+                            let root_path = search_dir.join(root);
+                            if root_path.exists() && root_path.is_dir() {
+                                module_compiler.add_source_root(root_path);
+                            } else {
+                                eprintln!(
+                                    "Warning: Source root not found: {}",
+                                    root_path.display()
+                                );
+                            }
+                        }
+                        config_loaded = true;
+                    }
+                    break;
+                }
+                Err(e) => {
+                    eprintln!("Warning: Failed to load {}: {}", config_path.display(), e);
+                }
+            }
+        }
+
+        // Go up one directory
+        if let Some(parent) = search_dir.parent() {
+            search_dir = parent;
+        } else {
+            break;
+        }
+    }
+
+    if !config_loaded {
+        eprintln!("Note: No windjammer.toml found. Module imports will only work with relative paths (./module) or std:: prefix.");
+    }
+
+    // Add the project's own source directory to source_roots
+    // This ensures that internal modules (vec2, camera2d, etc.) are not treated as external crates
+    let project_source_dir = if path.is_file() {
+        path.parent().unwrap_or(Path::new(".")).to_path_buf()
+    } else {
+        path.to_path_buf()
+    };
+    module_compiler.add_source_root(project_source_dir);
+
+    // PASS 0: Quick parse all files to register Copy structs
+    // This ensures Copy type detection works across all files
+    let mut global_copy_structs = HashSet::new();
+    for file in &wj_files {
+        let source = match std::fs::read_to_string(file) {
+            Ok(s) => s,
+            Err(_) => continue,
+        };
+
+        let mut lexer = lexer::Lexer::new(&source);
+        let tokens = lexer.tokenize_with_locations();
+        let mut parser = parser_impl::Parser::new(tokens);
+
+        if let Ok(program) = parser.parse() {
+            for item in &program.items {
+                if let parser::Item::Struct { decl, .. } = item {
+                    // Check if struct has @derive(Copy)
+                    let has_copy = decl.decorators.iter().any(|d| {
+                        d.name == "derive"
+                            && d.arguments.iter().any(|(_, arg)| {
+                                if let parser::Expression::Identifier { name, .. } = arg {
+                                    name == "Copy"
+                                } else {
+                                    false
+                                }
+                            })
+                    });
+                    if has_copy {
+                        global_copy_structs.insert(decl.name.clone());
+                    }
+                }
+            }
+        }
+    }
+
+    // Transfer Copy structs to ModuleCompiler's registry
+    module_compiler.copy_structs_registry = global_copy_structs;
+
     // PASS 1: Quick parse all files to register trait definitions
     // This ensures all traits are available before any file compilation
     for file in &wj_files {
@@ -351,22 +451,54 @@ fn build_project(path: &Path, output: &Path, target: CompilationTarget) -> Resul
 
         if let Ok(program) = parser.parse() {
             // Register any trait definitions found
+            let mut has_traits = false;
             for item in &program.items {
                 if let parser::Item::Trait { decl, .. } = item {
                     module_compiler
                         .trait_registry
                         .insert(decl.name.clone(), decl.clone());
+                    has_traits = true;
                 }
+            }
+            // ARENA FIX: Keep parser alive if we stored trait definitions
+            if has_traits {
+                module_compiler._trait_parsers.push(parser);
             }
         }
     }
 
+    // Determine source_root: if path is a file, find the actual source root
+    // BUGFIX: For nested files like src_wj/ecs/entity.wj, we need to find src_wj,
+    // not just the immediate parent (src_wj/ecs)
+    let source_root = if path.is_file() {
+        find_source_root(path).unwrap_or_else(|| path.parent().unwrap_or(Path::new(".")))
+    } else {
+        path
+    };
+
     // PASS 2: Full compilation with all traits available
+    let is_multi_file = wj_files.len() > 1;
+    println!("DEBUG: Starting PASS 2 with {} files", wj_files.len());
     for file in &wj_files {
         let file_name = file.file_name().unwrap().to_str().unwrap();
+
+        // THE WINDJAMMER WAY: In multi-file projects, skip mod.wj files
+        // They're only for controlling re-exports, which generate_nested_module_structure handles
+        // Compiling them would overwrite the correctly-generated mod.rs files
+        if is_multi_file && file_name == "mod.wj" {
+            continue;
+        }
+
         print!("  Compiling {:?}... ", file_name);
 
-        match compile_file_with_compiler(file, output, &mut module_compiler) {
+        match compile_file_with_compiler(
+            source_root,
+            file,
+            output,
+            &mut module_compiler,
+            is_multi_file,
+            true,
+        ) {
             Ok((stdlib_modules, external_crates)) => {
                 println!("{}", "✓".green());
                 // If both are empty, this might be a component (which handles its own Cargo.toml)
@@ -388,9 +520,116 @@ fn build_project(path: &Path, output: &Path, target: CompilationTarget) -> Resul
     }
 
     if !has_errors {
+        // THE WINDJAMMER WAY: Finalize trait inference across ALL files
+        // This ensures trait signatures are inferred from ALL implementations in the project
+        println!(
+            "{}",
+            "Analyzing trait signatures across all files...".cyan()
+        );
+        println!(
+            "  Total programs collected: {}",
+            module_compiler.all_programs.len()
+        );
+        if let Err(e) = module_compiler.finalize_trait_inference() {
+            println!("{}", "✗ Trait inference failed".red());
+            println!("    Error: {}", e);
+            anyhow::bail!("Trait inference failed: {}", e);
+        }
+        println!("{}", "✓ Trait inference complete".green());
+
+        // THE WINDJAMMER WAY: Regenerate ALL files with inferred trait signatures
+        // Both trait definitions AND implementations need to be regenerated
+        // with the updated cross-file inferred signatures
+        println!(
+            "{}",
+            "Regenerating with inferred trait signatures...".cyan()
+        );
+        for file in &wj_files {
+            let file_name = file.file_name().unwrap().to_str().unwrap();
+
+            // THE WINDJAMMER WAY: In multi-file projects, skip mod.wj files during regeneration too
+            if is_multi_file && file_name == "mod.wj" {
+                continue;
+            }
+
+            print!("  Updating {:?}... ", file_name);
+            match compile_file_with_compiler(
+                source_root,
+                file,
+                output,
+                &mut module_compiler,
+                is_multi_file,
+                false,
+            ) {
+                Ok(_) => println!("{}", "✓".green()),
+                Err(e) => {
+                    println!("{}", "✗".red());
+                    println!("    Error: {}", e);
+                    has_errors = true;
+                }
+            }
+        }
+
+        if has_errors {
+            println!("\n{} Trait regeneration failed", "Error:".red().bold());
+            anyhow::bail!("Trait regeneration failed");
+        }
+
+        // THE WINDJAMMER WAY: Generate lib.rs FIRST (before Cargo.toml) for multi-file projects
+        // This allows Cargo.toml generation to detect lib.rs and create [lib] instead of [[bin]]
+        // A project is multi-file if:
+        // 1. Multiple .wj files were found, OR
+        // 2. The input is a mod.wj file (implies multi-file structure)
+        let is_root_mod_wj = wj_files.len() == 1
+            && wj_files[0].file_name().and_then(|n| n.to_str()) == Some("mod.wj");
+        if wj_files.len() > 1 || is_root_mod_wj {
+            // Pass the directory, not the file
+            let source_dir = if path.is_file() {
+                path.parent().unwrap_or(path)
+            } else {
+                path
+            };
+            generate_nested_module_structure(source_dir, output)?;
+        }
+
         // Create Cargo.toml with stdlib and external dependencies (unless it's a component project)
         if !is_component_project {
-            create_cargo_toml_with_deps(output, &all_stdlib_modules, &all_external_crates, target)?;
+            // THE WINDJAMMER WAY: Filter out internal modules from external_crates
+            // Any module that has a .wj file in the project should NOT be an external dependency
+            // CRITICAL FIX: Discover ALL .wj files recursively, not just the root file!
+            let source_dir = if path.is_file() {
+                path.parent().unwrap_or(path)
+            } else {
+                path
+            };
+            let all_wj_files_in_project = find_wj_files(source_dir).unwrap_or_default();
+            let internal_modules: HashSet<String> = all_wj_files_in_project
+                .iter()
+                .filter_map(|f| {
+                    f.file_stem()
+                        .and_then(|s| s.to_str())
+                        .map(|s| s.to_string())
+                })
+                .collect();
+
+            let filtered_external_crates: Vec<String> = all_external_crates
+                .into_iter()
+                .filter(|crate_name| {
+                    // Check both with hyphens and underscores (Cargo uses hyphens, files use underscores)
+                    let crate_name_normalized = crate_name.replace('-', "_");
+                    let is_internal = internal_modules.contains(crate_name)
+                        || internal_modules.contains(&crate_name_normalized);
+                    // Keep only crates that are NOT internal modules
+                    !is_internal
+                })
+                .collect();
+
+            create_cargo_toml_with_deps(
+                output,
+                &all_stdlib_modules,
+                &filtered_external_crates,
+                target,
+            )?;
         }
 
         println!("\n{} Transpilation complete!", "Success!".green().bold());
@@ -465,21 +704,41 @@ fn find_wj_files(path: &Path) -> Result<Vec<PathBuf>> {
 
     if path.is_file() {
         if path.extension().and_then(|s| s.to_str()) == Some("wj") {
-            files.push(path.to_path_buf());
-        }
-    } else if path.is_dir() {
-        for entry in std::fs::read_dir(path)? {
-            let entry = entry?;
-            let path = entry.path();
-
-            if path.is_file() && path.extension().and_then(|s| s.to_str()) == Some("wj") {
-                files.push(path);
+            // THE WINDJAMMER WAY: If the file is mod.wj, find ALL .wj files in the parent directory
+            // This is because mod.wj implies a multi-file project structure
+            if path.file_name().and_then(|n| n.to_str()) == Some("mod.wj") {
+                if let Some(parent) = path.parent() {
+                    find_wj_files_recursive(parent, &mut files)?;
+                } else {
+                    files.push(path.to_path_buf());
+                }
+            } else {
+                files.push(path.to_path_buf());
             }
         }
+    } else if path.is_dir() {
+        // Recursively find all .wj files in subdirectories
+        find_wj_files_recursive(path, &mut files)?;
     }
 
     files.sort();
     Ok(files)
+}
+
+/// Recursively find all .wj files in a directory tree
+fn find_wj_files_recursive(dir: &Path, files: &mut Vec<PathBuf>) -> Result<()> {
+    for entry in std::fs::read_dir(dir)? {
+        let entry = entry?;
+        let path = entry.path();
+
+        if path.is_file() && path.extension().and_then(|s| s.to_str()) == Some("wj") {
+            files.push(path);
+        } else if path.is_dir() {
+            // Recurse into subdirectories
+            find_wj_files_recursive(&path, files)?;
+        }
+    }
+    Ok(())
 }
 
 // Module compiler for handling dependencies
@@ -488,9 +747,20 @@ struct ModuleCompiler {
     compiled_modules: HashMap<String, String>, // module path -> generated Rust code
     target: CompilationTarget,
     stdlib_path: PathBuf,
+    source_roots: Vec<PathBuf>, // Additional source roots (e.g., ../windjammer-game-core/src_wj)
     imported_stdlib_modules: HashSet<String>, // Track which stdlib modules are used
-    external_crates: Vec<String>,             // Track external crates (e.g., windjammer_ui)
-    trait_registry: HashMap<String, parser::TraitDecl>, // Global trait registry for cross-file trait resolution
+    external_crates: Vec<String>, // Track external crates (e.g., windjammer_ui)
+    trait_registry: HashMap<String, parser::TraitDecl<'static>>, // Global trait registry for cross-file trait resolution
+    copy_structs_registry: HashSet<String>, // Global Copy struct registry for proper Copy detection across files
+    analyzer: analyzer::Analyzer<'static>, // WINDJAMMER FIX: Shared analyzer for cross-file trait analysis
+    // THE WINDJAMMER WAY: Track ALL programs for cross-file trait inference
+    all_programs: Vec<parser::Program<'static>>, // All parsed programs from all files
+    // ARENA FIX: Keep parsers alive to prevent use-after-free
+    _parsers: Vec<parser::Parser>, // Parsers that own the arenas for all_programs
+    _trait_parsers: Vec<parser_impl::Parser>, // ARENA FIX: Parsers for trait_registry
+    // RECURSION GUARD: Track files currently being compiled to prevent circular dependencies
+    // Use String instead of PathBuf for Windows UNC path compatibility
+    compiling_files: HashSet<String>, // Normalized path strings in the current compilation chain
 }
 
 #[allow(dead_code)]
@@ -505,10 +775,40 @@ impl ModuleCompiler {
             compiled_modules: HashMap::new(),
             target,
             stdlib_path,
+            source_roots: Vec::new(),
             imported_stdlib_modules: HashSet::new(),
             external_crates: Vec::new(),
             trait_registry: HashMap::new(),
+            copy_structs_registry: HashSet::new(),
+            analyzer: analyzer::Analyzer::new(), // WINDJAMMER FIX: Shared analyzer instance
+            all_programs: Vec::new(),            // THE WINDJAMMER WAY: Track all programs
+            _parsers: Vec::new(),                // ARENA FIX: Keep parsers alive
+            _trait_parsers: Vec::new(),          // ARENA FIX: Keep trait parsers alive
+            compiling_files: HashSet::new(),     // RECURSION GUARD: Track compilation chain
         }
+    }
+
+    fn add_source_root(&mut self, path: PathBuf) {
+        self.source_roots.push(path);
+    }
+
+    /// THE WINDJAMMER WAY: Run cross-file trait inference after all files are analyzed
+    /// This ensures trait signatures are inferred from ALL implementations across the project
+    fn finalize_trait_inference(&mut self) -> Result<()> {
+        // Create a merged program with ALL items from ALL files
+        let mut all_items = Vec::new();
+        for program in &self.all_programs {
+            all_items.extend(program.items.clone());
+        }
+
+        let merged_program = parser::Program { items: all_items };
+
+        // Run the cross-file trait inference
+        self.analyzer
+            .infer_trait_signatures_from_impls(&merged_program)
+            .map_err(|e| anyhow::anyhow!("Trait inference error: {}", e))?;
+
+        Ok(())
     }
 
     fn compile_module(&mut self, module_path: &str, source_file: Option<&Path>) -> Result<()> {
@@ -531,6 +831,19 @@ impl ModuleCompiler {
 
         // Resolve module path to file path
         let file_path = self.resolve_module_path(module_path, source_file)?;
+
+        // Check if this is a source root module (marked by __source_root__ prefix)
+        // These are modules from configured source roots that shouldn't be recursively compiled
+        // when building individual files (they'll be in the same Rust module)
+        if file_path
+            .to_str()
+            .is_some_and(|s| s.starts_with("__source_root__::"))
+        {
+            // Mark as compiled but don't generate code (will be compiled separately)
+            self.compiled_modules
+                .insert(module_path.to_string(), String::new());
+            return Ok(());
+        }
 
         // Check if this is an external crate (marked by __external__ prefix)
         if file_path
@@ -628,9 +941,14 @@ impl ModuleCompiler {
             }
         }
 
-        // Analyze with access to all registered traits
-        let mut analyzer = analyzer::Analyzer::new();
-        // Load all registered traits into the analyzer
+        // WINDJAMMER FIX: Use the SHARED analyzer for cross-file trait analysis
+        // This ensures trait methods analyzed in file 1 are available when analyzing impl in file 2
+
+        // Update analyzer's Copy structs registry (in case new Copy structs were discovered)
+        self.analyzer
+            .update_copy_structs(self.copy_structs_registry.clone());
+
+        // Register any newly discovered traits into the analyzer
         for trait_decl in self.trait_registry.values() {
             let dummy_program = parser::Program {
                 items: vec![parser::Item::Trait {
@@ -638,15 +956,20 @@ impl ModuleCompiler {
                     location: parser::SourceLocation::default(),
                 }],
             };
-            analyzer.register_traits_from_program(&dummy_program);
+            self.analyzer.register_traits_from_program(&dummy_program);
         }
 
-        let (analyzed, signatures) = analyzer
+        // THE WINDJAMMER WAY: Store this program for cross-file trait inference
+        self.all_programs.push(program.clone());
+
+        let (analyzed, signatures, analyzed_trait_methods) = self
+            .analyzer
             .analyze_program(&program)
             .map_err(|e| anyhow::anyhow!("Analysis error: {}", e))?;
 
         // Generate Rust code (as a module)
         let mut generator = codegen::CodeGenerator::new_for_module(signatures, self.target);
+        generator.set_analyzed_trait_methods(analyzed_trait_methods);
         let rust_code = generator.generate_program(&program, &analyzed);
 
         // Extract module name from path
@@ -739,10 +1062,59 @@ impl ModuleCompiler {
                 source_dir.join(rel_path).join("mod.wj")
             ))
         } else {
+            // Absolute module path (e.g., math, rendering, physics)
+
+            // THE WINDJAMMER WAY: Check the current file's directory FIRST
+            // This allows "use texture_atlas::Foo" to work when texture_atlas.wj
+            // is in the same directory as the importing file
+            // We check this BEFORE source_roots to prioritize same-directory imports
+            if let Some(source_file) = source_file {
+                if let Some(source_dir) = source_file.parent() {
+                    // Try direct file in same directory: source_dir/texture_atlas.wj
+                    let mut candidate = source_dir.to_path_buf();
+                    candidate.push(format!("{}.wj", module_path));
+                    if candidate.exists() {
+                        // Found in same directory as source file!
+                        // Return the real path to compile it alongside
+                        return Ok(candidate);
+                    }
+
+                    // Try directory module in same directory: source_dir/texture_atlas/mod.wj
+                    let mut candidate = source_dir.to_path_buf();
+                    candidate.push(module_path);
+                    candidate.push("mod.wj");
+                    if candidate.exists() {
+                        return Ok(candidate);
+                    }
+                }
+            }
+
+            // Check if this exists in any of the configured source roots
+            for source_root in &self.source_roots {
+                // Try direct file: source_root/math.wj
+                let mut candidate = source_root.clone();
+                candidate.push(format!("{}.wj", module_path));
+                if candidate.exists() {
+                    // Found in source root - treat as external module
+                    // When compiling individual files from source roots, cross-module
+                    // dependencies should be treated as external (will be in same Rust module)
+                    return Ok(PathBuf::from(format!("__source_root__::{}", module_path)));
+                }
+
+                // Try directory module: source_root/math/mod.wj
+                let mut candidate = source_root.clone();
+                candidate.push(module_path);
+                candidate.push("mod.wj");
+                if candidate.exists() {
+                    // Found in source root - treat as external module
+                    return Ok(PathBuf::from(format!("__source_root__::{}", module_path)));
+                }
+            }
+
+            // Not found in source roots or current directory - treat as external crate
             // External crate imports (e.g., windjammer_ui, external_crate)
             // These are treated as Rust crate dependencies and passed through to generated code
             // Mark as external by returning a special "external" path
-            // We'll handle this specially in the compilation phase
             Ok(PathBuf::from(format!("__external__::{}", module_path)))
         }
     }
@@ -827,90 +1199,139 @@ fn compile_file(
     target: CompilationTarget,
 ) -> Result<(HashSet<String>, Vec<String>)> {
     let mut module_compiler = ModuleCompiler::new(target);
-    compile_file_with_compiler(input_path, output_dir, &mut module_compiler)
+    // For single-file compilation, use parent directory as source root
+    let source_root = input_path.parent().unwrap_or(Path::new("."));
+    let is_multi_file = false; // Single file compilation
+    compile_file_with_compiler(
+        source_root,
+        input_path,
+        output_dir,
+        &mut module_compiler,
+        is_multi_file,
+        true,
+    )
 }
 
 /// Compile a file with a provided ModuleCompiler (for shared trait registry)
 fn compile_file_with_compiler(
+    source_root: &Path,
     input_path: &Path,
     output_dir: &Path,
     module_compiler: &mut ModuleCompiler,
+    is_multi_file_project: bool,
+    store_program: bool, // Whether to add this program to all_programs for trait inference
+) -> Result<(HashSet<String>, Vec<String>)> {
+    // RECURSION GUARD: Prevent circular module dependencies from causing stack overflow
+    // THE WINDJAMMER WAY: Use normalized string for cross-platform path comparison
+    // Problem: Windows canonicalize() adds UNC prefixes (\\?\C:\...) inconsistently,
+    // causing PathBuf equality checks to fail even for the same file.
+    // Solution: Convert to lowercase string with forward slashes for consistent comparison.
+    let canonical_path = input_path.canonicalize().unwrap_or_else(|_| {
+        // If canonicalize fails (file doesn't exist yet), use absolute path
+        std::env::current_dir()
+            .ok()
+            .and_then(|cwd| cwd.join(input_path).canonicalize().ok())
+            .unwrap_or_else(|| input_path.to_path_buf())
+    });
+
+    // Normalize path for consistent comparison across platforms
+    // Remove UNC prefix on Windows and use forward slashes
+    let path_key = {
+        let normalized = canonical_path
+            .to_string_lossy()
+            .replace("\\\\?\\", "") // Remove Windows UNC prefix
+            .replace('\\', "/"); // Normalize to forward slashes
+
+        // Only lowercase on Windows (case-insensitive filesystem)
+        // macOS/Linux filesystems are case-sensitive!
+        #[cfg(target_os = "windows")]
+        {
+            normalized.to_lowercase()
+        }
+        #[cfg(not(target_os = "windows"))]
+        {
+            normalized
+        }
+    };
+
+    // DEBUG: Print ALL currently compiling files for Windows debugging
+    if !module_compiler.compiling_files.is_empty() {
+        eprintln!(
+            "🔍 Currently compiling {} files:",
+            module_compiler.compiling_files.len()
+        );
+        for (idx, file) in module_compiler.compiling_files.iter().enumerate() {
+            eprintln!("   [{}] {}", idx, file);
+        }
+        eprintln!("🔍 Checking: {}", path_key);
+    }
+
+    if module_compiler.compiling_files.contains(&path_key) {
+        // Already compiling this file in the current chain - skip to prevent infinite recursion
+        // This is OK and expected for circular imports that have already been handled
+        eprintln!(
+            "⚠️  RECURSION GUARD TRIGGERED: Skipping {} (already in compilation chain)",
+            path_key
+        );
+        eprintln!(
+            "   Currently compiling: {}",
+            module_compiler.compiling_files.len()
+        );
+        eprintln!("   🚨 WARNING: This will cause an EMPTY FILE to be written!");
+        return Ok((HashSet::new(), Vec::new()));
+    }
+
+    // Check recursion depth as additional safety
+    if module_compiler.compiling_files.len() >= 50 {
+        anyhow::bail!("Maximum module nesting depth exceeded (50 files). Possible circular dependency involving: {}", path_key);
+    }
+
+    module_compiler.compiling_files.insert(path_key.clone());
+    eprintln!(
+        "✅ RECURSION GUARD: Added {} to compilation set (now {} files)",
+        path_key,
+        module_compiler.compiling_files.len()
+    );
+
+    // THE WINDJAMMER WAY: Always cleanup, whether we succeed or fail
+    // Call the implementation, then remove path from set regardless of result
+    let result = compile_file_impl(
+        source_root,
+        input_path,
+        module_compiler,
+        output_dir,
+        is_multi_file_project,
+        store_program,
+        &path_key,
+    );
+
+    // Remove path from compilation set now that we're done (success or failure)
+    // This runs whether result is Ok or Err
+    module_compiler.compiling_files.remove(&path_key);
+    eprintln!(
+        "✅ RECURSION GUARD: Removed {} from compilation set (now {} files)",
+        path_key,
+        module_compiler.compiling_files.len()
+    );
+
+    result
+}
+
+/// Internal implementation of compile_file_with_compiler
+/// This is separated out so we can ensure cleanup happens in the outer function
+fn compile_file_impl(
+    source_root: &Path,
+    input_path: &Path,
+    module_compiler: &mut ModuleCompiler,
+    output_dir: &Path,
+    is_multi_file_project: bool,
+    store_program: bool,
+    _path_key: &str,
 ) -> Result<(HashSet<String>, Vec<String>)> {
     let target = module_compiler.target;
 
     // Read source file
     let source = std::fs::read_to_string(input_path)?;
-
-    // Check if this is a component file by looking for component-specific syntax
-    // Components must have a "view {" block (as a standalone token, not substring)
-    let is_component = if target == CompilationTarget::Wasm {
-        // Only detect as component if "view" is followed by "{" (not just any "view" word)
-        source.contains("view {")
-            || source.contains("view{")
-            || source.contains("\nview ") && (source.contains("view {") || source.contains("view{"))
-    } else {
-        false
-    };
-
-    // If it's a component file, handle it specially
-    if is_component {
-        use component::analyzer::DependencyAnalyzer;
-        use component::codegen::ComponentCodegen;
-        use component::parser::ComponentParser;
-        use component::transformer::SignalTransformer;
-
-        // Parse as component
-        let component_file = ComponentParser::parse(&source)
-            .map_err(|e| anyhow::anyhow!("Component parse error: {}", e))?;
-
-        // Analyze dependencies
-        let deps = DependencyAnalyzer::analyze(&component_file)
-            .map_err(|e| anyhow::anyhow!("Component analysis error: {}", e))?;
-
-        // Transform to signals
-        let transformed = SignalTransformer::transform(&component_file, &deps)
-            .map_err(|e| anyhow::anyhow!("Component transformation error: {}", e))?;
-
-        // Generate code
-        let rust_code = ComponentCodegen::generate(&transformed)
-            .map_err(|e| anyhow::anyhow!("Component codegen error: {}", e))?;
-
-        // Write lib.rs
-        std::fs::create_dir_all(output_dir.join("src"))?;
-        let lib_path = output_dir.join("src").join("lib.rs");
-        std::fs::write(&lib_path, &rust_code)?;
-
-        // Get component name (use filename if not specified)
-        let component_name = component_file.name.as_deref().unwrap_or_else(|| {
-            input_path
-                .file_stem()
-                .and_then(|s| s.to_str())
-                .unwrap_or("Component")
-        });
-
-        // Generate Cargo.toml
-        let cargo_toml = ComponentCodegen::generate_cargo_toml(component_name)?;
-        std::fs::write(output_dir.join("Cargo.toml"), &cargo_toml)?;
-
-        // Generate index.html
-        let index_html = ComponentCodegen::generate_index_html(component_name)?;
-        std::fs::write(output_dir.join("index.html"), &index_html)?;
-
-        // Generate README
-        let readme = ComponentCodegen::generate_readme(component_name)?;
-        std::fs::write(output_dir.join("README.md"), &readme)?;
-
-        println!("  Component compiled successfully!");
-        println!("  Output directory: {}", output_dir.display());
-        println!("  Next steps:");
-        println!("    cd {}", output_dir.display());
-        println!("    wasm-pack build --target web");
-        println!("    python3 -m http.server 8080");
-
-        return Ok((HashSet::new(), Vec::new()));
-    }
-
-    // Regular Windjammer file - use standard parser
     // Lex
     let mut lexer = lexer::Lexer::new(&source);
     let tokens = lexer.tokenize_with_locations();
@@ -925,8 +1346,59 @@ fn compile_file_with_compiler(
         .parse()
         .map_err(|e| anyhow::anyhow!("Parse error: {}", e))?;
 
-    // Compile dependencies first
+    // DEBUG: Print Item::Mod entries in the AST
+    if std::env::var("WJ_DEBUG_AST").is_ok() {
+        let file_name = input_path.file_name().unwrap().to_string_lossy();
+        eprintln!("\n=== AST for {} ===", file_name);
+        for (idx, item) in program.items.iter().enumerate() {
+            if let parser::Item::Mod {
+                name,
+                items,
+                is_public,
+                ..
+            } = item
+            {
+                eprintln!(
+                    "  Item #{}: {}mod {} (items.len() = {})",
+                    idx,
+                    if *is_public { "pub " } else { "" },
+                    name,
+                    items.len()
+                );
+                if !items.is_empty() {
+                    eprintln!("    INLINE MODULE with {} items:", items.len());
+                    for (i, nested) in items.iter().enumerate() {
+                        match nested {
+                            parser::Item::Struct { decl, .. } => {
+                                eprintln!("      #{}: struct {}", i, decl.name)
+                            }
+                            parser::Item::Function { decl, .. } => {
+                                eprintln!("      #{}: fn {}", i, decl.name)
+                            }
+                            _ => eprintln!("      #{}: {:?}", i, nested),
+                        }
+                    }
+                }
+            }
+        }
+        eprintln!("=== End AST ===\n");
+    }
+
+    // THE WINDJAMMER WAY: Store this program for cross-file trait inference
+    // Only store if requested (to avoid duplicates during regeneration)
+    if store_program {
+        module_compiler.all_programs.push(program.clone());
+    }
+
+    // ARENA FIX: ALWAYS store the parser to keep arena alive
+    // The shared analyzer accumulates AST references from all files,
+    // so we must keep all parsers alive for the entire compilation
+    module_compiler._parsers.push(parser);
+    // Note: parser has been moved and can't be used after this
+
+    // Compile dependencies first (both use statements and mod declarations)
     for item in &program.items {
+        // Handle use statements
         if let parser::Item::Use { path, alias: _, .. } = item {
             let module_path = path.join("::");
 
@@ -962,6 +1434,41 @@ fn compile_file_with_compiler(
             // Compile both std::* and relative imports (./ or ../) and external crates
             module_compiler.compile_module(&module_to_compile, Some(input_path))?;
         }
+
+        // Handle module declarations (pub mod math;)
+        if let parser::Item::Mod { name, items, .. } = item {
+            // Only process external module declarations (items.is_empty() means no inline body)
+            if items.is_empty() {
+                // Find the module file: either math.wj or math/mod.wj
+                let parent_dir = input_path.parent().unwrap_or(Path::new("."));
+
+                // Try math.wj first
+                let module_file = parent_dir.join(format!("{}.wj", name));
+                let module_dir_file = parent_dir.join(name).join("mod.wj");
+
+                let module_path_to_compile = if module_file.exists() {
+                    Some(module_file)
+                } else if module_dir_file.exists() {
+                    Some(module_dir_file)
+                } else {
+                    // Module file doesn't exist yet - might be empty directory
+                    // This is OK, we'll just not compile it
+                    None
+                };
+
+                if let Some(mod_path) = module_path_to_compile {
+                    // Recursively compile the module
+                    compile_file_with_compiler(
+                        source_root,
+                        &mod_path,
+                        output_dir,
+                        module_compiler,
+                        is_multi_file_project,
+                        store_program, // Pass through the store_program flag
+                    )?;
+                }
+            }
+        }
     }
 
     // Register traits from this program into the global registry
@@ -973,9 +1480,15 @@ fn compile_file_with_compiler(
         }
     }
 
-    // Analyze with access to all registered traits
-    let mut analyzer = analyzer::Analyzer::new();
-    // Load all registered traits into the analyzer
+    // WINDJAMMER FIX: Use the SHARED analyzer from module_compiler
+    // This ensures trait methods analyzed in file 1 are available when analyzing impl in file 2
+
+    // Update analyzer's Copy structs registry
+    module_compiler
+        .analyzer
+        .update_copy_structs(module_compiler.copy_structs_registry.clone());
+
+    // Register any newly discovered traits
     for trait_decl in module_compiler.trait_registry.values() {
         let dummy_program = parser::Program {
             items: vec![parser::Item::Trait {
@@ -983,12 +1496,77 @@ fn compile_file_with_compiler(
                 location: parser::SourceLocation::default(),
             }],
         };
-        analyzer.register_traits_from_program(&dummy_program);
+        module_compiler
+            .analyzer
+            .register_traits_from_program(&dummy_program);
     }
 
-    let (analyzed, signatures) = analyzer
+    let (analyzed, signatures, analyzed_trait_methods) = module_compiler
+        .analyzer
         .analyze_program(&program)
         .map_err(|e| anyhow::anyhow!("Analysis error: {}", e))?;
+
+    // MUTABILITY CHECK: Check for mut errors with great error messages
+    let mut mut_checker = errors::MutabilityChecker::new(input_path.to_path_buf());
+    let mut has_mut_errors = false;
+    for item in &program.items {
+        if let parser::Item::Function { decl, .. } = item {
+            let mut_errors = mut_checker.check_function(decl);
+            if !mut_errors.is_empty() {
+                has_mut_errors = true;
+                for error in &mut_errors {
+                    eprintln!("{}", error.format_error());
+                }
+            }
+        }
+    }
+
+    if has_mut_errors {
+        anyhow::bail!("Compilation failed: mutability errors detected");
+    }
+
+    // THE WINDJAMMER WAY: During regeneration, use the GLOBAL analyzed trait methods
+    // (which have been updated by finalize_trait_inference)
+    if !store_program {
+        // This is a regeneration pass - use the global inferred trait methods
+        eprintln!("DEBUG REGEN: Using global trait methods for regeneration");
+        eprintln!(
+            "DEBUG REGEN: Global trait methods has {} traits",
+            analyzed_trait_methods.len()
+        );
+        for (trait_name, methods) in &analyzed_trait_methods {
+            eprintln!(
+                "DEBUG REGEN:   GLOBAL Trait {} has {} methods",
+                trait_name,
+                methods.len()
+            );
+            for (method_name, method_analysis) in methods {
+                eprintln!("DEBUG REGEN:     GLOBAL Method {} inferred:", method_name);
+                for (param_name, ownership) in &method_analysis.inferred_ownership {
+                    eprintln!(
+                        "DEBUG REGEN:       BEFORE CLONE: {} = {:?}",
+                        param_name, ownership
+                    );
+                }
+            }
+        }
+        // Note: analyzed_trait_methods is already synchronized with module_compiler.analyzer
+        // No need to clone - we're using the same HashMap that was returned from analyze_program
+        eprintln!(
+            "DEBUG REGEN: After clone, analyzed_trait_methods has {} traits",
+            analyzed_trait_methods.len()
+        );
+        for (trait_name, methods) in &analyzed_trait_methods {
+            for (method_name, method_analysis) in methods {
+                eprintln!(
+                    "DEBUG REGEN:     AFTER CLONE {}.{} self={:?}",
+                    trait_name,
+                    method_name,
+                    method_analysis.inferred_ownership.get("self")
+                );
+            }
+        }
+    }
 
     // Infer trait bounds
     let mut inference_engine = inference::InferenceEngine::new();
@@ -1036,78 +1614,152 @@ fn compile_file_with_compiler(
             return Ok((HashSet::new(), Vec::new()));
         } else {
             // Use old generator for non-component WASM
-            let mut generator = codegen::CodeGenerator::new(signatures, target);
+            // THE WINDJAMMER WAY: Use new_for_module in multi-file projects to prevent inlining
+            let mut generator = if is_multi_file_project {
+                codegen::CodeGenerator::new_for_module(signatures, target)
+            } else {
+                codegen::CodeGenerator::new(signatures, target)
+            };
             generator.set_inferred_bounds(inferred_bounds_map);
+            generator.set_analyzed_trait_methods(analyzed_trait_methods);
 
             // Set source file for error mapping
             generator.set_source_file(input_path);
-            let output_file_path = output_dir.join(
-                input_path
-                    .file_name()
-                    .unwrap()
-                    .to_str()
-                    .unwrap()
-                    .replace(".wj", ".rs"),
-            );
+            let output_file_path = get_relative_output_path(source_root, input_path, output_dir)?;
+            // Create parent directories if needed
+            if let Some(parent) = output_file_path.parent() {
+                std::fs::create_dir_all(parent)?;
+            }
             generator.set_output_file(&output_file_path);
 
-            let code = generator.generate_program(&program, &analyzed);
+            // Set workspace root for relative paths in source maps
+            // Use the current working directory as the workspace root for portability
+            // This ensures both source and output paths can be relative
+            if let Ok(cwd) = std::env::current_dir() {
+                generator.set_workspace_root(cwd);
+            }
 
-            // Save source map for error mapping
+            let result = generator.generate_program(&program, &analyzed);
+
+            // Save source map for error mapping (now with relative paths)
             let source_map_path = output_file_path.with_extension("rs.map");
             if let Err(e) = generator.get_source_map().save_to_file(&source_map_path) {
                 eprintln!("Warning: Failed to save source map: {}", e);
             }
 
-            code
+            result
         }
     } else {
         // Use old generator for Rust target
-        let mut generator = codegen::CodeGenerator::new(signatures, target);
+        // THE WINDJAMMER WAY: Use new_for_module in multi-file projects to prevent inlining
+        let mut generator = if is_multi_file_project {
+            codegen::CodeGenerator::new_for_module(signatures, target)
+        } else {
+            codegen::CodeGenerator::new(signatures, target)
+        };
         generator.set_inferred_bounds(inferred_bounds_map);
+        generator.set_analyzed_trait_methods(analyzed_trait_methods);
 
         // Set source file for error mapping
         generator.set_source_file(input_path);
-        let output_file_path = output_dir.join(
-            input_path
-                .file_name()
-                .unwrap()
-                .to_str()
-                .unwrap()
-                .replace(".wj", ".rs"),
-        );
+        let output_file_path = get_relative_output_path(source_root, input_path, output_dir)?;
+        // Create parent directories if needed
+        if let Some(parent) = output_file_path.parent() {
+            std::fs::create_dir_all(parent)?;
+        }
         generator.set_output_file(&output_file_path);
 
-        let code = generator.generate_program(&program, &analyzed);
+        // Set workspace root for relative paths in source maps
+        // Use the current working directory as the workspace root for portability
+        // This ensures both source and output paths can be relative
+        if let Ok(cwd) = std::env::current_dir() {
+            generator.set_workspace_root(cwd);
+        }
 
-        // Save source map for error mapping
+        let result = generator.generate_program(&program, &analyzed);
+
+        // Save source map for error mapping (now with relative paths)
         let source_map_path = output_file_path.with_extension("rs.map");
         if let Err(e) = generator.get_source_map().save_to_file(&source_map_path) {
             eprintln!("Warning: Failed to save source map: {}", e);
         }
 
-        code
+        result
     };
 
-    // Combine module code with main code
-    let module_code = module_compiler.get_compiled_modules().join("\n");
-    let combined_code = if module_code.is_empty() {
+    // THE WINDJAMMER WAY: Don't inline modules in multi-file projects!
+    // The module system (lib.rs + mod.rs) handles module structure.
+    // Only inline modules for single-file compilation (legacy behavior).
+    //
+    // BUGFIX: Also don't inline if the program declares any modules (pub mod foo;)
+    // This handles the case where a single mod.wj file has submodules that
+    // should be compiled as separate files, not inlined.
+    let has_module_declarations = program
+        .items
+        .iter()
+        .any(|item| matches!(item, parser::Item::Mod { items, .. } if items.is_empty()));
+
+    let combined_code = if is_multi_file_project || has_module_declarations {
+        // Multi-file project OR module with submodules: Don't inline modules
+        // The module system handles everything via lib.rs/mod.rs
         rust_code
     } else {
-        format!("{}\n\n{}", module_code, rust_code)
+        // Single-file with no module declarations: Inline compiled modules (legacy)
+        let module_code = module_compiler.get_compiled_modules().join("\n");
+        if module_code.is_empty() {
+            rust_code
+        } else {
+            format!("{}\n\n{}", module_code, rust_code)
+        }
     };
 
-    // Write output
-    let output_file = output_dir.join(
-        input_path
-            .file_name()
-            .unwrap()
-            .to_str()
-            .unwrap()
-            .replace(".wj", ".rs"),
-    );
+    // Write output (preserving directory structure)
+    let output_file = get_relative_output_path(source_root, input_path, output_dir)?;
 
-    std::fs::write(output_file, combined_code)?;
+    // Create parent directories if needed
+    if let Some(parent) = output_file.parent() {
+        std::fs::create_dir_all(parent)?;
+    }
+
+    eprintln!(
+        "📝 WRITING FILE: {} ({} bytes)",
+        output_file.display(),
+        combined_code.len()
+    );
+    if combined_code.is_empty() {
+        eprintln!("    🚨 WARNING: Writing EMPTY file!");
+        eprintln!("    rust_code length: check generator output");
+    }
+
+    // Write file with explicit control over flush and sync
+    // This ensures the write completes before we return, preventing race conditions
+    // where tests read the file before the OS has flushed buffers
+    {
+        use std::io::Write;
+        let mut file = std::fs::File::create(&output_file)?;
+        file.write_all(combined_code.as_bytes())?;
+        file.flush()?; // Ensure data is written to OS buffers
+
+        // On Linux, also force OS to write buffers to disk (Ubuntu CI has aggressive caching)
+        // On macOS/Windows, flush() is sufficient
+        #[cfg(target_os = "linux")]
+        {
+            file.sync_all()?; // Sync file data AND metadata
+            drop(file); // Close file handle before syncing directory
+
+            // CRITICAL: On Linux, we must also sync the PARENT DIRECTORY
+            // to ensure the directory entry is persisted. Without this,
+            // a crash could leave the directory without the file entry.
+            // Ubuntu CI appears to have very aggressive caching.
+            if let Some(parent) = output_file.parent() {
+                let dir = std::fs::File::open(parent)?;
+                dir.sync_all()?;
+            }
+        }
+
+        #[cfg(not(target_os = "linux"))]
+        drop(file); // Close file handle on non-Linux systems
+    }
 
     // Return the set of imported stdlib modules and external crates for Cargo.toml generation
     Ok((
@@ -1283,8 +1935,111 @@ fn create_cargo_toml_with_deps(
     // to their Cargo.toml - the compiler no longer auto-adds filesystem paths
     let mut external_deps = Vec::new();
     for crate_name in external_crates {
-        // All external crates are assumed to be from crates.io
-        external_deps.push(format!("{} = \"*\"", crate_name));
+        // THE WINDJAMMER WAY: Filter out Rust keywords (crate, super, self)
+        // These are language features, not external dependencies!
+        if crate_name == "crate" || crate_name == "super" || crate_name == "self" {
+            continue; // Skip Rust keywords
+        }
+
+        // THE WINDJAMMER WAY: Check if windjammer-game or windjammer-game-core is imported
+        // If so, add it as a path dependency to the local game framework
+        if crate_name == "windjammer_game"
+            || crate_name == "windjammer-game"
+            || crate_name == "windjammer_game_core"
+            || crate_name == "windjammer-game-core"
+        {
+            // Try to find windjammer-game in the workspace
+            // First, check if WINDJAMMER_GAME_PATH env var is set (for development)
+            if let Ok(game_path) = std::env::var("WINDJAMMER_GAME_PATH") {
+                let game_path = PathBuf::from(game_path);
+                if game_path.exists() {
+                    external_deps.push(format!(
+                        "windjammer-game = {{ path = {:?} }}",
+                        game_path.to_str().unwrap()
+                    ));
+                    continue; // Skip the crates.io fallback
+                }
+            }
+
+            // Second, try to find it relative to the compiler source
+            // This works when compiling from source
+            let manifest_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR")); // /path/to/windjammer
+            let src_root = manifest_dir.parent().unwrap(); // /path/to (parent of windjammer)
+
+            // Try both old and new paths for compatibility
+            let game_path = src_root.join("windjammer-game/windjammer-game-core");
+            let legacy_game_path = src_root.join("windjammer-game/windjammer-game");
+
+            let final_path = if game_path.exists() {
+                game_path
+            } else if legacy_game_path.exists() {
+                legacy_game_path
+            } else {
+                PathBuf::new() // Empty path, will fallback to crates.io
+            };
+
+            if !final_path.as_os_str().is_empty() {
+                // Read the actual crate name from Cargo.toml at the path
+                let cargo_toml_path = final_path.join("Cargo.toml");
+                let crate_name_normalized = if cargo_toml_path.exists() {
+                    // Try to read the actual crate name from Cargo.toml
+                    if let Ok(content) = std::fs::read_to_string(&cargo_toml_path) {
+                        // Parse name = "..." line
+                        if let Some(line) = content.lines().find(|l| l.trim().starts_with("name")) {
+                            if let Some(name_part) = line.split('"').nth(1) {
+                                name_part.to_string()
+                            } else {
+                                // Fallback: guess based on crate_name
+                                if crate_name.contains("_core") || crate_name.contains("-core") {
+                                    "windjammer-game-core".to_string()
+                                } else {
+                                    "windjammer-game".to_string()
+                                }
+                            }
+                        } else {
+                            // Fallback: guess based on crate_name
+                            if crate_name.contains("_core") || crate_name.contains("-core") {
+                                "windjammer-game-core".to_string()
+                            } else {
+                                "windjammer-game".to_string()
+                            }
+                        }
+                    } else {
+                        // Fallback: guess based on crate_name
+                        if crate_name.contains("_core") || crate_name.contains("-core") {
+                            "windjammer-game-core".to_string()
+                        } else {
+                            "windjammer-game".to_string()
+                        }
+                    }
+                } else {
+                    // Fallback: guess based on crate_name
+                    if crate_name.contains("_core") || crate_name.contains("-core") {
+                        "windjammer-game-core".to_string()
+                    } else {
+                        "windjammer-game".to_string()
+                    }
+                };
+
+                external_deps.push(format!(
+                    "{} = {{ path = {:?} }}",
+                    crate_name_normalized,
+                    final_path.to_str().unwrap()
+                ));
+                continue; // Skip the crates.io fallback
+            }
+
+            // Fallback: assume it's on crates.io (for published version)
+            let crate_name_normalized = if crate_name.contains("_core") {
+                "windjammer-game-core"
+            } else {
+                "windjammer-game"
+            };
+            external_deps.push(format!("{} = \"*\"", crate_name_normalized));
+        } else {
+            // All other external crates are assumed to be from crates.io
+            external_deps.push(format!("{} = \"*\"", crate_name));
+        }
     }
 
     deps.extend(external_deps);
@@ -1335,26 +2090,38 @@ fn create_cargo_toml_with_deps(
         format!("[dependencies]\n{}\n\n", deps.join("\n"))
     };
 
-    // Find all .rs files to create [[bin]] sections
-    let mut bin_sections = Vec::new();
-    if let Ok(entries) = fs::read_dir(output_dir) {
-        for entry in entries.flatten() {
-            if let Some(filename) = entry.file_name().to_str() {
-                if filename.ends_with(".rs") && filename != "lib.rs" {
-                    let bin_name = filename.strip_suffix(".rs").unwrap_or(filename);
-                    bin_sections.push(format!(
-                        "[[bin]]\nname = \"{}\"\npath = \"{}\"\n",
-                        bin_name, filename
-                    ));
+    // THE WINDJAMMER WAY: Check if lib.rs exists to determine if this is a library or binary project
+    let has_lib_rs = output_dir.join("lib.rs").exists();
+    let has_main_rs = output_dir.join("main.rs").exists();
+
+    let lib_or_bin_section = if has_lib_rs {
+        // Library project - generate [lib] section
+        "[lib]\nname = \"windjammer_app\"\npath = \"lib.rs\"\n\n".to_string()
+    } else if has_main_rs {
+        // Binary project with main.rs - generate [[bin]] section
+        "[[bin]]\nname = \"windjammer-app\"\npath = \"main.rs\"\n\n".to_string()
+    } else {
+        // Multiple standalone files - generate [[bin]] sections for each
+        let mut bin_sections = Vec::new();
+        if let Ok(entries) = fs::read_dir(output_dir) {
+            for entry in entries.flatten() {
+                if let Some(filename) = entry.file_name().to_str() {
+                    if filename.ends_with(".rs") {
+                        let bin_name = filename.strip_suffix(".rs").unwrap_or(filename);
+                        bin_sections.push(format!(
+                            "[[bin]]\nname = \"{}\"\npath = \"{}\"\n",
+                            bin_name, filename
+                        ));
+                    }
                 }
             }
         }
-    }
 
-    let bin_section = if !bin_sections.is_empty() {
-        format!("{}\n", bin_sections.join("\n"))
-    } else {
-        String::new()
+        if !bin_sections.is_empty() {
+            format!("{}\n", bin_sections.join("\n"))
+        } else {
+            String::new()
+        }
     };
 
     let cargo_toml = format!(
@@ -1369,7 +2136,7 @@ edition = "2021"
 {}{}[profile.release]
 opt-level = 3
 "#,
-        deps_section, bin_section
+        deps_section, lib_or_bin_section
     );
 
     let cargo_toml_path = output_dir.join("Cargo.toml");
@@ -2710,22 +3477,17 @@ pub fn generate_mod_file(output_dir: &Path) -> Result<()> {
 
     // Generate mod.rs content
     let mut content = String::from("// Auto-generated mod.rs by Windjammer CLI\n");
-    content.push_str("// DO NOT EDIT MANUALLY - regenerate with: wj build --module-file\n\n");
+    content.push_str("// This file declares all generated Windjammer modules\n\n");
 
     // Add pub mod declarations
     for module in &modules {
         content.push_str(&format!("pub mod {};\n", module));
     }
 
-    content.push_str("\n// Re-export all public items for convenience\n");
+    // Add re-exports for all public types
+    content.push_str("\n// Re-export all public items\n");
     for module in &modules {
-        if let Some(exports) = type_exports.get(module) {
-            let exports_str = exports.join(", ");
-            content.push_str(&format!("pub use {}::{{{}}};\n", module, exports_str));
-        } else {
-            // Fallback to wildcard import
-            content.push_str(&format!("pub use {}::*;\n", module));
-        }
+        content.push_str(&format!("pub use {}::*;\n", module));
     }
 
     // Write mod.rs
@@ -2796,8 +3558,263 @@ pub fn strip_main_functions(output_dir: &Path) -> Result<()> {
     Ok(())
 }
 
+/// Find the actual source root for a Windjammer file
+///
+/// For example, given "src_wj/ecs/entity.wj", this will walk up to find "src_wj"
+/// by looking for a directory that looks like a source root:
+/// - Named "src_wj" or "src" (this is the most reliable indicator)
+/// - Or the topmost directory containing mod.wj
+fn find_source_root(file_path: &Path) -> Option<&Path> {
+    let mut current = file_path;
+    let mut topmost_mod_wj_dir = None;
+    let mut found_src_wj = None;
+
+    while let Some(parent) = current.parent() {
+        // Check if this directory looks like a source root by name
+        if let Some(dir_name) = parent.file_name().and_then(|n| n.to_str()) {
+            // If named "src_wj", this is definitely the source root for multi-file projects
+            if dir_name == "src_wj" {
+                found_src_wj = Some(parent);
+                // Don't return immediately, keep looking for mod.wj to confirm multi-file structure
+            }
+        }
+
+        // Track the topmost directory with mod.wj
+        if parent.join("mod.wj").exists() {
+            topmost_mod_wj_dir = Some(parent);
+        }
+
+        current = parent;
+    }
+
+    // Prefer src_wj with mod.wj (multi-file project)
+    if let Some(src_wj) = found_src_wj {
+        if src_wj.join("mod.wj").exists() || topmost_mod_wj_dir.is_some() {
+            return Some(src_wj);
+        }
+    }
+
+    // Otherwise, use the topmost mod.wj directory (multi-file project without src_wj)
+    if let Some(mod_wj_dir) = topmost_mod_wj_dir {
+        return Some(mod_wj_dir);
+    }
+
+    // For single-file projects, use the file's parent directory
+    // This prevents deeply nested output paths like /tmp/output/wj/windjammer-game/examples/file.rs
+    file_path.parent()
+}
+
+/// Calculate output path that preserves directory structure
+///
+/// Example:
+/// - source_root: "windjammer-game/src_wj"
+/// - input_path: "windjammer-game/src_wj/math/vec2.wj"
+/// - output_dir: "build"
+/// - Result: "build/math/vec2.rs"
+pub fn get_relative_output_path(
+    source_root: &Path,
+    input_path: &Path,
+    output_dir: &Path,
+) -> Result<PathBuf> {
+    // Get the relative path from source_root to input_path
+    let relative = input_path.strip_prefix(source_root).unwrap_or(input_path);
+
+    // Replace .wj extension with .rs
+    let rs_filename = relative
+        .file_name()
+        .and_then(|n| n.to_str())
+        .map(|s| s.replace(".wj", ".rs"))
+        .ok_or_else(|| anyhow::anyhow!("Invalid filename"))?;
+
+    // Construct output path preserving directory structure
+    let mut output_path = output_dir.to_path_buf();
+
+    // Add parent directories if they exist
+    if let Some(parent) = relative.parent() {
+        if parent != Path::new("") {
+            output_path.push(parent);
+        }
+    }
+
+    // Add the .rs filename
+    output_path.push(rs_filename);
+
+    Ok(output_path)
+}
+
+/// Generate nested module structure using the new Windjammer module system
+/// This replaces the old flat generate_mod_file with proper nested support
+pub fn generate_nested_module_structure(source_dir: &Path, output_dir: &Path) -> Result<()> {
+    use crate::module_system::{
+        discover_nested_modules, generate_lib_rs, generate_mod_rs_for_submodule,
+    };
+    use anyhow::Context;
+    use colored::*;
+
+    // Discover all modules in the source directory
+    let module_tree =
+        discover_nested_modules(source_dir).context("Failed to discover module structure")?;
+
+    // Generate lib.rs (or mod.rs for root)
+    // THE WINDJAMMER WAY: Auto-discover hand-written Rust modules (FFI/interop)
+    // Look for hand-written .rs files in the project root (parent of src_wj)
+    let project_root = if let Some(parent) = source_dir.parent() {
+        if parent.as_os_str().is_empty() {
+            std::path::Path::new(".")
+        } else {
+            parent
+        }
+    } else {
+        source_dir
+    };
+    let lib_rs_content = generate_lib_rs(&module_tree, project_root)?;
+    let lib_rs_path = output_dir.join("lib.rs");
+    std::fs::write(&lib_rs_path, lib_rs_content)?;
+
+    // Copy hand-written modules to output directory
+    // THE WINDJAMMER WAY: Seamless FFI integration!
+    // BUT: Don't overwrite generated .rs files from .wj sources!
+    // Check both project_root/ and project_root/src/ (Rust convention)
+    let copy_dirs = vec![project_root.to_path_buf(), project_root.join("src")];
+
+    for copy_dir in &copy_dirs {
+        if !copy_dir.exists() {
+            continue;
+        }
+
+        if let Ok(entries) = std::fs::read_dir(copy_dir) {
+            for entry in entries.flatten() {
+                let path = entry.path();
+                if path.is_file() {
+                    if let Some(name) = path.file_name() {
+                        let name_str = name.to_string_lossy();
+                        // Copy .rs files that aren't lib.rs or mod.rs
+                        if name_str.ends_with(".rs") && name_str != "lib.rs" && name_str != "mod.rs"
+                        {
+                            // THE WINDJAMMER WAY: Check if there's a corresponding .wj file
+                            // If runtime.wj exists, don't copy runtime.rs (it would overwrite the generated file!)
+                            let stem = path.file_stem().unwrap().to_string_lossy();
+                            let corresponding_wj = source_dir.join(format!("{}.wj", stem));
+
+                            if corresponding_wj.exists() {
+                                continue; // Skip copying - this file is generated from .wj
+                            }
+
+                            // Only copy hand-written .rs files (like ffi.rs)
+                            let dest = output_dir.join(name);
+                            if let Err(e) = std::fs::copy(&path, &dest) {
+                                eprintln!("Warning: Failed to copy {}: {}", name_str, e);
+                            }
+                        }
+                    }
+                } else if path.is_dir() {
+                    // THE WINDJAMMER WAY: Copy directories with hand-written Rust (like ffi/)
+                    if let Some(dir_name) = path.file_name() {
+                        let dir_name_str = dir_name.to_string_lossy();
+                        let skip_dirs = [
+                            "src_wj",
+                            "target",
+                            "build",
+                            "generated",
+                            "dist",
+                            "node_modules",
+                            ".git",
+                            "src",
+                        ];
+
+                        if !skip_dirs.contains(&dir_name_str.as_ref()) {
+                            // CRITICAL FIX: Don't copy directories that correspond to Windjammer modules!
+                            // Check if there's a corresponding .wj directory in src_wj
+                            let corresponding_wj_dir = source_dir.join(dir_name_str.as_ref());
+                            if corresponding_wj_dir.exists() && corresponding_wj_dir.is_dir() {
+                                continue; // Skip copying - this is a Windjammer module directory
+                            }
+
+                            // Check if this directory has a mod.rs (it's a Rust module)
+                            let mod_rs = path.join("mod.rs");
+                            if mod_rs.exists() {
+                                let dest_dir = output_dir.join(dir_name);
+                                if let Err(e) = copy_dir_recursive(&path, &dest_dir) {
+                                    eprintln!(
+                                        "Warning: Failed to copy directory {}: {}",
+                                        dir_name_str, e
+                                    );
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    println!(
+        "{} Generated lib.rs with {} top-level modules",
+        "✓".green(),
+        module_tree.root_modules.len()
+    );
+
+    // Recursively generate mod.rs for each directory module
+    fn generate_mod_rs_recursive(
+        module: &crate::module_system::Module,
+        output_dir: &Path,
+    ) -> Result<()> {
+        if module.is_directory && !module.submodules.is_empty() {
+            let mod_rs_content = generate_mod_rs_for_submodule(module)?;
+            let module_output_dir = output_dir.join(&module.name);
+            std::fs::create_dir_all(&module_output_dir)?;
+            let mod_rs_path = module_output_dir.join("mod.rs");
+            std::fs::write(&mod_rs_path, mod_rs_content)?;
+
+            // Recursively generate for submodules
+            for submodule in &module.submodules {
+                generate_mod_rs_recursive(submodule, &module_output_dir)?;
+            }
+        }
+        Ok(())
+    }
+
+    // Generate mod.rs for all directory modules
+    for module in &module_tree.root_modules {
+        generate_mod_rs_recursive(module, output_dir)?;
+    }
+
+    Ok(())
+}
 #[cfg(test)]
 mod tests {
+    use super::*;
+
+    #[test]
+    fn test_get_relative_output_path_nested() {
+        let source_root = Path::new("src_wj");
+        let input_path = Path::new("src_wj/math/vec2.wj");
+        let output_dir = Path::new("build");
+
+        let result = get_relative_output_path(source_root, input_path, output_dir).unwrap();
+        assert_eq!(result, PathBuf::from("build/math/vec2.rs"));
+    }
+
+    #[test]
+    fn test_get_relative_output_path_flat() {
+        let source_root = Path::new("src_wj");
+        let input_path = Path::new("src_wj/vec2.wj");
+        let output_dir = Path::new("build");
+
+        let result = get_relative_output_path(source_root, input_path, output_dir).unwrap();
+        assert_eq!(result, PathBuf::from("build/vec2.rs"));
+    }
+
+    #[test]
+    fn test_get_relative_output_path_deeply_nested() {
+        let source_root = Path::new("game/src_wj");
+        let input_path = Path::new("game/src_wj/rendering/shaders/vertex.wj");
+        let output_dir = Path::new("build");
+
+        let result = get_relative_output_path(source_root, input_path, output_dir).unwrap();
+        assert_eq!(result, PathBuf::from("build/rendering/shaders/vertex.rs"));
+    }
+
     #[test]
     fn test_two_pass_compilation_concept() {
         // This test documents the two-pass compilation approach:

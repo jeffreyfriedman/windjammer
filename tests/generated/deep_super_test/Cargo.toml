@@ -1,0 +1,18 @@
+[package]
+name = "windjammer-app"
+version = "0.1.0"
+edition = "2021"
+
+# Prevent this from being treated as part of parent workspace
+[workspace]
+
+[dependencies]
+smallvec = "1.13"
+serde = { version = "1.0", features = ["derive"] }
+
+[[bin]]
+name = "test_deep_super"
+path = "test_deep_super.rs"
+
+[profile.release]
+opt-level = 3

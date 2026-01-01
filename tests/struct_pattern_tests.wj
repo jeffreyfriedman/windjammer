@@ -1,0 +1,72 @@
+// Test: Struct Pattern Matching in Enums
+// This test verifies that struct-style enum variants can be pattern matched
+
+enum Shape {
+    Circle { radius: f32 },
+    Rectangle { width: f32, height: f32 },
+    Triangle { base: f32, height: f32 },
+}
+
+fn calculate_area(shape: Shape) -> f32 {
+    match shape {
+        Shape::Circle { radius: r } => {
+            return 3.14159 * r * r
+        }
+        Shape::Rectangle { width: w, height: h } => {
+            return w * h
+        }
+        Shape::Triangle { base: b, height: h } => {
+            return 0.5 * b * h
+        }
+    }
+}
+
+fn test_circle() -> f32 {
+    let circle = Shape::Circle { radius: 5.0 }
+    return calculate_area(circle)
+}
+
+fn test_rectangle() -> f32 {
+    let rect = Shape::Rectangle { width: 10.0, height: 20.0 }
+    return calculate_area(rect)
+}
+
+fn test_triangle() -> f32 {
+    let tri = Shape::Triangle { base: 6.0, height: 8.0 }
+    return calculate_area(tri)
+}
+
+// Test with wildcards
+fn has_large_dimension(shape: Shape) -> bool {
+    match shape {
+        Shape::Circle { radius: r } => r > 10.0,
+        Shape::Rectangle { width: w, height: _ } => w > 10.0,
+        Shape::Triangle { base: _, height: h } => h > 10.0,
+    }
+}
+
+// Test with partial destructuring
+fn get_first_dimension(shape: Shape) -> f32 {
+    match shape {
+        Shape::Circle { radius: r } => r,
+        Shape::Rectangle { width: w, height: _ } => w,
+        Shape::Triangle { base: b, height: _ } => b,
+    }
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

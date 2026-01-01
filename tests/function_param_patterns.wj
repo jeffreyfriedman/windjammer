@@ -1,0 +1,97 @@
+// Test: Patterns in Function Parameters
+// Tests that destructuring patterns work in function parameters
+
+// ============================================================================
+// TEST 1: Tuple parameter destructuring
+// ============================================================================
+
+fn add_tuple((a, b): (i32, i32)) -> i32 {
+    return a + b
+}
+
+fn add_triple((a, b, c): (i32, i32, i32)) -> i32 {
+    return a + b + c
+}
+
+// ============================================================================
+// TEST 2: Struct parameter destructuring
+// ============================================================================
+
+struct Point {
+    x: i32,
+    y: i32,
+}
+
+fn distance_from_origin(Point { x, y }: Point) -> f32 {
+    let sum = (x * x + y * y) as f32
+    return sum
+}
+
+// ============================================================================
+// TEST 3: Enum parameter destructuring
+// ============================================================================
+
+enum Option<T> {
+    Some(T),
+    None,
+}
+
+fn unwrap_or_zero(Option::Some(value): Option<i32>) -> i32 {
+    return value
+}
+
+// ============================================================================
+// TEST 4: Wildcard in parameters
+// ============================================================================
+
+fn ignore_second((a, _): (i32, i32)) -> i32 {
+    return a
+}
+
+fn ignore_all(_: i32) -> i32 {
+    return 42
+}
+
+// ============================================================================
+// TEST 5: Nested patterns in parameters
+// ============================================================================
+
+fn nested_tuple(((a, b), (c, d)): ((i32, i32), (i32, i32))) -> i32 {
+    return a + b + c + d
+}
+
+// ============================================================================
+// MAIN
+// ============================================================================
+
+fn main() {
+    let r1 = add_tuple((5, 10))
+    let r2 = add_triple((1, 2, 3))
+    
+    let point = Point { x: 3, y: 4 }
+    let r3 = distance_from_origin(point)
+    
+    let r4 = ignore_second((100, 200))
+    let r5 = ignore_all(999)
+    
+    let r6 = nested_tuple(((1, 2), (3, 4)))
+    
+    println("All function parameter pattern tests passed!")
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

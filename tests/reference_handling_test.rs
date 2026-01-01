@@ -10,7 +10,10 @@ fn compile_fixture(fixture_name: &str) -> Result<String, String> {
         .join("fixtures")
         .join(format!("{}.wj", fixture_name));
 
-    let output_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("test_output");
+    // Use unique output dir per fixture to avoid race conditions in parallel tests
+    let output_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("test_output")
+        .join(fixture_name);
     std::fs::create_dir_all(&output_dir).map_err(|e| e.to_string())?;
 
     // Run the compiler
@@ -37,7 +40,6 @@ fn compile_fixture(fixture_name: &str) -> Result<String, String> {
 }
 
 #[test]
-#[ignore] // Codegen changed - needs update
 fn test_mut_ref_no_double_borrow() {
     let rust_code = compile_fixture("mut_ref_test").expect("Compilation failed");
 

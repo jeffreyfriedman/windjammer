@@ -1,0 +1,11 @@
+# Phase13 Test Fix Summary
+# 
+# Tests 2-5 in phase13_loop_optimization.rs need:
+# 1. Wrap all Statement:: with test_alloc_stmt
+# 2. Wrap all Expression:: with test_alloc_expr  
+# 3. Replace Box::new(Expression) with test_alloc_expr(Expression)
+# 4. Add `let optimizer = crate::optimizer::Optimizer::with_defaults();`
+# 5. Add `&optimizer` parameter to optimize_loops calls
+#
+# This is straightforward but tedious due to nested structures.
+# User requested thoroughness - will complete manually.

@@ -79,11 +79,11 @@ impl ScopeAnalyzer {
     }
 
     /// Analyze a selection of statements
-    pub fn analyze(
+    pub fn analyze<'ast>(
         &mut self,
-        before_statements: &[Statement],
-        selected_statements: &[Statement],
-        after_statements: &[Statement],
+        before_statements: &[&'ast Statement<'ast>],
+        selected_statements: &[&'ast Statement<'ast>],
+        after_statements: &[&'ast Statement<'ast>],
     ) -> ScopeAnalysis {
         // Phase 1: Build outer scope from statements before selection
         self.collect_outer_scope(before_statements);
@@ -99,21 +99,21 @@ impl ScopeAnalyzer {
     }
 
     /// Collect variables defined before the selection
-    fn collect_outer_scope(&mut self, statements: &[Statement]) {
+    fn collect_outer_scope<'ast>(&mut self, statements: &[&'ast Statement<'ast>]) {
         for stmt in statements {
             Self::collect_definitions_in_statement(stmt, &mut self.outer_scope);
         }
     }
 
     /// Collect variables used after the selection
-    fn collect_used_after(&mut self, statements: &[Statement]) {
+    fn collect_used_after<'ast>(&mut self, statements: &[&'ast Statement<'ast>]) {
         for stmt in statements {
             Self::collect_usages_in_statement(stmt, &mut self.used_after);
         }
     }
 
     /// Analyze the selected statements
-    fn analyze_statements(&mut self, statements: &[Statement]) {
+    fn analyze_statements<'ast>(&mut self, statements: &[&'ast Statement<'ast>]) {
         for stmt in statements {
             self.analyze_statement(stmt);
         }
@@ -160,6 +160,7 @@ impl ScopeAnalyzer {
                 target,
                 value,
                 location: _,
+                compound_op: _,
             } => {
                 // Record write to target
                 if let Expression::Identifier { name, location: _ } = target {
@@ -417,37 +418,41 @@ mod tests {
     fn test_simple_parameter_detection() {
         let mut analyzer = ScopeAnalyzer::new();
 
+        use windjammer::test_utils::{test_alloc_expr, test_alloc_stmt};
+
         // Before: let x = 10;
-        let before = vec![Statement::Let {
+        let before = vec![test_alloc_stmt(Statement::Let {
             pattern: windjammer::parser::Pattern::Identifier("x".to_string()),
             mutable: false,
             type_: None,
-            value: Expression::Literal {
+            value: test_alloc_expr(Expression::Literal {
                 value: windjammer::parser::Literal::Int(10),
                 location: None,
-            },
+            }),
             location: None,
-        }];
+            else_block: None,
+        })];
 
         // Selection: let y = x + 5;
-        let selected = vec![Statement::Let {
+        let selected = vec![test_alloc_stmt(Statement::Let {
             pattern: windjammer::parser::Pattern::Identifier("y".to_string()),
             mutable: false,
             type_: None,
-            value: Expression::Binary {
-                left: Box::new(Expression::Identifier {
+            value: test_alloc_expr(Expression::Binary {
+                left: test_alloc_expr(Expression::Identifier {
                     name: "x".to_string(),
                     location: None,
                 }),
                 op: BinaryOp::Add,
-                right: Box::new(Expression::Literal {
+                right: test_alloc_expr(Expression::Literal {
                     value: windjammer::parser::Literal::Int(5),
                     location: None,
                 }),
                 location: None,
-            },
+            }),
             location: None,
-        }];
+            else_block: None,
+        })];
 
         // After: (empty)
         let after = vec![];
@@ -468,36 +473,39 @@ mod tests {
 
         let before = vec![];
 
+        use windjammer::test_utils::{test_alloc_expr, test_alloc_stmt};
+
         // Selection: let result = 42;
-        let selected = vec![Statement::Let {
+        let selected = vec![test_alloc_stmt(Statement::Let {
             pattern: windjammer::parser::Pattern::Identifier("result".to_string()),
             mutable: false,
             type_: None,
-            value: Expression::Literal {
+            value: test_alloc_expr(Expression::Literal {
                 value: windjammer::parser::Literal::Int(42),
                 location: None,
-            },
+            }),
             location: None,
-        }];
+            else_block: None,
+        })];
 
         // After: println(result);
-        let after = vec![Statement::Expression {
-            expr: Expression::Call {
-                function: Box::new(Expression::Identifier {
+        let after = vec![test_alloc_stmt(Statement::Expression {
+            expr: test_alloc_expr(Expression::Call {
+                function: test_alloc_expr(Expression::Identifier {
                     name: "println".to_string(),
                     location: None,
                 }),
                 arguments: vec![(
                     None,
-                    Expression::Identifier {
+                    test_alloc_expr(Expression::Identifier {
                         name: "result".to_string(),
                         location: None,
-                    },
+                    }),
                 )],
                 location: None,
-            },
+            }),
             location: None,
-        }];
+        })];
 
         let analysis = analyzer.analyze(&before, &selected, &after);
 
@@ -508,58 +516,62 @@ mod tests {
 
     #[test]
     fn test_parameter_and_return() {
+        use windjammer::test_utils::{test_alloc_expr, test_alloc_stmt};
+
         let mut analyzer = ScopeAnalyzer::new();
 
         // Before: let x = 10;
-        let before = vec![Statement::Let {
+        let before = vec![test_alloc_stmt(Statement::Let {
             pattern: windjammer::parser::Pattern::Identifier("x".to_string()),
             mutable: false,
             type_: None,
-            value: Expression::Literal {
+            value: test_alloc_expr(Expression::Literal {
                 value: windjammer::parser::Literal::Int(10),
                 location: None,
-            },
+            }),
             location: None,
-        }];
+            else_block: None,
+        })];
 
         // Selection: let y = x * 2;
-        let selected = vec![Statement::Let {
+        let selected = vec![test_alloc_stmt(Statement::Let {
             pattern: windjammer::parser::Pattern::Identifier("y".to_string()),
             mutable: false,
             type_: None,
-            value: Expression::Binary {
-                left: Box::new(Expression::Identifier {
+            value: test_alloc_expr(Expression::Binary {
+                left: test_alloc_expr(Expression::Identifier {
                     name: "x".to_string(),
                     location: None,
                 }),
                 op: BinaryOp::Mul,
-                right: Box::new(Expression::Literal {
+                right: test_alloc_expr(Expression::Literal {
                     value: windjammer::parser::Literal::Int(2),
                     location: None,
                 }),
                 location: None,
-            },
+            }),
             location: None,
-        }];
+            else_block: None,
+        })];
 
         // After: use(y);
-        let after = vec![Statement::Expression {
-            expr: Expression::Call {
-                function: Box::new(Expression::Identifier {
+        let after = vec![test_alloc_stmt(Statement::Expression {
+            expr: test_alloc_expr(Expression::Call {
+                function: test_alloc_expr(Expression::Identifier {
                     name: "use".to_string(),
                     location: None,
                 }),
                 arguments: vec![(
                     None,
-                    Expression::Identifier {
+                    test_alloc_expr(Expression::Identifier {
                         name: "y".to_string(),
                         location: None,
-                    },
+                    }),
                 )],
                 location: None,
-            },
+            }),
             location: None,
-        }];
+        })];
 
         let analysis = analyzer.analyze(&before, &selected, &after);
 

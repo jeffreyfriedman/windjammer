@@ -63,12 +63,11 @@ jobs:
       - name: Build
         run: cargo build --verbose
       
+      - name: Build release (needed for integration tests)
+        run: cargo build --release --verbose
+      
       - name: Run tests
         run: cargo test --verbose --all-features
-      
-      - name: Build release
-        if: matrix.rust == 'stable'
-        run: cargo build --release --verbose
       
       - name: Test examples (Unix)
         if: matrix.rust == 'stable' && runner.os != 'Windows'
