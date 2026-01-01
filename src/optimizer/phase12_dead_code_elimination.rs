@@ -576,14 +576,14 @@ fn eliminate_dead_code_in_expression<'a: 'ast, 'ast>(
             function,
             arguments,
             location,
-        } => optimizer.alloc_expr(Expression::Call {
+        } => optimizer.alloc_expr(unsafe { std::mem::transmute(Expression::Call {
             function: eliminate_dead_code_in_expression(function, optimizer),
             arguments: arguments
                 .iter()
                 .map(|(label, arg)| (label.clone(), eliminate_dead_code_in_expression(arg, optimizer)))
                 .collect(),
             location: location.clone(),
-        }),
+        }) }),
         Expression::MethodCall {
             object,
             method,
@@ -620,13 +620,13 @@ fn eliminate_dead_code_in_expression<'a: 'ast, 'ast>(
             operand: eliminate_dead_code_in_expression(operand, optimizer),
             location: location.clone(),
         }) }),
-        Expression::Tuple { elements, location } => optimizer.alloc_expr(Expression::Tuple {
+        Expression::Tuple { elements, location } => optimizer.alloc_expr(unsafe { std::mem::transmute(Expression::Tuple {
             elements: elements
                 .iter()
                 .map(|e| eliminate_dead_code_in_expression(e, optimizer))
                 .collect(),
             location: location.clone(),
-        }),
+        }) }),
         Expression::Index {
             object,
             index,
@@ -677,14 +677,14 @@ fn eliminate_dead_code_in_expression<'a: 'ast, 'ast>(
             name,
             fields,
             location,
-        } => optimizer.alloc_expr(Expression::StructLiteral {
+        } => optimizer.alloc_expr(unsafe { std::mem::transmute(Expression::StructLiteral {
             name: name.clone(),
             fields: fields
                 .iter()
                 .map(|(k, v)| (k.clone(), eliminate_dead_code_in_expression(v, optimizer)))
                 .collect(),
             location: location.clone(),
-        }),
+        }) }),
         Expression::Range {
             start,
             end,
@@ -722,12 +722,12 @@ fn eliminate_dead_code_in_expression<'a: 'ast, 'ast>(
             args,
             delimiter,
             location,
-        } => optimizer.alloc_expr(Expression::MacroInvocation {
+        } => optimizer.alloc_expr(unsafe { std::mem::transmute(Expression::MacroInvocation {
             name: name.clone(),
             args: args.iter().map(|a| eliminate_dead_code_in_expression(a, optimizer)).collect(),
             delimiter: *delimiter,
             location: location.clone(),
-        }),
+        }) }),
         _ => expr,
     }
 }
