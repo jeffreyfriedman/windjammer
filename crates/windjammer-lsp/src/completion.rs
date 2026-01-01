@@ -6,7 +6,7 @@ use windjammer::parser::{Item, Program};
 
 /// Completion provider for Windjammer code
 pub struct CompletionProvider {
-    program: Option<Program>,
+    program: Option<Program<'static>>,
 }
 
 impl CompletionProvider {
@@ -15,7 +15,7 @@ impl CompletionProvider {
     }
 
     /// Update the parsed program
-    pub fn update_program(&mut self, program: Program) {
+    pub fn update_program(&mut self, program: Program<'static>) {
         self.program = Some(program);
     }
 

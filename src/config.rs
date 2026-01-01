@@ -21,11 +21,17 @@ pub enum DependencySpec {
     },
 }
 
-/// Main Windjammer configuration (wj.toml)
+/// Main Windjammer configuration (wj.toml or windjammer.toml)
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct WjConfig {
     #[serde(default)]
+    pub project: Option<ProjectConfig>,
+
+    #[serde(default)]
     pub package: PackageConfig,
+
+    #[serde(default)]
+    pub sources: Option<SourcesConfig>,
 
     #[serde(default)]
     pub dependencies: HashMap<String, DependencySpec>,
@@ -38,7 +44,14 @@ pub struct WjConfig {
     pub backend: Option<BackendConfig>,
 }
 
-/// Package metadata
+/// Project metadata (for windjammer.toml)
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct ProjectConfig {
+    pub name: String,
+    pub version: String,
+}
+
+/// Package metadata (for wj.toml)
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct PackageConfig {
     pub name: String,
@@ -47,6 +60,15 @@ pub struct PackageConfig {
     pub authors: Vec<String>,
     #[serde(default)]
     pub edition: String,
+}
+
+/// Source configuration
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct SourcesConfig {
+    /// Source roots - directories where compiler looks for modules
+    /// e.g., ["windjammer-game-core/src_wj", "lib/src_wj"]
+    #[serde(default)]
+    pub roots: Vec<String>,
 }
 
 /// Backend proxy configuration

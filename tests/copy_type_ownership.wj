@@ -1,0 +1,56 @@
+// Test: Copy types should not be inferred as & when used in operator expressions
+// Bug: fn distance(a: Vec2, b: Vec2) generates a: &Vec2, b: &Vec2
+// This breaks operator overloading: a - b fails because Sub is not implemented for &Vec2
+// Expected: Copy types should remain owned for operator compatibility
+
+struct Vec2 {
+    pub x: f32,
+    pub y: f32,
+}
+
+impl Vec2 {
+    pub fn new(x: f32, y: f32) -> Vec2 {
+        Vec2 { x: x, y: y }
+    }
+}
+
+use std::ops::Sub
+
+impl Sub for Vec2 {
+    type Output = Vec2
+    
+    fn sub(self, other: Vec2) -> Vec2 {
+        Vec2::new(self.x - other.x, self.y - other.y)
+    }
+}
+
+// This function should generate: fn distance(a: Vec2, b: Vec2)
+// NOT: fn distance(a: &Vec2, b: &Vec2)
+// Because a - b requires owned Vec2, not &Vec2
+pub fn distance(a: Vec2, b: Vec2) -> f32 {
+    let diff = a - b
+    return (diff.x * diff.x + diff.y * diff.y).sqrt()
+}
+
+// This function should also generate: fn midpoint(a: Vec2, b: Vec2)
+// NOT: fn midpoint(a: &Vec2, b: &Vec2)
+pub fn midpoint(a: Vec2, b: Vec2) -> Vec2 {
+    Vec2::new((a.x + b.x) / 2.0, (a.y + b.y) / 2.0)
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

@@ -26,7 +26,8 @@ pub mod phase13_loop_optimization;
 pub mod phase14_escape_analysis;
 pub mod phase15_simd_vectorization;
 
-use crate::parser::Program;
+use crate::parser::{Expression, Pattern, Program, Statement};
+use typed_arena::Arena;
 
 /// Configuration for optimizer
 #[derive(Debug, Clone)]
@@ -57,9 +58,9 @@ impl Default for OptimizerConfig {
 
 /// Result of optimization pass
 #[derive(Debug, Clone)]
-pub struct OptimizationResult {
+pub struct OptimizationResult<'ast> {
     /// Optimized program
-    pub program: Program,
+    pub program: Program<'ast>,
     /// Optimization statistics
     pub stats: OptimizationStats,
 }
@@ -93,26 +94,64 @@ pub struct OptimizationStats {
 /// Main optimizer entry point
 pub struct Optimizer {
     config: OptimizerConfig,
+    // Arena allocators for optimized AST nodes
+    expr_arena: typed_arena::Arena<crate::parser::Expression<'static>>,
+    stmt_arena: typed_arena::Arena<crate::parser::Statement<'static>>,
+    pattern_arena: typed_arena::Arena<crate::parser::Pattern<'static>>,
 }
 
 impl Optimizer {
     pub fn new(config: OptimizerConfig) -> Self {
-        Self { config }
+        Self {
+            config,
+            expr_arena: Arena::new(),
+            stmt_arena: Arena::new(),
+            pattern_arena: Arena::new(),
+        }
     }
 
     pub fn with_defaults() -> Self {
         Self::new(OptimizerConfig::default())
     }
 
+    /// Allocate an expression in the arena
+    /// Returns a reference with free lifetime 'ast (not tied to &self)
+    pub fn alloc_expr<'ast>(&self, expr: Expression<'static>) -> &'ast Expression<'ast> {
+        unsafe {
+            let ptr = self.expr_arena.alloc(expr);
+            std::mem::transmute(ptr)
+        }
+    }
+
+    /// Allocate a statement in the arena
+    pub fn alloc_stmt<'ast>(&self, stmt: Statement<'static>) -> &'ast Statement<'ast> {
+        unsafe {
+            let ptr = self.stmt_arena.alloc(stmt);
+            std::mem::transmute(ptr)
+        }
+    }
+
+    /// Allocate a pattern in the arena
+    pub fn alloc_pattern<'ast>(&self, pattern: Pattern<'static>) -> &'ast Pattern<'ast> {
+        unsafe {
+            let ptr = self.pattern_arena.alloc(pattern);
+            std::mem::transmute(ptr)
+        }
+    }
+
     /// Run all enabled optimization passes
-    pub fn optimize(&self, program: Program) -> OptimizationResult {
+    pub fn optimize<'ast>(&self, program: &Program<'ast>) -> OptimizationResult<'ast> {
         let mut program = program;
         let mut stats = OptimizationStats::default();
 
+        // Keep intermediate programs alive to prevent dangling references
+        let mut intermediate_programs: Vec<Program<'ast>> = Vec::new();
+
         // Phase 11: String Interning
         if self.config.enable_string_interning {
-            let result = phase11_string_interning::optimize_string_interning(&program);
-            program = result.program;
+            let result = phase11_string_interning::optimize_string_interning(program, self);
+            intermediate_programs.push(result.program);
+            program = intermediate_programs.last().unwrap();
             stats.strings_interned = result.strings_interned;
             stats.string_memory_saved = result.memory_saved;
         }
@@ -120,8 +159,9 @@ impl Optimizer {
         // Phase 12: Dead Code Elimination
         if self.config.enable_dead_code_elimination {
             let (optimized_program, dce_stats) =
-                phase12_dead_code_elimination::eliminate_dead_code(&program);
-            program = optimized_program;
+                phase12_dead_code_elimination::eliminate_dead_code(program, self);
+            intermediate_programs.push(optimized_program);
+            program = intermediate_programs.last().unwrap();
             stats.dead_functions_removed = dce_stats.unused_functions_removed;
             stats.dead_code_bytes_saved =
                 dce_stats.unreachable_statements_removed + dce_stats.empty_blocks_removed;
@@ -130,8 +170,9 @@ impl Optimizer {
         // Phase 13: Loop Optimization
         if self.config.enable_loop_optimization {
             let (optimized_program, loop_stats) =
-                phase13_loop_optimization::optimize_loops(&program);
-            program = optimized_program;
+                phase13_loop_optimization::optimize_loops(program, self);
+            intermediate_programs.push(optimized_program);
+            program = intermediate_programs.last().unwrap();
             stats.loops_optimized = loop_stats.loops_optimized;
             stats.invariants_hoisted = loop_stats.invariants_hoisted;
             stats.loops_unrolled = loop_stats.loops_unrolled;
@@ -140,8 +181,9 @@ impl Optimizer {
         // Phase 14: Escape Analysis
         if self.config.enable_escape_analysis {
             let (optimized_program, esc_stats) =
-                phase14_escape_analysis::optimize_escape_analysis(&program);
-            program = optimized_program;
+                phase14_escape_analysis::optimize_escape_analysis(program, self);
+            intermediate_programs.push(optimized_program);
+            program = intermediate_programs.last().unwrap();
             stats.heap_to_stack_conversions = esc_stats.vectors_stack_allocated
                 + esc_stats.strings_inlined
                 + esc_stats.boxes_unboxed;
@@ -150,12 +192,16 @@ impl Optimizer {
         // Phase 15: SIMD Vectorization
         if self.config.enable_simd_vectorization {
             let (optimized_program, simd_stats) =
-                phase15_simd_vectorization::optimize_simd_vectorization(&program);
-            program = optimized_program;
+                phase15_simd_vectorization::optimize_simd_vectorization(program, self);
+            intermediate_programs.push(optimized_program);
+            program = intermediate_programs.last().unwrap();
             stats.loops_vectorized += simd_stats.loops_vectorized;
         }
 
-        OptimizationResult { program, stats }
+        OptimizationResult {
+            program: program.clone(),
+            stats,
+        }
     }
 }
 

@@ -1,0 +1,46 @@
+// Test: Generic parameters passed to &mut should remain owned
+// Bug: Compiler infers &G when source says `mut game: G`
+
+pub trait GameState {
+    fn tick(&mut self)
+}
+
+// External FFI that takes &mut reference
+extern fn process_state<S: GameState>(state: &mut S);
+
+// This function should OWN the game, then pass &mut to FFI
+pub fn run_game<G: GameState>(mut game: G) {
+    // We own `game` and can lend it mutably to FFI
+    process_state(&mut game)
+}
+
+pub struct MyGame {
+    pub frame: i32,
+}
+
+impl GameState for MyGame {
+    fn tick(&mut self) {
+        self.frame = self.frame + 1
+    }
+}
+
+pub fn test() {
+    let game = MyGame { frame: 0 }
+    run_game(game)  // Pass by value (move ownership)
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

@@ -9,17 +9,17 @@ use crate::parser::ast::*;
 use crate::parser_impl::Parser;
 
 impl Parser {
-    pub(crate) fn parse_expression(&mut self) -> Result<Expression, String> {
+    pub(crate) fn parse_expression(&mut self) -> Result<&'static Expression<'static>, String> {
         self.parse_ternary_expression()
     }
 
-    fn parse_ternary_expression(&mut self) -> Result<Expression, String> {
+    fn parse_ternary_expression(&mut self) -> Result<&'static Expression<'static>, String> {
         // Ternary operator removed - use if/else expressions instead
         // This simplifies the parser and eliminates ambiguity with TryOp (?)
         self.parse_binary_expression(0)
     }
 
-    pub(crate) fn parse_match_value(&mut self) -> Result<Expression, String> {
+    pub(crate) fn parse_match_value(&mut self) -> Result<&'static Expression<'static>, String> {
         // Parse a non-struct-literal expression for match values
         // This is basically parse_binary_expression but without struct literal support
         let mut left = match self.current_token() {
@@ -29,10 +29,10 @@ impl Parser {
                 // Check for empty tuple ()
                 if self.current_token() == &Token::RParen {
                     self.advance();
-                    return Ok(Expression::Tuple {
+                    return Ok(self.alloc_expr(Expression::Tuple {
                         elements: vec![],
                         location: self.current_location(),
-                    });
+                    }));
                 }
 
                 // Parse the first expression inside parentheses
@@ -55,10 +55,10 @@ impl Parser {
                     }
 
                     self.expect(Token::RParen)?;
-                    Expression::Tuple {
+                    self.alloc_expr(Expression::Tuple {
                         elements,
                         location: self.current_location(),
-                    }
+                    })
                 } else {
                     // Just a parenthesized expression
                     self.expect(Token::RParen)?;
@@ -72,10 +72,10 @@ impl Parser {
                 // Check for empty array []
                 if self.current_token() == &Token::RBracket {
                     self.advance();
-                    return Ok(Expression::Array {
+                    return Ok(self.alloc_expr(Expression::Array {
                         elements: vec![],
                         location: self.current_location(),
-                    });
+                    }));
                 }
 
                 let first_element = self.parse_expression()?;
@@ -87,12 +87,12 @@ impl Parser {
                     self.expect(Token::RBracket)?;
 
                     // Represent as a macro invocation: vec![value; count]
-                    return Ok(Expression::MacroInvocation {
+                    return Ok(self.alloc_expr(Expression::MacroInvocation {
                         name: "vec".to_string(),
                         args: vec![first_element, count],
                         delimiter: MacroDelimiter::Brackets,
                         location: self.current_location(),
-                    });
+                    }));
                 }
 
                 // Regular array literal
@@ -110,10 +110,10 @@ impl Parser {
                 }
 
                 self.expect(Token::RBracket)?;
-                Expression::Array {
+                self.alloc_expr(Expression::Array {
                     elements,
                     location: self.current_location(),
-                }
+                })
             }
             Token::Ampersand => {
                 // Handle & and &mut unary operators
@@ -125,45 +125,45 @@ impl Parser {
                     false
                 };
                 let inner = self.parse_match_value()?;
-                Expression::Unary {
+                self.alloc_expr(Expression::Unary {
                     op: if is_mut {
                         UnaryOp::MutRef
                     } else {
                         UnaryOp::Ref
                     },
-                    operand: Box::new(inner),
+                    operand: inner,
                     location: self.current_location(),
-                }
+                })
             }
             Token::Star => {
                 // Handle * dereference operator
                 self.advance();
                 let inner = self.parse_match_value()?;
-                Expression::Unary {
+                self.alloc_expr(Expression::Unary {
                     op: UnaryOp::Deref,
-                    operand: Box::new(inner),
+                    operand: inner,
                     location: self.current_location(),
-                }
+                })
             }
             Token::Minus => {
                 // Handle - negation operator
                 self.advance();
                 let inner = self.parse_match_value()?;
-                Expression::Unary {
+                self.alloc_expr(Expression::Unary {
                     op: UnaryOp::Neg,
-                    operand: Box::new(inner),
+                    operand: inner,
                     location: self.current_location(),
-                }
+                })
             }
             Token::Bang => {
                 // Handle ! not operator
                 self.advance();
                 let inner = self.parse_match_value()?;
-                Expression::Unary {
+                self.alloc_expr(Expression::Unary {
                     op: UnaryOp::Not,
-                    operand: Box::new(inner),
+                    operand: inner,
                     location: self.current_location(),
-                }
+                })
             }
             Token::Ident(name) => {
                 let mut qualified_name = name.clone();
@@ -194,10 +194,10 @@ impl Parser {
 
                 // Don't check for { here - just create the identifier
                 // and continue to postfix operators
-                Expression::Identifier {
+                self.alloc_expr(Expression::Identifier {
                     name: qualified_name,
                     location: self.current_location(),
-                }
+                })
             }
             _ => self.parse_primary_expression()?,
         };
@@ -210,10 +210,10 @@ impl Parser {
                     if self.peek(1) == Some(&Token::Await) {
                         self.advance(); // consume '.'
                         self.advance(); // consume 'await'
-                        left = Expression::Await {
-                            expr: Box::new(left),
+                        left = self.alloc_expr(Expression::Await {
+                            expr: left,
                             location: self.current_location(),
-                        };
+                        });
                     } else {
                         self.advance();
                         let field = if let Token::Ident(name) = self.current_token() {
@@ -223,11 +223,11 @@ impl Parser {
                         } else {
                             return Err("Expected field name after .".to_string());
                         };
-                        left = Expression::FieldAccess {
-                            object: Box::new(left),
+                        left = self.alloc_expr(Expression::FieldAccess {
+                            object: left,
                             field,
                             location: self.current_location(),
-                        };
+                        });
                     }
                 }
                 Token::LBracket => {
@@ -238,48 +238,44 @@ impl Parser {
                         // [..end] - slice from beginning
                         self.advance(); // consume '..'
                         let end = if self.current_token() != &Token::RBracket {
-                            Some(Box::new(self.parse_expression()?))
+                            Some(self.parse_expression()?)
                         } else {
                             None
                         };
                         self.expect(Token::RBracket)?;
 
                         // Desugar [..end] to .slice(0, end)
-                        let end_expr = end.unwrap_or_else(|| {
-                            Box::new(Expression::MethodCall {
-                                object: Box::new(left.clone()),
-                                method: "len".to_string(),
-                                type_args: None,
-                                arguments: vec![],
-                                location: self.current_location(),
-                            })
+                        // We need to compute end_expr without holding onto left
+                        let len_call = self.alloc_expr(Expression::MethodCall {
+                            object: left,
+                            method: "len".to_string(),
+                            type_args: None,
+                            arguments: vec![],
+                            location: self.current_location(),
+                        });
+                        let end_expr = end.unwrap_or(len_call);
+
+                        let zero_lit = self.alloc_expr(Expression::Literal {
+                            value: Literal::Int(0),
+                            location: self.current_location(),
                         });
 
-                        left = Expression::MethodCall {
-                            object: Box::new(left),
+                        left = self.alloc_expr(Expression::MethodCall {
+                            object: left,
                             method: "slice".to_string(),
                             type_args: None,
-                            arguments: vec![
-                                (
-                                    None,
-                                    Expression::Literal {
-                                        value: Literal::Int(0),
-                                        location: self.current_location(),
-                                    },
-                                ),
-                                (None, *end_expr),
-                            ],
+                            arguments: vec![(None, zero_lit), (None, end_expr)],
                             location: self.current_location(),
-                        };
+                        });
                     } else {
-                        let start_or_index = Box::new(self.parse_expression()?);
+                        let start_or_index = self.parse_expression()?;
 
                         // Check if this is a slice or regular index
                         if self.current_token() == &Token::DotDot {
                             // [start..] or [start..end] - slice syntax
                             self.advance(); // consume '..'
                             let end = if self.current_token() != &Token::RBracket {
-                                Some(Box::new(self.parse_expression()?))
+                                Some(self.parse_expression()?)
                             } else {
                                 None
                             };
@@ -287,8 +283,8 @@ impl Parser {
 
                             // Desugar [start..end] to .slice(start, end)
                             let end_expr = end.unwrap_or_else(|| {
-                                Box::new(Expression::MethodCall {
-                                    object: Box::new(left.clone()),
+                                self.alloc_expr(Expression::MethodCall {
+                                    object: left,
                                     method: "len".to_string(),
                                     type_args: None,
                                     arguments: vec![],
@@ -296,21 +292,21 @@ impl Parser {
                                 })
                             });
 
-                            left = Expression::MethodCall {
-                                object: Box::new(left),
+                            left = self.alloc_expr(Expression::MethodCall {
+                                object: left,
                                 method: "slice".to_string(),
                                 type_args: None,
-                                arguments: vec![(None, *start_or_index), (None, *end_expr)],
+                                arguments: vec![(None, start_or_index), (None, end_expr)],
                                 location: self.current_location(),
-                            };
+                            });
                         } else {
                             // Regular index: [i]
                             self.expect(Token::RBracket)?;
-                            left = Expression::Index {
-                                object: Box::new(left),
+                            left = self.alloc_expr(Expression::Index {
+                                object: left,
                                 index: start_or_index,
                                 location: self.current_location(),
-                            };
+                            });
                         }
                     }
                 }
@@ -324,24 +320,26 @@ impl Parser {
                         let mut types = vec![self.parse_type()?];
                         while self.current_token() == &Token::Comma {
                             self.advance();
-                            if self.current_token() != &Token::Gt {
+                            if self.current_token() != &Token::Gt
+                                && self.current_token() != &Token::Shr
+                            {
                                 types.push(self.parse_type()?);
                             }
                         }
-                        self.expect(Token::Gt)?;
+                        self.expect_gt_or_split_shr()?; // Handle nested generics
 
                         // Expect function call after turbofish
                         if self.current_token() == &Token::LParen {
                             self.advance();
                             let arguments = self.parse_arguments()?;
                             self.expect(Token::RParen)?;
-                            left = Expression::MethodCall {
-                                object: Box::new(left),
+                            left = self.alloc_expr(Expression::MethodCall {
+                                object: left,
                                 method: String::new(), // Empty method name signals turbofish call
                                 type_args: Some(types),
                                 arguments,
                                 location: self.current_location(),
-                            };
+                            });
                         } else {
                             return Err("Expected '(' after turbofish".to_string());
                         }
@@ -360,11 +358,13 @@ impl Parser {
                                 let mut types = vec![self.parse_type()?];
                                 while self.current_token() == &Token::Comma {
                                     self.advance();
-                                    if self.current_token() != &Token::Gt {
+                                    if self.current_token() != &Token::Gt
+                                        && self.current_token() != &Token::Shr
+                                    {
                                         types.push(self.parse_type()?);
                                     }
                                 }
-                                self.expect(Token::Gt)?;
+                                self.expect_gt_or_split_shr()?; // Handle nested generics
                                 Some(types)
                             } else {
                                 // Not turbofish - don't consume ::, let the loop handle it
@@ -378,20 +378,20 @@ impl Parser {
                             self.advance();
                             let arguments = self.parse_arguments()?;
                             self.expect(Token::RParen)?;
-                            left = Expression::MethodCall {
-                                object: Box::new(left),
+                            left = self.alloc_expr(Expression::MethodCall {
+                                object: left,
                                 method,
                                 type_args,
                                 arguments,
                                 location: self.current_location(),
-                            };
+                            });
                         } else {
                             // Just a path, treat as field access
-                            left = Expression::FieldAccess {
-                                object: Box::new(left),
+                            left = self.alloc_expr(Expression::FieldAccess {
+                                object: left,
                                 field: method,
                                 location: self.current_location(),
-                            };
+                            });
                         }
                     } else {
                         return Err("Expected '<' or identifier after '::'".to_string());
@@ -409,11 +409,11 @@ impl Parser {
                         }
                     }
                     self.expect(Token::RParen)?;
-                    left = Expression::Call {
-                        function: Box::new(left),
+                    left = self.alloc_expr(Expression::Call {
+                        function: left,
                         arguments,
                         location: self.current_location(),
-                    };
+                    });
                 }
                 _ => break,
             }
@@ -423,18 +423,21 @@ impl Parser {
         while let Some((op, precedence)) = self.get_binary_op() {
             self.advance();
             let right = self.parse_binary_expression(precedence + 1)?;
-            left = Expression::Binary {
-                left: Box::new(left),
+            left = self.alloc_expr(Expression::Binary {
+                left,
                 op,
-                right: Box::new(right),
+                right,
                 location: self.current_location(),
-            };
+            });
         }
 
         Ok(left)
     }
 
-    fn parse_binary_expression(&mut self, min_precedence: u8) -> Result<Expression, String> {
+    fn parse_binary_expression(
+        &mut self,
+        min_precedence: u8,
+    ) -> Result<&'static Expression<'static>, String> {
         let mut left = self.parse_primary_expression()?;
 
         loop {
@@ -446,11 +449,11 @@ impl Parser {
                 let func = self.parse_primary_expression()?;
 
                 // Transform: left |> func becomes func(left)
-                left = Expression::Call {
-                    function: Box::new(func),
+                left = self.alloc_expr(Expression::Call {
+                    function: func,
                     arguments: vec![(None, left)], // No label for piped argument
                     location: self.current_location(),
-                };
+                });
                 continue;
             }
 
@@ -458,11 +461,11 @@ impl Parser {
             if self.current_token() == &Token::LeftArrow {
                 self.advance();
                 let value = self.parse_expression()?;
-                left = Expression::ChannelSend {
-                    channel: Box::new(left),
-                    value: Box::new(value),
+                left = self.alloc_expr(Expression::ChannelSend {
+                    channel: left,
+                    value,
                     location: self.current_location(),
-                };
+                });
                 continue;
             }
 
@@ -474,12 +477,12 @@ impl Parser {
                 self.advance();
                 let right = self.parse_binary_expression(precedence + 1)?;
 
-                left = Expression::Binary {
-                    left: Box::new(left),
+                left = self.alloc_expr(Expression::Binary {
+                    left,
                     op,
-                    right: Box::new(right),
+                    right,
                     location: self.current_location(),
-                };
+                });
             } else {
                 break;
             }
@@ -490,24 +493,29 @@ impl Parser {
 
     fn get_binary_op(&self) -> Option<(BinaryOp, u8)> {
         match self.current_token() {
-            Token::Or => Some((BinaryOp::Or, 1)),
-            Token::And => Some((BinaryOp::And, 2)),
-            Token::Eq => Some((BinaryOp::Eq, 3)),
-            Token::Ne => Some((BinaryOp::Ne, 3)),
-            Token::Lt => Some((BinaryOp::Lt, 4)),
-            Token::Le => Some((BinaryOp::Le, 4)),
-            Token::Gt => Some((BinaryOp::Gt, 4)),
-            Token::Ge => Some((BinaryOp::Ge, 4)),
-            Token::Plus => Some((BinaryOp::Add, 5)),
-            Token::Minus => Some((BinaryOp::Sub, 5)),
-            Token::Star => Some((BinaryOp::Mul, 6)),
-            Token::Slash => Some((BinaryOp::Div, 6)),
-            Token::Percent => Some((BinaryOp::Mod, 6)),
+            Token::Or => Some((BinaryOp::Or, 1)),            // Logical OR
+            Token::And => Some((BinaryOp::And, 2)),          // Logical AND
+            Token::Pipe => Some((BinaryOp::BitOr, 3)),       // Bitwise OR
+            Token::Caret => Some((BinaryOp::BitXor, 4)),     // Bitwise XOR
+            Token::Ampersand => Some((BinaryOp::BitAnd, 5)), // Bitwise AND
+            Token::Eq => Some((BinaryOp::Eq, 6)),
+            Token::Ne => Some((BinaryOp::Ne, 6)),
+            Token::Lt => Some((BinaryOp::Lt, 7)),
+            Token::Le => Some((BinaryOp::Le, 7)),
+            Token::Gt => Some((BinaryOp::Gt, 7)),
+            Token::Ge => Some((BinaryOp::Ge, 7)),
+            Token::Shl => Some((BinaryOp::Shl, 8)), // Shift left
+            Token::Shr => Some((BinaryOp::Shr, 8)), // Shift right
+            Token::Plus => Some((BinaryOp::Add, 9)),
+            Token::Minus => Some((BinaryOp::Sub, 9)),
+            Token::Star => Some((BinaryOp::Mul, 10)),
+            Token::Slash => Some((BinaryOp::Div, 10)),
+            Token::Percent => Some((BinaryOp::Mod, 10)),
             _ => None,
         }
     }
 
-    fn parse_primary_expression(&mut self) -> Result<Expression, String> {
+    fn parse_primary_expression(&mut self) -> Result<&'static Expression<'static>, String> {
         let mut expr = match self.current_token() {
             Token::Thread => {
                 // Check if this is a thread block or a module path
@@ -518,22 +526,23 @@ impl Parser {
                     let body = self.parse_block_statements()?;
                     self.expect(Token::RBrace)?;
                     // Wrap in a statement expression
-                    Expression::Block {
-                        statements: vec![Statement::Thread {
-                            body,
-                            location: self.current_location(),
-                        }],
+                    let thread_stmt = self.alloc_stmt(Statement::Thread {
+                        body,
                         location: self.current_location(),
-                    }
+                    });
+                    self.alloc_expr(Expression::Block {
+                        statements: vec![thread_stmt],
+                        location: self.current_location(),
+                    })
                 } else {
                     // Module path like thread::sleep_seconds
                     // Parse as identifier and let postfix operators handle ::
                     let name = "thread".to_string();
                     self.advance();
-                    Expression::Identifier {
+                    self.alloc_expr(Expression::Identifier {
                         name,
                         location: self.current_location(),
-                    }
+                    })
                 }
             }
             Token::Async => {
@@ -545,31 +554,32 @@ impl Parser {
                     let body = self.parse_block_statements()?;
                     self.expect(Token::RBrace)?;
                     // Wrap in a statement expression
-                    Expression::Block {
-                        statements: vec![Statement::Async {
-                            body,
-                            location: self.current_location(),
-                        }],
+                    let async_stmt = self.alloc_stmt(Statement::Async {
+                        body,
                         location: self.current_location(),
-                    }
+                    });
+                    self.alloc_expr(Expression::Block {
+                        statements: vec![async_stmt],
+                        location: self.current_location(),
+                    })
                 } else {
                     // Module path like async::something
                     let name = "async".to_string();
                     self.advance();
-                    Expression::Identifier {
+                    self.alloc_expr(Expression::Identifier {
                         name,
                         location: self.current_location(),
-                    }
+                    })
                 }
             }
             Token::LeftArrow => {
                 // Channel receive: <-ch
                 self.advance();
                 let channel = self.parse_primary_expression()?;
-                Expression::ChannelRecv {
-                    channel: Box::new(channel),
+                self.alloc_expr(Expression::ChannelRecv {
+                    channel,
                     location: self.current_location(),
-                }
+                })
             }
             Token::Ampersand => {
                 // Reference: &expr or &mut expr
@@ -581,85 +591,85 @@ impl Parser {
                     false
                 };
                 let operand = self.parse_primary_expression()?;
-                Expression::Unary {
+                self.alloc_expr(Expression::Unary {
                     op: if is_mut {
                         UnaryOp::MutRef
                     } else {
                         UnaryOp::Ref
                     },
-                    operand: Box::new(operand),
+                    operand,
                     location: self.current_location(),
-                }
+                })
             }
             Token::Star => {
                 // Dereference: *expr
                 self.advance();
                 let operand = self.parse_primary_expression()?;
-                Expression::Unary {
+                self.alloc_expr(Expression::Unary {
                     op: UnaryOp::Deref,
-                    operand: Box::new(operand),
+                    operand,
                     location: self.current_location(),
-                }
+                })
             }
             Token::Minus => {
                 // Negation: -expr
                 self.advance();
                 let operand = self.parse_primary_expression()?;
-                Expression::Unary {
+                self.alloc_expr(Expression::Unary {
                     op: UnaryOp::Neg,
-                    operand: Box::new(operand),
+                    operand,
                     location: self.current_location(),
-                }
+                })
             }
             Token::Bang => {
                 // Logical not: !expr
                 self.advance();
                 let operand = self.parse_primary_expression()?;
-                Expression::Unary {
+                self.alloc_expr(Expression::Unary {
                     op: UnaryOp::Not,
-                    operand: Box::new(operand),
+                    operand,
                     location: self.current_location(),
-                }
+                })
             }
             Token::Self_ => {
                 // self keyword used in expressions
                 self.advance();
-                Expression::Identifier {
+                self.alloc_expr(Expression::Identifier {
                     name: "self".to_string(),
                     location: self.current_location(),
-                }
+                })
             }
             Token::IntLiteral(n) => {
                 let n = *n;
                 self.advance();
-                Expression::Literal {
+                self.alloc_expr(Expression::Literal {
                     value: Literal::Int(n),
                     location: self.current_location(),
-                }
+                })
             }
             Token::FloatLiteral(f) => {
                 let f = *f;
                 self.advance();
-                Expression::Literal {
+                self.alloc_expr(Expression::Literal {
                     value: Literal::Float(f),
                     location: self.current_location(),
-                }
+                })
             }
             Token::StringLiteral(s) => {
                 let s = s.clone();
                 self.advance();
-                Expression::Literal {
+                self.alloc_expr(Expression::Literal {
                     value: Literal::String(s),
                     location: self.current_location(),
-                }
+                })
             }
             Token::CharLiteral(c) => {
                 let c = *c;
                 self.advance();
-                Expression::Literal {
+                self.alloc_expr(Expression::Literal {
                     value: Literal::Char(c),
                     location: self.current_location(),
-                }
+                })
             }
             Token::InterpolatedString(parts) => {
                 // Convert interpolated string to format! macro call
@@ -689,7 +699,9 @@ impl Parser {
                             }
 
                             // Parse the tokens into an expression
-                            let mut expr_parser = Parser::new(expr_tokens);
+                            // ARENA FIX: Use Box::leak to keep the parser (and its arena) alive
+                            // This prevents use-after-free when the interpolated expression is used later
+                            let expr_parser = Box::leak(Box::new(Parser::new(expr_tokens)));
                             if let Ok(expr) = expr_parser.parse_expression() {
                                 args.push(expr);
                             }
@@ -698,26 +710,27 @@ impl Parser {
                 }
 
                 // Create format! macro invocation
-                let mut macro_args = vec![Expression::Literal {
+                let format_lit = self.alloc_expr(Expression::Literal {
                     value: Literal::String(format_string),
                     location: self.current_location(),
-                }];
+                });
+                let mut macro_args = vec![format_lit];
                 macro_args.extend(args);
 
-                Expression::MacroInvocation {
+                self.alloc_expr(Expression::MacroInvocation {
                     name: "format".to_string(),
                     args: macro_args,
                     delimiter: MacroDelimiter::Parens,
                     location: self.current_location(),
-                }
+                })
             }
             Token::BoolLiteral(b) => {
                 let b = *b;
                 self.advance();
-                Expression::Literal {
+                self.alloc_expr(Expression::Literal {
                     value: Literal::Bool(b),
                     location: self.current_location(),
-                }
+                })
             }
             Token::Ident(name) => {
                 let mut qualified_name = name.clone();
@@ -805,10 +818,10 @@ impl Parser {
                             self.parse_expression()?
                         } else {
                             // Shorthand syntax: field (implicitly field: field)
-                            Expression::Identifier {
+                            self.alloc_expr(Expression::Identifier {
                                 name: field_name.clone(),
                                 location: self.current_location(),
-                            }
+                            })
                         };
 
                         fields.push((field_name, field_value));
@@ -827,16 +840,16 @@ impl Parser {
                     }
 
                     self.expect(Token::RBrace)?;
-                    Expression::StructLiteral {
+                    self.alloc_expr(Expression::StructLiteral {
                         name: qualified_name,
                         fields,
                         location: self.current_location(),
-                    }
+                    })
                 } else {
-                    Expression::Identifier {
+                    self.alloc_expr(Expression::Identifier {
                         name: qualified_name,
                         location: self.current_location(),
-                    }
+                    })
                 }
             }
             Token::LParen => {
@@ -845,10 +858,10 @@ impl Parser {
                 // Check for empty tuple ()
                 if self.current_token() == &Token::RParen {
                     self.advance();
-                    Expression::Tuple {
+                    self.alloc_expr(Expression::Tuple {
                         elements: vec![],
                         location: self.current_location(),
-                    }
+                    })
                 } else {
                     let first_expr = self.parse_expression()?;
 
@@ -867,10 +880,10 @@ impl Parser {
                         }
 
                         self.expect(Token::RParen)?;
-                        Expression::Tuple {
+                        self.alloc_expr(Expression::Tuple {
                             elements: exprs,
                             location: self.current_location(),
-                        }
+                        })
                     } else {
                         // Just a parenthesized expression
                         self.expect(Token::RParen)?;
@@ -885,10 +898,10 @@ impl Parser {
                 // Check for empty array []
                 if self.current_token() == &Token::RBracket {
                     self.advance();
-                    Expression::Array {
+                    self.alloc_expr(Expression::Array {
                         elements: vec![],
                         location: self.current_location(),
-                    }
+                    })
                 } else {
                     let first_element = self.parse_expression()?;
 
@@ -899,12 +912,12 @@ impl Parser {
                         self.expect(Token::RBracket)?;
 
                         // Represent as a macro invocation: vec![value; count]
-                        Expression::MacroInvocation {
+                        self.alloc_expr(Expression::MacroInvocation {
                             name: "vec".to_string(),
                             args: vec![first_element, count],
                             delimiter: MacroDelimiter::Brackets,
                             location: self.current_location(),
-                        }
+                        })
                     } else {
                         // Regular array literal
                         let mut elements = vec![first_element];
@@ -921,10 +934,10 @@ impl Parser {
                         }
 
                         self.expect(Token::RBracket)?;
-                        Expression::Array {
+                        self.alloc_expr(Expression::Array {
                             elements,
                             location: self.current_location(),
-                        }
+                        })
                     }
                 }
             }
@@ -933,7 +946,7 @@ impl Parser {
                 self.advance();
                 // Parse the value to match on, but don't allow struct literals here
                 // (since we need to see the { for the match arms)
-                let value = Box::new(self.parse_match_value()?);
+                let value = self.parse_match_value()?;
 
                 self.expect(Token::LBrace)?;
 
@@ -967,15 +980,15 @@ impl Parser {
 
                 // Convert match arms into a match expression
                 // For now, wrap in a block expression
-                let match_stmt = Statement::Match {
-                    value: *value,
+                let match_stmt = self.alloc_stmt(Statement::Match {
+                    value,
                     arms,
                     location: self.current_location(),
-                };
-                Expression::Block {
+                });
+                self.alloc_expr(Expression::Block {
                     statements: vec![match_stmt],
                     location: self.current_location(),
-                }
+                })
             }
             Token::Pipe => {
                 // Closure: |params| body
@@ -1065,7 +1078,7 @@ impl Parser {
                     self.advance();
                     let statements = self.parse_block_statements()?;
                     self.expect(Token::RBrace)?;
-                    Box::new(Expression::Block {
+                    self.alloc_expr(Expression::Block {
                         statements,
                         location: self.current_location(),
                     })
@@ -1092,22 +1105,22 @@ impl Parser {
                         // Reset and parse as a statement
                         self.position = checkpoint;
                         let stmt = self.parse_statement()?;
-                        Box::new(Expression::Block {
+                        self.alloc_expr(Expression::Block {
                             statements: vec![stmt],
                             location: self.current_location(),
                         })
                     } else {
                         // Reset and parse as a normal expression
                         self.position = checkpoint;
-                        Box::new(self.parse_expression()?)
+                        self.parse_expression()?
                     }
                 };
 
-                Expression::Closure {
+                self.alloc_expr(Expression::Closure {
                     parameters,
                     body,
                     location: self.current_location(),
-                }
+                })
             }
             Token::Or => {
                 // Closure with no parameters: || body
@@ -1119,20 +1132,20 @@ impl Parser {
                     self.advance();
                     let statements = self.parse_block_statements()?;
                     self.expect(Token::RBrace)?;
-                    Box::new(Expression::Block {
+                    self.alloc_expr(Expression::Block {
                         statements,
                         location: self.current_location(),
                     })
                 } else {
                     // Expression closure: || expr
-                    Box::new(self.parse_expression()?)
+                    self.parse_expression()?
                 };
 
-                Expression::Closure {
+                self.alloc_expr(Expression::Closure {
                     parameters: Vec::new(), // No parameters
                     body,
                     location: self.current_location(),
-                }
+                })
             }
             Token::If => {
                 // If expression: if cond { ... } else { ... }
@@ -1172,40 +1185,43 @@ impl Parser {
                     //     pattern => { then_block }
                     //     _ => { else_block }
                     // }
+                    let then_body = self.alloc_expr(Expression::Block {
+                        statements: then_block,
+                        location: self.current_location(),
+                    });
+
                     let mut arms = vec![MatchArm {
                         pattern,
                         guard: None,
-                        body: Expression::Block {
-                            statements: then_block,
-                            location: self.current_location(),
-                        },
+                        body: then_body,
                     }];
 
                     if let Some(else_block) = else_block {
+                        let else_body = self.alloc_expr(Expression::Block {
+                            statements: else_block,
+                            location: self.current_location(),
+                        });
                         arms.push(MatchArm {
                             pattern: Pattern::Wildcard,
                             guard: None,
-                            body: Expression::Block {
-                                statements: else_block,
-                                location: self.current_location(),
-                            },
+                            body: else_body,
                         });
                     }
 
-                    let match_stmt = Statement::Match {
+                    let match_stmt = self.alloc_stmt(Statement::Match {
                         value: expr,
                         arms,
                         location: self.current_location(),
-                    };
+                    });
 
-                    Expression::Block {
+                    self.alloc_expr(Expression::Block {
                         statements: vec![match_stmt],
                         location: self.current_location(),
-                    }
+                    })
                 } else {
                     // Regular if expression
                     // Use parse_match_value to avoid struct literal ambiguity
-                    let condition = Box::new(self.parse_match_value()?);
+                    let condition = self.parse_match_value()?;
 
                     self.expect(Token::LBrace)?;
                     let then_block = self.parse_block_statements()?;
@@ -1231,17 +1247,17 @@ impl Parser {
 
                     // Convert to expression by wrapping in a block with an if statement
                     // that returns the value
-                    let if_stmt = Statement::If {
-                        condition: *condition,
+                    let if_stmt = self.alloc_stmt(Statement::If {
+                        condition,
                         then_block,
                         else_block,
                         location: self.current_location(),
-                    };
+                    });
 
-                    Expression::Block {
+                    self.alloc_expr(Expression::Block {
                         statements: vec![if_stmt],
                         location: self.current_location(),
-                    }
+                    })
                 }
             }
             Token::Unsafe => {
@@ -1250,10 +1266,10 @@ impl Parser {
                 self.expect(Token::LBrace)?;
                 let body = self.parse_block_statements()?;
                 self.expect(Token::RBrace)?;
-                Expression::Block {
+                self.alloc_expr(Expression::Block {
                     statements: body,
                     location: self.current_location(),
-                }
+                })
             }
             Token::LBrace => {
                 // Could be block expression or map literal
@@ -1266,10 +1282,10 @@ impl Parser {
                 if self.current_token() == &Token::RBrace {
                     self.advance();
                     // Empty block (not empty map - use HashMap::new() or map{} for that)
-                    return Ok(Expression::Block {
+                    return Ok(self.alloc_expr(Expression::Block {
                         statements: vec![],
                         location: self.current_location(),
-                    });
+                    }));
                 }
 
                 // Try to detect map literal by parsing first item
@@ -1314,18 +1330,18 @@ impl Parser {
                     }
 
                     self.expect(Token::RBrace)?;
-                    Expression::MapLiteral {
+                    self.alloc_expr(Expression::MapLiteral {
                         pairs,
                         location: self.current_location(),
-                    }
+                    })
                 } else {
                     // Parse as block expression
                     let body = self.parse_block_statements()?;
                     self.expect(Token::RBrace)?;
-                    Expression::Block {
+                    self.alloc_expr(Expression::Block {
                         statements: body,
                         location: self.current_location(),
-                    }
+                    })
                 }
             }
             Token::Return => {
@@ -1337,31 +1353,32 @@ impl Parser {
                 ) {
                     None
                 } else {
-                    Some(Box::new(self.parse_expression()?))
+                    Some(self.parse_expression()?)
                 };
                 // Wrap in a block with a return statement
-                Expression::Block {
-                    statements: vec![Statement::Return {
-                        value: return_value.map(|b| *b),
-                        location: self.current_location(),
-                    }],
+                let return_stmt = self.alloc_stmt(Statement::Return {
+                    value: return_value,
                     location: self.current_location(),
-                }
+                });
+                self.alloc_expr(Expression::Block {
+                    statements: vec![return_stmt],
+                    location: self.current_location(),
+                })
             }
             // Allow certain keywords as identifiers in expression context (e.g., HTML attributes)
             Token::For => {
                 self.advance();
-                Expression::Identifier {
+                self.alloc_expr(Expression::Identifier {
                     name: "for".to_string(),
                     location: self.current_location(),
-                }
+                })
             }
             Token::Type => {
                 self.advance();
-                Expression::Identifier {
+                self.alloc_expr(Expression::Identifier {
                     name: "type".to_string(),
                     location: self.current_location(),
-                }
+                })
             }
             _ => {
                 return Err(format!(
@@ -1380,10 +1397,10 @@ impl Parser {
                     if self.peek(1) == Some(&Token::Await) {
                         self.advance(); // consume '.'
                         self.advance(); // consume 'await'
-                        Expression::Await {
-                            expr: Box::new(expr),
+                        self.alloc_expr(Expression::Await {
+                            expr,
                             location: self.current_location(),
-                        }
+                        })
                     } else {
                         self.advance();
                         // Allow keywords as field names (e.g., std.thread, std.async)
@@ -1405,11 +1422,13 @@ impl Parser {
                                     let mut types = vec![self.parse_type()?];
                                     while self.current_token() == &Token::Comma {
                                         self.advance();
-                                        if self.current_token() != &Token::Gt {
+                                        if self.current_token() != &Token::Gt
+                                            && self.current_token() != &Token::Shr
+                                        {
                                             types.push(self.parse_type()?);
                                         }
                                     }
-                                    self.expect(Token::Gt)?;
+                                    self.expect_gt_or_split_shr()?; // Handle nested generics
                                     Some(types)
                                 } else {
                                     // Not turbofish - don't consume ::
@@ -1420,16 +1439,27 @@ impl Parser {
                             };
 
                             if self.current_token() == &Token::LParen {
-                                // Method call (possibly with turbofish)
-                                self.advance();
-                                let arguments = self.parse_arguments()?;
-                                self.expect(Token::RParen)?;
-                                Expression::MethodCall {
-                                    object: Box::new(expr),
-                                    method: field,
-                                    type_args,
-                                    arguments,
-                                    location: self.current_location(),
+                                // Check for newline before LParen (ASI)
+                                if self.had_newline_before_current() {
+                                    // ASI: This LParen starts a new statement, not a method call
+                                    // Create a field access and break
+                                    self.alloc_expr(Expression::FieldAccess {
+                                        object: expr,
+                                        field,
+                                        location: self.current_location(),
+                                    })
+                                } else {
+                                    // Method call (possibly with turbofish)
+                                    self.advance();
+                                    let arguments = self.parse_arguments()?;
+                                    self.expect(Token::RParen)?;
+                                    self.alloc_expr(Expression::MethodCall {
+                                        object: expr,
+                                        method: field,
+                                        type_args,
+                                        arguments,
+                                        location: self.current_location(),
+                                    })
                                 }
                             } else if type_args.is_some() {
                                 return Err(
@@ -1437,11 +1467,11 @@ impl Parser {
                                 );
                             } else {
                                 // Field access
-                                Expression::FieldAccess {
-                                    object: Box::new(expr),
+                                self.alloc_expr(Expression::FieldAccess {
+                                    object: expr,
                                     field,
                                     location: self.current_location(),
-                                }
+                                })
                             }
                         } else {
                             return Err(format!(
@@ -1459,11 +1489,13 @@ impl Parser {
                         let mut types = vec![self.parse_type()?];
                         while self.current_token() == &Token::Comma {
                             self.advance();
-                            if self.current_token() != &Token::Gt {
+                            if self.current_token() != &Token::Gt
+                                && self.current_token() != &Token::Shr
+                            {
                                 types.push(self.parse_type()?);
                             }
                         }
-                        self.expect(Token::Gt)?;
+                        self.expect_gt_or_split_shr()?; // Handle nested generics
 
                         // Now expect either () for call, :: for path continuation, or identifier
                         if self.current_token() == &Token::LParen {
@@ -1472,13 +1504,13 @@ impl Parser {
                             self.expect(Token::RParen)?;
                             // Convert to method call with turbofish
                             // For func::<T>(), treat as a special method call on the function
-                            Expression::MethodCall {
-                                object: Box::new(expr),
+                            self.alloc_expr(Expression::MethodCall {
+                                object: expr,
                                 method: String::new(), // Empty method name signals turbofish call
                                 type_args: Some(types),
                                 arguments,
                                 location: self.current_location(),
-                            }
+                            })
                         } else if self.current_token() == &Token::ColonColon {
                             // Vec::<int>::new() - another :: after turbofish
                             // Continue parsing in the loop, the :: will be handled on next iteration
@@ -1496,10 +1528,10 @@ impl Parser {
 
                             // Update the expression to include the turbofish
                             if let Expression::Identifier { name, .. } = expr {
-                                expr = Expression::Identifier {
+                                expr = self.alloc_expr(Expression::Identifier {
                                     name: format!("{}{}", name, type_str),
                                     location: self.current_location(),
-                                };
+                                });
                             } else {
                                 return Err(
                                     "Turbofish can only be applied to identifiers".to_string()
@@ -1511,13 +1543,13 @@ impl Parser {
                             // Type::method or module::function continuation
                             let method = method.clone();
                             self.advance();
-                            Expression::MethodCall {
-                                object: Box::new(expr),
+                            self.alloc_expr(Expression::MethodCall {
+                                object: expr,
                                 method,
                                 type_args: None,
                                 arguments: vec![],
                                 location: self.current_location(),
-                            }
+                            })
                         } else {
                             return Err(format!(
                                 "Expected '(', '::', or identifier after '::<Type>', got {:?}",
@@ -1549,11 +1581,13 @@ impl Parser {
                                 let mut types = vec![self.parse_type()?];
                                 while self.current_token() == &Token::Comma {
                                     self.advance();
-                                    if self.current_token() != &Token::Gt {
+                                    if self.current_token() != &Token::Gt
+                                        && self.current_token() != &Token::Shr
+                                    {
                                         types.push(self.parse_type()?);
                                     }
                                 }
-                                self.expect(Token::Gt)?;
+                                self.expect_gt_or_split_shr()?; // Handle nested generics
                                 Some(types)
                             } else {
                                 // Not turbofish - don't consume ::
@@ -1567,41 +1601,49 @@ impl Parser {
                             self.advance();
                             let arguments = self.parse_arguments()?;
                             self.expect(Token::RParen)?;
-                            Expression::MethodCall {
-                                object: Box::new(expr),
+                            self.alloc_expr(Expression::MethodCall {
+                                object: expr,
                                 method,
                                 type_args,
                                 arguments,
                                 location: self.current_location(),
-                            }
+                            })
                         } else {
                             // Just a path, treat as field access
-                            Expression::FieldAccess {
-                                object: Box::new(expr),
+                            self.alloc_expr(Expression::FieldAccess {
+                                object: expr,
                                 field: method,
                                 location: self.current_location(),
-                            }
+                            })
                         }
                     }
                 }
                 Token::LParen => {
+                    // Check for newline before LParen (automatic semicolon insertion)
+                    // If there was a newline, this might be a new statement, not a function call
+                    if self.had_newline_before_current() {
+                        // ASI: Treat newline as statement terminator
+                        // Don't consume the LParen - it belongs to the next statement
+                        break;
+                    }
+
                     self.advance();
                     let arguments = self.parse_arguments()?;
                     self.expect(Token::RParen)?;
-                    Expression::Call {
-                        function: Box::new(expr),
+                    self.alloc_expr(Expression::Call {
+                        function: expr,
                         arguments,
                         location: self.current_location(),
-                    }
+                    })
                 }
                 Token::Question => {
                     // TryOp: expr?
                     // No ambiguity since we removed ternary operator
                     self.advance();
-                    Expression::TryOp {
-                        expr: Box::new(expr),
+                    self.alloc_expr(Expression::TryOp {
+                        expr,
                         location: self.current_location(),
-                    }
+                    })
                 }
                 Token::LBracket => {
                     self.advance();
@@ -1611,7 +1653,7 @@ impl Parser {
                         // [..end] - slice from beginning
                         self.advance(); // consume '..'
                         let end = if self.current_token() != &Token::RBracket {
-                            Some(Box::new(self.parse_expression()?))
+                            Some(self.parse_expression()?)
                         } else {
                             None
                         };
@@ -1619,8 +1661,8 @@ impl Parser {
 
                         // Desugar [..end] to .slice(0, end)
                         let end_expr = end.unwrap_or_else(|| {
-                            Box::new(Expression::MethodCall {
-                                object: Box::new(expr.clone()),
+                            self.alloc_expr(Expression::MethodCall {
+                                object: self.alloc_expr(expr.clone()),
                                 method: "len".to_string(),
                                 type_args: None,
                                 arguments: vec![],
@@ -1628,22 +1670,22 @@ impl Parser {
                             })
                         });
 
-                        Expression::MethodCall {
-                            object: Box::new(expr),
+                        self.alloc_expr(Expression::MethodCall {
+                            object: expr,
                             method: "slice".to_string(),
                             type_args: None,
                             arguments: vec![
                                 (
                                     None,
-                                    Expression::Literal {
+                                    self.alloc_expr(Expression::Literal {
                                         value: Literal::Int(0),
                                         location: self.current_location(),
-                                    },
+                                    }),
                                 ),
-                                (None, *end_expr),
+                                (None, end_expr),
                             ],
                             location: self.current_location(),
-                        }
+                        })
                     } else {
                         // Parse the first expression
                         // We need to parse without consuming .. as a range operator
@@ -1655,7 +1697,7 @@ impl Parser {
                             // [start..] or [start..end] - slice syntax
                             self.advance(); // consume '..'
                             let end = if self.current_token() != &Token::RBracket {
-                                Some(Box::new(self.parse_expression()?))
+                                Some(self.parse_expression()?)
                             } else {
                                 None
                             };
@@ -1663,8 +1705,8 @@ impl Parser {
 
                             // Desugar [start..end] to .slice(start, end)
                             let end_expr = end.unwrap_or_else(|| {
-                                Box::new(Expression::MethodCall {
-                                    object: Box::new(expr.clone()),
+                                self.alloc_expr(Expression::MethodCall {
+                                    object: expr,
                                     method: "len".to_string(),
                                     type_args: None,
                                     arguments: vec![],
@@ -1672,21 +1714,21 @@ impl Parser {
                                 })
                             });
 
-                            Expression::MethodCall {
-                                object: Box::new(expr),
+                            self.alloc_expr(Expression::MethodCall {
+                                object: expr,
                                 method: "slice".to_string(),
                                 type_args: None,
-                                arguments: vec![(None, start_or_index), (None, *end_expr)],
+                                arguments: vec![(None, start_or_index), (None, end_expr)],
                                 location: self.current_location(),
-                            }
+                            })
                         } else {
                             // Regular index: [i]
                             self.expect(Token::RBracket)?;
-                            Expression::Index {
-                                object: Box::new(expr),
-                                index: Box::new(start_or_index),
+                            self.alloc_expr(Expression::Index {
+                                object: expr,
+                                index: start_or_index,
                                 location: self.current_location(),
-                            }
+                            })
                         }
                     }
                 }
@@ -1703,21 +1745,21 @@ impl Parser {
                     let inclusive = self.current_token() == &Token::DotDotEq;
                     self.advance();
                     let end = self.parse_primary_expression()?;
-                    Expression::Range {
-                        start: Box::new(expr),
-                        end: Box::new(end),
+                    self.alloc_expr(Expression::Range {
+                        start: expr,
+                        end,
                         inclusive,
                         location: self.current_location(),
-                    }
+                    })
                 }
                 Token::As => {
                     self.advance();
                     let type_ = self.parse_type()?;
-                    Expression::Cast {
-                        expr: Box::new(expr),
+                    self.alloc_expr(Expression::Cast {
+                        expr,
                         type_,
                         location: self.current_location(),
-                    }
+                    })
                 }
                 Token::Bang => {
                     // Macro invocation: name!(...) or name![...] or name!{...}
@@ -1746,12 +1788,12 @@ impl Parser {
 
                         self.expect(end_token)?;
 
-                        Expression::MacroInvocation {
-                            name,
+                        self.alloc_expr(Expression::MacroInvocation {
+                            name: name.clone(),
                             args,
                             delimiter,
                             location: self.current_location(),
-                        }
+                        })
                     } else {
                         // Not a macro invocation, break out of postfix loop
                         break;
@@ -1768,7 +1810,9 @@ impl Parser {
         self.tokens.get(self.position + offset).map(|t| &t.token)
     }
 
-    fn parse_arguments(&mut self) -> Result<Vec<(Option<String>, Expression)>, String> {
+    fn parse_arguments(
+        &mut self,
+    ) -> Result<Vec<(Option<String>, &'static Expression<'static>)>, String> {
         let mut args = Vec::new();
 
         while self.current_token() != &Token::RParen {

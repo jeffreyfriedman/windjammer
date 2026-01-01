@@ -160,15 +160,18 @@ mod tests {
                 pattern: None,
                 type_: Type::String,
                 ownership: OwnershipHint::Inferred,
+                is_mutable: false,
             }],
             return_type: None,
             body: vec![],
             decorators: vec![],
             is_pub: false,
             is_async: false,
+            is_extern: false,
             type_params: vec![],
             where_clause: vec![],
             parent_type: None,
+            doc_comment: None,
         };
 
         let decl = generate_function_declaration(&func);
@@ -188,17 +191,20 @@ mod tests {
                     field_type: Type::Int,
                     is_pub: true,
                     decorators: vec![],
+                    doc_comment: None,
                 },
                 StructField {
                     name: "y".to_string(),
                     field_type: Type::Int,
                     is_pub: true,
                     decorators: vec![],
+                    doc_comment: None,
                 },
             ],
             decorators: vec![],
             type_params: vec![],
             where_clause: vec![],
+            doc_comment: None,
         };
 
         let interface = generate_interface(&struct_def);

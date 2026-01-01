@@ -8,7 +8,7 @@ use crate::parser::ast::*;
 use crate::parser_impl::Parser;
 
 impl Parser {
-    pub(crate) fn parse_impl(&mut self) -> Result<ImplBlock, String> {
+    pub(crate) fn parse_impl(&mut self) -> Result<ImplBlock<'static>, String> {
         // Parse: impl<T> Type { } or impl Trait for Type { } or impl Trait<TypeArgs> for Type { }
 
         // Parse type parameters: impl<T, U> Box<T, U> { ... }
@@ -153,7 +153,10 @@ impl Parser {
 
                 let concrete_type = self.parse_type()?;
 
-                self.expect(Token::Semicolon)?;
+                // Semicolons are optional for associated types (like Swift, Kotlin, Go)
+                if self.current_token() == &Token::Semicolon {
+                    self.advance(); // consume optional semicolon
+                }
 
                 associated_types.push(AssociatedType {
                     name: assoc_name,
@@ -162,6 +165,15 @@ impl Parser {
 
                 continue;
             }
+
+            // Capture doc comment if present (/// or //!)
+            let doc_comment = if let Token::DocComment(comment) = self.current_token() {
+                let comment = comment.clone();
+                self.advance();
+                Some(comment)
+            } else {
+                None
+            };
 
             // Skip decorators for now (could be added later)
             let mut decorators = Vec::new();
@@ -189,6 +201,7 @@ impl Parser {
             func.is_pub = is_pub;
             func.is_async = is_async;
             func.decorators = decorators;
+            func.doc_comment = doc_comment; // Doc comment from before the method
             func.parent_type = Some(type_name.clone()); // Track which impl block this function belongs to
             functions.push(func);
         }
@@ -207,7 +220,7 @@ impl Parser {
         })
     }
 
-    pub(crate) fn parse_trait(&mut self) -> Result<TraitDecl, String> {
+    pub(crate) fn parse_trait(&mut self) -> Result<TraitDecl<'static>, String> {
         // Parse: trait Name<T, U> { methods }
         let name = if let Token::Ident(n) = self.current_token() {
             let n = n.clone();
@@ -235,7 +248,7 @@ impl Parser {
                 }
             }
 
-            self.expect(Token::Gt)?;
+            self.expect_gt_or_split_shr()?; // Handle nested generics
             params
         } else {
             Vec::new()
@@ -284,7 +297,10 @@ impl Parser {
                     return Err("Expected associated type name".to_string());
                 };
 
-                self.expect(Token::Semicolon)?;
+                // Semicolons are optional for associated types (like Swift, Kotlin, Go)
+                if self.current_token() == &Token::Semicolon {
+                    self.advance(); // consume optional semicolon
+                }
 
                 associated_types.push(AssociatedType {
                     name: assoc_name,
@@ -293,6 +309,15 @@ impl Parser {
 
                 continue;
             }
+
+            // Capture doc comment if present (/// or //!)
+            let doc_comment = if let Token::DocComment(comment) = self.current_token() {
+                let comment = comment.clone();
+                self.advance();
+                Some(comment)
+            } else {
+                None
+            };
 
             // Parse trait method signature
             let is_async = if self.current_token() == &Token::Async {
@@ -330,6 +355,11 @@ impl Parser {
                 self.expect(Token::RBrace)?;
                 Some(statements)
             } else {
+                // No body - this is a trait method declaration
+                // Semicolons are optional (Windjammer philosophy: minimize ceremony)
+                if self.current_token() == &Token::Semicolon {
+                    self.advance(); // consume optional semicolon
+                }
                 None
             };
 
@@ -339,6 +369,7 @@ impl Parser {
                 return_type,
                 is_async,
                 body,
+                doc_comment,
             });
         }
 
@@ -350,10 +381,11 @@ impl Parser {
             supertraits,
             associated_types,
             methods,
+            doc_comment: None,
         })
     }
 
-    pub(crate) fn parse_decorator(&mut self) -> Result<Decorator, String> {
+    pub(crate) fn parse_decorator(&mut self) -> Result<Decorator<'static>, String> {
         if let Token::Decorator(name) = self.current_token() {
             let name = name.clone();
             self.advance();
@@ -372,7 +404,9 @@ impl Parser {
         }
     }
 
-    fn parse_decorator_arguments(&mut self) -> Result<Vec<(String, Expression)>, String> {
+    fn parse_decorator_arguments(
+        &mut self,
+    ) -> Result<Vec<(String, &'static Expression<'static>)>, String> {
         let mut args = Vec::new();
 
         while self.current_token() != &Token::RParen {
@@ -388,10 +422,10 @@ impl Parser {
                 } else {
                     // Positional argument (just a string or expression)
                     // Reparse as expression
-                    let expr = Expression::Identifier {
+                    let expr = self.alloc_expr(Expression::Identifier {
                         name: key,
                         location: self.current_location(),
-                    };
+                    });
                     args.push((String::new(), expr));
                 }
             } else {
@@ -447,11 +481,13 @@ impl Parser {
 
         // Parse the rest of the path (identifiers separated by :: or /)
         loop {
+            // THE WINDJAMMER WAY: Support Rust-style path keywords (self, super, crate)
             // Allow keywords as identifiers in module paths
             let name_opt = match self.current_token() {
-                Token::Ident(n) => Some(n.clone()),
+                Token::Ident(n) => Some(n.clone()), // Includes "super" and "crate" (not reserved)
                 Token::Thread => Some("thread".to_string()),
                 Token::Async => Some("async".to_string()),
+                Token::Self_ => Some("self".to_string()), // "self" IS a reserved keyword
                 _ => None,
             };
 
@@ -459,7 +495,7 @@ impl Parser {
                 path_str.push_str(&name);
                 self.advance();
 
-                // Check for :: or / as separator (. is NOT supported - use :: for modules)
+                // Check for :: as separator (. and / are NOT supported - use :: for modules)
                 if self.current_token() == &Token::ColonColon {
                     path_str.push_str("::");
                     self.advance();
@@ -471,8 +507,9 @@ impl Parser {
                         break;
                     }
                 } else if self.current_token() == &Token::Slash {
-                    path_str.push('/');
-                    self.advance();
+                    // ERROR: / is not allowed for absolute module paths, use :: instead
+                    // Note: / is still valid for relative imports like ./module or ../module
+                    return Err("Use '::' for module paths, not '/'. Example: 'use std::fs' not 'use std/fs'".to_string());
                 } else if self.current_token() == &Token::Dot {
                     // ERROR: . is not allowed for module paths, use :: instead
                     return Err("Use '::' for module paths, not '.'. Example: 'use std::fs' not 'use std.fs'".to_string());
@@ -522,9 +559,31 @@ impl Parser {
             path_str.push('}');
         }
 
-        // For now, return the path as a single-element vector
-        // This preserves the relative path structure
-        path.push(path_str.clone());
+        // Split the path string into segments
+        // Examples:
+        // - "std::fs" -> ["std", "fs"]
+        // - "self::utils" -> ["self", "utils"]
+        // - "./module::Type" -> ["./module", "Type"]
+        // - "module::{A, B, C}" -> ["module::{A, B, C}"] (keep braced imports as one segment)
+
+        if path_str.contains("::{") {
+            // Braced import - keep as single segment
+            path.push(path_str.clone());
+        } else if path_str.starts_with("./") || path_str.starts_with("../") {
+            // Relative import - split on :: but keep ./ or ../ prefix with first segment
+            let parts: Vec<&str> = path_str.split("::").collect();
+            for part in parts {
+                path.push(part.to_string());
+            }
+        } else {
+            // Absolute import - split on ::
+            let parts: Vec<&str> = path_str.split("::").collect();
+            for part in parts {
+                if !part.is_empty() {
+                    path.push(part.to_string());
+                }
+            }
+        }
 
         // Check for optional "as alias" syntax
         let alias = if self.current_token() == &Token::As {
@@ -545,7 +604,50 @@ impl Parser {
         Ok((path, alias))
     }
 
-    pub(crate) fn parse_function(&mut self) -> Result<FunctionDecl, String> {
+    pub(crate) fn parse_mod(&mut self) -> Result<(String, Vec<Item<'static>>, bool), String> {
+        // Note: Token::Mod already consumed in parse_item
+
+        // Get module name
+        let name = if let Token::Ident(n) = self.current_token() {
+            let name = n.clone();
+            self.advance();
+            name
+        } else {
+            return Err("Expected module name after 'mod'".to_string());
+        };
+
+        // Check for external module (mod name) vs inline module (mod name { ... })
+        // Semicolons are optional thanks to ASI
+        if self.current_token() == &Token::LBrace {
+            // Inline module: mod name { ... }
+            self.expect(Token::LBrace)?;
+
+            let mut items = Vec::new();
+            while self.current_token() != &Token::RBrace && self.current_token() != &Token::Eof {
+                items.push(self.parse_item()?);
+
+                // Consume optional semicolon after items (ASI - semicolons are optional)
+                if self.current_token() == &Token::Semicolon {
+                    self.advance();
+                }
+            }
+
+            self.expect(Token::RBrace)?;
+
+            // is_public will be set by parse_item if pub keyword was present
+            Ok((name, items, false))
+        } else {
+            // External module: mod name (semicolon optional)
+            // Consume optional semicolon
+            if self.current_token() == &Token::Semicolon {
+                self.advance();
+            }
+            // Return empty items list - the module will be resolved by the module system
+            Ok((name, Vec::new(), false))
+        }
+    }
+
+    pub(crate) fn parse_function(&mut self) -> Result<FunctionDecl<'static>, String> {
         // Note: Token::Fn already consumed in parse_item
 
         let name = if let Token::Ident(n) = self.current_token() {
@@ -573,13 +675,25 @@ impl Parser {
         // Parse where clause (optional): where T: Display, U: Debug
         let where_clause = self.parse_where_clause()?;
 
-        self.expect(Token::LBrace)?;
-        let body = self.parse_block_statements()?;
-        self.expect(Token::RBrace)?;
+        // Parse body (or semicolon for extern functions)
+        // Semicolons are optional (Windjammer philosophy)
+        let body = if self.current_token() == &Token::Semicolon {
+            self.advance();
+            Vec::new() // Empty body for extern functions
+        } else if self.current_token() == &Token::LBrace {
+            self.expect(Token::LBrace)?;
+            let statements = self.parse_block_statements()?;
+            self.expect(Token::RBrace)?;
+            statements
+        } else {
+            // No semicolon and no body - assume extern function
+            Vec::new()
+        };
 
         Ok(FunctionDecl {
             name,
             is_pub: false,          // Set by parse_item if pub keyword present
+            is_extern: false,       // Set by parse_item if extern keyword present
             type_params,            // Parsed generic type parameters
             where_clause,           // Parsed where clause
             decorators: Vec::new(), // Set by parse_item
@@ -588,10 +702,11 @@ impl Parser {
             return_type,
             body,
             parent_type: None, // Set by parse_impl for methods
+            doc_comment: None, // Set by parse_item if doc comments present
         })
     }
 
-    fn parse_parameters(&mut self) -> Result<Vec<Parameter>, String> {
+    fn parse_parameters(&mut self) -> Result<Vec<Parameter<'static>>, String> {
         let mut params = Vec::new();
 
         while self.current_token() != &Token::RParen {
@@ -606,6 +721,7 @@ impl Parser {
                         pattern: None,
                         type_: Type::Custom("Self".to_string()),
                         ownership: OwnershipHint::Mut,
+                        is_mutable: false,
                     });
                 } else {
                     self.expect(Token::Self_)?;
@@ -614,6 +730,7 @@ impl Parser {
                         pattern: None,
                         type_: Type::Custom("Self".to_string()),
                         ownership: OwnershipHint::Ref,
+                        is_mutable: false,
                     });
                 }
             } else if self.current_token() == &Token::Self_ {
@@ -623,16 +740,18 @@ impl Parser {
                     pattern: None,
                     type_: Type::Custom("Self".to_string()),
                     ownership: OwnershipHint::Owned,
+                    is_mutable: false,
                 });
             } else if self.current_token() == &Token::Mut && self.peek(1) == Some(&Token::Self_) {
                 // mut self (owned mutable) - only if next token is Self_
                 self.advance(); // consume mut
                 self.advance(); // consume self
                 params.push(Parameter {
-                    name: "mut self".to_string(),
+                    name: "self".to_string(),
                     pattern: None,
                     type_: Type::Custom("Self".to_string()),
                     ownership: OwnershipHint::Owned,
+                    is_mutable: true,
                 });
             } else {
                 // Regular parameter - could be a simple name or a pattern
@@ -646,23 +765,31 @@ impl Parser {
                     // Extract a name from the pattern for backward compatibility
                     let name = Self::pattern_to_name(&pattern);
 
-                    // Let the analyzer infer ownership based on usage
-                    // (References are already explicit in the type)
-                    let ownership = OwnershipHint::Inferred;
+                    // CRITICAL FIX: Determine ownership from the type annotation
+                    // If the type is explicitly &T or &mut T, use that.
+                    // Otherwise, treat it as owned (pass by value).
+                    let ownership = match &type_ {
+                        Type::Reference(_) => OwnershipHint::Ref,
+                        Type::MutableReference(_) => OwnershipHint::Mut,
+                        _ => OwnershipHint::Inferred, // Let analyzer infer ownership based on usage
+                    };
 
                     params.push(Parameter {
                         name,
                         pattern: Some(pattern),
                         type_,
                         ownership,
+                        is_mutable: false,
                     });
                 } else {
                     // Simple identifier parameter
-                    // Optional: consume 'mut' keyword (for backward compatibility)
-                    // In Windjammer, owned parameters are auto-mutable, so 'mut' is redundant
-                    if self.current_token() == &Token::Mut {
+                    // Check for 'mut' keyword and preserve it
+                    let is_mutable = if self.current_token() == &Token::Mut {
                         self.advance();
-                    }
+                        true
+                    } else {
+                        false
+                    };
 
                     let name = if let Token::Ident(n) = self.current_token() {
                         let name = n.clone();
@@ -678,15 +805,22 @@ impl Parser {
                     self.expect(Token::Colon)?;
                     let type_ = self.parse_type()?;
 
-                    // Let the analyzer infer ownership based on usage
-                    // (References are already explicit in the type)
-                    let ownership = OwnershipHint::Inferred;
+                    // CRITICAL FIX: Determine ownership from the type annotation
+                    // If the type is explicitly &T or &mut T, use that.
+                    // Otherwise, let the analyzer infer based on usage.
+                    // This allows the analyzer to automatically add &mut when parameters are mutated.
+                    let ownership = match &type_ {
+                        Type::Reference(_) => OwnershipHint::Ref,
+                        Type::MutableReference(_) => OwnershipHint::Mut,
+                        _ => OwnershipHint::Inferred, // Let analyzer infer ownership based on usage
+                    };
 
                     params.push(Parameter {
                         name,
                         pattern: None,
                         type_,
                         ownership,
+                        is_mutable,
                     });
                 }
             }
@@ -705,7 +839,7 @@ impl Parser {
     // TYPE PARSING (used by multiple sections above)
     // ------------------------------------------------------------------------
 
-    pub(crate) fn parse_struct(&mut self) -> Result<StructDecl, String> {
+    pub(crate) fn parse_struct(&mut self) -> Result<StructDecl<'static>, String> {
         // Token::Struct already consumed in parse_item
 
         let name = if let Token::Ident(n) = self.current_token() {
@@ -722,49 +856,68 @@ impl Parser {
         // Parse where clause (optional): where T: Clone, U: Debug
         let where_clause = self.parse_where_clause()?;
 
-        self.expect(Token::LBrace)?;
+        // Check for unit struct: struct Name;
+        let fields = if self.current_token() == &Token::Semicolon {
+            // Unit struct with no fields
+            self.advance(); // consume semicolon
+            Vec::new()
+        } else {
+            // Regular struct with fields
+            self.expect(Token::LBrace)?;
 
-        let mut fields = Vec::new();
-        while self.current_token() != &Token::RBrace {
-            // Parse decorators on fields
-            let mut field_decorators = Vec::new();
-            while let Token::Decorator(_dec_name) = self.current_token() {
-                let decorator = self.parse_decorator()?;
-                field_decorators.push(decorator);
+            let mut fields = Vec::new();
+            while self.current_token() != &Token::RBrace {
+                // Collect doc comment for field (if any)
+                let field_doc_comment = if let Token::DocComment(comment) = self.current_token() {
+                    let doc = comment.clone();
+                    self.advance();
+                    Some(doc)
+                } else {
+                    None
+                };
+
+                // Parse decorators on fields
+                let mut field_decorators = Vec::new();
+                while let Token::Decorator(_dec_name) = self.current_token() {
+                    let decorator = self.parse_decorator()?;
+                    field_decorators.push(decorator);
+                }
+
+                // Parse pub keyword for fields
+                let is_pub = if self.current_token() == &Token::Pub {
+                    self.advance();
+                    true
+                } else {
+                    false
+                };
+
+                let field_name = if let Token::Ident(n) = self.current_token() {
+                    let name = n.clone();
+                    self.advance();
+                    name
+                } else {
+                    return Err("Expected field name".to_string());
+                };
+
+                self.expect(Token::Colon)?;
+                let field_type = self.parse_type()?;
+
+                fields.push(StructField {
+                    name: field_name,
+                    field_type,
+                    decorators: field_decorators,
+                    is_pub,
+                    doc_comment: field_doc_comment,
+                });
+
+                if self.current_token() == &Token::Comma {
+                    self.advance();
+                }
             }
 
-            // Parse pub keyword for fields
-            let is_pub = if self.current_token() == &Token::Pub {
-                self.advance();
-                true
-            } else {
-                false
-            };
-
-            let field_name = if let Token::Ident(n) = self.current_token() {
-                let name = n.clone();
-                self.advance();
-                name
-            } else {
-                return Err("Expected field name".to_string());
-            };
-
-            self.expect(Token::Colon)?;
-            let field_type = self.parse_type()?;
-
-            fields.push(StructField {
-                name: field_name,
-                field_type,
-                decorators: field_decorators,
-                is_pub,
-            });
-
-            if self.current_token() == &Token::Comma {
-                self.advance();
-            }
-        }
-
-        self.expect(Token::RBrace)?;
+            self.expect(Token::RBrace)?;
+            fields
+        };
 
         Ok(StructDecl {
             name,
@@ -773,6 +926,7 @@ impl Parser {
             where_clause,
             fields,
             decorators: Vec::new(),
+            doc_comment: None, // Set by parse_item if doc comments present
         })
     }
 
@@ -794,6 +948,15 @@ impl Parser {
 
         let mut variants = Vec::new();
         while self.current_token() != &Token::RBrace {
+            // Collect doc comment for variant (if any)
+            let doc_comment = if let Token::DocComment(comment) = self.current_token() {
+                let doc = comment.clone();
+                self.advance();
+                Some(doc)
+            } else {
+                None
+            };
+
             let variant_name = if let Token::Ident(n) = self.current_token() {
                 let name = n.clone();
                 self.advance();
@@ -803,40 +966,80 @@ impl Parser {
             };
 
             let data = if self.current_token() == &Token::LParen {
-                // Tuple-style variant: Variant(Type)
+                // Tuple-style variant: Variant(Type1, Type2, Type3)
                 self.advance();
-                let type_ = self.parse_type()?;
-                self.expect(Token::RParen)?;
-                Some(type_)
-            } else if self.current_token() == &Token::LBrace {
-                // Struct-style variant: Variant { field1: Type1, field2: Type2 }
-                // For now, we'll parse this as a tuple containing a struct type
-                // TODO: Extend EnumVariant to properly represent struct-style variants
-                self.advance(); // consume {
 
-                // Skip the struct fields for now - just consume until we hit }
-                let mut depth = 1;
-                while depth > 0 && self.current_token() != &Token::Eof {
-                    match self.current_token() {
-                        Token::LBrace => depth += 1,
-                        Token::RBrace => depth -= 1,
-                        _ => {}
-                    }
-                    if depth > 0 {
-                        self.advance();
+                let mut types = Vec::new();
+
+                // Parse types separated by commas
+                if self.current_token() != &Token::RParen {
+                    loop {
+                        types.push(self.parse_type()?);
+
+                        if self.current_token() == &Token::Comma {
+                            self.advance();
+                            // Allow trailing comma
+                            if self.current_token() == &Token::RParen {
+                                break;
+                            }
+                        } else {
+                            break;
+                        }
                     }
                 }
-                self.expect(Token::RBrace)?;
 
-                // Represent as None for now - struct-style variants don't have a single type
-                None
+                self.expect(Token::RParen)?;
+                EnumVariantData::Tuple(types)
+            } else if self.current_token() == &Token::LBrace {
+                // Struct-style variant: Variant { field1: Type1, field2: Type2 }
+                self.advance(); // consume {
+
+                let mut fields = Vec::new();
+
+                // Parse field: type pairs
+                while self.current_token() != &Token::RBrace && self.current_token() != &Token::Eof
+                {
+                    // Parse field name
+                    let field_name = if let Token::Ident(name) = self.current_token() {
+                        let n = name.clone();
+                        self.advance();
+                        n
+                    } else {
+                        return Err(format!(
+                            "Expected field name in struct variant (at token position {})",
+                            self.position
+                        ));
+                    };
+
+                    self.expect(Token::Colon)?;
+
+                    // Parse field type
+                    let field_type = self.parse_type()?;
+
+                    fields.push((field_name, field_type));
+
+                    // Check for comma or end
+                    if self.current_token() == &Token::Comma {
+                        self.advance();
+                        // Allow trailing comma
+                        if self.current_token() == &Token::RBrace {
+                            break;
+                        }
+                    } else {
+                        break;
+                    }
+                }
+
+                self.expect(Token::RBrace)?;
+                EnumVariantData::Struct(fields)
             } else {
-                None
+                EnumVariantData::Unit
             };
 
             variants.push(EnumVariant {
                 name: variant_name,
                 data,
+                doc_comment,
             });
 
             if self.current_token() == &Token::Comma {
@@ -851,6 +1054,7 @@ impl Parser {
             is_pub: false, // Will be set by parse_item() if pub keyword present
             type_params,
             variants,
+            doc_comment: None, // Set by parse_item if doc comments present
         })
     }
 }

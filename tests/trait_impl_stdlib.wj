@@ -1,0 +1,47 @@
+// Test: Trait implementation for stdlib traits (Add, Sub, etc.)
+// Bug: Analyzer was inferring &mut for trait method parameters
+// Expected: Trait implementations should match trait signature exactly
+
+use std::ops::Add
+use std::ops::Sub
+
+struct Point {
+    pub x: f32,
+    pub y: f32,
+}
+
+// Implement Add trait - parameters should be owned (self, other: Point)
+// NOT inferred as &Point even though 'other' is not mutated
+impl Add for Point {
+    type Output = Point
+    
+    fn add(self, other: Point) -> Point {
+        Point { x: self.x + other.x, y: self.y + other.y }
+    }
+}
+
+// Implement Sub trait - same ownership rules
+impl Sub for Point {
+    type Output = Point
+    
+    fn sub(self, other: Point) -> Point {
+        Point { x: self.x - other.x, y: self.y - other.y }
+    }
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
