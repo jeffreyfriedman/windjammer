@@ -9,6 +9,24 @@
 use windjammer::codegen::rust::string_analysis::{collect_concat_parts, contains_string_literal};
 use windjammer::parser::ast::builders::*;
 use windjammer::parser::{BinaryOp, Expression, Literal};
+use windjammer::test_utils::*;
+
+// Helper wrappers for arena allocation
+fn alloc_string(s: &str) -> &'static Expression<'static> {
+    test_alloc_expr(expr_string(s))
+}
+
+fn alloc_var(name: &str) -> &'static Expression<'static> {
+    test_alloc_expr(expr_var(name))
+}
+
+fn alloc_add(left: &'static Expression<'static>, right: &'static Expression<'static>) -> &'static Expression<'static> {
+    test_alloc_expr(expr_add(left, right))
+}
+
+fn alloc_mul(left: &'static Expression<'static>, right: &'static Expression<'static>) -> &'static Expression<'static> {
+    test_alloc_expr(expr_binary(BinaryOp::Mul, left, right))
+}
 
 #[cfg(test)]
 mod collect_concat_parts_tests {
@@ -17,9 +35,9 @@ mod collect_concat_parts_tests {
     #[test]
     fn test_single_string_literal() {
         // Test: "hello" → ["hello"]
-        let expr = expr_string("hello");
+        let expr = alloc_string("hello");
 
-        let parts = collect_concat_parts(&expr);
+        let parts = collect_concat_parts(expr);
         assert_eq!(parts.len(), 1);
 
         match &parts[0] {
@@ -36,7 +54,7 @@ mod collect_concat_parts_tests {
     #[test]
     fn test_two_string_concat() {
         // Test: "hello" + "world" → ["hello", "world"]
-        let expr = expr_add(expr_string("hello"), expr_string("world"));
+        let expr = alloc_add(alloc_string("hello"), alloc_string("world"));
 
         let parts = collect_concat_parts(&expr);
         assert_eq!(parts.len(), 2);
@@ -63,9 +81,9 @@ mod collect_concat_parts_tests {
     fn test_three_string_concat_chain() {
         // Test: "a" + "b" + "c" → ["a", "b", "c"]
         // ("a" + "b") + "c"
-        let abc = expr_add(
-            expr_add(expr_string("a"), expr_string("b")),
-            expr_string("c"),
+        let abc = alloc_add(
+            alloc_add(alloc_string("a"), alloc_string("b")),
+            alloc_string("c"),
         );
 
         let parts = collect_concat_parts(&abc);
@@ -75,7 +93,7 @@ mod collect_concat_parts_tests {
     #[test]
     fn test_mixed_expression_concat() {
         // Test: "hello" + variable_name → ["hello", variable_name]
-        let expr = expr_add(expr_string("hello"), expr_var("name"));
+        let expr = alloc_add(alloc_string("hello"), alloc_var("name"));
 
         let parts = collect_concat_parts(&expr);
         assert_eq!(parts.len(), 2);
@@ -98,7 +116,7 @@ mod collect_concat_parts_tests {
     #[test]
     fn test_non_add_binary_expression() {
         // Test: a * b → [a * b] (not a concatenation)
-        let expr = expr_mul(expr_var("a"), expr_var("b"));
+        let expr = alloc_mul(alloc_var("a"), alloc_var("b"));
 
         let parts = collect_concat_parts(&expr);
         assert_eq!(parts.len(), 1); // Whole expression, not split
@@ -121,7 +139,7 @@ mod contains_string_literal_tests {
     #[test]
     fn test_single_string_literal() {
         // Test: "hello" → true
-        let expr = expr_string("hello");
+        let expr = alloc_string("hello");
         assert!(contains_string_literal(&expr));
     }
 
@@ -135,35 +153,35 @@ mod contains_string_literal_tests {
     #[test]
     fn test_identifier() {
         // Test: variable_name → false
-        let expr = expr_var("variable_name");
+        let expr = alloc_var("variable_name");
         assert!(!contains_string_literal(&expr));
     }
 
     #[test]
     fn test_binary_with_string_left() {
         // Test: "hello" + variable → true
-        let expr = expr_add(expr_string("hello"), expr_var("name"));
+        let expr = alloc_add(alloc_string("hello"), alloc_var("name"));
         assert!(contains_string_literal(&expr));
     }
 
     #[test]
     fn test_binary_with_string_right() {
         // Test: variable + "world" → true
-        let expr = expr_add(expr_var("name"), expr_string("world"));
+        let expr = alloc_add(alloc_var("name"), alloc_string("world"));
         assert!(contains_string_literal(&expr));
     }
 
     #[test]
     fn test_binary_no_strings() {
         // Test: a + b → false
-        let expr = expr_add(expr_var("a"), expr_var("b"));
+        let expr = alloc_add(alloc_var("a"), alloc_var("b"));
         assert!(!contains_string_literal(&expr));
     }
 
     #[test]
     fn test_nested_binary_with_string() {
         // Test: (a + b) + "hello" → true
-        let expr = expr_add(expr_add(expr_var("a"), expr_var("b")), expr_string("hello"));
+        let expr = alloc_add(alloc_add(alloc_var("a"), alloc_var("b")), alloc_string("hello"));
         assert!(contains_string_literal(&expr));
     }
 }
