@@ -757,7 +757,7 @@ mod tests {
     use super::*;
     use crate::parser::*;
 
-    fn create_test_function(name: &str, body_stmts: Vec<Statement>) -> Item {
+    fn create_test_function<'ast>(name: &str, body_stmts: Vec<&'ast Statement<'ast>>) -> Item<'ast> {
         Item::Function {
             decl: FunctionDecl {
                 is_pub: false,
@@ -783,23 +783,23 @@ mod tests {
             items: vec![
                 create_test_function(
                     "test1",
-                    vec![Statement::Expression {
-                        expr: Expression::Literal {
+                    vec![test_alloc_stmt(Statement::Expression {
+                        expr: test_alloc_expr(Expression::Literal {
                             value: Literal::String("Hello World".to_string()),
                             location: None,
-                        },
+                        }),
                         location: None,
-                    }],
+                    })],
                 ),
                 create_test_function(
                     "test2",
-                    vec![Statement::Expression {
-                        expr: Expression::Literal {
+                    vec![test_alloc_stmt(Statement::Expression {
+                        expr: test_alloc_expr(Expression::Literal {
                             value: Literal::String("Hello World".to_string()),
                             location: None,
-                        },
+                        }),
                         location: None,
-                    }],
+                    })],
                 ),
             ],
         };
@@ -814,28 +814,29 @@ mod tests {
             items: vec![
                 create_test_function(
                     "test1",
-                    vec![Statement::Expression {
-                        expr: Expression::Literal {
+                    vec![test_alloc_stmt(Statement::Expression {
+                        expr: test_alloc_expr(Expression::Literal {
                             value: Literal::String("Hello World".to_string()),
                             location: None,
-                        },
+                        }),
                         location: None,
-                    }],
+                    })],
                 ),
                 create_test_function(
                     "test2",
-                    vec![Statement::Expression {
-                        expr: Expression::Literal {
+                    vec![test_alloc_stmt(Statement::Expression {
+                        expr: test_alloc_expr(Expression::Literal {
                             value: Literal::String("Hello World".to_string()),
                             location: None,
-                        },
+                        }),
                         location: None,
-                    }],
+                    })],
                 ),
             ],
         };
 
-        let result = optimize_string_interning(&program);
+        let optimizer = crate::optimizer::Optimizer::with_defaults();
+        let result = optimize_string_interning(&program, &optimizer);
 
         // Should have 3 items: 1 static + 2 functions
         assert_eq!(result.program.items.len(), 3);
@@ -844,13 +845,15 @@ mod tests {
         match &result.program.items[0] {
             Item::Static { name, value, .. } => {
                 assert_eq!(name, "__STRING_POOL_0");
-                assert_eq!(
-                    value,
-                    &Expression::Literal {
-                        value: Literal::String("Hello World".to_string()),
-                        location: None,
-                    }
-                );
+                if let Expression::Literal {
+                    value: Literal::String(s),
+                    ..
+                } = value
+                {
+                    assert_eq!(s, "Hello World");
+                } else {
+                    panic!("Expected string literal");
+                }
             }
             _ => panic!("Expected static declaration"),
         }
@@ -858,14 +861,22 @@ mod tests {
         // Functions should reference the pool
         match &result.program.items[1] {
             Item::Function { decl: f, .. } => {
-                if let Some(Statement::Expression {
-                    expr: Expression::Identifier { name, .. },
-                    ..
-                }) = f.body.first()
-                {
-                    assert_eq!(name, "__STRING_POOL_0");
+                if let Some(stmt) = f.body.first() {
+                    if let Statement::Expression {
+                        expr,
+                        ..
+                    } = stmt
+                    {
+                        if let Expression::Identifier { name, .. } = expr {
+                            assert_eq!(name, "__STRING_POOL_0");
+                        } else {
+                            panic!("Expected identifier");
+                        }
+                    } else {
+                        panic!("Expected expression statement");
+                    }
                 } else {
-                    panic!("Expected identifier reference to pool");
+                    panic!("Expected statement");
                 }
             }
             _ => panic!("Expected function"),
@@ -878,32 +889,33 @@ mod tests {
             items: vec![create_test_function(
                 "test1",
                 vec![
-                    Statement::Expression {
-                        expr: Expression::Literal {
+                    test_alloc_stmt(Statement::Expression {
+                        expr: test_alloc_expr(Expression::Literal {
                             value: Literal::String("Hello World".to_string()),
                             location: None,
-                        },
+                        }),
                         location: None,
-                    },
-                    Statement::Expression {
-                        expr: Expression::Literal {
+                    }),
+                    test_alloc_stmt(Statement::Expression {
+                        expr: test_alloc_expr(Expression::Literal {
                             value: Literal::String("Hello World".to_string()),
                             location: None,
-                        },
+                        }),
                         location: None,
-                    },
-                    Statement::Expression {
-                        expr: Expression::Literal {
+                    }),
+                    test_alloc_stmt(Statement::Expression {
+                        expr: test_alloc_expr(Expression::Literal {
                             value: Literal::String("Hello World".to_string()),
                             location: None,
-                        },
+                        }),
                         location: None,
-                    },
+                    }),
                 ],
             )],
         };
 
-        let result = optimize_string_interning(&program);
+        let optimizer = crate::optimizer::Optimizer::with_defaults();
+        let result = optimize_string_interning(&program, &optimizer);
 
         // "Hello World" = 11 bytes, appears 3 times, saves 2 copies = 22 bytes
         assert_eq!(result.strings_interned, 1);
@@ -916,32 +928,33 @@ mod tests {
             items: vec![create_test_function(
                 "test",
                 vec![
-                    Statement::Expression {
-                        expr: Expression::Literal {
+                    test_alloc_stmt(Statement::Expression {
+                        expr: test_alloc_expr(Expression::Literal {
                             value: Literal::String("Hi".to_string()),
                             location: None,
-                        },
+                        }),
                         location: None,
-                    },
-                    Statement::Expression {
-                        expr: Expression::Literal {
+                    }),
+                    test_alloc_stmt(Statement::Expression {
+                        expr: test_alloc_expr(Expression::Literal {
                             value: Literal::String("Hi".to_string()),
                             location: None,
-                        },
+                        }),
                         location: None,
-                    },
-                    Statement::Expression {
-                        expr: Expression::Literal {
+                    }),
+                    test_alloc_stmt(Statement::Expression {
+                        expr: test_alloc_expr(Expression::Literal {
                             value: Literal::String("Hi".to_string()),
                             location: None,
-                        },
+                        }),
                         location: None,
-                    },
+                    }),
                 ],
             )],
         };
 
-        let result = optimize_string_interning(&program);
+        let optimizer = crate::optimizer::Optimizer::with_defaults();
+        let result = optimize_string_interning(&program, &optimizer);
 
         // Should not intern short strings (< 10 chars)
         assert_eq!(result.strings_interned, 0);
@@ -953,41 +966,50 @@ mod tests {
         let program = Program {
             items: vec![create_test_function(
                 "test",
-                vec![Statement::Expression {
-                    expr: Expression::Binary {
-                        left: Box::new(Expression::Literal {
+                vec![test_alloc_stmt(Statement::Expression {
+                    expr: test_alloc_expr(Expression::Binary {
+                        left: test_alloc_expr(Expression::Literal {
                             value: Literal::String("Long String Value".to_string()),
                             location: None,
                         }),
                         op: BinaryOp::Add,
-                        right: Box::new(Expression::Literal {
+                        right: test_alloc_expr(Expression::Literal {
                             value: Literal::String("Long String Value".to_string()),
                             location: None,
                         }),
                         location: None,
-                    },
+                    }),
                     location: None,
-                }],
+                })],
             )],
         };
 
-        let result = optimize_string_interning(&program);
+        let optimizer = crate::optimizer::Optimizer::with_defaults();
+        let result = optimize_string_interning(&program, &optimizer);
         assert_eq!(result.strings_interned, 1);
         assert_eq!(result.memory_saved, 17); // "Long String Value" = 17 bytes
 
         // Check transformation
         match &result.program.items[1] {
             Item::Function { decl: f, .. } => {
-                if let Some(Statement::Expression {
-                    expr: Expression::Binary { left, right, .. },
-                    ..
-                }) = f.body.first()
-                {
-                    // Both sides should reference the pool
-                    assert!(matches!(&**left, Expression::Identifier { .. }));
-                    assert!(matches!(&**right, Expression::Identifier { .. }));
+                if let Some(stmt) = f.body.first() {
+                    if let Statement::Expression {
+                        expr,
+                        ..
+                    } = stmt
+                    {
+                        if let Expression::Binary { left, right, .. } = expr {
+                            // Both sides should reference the pool
+                            assert!(matches!(left, Expression::Identifier { .. }));
+                            assert!(matches!(right, Expression::Identifier { .. }));
+                        } else {
+                            panic!("Expected binary expression");
+                        }
+                    } else {
+                        panic!("Expected expression statement");
+                    }
                 } else {
-                    panic!("Expected binary expression");
+                    panic!("Expected statement");
                 }
             }
             _ => panic!("Expected function"),
@@ -1000,39 +1022,40 @@ mod tests {
             items: vec![create_test_function(
                 "test",
                 vec![
-                    Statement::Expression {
-                        expr: Expression::Literal {
+                    test_alloc_stmt(Statement::Expression {
+                        expr: test_alloc_expr(Expression::Literal {
                             value: Literal::String("First String".to_string()),
                             location: None,
-                        },
+                        }),
                         location: None,
-                    },
-                    Statement::Expression {
-                        expr: Expression::Literal {
+                    }),
+                    test_alloc_stmt(Statement::Expression {
+                        expr: test_alloc_expr(Expression::Literal {
                             value: Literal::String("First String".to_string()),
                             location: None,
-                        },
+                        }),
                         location: None,
-                    },
-                    Statement::Expression {
-                        expr: Expression::Literal {
+                    }),
+                    test_alloc_stmt(Statement::Expression {
+                        expr: test_alloc_expr(Expression::Literal {
                             value: Literal::String("Second String".to_string()),
                             location: None,
-                        },
+                        }),
                         location: None,
-                    },
-                    Statement::Expression {
-                        expr: Expression::Literal {
+                    }),
+                    test_alloc_stmt(Statement::Expression {
+                        expr: test_alloc_expr(Expression::Literal {
                             value: Literal::String("Second String".to_string()),
                             location: None,
-                        },
+                        }),
                         location: None,
-                    },
+                    }),
                 ],
             )],
         };
 
-        let result = optimize_string_interning(&program);
+        let optimizer = crate::optimizer::Optimizer::with_defaults();
+        let result = optimize_string_interning(&program, &optimizer);
 
         // Should intern both strings
         assert_eq!(result.strings_interned, 2);

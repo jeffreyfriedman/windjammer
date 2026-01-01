@@ -759,7 +759,7 @@ mod tests {
     use super::*;
     use crate::parser::{Decorator, Literal, Pattern, Type};
 
-    fn make_pub_func(name: &str, body: Vec<Statement>) -> FunctionDecl {
+    fn make_pub_func<'ast>(name: &str, body: Vec<&'ast Statement<'ast>>) -> FunctionDecl<'ast> {
         FunctionDecl {
             is_pub: false,
             is_extern: false,
@@ -779,7 +779,7 @@ mod tests {
         }
     }
 
-    fn make_private_func(name: &str, body: Vec<Statement>) -> FunctionDecl {
+    fn make_private_func<'ast>(name: &str, body: Vec<&'ast Statement<'ast>>) -> FunctionDecl<'ast> {
         FunctionDecl {
             is_pub: false,
             is_extern: false,
