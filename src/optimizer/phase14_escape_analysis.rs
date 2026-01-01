@@ -436,6 +436,7 @@ fn try_optimize_vec_to_smallvec<'ast>(expr: &'ast Expression<'ast>, optimizer: &
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::test_utils::*;
 
     #[test]
     fn test_escape_analysis_basic() {
