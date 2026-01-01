@@ -294,12 +294,12 @@ fn replace_strings_in_expression<'a: 'ast, 'ast>(
             right,
             op,
             location,
-        } => optimizer.alloc_expr(Expression::Binary {
+        } => optimizer.alloc_expr(unsafe { std::mem::transmute(Expression::Binary {
             left: replace_strings_in_expression(left, pool_map, optimizer),
             right: replace_strings_in_expression(right, pool_map, optimizer),
             op: *op,
             location: location.clone(),
-        }),
+        }) }),
         Expression::Unary {
             op,
             operand,
@@ -350,14 +350,14 @@ fn replace_strings_in_expression<'a: 'ast, 'ast>(
             name,
             fields,
             location,
-        } => optimizer.alloc_expr(Expression::StructLiteral {
+        } => optimizer.alloc_expr(unsafe { std::mem::transmute(Expression::StructLiteral {
             name: name.clone(),
             fields: fields
                 .iter()
                 .map(|(name, value)| (name.clone(), replace_strings_in_expression(value, pool_map, optimizer)))
                 .collect(),
             location: location.clone(),
-        }),
+        }) }),
         Expression::Range {
             start,
             end,
@@ -396,19 +396,19 @@ fn replace_strings_in_expression<'a: 'ast, 'ast>(
             index: replace_strings_in_expression(index, pool_map, optimizer),
             location: location.clone(),
         }) }),
-        Expression::Tuple { elements, location } => optimizer.alloc_expr(Expression::Tuple {
+        Expression::Tuple { elements, location } => optimizer.alloc_expr(unsafe { std::mem::transmute(Expression::Tuple {
             elements: elements
                 .iter()
                 .map(|e| replace_strings_in_expression(e, pool_map, optimizer))
                 .collect(),
             location: location.clone(),
-        }),
+        }) }),
         Expression::MacroInvocation {
             name,
             args,
             delimiter,
             location,
-        } => optimizer.alloc_expr(Expression::MacroInvocation {
+        } => optimizer.alloc_expr(unsafe { std::mem::transmute(Expression::MacroInvocation {
             name: name.clone(),
             args: args
                 .iter()
@@ -416,7 +416,7 @@ fn replace_strings_in_expression<'a: 'ast, 'ast>(
                 .collect(),
             delimiter: *delimiter,
             location: location.clone(),
-        }),
+        }) }),
         Expression::TryOp { expr, location } => optimizer.alloc_expr(unsafe { std::mem::transmute(Expression::TryOp {
             expr: replace_strings_in_expression(expr, pool_map, optimizer),
             location: location.clone(),
@@ -441,13 +441,13 @@ fn replace_strings_in_expression<'a: 'ast, 'ast>(
         Expression::Block {
             statements,
             location,
-        } => optimizer.alloc_expr(Expression::Block {
+        } => optimizer.alloc_expr(unsafe { std::mem::transmute(Expression::Block {
             statements: statements
                 .iter()
                 .map(|stmt| replace_strings_in_statement(stmt, pool_map, optimizer))
                 .collect(),
             location: location.clone(),
-        }),
+        }) }),
         other => other,
     }
 }
