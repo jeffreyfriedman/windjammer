@@ -306,6 +306,7 @@ pub fn describe(n: i32) -> string {
 }
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_match_mixed_return() {
     let code = r#"
 pub fn get_message(code: i32) -> string {

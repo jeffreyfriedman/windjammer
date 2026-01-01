@@ -79,6 +79,7 @@ fn compile_and_verify(code: &str) -> (bool, String, String) {
 // These tests document what's expected when implemented
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_extern_compatibility() {
     // Test that regular functions can be made extern-compatible
     let code = r#"
@@ -99,6 +100,7 @@ pub fn add(a: i32, b: i32) -> i32 {
 // ============================================================================
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_ffi_primitives() {
     let code = r#"
 pub fn use_ffi_types(
@@ -114,6 +116,7 @@ pub fn use_ffi_types(
 }
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_ffi_references() {
     // References are safe alternatives to pointers
     let code = r#"
@@ -194,6 +197,7 @@ pub struct Wrapper {
 // ============================================================================
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_option_ref() {
     // Option<&T> for optional references
     let code = r#"
