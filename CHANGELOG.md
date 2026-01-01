@@ -1,4 +1,18 @@
 ## [0.39.1] - 2026-01-01
+### Added
+- **Security Scanning**: CodeQL workflow for automated security analysis
+  - Runs on every push and pull request to main branch
+  - Weekly scheduled scans on Mondays
+  - Analyzes Rust code for security vulnerabilities
+- **Security Policy**: Comprehensive SECURITY.md file
+  - Vulnerability reporting process
+  - Supported versions and security measures
+  - Known security considerations and best practices
+- **Enhanced Dependabot**: Expanded configuration for all workspace crates
+  - Daily security update checks (was weekly)
+  - Added MCP and Runtime crate dependency tracking
+  - Covers all 4 workspace crates now
+
 ### Fixed
 - **Code Coverage CI**: Added `#[cfg_attr(tarpaulin, ignore)]` to 4 more tests that spawn subprocesses and timeout under coverage instrumentation
   - `test_borrow_for_iteration`
@@ -15,6 +29,12 @@
   - Test remains ignored on Windows due to subprocess hanging (60+ seconds)
   - Added explicit piped stdout/stderr to prevent potential buffer deadlocks
   - Works correctly on macOS/Ubuntu (0.04s)
+
+### Security
+- **Current Audit Status**: Zero critical vulnerabilities
+- **Unmaintained Dependencies**: 2 warnings (paste, yaml-rust) - both transitive, low impact
+- **Security Tooling**: CodeQL, Dependabot, cargo-audit integrated
+- **Supply Chain**: 453 crate dependencies monitored daily
 
 ## [0.39.0] - 2025-12-25
 ### Added
