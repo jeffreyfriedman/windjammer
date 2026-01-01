@@ -326,7 +326,7 @@ fn optimize_loops_in_statement<'a: 'ast, 'ast>(
             compound_op,
             location,
         } => optimizer.alloc_stmt(unsafe { std::mem::transmute(Statement::Assignment {
-            target: target.clone(),
+            target,
             value: optimize_loops_in_expression(value, config, stats, optimizer),
             compound_op: *compound_op,
             location: location.clone(),
@@ -358,7 +358,7 @@ fn optimize_loops_in_statement<'a: 'ast, 'ast>(
                         .guard
                         .as_ref()
                         .map(|g| optimize_loops_in_expression(g, config, stats, optimizer)),
-                    body: optimize_loops_in_expression(&arm.body, config, stats, optimizer),
+                    body: optimize_loops_in_expression(arm.body, config, stats, optimizer),
                 })
                 .collect(),
             location: location.clone(),
@@ -624,17 +624,17 @@ fn hoist_loop_invariants<'ast>(
     body: &[&'ast Statement<'ast>],
     loop_var: &str,
     stats: &mut LoopOptimizationStats,
-    optimizer: &crate::optimizer::Optimizer,
+    _optimizer: &crate::optimizer::Optimizer,
 ) -> (Vec<&'ast Statement<'ast>>, Vec<&'ast Statement<'ast>>) {
     let mut hoisted = Vec::new();
     let mut remaining = Vec::new();
 
     for stmt in body {
         if is_loop_invariant(stmt, loop_var) {
-            hoisted.push(stmt.clone());
+            hoisted.push(*stmt);
             stats.invariants_hoisted += 1;
         } else {
-            remaining.push(stmt.clone());
+            remaining.push(*stmt);
         }
     }
 
@@ -764,7 +764,7 @@ fn statement_uses_variable<'ast>(stmt: &'ast Statement<'ast>, var_name: &str) ->
                     arm.guard
                         .as_ref()
                         .is_some_and(|g| expression_uses_variable(g, var_name))
-                        || expression_uses_variable(&arm.body, var_name)
+                        || expression_uses_variable(arm.body, var_name)
                 })
         }
         _ => false,

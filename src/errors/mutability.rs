@@ -201,7 +201,7 @@ impl MutabilityChecker {
                     if let Some(guard) = &arm.guard {
                         self.check_expression(guard);
                     }
-                    self.check_expression(&arm.body);
+                    self.check_expression(arm.body);
                 }
             }
             _ => {}

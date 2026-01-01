@@ -125,7 +125,7 @@ pub fn statement_modifies_self(stmt: &Statement) -> bool {
         }
         Statement::Match { arms, .. } => arms.iter().any(|arm| {
             // Match arms have a body expression, check if it contains modifications
-            expression_modifies_self(&arm.body)
+            expression_modifies_self(arm.body)
         }),
         _ => false,
     }
@@ -168,7 +168,7 @@ pub fn statement_accesses_fields(ctx: &AnalysisContext, stmt: &Statement) -> boo
             expression_accesses_fields(ctx, value)
                 || arms
                     .iter()
-                    .any(|arm| expression_accesses_fields(ctx, &arm.body))
+                    .any(|arm| expression_accesses_fields(ctx, arm.body))
         }
         _ => false,
     }
@@ -201,7 +201,7 @@ pub fn statement_mutates_fields(ctx: &AnalysisContext, stmt: &Statement) -> bool
         Statement::Match { arms, .. } => {
             arms.iter().any(|arm| {
                 // MatchArm body is an Expression, need to check for blocks
-                expression_mutates_fields(ctx, &arm.body)
+                expression_mutates_fields(ctx, arm.body)
             })
         }
         _ => false,
