@@ -224,7 +224,7 @@ fn analyze_statements_for_escapes<'ast>(stmts: &[&'ast Statement<'ast>], info: &
             }
             Statement::Match { arms, .. } => {
                 for arm in arms {
-                    collect_variables_in_expression(&arm.body, &mut info.returned_vars);
+                    collect_variables_in_expression(arm.body, &mut info.returned_vars);
                 }
             }
             _ => {}

@@ -1521,7 +1521,7 @@ impl<'ast> Analyzer<'ast> {
                 // CRITICAL: Handle match expressions where parameter is returned in arms
                 Statement::Match { arms, .. } => {
                     for arm in arms {
-                        if self.expression_uses_identifier_for_return(name, &arm.body) {
+                        if self.expression_uses_identifier_for_return(name, arm.body) {
                             return true;
                         }
                     }
@@ -3127,7 +3127,7 @@ impl<'ast> Analyzer<'ast> {
                     // Full analysis would require checking if arms modify vs just read
                     // For now, consider it a potential read-only use
                     for arm in arms {
-                        if self.expression_references_variable(var_name, &arm.body) {
+                        if self.expression_references_variable(var_name, arm.body) {
                             has_read_only_path = true;
                         }
                     }
@@ -3371,7 +3371,7 @@ impl<'ast> Analyzer<'ast> {
                 self.expression_mutates_self_fields(value)
                     || arms.iter().any(|arm| {
                         // Match arms have an expression body, check if it contains modifications
-                        self.expression_contains_self_field_mutations(&arm.body)
+                        self.expression_contains_self_field_mutations(arm.body)
                     })
             }
             Statement::Return { value, .. } => {
@@ -3537,7 +3537,7 @@ impl<'ast> Analyzer<'ast> {
                 self.expression_uses_identifier(name, value)
                     || arms
                         .iter()
-                        .any(|arm| self.expression_uses_identifier(name, &arm.body))
+                        .any(|arm| self.expression_uses_identifier(name, arm.body))
             }
             _ => false,
         }

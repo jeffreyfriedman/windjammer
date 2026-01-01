@@ -475,7 +475,7 @@ if (import.meta.url === `file://${process.argv[1]}`) {
                         output.push_str("else if (");
                     }
                     output.push_str(&self.generate_pattern_match(&arm.pattern, "__match_value"));
-                    if let Some(ref guard) = arm.guard {
+                    if let Some(guard) = arm.guard {
                         output.push_str(" && ");
                         output.push_str(&self.generate_expression(guard));
                     }
@@ -485,7 +485,7 @@ if (import.meta.url === `file://${process.argv[1]}`) {
                     output.push_str(&self.indent());
                     output.push_str(&format!(
                         "return {};\n",
-                        self.generate_expression(&arm.body)
+                        self.generate_expression(arm.body)
                     ));
                     self.indent_level -= 1;
 

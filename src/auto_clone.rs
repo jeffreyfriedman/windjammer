@@ -154,7 +154,7 @@ impl AutoCloneAnalysis {
                 Self::collect_usages_from_expression(value, idx, UsageKind::Read, map);
                 for arm in arms {
                     // MatchArm.body is an Expression, not Vec<Statement>
-                    Self::collect_usages_from_expression(&arm.body, idx, UsageKind::Read, map);
+                    Self::collect_usages_from_expression(arm.body, idx, UsageKind::Read, map);
                 }
             }
             _ => {}
@@ -443,7 +443,7 @@ impl AutoCloneAnalysis {
                 // Check if the block ends with a match statement that returns string literals
                 if let Some(Statement::Match { arms, .. }) = statements.last() {
                     arms.iter()
-                        .all(|arm| Self::expr_returns_string_literal(&arm.body))
+                        .all(|arm| Self::expr_returns_string_literal(arm.body))
                 } else {
                     false
                 }
