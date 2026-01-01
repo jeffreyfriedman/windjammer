@@ -6,7 +6,6 @@
 /// 3. Deallocation performance
 ///
 /// These benchmarks validate the 87.5% stack reduction and zero recursive drops.
-
 use std::time::Instant;
 use windjammer::lexer::Lexer;
 use windjammer::parser_impl::Parser;
@@ -65,24 +64,27 @@ fn match_expression(val: Option<i64>) -> i64 {
 #[allow(dead_code)]
 pub fn benchmark_parse_speed() {
     println!("\n=== Compilation Speed Benchmark ===");
-    
+
     let iterations = 100;
     let mut total_time = std::time::Duration::ZERO;
-    
+
     for _ in 0..iterations {
         let start = Instant::now();
-        
+
         let mut lexer = Lexer::new(DEEPLY_NESTED_PROGRAM);
         let tokens = lexer.tokenize_with_locations();
         let parser = Box::leak(Box::new(Parser::new(tokens)));
         let _program = parser.parse().expect("Parse should succeed");
-        
+
         let elapsed = start.elapsed();
         total_time += elapsed;
     }
-    
+
     let avg_time = total_time / iterations;
-    println!("Average parse time: {:?} ({} iterations)", avg_time, iterations);
+    println!(
+        "Average parse time: {:?} ({} iterations)",
+        avg_time, iterations
+    );
     println!("Total time: {:?}", total_time);
 }
 
@@ -93,26 +95,26 @@ pub fn benchmark_parse_speed() {
 #[allow(dead_code)]
 pub fn benchmark_deallocation() {
     println!("\n=== Deallocation Performance Benchmark ===");
-    
+
     let iterations = 100;
     let mut parse_times = vec![];
-    
+
     for _ in 0..iterations {
         let mut lexer = Lexer::new(DEEPLY_NESTED_PROGRAM);
         let tokens = lexer.tokenize_with_locations();
-        
+
         let parse_start = Instant::now();
         let parser = Box::leak(Box::new(Parser::new(tokens)));
         let _program = parser.parse().expect("Parse should succeed");
         let parse_time = parse_start.elapsed();
-        
+
         // Note: We're using Box::leak for static lifetime in tests
         // In production, the parser would be dropped normally
         // Deallocation time: O(1) for arena (single allocation drop)
-        
+
         parse_times.push(parse_time);
     }
-    
+
     let avg_parse = parse_times.iter().sum::<std::time::Duration>() / iterations as u32;
     println!("Average parse time: {:?}", avg_parse);
     println!("Deallocation: O(1) - arena drops as single allocation");
@@ -126,15 +128,15 @@ pub fn benchmark_deallocation() {
 #[allow(dead_code)]
 pub fn benchmark_memory_usage() {
     println!("\n=== Memory Usage Analysis ===");
-    
+
     let mut lexer = Lexer::new(DEEPLY_NESTED_PROGRAM);
     let tokens = lexer.tokenize_with_locations();
     let parser = Box::leak(Box::new(Parser::new(tokens)));
     let program = parser.parse().expect("Parse should succeed");
-    
+
     // Count AST nodes
     let item_count = program.items.len();
-    
+
     println!("Program size: {} bytes", DEEPLY_NESTED_PROGRAM.len());
     println!("Top-level items: {}", item_count);
     println!("\nArena Benefits:");
@@ -153,11 +155,11 @@ pub fn run_all_benchmarks() {
     println!("\n╔══════════════════════════════════════════════════════════╗");
     println!("║      Arena Allocation Performance Benchmarks            ║");
     println!("╚══════════════════════════════════════════════════════════╝");
-    
+
     benchmark_memory_usage();
     benchmark_parse_speed();
     benchmark_deallocation();
-    
+
     println!("\n╔══════════════════════════════════════════════════════════╗");
     println!("║                    Summary                               ║");
     println!("╚══════════════════════════════════════════════════════════╝");
@@ -172,4 +174,3 @@ pub fn run_all_benchmarks() {
 fn main() {
     run_all_benchmarks();
 }
-

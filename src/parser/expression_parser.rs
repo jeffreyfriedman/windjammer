@@ -264,10 +264,7 @@ impl Parser {
                             object: left,
                             method: "slice".to_string(),
                             type_args: None,
-                            arguments: vec![
-                                (None, zero_lit),
-                                (None, end_expr),
-                            ],
+                            arguments: vec![(None, zero_lit), (None, end_expr)],
                             location: self.current_location(),
                         });
                     } else {
@@ -437,7 +434,10 @@ impl Parser {
         Ok(left)
     }
 
-    fn parse_binary_expression(&mut self, min_precedence: u8) -> Result<&'static Expression<'static>, String> {
+    fn parse_binary_expression(
+        &mut self,
+        min_precedence: u8,
+    ) -> Result<&'static Expression<'static>, String> {
         let mut left = self.parse_primary_expression()?;
 
         loop {
@@ -699,7 +699,9 @@ impl Parser {
                             }
 
                             // Parse the tokens into an expression
-                            let mut expr_parser = Parser::new(expr_tokens);
+                            // ARENA FIX: Use Box::leak to keep the parser (and its arena) alive
+                            // This prevents use-after-free when the interpolated expression is used later
+                            let expr_parser = Box::leak(Box::new(Parser::new(expr_tokens)));
                             if let Ok(expr) = expr_parser.parse_expression() {
                                 args.push(expr);
                             }
@@ -1187,7 +1189,7 @@ impl Parser {
                         statements: then_block,
                         location: self.current_location(),
                     });
-                    
+
                     let mut arms = vec![MatchArm {
                         pattern,
                         guard: None,
@@ -1808,7 +1810,9 @@ impl Parser {
         self.tokens.get(self.position + offset).map(|t| &t.token)
     }
 
-    fn parse_arguments(&mut self) -> Result<Vec<(Option<String>, &'static Expression<'static>)>, String> {
+    fn parse_arguments(
+        &mut self,
+    ) -> Result<Vec<(Option<String>, &'static Expression<'static>)>, String> {
         let mut args = Vec::new();
 
         while self.current_token() != &Token::RParen {

@@ -404,7 +404,9 @@ impl Parser {
         }
     }
 
-    fn parse_decorator_arguments(&mut self) -> Result<Vec<(String, &'static Expression<'static>)>, String> {
+    fn parse_decorator_arguments(
+        &mut self,
+    ) -> Result<Vec<(String, &'static Expression<'static>)>, String> {
         let mut args = Vec::new();
 
         while self.current_token() != &Token::RParen {

@@ -650,7 +650,7 @@ impl WindjammerDatabase {
     }
 
     /// Get the parsed program for a file
-    pub fn get_program(&self, file: SourceFile) -> &parser::Program {
+    pub fn get_program(&self, file: SourceFile) -> &parser::Program<'_> {
         let parsed = parse(self, file);
         parsed.program(self)
     }

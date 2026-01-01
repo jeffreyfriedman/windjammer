@@ -2,6 +2,8 @@
 //
 // UPDATED: Now using AST builder functions!
 
+#![allow(clippy::needless_borrow)]
+
 use windjammer::codegen::rust::string_analysis::{
     block_has_as_str, block_has_explicit_ref, expression_has_as_str, expression_is_explicit_ref,
     expression_produces_string, statement_has_as_str,
@@ -18,32 +20,55 @@ fn alloc_int(n: i64) -> &'static windjammer::parser::Expression<'static> {
     test_alloc_expr(expr_int(n))
 }
 
-fn alloc_method(obj: &'static windjammer::parser::Expression<'static>, method: &str, args: Vec<&'static windjammer::parser::Expression<'static>>) -> &'static windjammer::parser::Expression<'static> {
-    let args_with_names: Vec<(Option<String>, &'static windjammer::parser::Expression<'static>)> = args.into_iter().map(|e| (None, e)).collect();
+fn alloc_method(
+    obj: &'static windjammer::parser::Expression<'static>,
+    method: &str,
+    args: Vec<&'static windjammer::parser::Expression<'static>>,
+) -> &'static windjammer::parser::Expression<'static> {
+    let args_with_names: Vec<(
+        Option<String>,
+        &'static windjammer::parser::Expression<'static>,
+    )> = args.into_iter().map(|e| (None, e)).collect();
     test_alloc_expr(expr_method(obj, method, args_with_names))
 }
 
-fn alloc_macro(name: &str, args: Vec<&'static windjammer::parser::Expression<'static>>) -> &'static windjammer::parser::Expression<'static> {
+fn alloc_macro(
+    name: &str,
+    args: Vec<&'static windjammer::parser::Expression<'static>>,
+) -> &'static windjammer::parser::Expression<'static> {
     test_alloc_expr(expr_macro(name, args))
 }
 
-fn alloc_unary(op: windjammer::parser::UnaryOp, operand: &'static windjammer::parser::Expression<'static>) -> &'static windjammer::parser::Expression<'static> {
+fn alloc_unary(
+    op: windjammer::parser::UnaryOp,
+    operand: &'static windjammer::parser::Expression<'static>,
+) -> &'static windjammer::parser::Expression<'static> {
     test_alloc_expr(expr_unary(op, operand))
 }
 
-fn alloc_block(stmts: Vec<&'static windjammer::parser::Statement<'static>>) -> &'static windjammer::parser::Expression<'static> {
+fn alloc_block(
+    stmts: Vec<&'static windjammer::parser::Statement<'static>>,
+) -> &'static windjammer::parser::Expression<'static> {
     test_alloc_expr(expr_block(stmts))
 }
 
-fn alloc_stmt_expr(expr: &'static windjammer::parser::Expression<'static>) -> &'static windjammer::parser::Statement<'static> {
+fn alloc_stmt_expr(
+    expr: &'static windjammer::parser::Expression<'static>,
+) -> &'static windjammer::parser::Statement<'static> {
     test_alloc_stmt(stmt_expr(expr))
 }
 
-fn alloc_stmt_let(name: &str, type_: Option<windjammer::parser::Type>, value: &'static windjammer::parser::Expression<'static>) -> &'static windjammer::parser::Statement<'static> {
+fn alloc_stmt_let(
+    name: &str,
+    type_: Option<windjammer::parser::Type>,
+    value: &'static windjammer::parser::Expression<'static>,
+) -> &'static windjammer::parser::Statement<'static> {
     test_alloc_stmt(stmt_let(name, type_, value))
 }
 
-fn alloc_stmt_return(value: Option<&'static windjammer::parser::Expression<'static>>) -> &'static windjammer::parser::Statement<'static> {
+fn alloc_stmt_return(
+    value: Option<&'static windjammer::parser::Expression<'static>>,
+) -> &'static windjammer::parser::Statement<'static> {
     test_alloc_stmt(stmt_return(value))
 }
 
@@ -100,7 +125,11 @@ mod as_str_detection_tests {
 
     #[test]
     fn test_block_has_as_str() {
-        let block = vec![alloc_stmt_expr(alloc_method(alloc_var("s"), "as_str", vec![]))];
+        let block = vec![alloc_stmt_expr(alloc_method(
+            alloc_var("s"),
+            "as_str",
+            vec![],
+        ))];
         assert!(block_has_as_str(&block));
     }
 
@@ -137,7 +166,10 @@ mod explicit_ref_tests {
     #[test]
     fn test_expression_is_explicit_ref_with_block() {
         // { &x } → true (recursive check)
-        let expr = alloc_block(vec![alloc_stmt_expr(alloc_unary(UnaryOp::Ref, alloc_var("x")))]);
+        let expr = alloc_block(vec![alloc_stmt_expr(alloc_unary(
+            UnaryOp::Ref,
+            alloc_var("x"),
+        ))]);
         assert!(expression_is_explicit_ref(&expr));
     }
 
@@ -161,7 +193,10 @@ mod explicit_ref_tests {
     #[test]
     fn test_block_has_explicit_ref_return_statement() {
         // { return &x; } → true
-        let block = vec![alloc_stmt_return(Some(alloc_unary(UnaryOp::Ref, alloc_var("x"))))];
+        let block = vec![alloc_stmt_return(Some(alloc_unary(
+            UnaryOp::Ref,
+            alloc_var("x"),
+        )))];
         assert!(block_has_explicit_ref(&block));
     }
 

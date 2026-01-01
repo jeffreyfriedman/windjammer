@@ -1,3 +1,6 @@
+#![allow(clippy::collapsible_if)]
+#![allow(clippy::collapsible_match)]
+
 // Ownership and borrow checking analyzer
 use crate::auto_clone::AutoCloneAnalysis;
 use crate::parser::*;
@@ -396,7 +399,10 @@ impl<'ast> Analyzer<'ast> {
         }
     }
 
-    pub fn analyze_program(&mut self, program: &Program<'ast>) -> Result<ProgramAnalysisResult<'ast>, String> {
+    pub fn analyze_program(
+        &mut self,
+        program: &Program<'ast>,
+    ) -> Result<ProgramAnalysisResult<'ast>, String> {
         let mut analyzed = Vec::new();
         let mut registry = SignatureRegistry::new();
 
@@ -648,7 +654,10 @@ impl<'ast> Analyzer<'ast> {
     /// THE WINDJAMMER WAY: Infer trait method signatures from ALL implementations
     /// If any impl needs &mut self, the trait gets &mut self
     /// The compiler does the work, not the user!
-    pub fn infer_trait_signatures_from_impls(&mut self, program: &Program<'ast>) -> Result<(), String> {
+    pub fn infer_trait_signatures_from_impls(
+        &mut self,
+        program: &Program<'ast>,
+    ) -> Result<(), String> {
         use std::collections::HashMap;
 
         eprintln!(
@@ -770,7 +779,10 @@ impl<'ast> Analyzer<'ast> {
         Ok(())
     }
 
-    fn analyze_trait_method(&mut self, func: &FunctionDecl<'ast>) -> Result<AnalyzedFunction<'ast>, String> {
+    fn analyze_trait_method(
+        &mut self,
+        func: &FunctionDecl<'ast>,
+    ) -> Result<AnalyzedFunction<'ast>, String> {
         // Analyze the function normally first
         let mut analyzed = self.analyze_function(func)?;
 
@@ -848,7 +860,10 @@ impl<'ast> Analyzer<'ast> {
         result
     }
 
-    fn analyze_function(&mut self, func: &FunctionDecl<'ast>) -> Result<AnalyzedFunction<'ast>, String> {
+    fn analyze_function(
+        &mut self,
+        func: &FunctionDecl<'ast>,
+    ) -> Result<AnalyzedFunction<'ast>, String> {
         let mut inferred_ownership = HashMap::new();
 
         // Check if this is a game decorator function
@@ -1250,7 +1265,11 @@ impl<'ast> Analyzer<'ast> {
         }
     }
 
-    fn is_used_in_if_else_expression(&self, name: &str, statements: &[&'ast Statement<'ast>]) -> bool {
+    fn is_used_in_if_else_expression(
+        &self,
+        name: &str,
+        statements: &[&'ast Statement<'ast>],
+    ) -> bool {
         // Check if parameter is used in an if/else expression
         // Example:
         //   let x = if cond { Thing::new(...) } else { param }
@@ -1846,7 +1865,11 @@ impl<'ast> Analyzer<'ast> {
     /// Check if a parameter is pattern matched with field extraction
     /// e.g., `match param { Enum::Variant { field: f } => ... }`
     /// If we borrow the parameter, `f` becomes a reference, breaking calls expecting owned values
-    fn is_pattern_matched_with_fields(&self, name: &str, statements: &[&'ast Statement<'ast>]) -> bool {
+    fn is_pattern_matched_with_fields(
+        &self,
+        name: &str,
+        statements: &[&'ast Statement<'ast>],
+    ) -> bool {
         for stmt in statements {
             match stmt {
                 #[allow(clippy::collapsible_match)]
@@ -3805,7 +3828,11 @@ impl<'ast> Analyzer<'ast> {
     }
 
     /// Check if a variable is mutated within a specific set of statements
-    fn is_variable_mutated_in_statements(&self, var_name: &str, statements: &[&'ast Statement<'ast>]) -> bool {
+    fn is_variable_mutated_in_statements(
+        &self,
+        var_name: &str,
+        statements: &[&'ast Statement<'ast>],
+    ) -> bool {
         for stmt in statements {
             match stmt {
                 Statement::Assignment { target, .. } => {

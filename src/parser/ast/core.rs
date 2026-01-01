@@ -17,7 +17,7 @@ use crate::parser::ast::types::{AssociatedType, SourceLocation, Type, TypeParam}
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct Parameter<'ast> {
-    pub name: String,             // For simple parameters and backward compatibility
+    pub name: String, // For simple parameters and backward compatibility
     pub pattern: Option<Pattern<'ast>>, // For pattern matching parameters
     pub type_: Type,
     pub ownership: OwnershipHint,
@@ -49,9 +49,9 @@ pub struct FunctionDecl<'ast> {
     pub is_async: bool,
     pub parameters: Vec<Parameter<'ast>>,
     pub return_type: Option<Type>,
-    pub body: Vec<&'ast Statement<'ast>>,        // Empty for extern functions
-    pub parent_type: Option<String>, // The type name if this function is in an impl block
-    pub doc_comment: Option<String>, // Documentation comment (/// lines)
+    pub body: Vec<&'ast Statement<'ast>>, // Empty for extern functions
+    pub parent_type: Option<String>,      // The type name if this function is in an impl block
+    pub doc_comment: Option<String>,      // Documentation comment (/// lines)
 }
 
 // ============================================================================
@@ -237,9 +237,9 @@ pub struct MatchArm<'ast> {
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum EnumPatternBinding<'ast> {
-    None,                                 // No parentheses: None, Empty
-    Wildcard,                             // Parentheses with wildcard: Some(_)
-    Single(String),                       // Single binding: Some(x)
+    None,                                       // No parentheses: None, Empty
+    Wildcard,                                   // Parentheses with wildcard: Some(_)
+    Single(String),                             // Single binding: Some(x)
     Tuple(Vec<Pattern<'ast>>),                  // Multiple bindings: Rgb(r, g, b)
     Struct(Vec<(String, Pattern<'ast>)>, bool), // Struct pattern: Box { width: w, height: h }, bool=has_wildcard (..)
 }
@@ -250,9 +250,9 @@ pub enum Pattern<'ast> {
     Identifier(String),
     EnumVariant(String, EnumPatternBinding<'ast>), // Enum name, binding type
     Literal(Literal),
-    Tuple(Vec<Pattern<'ast>>),         // Tuple pattern: (a, b, c)
-    Or(Vec<Pattern<'ast>>),            // Or pattern: pattern1 | pattern2 | pattern3
-    Reference(&'ast Pattern<'ast>),     // Reference pattern: &x
+    Tuple(Vec<Pattern<'ast>>),      // Tuple pattern: (a, b, c)
+    Or(Vec<Pattern<'ast>>),         // Or pattern: pattern1 | pattern2 | pattern3
+    Reference(&'ast Pattern<'ast>), // Reference pattern: &x
 }
 
 // ============================================================================
@@ -443,7 +443,7 @@ pub struct TraitMethod<'ast> {
     pub return_type: Option<Type>,
     pub is_async: bool,
     pub body: Option<Vec<&'ast Statement<'ast>>>, // None for trait definitions, Some for default impls
-    pub doc_comment: Option<String>,  // Documentation comment (/// lines)
+    pub doc_comment: Option<String>,              // Documentation comment (/// lines)
 }
 
 // ============================================================================

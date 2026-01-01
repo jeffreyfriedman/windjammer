@@ -4,7 +4,7 @@
 use windjammer::lexer::Lexer;
 use windjammer::parser::{Item, Parser};
 
-fn parse_code(code: &str) -> Result<Vec<Item>, String> {
+fn parse_code(code: &str) -> Result<Vec<Item<'_>>, String> {
     let mut lexer = Lexer::new(code);
     let tokens = lexer.tokenize_with_locations();
     let mut parser = Parser::new(tokens);

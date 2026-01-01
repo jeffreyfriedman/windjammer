@@ -53,7 +53,8 @@ pub fn eliminate_dead_code<'ast>(
                 }
 
                 // Process function body to remove dead code
-                let (new_body, func_stats) = eliminate_dead_code_in_statements(&func.body, optimizer);
+                let (new_body, func_stats) =
+                    eliminate_dead_code_in_statements(&func.body, optimizer);
                 stats.unreachable_statements_removed += func_stats.unreachable_statements_removed;
                 stats.unused_variables_removed += func_stats.unused_variables_removed;
                 stats.empty_blocks_removed += func_stats.empty_blocks_removed;
@@ -160,7 +161,10 @@ fn find_called_functions(program: &Program) -> HashSet<String> {
 }
 
 /// Find function calls in a list of statements
-fn find_calls_in_statements<'ast>(statements: &[&'ast Statement<'ast>], called: &mut HashSet<String>) {
+fn find_calls_in_statements<'ast>(
+    statements: &[&'ast Statement<'ast>],
+    called: &mut HashSet<String>,
+) {
     for stmt in statements {
         find_calls_in_statement(stmt, called);
     }
@@ -403,17 +407,21 @@ fn eliminate_dead_code_in_statement<'ast>(
     optimizer: &crate::optimizer::Optimizer,
 ) -> &'ast Statement<'ast> {
     match stmt {
-        Statement::Expression { expr, location } => optimizer.alloc_stmt(unsafe { std::mem::transmute(Statement::Expression {
-            expr: eliminate_dead_code_in_expression(expr, optimizer),
-            location: location.clone(),
-        }) }),
+        Statement::Expression { expr, location } => optimizer.alloc_stmt(unsafe {
+            std::mem::transmute::<Statement<'_>, Statement<'_>>(Statement::Expression {
+                expr: eliminate_dead_code_in_expression(expr, optimizer),
+                location: location.clone(),
+            })
+        }),
         Statement::Return {
             value: Some(expr),
             location,
-        } => optimizer.alloc_stmt(unsafe { std::mem::transmute(Statement::Return {
-            value: Some(eliminate_dead_code_in_expression(expr, optimizer)),
-            location: location.clone(),
-        }) }),
+        } => optimizer.alloc_stmt(unsafe {
+            std::mem::transmute::<Statement<'_>, Statement<'_>>(Statement::Return {
+                value: Some(eliminate_dead_code_in_expression(expr, optimizer)),
+                location: location.clone(),
+            })
+        }),
         Statement::Return {
             value: None,
             location,
@@ -428,30 +436,34 @@ fn eliminate_dead_code_in_statement<'ast>(
             value,
             else_block,
             location,
-        } => optimizer.alloc_stmt(unsafe { std::mem::transmute(Statement::Let {
-            pattern: pattern.clone(),
-            mutable: *mutable,
-            type_: type_.clone(),
-            value: eliminate_dead_code_in_expression(value, optimizer),
-            else_block: else_block.as_ref().map(|stmts| {
-                stmts
-                    .iter()
-                    .map(|s| eliminate_dead_code_in_statement(s, stats, optimizer))
-                    .collect()
-            }),
-            location: location.clone(),
-        }) }),
+        } => optimizer.alloc_stmt(unsafe {
+            std::mem::transmute::<Statement<'_>, Statement<'_>>(Statement::Let {
+                pattern: pattern.clone(),
+                mutable: *mutable,
+                type_: type_.clone(),
+                value: eliminate_dead_code_in_expression(value, optimizer),
+                else_block: else_block.as_ref().map(|stmts| {
+                    stmts
+                        .iter()
+                        .map(|s| eliminate_dead_code_in_statement(s, stats, optimizer))
+                        .collect()
+                }),
+                location: location.clone(),
+            })
+        }),
         Statement::Assignment {
             target,
             value,
             compound_op,
             location,
-        } => optimizer.alloc_stmt(unsafe { std::mem::transmute(Statement::Assignment {
-            target,
-            value: eliminate_dead_code_in_expression(value, optimizer),
-            compound_op: *compound_op,
-            location: location.clone(),
-        }) }),
+        } => optimizer.alloc_stmt(unsafe {
+            std::mem::transmute::<Statement<'_>, Statement<'_>>(Statement::Assignment {
+                target,
+                value: eliminate_dead_code_in_expression(value, optimizer),
+                compound_op: *compound_op,
+                location: location.clone(),
+            })
+        }),
         Statement::If {
             condition,
             then_block,
@@ -464,7 +476,8 @@ fn eliminate_dead_code_in_statement<'ast>(
             stats.empty_blocks_removed += then_stats.empty_blocks_removed;
 
             let new_else = if let Some(else_stmts) = else_block {
-                let (new_else_stmts, else_stats) = eliminate_dead_code_in_statements(else_stmts, optimizer);
+                let (new_else_stmts, else_stats) =
+                    eliminate_dead_code_in_statements(else_stmts, optimizer);
                 stats.unreachable_statements_removed += else_stats.unreachable_statements_removed;
                 stats.empty_blocks_removed += else_stats.empty_blocks_removed;
                 Some(new_else_stmts)
@@ -472,12 +485,14 @@ fn eliminate_dead_code_in_statement<'ast>(
                 None
             };
 
-            optimizer.alloc_stmt(unsafe { std::mem::transmute(Statement::If {
-                condition: new_condition,
-                then_block: new_then,
-                else_block: new_else,
-                location: location.clone(),
-            }) })
+            optimizer.alloc_stmt(unsafe {
+                std::mem::transmute::<Statement<'_>, Statement<'_>>(Statement::If {
+                    condition: new_condition,
+                    then_block: new_then,
+                    else_block: new_else,
+                    location: location.clone(),
+                })
+            })
         }
         Statement::While {
             condition,
@@ -489,11 +504,13 @@ fn eliminate_dead_code_in_statement<'ast>(
             stats.unreachable_statements_removed += body_stats.unreachable_statements_removed;
             stats.empty_blocks_removed += body_stats.empty_blocks_removed;
 
-            optimizer.alloc_stmt(unsafe { std::mem::transmute(Statement::While {
-                condition: new_condition,
-                body: new_body,
-                location: location.clone(),
-            }) })
+            optimizer.alloc_stmt(unsafe {
+                std::mem::transmute::<Statement<'_>, Statement<'_>>(Statement::While {
+                    condition: new_condition,
+                    body: new_body,
+                    location: location.clone(),
+                })
+            })
         }
         Statement::For {
             pattern,
@@ -506,12 +523,14 @@ fn eliminate_dead_code_in_statement<'ast>(
             stats.unreachable_statements_removed += body_stats.unreachable_statements_removed;
             stats.empty_blocks_removed += body_stats.empty_blocks_removed;
 
-            optimizer.alloc_stmt(unsafe { std::mem::transmute(Statement::For {
-                pattern: pattern.clone(),
-                iterable: new_iterable,
-                body: new_body,
-                location: location.clone(),
-            }) })
+            optimizer.alloc_stmt(unsafe {
+                std::mem::transmute::<Statement<'_>, Statement<'_>>(Statement::For {
+                    pattern: pattern.clone(),
+                    iterable: new_iterable,
+                    body: new_body,
+                    location: location.clone(),
+                })
+            })
         }
         Statement::Match {
             value,
@@ -523,7 +542,10 @@ fn eliminate_dead_code_in_statement<'ast>(
 
             for arm in arms {
                 let new_body = eliminate_dead_code_in_expression(arm.body, optimizer);
-                let new_guard = arm.guard.as_ref().map(|g| eliminate_dead_code_in_expression(g, optimizer));
+                let new_guard = arm
+                    .guard
+                    .as_ref()
+                    .map(|g| eliminate_dead_code_in_expression(g, optimizer));
 
                 new_arms.push(MatchArm {
                     pattern: arm.pattern.clone(),
@@ -532,36 +554,42 @@ fn eliminate_dead_code_in_statement<'ast>(
                 });
             }
 
-            optimizer.alloc_stmt(unsafe { std::mem::transmute(Statement::Match {
-                value: new_value,
-                arms: new_arms,
-                location: location.clone(),
-            }) })
+            optimizer.alloc_stmt(unsafe {
+                std::mem::transmute::<Statement<'_>, Statement<'_>>(Statement::Match {
+                    value: new_value,
+                    arms: new_arms,
+                    location: location.clone(),
+                })
+            })
         }
         Statement::Const {
             name,
             type_,
             value,
             location,
-        } => optimizer.alloc_stmt(unsafe { std::mem::transmute(Statement::Const {
-            name: name.clone(),
-            type_: type_.clone(),
-            value: eliminate_dead_code_in_expression(value, optimizer),
-            location: location.clone(),
-        }) }),
+        } => optimizer.alloc_stmt(unsafe {
+            std::mem::transmute::<Statement<'_>, Statement<'_>>(Statement::Const {
+                name: name.clone(),
+                type_: type_.clone(),
+                value: eliminate_dead_code_in_expression(value, optimizer),
+                location: location.clone(),
+            })
+        }),
         Statement::Static {
             name,
             mutable,
             type_,
             value,
             location,
-        } => optimizer.alloc_stmt(unsafe { std::mem::transmute(Statement::Static {
-            name: name.clone(),
-            mutable: *mutable,
-            type_: type_.clone(),
-            value: eliminate_dead_code_in_expression(value, optimizer),
-            location: location.clone(),
-        }) }),
+        } => optimizer.alloc_stmt(unsafe {
+            std::mem::transmute::<Statement<'_>, Statement<'_>>(Statement::Static {
+                name: name.clone(),
+                mutable: *mutable,
+                type_: type_.clone(),
+                value: eliminate_dead_code_in_expression(value, optimizer),
+                location: location.clone(),
+            })
+        }),
         _ => stmt,
     }
 }
@@ -576,158 +604,205 @@ fn eliminate_dead_code_in_expression<'a: 'ast, 'ast>(
             function,
             arguments,
             location,
-        } => optimizer.alloc_expr(unsafe { std::mem::transmute(Expression::Call {
-            function: eliminate_dead_code_in_expression(function, optimizer),
-            arguments: arguments
-                .iter()
-                .map(|(label, arg)| (label.clone(), eliminate_dead_code_in_expression(arg, optimizer)))
-                .collect(),
-            location: location.clone(),
-        }) }),
+        } => optimizer.alloc_expr(unsafe {
+            std::mem::transmute::<Expression<'_>, Expression<'_>>(Expression::Call {
+                function: eliminate_dead_code_in_expression(function, optimizer),
+                arguments: arguments
+                    .iter()
+                    .map(|(label, arg)| {
+                        (
+                            label.clone(),
+                            eliminate_dead_code_in_expression(arg, optimizer),
+                        )
+                    })
+                    .collect(),
+                location: location.clone(),
+            })
+        }),
         Expression::MethodCall {
             object,
             method,
             type_args,
             arguments,
             location,
-        } => optimizer.alloc_expr(unsafe { std::mem::transmute(Expression::MethodCall {
-            object: eliminate_dead_code_in_expression(object, optimizer),
-            method: method.clone(),
-            type_args: type_args.clone(),
-            arguments: arguments
-                .iter()
-                .map(|(label, arg)| (label.clone(), eliminate_dead_code_in_expression(arg, optimizer)))
-                .collect(),
-            location: location.clone(),
-        }) }),
+        } => optimizer.alloc_expr(unsafe {
+            std::mem::transmute::<Expression<'_>, Expression<'_>>(Expression::MethodCall {
+                object: eliminate_dead_code_in_expression(object, optimizer),
+                method: method.clone(),
+                type_args: type_args.clone(),
+                arguments: arguments
+                    .iter()
+                    .map(|(label, arg)| {
+                        (
+                            label.clone(),
+                            eliminate_dead_code_in_expression(arg, optimizer),
+                        )
+                    })
+                    .collect(),
+                location: location.clone(),
+            })
+        }),
         Expression::Binary {
             left,
             op,
             right,
             location,
-        } => optimizer.alloc_expr(unsafe { std::mem::transmute(Expression::Binary {
-            left: eliminate_dead_code_in_expression(left, optimizer),
-            op: *op,
-            right: eliminate_dead_code_in_expression(right, optimizer),
-            location: location.clone(),
-        }) }),
+        } => optimizer.alloc_expr(unsafe {
+            std::mem::transmute::<Expression<'_>, Expression<'_>>(Expression::Binary {
+                left: eliminate_dead_code_in_expression(left, optimizer),
+                op: *op,
+                right: eliminate_dead_code_in_expression(right, optimizer),
+                location: location.clone(),
+            })
+        }),
         Expression::Unary {
             op,
             operand,
             location,
-        } => optimizer.alloc_expr(unsafe { std::mem::transmute(Expression::Unary {
-            op: *op,
-            operand: eliminate_dead_code_in_expression(operand, optimizer),
-            location: location.clone(),
-        }) }),
-        Expression::Tuple { elements, location } => optimizer.alloc_expr(unsafe { std::mem::transmute(Expression::Tuple {
-            elements: elements
-                .iter()
-                .map(|e| eliminate_dead_code_in_expression(e, optimizer))
-                .collect(),
-            location: location.clone(),
-        }) }),
+        } => optimizer.alloc_expr(unsafe {
+            std::mem::transmute::<Expression<'_>, Expression<'_>>(Expression::Unary {
+                op: *op,
+                operand: eliminate_dead_code_in_expression(operand, optimizer),
+                location: location.clone(),
+            })
+        }),
+        Expression::Tuple { elements, location } => optimizer.alloc_expr(unsafe {
+            std::mem::transmute::<Expression<'_>, Expression<'_>>(Expression::Tuple {
+                elements: elements
+                    .iter()
+                    .map(|e| eliminate_dead_code_in_expression(e, optimizer))
+                    .collect(),
+                location: location.clone(),
+            })
+        }),
         Expression::Index {
             object,
             index,
             location,
-        } => optimizer.alloc_expr(unsafe { std::mem::transmute(Expression::Index {
-            object: eliminate_dead_code_in_expression(object, optimizer),
-            index: eliminate_dead_code_in_expression(index, optimizer),
-            location: location.clone(),
-        }) }),
+        } => optimizer.alloc_expr(unsafe {
+            std::mem::transmute::<Expression<'_>, Expression<'_>>(Expression::Index {
+                object: eliminate_dead_code_in_expression(object, optimizer),
+                index: eliminate_dead_code_in_expression(index, optimizer),
+                location: location.clone(),
+            })
+        }),
         Expression::FieldAccess {
             object,
             field,
             location,
-        } => optimizer.alloc_expr(unsafe { std::mem::transmute(Expression::FieldAccess {
-            object: eliminate_dead_code_in_expression(object, optimizer),
-            field: field.clone(),
-            location: location.clone(),
-        }) }),
+        } => optimizer.alloc_expr(unsafe {
+            std::mem::transmute::<Expression<'_>, Expression<'_>>(Expression::FieldAccess {
+                object: eliminate_dead_code_in_expression(object, optimizer),
+                field: field.clone(),
+                location: location.clone(),
+            })
+        }),
         Expression::Cast {
             expr,
             type_,
             location,
-        } => optimizer.alloc_expr(unsafe { std::mem::transmute(Expression::Cast {
-            expr: eliminate_dead_code_in_expression(expr, optimizer),
-            type_: type_.clone(),
-            location: location.clone(),
-        }) }),
+        } => optimizer.alloc_expr(unsafe {
+            std::mem::transmute::<Expression<'_>, Expression<'_>>(Expression::Cast {
+                expr: eliminate_dead_code_in_expression(expr, optimizer),
+                type_: type_.clone(),
+                location: location.clone(),
+            })
+        }),
         Expression::Block {
             statements,
             location,
         } => {
             let (new_statements, _) = eliminate_dead_code_in_statements(statements, optimizer);
-            optimizer.alloc_expr(unsafe { std::mem::transmute(Expression::Block {
-                statements: new_statements,
-                location: location.clone(),
-            }) })
+            optimizer.alloc_expr(unsafe {
+                std::mem::transmute::<Expression<'_>, Expression<'_>>(Expression::Block {
+                    statements: new_statements,
+                    location: location.clone(),
+                })
+            })
         }
         Expression::Closure {
             parameters,
             body,
             location,
-        } => optimizer.alloc_expr(unsafe { std::mem::transmute(Expression::Closure {
-            parameters: parameters.clone(),
-            body: eliminate_dead_code_in_expression(body, optimizer),
-            location: location.clone(),
-        }) }),
+        } => optimizer.alloc_expr(unsafe {
+            std::mem::transmute::<Expression<'_>, Expression<'_>>(Expression::Closure {
+                parameters: parameters.clone(),
+                body: eliminate_dead_code_in_expression(body, optimizer),
+                location: location.clone(),
+            })
+        }),
         Expression::StructLiteral {
             name,
             fields,
             location,
-        } => optimizer.alloc_expr(unsafe { std::mem::transmute(Expression::StructLiteral {
-            name: name.clone(),
-            fields: fields
-                .iter()
-                .map(|(k, v)| (k.clone(), eliminate_dead_code_in_expression(v, optimizer)))
-                .collect(),
-            location: location.clone(),
-        }) }),
+        } => optimizer.alloc_expr(unsafe {
+            std::mem::transmute::<Expression<'_>, Expression<'_>>(Expression::StructLiteral {
+                name: name.clone(),
+                fields: fields
+                    .iter()
+                    .map(|(k, v)| (k.clone(), eliminate_dead_code_in_expression(v, optimizer)))
+                    .collect(),
+                location: location.clone(),
+            })
+        }),
         Expression::Range {
             start,
             end,
             inclusive,
             location,
-        } => optimizer.alloc_expr(unsafe { std::mem::transmute(Expression::Range {
-            start: eliminate_dead_code_in_expression(start, optimizer),
-            end: eliminate_dead_code_in_expression(end, optimizer),
-            inclusive: *inclusive,
-            location: location.clone(),
-        }) }),
+        } => optimizer.alloc_expr(unsafe {
+            std::mem::transmute::<Expression<'_>, Expression<'_>>(Expression::Range {
+                start: eliminate_dead_code_in_expression(start, optimizer),
+                end: eliminate_dead_code_in_expression(end, optimizer),
+                inclusive: *inclusive,
+                location: location.clone(),
+            })
+        }),
         Expression::ChannelSend {
             channel,
             value,
             location,
-        } => optimizer.alloc_expr(unsafe { std::mem::transmute(Expression::ChannelSend {
-            channel: eliminate_dead_code_in_expression(channel, optimizer),
-            value: eliminate_dead_code_in_expression(value, optimizer),
-            location: location.clone(),
-        }) }),
-        Expression::ChannelRecv { channel, location } => optimizer.alloc_expr(unsafe { std::mem::transmute(Expression::ChannelRecv {
-            channel: eliminate_dead_code_in_expression(channel, optimizer),
-            location: location.clone(),
-        }) }),
-        Expression::Await { expr, location } => optimizer.alloc_expr(unsafe { std::mem::transmute(Expression::Await {
-            expr: eliminate_dead_code_in_expression(expr, optimizer),
-            location: location.clone(),
-        }) }),
-        Expression::TryOp { expr, location } => optimizer.alloc_expr(unsafe { std::mem::transmute(Expression::TryOp {
-            expr: eliminate_dead_code_in_expression(expr, optimizer),
-            location: location.clone(),
-        }) }),
+        } => optimizer.alloc_expr(unsafe {
+            std::mem::transmute::<Expression<'_>, Expression<'_>>(Expression::ChannelSend {
+                channel: eliminate_dead_code_in_expression(channel, optimizer),
+                value: eliminate_dead_code_in_expression(value, optimizer),
+                location: location.clone(),
+            })
+        }),
+        Expression::ChannelRecv { channel, location } => optimizer.alloc_expr(unsafe {
+            std::mem::transmute::<Expression<'_>, Expression<'_>>(Expression::ChannelRecv {
+                channel: eliminate_dead_code_in_expression(channel, optimizer),
+                location: location.clone(),
+            })
+        }),
+        Expression::Await { expr, location } => optimizer.alloc_expr(unsafe {
+            std::mem::transmute::<Expression<'_>, Expression<'_>>(Expression::Await {
+                expr: eliminate_dead_code_in_expression(expr, optimizer),
+                location: location.clone(),
+            })
+        }),
+        Expression::TryOp { expr, location } => optimizer.alloc_expr(unsafe {
+            std::mem::transmute::<Expression<'_>, Expression<'_>>(Expression::TryOp {
+                expr: eliminate_dead_code_in_expression(expr, optimizer),
+                location: location.clone(),
+            })
+        }),
         Expression::MacroInvocation {
             name,
             args,
             delimiter,
             location,
-        } => optimizer.alloc_expr(unsafe { std::mem::transmute(Expression::MacroInvocation {
-            name: name.clone(),
-            args: args.iter().map(|a| eliminate_dead_code_in_expression(a, optimizer)).collect(),
-            delimiter: *delimiter,
-            location: location.clone(),
-        }) }),
+        } => optimizer.alloc_expr(unsafe {
+            std::mem::transmute::<Expression<'_>, Expression<'_>>(Expression::MacroInvocation {
+                name: name.clone(),
+                args: args
+                    .iter()
+                    .map(|a| eliminate_dead_code_in_expression(a, optimizer))
+                    .collect(),
+                delimiter: *delimiter,
+                location: location.clone(),
+            })
+        }),
         _ => expr,
     }
 }
@@ -758,6 +833,7 @@ fn is_empty_statement(stmt: &Statement) -> bool {
 mod tests {
     use super::*;
     use crate::parser::{Decorator, Literal, Pattern, Type};
+    use crate::test_utils::{test_alloc_expr, test_alloc_stmt};
 
     fn make_pub_func<'ast>(name: &str, body: Vec<&'ast Statement<'ast>>) -> FunctionDecl<'ast> {
         FunctionDecl {

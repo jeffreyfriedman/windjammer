@@ -24,7 +24,10 @@ pub fn collect_concat_parts<'ast>(expr: &Expression<'ast>) -> Vec<Expression<'as
 }
 
 /// Recursively collect string concatenation parts
-fn collect_concat_parts_recursive<'ast>(expr: &Expression<'ast>, parts: &mut Vec<Expression<'ast>>) {
+fn collect_concat_parts_recursive<'ast>(
+    expr: &Expression<'ast>,
+    parts: &mut Vec<Expression<'ast>>,
+) {
     match expr {
         Expression::Binary {
             left,
@@ -47,7 +50,10 @@ fn collect_concat_parts_recursive<'ast>(expr: &Expression<'ast>, parts: &mut Vec
 ///
 /// This is the same as `collect_concat_parts` but uses a mutable reference
 /// instead of returning a Vec, avoiding unnecessary allocation in some contexts.
-pub fn collect_concat_parts_static<'ast>(expr: &Expression<'ast>, parts: &mut Vec<Expression<'ast>>) {
+pub fn collect_concat_parts_static<'ast>(
+    expr: &Expression<'ast>,
+    parts: &mut Vec<Expression<'ast>>,
+) {
     collect_concat_parts_recursive(expr, parts);
 }
 

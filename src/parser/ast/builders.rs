@@ -213,7 +213,11 @@ pub fn expr_var<'ast>(name: impl Into<String>) -> Expression<'ast> {
 }
 
 /// Build binary operation expression
-pub fn expr_binary<'ast>(op: BinaryOp, left: &'ast Expression<'ast>, right: &'ast Expression<'ast>) -> Expression<'ast> {
+pub fn expr_binary<'ast>(
+    op: BinaryOp,
+    left: &'ast Expression<'ast>,
+    right: &'ast Expression<'ast>,
+) -> Expression<'ast> {
     Expression::Binary {
         left,
         op,
@@ -223,27 +227,42 @@ pub fn expr_binary<'ast>(op: BinaryOp, left: &'ast Expression<'ast>, right: &'as
 }
 
 /// Build addition expression (convenience)
-pub fn expr_add<'ast>(left: &'ast Expression<'ast>, right: &'ast Expression<'ast>) -> Expression<'ast> {
+pub fn expr_add<'ast>(
+    left: &'ast Expression<'ast>,
+    right: &'ast Expression<'ast>,
+) -> Expression<'ast> {
     expr_binary(BinaryOp::Add, left, right)
 }
 
 /// Build subtraction expression (convenience)
-pub fn expr_sub<'ast>(left: &'ast Expression<'ast>, right: &'ast Expression<'ast>) -> Expression<'ast> {
+pub fn expr_sub<'ast>(
+    left: &'ast Expression<'ast>,
+    right: &'ast Expression<'ast>,
+) -> Expression<'ast> {
     expr_binary(BinaryOp::Sub, left, right)
 }
 
 /// Build multiplication expression (convenience)
-pub fn expr_mul<'ast>(left: &'ast Expression<'ast>, right: &'ast Expression<'ast>) -> Expression<'ast> {
+pub fn expr_mul<'ast>(
+    left: &'ast Expression<'ast>,
+    right: &'ast Expression<'ast>,
+) -> Expression<'ast> {
     expr_binary(BinaryOp::Mul, left, right)
 }
 
 /// Build division expression (convenience)
-pub fn expr_div<'ast>(left: &'ast Expression<'ast>, right: &'ast Expression<'ast>) -> Expression<'ast> {
+pub fn expr_div<'ast>(
+    left: &'ast Expression<'ast>,
+    right: &'ast Expression<'ast>,
+) -> Expression<'ast> {
     expr_binary(BinaryOp::Div, left, right)
 }
 
 /// Build equality expression (convenience)
-pub fn expr_eq<'ast>(left: &'ast Expression<'ast>, right: &'ast Expression<'ast>) -> Expression<'ast> {
+pub fn expr_eq<'ast>(
+    left: &'ast Expression<'ast>,
+    right: &'ast Expression<'ast>,
+) -> Expression<'ast> {
     expr_binary(BinaryOp::Eq, left, right)
 }
 
@@ -268,7 +287,10 @@ pub fn expr_not<'ast>(operand: &'ast Expression<'ast>) -> Expression<'ast> {
 
 /// Build function call expression
 /// Note: Caller must provide function expression allocated in arena
-pub fn expr_call<'ast>(function: &'ast Expression<'ast>, arguments: Vec<(Option<String>, &'ast Expression<'ast>)>) -> Expression<'ast> {
+pub fn expr_call<'ast>(
+    function: &'ast Expression<'ast>,
+    arguments: Vec<(Option<String>, &'ast Expression<'ast>)>,
+) -> Expression<'ast> {
     Expression::Call {
         function,
         arguments,
@@ -292,7 +314,10 @@ pub fn expr_method<'ast>(
 }
 
 /// Build macro invocation expression
-pub fn expr_macro<'ast>(name: impl Into<String>, args: Vec<&'ast Expression<'ast>>) -> Expression<'ast> {
+pub fn expr_macro<'ast>(
+    name: impl Into<String>,
+    args: Vec<&'ast Expression<'ast>>,
+) -> Expression<'ast> {
     Expression::MacroInvocation {
         name: name.into(),
         args,
@@ -302,7 +327,10 @@ pub fn expr_macro<'ast>(name: impl Into<String>, args: Vec<&'ast Expression<'ast
 }
 
 /// Build field access expression
-pub fn expr_field<'ast>(object: &'ast Expression<'ast>, field: impl Into<String>) -> Expression<'ast> {
+pub fn expr_field<'ast>(
+    object: &'ast Expression<'ast>,
+    field: impl Into<String>,
+) -> Expression<'ast> {
     Expression::FieldAccess {
         object,
         field: field.into(),
@@ -311,7 +339,10 @@ pub fn expr_field<'ast>(object: &'ast Expression<'ast>, field: impl Into<String>
 }
 
 /// Build array index expression
-pub fn expr_index<'ast>(array: &'ast Expression<'ast>, index: &'ast Expression<'ast>) -> Expression<'ast> {
+pub fn expr_index<'ast>(
+    array: &'ast Expression<'ast>,
+    index: &'ast Expression<'ast>,
+) -> Expression<'ast> {
     Expression::Index {
         object: array,
         index,
@@ -348,7 +379,11 @@ pub fn expr_block<'ast>(statements: Vec<&'ast Statement<'ast>>) -> Expression<'a
 // ============================================================================
 
 /// Build let statement (immutable)
-pub fn stmt_let<'ast>(name: impl Into<String>, type_: Option<Type>, value: &'ast Expression<'ast>) -> Statement<'ast> {
+pub fn stmt_let<'ast>(
+    name: impl Into<String>,
+    type_: Option<Type>,
+    value: &'ast Expression<'ast>,
+) -> Statement<'ast> {
     Statement::Let {
         pattern: Pattern::Identifier(name.into()),
         mutable: false,
@@ -360,7 +395,11 @@ pub fn stmt_let<'ast>(name: impl Into<String>, type_: Option<Type>, value: &'ast
 }
 
 /// Build let mut statement (mutable)
-pub fn stmt_let_mut<'ast>(name: impl Into<String>, type_: Option<Type>, value: &'ast Expression<'ast>) -> Statement<'ast> {
+pub fn stmt_let_mut<'ast>(
+    name: impl Into<String>,
+    type_: Option<Type>,
+    value: &'ast Expression<'ast>,
+) -> Statement<'ast> {
     Statement::Let {
         pattern: Pattern::Identifier(name.into()),
         mutable: true,
@@ -372,7 +411,10 @@ pub fn stmt_let_mut<'ast>(name: impl Into<String>, type_: Option<Type>, value: &
 }
 
 /// Build assignment statement
-pub fn stmt_assign<'ast>(target: &'ast Expression<'ast>, value: &'ast Expression<'ast>) -> Statement<'ast> {
+pub fn stmt_assign<'ast>(
+    target: &'ast Expression<'ast>,
+    value: &'ast Expression<'ast>,
+) -> Statement<'ast> {
     Statement::Assignment {
         target,
         value,
@@ -382,7 +424,11 @@ pub fn stmt_assign<'ast>(target: &'ast Expression<'ast>, value: &'ast Expression
 }
 
 /// Build compound assignment statement (+=, -=, etc.)
-pub fn stmt_compound_assign<'ast>(op: CompoundOp, target: &'ast Expression<'ast>, value: &'ast Expression<'ast>) -> Statement<'ast> {
+pub fn stmt_compound_assign<'ast>(
+    op: CompoundOp,
+    target: &'ast Expression<'ast>,
+    value: &'ast Expression<'ast>,
+) -> Statement<'ast> {
     Statement::Assignment {
         target,
         value,
@@ -436,7 +482,10 @@ pub fn stmt_if_else<'ast>(
 }
 
 /// Build while loop statement
-pub fn stmt_while<'ast>(condition: &'ast Expression<'ast>, body: Vec<&'ast Statement<'ast>>) -> Statement<'ast> {
+pub fn stmt_while<'ast>(
+    condition: &'ast Expression<'ast>,
+    body: Vec<&'ast Statement<'ast>>,
+) -> Statement<'ast> {
     Statement::While {
         condition,
         body,
@@ -463,7 +512,11 @@ pub fn stmt_continue<'ast>() -> Statement<'ast> {
 }
 
 /// Build for loop statement
-pub fn stmt_for<'ast>(pattern: Pattern<'ast>, iterable: &'ast Expression<'ast>, body: Vec<&'ast Statement<'ast>>) -> Statement<'ast> {
+pub fn stmt_for<'ast>(
+    pattern: Pattern<'ast>,
+    iterable: &'ast Expression<'ast>,
+    body: Vec<&'ast Statement<'ast>>,
+) -> Statement<'ast> {
     Statement::For {
         pattern,
         iterable,
@@ -473,7 +526,10 @@ pub fn stmt_for<'ast>(pattern: Pattern<'ast>, iterable: &'ast Expression<'ast>, 
 }
 
 /// Build match statement
-pub fn stmt_match<'ast>(value: &'ast Expression<'ast>, arms: Vec<super::core::MatchArm<'ast>>) -> Statement<'ast> {
+pub fn stmt_match<'ast>(
+    value: &'ast Expression<'ast>,
+    arms: Vec<super::core::MatchArm<'ast>>,
+) -> Statement<'ast> {
     Statement::Match {
         value,
         arms,
