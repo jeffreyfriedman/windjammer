@@ -2,6 +2,61 @@
 //
 // Tests FIRST, then implementation (proper TDD)
 
+use windjammer::test_utils::*;
+
+// Arena-allocating wrappers for builder functions
+fn alloc_int(n: i64) -> &'static windjammer::parser::Expression<'static> {
+    test_alloc_expr(windjammer::parser::ast::builders::expr_int(n))
+}
+
+fn alloc_float(f: f64) -> &'static windjammer::parser::Expression<'static> {
+    test_alloc_expr(windjammer::parser::ast::builders::expr_float(f))
+}
+
+fn alloc_string(s: &str) -> &'static windjammer::parser::Expression<'static> {
+    test_alloc_expr(windjammer::parser::ast::builders::expr_string(s))
+}
+
+fn alloc_bool(b: bool) -> &'static windjammer::parser::Expression<'static> {
+    test_alloc_expr(windjammer::parser::ast::builders::expr_bool(b))
+}
+
+fn alloc_var(name: &str) -> &'static windjammer::parser::Expression<'static> {
+    test_alloc_expr(windjammer::parser::ast::builders::expr_var(name))
+}
+
+fn alloc_binary(op: windjammer::parser::BinaryOp, left: &'static windjammer::parser::Expression<'static>, right: &'static windjammer::parser::Expression<'static>) -> &'static windjammer::parser::Expression<'static> {
+    test_alloc_expr(windjammer::parser::ast::builders::expr_binary(op, left, right))
+}
+
+fn alloc_add(left: &'static windjammer::parser::Expression<'static>, right: &'static windjammer::parser::Expression<'static>) -> &'static windjammer::parser::Expression<'static> {
+    test_alloc_expr(windjammer::parser::ast::builders::expr_add(left, right))
+}
+
+fn alloc_call(func: &str, args: Vec<&'static windjammer::parser::Expression<'static>>) -> &'static windjammer::parser::Expression<'static> {
+    let func_expr = alloc_var(func);
+    let args_with_names: Vec<(Option<String>, &'static windjammer::parser::Expression<'static>)> = args.into_iter().map(|e| (None, e)).collect();
+    test_alloc_expr(windjammer::parser::ast::builders::expr_call(func_expr, args_with_names))
+}
+
+fn alloc_method(obj: &'static windjammer::parser::Expression<'static>, method: &str, args: Vec<&'static windjammer::parser::Expression<'static>>) -> &'static windjammer::parser::Expression<'static> {
+    let args_with_names: Vec<(Option<String>, &'static windjammer::parser::Expression<'static>)> = args.into_iter().map(|e| (None, e)).collect();
+    test_alloc_expr(windjammer::parser::ast::builders::expr_method(obj, method, args_with_names))
+}
+
+fn alloc_field(obj: &'static windjammer::parser::Expression<'static>, field: &str) -> &'static windjammer::parser::Expression<'static> {
+    test_alloc_expr(windjammer::parser::ast::builders::expr_field(obj, field))
+}
+
+// Statement wrappers
+fn alloc_stmt_return(value: Option<&'static windjammer::parser::Expression<'static>>) -> &'static windjammer::parser::Statement<'static> {
+    test_alloc_stmt(windjammer::parser::ast::builders::stmt_return(value))
+}
+
+fn alloc_stmt_expr(expr: &'static windjammer::parser::Expression<'static>) -> &'static windjammer::parser::Statement<'static> {
+    test_alloc_stmt(windjammer::parser::ast::builders::stmt_expr(expr))
+}
+
 // ============================================================================
 // TYPE BUILDER TESTS
 // ============================================================================
@@ -231,14 +286,14 @@ fn test_parameter_builder_mutable() {
 #[test]
 fn test_expr_literal_int() {
     // Before: Expression::Literal { value: Literal::Int(42), location: None }
-    // After: expr_int(42)
+    // After: alloc_int(42)
 
     use windjammer::parser::ast::*;
 
-    let expr = expr_int(42);
+    let expr = alloc_int(42);
 
     if let Expression::Literal { value, .. } = expr {
-        assert_eq!(value, Literal::Int(42));
+        assert_eq!(*value, Literal::Int(42));
     } else {
         panic!("Expected Literal expression");
     }
@@ -248,10 +303,10 @@ fn test_expr_literal_int() {
 fn test_expr_literal_float() {
     use windjammer::parser::ast::*;
 
-    let expr = expr_float(2.5);
+    let expr = alloc_float(2.5);
 
     if let Expression::Literal { value, .. } = expr {
-        assert_eq!(value, Literal::Float(2.5));
+        assert_eq!(*value, Literal::Float(2.5));
     } else {
         panic!("Expected Literal expression");
     }
@@ -261,10 +316,10 @@ fn test_expr_literal_float() {
 fn test_expr_literal_string() {
     use windjammer::parser::ast::*;
 
-    let expr = expr_string("hello");
+    let expr = alloc_string("hello");
 
     if let Expression::Literal { value, .. } = expr {
-        assert_eq!(value, Literal::String("hello".to_string()));
+        assert_eq!(*value, Literal::String("hello".to_string()));
     } else {
         panic!("Expected Literal expression");
     }
@@ -274,23 +329,23 @@ fn test_expr_literal_string() {
 fn test_expr_literal_bool() {
     use windjammer::parser::ast::*;
 
-    let expr = expr_bool(true);
+    let expr = alloc_bool(true);
 
     if let Expression::Literal { value, .. } = expr {
-        assert_eq!(value, Literal::Bool(true));
+        assert_eq!(*value, Literal::Bool(true));
     } else {
         panic!("Expected Literal expression");
     }
 }
 
 #[test]
-fn test_expr_var() {
+fn test_alloc_var() {
     // Before: Expression::Identifier { name: "x".to_string(), location: None }
-    // After: expr_var("x")
+    // After: alloc_var("x")
 
     use windjammer::parser::ast::*;
 
-    let expr = expr_var("x");
+    let expr = alloc_var("x");
 
     if let Expression::Identifier { name, .. } = expr {
         assert_eq!(name, "x");
@@ -300,7 +355,7 @@ fn test_expr_var() {
 }
 
 #[test]
-fn test_expr_binary() {
+fn test_alloc_binary() {
     // Before:
     // Expression::Binary {
     //     left: Box::new(Expression::Identifier { name: "a".to_string(), location: None }),
@@ -309,17 +364,17 @@ fn test_expr_binary() {
     //     location: None,
     // }
     //
-    // After: expr_binary(BinaryOp::Add, expr_var("a"), expr_var("b"))
+    // After: alloc_binary(BinaryOp::Add, alloc_var("a"), alloc_var("b"))
 
     use windjammer::parser::ast::*;
 
-    let expr = expr_binary(BinaryOp::Add, expr_var("a"), expr_var("b"));
+    let expr = alloc_binary(BinaryOp::Add, alloc_var("a"), alloc_var("b"));
 
     if let Expression::Binary {
         left, op, right, ..
     } = expr
     {
-        assert_eq!(op, BinaryOp::Add);
+        assert_eq!(*op, BinaryOp::Add);
         if let Expression::Identifier { name, .. } = *left {
             assert_eq!(name, "a");
         } else {
@@ -337,21 +392,21 @@ fn test_expr_binary() {
 
 #[test]
 fn test_expr_add_shorthand() {
-    // Convenience: expr_add(a, b) instead of expr_binary(BinaryOp::Add, a, b)
+    // Convenience: alloc_add(a, b) instead of alloc_binary(BinaryOp::Add, a, b)
 
     use windjammer::parser::ast::*;
 
-    let expr = expr_add(expr_var("x"), expr_int(1));
+    let expr = alloc_add(alloc_var("x"), alloc_int(1));
 
     if let Expression::Binary { op, .. } = expr {
-        assert_eq!(op, BinaryOp::Add);
+        assert_eq!(*op, BinaryOp::Add);
     } else {
         panic!("Expected Binary expression");
     }
 }
 
 #[test]
-fn test_expr_call() {
+fn test_alloc_call() {
     // Before:
     // Expression::Call {
     //     function: Box::new(Expression::Identifier { name: "foo".to_string(), location: None }),
@@ -362,11 +417,11 @@ fn test_expr_call() {
     //     location: None,
     // }
     //
-    // After: expr_call("foo", vec![expr_int(1), expr_int(2)])
+    // After: alloc_call("foo", vec![alloc_int(1), alloc_int(2)])
 
     use windjammer::parser::ast::*;
 
-    let expr = expr_call("foo", vec![expr_int(1), expr_int(2)]);
+    let expr = alloc_call("foo", vec![alloc_int(1), alloc_int(2)]);
 
     if let Expression::Call {
         function,
@@ -396,11 +451,11 @@ fn test_expr_method_call() {
     //     location: None,
     // }
     //
-    // After: expr_method("obj", "method", vec![])
+    // After: alloc_method("obj", "method", vec![])
 
     use windjammer::parser::ast::*;
 
-    let expr = expr_method(expr_var("obj"), "method", vec![]);
+    let expr = alloc_method(alloc_var("obj"), "method", vec![]);
 
     if let Expression::MethodCall {
         object,
@@ -422,7 +477,7 @@ fn test_expr_method_call() {
 }
 
 #[test]
-fn test_expr_field() {
+fn test_alloc_field() {
     // Before:
     // Expression::FieldAccess {
     //     object: Box::new(Expression::Identifier { name: "obj".to_string(), location: None }),
@@ -430,11 +485,11 @@ fn test_expr_field() {
     //     location: None,
     // }
     //
-    // After: expr_field(expr_var("obj"), "field")
+    // After: alloc_field(alloc_var("obj"), "field")
 
     use windjammer::parser::ast::*;
 
-    let expr = expr_field(expr_var("obj"), "field");
+    let expr = alloc_field(alloc_var("obj"), "field");
 
     if let Expression::FieldAccess { object, field, .. } = expr {
         if let Expression::Identifier { name, .. } = *object {
@@ -453,15 +508,15 @@ fn test_expr_chained_complex() {
     // Complex example: obj.method(x + 1).field
     //
     // Before: ~20 lines of nested Expression structs
-    // After: expr_field(expr_method(expr_var("obj"), "method", vec![expr_add(expr_var("x"), expr_int(1))]), "field")
+    // After: alloc_field(alloc_method(alloc_var("obj"), "method", vec![alloc_add(alloc_var("x"), alloc_int(1))]), "field")
 
     use windjammer::parser::ast::*;
 
-    let expr = expr_field(
-        expr_method(
-            expr_var("obj"),
+    let expr = alloc_field(
+        alloc_method(
+            alloc_var("obj"),
             "method",
-            vec![expr_add(expr_var("x"), expr_int(1))],
+            vec![alloc_add(alloc_var("x"), alloc_int(1))],
         ),
         "field",
     );
@@ -481,11 +536,11 @@ fn test_expr_chained_complex() {
 #[test]
 fn test_stmt_let() {
     // Before: 10+ lines
-    // After: stmt_let("x", Some(Type::Int), expr_int(42))
+    // After: stmt_let("x", Some(Type::Int), alloc_int(42))
 
     use windjammer::parser::ast::*;
 
-    let stmt = stmt_let("x", Some(Type::Int), expr_int(42));
+    let stmt = stmt_let("x", Some(Type::Int), alloc_int(42));
 
     if let Statement::Let { mutable, type_, .. } = stmt {
         assert!(!mutable);
@@ -499,7 +554,7 @@ fn test_stmt_let() {
 fn test_stmt_let_mut() {
     use windjammer::parser::ast::*;
 
-    let stmt = stmt_let_mut("x", Some(Type::Int), expr_int(0));
+    let stmt = stmt_let_mut("x", Some(Type::Int), alloc_int(0));
 
     if let Statement::Let { mutable, .. } = stmt {
         assert!(mutable);
@@ -512,7 +567,7 @@ fn test_stmt_let_mut() {
 fn test_stmt_assign() {
     use windjammer::parser::ast::*;
 
-    let stmt = stmt_assign(expr_var("x"), expr_int(42));
+    let stmt = stmt_assign(alloc_var("x"), alloc_int(42));
 
     if let Statement::Assignment { compound_op, .. } = stmt {
         assert_eq!(compound_op, None);
@@ -525,7 +580,7 @@ fn test_stmt_assign() {
 fn test_stmt_compound_assign() {
     use windjammer::parser::ast::*;
 
-    let stmt = stmt_compound_assign(CompoundOp::Add, expr_var("x"), expr_int(1));
+    let stmt = stmt_compound_assign(CompoundOp::Add, alloc_var("x"), alloc_int(1));
 
     if let Statement::Assignment { compound_op, .. } = stmt {
         assert_eq!(compound_op, Some(CompoundOp::Add));
@@ -538,7 +593,7 @@ fn test_stmt_compound_assign() {
 fn test_stmt_return_some() {
     use windjammer::parser::ast::*;
 
-    let stmt = stmt_return(Some(expr_int(42)));
+    let stmt = stmt_return(Some(alloc_int(42)));
 
     if let Statement::Return { value, .. } = stmt {
         assert!(value.is_some());
@@ -564,7 +619,7 @@ fn test_stmt_return_none() {
 fn test_stmt_expr() {
     use windjammer::parser::ast::*;
 
-    let stmt = stmt_expr(expr_call("foo", vec![]));
+    let stmt = stmt_expr(alloc_call("foo", vec![]));
 
     if let Statement::Expression { .. } = stmt {
         // Success
@@ -577,7 +632,7 @@ fn test_stmt_expr() {
 fn test_stmt_if() {
     use windjammer::parser::ast::*;
 
-    let stmt = stmt_if(expr_bool(true), vec![stmt_return(None)], None);
+    let stmt = stmt_if(alloc_bool(true), vec![alloc_stmt_return(None)], None);
 
     if let Statement::If {
         then_block,
@@ -597,9 +652,9 @@ fn test_stmt_if_else() {
     use windjammer::parser::ast::*;
 
     let stmt = stmt_if_else(
-        expr_bool(true),
-        vec![stmt_return(Some(expr_int(1)))],
-        vec![stmt_return(Some(expr_int(2)))],
+        alloc_bool(true),
+        vec![alloc_stmt_return(Some(alloc_int(1)))],
+        vec![alloc_stmt_return(Some(alloc_int(2)))],
     );
 
     if let Statement::If { else_block, .. } = stmt {
@@ -614,7 +669,7 @@ fn test_stmt_if_else() {
 fn test_stmt_while() {
     use windjammer::parser::ast::*;
 
-    let stmt = stmt_while(expr_bool(true), vec![stmt_expr(expr_call("work", vec![]))]);
+    let stmt = stmt_while(alloc_bool(true), vec![alloc_stmt_expr(alloc_call("work", vec![]))]);
 
     if let Statement::While { body, .. } = stmt {
         assert_eq!(body.len(), 1);
