@@ -4,28 +4,46 @@
 // UPDATED: Now using standard AST builder functions!
 
 use windjammer::codegen::rust::constant_folding::*;
-use windjammer::parser::ast::builders::*;
 use windjammer::parser::{BinaryOp, Expression, Literal, UnaryOp};
+use windjammer::test_utils::*;
 
 // Re-alias builders for backward compatibility with existing tests
-fn int_lit(n: i64) -> Expression {
-    expr_int(n)
+fn int_lit(n: i64) -> &'static Expression<'static> {
+    test_alloc_expr(Expression::Literal {
+        value: Literal::Int(n),
+        location: None,
+    })
 }
 
-fn float_lit(f: f64) -> Expression {
-    expr_float(f)
+fn float_lit(f: f64) -> &'static Expression<'static> {
+    test_alloc_expr(Expression::Literal {
+        value: Literal::Float(f),
+        location: None,
+    })
 }
 
-fn bool_lit(b: bool) -> Expression {
-    expr_bool(b)
+fn bool_lit(b: bool) -> &'static Expression<'static> {
+    test_alloc_expr(Expression::Literal {
+        value: Literal::Bool(b),
+        location: None,
+    })
 }
 
-fn binary(left: Expression, op: BinaryOp, right: Expression) -> Expression {
-    expr_binary(op, left, right)
+fn binary(left: &'static Expression<'static>, op: BinaryOp, right: &'static Expression<'static>) -> &'static Expression<'static> {
+    test_alloc_expr(Expression::Binary {
+        left,
+        op,
+        right,
+        location: None,
+    })
 }
 
-fn unary(op: UnaryOp, operand: Expression) -> Expression {
-    expr_unary(op, operand)
+fn unary(op: UnaryOp, operand: &'static Expression<'static>) -> &'static Expression<'static> {
+    test_alloc_expr(Expression::Unary {
+        op,
+        operand,
+        location: None,
+    })
 }
 
 // ============================================================================
