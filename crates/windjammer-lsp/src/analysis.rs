@@ -105,7 +105,7 @@ impl AnalysisDatabase {
     fn full_analysis(
         &self,
         content: &str,
-    ) -> (Vec<Diagnostic>, Option<Program>, Vec<AnalyzedFunction>) {
+    ) -> (Vec<Diagnostic>, Option<Program<'static>>, Vec<AnalyzedFunction<'static>>) {
         let mut diagnostics = Vec::new();
         let mut program_result = None;
         let mut analyzed_functions = Vec::new();
@@ -115,7 +115,8 @@ impl AnalysisDatabase {
         let tokens = lexer.tokenize_with_locations();
 
         // Parse the file
-        let mut parser = Parser::new(tokens);
+        // Leak parser to keep arena alive for 'static lifetime
+        let parser = Box::leak(Box::new(Parser::new(tokens)));
         match parser.parse() {
             Ok(program) => {
                 tracing::debug!("File parsed successfully");
@@ -181,7 +182,7 @@ impl AnalysisDatabase {
     }
 
     /// Get cached program for a file
-    pub fn get_program(&self, uri: &Url) -> Option<Program> {
+    pub fn get_program(&self, uri: &Url) -> Option<Program<'static>> {
         self.cache
             .read()
             .unwrap()
@@ -190,7 +191,7 @@ impl AnalysisDatabase {
     }
 
     /// Get cached analyzed functions for a file
-    pub fn get_analyzed_functions(&self, uri: &Url) -> Vec<AnalyzedFunction> {
+    pub fn get_analyzed_functions(&self, uri: &Url) -> Vec<AnalyzedFunction<'static>> {
         self.cache
             .read()
             .unwrap()

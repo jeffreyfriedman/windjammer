@@ -1,19 +1,10 @@
 [workspace]
 members = [
     ".",
-    # Temporarily disabled - needs arena lifetime refactoring
-    # "crates/windjammer-lsp",
+    "crates/windjammer-lsp",
     "crates/windjammer-mcp",
     "crates/windjammer-runtime",
-    # Removed: crates/windjammer-c-ffi (moved to windjammer-game repo)
-    # Removed: crates/windjammer-editor-desktop (moved to windjammer-game repo)
-    # Removed: crates/windjammer-editor-web (moved to windjammer-game repo)
-    # Removed: crates/windjammer-game-editor (moved to windjammer-game repo)
-    # Removed: crates/windjammer-game-framework (moved to windjammer-game repo)
-    # Removed: crates/windjammer-ui (moved to windjammer-ui repo)
-    # Removed: crates/windjammer-ui-macro (moved to windjammer-ui repo)
-    # Removed: sdks/rust (moved to windjammer-game repo)
-    # Removed: tools/sdk-generator (no longer exists)
+    
 ]
 
 [workspace.package]
