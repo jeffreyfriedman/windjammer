@@ -1,0 +1,15 @@
+
+        trait Renderable {
+            fn render(self) -> string
+        }
+        
+        struct Text {
+            content: string
+        }
+        
+        impl Renderable for Text {
+            fn render(self) -> string {
+                self.content
+            }
+        }
+    

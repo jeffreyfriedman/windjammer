@@ -58,7 +58,7 @@ pub struct SourceFile {
 #[salsa::tracked]
 pub struct ParsedProgram<'db> {
     #[returns(ref)]
-    pub program: parser::Program,
+    pub program: parser::Program<'static>,
 }
 
 /// Import information for a file
@@ -145,7 +145,8 @@ pub fn parse<'db>(db: &'db dyn salsa::Database, file: SourceFile) -> ParsedProgr
     // Lex and parse
     let mut lexer = lexer::Lexer::new(text);
     let tokens = lexer.tokenize_with_locations();
-    let mut parser = parser::Parser::new(tokens);
+    // Leak parser to keep arena alive for 'static lifetime (required by Salsa)
+    let parser = Box::leak(Box::new(parser::Parser::new(tokens)));
 
     let program = match parser.parse() {
         Ok(prog) => prog,
@@ -178,6 +179,7 @@ pub fn imports<'db>(db: &'db dyn salsa::Database, file: SourceFile) -> ImportInf
             path,
             alias: _,
             location: _,
+            is_pub: _,
         } = item
         {
             let import_path = path.join(".");
@@ -648,7 +650,7 @@ impl WindjammerDatabase {
     }
 
     /// Get the parsed program for a file
-    pub fn get_program(&self, file: SourceFile) -> &parser::Program {
+    pub fn get_program(&self, file: SourceFile) -> &parser::Program<'static> {
         let parsed = parse(self, file);
         parsed.program(self)
     }

@@ -3,7 +3,7 @@ use windjammer::parser::{FunctionDecl, Item, Program, Type};
 
 /// Hover provider for Windjammer code
 pub struct HoverProvider {
-    program: Option<Program>,
+    program: Option<Program<'static>>,
 }
 
 impl HoverProvider {
@@ -12,7 +12,7 @@ impl HoverProvider {
     }
 
     /// Update the parsed program
-    pub fn update_program(&mut self, program: Program) {
+    pub fn update_program(&mut self, program: Program<'static>) {
         self.program = Some(program);
     }
 

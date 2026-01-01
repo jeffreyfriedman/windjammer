@@ -95,14 +95,17 @@ impl SimdStats {
 }
 
 /// Perform SIMD vectorization optimization on a program
-pub fn optimize_simd_vectorization(program: &Program) -> (Program, SimdStats) {
+pub fn optimize_simd_vectorization<'ast>(
+    program: &Program<'ast>,
+    optimizer: &crate::optimizer::Optimizer,
+) -> (Program<'ast>, SimdStats) {
     let mut stats = SimdStats::default();
     let mut new_items = Vec::new();
 
     for item in &program.items {
         let new_item = match item {
             Item::Function { decl: func, .. } => {
-                let (new_func, func_stats) = optimize_function_simd(func);
+                let (new_func, func_stats) = optimize_function_simd(func, optimizer);
                 stats.add(&func_stats);
                 Item::Function {
                     decl: new_func,
@@ -112,7 +115,7 @@ pub fn optimize_simd_vectorization(program: &Program) -> (Program, SimdStats) {
             Item::Impl {
                 block: impl_block, ..
             } => {
-                let (new_impl, impl_stats) = optimize_impl_simd(impl_block);
+                let (new_impl, impl_stats) = optimize_impl_simd(impl_block, optimizer);
                 stats.add(&impl_stats);
                 Item::Impl {
                     block: new_impl,
@@ -128,9 +131,12 @@ pub fn optimize_simd_vectorization(program: &Program) -> (Program, SimdStats) {
 }
 
 /// Optimize a function with SIMD vectorization
-fn optimize_function_simd(func: &FunctionDecl) -> (FunctionDecl, SimdStats) {
+fn optimize_function_simd<'ast>(
+    func: &FunctionDecl<'ast>,
+    optimizer: &crate::optimizer::Optimizer,
+) -> (FunctionDecl<'ast>, SimdStats) {
     let mut stats = SimdStats::default();
-    let new_body = optimize_statements_simd(&func.body, &mut stats);
+    let new_body = optimize_statements_simd(&func.body, &mut stats, optimizer);
 
     (
         FunctionDecl {
@@ -142,12 +148,15 @@ fn optimize_function_simd(func: &FunctionDecl) -> (FunctionDecl, SimdStats) {
 }
 
 /// Optimize an impl block with SIMD vectorization
-fn optimize_impl_simd(impl_block: &ImplBlock) -> (ImplBlock, SimdStats) {
+fn optimize_impl_simd<'ast>(
+    impl_block: &ImplBlock<'ast>,
+    optimizer: &crate::optimizer::Optimizer,
+) -> (ImplBlock<'ast>, SimdStats) {
     let mut stats = SimdStats::default();
     let mut new_functions = Vec::new();
 
     for func in &impl_block.functions {
-        let (new_func, func_stats) = optimize_function_simd(func);
+        let (new_func, func_stats) = optimize_function_simd(func, optimizer);
         stats.add(&func_stats);
         new_functions.push(new_func);
     }
@@ -186,11 +195,15 @@ enum VectorOperation {
 }
 
 /// Optimize statements with SIMD vectorization
-fn optimize_statements_simd(stmts: &[Statement], stats: &mut SimdStats) -> Vec<Statement> {
+fn optimize_statements_simd<'ast>(
+    stmts: &[&'ast Statement<'ast>],
+    stats: &mut SimdStats,
+    optimizer: &crate::optimizer::Optimizer,
+) -> Vec<&'ast Statement<'ast>> {
     let mut result = Vec::new();
 
     for stmt in stmts {
-        let optimized = optimize_statement_simd(stmt, stats);
+        let optimized = optimize_statement_simd(stmt, stats, optimizer);
         result.push(optimized);
     }
 
@@ -198,7 +211,11 @@ fn optimize_statements_simd(stmts: &[Statement], stats: &mut SimdStats) -> Vec<S
 }
 
 /// Optimize a single statement with SIMD vectorization
-fn optimize_statement_simd(stmt: &Statement, stats: &mut SimdStats) -> Statement {
+fn optimize_statement_simd<'a: 'ast, 'ast>(
+    stmt: &'a Statement<'a>,
+    stats: &mut SimdStats,
+    optimizer: &crate::optimizer::Optimizer,
+) -> &'ast Statement<'ast> {
     match stmt {
         Statement::For {
             pattern,
@@ -224,48 +241,60 @@ fn optimize_statement_simd(stmt: &Statement, stats: &mut SimdStats) -> Statement
 
                         // Add a decorator to mark this loop as vectorizable
                         // The codegen phase will see this and generate SIMD code
-                        return create_vectorized_loop(variable, iterable, body, &vectorizable);
+                        return create_vectorized_loop(
+                            variable,
+                            iterable,
+                            body,
+                            &vectorizable,
+                            optimizer,
+                        );
                     }
                 }
             }
 
             // Not vectorizable, recurse into body
-            Statement::For {
-                pattern: pattern.clone(),
-                iterable: iterable.clone(),
-                body: optimize_statements_simd(body, stats),
-                location: None,
-            }
+            optimizer.alloc_stmt(unsafe {
+                std::mem::transmute::<Statement<'_>, Statement<'_>>(Statement::For {
+                    pattern: pattern.clone(),
+                    iterable,
+                    body: optimize_statements_simd(body, stats, optimizer),
+                    location: None,
+                })
+            })
         }
         Statement::If {
             condition,
             then_block,
             else_block,
             ..
-        } => Statement::If {
-            condition: condition.clone(),
-            then_block: optimize_statements_simd(then_block, stats),
-            else_block: else_block
-                .as_ref()
-                .map(|stmts| optimize_statements_simd(stmts, stats)),
-            location: None,
-        },
+        } => optimizer.alloc_stmt(unsafe {
+            std::mem::transmute::<Statement<'_>, Statement<'_>>(Statement::If {
+                condition,
+                then_block: optimize_statements_simd(then_block, stats, optimizer),
+                else_block: else_block
+                    .as_ref()
+                    .map(|stmts| optimize_statements_simd(stmts, stats, optimizer)),
+                location: None,
+            })
+        }),
         Statement::While {
             condition, body, ..
-        } => Statement::While {
-            condition: condition.clone(),
-            body: optimize_statements_simd(body, stats),
-            location: None,
-        },
-        _ => stmt.clone(),
+        } => optimizer.alloc_stmt(unsafe {
+            std::mem::transmute::<Statement<'_>, Statement<'_>>(Statement::While {
+                condition,
+                body: optimize_statements_simd(body, stats, optimizer),
+                location: None,
+            })
+        }),
+        _ => stmt,
     }
 }
 
 /// Analyze if a loop can be vectorized
-fn analyze_loop_vectorizability(
+fn analyze_loop_vectorizability<'ast>(
     variable: &str,
-    iterable: &Expression,
-    body: &[Statement],
+    iterable: &'ast Expression<'ast>,
+    body: &[&'ast Statement<'ast>],
 ) -> Option<VectorizableLoop> {
     // Check if we're iterating over a range or array
     let is_range_or_array = matches!(
@@ -291,7 +320,10 @@ fn analyze_loop_vectorizability(
 }
 
 /// Classify what type of vector operation the loop performs
-fn classify_loop_operation(variable: &str, body: &[Statement]) -> VectorOperation {
+fn classify_loop_operation<'ast>(
+    variable: &str,
+    body: &[&'ast Statement<'ast>],
+) -> VectorOperation {
     // Simple heuristic: look for common patterns
     for stmt in body {
         match stmt {
@@ -315,7 +347,7 @@ fn classify_loop_operation(variable: &str, body: &[Statement]) -> VectorOperatio
 }
 
 /// Check if vectorization is safe (no loop-carried dependencies, function calls, etc.)
-fn check_vectorization_safety(body: &[Statement]) -> bool {
+fn check_vectorization_safety<'ast>(body: &[&'ast Statement<'ast>]) -> bool {
     // For safety, we'll be conservative and only vectorize simple loops
     // No function calls, no control flow, no early returns
     for stmt in body {
@@ -367,21 +399,24 @@ fn is_numeric_operation(op: &VectorOperation) -> bool {
 }
 
 /// Create a vectorized version of the loop
-fn create_vectorized_loop(
+fn create_vectorized_loop<'ast>(
     variable: &str,
-    iterable: &Expression,
-    body: &[Statement],
+    iterable: &'ast Expression<'ast>,
+    body: &[&'ast Statement<'ast>],
     _info: &VectorizableLoop,
-) -> Statement {
+    optimizer: &crate::optimizer::Optimizer,
+) -> &'ast Statement<'ast> {
     // In the real implementation, codegen would recognize vectorizable patterns
     // and generate SIMD code. For now, we just preserve the loop structure
     // and track it in stats.
-    Statement::For {
-        pattern: Pattern::Identifier(variable.to_string()),
-        iterable: iterable.clone(),
-        body: body.to_vec(),
-        location: None,
-    }
+    optimizer.alloc_stmt(unsafe {
+        std::mem::transmute::<Statement<'_>, Statement<'_>>(Statement::For {
+            pattern: Pattern::Identifier(variable.to_string()),
+            iterable,
+            body: body.to_vec(),
+            location: None,
+        })
+    })
 }
 
 #[cfg(test)]
@@ -390,6 +425,7 @@ mod tests {
 
     #[cfg(test)]
     use crate::parser::{Literal, Type};
+    use crate::test_utils::{test_alloc_expr, test_alloc_stmt};
 
     #[test]
     #[allow(unused_comparisons, clippy::absurd_extreme_comparisons)]
@@ -399,70 +435,74 @@ mod tests {
             items: vec![Item::Function {
                 decl: FunctionDecl {
                     is_pub: false,
+                    is_extern: false,
                     name: "sum_array".to_string(),
                     parameters: vec![],
                     return_type: None,
                     body: vec![
-                        Statement::Let {
+                        test_alloc_stmt(Statement::Let {
                             pattern: Pattern::Identifier("sum".to_string()),
                             mutable: true,
                             type_: Some(Type::Custom("f64".to_string())),
-                            value: Expression::Literal {
+                            value: test_alloc_expr(Expression::Literal {
                                 value: Literal::Float(0.0),
                                 location: None,
-                            },
+                            }),
+                            else_block: None,
                             location: None,
-                        },
-                        Statement::For {
+                        }),
+                        test_alloc_stmt(Statement::For {
                             pattern: Pattern::Identifier("i".to_string()),
-                            iterable: Expression::Range {
-                                start: Box::new(Expression::Literal {
+                            iterable: test_alloc_expr(Expression::Range {
+                                start: test_alloc_expr(Expression::Literal {
                                     value: Literal::Int(0),
                                     location: None,
                                 }),
-                                end: Box::new(Expression::Identifier {
+                                end: test_alloc_expr(Expression::Identifier {
                                     name: "n".to_string(),
                                     location: None,
                                 }),
                                 inclusive: false,
                                 location: None,
-                            },
-                            body: vec![Statement::Expression {
-                                expr: Expression::Binary {
-                                    left: Box::new(Expression::Identifier {
+                            }),
+                            body: vec![test_alloc_stmt(Statement::Expression {
+                                expr: test_alloc_expr(Expression::Binary {
+                                    left: test_alloc_expr(Expression::Identifier {
                                         name: "sum".to_string(),
                                         location: None,
                                     }),
                                     op: BinaryOp::Add,
-                                    right: Box::new(Expression::Index {
-                                        object: Box::new(Expression::Identifier {
+                                    right: test_alloc_expr(Expression::Index {
+                                        object: test_alloc_expr(Expression::Identifier {
                                             name: "array".to_string(),
                                             location: None,
                                         }),
-                                        index: Box::new(Expression::Identifier {
+                                        index: test_alloc_expr(Expression::Identifier {
                                             name: "i".to_string(),
                                             location: None,
                                         }),
                                         location: None,
                                     }),
                                     location: None,
-                                },
+                                }),
                                 location: None,
-                            }],
+                            })],
                             location: None,
-                        },
+                        }),
                     ],
                     type_params: vec![],
                     where_clause: vec![],
                     is_async: false,
                     decorators: vec![],
                     parent_type: None,
+                    doc_comment: None,
                 },
                 location: None,
             }],
         };
 
-        let (optimized, stats) = optimize_simd_vectorization(&program);
+        let optimizer = crate::optimizer::Optimizer::with_defaults();
+        let (optimized, stats) = optimize_simd_vectorization(&program, &optimizer);
 
         // Should attempt to vectorize the reduction loop
         // Note: The current implementation may not vectorize all patterns yet
@@ -481,47 +521,50 @@ mod tests {
             items: vec![Item::Function {
                 decl: FunctionDecl {
                     is_pub: false,
+                    is_extern: false,
                     name: "complex".to_string(),
                     parameters: vec![],
                     return_type: None,
-                    body: vec![Statement::For {
+                    body: vec![test_alloc_stmt(Statement::For {
                         pattern: Pattern::Identifier("i".to_string()),
-                        iterable: Expression::Range {
-                            start: Box::new(Expression::Literal {
+                        iterable: test_alloc_expr(Expression::Range {
+                            start: test_alloc_expr(Expression::Literal {
                                 value: Literal::Int(0),
                                 location: None,
                             }),
-                            end: Box::new(Expression::Literal {
+                            end: test_alloc_expr(Expression::Literal {
                                 value: Literal::Int(10),
                                 location: None,
                             }),
                             inclusive: false,
                             location: None,
-                        },
-                        body: vec![Statement::Expression {
-                            expr: Expression::Call {
-                                function: Box::new(Expression::Identifier {
+                        }),
+                        body: vec![test_alloc_stmt(Statement::Expression {
+                            expr: test_alloc_expr(Expression::Call {
+                                function: test_alloc_expr(Expression::Identifier {
                                     name: "println".to_string(),
                                     location: None,
                                 }),
                                 arguments: vec![],
                                 location: None,
-                            },
+                            }),
                             location: None,
-                        }],
+                        })],
                         location: None,
-                    }],
+                    })],
                     type_params: vec![],
                     where_clause: vec![],
                     is_async: false,
                     decorators: vec![],
                     parent_type: None,
+                    doc_comment: None,
                 },
                 location: None,
             }],
         };
 
-        let (_, stats) = optimize_simd_vectorization(&program);
+        let optimizer = crate::optimizer::Optimizer::with_defaults();
+        let (_, stats) = optimize_simd_vectorization(&program, &optimizer);
 
         // Should NOT vectorize (has function call)
         assert_eq!(stats.loops_vectorized, 0);

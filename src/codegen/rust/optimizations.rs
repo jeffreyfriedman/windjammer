@@ -13,7 +13,7 @@ use crate::parser::*;
 
 /// Optimization methods for CodeGenerator
 pub trait OptimizationGenerator {
-    fn try_fold_constant(&self, expr: &Expression) -> Option<Expression>;
+    fn try_fold_constant(&self, expr: &Expression) -> Option<Expression<'_>>;
 }
 
 // Implementation will be added after extracting from generator.rs
