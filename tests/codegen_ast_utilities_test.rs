@@ -6,6 +6,44 @@
 use windjammer::codegen::rust::ast_utilities::*;
 use windjammer::parser::ast::builders::*;
 use windjammer::parser::{Expression, Pattern, Statement};
+use windjammer::test_utils::*;
+
+// Arena-allocating wrappers - COMPREHENSIVE SET
+macro_rules! alloc_expr_wrapper {
+    ($name:ident, $builder:ident) => {
+        fn $name(arg: impl Into<String>) -> &'static Expression<'static> {
+            test_alloc_expr($builder(arg))
+        }
+    };
+}
+
+fn alloc_int(n: i64) -> &'static Expression<'static> {
+    test_alloc_expr(expr_int(n))
+}
+
+fn alloc_var(name: impl Into<String>) -> &'static Expression<'static> {
+    test_alloc_expr(expr_var(name))
+}
+
+fn alloc_string(s: impl Into<String>) -> &'static Expression<'static> {
+    test_alloc_expr(expr_string(s))
+}
+
+fn alloc_stmt_let(name: &str, type_: Option<windjammer::parser::Type>, value: &'static Expression<'static>) -> &'static Statement<'static> {
+    test_alloc_stmt(stmt_let(name, type_, value))
+}
+
+fn alloc_stmt_return(value: Option<&'static Expression<'static>>) -> &'static Statement<'static> {
+    test_alloc_stmt(stmt_return(value))
+}
+
+fn alloc_stmt_if(cond: &'static Expression<'static>, then_block: Vec<&'static Statement<'static>>, else_block: Option<Vec<&'static Statement<'static>>>) -> &'static Statement<'static> {
+    test_alloc_stmt(stmt_if(cond, then_block, else_block))
+}
+
+fn alloc_stmt_expr(expr: &'static Expression<'static>) -> &'static Statement<'static> {
+    test_alloc_stmt(stmt_expr(expr))
+}
 
 // ============================================================================
 // count_statements TESTS
@@ -19,26 +57,26 @@ fn test_count_statements_empty() {
 
 #[test]
 fn test_count_statements_simple_let() {
-    let statements = vec![stmt_let("x", None, expr_int(42))];
+    let statements = vec![alloc_alloc_stmt_let("x", None, alloc_int(42))];
     assert_eq!(count_statements(&statements), 1);
 }
 
 #[test]
 fn test_count_statements_return() {
-    let statements = vec![stmt_return(Some(expr_var("x")))];
+    let statements = vec![alloc_stmt_return(Some(alloc_var("x")))];
     assert_eq!(count_statements(&statements), 1);
 }
 
 #[test]
 fn test_count_statements_expression() {
-    let statements = vec![stmt_expr(expr_int(42))];
+    let statements = vec![alloc_alloc_stmt_expr(alloc_int(42))];
     assert_eq!(count_statements(&statements), 1);
 }
 
 #[test]
 fn test_count_statements_if_weighted() {
     // If statements should count as 3 (weighted more heavily)
-    let statements = vec![stmt_if(expr_bool(true), vec![], None)];
+    let statements = vec![alloc_stmt_if(expr_bool(true), vec![], None)];
     assert_eq!(count_statements(&statements), 3);
 }
 
