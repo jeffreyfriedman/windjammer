@@ -3,6 +3,8 @@
 //
 // UPDATED: Now using standard AST builder functions!
 
+#![allow(clippy::needless_borrow)]
+
 use windjammer::codegen::rust::constant_folding::*;
 use windjammer::parser::{BinaryOp, Expression, Literal, UnaryOp};
 use windjammer::test_utils::*;
@@ -29,7 +31,11 @@ fn bool_lit(b: bool) -> &'static Expression<'static> {
     })
 }
 
-fn binary(left: &'static Expression<'static>, op: BinaryOp, right: &'static Expression<'static>) -> &'static Expression<'static> {
+fn binary(
+    left: &'static Expression<'static>,
+    op: BinaryOp,
+    right: &'static Expression<'static>,
+) -> &'static Expression<'static> {
     test_alloc_expr(Expression::Binary {
         left,
         op,

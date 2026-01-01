@@ -143,7 +143,7 @@ impl Optimizer {
     pub fn optimize<'ast>(&self, program: &Program<'ast>) -> OptimizationResult<'ast> {
         let mut program = program;
         let mut stats = OptimizationStats::default();
-        
+
         // Keep intermediate programs alive to prevent dangling references
         let mut intermediate_programs: Vec<Program<'ast>> = Vec::new();
 
@@ -198,7 +198,10 @@ impl Optimizer {
             stats.loops_vectorized += simd_stats.loops_vectorized;
         }
 
-        OptimizationResult { program: program.clone(), stats }
+        OptimizationResult {
+            program: program.clone(),
+            stats,
+        }
     }
 }
 

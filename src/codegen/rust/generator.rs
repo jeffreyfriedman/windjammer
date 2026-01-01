@@ -1,3 +1,6 @@
+#![allow(clippy::collapsible_if)]
+#![allow(clippy::collapsible_match)]
+
 // Rust code generator
 use crate::analyzer::*;
 use crate::codegen::rust::{
@@ -532,7 +535,11 @@ impl<'ast> CodeGenerator<'ast> {
         output
     }
 
-    pub fn generate_program(&mut self, program: &Program<'ast>, analyzed: &[AnalyzedFunction<'ast>]) -> String {
+    pub fn generate_program(
+        &mut self,
+        program: &Program<'ast>,
+        analyzed: &[AnalyzedFunction<'ast>],
+    ) -> String {
         let mut imports = String::new();
         let mut body = String::new();
 
@@ -1793,7 +1800,11 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
         output
     }
 
-    fn generate_impl(&mut self, impl_block: &ImplBlock<'ast>, analyzed: &[AnalyzedFunction<'ast>]) -> String {
+    fn generate_impl(
+        &mut self,
+        impl_block: &ImplBlock<'ast>,
+        analyzed: &[AnalyzedFunction<'ast>],
+    ) -> String {
         let mut output = String::new();
 
         // Check if this impl block has @export or @wasm_bindgen decorator
@@ -5150,7 +5161,11 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
     }
 
     /// Generate efficient string concatenation using format! macro
-    fn generate_string_concat(&mut self, left: &Expression<'ast>, right: &Expression<'ast>) -> String {
+    fn generate_string_concat(
+        &mut self,
+        left: &Expression<'ast>,
+        right: &Expression<'ast>,
+    ) -> String {
         // Collect all parts of the concatenation chain
         let mut parts = Vec::new();
         string_analysis::collect_concat_parts_static(left, &mut parts);

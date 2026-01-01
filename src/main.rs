@@ -27,13 +27,13 @@ pub mod lexer;
 pub mod optimizer;
 pub mod parser; // Parser module (refactored structure)
 pub mod parser_impl; // Parser implementation (being migrated to parser/)
-// Test utilities for arena-allocated AST construction (available for integration tests)
-pub mod test_utils;
+                     // Test utilities for arena-allocated AST construction (available for integration tests)
 pub mod parser_recovery;
 pub mod source_map; // Source map for error message translation
 pub mod source_map_cache; // Source map caching for performance
 pub mod stdlib_scanner;
-pub mod syntax_highlighter; // Syntax highlighting for error snippets
+pub mod syntax_highlighter;
+pub mod test_utils; // Syntax highlighting for error snippets
 
 use anyhow::Result;
 use clap::{Parser, Subcommand, ValueEnum};
@@ -451,12 +451,18 @@ pub fn build_project(path: &Path, output: &Path, target: CompilationTarget) -> R
 
         if let Ok(program) = parser.parse() {
             // Register any trait definitions found
+            let mut has_traits = false;
             for item in &program.items {
                 if let parser::Item::Trait { decl, .. } = item {
                     module_compiler
                         .trait_registry
                         .insert(decl.name.clone(), decl.clone());
+                    has_traits = true;
                 }
+            }
+            // ARENA FIX: Keep parser alive if we stored trait definitions
+            if has_traits {
+                module_compiler._trait_parsers.push(parser);
             }
         }
     }
@@ -749,6 +755,9 @@ struct ModuleCompiler {
     analyzer: analyzer::Analyzer<'static>, // WINDJAMMER FIX: Shared analyzer for cross-file trait analysis
     // THE WINDJAMMER WAY: Track ALL programs for cross-file trait inference
     all_programs: Vec<parser::Program<'static>>, // All parsed programs from all files
+    // ARENA FIX: Keep parsers alive to prevent use-after-free
+    _parsers: Vec<parser::Parser>, // Parsers that own the arenas for all_programs
+    _trait_parsers: Vec<parser_impl::Parser>, // ARENA FIX: Parsers for trait_registry
     // RECURSION GUARD: Track files currently being compiled to prevent circular dependencies
     // Use String instead of PathBuf for Windows UNC path compatibility
     compiling_files: HashSet<String>, // Normalized path strings in the current compilation chain
@@ -773,6 +782,8 @@ impl ModuleCompiler {
             copy_structs_registry: HashSet::new(),
             analyzer: analyzer::Analyzer::new(), // WINDJAMMER FIX: Shared analyzer instance
             all_programs: Vec::new(),            // THE WINDJAMMER WAY: Track all programs
+            _parsers: Vec::new(),                // ARENA FIX: Keep parsers alive
+            _trait_parsers: Vec::new(),          // ARENA FIX: Keep trait parsers alive
             compiling_files: HashSet::new(),     // RECURSION GUARD: Track compilation chain
         }
     }
@@ -1379,6 +1390,12 @@ fn compile_file_impl(
         module_compiler.all_programs.push(program.clone());
     }
 
+    // ARENA FIX: ALWAYS store the parser to keep arena alive
+    // The shared analyzer accumulates AST references from all files,
+    // so we must keep all parsers alive for the entire compilation
+    module_compiler._parsers.push(parser);
+    // Note: parser has been moved and can't be used after this
+
     // Compile dependencies first (both use statements and mod declarations)
     for item in &program.items {
         // Handle use statements
@@ -1729,7 +1746,7 @@ fn compile_file_impl(
         {
             file.sync_all()?; // Sync file data AND metadata
             drop(file); // Close file handle before syncing directory
-            
+
             // CRITICAL: On Linux, we must also sync the PARENT DIRECTORY
             // to ensure the directory entry is persisted. Without this,
             // a crash could leave the directory without the file entry.
@@ -1739,7 +1756,7 @@ fn compile_file_impl(
                 dir.sync_all()?;
             }
         }
-        
+
         #[cfg(not(target_os = "linux"))]
         drop(file); // Close file handle on non-Linux systems
     }

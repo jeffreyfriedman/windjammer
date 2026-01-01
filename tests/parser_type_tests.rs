@@ -14,7 +14,7 @@ use windjammer::parser_impl::Parser;
 // HELPER FUNCTIONS
 // ============================================================================
 
-fn parse_program(input: &str) -> Program {
+fn parse_program(input: &str) -> Program<'_> {
     let mut lexer = Lexer::new(input);
     let tokens = lexer.tokenize_with_locations();
     let mut parser = Parser::new(tokens);
