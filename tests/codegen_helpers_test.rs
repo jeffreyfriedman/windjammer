@@ -92,10 +92,10 @@ fn test_get_statement_location_let() {
         pattern: Pattern::Identifier("x".to_string()),
         mutable: false,
         type_: None,
-        value: Expression::Literal {
+        value: windjammer::test_utils::test_alloc_expr(Expression::Literal {
             value: windjammer::parser::Literal::Int(0),
             location: None,
-        },
+        }),
         else_block: None,
         location: location.clone(),
     };
