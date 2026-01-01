@@ -1,21 +1,13 @@
-# Cargo configuration for Windjammer
+# Cross-platform stack size configuration
 
-[build]
-# Use all available CPU cores for compilation
-jobs = -1
+# STACK SIZE: Arena allocation eliminates recursive drops, allowing much smaller stacks
+# 8MB is sufficient with arena allocation (was 64MB before)
+[target.x86_64-pc-windows-msvc]
+rustflags = ["-C", "link-arg=/STACK:8388608", "-C", "link-arg=/DEBUG"]
 
-[test]
-# Run tests single-threaded to avoid race conditions in LSP/MCP tests
-# These crates use tokio runtimes and shared state that can deadlock in parallel
-jobs = 1
+[target.x86_64-pc-windows-gnu]
+rustflags = ["-C", "link-arg=-Wl,--stack,8388608"]
 
-# Alternative: Use RUST_TEST_THREADS=1 environment variable
-# RUST_TEST_THREADS = "1"
-
-# Cross-compilation linker configuration
-[target.aarch64-unknown-linux-gnu]
-linker = "aarch64-linux-gnu-gcc"
-
-[target.x86_64-unknown-linux-gnu]
-linker = "gcc"
-
+# Set minimum stack size for worker threads (8MB with arena allocation)
+[env]
+RUST_MIN_STACK = "8388608"

@@ -1,0 +1,38 @@
+// Test file for doc comments inside impl blocks
+
+struct Point {
+    x: float,
+    y: float,
+}
+
+impl Point {
+    /// Creates a new Point at the origin.
+    fn zero() -> Point {
+        Point { x: 0.0, y: 0.0 }
+    }
+
+    /// Creates a new Point with the given coordinates.
+    fn new(x: float, y: float) -> Point {
+        Point { x: x, y: y }
+    }
+
+    /// Calculates the distance from the origin.
+    fn distance_from_origin(&self) -> float {
+        (self.x * self.x + self.y * self.y).sqrt()
+    }
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

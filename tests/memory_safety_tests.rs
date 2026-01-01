@@ -41,7 +41,7 @@ fn main() {
     let result = analyzer.analyze_program(&program);
     assert!(result.is_ok(), "Ownership analysis should succeed");
 
-    let (analyzed_functions, signatures) = result.unwrap();
+    let (analyzed_functions, signatures, _analyzed_trait_methods) = result.unwrap();
 
     // Generate Rust code
     let mut generator = CodeGenerator::new_for_module(signatures, CompilationTarget::Wasm);
@@ -76,7 +76,7 @@ fn main() {
     let result = analyzer.analyze_program(&program);
     assert!(result.is_ok(), "Reference analysis should succeed");
 
-    let (analyzed_functions, signatures) = result.unwrap();
+    let (analyzed_functions, signatures, _analyzed_trait_methods) = result.unwrap();
     let mut generator = CodeGenerator::new_for_module(signatures, CompilationTarget::Wasm);
     let rust_code = generator.generate_program(&program, &analyzed_functions);
 
@@ -108,7 +108,7 @@ fn main() {
     let result = analyzer.analyze_program(&program);
     assert!(result.is_ok(), "Mutable reference analysis should succeed");
 
-    let (analyzed_functions, signatures) = result.unwrap();
+    let (analyzed_functions, signatures, _analyzed_trait_methods) = result.unwrap();
     let mut generator = CodeGenerator::new_for_module(signatures, CompilationTarget::Wasm);
     let rust_code = generator.generate_program(&program, &analyzed_functions);
 

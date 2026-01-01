@@ -293,12 +293,14 @@ mod tests {
                 pattern: None,
                 type_: Type::Custom("int".to_string()),
                 ownership: windjammer::parser::OwnershipHint::Inferred,
+                is_mutable: false,
             },
             Parameter {
                 name: "y".to_string(),
                 pattern: None,
                 type_: Type::Custom("int".to_string()),
                 ownership: windjammer::parser::OwnershipHint::Inferred,
+                is_mutable: false,
             },
         ];
 

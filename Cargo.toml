@@ -4,19 +4,11 @@ members = [
     "crates/windjammer-lsp",
     "crates/windjammer-mcp",
     "crates/windjammer-runtime",
-    # Removed: crates/windjammer-c-ffi (moved to windjammer-game repo)
-    # Removed: crates/windjammer-editor-desktop (moved to windjammer-game repo)
-    # Removed: crates/windjammer-editor-web (moved to windjammer-game repo)
-    # Removed: crates/windjammer-game-editor (moved to windjammer-game repo)
-    # Removed: crates/windjammer-game-framework (moved to windjammer-game repo)
-    # Removed: crates/windjammer-ui (moved to windjammer-ui repo)
-    # Removed: crates/windjammer-ui-macro (moved to windjammer-ui repo)
-    # Removed: sdks/rust (moved to windjammer-game repo)
-    # Removed: tools/sdk-generator (no longer exists)
+    
 ]
 
 [workspace.package]
-version = "0.38.5"
+version = "0.39.0"
 edition = "2021"
 authors = ["Jeffrey Friedman <20387583+jeffreyfriedman@users.noreply.github.com>", "Windjammer Contributors"]
 license = "MIT OR Apache-2.0"
@@ -63,7 +55,7 @@ default = []
 
 [dependencies]
 # Parser combinator library
-nom = "7.1"
+nom = "7.1.3"  # Bumped to force CI cache invalidation
 # CLI argument parsing
 clap = { version = "4.5", features = ["derive"] }
 # Error handling
@@ -73,7 +65,7 @@ thiserror = "1.0"
 indoc = "2.0"
 # Pretty printing
 colored = "2.1"
-# JSON parsing for rustc diagnostics
+# JSON/TOML parsing for rustc diagnostics and windjammer.toml
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 # Syntax highlighting for error snippets
@@ -88,6 +80,8 @@ toml = "0.9"
 tempfile = "3.8"
 # Incremental compilation with Salsa
 salsa = "0.24"
+# Arena allocation for AST (eliminates Drop recursion, improves performance)
+typed-arena = "2.0"
 
 [dev-dependencies]
 # Benchmarking
@@ -127,3 +121,11 @@ harness = false
 name = "regression_benchmarks"
 harness = false
 
+[[bench]]
+name = "arena_performance"
+harness = false
+
+# Allow tarpaulin cfg for coverage testing
+# Tarpaulin sets this cfg when running, so we need to tell Rust it's expected
+[lints.rust]
+unexpected_cfgs = { level = "warn", check-cfg = ['cfg(tarpaulin)'] }

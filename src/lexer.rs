@@ -29,6 +29,8 @@ pub enum Token {
     Break,
     Continue,
     Use,
+    Mod,
+    Extern,
     Thread,
     Async,
     Await,
@@ -79,6 +81,11 @@ pub enum Token {
     Or,
     Not,
 
+    // Bitwise operators
+    Caret, // ^ (XOR)
+    Shl,   // <<
+    Shr,   // >>
+
     Assign,
     PlusAssign,    // +=
     MinusAssign,   // -=
@@ -118,6 +125,9 @@ pub enum Token {
     // Special
     Eof,
     Newline,
+
+    // Documentation
+    DocComment(String), // /// doc comment content
 }
 
 impl fmt::Display for Token {
@@ -146,6 +156,8 @@ impl std::hash::Hash for Token {
             Token::CharLiteral(c) => c.hash(state),
             Token::BoolLiteral(b) => b.hash(state),
             Token::Ident(s) => s.hash(state),
+            Token::DocComment(s) => s.hash(state),
+            Token::Decorator(s) => s.hash(state),
             _ => {} // Keywords and operators have no data
         }
     }
@@ -222,6 +234,80 @@ impl Lexer {
         let mut num_str = String::new();
         let mut is_float = false;
 
+        // Check for hex, binary, or octal prefix
+        if self.current_char == Some('0') {
+            if let Some(prefix) = self.peek(1) {
+                match prefix {
+                    'x' | 'X' => {
+                        // Hexadecimal: 0xFF, 0xDEADBEEF
+                        self.advance(); // skip '0'
+                        self.advance(); // skip 'x'
+
+                        let mut hex_str = String::new();
+                        while let Some(ch) = self.current_char {
+                            if ch.is_ascii_hexdigit() {
+                                hex_str.push(ch);
+                                self.advance();
+                            } else if ch == '_' {
+                                self.advance(); // skip underscore separator
+                            } else {
+                                break;
+                            }
+                        }
+
+                        let value = i64::from_str_radix(&hex_str, 16).expect("Invalid hex literal");
+                        return Token::IntLiteral(value);
+                    }
+                    'b' | 'B' => {
+                        // Binary: 0b1010, 0b1111_0000
+                        self.advance(); // skip '0'
+                        self.advance(); // skip 'b'
+
+                        let mut bin_str = String::new();
+                        while let Some(ch) = self.current_char {
+                            if ch == '0' || ch == '1' {
+                                bin_str.push(ch);
+                                self.advance();
+                            } else if ch == '_' {
+                                self.advance(); // skip underscore separator
+                            } else {
+                                break;
+                            }
+                        }
+
+                        let value =
+                            i64::from_str_radix(&bin_str, 2).expect("Invalid binary literal");
+                        return Token::IntLiteral(value);
+                    }
+                    'o' | 'O' => {
+                        // Octal: 0o755, 0o644
+                        self.advance(); // skip '0'
+                        self.advance(); // skip 'o'
+
+                        let mut oct_str = String::new();
+                        while let Some(ch) = self.current_char {
+                            if ('0'..='7').contains(&ch) {
+                                oct_str.push(ch);
+                                self.advance();
+                            } else if ch == '_' {
+                                self.advance(); // skip underscore separator
+                            } else {
+                                break;
+                            }
+                        }
+
+                        let value =
+                            i64::from_str_radix(&oct_str, 8).expect("Invalid octal literal");
+                        return Token::IntLiteral(value);
+                    }
+                    _ => {
+                        // Regular decimal number starting with 0
+                    }
+                }
+            }
+        }
+
+        // Regular decimal number (or float)
         while let Some(ch) = self.current_char {
             if ch.is_ascii_digit() {
                 num_str.push(ch);
@@ -432,6 +518,8 @@ impl Lexer {
             "break" => Token::Break,
             "continue" => Token::Continue,
             "use" => Token::Use,
+            "mod" => Token::Mod,
+            "extern" => Token::Extern,
             "thread" => Token::Thread,
             "async" => Token::Async,
             "await" => Token::Await,
@@ -467,7 +555,34 @@ impl Lexer {
                 self.advance();
                 Token::Newline
             }
+            Some('/')
+                if self.peek(1) == Some('/')
+                    && self.peek(2) == Some('/')
+                    && self.peek(3) != Some('/') =>
+            {
+                // Doc comment: /// text
+                self.advance(); // skip first /
+                self.advance(); // skip second /
+                self.advance(); // skip third /
+
+                // Skip one leading space if present
+                if self.current_char == Some(' ') {
+                    self.advance();
+                }
+
+                // Read content until end of line
+                let mut content = String::new();
+                while let Some(ch) = self.current_char {
+                    if ch == '\n' {
+                        break;
+                    }
+                    content.push(ch);
+                    self.advance();
+                }
+                Token::DocComment(content)
+            }
             Some('/') if self.peek(1) == Some('/') => {
+                // Regular comment: // text
                 self.skip_comment();
                 return self.next_token();
             }
@@ -551,6 +666,10 @@ impl Lexer {
                 self.advance();
                 Token::Percent
             }
+            Some('^') => {
+                self.advance();
+                Token::Caret
+            }
             Some('=') if self.peek(1) == Some('=') => {
                 self.advance();
                 self.advance();
@@ -579,6 +698,11 @@ impl Lexer {
                 self.advance();
                 Token::LeftArrow
             }
+            Some('<') if self.peek(1) == Some('<') => {
+                self.advance();
+                self.advance();
+                Token::Shl
+            }
             Some('<') if self.peek(1) == Some('=') => {
                 self.advance();
                 self.advance();
@@ -587,6 +711,11 @@ impl Lexer {
             Some('<') => {
                 self.advance();
                 Token::Lt
+            }
+            Some('>') if self.peek(1) == Some('>') => {
+                self.advance();
+                self.advance();
+                Token::Shr
             }
             Some('>') if self.peek(1) == Some('=') => {
                 self.advance();
@@ -775,5 +904,48 @@ mod tests {
         assert_eq!(tokens[0], Token::Thread);
         assert_eq!(tokens[1], Token::Async);
         assert_eq!(tokens[2], Token::Await);
+    }
+
+    #[test]
+    fn test_lexer_doc_comment() {
+        let mut lexer = Lexer::new("/// This is a doc comment\nfn foo() {}");
+        let tokens = lexer.tokenize();
+
+        assert_eq!(
+            tokens[0],
+            Token::DocComment("This is a doc comment".to_string())
+        );
+        assert_eq!(tokens[1], Token::Fn);
+        assert_eq!(tokens[2], Token::Ident("foo".to_string()));
+    }
+
+    #[test]
+    fn test_lexer_doc_comment_no_space() {
+        let mut lexer = Lexer::new("///No leading space\nfn bar() {}");
+        let tokens = lexer.tokenize();
+
+        assert_eq!(tokens[0], Token::DocComment("No leading space".to_string()));
+        assert_eq!(tokens[1], Token::Fn);
+    }
+
+    #[test]
+    fn test_lexer_regular_comment_not_doc() {
+        // Regular comments should be skipped, not captured as DocComment
+        let mut lexer = Lexer::new("// This is a regular comment\nfn baz() {}");
+        let tokens = lexer.tokenize();
+
+        // Regular comment is skipped, first token should be Fn
+        assert_eq!(tokens[0], Token::Fn);
+        assert_eq!(tokens[1], Token::Ident("baz".to_string()));
+    }
+
+    #[test]
+    fn test_lexer_four_slashes_not_doc() {
+        // //// should be treated as regular comment, not doc comment
+        let mut lexer = Lexer::new("//// This is not a doc comment\nfn qux() {}");
+        let tokens = lexer.tokenize();
+
+        // //// is regular comment, skipped
+        assert_eq!(tokens[0], Token::Fn);
     }
 }

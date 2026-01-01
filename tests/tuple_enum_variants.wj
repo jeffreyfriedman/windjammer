@@ -1,0 +1,133 @@
+// Test: Tuple Enum Variants
+// Tests that enum variants can have multiple fields
+
+// ============================================================================
+// TEST 1: Define tuple enum variants
+// ============================================================================
+
+enum Color {
+    Red,
+    Green,
+    Blue,
+    Rgb(i32, i32, i32),
+    Rgba(i32, i32, i32, i32),
+}
+
+enum Shape {
+    Circle(f32),                    // Single field
+    Rectangle(f32, f32),            // Two fields
+    Triangle(f32, f32, f32),        // Three fields
+}
+
+// ============================================================================
+// TEST 2: Match on tuple enum variants with destructuring
+// ============================================================================
+
+fn test_color_match(color: Color) -> i32 {
+    match color {
+        Color::Red => { return 1 }
+        Color::Green => { return 2 }
+        Color::Blue => { return 3 }
+        Color::Rgb(r, g, b) => { return r + g + b }
+        Color::Rgba(r, g, b, a) => { return r + g + b + a }
+    }
+}
+
+fn test_shape_match(shape: Shape) -> f32 {
+    match shape {
+        Shape::Circle(radius) => { return radius * 2.0 }
+        Shape::Rectangle(width, height) => { return width * height }
+        Shape::Triangle(a, b, c) => { return a + b + c }
+    }
+}
+
+// ============================================================================
+// TEST 3: Match with wildcards in tuple variants
+// ============================================================================
+
+fn test_wildcards(color: Color) -> i32 {
+    match color {
+        Color::Rgb(r, _, _) => { return r }
+        Color::Rgba(_, g, _, _) => { return g }
+        _ => { return 0 }
+    }
+}
+
+// ============================================================================
+// TEST 4: Construct tuple enum variants
+// ============================================================================
+
+fn test_construction() -> i32 {
+    let red = Color::Red
+    let rgb = Color::Rgb(255, 128, 64)
+    let rgba = Color::Rgba(255, 255, 255, 255)
+    
+    let circle = Shape::Circle(10.0)
+    let rect = Shape::Rectangle(5.0, 10.0)
+    
+    return test_color_match(rgb) + test_color_match(rgba)
+}
+
+// ============================================================================
+// TEST 5: Nested tuple variants
+// ============================================================================
+
+enum Result<T, E> {
+    Ok(T),
+    Err(E),
+}
+
+enum Option<T> {
+    Some(T),
+    None,
+}
+
+fn test_nested(result: Result<Option<i32>, i32>) -> i32 {
+    match result {
+        Result::Ok(Option::Some(value)) => { return value }
+        Result::Ok(Option::None) => { return 0 }
+        Result::Err(code) => { return code }
+    }
+}
+
+// ============================================================================
+// MAIN
+// ============================================================================
+
+fn main() {
+    // Test 1 & 2: Basic matching
+    let r1 = test_color_match(Color::Red)
+    let r2 = test_color_match(Color::Rgb(100, 50, 25))
+    let r3 = test_color_match(Color::Rgba(10, 20, 30, 40))
+    
+    let r4 = test_shape_match(Shape::Circle(5.0))
+    let r5 = test_shape_match(Shape::Rectangle(4.0, 6.0))
+    
+    // Test 3: Wildcards
+    let r6 = test_wildcards(Color::Rgb(99, 0, 0))
+    
+    // Test 4: Construction
+    let r7 = test_construction()
+    
+    // Test 5: Nested
+    let r8 = test_nested(Result::Ok(Option::Some(42)))
+    
+    println("All tuple enum variant tests passed!")
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

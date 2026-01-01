@@ -35,7 +35,7 @@ impl TreeShaker {
     }
 
     /// Shake the tree - remove unused code from the program
-    pub fn shake(&mut self, program: &Program) -> Program {
+    pub fn shake<'ast>(&mut self, program: &Program<'ast>) -> Program<'ast> {
         // Phase 1: Mark all used items starting from entry points
         self.mark_used(program);
 
@@ -51,7 +51,7 @@ impl TreeShaker {
     }
 
     /// Mark all used items starting from entry points
-    fn mark_used(&mut self, program: &Program) {
+    fn mark_used<'ast>(&mut self, program: &Program<'ast>) {
         // Start with entry points
         for entry in &self.entry_points.clone() {
             self.used_functions.insert(entry.clone());
@@ -79,7 +79,7 @@ impl TreeShaker {
     }
 
     /// Find all function calls in a block of statements
-    fn find_function_calls(&self, statements: &[Statement]) -> Vec<String> {
+    fn find_function_calls<'ast>(&self, statements: &[&'ast Statement<'ast>]) -> Vec<String> {
         let mut calls = Vec::new();
 
         for stmt in statements {
@@ -147,7 +147,7 @@ impl TreeShaker {
                 ..
             } => {
                 // Check if it's a direct function call
-                if let Expression::Identifier { name, .. } = function.as_ref() {
+                if let Expression::Identifier { name, .. } = function {
                     calls.push(name.clone());
                 }
                 calls.extend(self.find_calls_in_expression(function));
@@ -203,6 +203,7 @@ impl TreeShaker {
             Item::Trait { .. } => true,  // Keep all traits
             Item::Impl { .. } => true,   // Keep all impls
             Item::Use { .. } => true,    // Keep all imports (could be smarter here)
+            Item::Mod { .. } => true,    // Keep all modules
             Item::BoundAlias { .. } => true, // Keep all bound aliases
         }
     }
@@ -215,7 +216,7 @@ impl Default for TreeShaker {
 }
 
 /// Shake the tree - remove unused code
-pub fn shake_tree(program: &Program) -> Program {
+pub fn shake_tree<'ast>(program: &Program<'ast>) -> Program<'ast> {
     TreeShaker::new().shake(program)
 }
 
@@ -254,6 +255,7 @@ pub fn analyze_usage(program: &Program) -> UsageAnalysis {
 mod tests {
     use super::*;
     use crate::parser::FunctionDecl;
+    use crate::test_utils::{test_alloc_expr, test_alloc_stmt};
 
     #[test]
     fn test_tree_shaker_basic() {
@@ -263,24 +265,26 @@ mod tests {
                     decl: FunctionDecl {
                         name: "main".to_string(),
                         is_pub: false,
+                        is_extern: false,
                         type_params: vec![],
                         where_clause: vec![],
                         decorators: vec![],
                         is_async: false,
                         parameters: vec![],
                         return_type: None,
-                        body: vec![Statement::Expression {
-                            expr: Expression::Call {
-                                function: Box::new(Expression::Identifier {
+                        body: vec![test_alloc_stmt(Statement::Expression {
+                            expr: test_alloc_expr(Expression::Call {
+                                function: test_alloc_expr(Expression::Identifier {
                                     name: "used".to_string(),
                                     location: None,
                                 }),
                                 arguments: vec![],
                                 location: None,
-                            },
+                            }),
                             location: None,
-                        }],
+                        })],
                         parent_type: None,
+                        doc_comment: None,
                     },
                     location: None,
                 },
@@ -288,6 +292,7 @@ mod tests {
                     decl: FunctionDecl {
                         name: "used".to_string(),
                         is_pub: false,
+                        is_extern: false,
                         type_params: vec![],
                         where_clause: vec![],
                         decorators: vec![],
@@ -296,6 +301,7 @@ mod tests {
                         return_type: None,
                         body: vec![],
                         parent_type: None,
+                        doc_comment: None,
                     },
                     location: None,
                 },
@@ -303,6 +309,7 @@ mod tests {
                     decl: FunctionDecl {
                         name: "unused".to_string(),
                         is_pub: false,
+                        is_extern: false,
                         type_params: vec![],
                         where_clause: vec![],
                         decorators: vec![],
@@ -311,6 +318,7 @@ mod tests {
                         return_type: None,
                         body: vec![],
                         parent_type: None,
+                        doc_comment: None,
                     },
                     location: None,
                 },
@@ -332,6 +340,7 @@ mod tests {
                     decl: FunctionDecl {
                         name: "main".to_string(),
                         is_pub: false,
+                        is_extern: false,
                         type_params: vec![],
                         where_clause: vec![],
                         decorators: vec![],
@@ -340,6 +349,7 @@ mod tests {
                         return_type: None,
                         body: vec![],
                         parent_type: None,
+                        doc_comment: None,
                     },
                     location: None,
                 },
@@ -347,6 +357,7 @@ mod tests {
                     decl: FunctionDecl {
                         name: "unused".to_string(),
                         is_pub: false,
+                        is_extern: false,
                         type_params: vec![],
                         where_clause: vec![],
                         decorators: vec![],
@@ -355,6 +366,7 @@ mod tests {
                         return_type: None,
                         body: vec![],
                         parent_type: None,
+                        doc_comment: None,
                     },
                     location: None,
                 },

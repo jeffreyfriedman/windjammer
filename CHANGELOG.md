@@ -1,6 +1,101 @@
+## [0.39.0] - 2025-12-25
+### Added
+- **Automatic Ownership Inference**: Compiler automatically infers `&`, `&mut`, and owned parameters
+- **Automatic Trait Inference**: Compiler determines `self` vs `&self` vs `&mut self` for trait methods
+- **Multi-File Project Support**: Module system with `pub mod`, `use` statements, and cross-file compilation
+- **String Type Inference**: Auto-detect `&str` vs `String` and insert `.to_string()` when needed
+- **Nested Generics Parser**: Support for `HashMap<K, Vec<V>>` and `>>` token splitting
+- **Doc Comments**: `///` style comments for functions, structs, enums, fields, and variants
+- **Path Dependency Resolution**: Auto-detect local crates (e.g., windjammer-game-core)
+- **LSP Integration (PoC)**: Quick-fixes for missing `mut`, auto-add `&` and `&mut`
+
+### Fixed
+- **Operator Precedence**: Fixed binary operator parsing
+- **Array Indexing**: Corrected ownership in `vec[i]` expressions
+- **Parameter Mutability**: Fixed `&mut` inference for function parameters
+- **Trait Implementation Signatures**: Match trait signatures exactly in impl blocks
+- **Binary Op Ownership**: Preserve ownership in binary expressions
+- **Self Field Access**: `self.field` now correctly infers ownership
+- **Nested Field Mutation**: `obj.nested.field = x` works correctly
+- **Binary Ops in Assignments**: `x = a + b` ownership fixed
+- **Assignment Detection**: Distinguishes `=` from `==`
+- **Copy Type Handling**: Correct Copy trait detection and usage
+- **Vec Cloning**: Smart `Vec::clone()` insertion when needed
+- **String Literals**: Auto-`.to_string()` for `&str` → `String` coercion
+- **Method Call Chains**: Ownership through `a.b().c()` chains
+- **Tuple Returns**: Parse and generate tuple types correctly
+- **Generic Bounds**: Infer and generate trait bounds
+- **Return Type Inference**: Infer function return types when unambiguous
+
+### Performance
+- **Compile-time optimizations**: Const propagation, dead code elimination, inline expansion
+- **Runtime optimizations**: SmallVec for small collections, Cow for strings
+- **Memory optimizations**: Stack allocation, arena allocation, string capacity pre-sizing
+
+### Changed
+- **Version**: Bumped to 0.39.0 for significant new features
+- **Explicit Mutability**: Reverted auto-mut inference; `mut` keyword now required (Rust-style)
+- **Type Aliases**: Added `ProgramAnalysisResult` type alias to reduce type complexity
+
+## [0.38.8] - 2025-11-29
+### Fixed
+- Add Copy struct detection via @derive(Copy) decorator
+- Fix UI module tests to include is_extern field
+- Add debug output for Copy type investigation
+
 # Changelog
 
 All notable changes to Windjammer will be documented in this file.
+
+## [0.38.6] - 2025-11-28
+
+### Added
+- **Extern Function (`extern fn`) Support**: Full support for FFI function declarations.
+  - Syntax: `pub extern fn name(params) -> RetType;` (no body, semicolon-terminated)
+  - Works inside `mod` blocks: `mod ffi { pub extern fn ...; }`
+  - Generates idiomatic Rust `extern fn` declarations
+  - **Impact**: CRITICAL for FFI integration. Enables clean game engine architecture with Windjammer abstractions calling Rust/C FFI.
+
+- **Module (`mod`) Support**: Full support for module declarations and nested items.
+  - Syntax: `mod name { ... }` and `pub mod name { ... }`
+  - Can contain functions, structs, enums, traits, impl blocks, use statements, and nested modules
+  - Enables proper FFI organization: `mod ffi { ... }`
+  - **Impact**: Critical for code organization and FFI declarations. No more workarounds!
+
+- **Automatic `mut` Inference for Local Variables**: The `mut` keyword is now optional for local variables - the compiler automatically infers mutability from usage.
+  - Before: `let mut x = 5` (explicit mut required, like Rust)
+  - After: `let x = 5` (mut inferred if variable is reassigned, like Go)
+  - Aligns with modern languages (Go, Swift's `var`, Kotlin's `var`)
+  - **Impact**: MAJOR ergonomics improvement. Eliminates one of Rust's most criticized quirks. Users never need to write `mut` again!
+
+### Changed
+- **Semicolons Now Optional for Associated Types**: Associated type declarations no longer require semicolons, aligning with modern languages (Swift, Kotlin, Go).
+  - Before: `type Output = Vec2;` (semicolon required, like Rust)
+  - After: `type Output = Vec2` (semicolon optional, like Swift/Kotlin/Go)
+  - Applies to both trait declarations and impl blocks
+  - **Impact**: More consistent and ergonomic syntax. Windjammer no longer copies Rust's quirks unnecessarily.
+
+### Fixed
+- **Parameter Mutability Over-Inference** (CRITICAL): Fixed bug where explicit type annotations like `delta: f32` were incorrectly generated as `delta: &mut f32`.
+  - **Parser Fix**: Now correctly sets `OwnershipHint::Owned` for parameters with explicit non-reference types
+  - **Code Generator Fix**: Only adds `mut` to owned parameters if they're actually mutated (checked via analyzer)
+  - **Analyzer Fix**: Refined `is_stored()` to distinguish between direct assignment (`self.field = param`) and usage in calculations (`self.field = self.field * param`)
+  - **Impact**: Enables correct code generation for game loops and numeric parameters. Critical blocker for game engine development.
+
+- **Builder Pattern Ownership Inference**: Fixed critical bug where builder pattern methods were incorrectly inferred as `&self` instead of `self` (consuming).
+  - Now correctly detects when a method returns `Self` (either the `self` identifier or a struct literal of the same type)
+  - Builder pattern methods that return `Self` are now always inferred as consuming `self` (Owned), not borrowing
+  - Fixed parameter ownership inference to detect parameters used in struct literals passed as method arguments (e.g., `vec.push(Struct { field: param })`)
+
+- **Constructor Ownership Inference**: Fixed critical bug where functions without `self` parameter were incorrectly getting implicit `&self` added, breaking constructors like `new()`.
+  - Field access detection refined to avoid false positives with local variables
+
+- **Automatic Trait Derivation for Structs**: Compiler now automatically derives `Clone`, `Debug`, and `PartialEq` for simple structs (structs with only simple-typed fields).
+  - Extends the auto-derive feature from enums to structs
+  - Recognizes `String` (Rust type) as a simple type
+  - Zero syntax required - just works!
+  
+**Impact**: Builder patterns now work correctly without manual ownership annotations. This was blocking 60% of dogfooding panels from compiling.
 
 ## [0.38.5] - 2025-11-28
 

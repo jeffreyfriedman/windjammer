@@ -7,6 +7,7 @@
 //! - Preview-able: Show changes before applying
 //! - Undo-able: Via LSP workspace edits
 
+pub mod add_mut;
 pub mod ast_utils;
 pub mod batch;
 pub mod change_signature;
@@ -42,9 +43,19 @@ impl<'a> RefactoringEngine<'a> {
         &self,
         uri: &Url,
         range: Range,
-        _context: &CodeActionContext,
+        context: &CodeActionContext,
+        source: Option<&str>,
     ) -> Vec<CodeActionOrCommand> {
         let mut actions = Vec::new();
+
+        // Add `mut` quick-fix - check diagnostics for mutability errors
+        if let Some(source) = source {
+            for diagnostic in &context.diagnostics {
+                if let Some(action) = self.add_mut_action(uri, diagnostic, source) {
+                    actions.push(CodeActionOrCommand::CodeAction(action));
+                }
+            }
+        }
 
         // Extract Function - only show if selection is non-empty
         if range.start != range.end {
@@ -66,6 +77,49 @@ impl<'a> RefactoringEngine<'a> {
         }
 
         actions
+    }
+
+    /// Create "Add mut" quick-fix code action
+    fn add_mut_action(
+        &self,
+        uri: &Url,
+        diagnostic: &Diagnostic,
+        source: &str,
+    ) -> Option<CodeAction> {
+        // Check if this is a mutability error
+        let message = &diagnostic.message;
+        if !message.contains("immutable") && !message.contains("cannot assign") {
+            return None;
+        }
+
+        // Extract variable name from error message
+        // Format: "cannot assign twice to immutable variable `x`"
+        let var_name = if let Some(start) = message.find('`') {
+            if let Some(end) = message[start + 1..].find('`') {
+                message[start + 1..start + 1 + end].to_string()
+            } else {
+                return None;
+            }
+        } else {
+            return None;
+        };
+
+        let fix =
+            add_mut::AddMutFix::new(uri.clone(), var_name.clone(), diagnostic.range.start.line);
+
+        // Generate the workspace edit directly
+        let edit = fix.execute(source).ok()?;
+
+        Some(CodeAction {
+            title: format!("Add `mut` to `{}`", var_name),
+            kind: Some(CodeActionKind::QUICKFIX),
+            diagnostics: Some(vec![diagnostic.clone()]),
+            edit: Some(edit),
+            command: None,
+            is_preferred: Some(true),
+            disabled: None,
+            data: None,
+        })
     }
 
     /// Create "Extract Function" code action
@@ -175,6 +229,19 @@ impl<'a> RefactoringEngine<'a> {
         let mover =
             move_item::MoveItem::new(self.db, source_uri.clone(), target_uri.clone(), position);
         mover.execute(source_content, target_content)
+    }
+
+    /// Execute "Add mut" quick-fix (called via LSP command)
+    #[allow(dead_code)]
+    pub fn execute_add_mut(
+        &self,
+        uri: &Url,
+        variable_name: &str,
+        line: u32,
+        source: &str,
+    ) -> Result<WorkspaceEdit, String> {
+        let fix = add_mut::AddMutFix::new(uri.clone(), variable_name.to_string(), line);
+        fix.execute(source)
     }
 }
 

@@ -3,7 +3,7 @@ use windjammer::analyzer::{AnalyzedFunction, OwnershipMode};
 
 /// Inlay hints provider for displaying ownership inference
 pub struct InlayHintsProvider {
-    analyzed_functions: Vec<AnalyzedFunction>,
+    analyzed_functions: Vec<AnalyzedFunction<'static>>,
 }
 
 impl InlayHintsProvider {
@@ -14,7 +14,7 @@ impl InlayHintsProvider {
     }
 
     /// Update with new analyzed functions
-    pub fn update_analyzed_functions(&mut self, functions: Vec<AnalyzedFunction>) {
+    pub fn update_analyzed_functions(&mut self, functions: Vec<AnalyzedFunction<'static>>) {
         self.analyzed_functions = functions;
     }
 

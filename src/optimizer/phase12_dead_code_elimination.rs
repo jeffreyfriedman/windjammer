@@ -29,7 +29,10 @@ pub struct DeadCodeStats {
 }
 
 /// Perform dead code elimination on a program
-pub fn eliminate_dead_code(program: &Program) -> (Program, DeadCodeStats) {
+pub fn eliminate_dead_code<'ast>(
+    program: &Program<'ast>,
+    optimizer: &crate::optimizer::Optimizer,
+) -> (Program<'ast>, DeadCodeStats) {
     let mut stats = DeadCodeStats::default();
 
     // Step 1: Find all called functions (used to identify unused functions)
@@ -50,7 +53,8 @@ pub fn eliminate_dead_code(program: &Program) -> (Program, DeadCodeStats) {
                 }
 
                 // Process function body to remove dead code
-                let (new_body, func_stats) = eliminate_dead_code_in_statements(&func.body);
+                let (new_body, func_stats) =
+                    eliminate_dead_code_in_statements(&func.body, optimizer);
                 stats.unreachable_statements_removed += func_stats.unreachable_statements_removed;
                 stats.unused_variables_removed += func_stats.unused_variables_removed;
                 stats.empty_blocks_removed += func_stats.empty_blocks_removed;
@@ -58,6 +62,7 @@ pub fn eliminate_dead_code(program: &Program) -> (Program, DeadCodeStats) {
                 let new_func = FunctionDecl {
                     name: func.name.clone(),
                     is_pub: func.is_pub,
+                    is_extern: func.is_extern,
                     type_params: func.type_params.clone(),
                     where_clause: func.where_clause.clone(),
                     decorators: func.decorators.clone(),
@@ -66,6 +71,7 @@ pub fn eliminate_dead_code(program: &Program) -> (Program, DeadCodeStats) {
                     return_type: func.return_type.clone(),
                     body: new_body,
                     parent_type: func.parent_type.clone(),
+                    doc_comment: func.doc_comment.clone(),
                 };
                 new_items.push(Item::Function {
                     decl: new_func,
@@ -77,7 +83,7 @@ pub fn eliminate_dead_code(program: &Program) -> (Program, DeadCodeStats) {
                 location,
             } => {
                 // Process impl block methods
-                let new_impl = eliminate_dead_code_in_impl(impl_block, &mut stats);
+                let new_impl = eliminate_dead_code_in_impl(impl_block, &mut stats, optimizer);
                 new_items.push(Item::Impl {
                     block: new_impl,
                     location: location.clone(),
@@ -91,7 +97,7 @@ pub fn eliminate_dead_code(program: &Program) -> (Program, DeadCodeStats) {
                 location,
             } => {
                 // Process static initializers
-                let new_value = eliminate_dead_code_in_expression(value);
+                let new_value = eliminate_dead_code_in_expression(value, optimizer);
                 new_items.push(Item::Static {
                     name: name.clone(),
                     mutable: *mutable,
@@ -107,7 +113,7 @@ pub fn eliminate_dead_code(program: &Program) -> (Program, DeadCodeStats) {
                 location,
             } => {
                 // Process const initializers
-                let new_value = eliminate_dead_code_in_expression(value);
+                let new_value = eliminate_dead_code_in_expression(value, optimizer);
                 new_items.push(Item::Const {
                     name: name.clone(),
                     type_: type_.clone(),
@@ -155,14 +161,17 @@ fn find_called_functions(program: &Program) -> HashSet<String> {
 }
 
 /// Find function calls in a list of statements
-fn find_calls_in_statements(statements: &[Statement], called: &mut HashSet<String>) {
+fn find_calls_in_statements<'ast>(
+    statements: &[&'ast Statement<'ast>],
+    called: &mut HashSet<String>,
+) {
     for stmt in statements {
         find_calls_in_statement(stmt, called);
     }
 }
 
 /// Find function calls in a statement
-fn find_calls_in_statement(stmt: &Statement, called: &mut HashSet<String>) {
+fn find_calls_in_statement<'ast>(stmt: &'ast Statement<'ast>, called: &mut HashSet<String>) {
     match stmt {
         Statement::Expression { expr, .. } => {
             find_calls_in_expression(expr, called);
@@ -204,7 +213,7 @@ fn find_calls_in_statement(stmt: &Statement, called: &mut HashSet<String>) {
         Statement::Match { value, arms, .. } => {
             find_calls_in_expression(value, called);
             for arm in arms {
-                find_calls_in_expression(&arm.body, called);
+                find_calls_in_expression(arm.body, called);
                 if let Some(guard) = &arm.guard {
                     find_calls_in_expression(guard, called);
                 }
@@ -218,7 +227,7 @@ fn find_calls_in_statement(stmt: &Statement, called: &mut HashSet<String>) {
 }
 
 /// Find function calls in an expression
-fn find_calls_in_expression(expr: &Expression, called: &mut HashSet<String>) {
+fn find_calls_in_expression<'ast>(expr: &'ast Expression<'ast>, called: &mut HashSet<String>) {
     match expr {
         Expression::Call {
             function,
@@ -313,11 +322,15 @@ fn is_unused_function(func: &FunctionDecl, called_functions: &HashSet<String>) -
 }
 
 /// Eliminate dead code in impl block methods
-fn eliminate_dead_code_in_impl(impl_block: &ImplBlock, stats: &mut DeadCodeStats) -> ImplBlock {
+fn eliminate_dead_code_in_impl<'ast>(
+    impl_block: &ImplBlock<'ast>,
+    stats: &mut DeadCodeStats,
+    optimizer: &crate::optimizer::Optimizer,
+) -> ImplBlock<'ast> {
     let mut new_functions = Vec::new();
 
     for func in &impl_block.functions {
-        let (new_body, func_stats) = eliminate_dead_code_in_statements(&func.body);
+        let (new_body, func_stats) = eliminate_dead_code_in_statements(&func.body, optimizer);
         stats.unreachable_statements_removed += func_stats.unreachable_statements_removed;
         stats.unused_variables_removed += func_stats.unused_variables_removed;
         stats.empty_blocks_removed += func_stats.empty_blocks_removed;
@@ -325,6 +338,7 @@ fn eliminate_dead_code_in_impl(impl_block: &ImplBlock, stats: &mut DeadCodeStats
         let new_func = FunctionDecl {
             name: func.name.clone(),
             is_pub: func.is_pub,
+            is_extern: func.is_extern,
             type_params: func.type_params.clone(),
             where_clause: func.where_clause.clone(),
             decorators: func.decorators.clone(),
@@ -333,6 +347,7 @@ fn eliminate_dead_code_in_impl(impl_block: &ImplBlock, stats: &mut DeadCodeStats
             return_type: func.return_type.clone(),
             body: new_body,
             parent_type: func.parent_type.clone(),
+            doc_comment: func.doc_comment.clone(),
         };
         new_functions.push(new_func);
     }
@@ -350,7 +365,10 @@ fn eliminate_dead_code_in_impl(impl_block: &ImplBlock, stats: &mut DeadCodeStats
 }
 
 /// Eliminate dead code in a list of statements
-fn eliminate_dead_code_in_statements(statements: &[Statement]) -> (Vec<Statement>, DeadCodeStats) {
+fn eliminate_dead_code_in_statements<'ast>(
+    statements: &[&'ast Statement<'ast>],
+    optimizer: &crate::optimizer::Optimizer,
+) -> (Vec<&'ast Statement<'ast>>, DeadCodeStats) {
     let mut stats = DeadCodeStats::default();
     let mut new_statements = Vec::new();
     let mut found_terminator = false;
@@ -363,15 +381,15 @@ fn eliminate_dead_code_in_statements(statements: &[Statement]) -> (Vec<Statement
         }
 
         // Process the statement
-        let new_stmt = eliminate_dead_code_in_statement(stmt, &mut stats);
+        let new_stmt = eliminate_dead_code_in_statement(stmt, &mut stats, optimizer);
 
         // Check if this statement terminates control flow
-        if is_terminator(&new_stmt) {
+        if is_terminator(new_stmt) {
             found_terminator = true;
         }
 
         // Skip empty statements
-        if is_empty_statement(&new_stmt) {
+        if is_empty_statement(new_stmt) {
             stats.empty_blocks_removed += 1;
             continue;
         }
@@ -383,61 +401,83 @@ fn eliminate_dead_code_in_statements(statements: &[Statement]) -> (Vec<Statement
 }
 
 /// Eliminate dead code in a single statement
-fn eliminate_dead_code_in_statement(stmt: &Statement, stats: &mut DeadCodeStats) -> Statement {
+fn eliminate_dead_code_in_statement<'ast>(
+    stmt: &'ast Statement<'ast>,
+    stats: &mut DeadCodeStats,
+    optimizer: &crate::optimizer::Optimizer,
+) -> &'ast Statement<'ast> {
     match stmt {
-        Statement::Expression { expr, location } => Statement::Expression {
-            expr: eliminate_dead_code_in_expression(expr),
-            location: location.clone(),
-        },
+        Statement::Expression { expr, location } => optimizer.alloc_stmt(unsafe {
+            std::mem::transmute::<Statement<'_>, Statement<'_>>(Statement::Expression {
+                expr: eliminate_dead_code_in_expression(expr, optimizer),
+                location: location.clone(),
+            })
+        }),
         Statement::Return {
             value: Some(expr),
             location,
-        } => Statement::Return {
-            value: Some(eliminate_dead_code_in_expression(expr)),
-            location: location.clone(),
-        },
+        } => optimizer.alloc_stmt(unsafe {
+            std::mem::transmute::<Statement<'_>, Statement<'_>>(Statement::Return {
+                value: Some(eliminate_dead_code_in_expression(expr, optimizer)),
+                location: location.clone(),
+            })
+        }),
         Statement::Return {
             value: None,
             location,
-        } => Statement::Return {
+        } => optimizer.alloc_stmt(Statement::Return {
             value: None,
             location: location.clone(),
-        },
+        }),
         Statement::Let {
             pattern,
             mutable,
             type_,
             value,
+            else_block,
             location,
-        } => Statement::Let {
-            pattern: pattern.clone(),
-            mutable: *mutable,
-            type_: type_.clone(),
-            value: eliminate_dead_code_in_expression(value),
-            location: location.clone(),
-        },
+        } => optimizer.alloc_stmt(unsafe {
+            std::mem::transmute::<Statement<'_>, Statement<'_>>(Statement::Let {
+                pattern: pattern.clone(),
+                mutable: *mutable,
+                type_: type_.clone(),
+                value: eliminate_dead_code_in_expression(value, optimizer),
+                else_block: else_block.as_ref().map(|stmts| {
+                    stmts
+                        .iter()
+                        .map(|s| eliminate_dead_code_in_statement(s, stats, optimizer))
+                        .collect()
+                }),
+                location: location.clone(),
+            })
+        }),
         Statement::Assignment {
             target,
             value,
+            compound_op,
             location,
-        } => Statement::Assignment {
-            target: target.clone(),
-            value: eliminate_dead_code_in_expression(value),
-            location: location.clone(),
-        },
+        } => optimizer.alloc_stmt(unsafe {
+            std::mem::transmute::<Statement<'_>, Statement<'_>>(Statement::Assignment {
+                target,
+                value: eliminate_dead_code_in_expression(value, optimizer),
+                compound_op: *compound_op,
+                location: location.clone(),
+            })
+        }),
         Statement::If {
             condition,
             then_block,
             else_block,
             location,
         } => {
-            let new_condition = eliminate_dead_code_in_expression(condition);
-            let (new_then, then_stats) = eliminate_dead_code_in_statements(then_block);
+            let new_condition = eliminate_dead_code_in_expression(condition, optimizer);
+            let (new_then, then_stats) = eliminate_dead_code_in_statements(then_block, optimizer);
             stats.unreachable_statements_removed += then_stats.unreachable_statements_removed;
             stats.empty_blocks_removed += then_stats.empty_blocks_removed;
 
             let new_else = if let Some(else_stmts) = else_block {
-                let (new_else_stmts, else_stats) = eliminate_dead_code_in_statements(else_stmts);
+                let (new_else_stmts, else_stats) =
+                    eliminate_dead_code_in_statements(else_stmts, optimizer);
                 stats.unreachable_statements_removed += else_stats.unreachable_statements_removed;
                 stats.empty_blocks_removed += else_stats.empty_blocks_removed;
                 Some(new_else_stmts)
@@ -445,28 +485,32 @@ fn eliminate_dead_code_in_statement(stmt: &Statement, stats: &mut DeadCodeStats)
                 None
             };
 
-            Statement::If {
-                condition: new_condition,
-                then_block: new_then,
-                else_block: new_else,
-                location: location.clone(),
-            }
+            optimizer.alloc_stmt(unsafe {
+                std::mem::transmute::<Statement<'_>, Statement<'_>>(Statement::If {
+                    condition: new_condition,
+                    then_block: new_then,
+                    else_block: new_else,
+                    location: location.clone(),
+                })
+            })
         }
         Statement::While {
             condition,
             body,
             location,
         } => {
-            let new_condition = eliminate_dead_code_in_expression(condition);
-            let (new_body, body_stats) = eliminate_dead_code_in_statements(body);
+            let new_condition = eliminate_dead_code_in_expression(condition, optimizer);
+            let (new_body, body_stats) = eliminate_dead_code_in_statements(body, optimizer);
             stats.unreachable_statements_removed += body_stats.unreachable_statements_removed;
             stats.empty_blocks_removed += body_stats.empty_blocks_removed;
 
-            Statement::While {
-                condition: new_condition,
-                body: new_body,
-                location: location.clone(),
-            }
+            optimizer.alloc_stmt(unsafe {
+                std::mem::transmute::<Statement<'_>, Statement<'_>>(Statement::While {
+                    condition: new_condition,
+                    body: new_body,
+                    location: location.clone(),
+                })
+            })
         }
         Statement::For {
             pattern,
@@ -474,29 +518,34 @@ fn eliminate_dead_code_in_statement(stmt: &Statement, stats: &mut DeadCodeStats)
             body,
             location,
         } => {
-            let new_iterable = eliminate_dead_code_in_expression(iterable);
-            let (new_body, body_stats) = eliminate_dead_code_in_statements(body);
+            let new_iterable = eliminate_dead_code_in_expression(iterable, optimizer);
+            let (new_body, body_stats) = eliminate_dead_code_in_statements(body, optimizer);
             stats.unreachable_statements_removed += body_stats.unreachable_statements_removed;
             stats.empty_blocks_removed += body_stats.empty_blocks_removed;
 
-            Statement::For {
-                pattern: pattern.clone(),
-                iterable: new_iterable,
-                body: new_body,
-                location: location.clone(),
-            }
+            optimizer.alloc_stmt(unsafe {
+                std::mem::transmute::<Statement<'_>, Statement<'_>>(Statement::For {
+                    pattern: pattern.clone(),
+                    iterable: new_iterable,
+                    body: new_body,
+                    location: location.clone(),
+                })
+            })
         }
         Statement::Match {
             value,
             arms,
             location,
         } => {
-            let new_value = eliminate_dead_code_in_expression(value);
+            let new_value = eliminate_dead_code_in_expression(value, optimizer);
             let mut new_arms = Vec::new();
 
             for arm in arms {
-                let new_body = eliminate_dead_code_in_expression(&arm.body);
-                let new_guard = arm.guard.as_ref().map(eliminate_dead_code_in_expression);
+                let new_body = eliminate_dead_code_in_expression(arm.body, optimizer);
+                let new_guard = arm
+                    .guard
+                    .as_ref()
+                    .map(|g| eliminate_dead_code_in_expression(g, optimizer));
 
                 new_arms.push(MatchArm {
                     pattern: arm.pattern.clone(),
@@ -505,200 +554,256 @@ fn eliminate_dead_code_in_statement(stmt: &Statement, stats: &mut DeadCodeStats)
                 });
             }
 
-            Statement::Match {
-                value: new_value,
-                arms: new_arms,
-                location: location.clone(),
-            }
+            optimizer.alloc_stmt(unsafe {
+                std::mem::transmute::<Statement<'_>, Statement<'_>>(Statement::Match {
+                    value: new_value,
+                    arms: new_arms,
+                    location: location.clone(),
+                })
+            })
         }
         Statement::Const {
             name,
             type_,
             value,
             location,
-        } => Statement::Const {
-            name: name.clone(),
-            type_: type_.clone(),
-            value: eliminate_dead_code_in_expression(value),
-            location: location.clone(),
-        },
+        } => optimizer.alloc_stmt(unsafe {
+            std::mem::transmute::<Statement<'_>, Statement<'_>>(Statement::Const {
+                name: name.clone(),
+                type_: type_.clone(),
+                value: eliminate_dead_code_in_expression(value, optimizer),
+                location: location.clone(),
+            })
+        }),
         Statement::Static {
             name,
             mutable,
             type_,
             value,
             location,
-        } => Statement::Static {
-            name: name.clone(),
-            mutable: *mutable,
-            type_: type_.clone(),
-            value: eliminate_dead_code_in_expression(value),
-            location: location.clone(),
-        },
-        _ => stmt.clone(),
+        } => optimizer.alloc_stmt(unsafe {
+            std::mem::transmute::<Statement<'_>, Statement<'_>>(Statement::Static {
+                name: name.clone(),
+                mutable: *mutable,
+                type_: type_.clone(),
+                value: eliminate_dead_code_in_expression(value, optimizer),
+                location: location.clone(),
+            })
+        }),
+        _ => stmt,
     }
 }
 
 /// Eliminate dead code in an expression
-fn eliminate_dead_code_in_expression(expr: &Expression) -> Expression {
+fn eliminate_dead_code_in_expression<'a: 'ast, 'ast>(
+    expr: &'a Expression<'a>,
+    optimizer: &crate::optimizer::Optimizer,
+) -> &'ast Expression<'ast> {
     match expr {
         Expression::Call {
             function,
             arguments,
             location,
-        } => Expression::Call {
-            function: Box::new(eliminate_dead_code_in_expression(function)),
-            arguments: arguments
-                .iter()
-                .map(|(label, arg)| (label.clone(), eliminate_dead_code_in_expression(arg)))
-                .collect(),
-            location: location.clone(),
-        },
+        } => optimizer.alloc_expr(unsafe {
+            std::mem::transmute::<Expression<'_>, Expression<'_>>(Expression::Call {
+                function: eliminate_dead_code_in_expression(function, optimizer),
+                arguments: arguments
+                    .iter()
+                    .map(|(label, arg)| {
+                        (
+                            label.clone(),
+                            eliminate_dead_code_in_expression(arg, optimizer),
+                        )
+                    })
+                    .collect(),
+                location: location.clone(),
+            })
+        }),
         Expression::MethodCall {
             object,
             method,
             type_args,
             arguments,
             location,
-        } => Expression::MethodCall {
-            object: Box::new(eliminate_dead_code_in_expression(object)),
-            method: method.clone(),
-            type_args: type_args.clone(),
-            arguments: arguments
-                .iter()
-                .map(|(label, arg)| (label.clone(), eliminate_dead_code_in_expression(arg)))
-                .collect(),
-            location: location.clone(),
-        },
+        } => optimizer.alloc_expr(unsafe {
+            std::mem::transmute::<Expression<'_>, Expression<'_>>(Expression::MethodCall {
+                object: eliminate_dead_code_in_expression(object, optimizer),
+                method: method.clone(),
+                type_args: type_args.clone(),
+                arguments: arguments
+                    .iter()
+                    .map(|(label, arg)| {
+                        (
+                            label.clone(),
+                            eliminate_dead_code_in_expression(arg, optimizer),
+                        )
+                    })
+                    .collect(),
+                location: location.clone(),
+            })
+        }),
         Expression::Binary {
             left,
             op,
             right,
             location,
-        } => Expression::Binary {
-            left: Box::new(eliminate_dead_code_in_expression(left)),
-            op: *op,
-            right: Box::new(eliminate_dead_code_in_expression(right)),
-            location: location.clone(),
-        },
+        } => optimizer.alloc_expr(unsafe {
+            std::mem::transmute::<Expression<'_>, Expression<'_>>(Expression::Binary {
+                left: eliminate_dead_code_in_expression(left, optimizer),
+                op: *op,
+                right: eliminate_dead_code_in_expression(right, optimizer),
+                location: location.clone(),
+            })
+        }),
         Expression::Unary {
             op,
             operand,
             location,
-        } => Expression::Unary {
-            op: *op,
-            operand: Box::new(eliminate_dead_code_in_expression(operand)),
-            location: location.clone(),
-        },
-        Expression::Tuple { elements, location } => Expression::Tuple {
-            elements: elements
-                .iter()
-                .map(eliminate_dead_code_in_expression)
-                .collect(),
-            location: location.clone(),
-        },
+        } => optimizer.alloc_expr(unsafe {
+            std::mem::transmute::<Expression<'_>, Expression<'_>>(Expression::Unary {
+                op: *op,
+                operand: eliminate_dead_code_in_expression(operand, optimizer),
+                location: location.clone(),
+            })
+        }),
+        Expression::Tuple { elements, location } => optimizer.alloc_expr(unsafe {
+            std::mem::transmute::<Expression<'_>, Expression<'_>>(Expression::Tuple {
+                elements: elements
+                    .iter()
+                    .map(|e| eliminate_dead_code_in_expression(e, optimizer))
+                    .collect(),
+                location: location.clone(),
+            })
+        }),
         Expression::Index {
             object,
             index,
             location,
-        } => Expression::Index {
-            object: Box::new(eliminate_dead_code_in_expression(object)),
-            index: Box::new(eliminate_dead_code_in_expression(index)),
-            location: location.clone(),
-        },
+        } => optimizer.alloc_expr(unsafe {
+            std::mem::transmute::<Expression<'_>, Expression<'_>>(Expression::Index {
+                object: eliminate_dead_code_in_expression(object, optimizer),
+                index: eliminate_dead_code_in_expression(index, optimizer),
+                location: location.clone(),
+            })
+        }),
         Expression::FieldAccess {
             object,
             field,
             location,
-        } => Expression::FieldAccess {
-            object: Box::new(eliminate_dead_code_in_expression(object)),
-            field: field.clone(),
-            location: location.clone(),
-        },
+        } => optimizer.alloc_expr(unsafe {
+            std::mem::transmute::<Expression<'_>, Expression<'_>>(Expression::FieldAccess {
+                object: eliminate_dead_code_in_expression(object, optimizer),
+                field: field.clone(),
+                location: location.clone(),
+            })
+        }),
         Expression::Cast {
             expr,
             type_,
             location,
-        } => Expression::Cast {
-            expr: Box::new(eliminate_dead_code_in_expression(expr)),
-            type_: type_.clone(),
-            location: location.clone(),
-        },
+        } => optimizer.alloc_expr(unsafe {
+            std::mem::transmute::<Expression<'_>, Expression<'_>>(Expression::Cast {
+                expr: eliminate_dead_code_in_expression(expr, optimizer),
+                type_: type_.clone(),
+                location: location.clone(),
+            })
+        }),
         Expression::Block {
             statements,
             location,
         } => {
-            let (new_statements, _) = eliminate_dead_code_in_statements(statements);
-            Expression::Block {
-                statements: new_statements,
-                location: location.clone(),
-            }
+            let (new_statements, _) = eliminate_dead_code_in_statements(statements, optimizer);
+            optimizer.alloc_expr(unsafe {
+                std::mem::transmute::<Expression<'_>, Expression<'_>>(Expression::Block {
+                    statements: new_statements,
+                    location: location.clone(),
+                })
+            })
         }
         Expression::Closure {
             parameters,
             body,
             location,
-        } => Expression::Closure {
-            parameters: parameters.clone(),
-            body: Box::new(eliminate_dead_code_in_expression(body)),
-            location: location.clone(),
-        },
+        } => optimizer.alloc_expr(unsafe {
+            std::mem::transmute::<Expression<'_>, Expression<'_>>(Expression::Closure {
+                parameters: parameters.clone(),
+                body: eliminate_dead_code_in_expression(body, optimizer),
+                location: location.clone(),
+            })
+        }),
         Expression::StructLiteral {
             name,
             fields,
             location,
-        } => Expression::StructLiteral {
-            name: name.clone(),
-            fields: fields
-                .iter()
-                .map(|(k, v)| (k.clone(), eliminate_dead_code_in_expression(v)))
-                .collect(),
-            location: location.clone(),
-        },
+        } => optimizer.alloc_expr(unsafe {
+            std::mem::transmute::<Expression<'_>, Expression<'_>>(Expression::StructLiteral {
+                name: name.clone(),
+                fields: fields
+                    .iter()
+                    .map(|(k, v)| (k.clone(), eliminate_dead_code_in_expression(v, optimizer)))
+                    .collect(),
+                location: location.clone(),
+            })
+        }),
         Expression::Range {
             start,
             end,
             inclusive,
             location,
-        } => Expression::Range {
-            start: Box::new(eliminate_dead_code_in_expression(start)),
-            end: Box::new(eliminate_dead_code_in_expression(end)),
-            inclusive: *inclusive,
-            location: location.clone(),
-        },
+        } => optimizer.alloc_expr(unsafe {
+            std::mem::transmute::<Expression<'_>, Expression<'_>>(Expression::Range {
+                start: eliminate_dead_code_in_expression(start, optimizer),
+                end: eliminate_dead_code_in_expression(end, optimizer),
+                inclusive: *inclusive,
+                location: location.clone(),
+            })
+        }),
         Expression::ChannelSend {
             channel,
             value,
             location,
-        } => Expression::ChannelSend {
-            channel: Box::new(eliminate_dead_code_in_expression(channel)),
-            value: Box::new(eliminate_dead_code_in_expression(value)),
-            location: location.clone(),
-        },
-        Expression::ChannelRecv { channel, location } => Expression::ChannelRecv {
-            channel: Box::new(eliminate_dead_code_in_expression(channel)),
-            location: location.clone(),
-        },
-        Expression::Await { expr, location } => Expression::Await {
-            expr: Box::new(eliminate_dead_code_in_expression(expr)),
-            location: location.clone(),
-        },
-        Expression::TryOp { expr, location } => Expression::TryOp {
-            expr: Box::new(eliminate_dead_code_in_expression(expr)),
-            location: location.clone(),
-        },
+        } => optimizer.alloc_expr(unsafe {
+            std::mem::transmute::<Expression<'_>, Expression<'_>>(Expression::ChannelSend {
+                channel: eliminate_dead_code_in_expression(channel, optimizer),
+                value: eliminate_dead_code_in_expression(value, optimizer),
+                location: location.clone(),
+            })
+        }),
+        Expression::ChannelRecv { channel, location } => optimizer.alloc_expr(unsafe {
+            std::mem::transmute::<Expression<'_>, Expression<'_>>(Expression::ChannelRecv {
+                channel: eliminate_dead_code_in_expression(channel, optimizer),
+                location: location.clone(),
+            })
+        }),
+        Expression::Await { expr, location } => optimizer.alloc_expr(unsafe {
+            std::mem::transmute::<Expression<'_>, Expression<'_>>(Expression::Await {
+                expr: eliminate_dead_code_in_expression(expr, optimizer),
+                location: location.clone(),
+            })
+        }),
+        Expression::TryOp { expr, location } => optimizer.alloc_expr(unsafe {
+            std::mem::transmute::<Expression<'_>, Expression<'_>>(Expression::TryOp {
+                expr: eliminate_dead_code_in_expression(expr, optimizer),
+                location: location.clone(),
+            })
+        }),
         Expression::MacroInvocation {
             name,
             args,
             delimiter,
             location,
-        } => Expression::MacroInvocation {
-            name: name.clone(),
-            args: args.iter().map(eliminate_dead_code_in_expression).collect(),
-            delimiter: delimiter.clone(),
-            location: location.clone(),
-        },
-        _ => expr.clone(),
+        } => optimizer.alloc_expr(unsafe {
+            std::mem::transmute::<Expression<'_>, Expression<'_>>(Expression::MacroInvocation {
+                name: name.clone(),
+                args: args
+                    .iter()
+                    .map(|a| eliminate_dead_code_in_expression(a, optimizer))
+                    .collect(),
+                delimiter: *delimiter,
+                location: location.clone(),
+            })
+        }),
+        _ => expr,
     }
 }
 
@@ -728,10 +833,12 @@ fn is_empty_statement(stmt: &Statement) -> bool {
 mod tests {
     use super::*;
     use crate::parser::{Decorator, Literal, Pattern, Type};
+    use crate::test_utils::{test_alloc_expr, test_alloc_stmt};
 
-    fn make_pub_func(name: &str, body: Vec<Statement>) -> FunctionDecl {
+    fn make_pub_func<'ast>(name: &str, body: Vec<&'ast Statement<'ast>>) -> FunctionDecl<'ast> {
         FunctionDecl {
             is_pub: false,
+            is_extern: false,
             name: name.to_string(),
             type_params: vec![],
             where_clause: vec![],
@@ -744,12 +851,14 @@ mod tests {
             return_type: Some(Type::Custom("i32".to_string())),
             body,
             parent_type: None,
+            doc_comment: None,
         }
     }
 
-    fn make_private_func(name: &str, body: Vec<Statement>) -> FunctionDecl {
+    fn make_private_func<'ast>(name: &str, body: Vec<&'ast Statement<'ast>>) -> FunctionDecl<'ast> {
         FunctionDecl {
             is_pub: false,
+            is_extern: false,
             name: name.to_string(),
             type_params: vec![],
             where_clause: vec![],
@@ -759,6 +868,7 @@ mod tests {
             return_type: None,
             body,
             parent_type: None,
+            doc_comment: None,
         }
     }
 
@@ -769,32 +879,33 @@ mod tests {
                 decl: make_pub_func(
                     "test",
                     vec![
-                        Statement::Return {
-                            value: Some(Expression::Literal {
+                        test_alloc_stmt(Statement::Return {
+                            value: Some(test_alloc_expr(Expression::Literal {
                                 value: Literal::Int(42),
+                                location: None,
+                            })),
+                            location: None,
+                        }),
+                        test_alloc_stmt(Statement::Expression {
+                            expr: test_alloc_expr(Expression::MacroInvocation {
+                                name: "println".to_string(),
+                                args: vec![test_alloc_expr(Expression::Literal {
+                                    value: Literal::String("unreachable".to_string()),
+                                    location: None,
+                                })],
+                                delimiter: crate::parser::MacroDelimiter::Parens,
                                 location: None,
                             }),
                             location: None,
-                        },
-                        Statement::Expression {
-                            expr: Expression::MacroInvocation {
-                                name: "println".to_string(),
-                                args: vec![Expression::Literal {
-                                    value: Literal::String("unreachable".to_string()),
-                                    location: None,
-                                }],
-                                delimiter: crate::parser::MacroDelimiter::Parens,
-                                location: None,
-                            },
-                            location: None,
-                        },
+                        }),
                     ],
                 ),
                 location: None,
             }],
         };
 
-        let (optimized, stats) = eliminate_dead_code(&program);
+        let optimizer = crate::optimizer::Optimizer::with_defaults();
+        let (optimized, stats) = eliminate_dead_code(&program, &optimizer);
         assert_eq!(stats.unreachable_statements_removed, 1);
 
         let func = match &optimized.items[0] {
@@ -811,27 +922,28 @@ mod tests {
                 Item::Function {
                     decl: make_pub_func(
                         "main",
-                        vec![Statement::Return {
+                        vec![test_alloc_stmt(Statement::Return {
                             value: None,
                             location: None,
-                        }],
+                        })],
                     ),
                     location: None,
                 },
                 Item::Function {
                     decl: make_private_func(
                         "unused_helper",
-                        vec![Statement::Return {
+                        vec![test_alloc_stmt(Statement::Return {
                             value: None,
                             location: None,
-                        }],
+                        })],
                     ),
                     location: None,
                 },
             ],
         };
 
-        let (optimized, stats) = eliminate_dead_code(&program);
+        let optimizer = crate::optimizer::Optimizer::with_defaults();
+        let (optimized, stats) = eliminate_dead_code(&program, &optimizer);
         assert_eq!(stats.unused_functions_removed, 1);
         assert_eq!(optimized.items.len(), 1);
     }
@@ -843,34 +955,35 @@ mod tests {
                 Item::Function {
                     decl: make_pub_func(
                         "main",
-                        vec![Statement::Expression {
-                            expr: Expression::Call {
-                                function: Box::new(Expression::Identifier {
+                        vec![test_alloc_stmt(Statement::Expression {
+                            expr: test_alloc_expr(Expression::Call {
+                                function: test_alloc_expr(Expression::Identifier {
                                     name: "helper".to_string(),
                                     location: None,
                                 }),
                                 arguments: vec![],
                                 location: None,
-                            },
+                            }),
                             location: None,
-                        }],
+                        })],
                     ),
                     location: None,
                 },
                 Item::Function {
                     decl: make_private_func(
                         "helper",
-                        vec![Statement::Return {
+                        vec![test_alloc_stmt(Statement::Return {
                             value: None,
                             location: None,
-                        }],
+                        })],
                     ),
                     location: None,
                 },
             ],
         };
 
-        let (optimized, stats) = eliminate_dead_code(&program);
+        let optimizer = crate::optimizer::Optimizer::with_defaults();
+        let (optimized, stats) = eliminate_dead_code(&program, &optimizer);
         assert_eq!(stats.unused_functions_removed, 0);
         assert_eq!(optimized.items.len(), 2);
     }
@@ -882,26 +995,27 @@ mod tests {
                 decl: make_pub_func(
                     "test",
                     vec![
-                        Statement::If {
-                            condition: Expression::Literal {
+                        test_alloc_stmt(Statement::If {
+                            condition: test_alloc_expr(Expression::Literal {
                                 value: Literal::Bool(true),
                                 location: None,
-                            },
+                            }),
                             then_block: vec![],
                             else_block: Some(vec![]),
                             location: None,
-                        },
-                        Statement::Return {
+                        }),
+                        test_alloc_stmt(Statement::Return {
                             value: None,
                             location: None,
-                        },
+                        }),
                     ],
                 ),
                 location: None,
             }],
         };
 
-        let (optimized, stats) = eliminate_dead_code(&program);
+        let optimizer = crate::optimizer::Optimizer::with_defaults();
+        let (optimized, stats) = eliminate_dead_code(&program, &optimizer);
         assert_eq!(stats.empty_blocks_removed, 1);
 
         let func = match &optimized.items[0] {
@@ -917,51 +1031,52 @@ mod tests {
             items: vec![Item::Function {
                 decl: make_pub_func(
                     "test",
-                    vec![Statement::If {
-                        condition: Expression::Literal {
+                    vec![test_alloc_stmt(Statement::If {
+                        condition: test_alloc_expr(Expression::Literal {
                             value: Literal::Bool(true),
                             location: None,
-                        },
+                        }),
                         then_block: vec![
-                            Statement::Return {
-                                value: Some(Expression::Literal {
+                            test_alloc_stmt(Statement::Return {
+                                value: Some(test_alloc_expr(Expression::Literal {
                                     value: Literal::Int(1),
                                     location: None,
-                                }),
+                                })),
                                 location: None,
-                            },
-                            Statement::Expression {
-                                expr: Expression::Literal {
+                            }),
+                            test_alloc_stmt(Statement::Expression {
+                                expr: test_alloc_expr(Expression::Literal {
                                     value: Literal::Int(2),
                                     location: None,
-                                },
+                                }),
                                 location: None,
-                            },
+                            }),
                         ],
                         else_block: Some(vec![
-                            Statement::Return {
-                                value: Some(Expression::Literal {
+                            test_alloc_stmt(Statement::Return {
+                                value: Some(test_alloc_expr(Expression::Literal {
                                     value: Literal::Int(3),
+                                    location: None,
+                                })),
+                                location: None,
+                            }),
+                            test_alloc_stmt(Statement::Expression {
+                                expr: test_alloc_expr(Expression::Literal {
+                                    value: Literal::Int(4),
                                     location: None,
                                 }),
                                 location: None,
-                            },
-                            Statement::Expression {
-                                expr: Expression::Literal {
-                                    value: Literal::Int(4),
-                                    location: None,
-                                },
-                                location: None,
-                            },
+                            }),
                         ]),
                         location: None,
-                    }],
+                    })],
                 ),
                 location: None,
             }],
         };
 
-        let (optimized, stats) = eliminate_dead_code(&program);
+        let optimizer = crate::optimizer::Optimizer::with_defaults();
+        let (optimized, stats) = eliminate_dead_code(&program, &optimizer);
         assert_eq!(stats.unreachable_statements_removed, 2);
 
         let func = match &optimized.items[0] {
@@ -972,7 +1087,7 @@ mod tests {
             then_block,
             else_block,
             ..
-        } = &func.body[0]
+        } = func.body[0]
         {
             assert_eq!(then_block.len(), 1);
             assert_eq!(else_block.as_ref().unwrap().len(), 1);
@@ -988,30 +1103,32 @@ mod tests {
                 decl: make_pub_func(
                     "test",
                     vec![
-                        Statement::Let {
+                        test_alloc_stmt(Statement::Let {
                             pattern: Pattern::Identifier("x".to_string()),
                             mutable: false,
                             type_: None,
-                            value: Expression::Literal {
+                            value: test_alloc_expr(Expression::Literal {
                                 value: Literal::Int(42),
                                 location: None,
-                            },
+                            }),
+                            else_block: None,
                             location: None,
-                        },
-                        Statement::Return {
-                            value: Some(Expression::Identifier {
+                        }),
+                        test_alloc_stmt(Statement::Return {
+                            value: Some(test_alloc_expr(Expression::Identifier {
                                 name: "x".to_string(),
                                 location: None,
-                            }),
+                            })),
                             location: None,
-                        },
+                        }),
                     ],
                 ),
                 location: None,
             }],
         };
 
-        let (_, stats) = eliminate_dead_code(&program);
+        let optimizer = crate::optimizer::Optimizer::with_defaults();
+        let (_, stats) = eliminate_dead_code(&program, &optimizer);
         assert_eq!(stats.unreachable_statements_removed, 0);
         assert_eq!(stats.unused_functions_removed, 0);
         assert_eq!(stats.empty_blocks_removed, 0);

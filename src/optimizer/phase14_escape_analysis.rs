@@ -79,14 +79,17 @@ impl EscapeAnalysisStats {
 }
 
 /// Perform escape analysis optimization on a program
-pub fn optimize_escape_analysis(program: &Program) -> (Program, EscapeAnalysisStats) {
+pub fn optimize_escape_analysis<'ast>(
+    program: &Program<'ast>,
+    optimizer: &crate::optimizer::Optimizer,
+) -> (Program<'ast>, EscapeAnalysisStats) {
     let mut stats = EscapeAnalysisStats::default();
     let mut new_items = Vec::new();
 
     for item in &program.items {
         let new_item = match item {
             Item::Function { decl: func, .. } => {
-                let (new_func, func_stats) = optimize_function_escape_analysis(func);
+                let (new_func, func_stats) = optimize_function_escape_analysis(func, optimizer);
                 stats.add(&func_stats);
                 Item::Function {
                     decl: new_func,
@@ -96,7 +99,7 @@ pub fn optimize_escape_analysis(program: &Program) -> (Program, EscapeAnalysisSt
             Item::Impl {
                 block: impl_block, ..
             } => {
-                let (new_impl, impl_stats) = optimize_impl_escape_analysis(impl_block);
+                let (new_impl, impl_stats) = optimize_impl_escape_analysis(impl_block, optimizer);
                 stats.add(&impl_stats);
                 Item::Impl {
                     block: new_impl,
@@ -112,14 +115,18 @@ pub fn optimize_escape_analysis(program: &Program) -> (Program, EscapeAnalysisSt
 }
 
 /// Optimize a function with escape analysis
-fn optimize_function_escape_analysis(func: &FunctionDecl) -> (FunctionDecl, EscapeAnalysisStats) {
+fn optimize_function_escape_analysis<'ast>(
+    func: &FunctionDecl<'ast>,
+    optimizer: &crate::optimizer::Optimizer,
+) -> (FunctionDecl<'ast>, EscapeAnalysisStats) {
     let mut stats = EscapeAnalysisStats::default();
 
     // Analyze which variables escape
     let escape_info = analyze_escapes(&func.body, &func.parameters);
 
     // Transform statements based on escape info
-    let new_body = optimize_statements_escape_analysis(&func.body, &escape_info, &mut stats);
+    let new_body =
+        optimize_statements_escape_analysis(&func.body, &escape_info, &mut stats, optimizer);
 
     (
         FunctionDecl {
@@ -131,12 +138,15 @@ fn optimize_function_escape_analysis(func: &FunctionDecl) -> (FunctionDecl, Esca
 }
 
 /// Optimize an impl block with escape analysis
-fn optimize_impl_escape_analysis(impl_block: &ImplBlock) -> (ImplBlock, EscapeAnalysisStats) {
+fn optimize_impl_escape_analysis<'ast>(
+    impl_block: &ImplBlock<'ast>,
+    optimizer: &crate::optimizer::Optimizer,
+) -> (ImplBlock<'ast>, EscapeAnalysisStats) {
     let mut stats = EscapeAnalysisStats::default();
     let mut new_functions = Vec::new();
 
     for func in &impl_block.functions {
-        let (new_func, func_stats) = optimize_function_escape_analysis(func);
+        let (new_func, func_stats) = optimize_function_escape_analysis(func, optimizer);
         stats.add(&func_stats);
         new_functions.push(new_func);
     }
@@ -163,7 +173,10 @@ struct EscapeInfo {
 }
 
 /// Analyze which variables escape in a function
-fn analyze_escapes(body: &[Statement], parameters: &[Parameter]) -> EscapeInfo {
+fn analyze_escapes<'ast>(
+    body: &[&'ast Statement<'ast>],
+    parameters: &[Parameter<'ast>],
+) -> EscapeInfo {
     let mut info = EscapeInfo {
         escaped_vars: HashSet::new(),
         returned_vars: HashSet::new(),
@@ -189,7 +202,7 @@ fn analyze_escapes(body: &[Statement], parameters: &[Parameter]) -> EscapeInfo {
 }
 
 /// Analyze statements to find escaping variables
-fn analyze_statements_for_escapes(stmts: &[Statement], info: &mut EscapeInfo) {
+fn analyze_statements_for_escapes<'ast>(stmts: &[&'ast Statement<'ast>], info: &mut EscapeInfo) {
     for stmt in stmts {
         match stmt {
             Statement::Return {
@@ -224,7 +237,7 @@ fn analyze_statements_for_escapes(stmts: &[Statement], info: &mut EscapeInfo) {
             }
             Statement::Match { arms, .. } => {
                 for arm in arms {
-                    collect_variables_in_expression(&arm.body, &mut info.returned_vars);
+                    collect_variables_in_expression(arm.body, &mut info.returned_vars);
                 }
             }
             _ => {}
@@ -233,7 +246,7 @@ fn analyze_statements_for_escapes(stmts: &[Statement], info: &mut EscapeInfo) {
 }
 
 /// Collect all variable identifiers in an expression
-fn collect_variables_in_expression(expr: &Expression, vars: &mut HashSet<String>) {
+fn collect_variables_in_expression<'ast>(expr: &'ast Expression<'ast>, vars: &mut HashSet<String>) {
     match expr {
         Expression::Identifier { name, .. } => {
             vars.insert(name.clone());
@@ -274,29 +287,32 @@ fn collect_variables_in_expression(expr: &Expression, vars: &mut HashSet<String>
 
 /// Optimize statements with escape analysis
 #[allow(clippy::only_used_in_recursion)]
-fn optimize_statements_escape_analysis(
-    stmts: &[Statement],
+fn optimize_statements_escape_analysis<'ast>(
+    stmts: &[&'ast Statement<'ast>],
     escape_info: &EscapeInfo,
     stats: &mut EscapeAnalysisStats,
-) -> Vec<Statement> {
+    optimizer: &crate::optimizer::Optimizer,
+) -> Vec<&'ast Statement<'ast>> {
     stmts
         .iter()
-        .map(|stmt| optimize_statement_escape_analysis(stmt, escape_info, stats))
+        .map(|stmt| optimize_statement_escape_analysis(stmt, escape_info, stats, optimizer))
         .collect()
 }
 
 /// Optimize a single statement with escape analysis
-fn optimize_statement_escape_analysis(
-    stmt: &Statement,
+fn optimize_statement_escape_analysis<'a, 'ast>(
+    stmt: &'a Statement<'a>,
     escape_info: &EscapeInfo,
     stats: &mut EscapeAnalysisStats,
-) -> Statement {
+    optimizer: &crate::optimizer::Optimizer,
+) -> &'ast Statement<'ast> {
     match stmt {
         Statement::Let {
             pattern,
             mutable,
             type_,
             value,
+            else_block,
             ..
         } => {
             // Check if this is a vec! macro that doesn't escape (only for simple identifiers)
@@ -306,114 +322,158 @@ fn optimize_statement_escape_analysis(
             };
             if let Some(name) = var_name {
                 if !escape_info.escaped_vars.contains(name) {
-                    if let Some(new_value) = try_optimize_vec_to_smallvec(value) {
+                    if let Some(new_value) = try_optimize_vec_to_smallvec(value, optimizer) {
                         stats.vectors_stack_allocated += 1;
                         stats.total_optimizations += 1;
-                        return Statement::Let {
-                            pattern: Pattern::Identifier(name.to_string()),
-                            mutable: *mutable,
-                            type_: type_.clone(),
-                            value: new_value,
-                            location: None,
-                        };
+                        return optimizer.alloc_stmt(unsafe {
+                            std::mem::transmute::<Statement<'_>, Statement<'_>>(Statement::Let {
+                                pattern: Pattern::Identifier(name.to_string()),
+                                mutable: *mutable,
+                                type_: type_.clone(),
+                                value: new_value,
+                                else_block: else_block.clone(),
+                                location: None,
+                            })
+                        });
                     }
                 }
             }
 
-            Statement::Let {
-                pattern: pattern.clone(),
-                mutable: *mutable,
-                type_: type_.clone(),
-                value: optimize_expression_escape_analysis(value, escape_info, stats),
-                location: None,
-            }
+            optimizer.alloc_stmt(unsafe {
+                std::mem::transmute::<Statement<'_>, Statement<'_>>(Statement::Let {
+                    pattern: pattern.clone(),
+                    mutable: *mutable,
+                    type_: type_.clone(),
+                    value: optimize_expression_escape_analysis(
+                        value,
+                        escape_info,
+                        stats,
+                        optimizer,
+                    ),
+                    else_block: else_block.as_ref().map(|stmts| {
+                        optimize_statements_escape_analysis(stmts, escape_info, stats, optimizer)
+                    }),
+                    location: None,
+                })
+            })
         }
         Statement::If {
             condition,
             then_block,
             else_block,
             ..
-        } => Statement::If {
-            condition: optimize_expression_escape_analysis(condition, escape_info, stats),
-            then_block: optimize_statements_escape_analysis(then_block, escape_info, stats),
-            else_block: else_block
-                .as_ref()
-                .map(|stmts| optimize_statements_escape_analysis(stmts, escape_info, stats)),
-            location: None,
-        },
+        } => optimizer.alloc_stmt(unsafe {
+            std::mem::transmute::<Statement<'_>, Statement<'_>>(Statement::If {
+                condition: optimize_expression_escape_analysis(
+                    condition,
+                    escape_info,
+                    stats,
+                    optimizer,
+                ),
+                then_block: optimize_statements_escape_analysis(
+                    then_block,
+                    escape_info,
+                    stats,
+                    optimizer,
+                ),
+                else_block: else_block.as_ref().map(|stmts| {
+                    optimize_statements_escape_analysis(stmts, escape_info, stats, optimizer)
+                }),
+                location: None,
+            })
+        }),
         Statement::While {
             condition, body, ..
-        } => Statement::While {
-            condition: optimize_expression_escape_analysis(condition, escape_info, stats),
-            body: optimize_statements_escape_analysis(body, escape_info, stats),
-            location: None,
-        },
+        } => optimizer.alloc_stmt(unsafe {
+            std::mem::transmute::<Statement<'_>, Statement<'_>>(Statement::While {
+                condition: optimize_expression_escape_analysis(
+                    condition,
+                    escape_info,
+                    stats,
+                    optimizer,
+                ),
+                body: optimize_statements_escape_analysis(body, escape_info, stats, optimizer),
+                location: None,
+            })
+        }),
         Statement::For {
             pattern,
             iterable,
             body,
             ..
-        } => Statement::For {
-            pattern: pattern.clone(),
-            iterable: optimize_expression_escape_analysis(iterable, escape_info, stats),
-            body: optimize_statements_escape_analysis(body, escape_info, stats),
-            location: None,
-        },
-        _ => stmt.clone(),
+        } => optimizer.alloc_stmt(unsafe {
+            std::mem::transmute::<Statement<'_>, Statement<'_>>(Statement::For {
+                pattern: pattern.clone(),
+                iterable: optimize_expression_escape_analysis(
+                    iterable,
+                    escape_info,
+                    stats,
+                    optimizer,
+                ),
+                body: optimize_statements_escape_analysis(body, escape_info, stats, optimizer),
+                location: None,
+            })
+        }),
+        _ => unsafe { std::mem::transmute::<&Statement<'_>, &Statement<'_>>(stmt) }, // Safe: just changing lifetime annotation
     }
 }
 
 /// Optimize an expression with escape analysis
 #[allow(clippy::only_used_in_recursion)]
-fn optimize_expression_escape_analysis(
-    expr: &Expression,
+fn optimize_expression_escape_analysis<'a: 'ast, 'ast>(
+    expr: &'a Expression<'a>,
     escape_info: &EscapeInfo,
     stats: &mut EscapeAnalysisStats,
-) -> Expression {
+    optimizer: &crate::optimizer::Optimizer,
+) -> &'ast Expression<'ast> {
     match expr {
         Expression::Binary {
             left, op, right, ..
-        } => Expression::Binary {
-            left: Box::new(optimize_expression_escape_analysis(
-                left,
-                escape_info,
-                stats,
-            )),
-            op: *op,
-            right: Box::new(optimize_expression_escape_analysis(
-                right,
-                escape_info,
-                stats,
-            )),
-            location: None,
-        },
-        Expression::Unary { op, operand, .. } => Expression::Unary {
-            op: *op,
-            operand: Box::new(optimize_expression_escape_analysis(
-                operand,
-                escape_info,
-                stats,
-            )),
-            location: None,
-        },
-        _ => expr.clone(),
+        } => optimizer.alloc_expr(unsafe {
+            std::mem::transmute::<Expression<'_>, Expression<'_>>(Expression::Binary {
+                left: optimize_expression_escape_analysis(left, escape_info, stats, optimizer),
+                op: *op,
+                right: optimize_expression_escape_analysis(right, escape_info, stats, optimizer),
+                location: None,
+            })
+        }),
+        Expression::Unary { op, operand, .. } => optimizer.alloc_expr(unsafe {
+            std::mem::transmute::<Expression<'_>, Expression<'_>>(Expression::Unary {
+                op: *op,
+                operand: optimize_expression_escape_analysis(
+                    operand,
+                    escape_info,
+                    stats,
+                    optimizer,
+                ),
+                location: None,
+            })
+        }),
+        _ => expr,
     }
 }
 
 /// Try to optimize vec! macro to SmallVec
-fn try_optimize_vec_to_smallvec(expr: &Expression) -> Option<Expression> {
+fn try_optimize_vec_to_smallvec<'ast>(
+    expr: &'ast Expression<'ast>,
+    optimizer: &crate::optimizer::Optimizer,
+) -> Option<&'ast Expression<'ast>> {
     match expr {
         Expression::MacroInvocation { name, args, .. } if name == "vec" => {
             // Only optimize if the vec has a small number of elements (< 8)
             if args.len() < 8 && !args.is_empty() {
                 // Transform vec![...] to smallvec![...]
                 // This is a marker that codegen will handle
-                return Some(Expression::MacroInvocation {
-                    name: "smallvec".to_string(),
-                    args: args.clone(),
-                    delimiter: MacroDelimiter::Brackets,
-                    location: None,
-                });
+                return Some(optimizer.alloc_expr(unsafe {
+                    std::mem::transmute::<Expression<'_>, Expression<'_>>(
+                        Expression::MacroInvocation {
+                            name: "smallvec".to_string(),
+                            args: args.clone(),
+                            delimiter: MacroDelimiter::Brackets,
+                            location: None,
+                        },
+                    )
+                }));
             }
         }
         _ => {}
@@ -424,6 +484,7 @@ fn try_optimize_vec_to_smallvec(expr: &Expression) -> Option<Expression> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::test_utils::*;
 
     #[test]
     fn test_escape_analysis_basic() {
@@ -432,56 +493,59 @@ mod tests {
             items: vec![Item::Function {
                 decl: FunctionDecl {
                     is_pub: false,
+                    is_extern: false,
                     name: "test".to_string(),
                     parameters: vec![],
                     return_type: None,
-                    body: vec![Statement::Let {
+                    body: vec![test_alloc_stmt(Statement::Let {
                         pattern: Pattern::Identifier("temp".to_string()),
                         mutable: false,
                         type_: None,
-                        value: Expression::MacroInvocation {
+                        value: test_alloc_expr(Expression::MacroInvocation {
                             name: "vec".to_string(),
                             args: vec![
-                                Expression::Literal {
+                                test_alloc_expr(Expression::Literal {
                                     value: Literal::Int(1),
                                     location: None,
-                                },
-                                Expression::Literal {
+                                }),
+                                test_alloc_expr(Expression::Literal {
                                     value: Literal::Int(2),
                                     location: None,
-                                },
-                                Expression::Literal {
+                                }),
+                                test_alloc_expr(Expression::Literal {
                                     value: Literal::Int(3),
                                     location: None,
-                                },
+                                }),
                             ],
                             delimiter: MacroDelimiter::Brackets,
                             location: None,
-                        },
+                        }),
+                        else_block: None,
                         location: None,
-                    }],
+                    })],
                     type_params: vec![],
                     where_clause: vec![],
                     is_async: false,
                     decorators: vec![],
                     parent_type: None,
+                    doc_comment: None,
                 },
                 location: None,
             }],
         };
 
-        let (optimized, stats) = optimize_escape_analysis(&program);
+        let optimizer = crate::optimizer::Optimizer::with_defaults();
+        let (optimized, stats) = optimize_escape_analysis(&program, &optimizer);
         assert_eq!(stats.vectors_stack_allocated, 1);
         assert_eq!(stats.total_optimizations, 1);
 
         // Verify the optimization was applied
+        #[allow(clippy::collapsible_match)]
         if let Item::Function { decl: func, .. } = &optimized.items[0] {
-            if let Statement::Let {
-                value: Expression::MacroInvocation { name, .. },
-                ..
-            } = &func.body[0]
-            {
-                assert_eq!(name, "smallvec");
+            if let Statement::Let { value, .. } = func.body[0] {
+                if let Expression::MacroInvocation { name, .. } = value {
+                    assert_eq!(name, "smallvec");
+                }
             }
         }
     }
@@ -493,44 +557,48 @@ mod tests {
             items: vec![Item::Function {
                 decl: FunctionDecl {
                     is_pub: false,
+                    is_extern: false,
                     name: "test".to_string(),
                     parameters: vec![],
                     return_type: None,
                     body: vec![
-                        Statement::Let {
+                        test_alloc_stmt(Statement::Let {
                             pattern: Pattern::Identifier("temp".to_string()),
                             mutable: false,
                             type_: None,
-                            value: Expression::MacroInvocation {
+                            value: test_alloc_expr(Expression::MacroInvocation {
                                 name: "vec".to_string(),
-                                args: vec![Expression::Literal {
+                                args: vec![test_alloc_expr(Expression::Literal {
                                     value: Literal::Int(1),
                                     location: None,
-                                }],
+                                })],
                                 delimiter: MacroDelimiter::Brackets,
                                 location: None,
-                            },
+                            }),
+                            else_block: None,
                             location: None,
-                        },
-                        Statement::Return {
-                            value: Some(Expression::Identifier {
+                        }),
+                        test_alloc_stmt(Statement::Return {
+                            value: Some(test_alloc_expr(Expression::Identifier {
                                 name: "temp".to_string(),
                                 location: None,
-                            }),
+                            })),
                             location: None,
-                        },
+                        }),
                     ],
                     type_params: vec![],
                     where_clause: vec![],
                     is_async: false,
                     decorators: vec![],
                     parent_type: None,
+                    doc_comment: None,
                 },
                 location: None,
             }],
         };
 
-        let (_, stats) = optimize_escape_analysis(&program);
+        let optimizer = crate::optimizer::Optimizer::with_defaults();
+        let (_, stats) = optimize_escape_analysis(&program, &optimizer);
         // Should NOT optimize because temp is returned
         assert_eq!(stats.vectors_stack_allocated, 0);
     }

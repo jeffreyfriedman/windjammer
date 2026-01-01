@@ -102,12 +102,12 @@ impl Parser {
                     break;
                 }
             }
-            self.expect(Token::Gt)?; // Consume >
+            self.expect_gt_or_split_shr()?; // Consume > (handles >> for nested generics)
         }
         Ok(type_params)
     }
 
-    /// Parse where clause: where T: Display, U: Clone + Send
+    /// Parse where clause: where T: Display, U: Clone + Send, P::Output: Debug
     pub fn parse_where_clause(&mut self) -> Result<Vec<(String, Vec<String>)>, String> {
         let mut where_clause = Vec::new();
         if self.current_token() == &Token::Where {
@@ -115,10 +115,22 @@ impl Parser {
             while self.current_token() != &Token::LBrace
                 && self.current_token() != &Token::Semicolon
             {
-                // Parse type parameter name
+                // Parse type parameter name (can be T or P::Output for associated types)
                 let type_param = if let Token::Ident(n) = self.current_token() {
-                    let name = n.clone();
+                    let mut name = n.clone();
                     self.advance();
+
+                    // Check for associated type syntax: P::Output
+                    while self.current_token() == &Token::ColonColon {
+                        self.advance(); // Consume ::
+                        if let Token::Ident(assoc_name) = self.current_token() {
+                            name.push_str("::");
+                            name.push_str(assoc_name);
+                            self.advance();
+                        } else {
+                            return Err("Expected associated type name after '::'".to_string());
+                        }
+                    }
                     name
                 } else {
                     return Err("Expected type parameter name in where clause".to_string());
@@ -402,17 +414,17 @@ impl Parser {
                     // Handle Vec<T>, Option<T>, Result<T, E>
                     if type_name == "Vec" {
                         let inner = Box::new(self.parse_type()?);
-                        self.expect(Token::Gt)?;
+                        self.expect_gt_or_split_shr()?;
                         Type::Vec(inner)
                     } else if type_name == "Option" {
                         let inner = Box::new(self.parse_type()?);
-                        self.expect(Token::Gt)?;
+                        self.expect_gt_or_split_shr()?;
                         Type::Option(inner)
                     } else if type_name == "Result" {
                         let ok_type = Box::new(self.parse_type()?);
                         self.expect(Token::Comma)?;
                         let err_type = Box::new(self.parse_type()?);
-                        self.expect(Token::Gt)?;
+                        self.expect_gt_or_split_shr()?;
                         Type::Result(ok_type, err_type)
                     } else {
                         // Generic custom type: Box<T>, HashMap<K, V>, etc.
@@ -423,11 +435,17 @@ impl Parser {
 
                             if self.current_token() == &Token::Comma {
                                 self.advance();
-                            } else if self.current_token() == &Token::Gt {
-                                self.advance();
+                            } else if self.current_token() == &Token::Gt
+                                || self.current_token() == &Token::Shr
+                            {
+                                // Handle both > and >> (for nested generics like HashMap<K, Vec<V>>)
+                                self.expect_gt_or_split_shr()?;
                                 break;
                             } else {
-                                return Err("Expected ',' or '>' in type arguments".to_string());
+                                return Err(format!(
+                                    "Expected ',' or '>' in type arguments, got {:?}",
+                                    self.current_token()
+                                ));
                             }
                         }
 
