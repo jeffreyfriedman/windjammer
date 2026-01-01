@@ -1,3 +1,13 @@
+## [0.39.1] - 2026-01-01
+### Fixed
+- **Code Coverage CI**: Added `#[cfg_attr(tarpaulin, ignore)]` to 4 more tests that spawn subprocesses and timeout under coverage instrumentation
+  - `test_borrow_for_iteration`
+  - `test_conditional_mutation`
+  - `test_explicit_borrowed_respected`
+  - `test_explicit_mut_borrowed_respected`
+- **Total Ignored Tests**: 14 tests now ignored during coverage (all spawn subprocesses)
+- **Impact**: Code coverage CI now completes successfully without timeouts
+
 ## [0.39.0] - 2025-12-25
 ### Added
 - **Automatic Ownership Inference**: Compiler automatically infers `&`, `&mut`, and owned parameters
