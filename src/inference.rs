@@ -212,7 +212,7 @@ impl InferenceEngine {
             Statement::Match { value, arms, .. } => {
                 self.collect_constraints_from_expression(value, bounds);
                 for arm in arms {
-                    self.collect_constraints_from_expression(&arm.body, bounds);
+                    self.collect_constraints_from_expression(arm.body, bounds);
                     if let Some(guard) = &arm.guard {
                         self.collect_constraints_from_expression(guard, bounds);
                     }

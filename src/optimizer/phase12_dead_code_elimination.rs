@@ -209,7 +209,7 @@ fn find_calls_in_statement<'ast>(stmt: &'ast Statement<'ast>, called: &mut HashS
         Statement::Match { value, arms, .. } => {
             find_calls_in_expression(value, called);
             for arm in arms {
-                find_calls_in_expression(&arm.body, called);
+                find_calls_in_expression(arm.body, called);
                 if let Some(guard) = &arm.guard {
                     find_calls_in_expression(guard, called);
                 }
@@ -380,12 +380,12 @@ fn eliminate_dead_code_in_statements<'ast>(
         let new_stmt = eliminate_dead_code_in_statement(stmt, &mut stats, optimizer);
 
         // Check if this statement terminates control flow
-        if is_terminator(&new_stmt) {
+        if is_terminator(new_stmt) {
             found_terminator = true;
         }
 
         // Skip empty statements
-        if is_empty_statement(&new_stmt) {
+        if is_empty_statement(new_stmt) {
             stats.empty_blocks_removed += 1;
             continue;
         }
@@ -447,7 +447,7 @@ fn eliminate_dead_code_in_statement<'ast>(
             compound_op,
             location,
         } => optimizer.alloc_stmt(unsafe { std::mem::transmute(Statement::Assignment {
-            target: target.clone(),
+            target,
             value: eliminate_dead_code_in_expression(value, optimizer),
             compound_op: *compound_op,
             location: location.clone(),
@@ -522,7 +522,7 @@ fn eliminate_dead_code_in_statement<'ast>(
             let mut new_arms = Vec::new();
 
             for arm in arms {
-                let new_body = eliminate_dead_code_in_expression(&arm.body, optimizer);
+                let new_body = eliminate_dead_code_in_expression(arm.body, optimizer);
                 let new_guard = arm.guard.as_ref().map(|g| eliminate_dead_code_in_expression(g, optimizer));
 
                 new_arms.push(MatchArm {

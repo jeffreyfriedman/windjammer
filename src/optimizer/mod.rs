@@ -149,7 +149,7 @@ impl Optimizer {
 
         // Phase 11: String Interning
         if self.config.enable_string_interning {
-            let result = phase11_string_interning::optimize_string_interning(&program, self);
+            let result = phase11_string_interning::optimize_string_interning(program, self);
             intermediate_programs.push(result.program);
             program = intermediate_programs.last().unwrap();
             stats.strings_interned = result.strings_interned;
@@ -159,7 +159,7 @@ impl Optimizer {
         // Phase 12: Dead Code Elimination
         if self.config.enable_dead_code_elimination {
             let (optimized_program, dce_stats) =
-                phase12_dead_code_elimination::eliminate_dead_code(&program, self);
+                phase12_dead_code_elimination::eliminate_dead_code(program, self);
             intermediate_programs.push(optimized_program);
             program = intermediate_programs.last().unwrap();
             stats.dead_functions_removed = dce_stats.unused_functions_removed;
@@ -170,7 +170,7 @@ impl Optimizer {
         // Phase 13: Loop Optimization
         if self.config.enable_loop_optimization {
             let (optimized_program, loop_stats) =
-                phase13_loop_optimization::optimize_loops(&program, self);
+                phase13_loop_optimization::optimize_loops(program, self);
             intermediate_programs.push(optimized_program);
             program = intermediate_programs.last().unwrap();
             stats.loops_optimized = loop_stats.loops_optimized;
@@ -181,7 +181,7 @@ impl Optimizer {
         // Phase 14: Escape Analysis
         if self.config.enable_escape_analysis {
             let (optimized_program, esc_stats) =
-                phase14_escape_analysis::optimize_escape_analysis(&program, self);
+                phase14_escape_analysis::optimize_escape_analysis(program, self);
             intermediate_programs.push(optimized_program);
             program = intermediate_programs.last().unwrap();
             stats.heap_to_stack_conversions = esc_stats.vectors_stack_allocated
@@ -192,7 +192,7 @@ impl Optimizer {
         // Phase 15: SIMD Vectorization
         if self.config.enable_simd_vectorization {
             let (optimized_program, simd_stats) =
-                phase15_simd_vectorization::optimize_simd_vectorization(&program, self);
+                phase15_simd_vectorization::optimize_simd_vectorization(program, self);
             intermediate_programs.push(optimized_program);
             program = intermediate_programs.last().unwrap();
             stats.loops_vectorized += simd_stats.loops_vectorized;
