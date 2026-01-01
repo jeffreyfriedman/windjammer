@@ -56,21 +56,50 @@ fn compile_fixture(fixture_name: &str) -> Result<String, String> {
     eprintln!("   Reading: {}", rust_file.display());
     eprintln!("   Exists: {}", rust_file.exists());
 
-    if rust_file.exists() {
-        if let Ok(metadata) = std::fs::metadata(&rust_file) {
-            eprintln!("   Size: {} bytes", metadata.len());
+    // Retry logic to handle file I/O race conditions
+    let mut retries = 3;
+    let mut last_error = String::new();
+
+    while retries > 0 {
+        if rust_file.exists() {
+            if let Ok(metadata) = std::fs::metadata(&rust_file) {
+                eprintln!("   Size: {} bytes", metadata.len());
+
+                // If file exists but is empty, wait and retry
+                if metadata.len() == 0 {
+                    eprintln!("   ⚠️ File is empty, waiting 100ms before retry...");
+                    std::thread::sleep(std::time::Duration::from_millis(100));
+                    retries -= 1;
+                    continue;
+                }
+            }
+        } else {
+            eprintln!("   ⚠️ FILE DOES NOT EXIST!");
+            if let Ok(entries) = std::fs::read_dir(&output_dir) {
+                eprintln!("   Files in output dir:");
+                for entry in entries.flatten() {
+                    eprintln!("     - {}", entry.path().display());
+                }
+            }
         }
-    } else {
-        eprintln!("   ⚠️ FILE DOES NOT EXIST!");
-        if let Ok(entries) = std::fs::read_dir(&output_dir) {
-            eprintln!("   Files in output dir:");
-            for entry in entries.flatten() {
-                eprintln!("     - {}", entry.path().display());
+
+        match std::fs::read_to_string(&rust_file) {
+            Ok(content) if !content.is_empty() => return Ok(content),
+            Ok(_) => {
+                eprintln!("   ⚠️ File read but empty, waiting 100ms before retry...");
+                std::thread::sleep(std::time::Duration::from_millis(100));
+                retries -= 1;
+            }
+            Err(e) => {
+                last_error = format!("Failed to read generated code: {}", e);
+                eprintln!("   ⚠️ Read error: {}, waiting 100ms before retry...", e);
+                std::thread::sleep(std::time::Duration::from_millis(100));
+                retries -= 1;
             }
         }
     }
 
-    std::fs::read_to_string(rust_file).map_err(|e| format!("Failed to read generated code: {}", e))
+    Err(format!("File I/O race condition: {}", last_error))
 }
 
 #[test]
