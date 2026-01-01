@@ -42,7 +42,7 @@ impl SemanticTokensProvider {
         }
     }
 
-    pub fn update_program(&mut self, program: Program, source: String) {
+    pub fn update_program(&mut self, program: Program<'static>, source: String) {
         self.program = Some(program);
         self.source = source;
     }
