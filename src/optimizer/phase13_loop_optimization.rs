@@ -894,40 +894,41 @@ mod tests {
                     doc_comment: None,
                     parameters: vec![],
                     return_type: None,
-                    body: vec![Statement::For {
+                    body: vec![test_alloc_stmt(Statement::For {
                         pattern: Pattern::Identifier("i".to_string()),
-                        iterable: Expression::Range {
-                            start: Box::new(Expression::Literal {
+                        iterable: test_alloc_expr(Expression::Range {
+                            start: test_alloc_expr(Expression::Literal {
                                 value: Literal::Int(0),
                                 location: None,
                             }),
-                            end: Box::new(Expression::Literal {
+                            end: test_alloc_expr(Expression::Literal {
                                 value: Literal::Int(3),
                                 location: None,
                             }),
                             inclusive: false,
                             location: None,
-                        },
-                        body: vec![Statement::Expression {
-                            expr: Expression::MacroInvocation {
+                        }),
+                        body: vec![test_alloc_stmt(Statement::Expression {
+                            expr: test_alloc_expr(Expression::MacroInvocation {
                                 name: "println".to_string(),
-                                args: vec![Expression::Identifier {
+                                args: vec![test_alloc_expr(Expression::Identifier {
                                     name: "i".to_string(),
                                     location: None,
-                                }],
+                                })],
                                 delimiter: crate::parser::MacroDelimiter::Parens,
                                 location: None,
-                            },
+                            }),
                             location: None,
-                        }],
+                        })],
                         location: None,
-                    }],
+                    })],
                 },
                 location: None,
             }],
         };
 
-        let (optimized, stats) = optimize_loops(&program);
+        let optimizer = crate::optimizer::Optimizer::with_defaults();
+        let (optimized, stats) = optimize_loops(&program, &optimizer);
         assert_eq!(stats.loops_unrolled, 1);
 
         let func = match &optimized.items[0] {
@@ -954,58 +955,59 @@ mod tests {
                     doc_comment: None,
                     parameters: vec![],
                     return_type: None,
-                    body: vec![Statement::For {
+                    body: vec![test_alloc_stmt(Statement::For {
                         pattern: Pattern::Identifier("i".to_string()),
-                        iterable: Expression::Range {
-                            start: Box::new(Expression::Literal {
+                        iterable: test_alloc_expr(Expression::Range {
+                            start: test_alloc_expr(Expression::Literal {
                                 value: Literal::Int(0),
                                 location: None,
                             }),
-                            end: Box::new(Expression::Literal {
+                            end: test_alloc_expr(Expression::Literal {
                                 value: Literal::Int(100),
                                 location: None,
                             }),
                             inclusive: false,
                             location: None,
-                        },
+                        }),
                         body: vec![
                             // Loop-invariant: doesn't use 'i'
-                            Statement::Let {
+                            test_alloc_stmt(Statement::Let {
                                 pattern: Pattern::Identifier("x".to_string()),
                                 mutable: false,
                                 type_: None,
-                                value: Expression::Literal {
+                                value: test_alloc_expr(Expression::Literal {
                                     value: Literal::Int(42),
                                     location: None,
-                                },
+                                }),
                                 else_block: None,
                                 location: None,
-                            },
+                            }),
                             // Loop-variant: uses 'i'
-                            Statement::Expression {
-                                expr: Expression::Binary {
-                                    left: Box::new(Expression::Identifier {
+                            test_alloc_stmt(Statement::Expression {
+                                expr: test_alloc_expr(Expression::Binary {
+                                    left: test_alloc_expr(Expression::Identifier {
                                         name: "x".to_string(),
                                         location: None,
                                     }),
                                     op: BinaryOp::Add,
-                                    right: Box::new(Expression::Identifier {
+                                    right: test_alloc_expr(Expression::Identifier {
                                         name: "i".to_string(),
                                         location: None,
                                     }),
                                     location: None,
-                                },
+                                }),
                                 location: None,
-                            },
+                            }),
                         ],
                         location: None,
-                    }],
+                    })],
                 },
                 location: None,
             }],
         };
 
-        let (optimized, stats) = optimize_loops(&program);
+        let optimizer = crate::optimizer::Optimizer::with_defaults();
+        let (optimized, stats) = optimize_loops(&program, &optimizer);
         assert_eq!(stats.invariants_hoisted, 1);
         assert_eq!(stats.loops_optimized, 1);
 
@@ -1035,27 +1037,28 @@ mod tests {
                     doc_comment: None,
                     parameters: vec![],
                     return_type: Some(Type::Custom("i32".to_string())),
-                    body: vec![Statement::Return {
-                        value: Some(Expression::Binary {
-                            left: Box::new(Expression::Identifier {
+                    body: vec![test_alloc_stmt(Statement::Return {
+                        value: Some(test_alloc_expr(Expression::Binary {
+                            left: test_alloc_expr(Expression::Identifier {
                                 name: "x".to_string(),
                                 location: None,
                             }),
                             op: BinaryOp::Mul,
-                            right: Box::new(Expression::Literal {
+                            right: test_alloc_expr(Expression::Literal {
                                 value: Literal::Int(4),
                                 location: None,
                             }),
                             location: None,
-                        }),
+                        })),
                         location: None,
-                    }],
+                    })],
                 },
                 location: None,
             }],
         };
 
-        let (_, stats) = optimize_loops(&program);
+        let optimizer = crate::optimizer::Optimizer::with_defaults();
+        let (_, stats) = optimize_loops(&program, &optimizer);
         // No strength reductions implemented yet
         assert_eq!(stats.strength_reductions, 0);
     }
@@ -1076,35 +1079,36 @@ mod tests {
                     doc_comment: None,
                     parameters: vec![],
                     return_type: None,
-                    body: vec![Statement::For {
+                    body: vec![test_alloc_stmt(Statement::For {
                         pattern: Pattern::Identifier("i".to_string()),
-                        iterable: Expression::Range {
-                            start: Box::new(Expression::Literal {
+                        iterable: test_alloc_expr(Expression::Range {
+                            start: test_alloc_expr(Expression::Literal {
                                 value: Literal::Int(0),
                                 location: None,
                             }),
-                            end: Box::new(Expression::Literal {
+                            end: test_alloc_expr(Expression::Literal {
                                 value: Literal::Int(1000),
                                 location: None,
                             }), // Too large
                             inclusive: false,
                             location: None,
-                        },
-                        body: vec![Statement::Expression {
-                            expr: Expression::Identifier {
+                        }),
+                        body: vec![test_alloc_stmt(Statement::Expression {
+                            expr: test_alloc_expr(Expression::Identifier {
                                 name: "i".to_string(),
                                 location: None,
-                            },
+                            }),
                             location: None,
-                        }],
+                        })],
                         location: None,
-                    }],
+                    })],
                 },
                 location: None,
             }],
         };
 
-        let (optimized, stats) = optimize_loops(&program);
+        let optimizer = crate::optimizer::Optimizer::with_defaults();
+        let (optimized, stats) = optimize_loops(&program, &optimizer);
         assert_eq!(stats.loops_unrolled, 0); // Should not unroll
 
         let func = match &optimized.items[0] {
@@ -1132,50 +1136,51 @@ mod tests {
                     doc_comment: None,
                     parameters: vec![],
                     return_type: None,
-                    body: vec![Statement::For {
+                    body: vec![test_alloc_stmt(Statement::For {
                         pattern: Pattern::Identifier("i".to_string()),
-                        iterable: Expression::Range {
-                            start: Box::new(Expression::Literal {
+                        iterable: test_alloc_expr(Expression::Range {
+                            start: test_alloc_expr(Expression::Literal {
                                 value: Literal::Int(0),
                                 location: None,
                             }),
-                            end: Box::new(Expression::Literal {
+                            end: test_alloc_expr(Expression::Literal {
                                 value: Literal::Int(10),
                                 location: None,
                             }),
                             inclusive: false,
                             location: None,
-                        },
+                        }),
                         body: vec![
                             // Loop-variant: uses 'i'
-                            Statement::Let {
+                            test_alloc_stmt(Statement::Let {
                                 pattern: Pattern::Identifier("x".to_string()),
                                 mutable: false,
                                 type_: None,
-                                value: Expression::Binary {
-                                    left: Box::new(Expression::Identifier {
+                                value: test_alloc_expr(Expression::Binary {
+                                    left: test_alloc_expr(Expression::Identifier {
                                         name: "i".to_string(),
                                         location: None,
                                     }),
                                     op: BinaryOp::Mul,
-                                    right: Box::new(Expression::Literal {
+                                    right: test_alloc_expr(Expression::Literal {
                                         value: Literal::Int(2),
                                         location: None,
                                     }),
                                     location: None,
-                                },
+                                }),
                                 else_block: None,
                                 location: None,
-                            },
+                            }),
                         ],
                         location: None,
-                    }],
+                    })],
                 },
                 location: None,
             }],
         };
 
-        let (_, stats) = optimize_loops(&program);
+        let optimizer = crate::optimizer::Optimizer::with_defaults();
+        let (_, stats) = optimize_loops(&program, &optimizer);
         assert_eq!(stats.invariants_hoisted, 0); // Should not hoist
     }
 }
