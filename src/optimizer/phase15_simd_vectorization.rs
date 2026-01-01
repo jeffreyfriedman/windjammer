@@ -405,55 +405,55 @@ mod tests {
                     parameters: vec![],
                     return_type: None,
                     body: vec![
-                        Statement::Let {
+                        test_alloc_stmt(Statement::Let {
                             pattern: Pattern::Identifier("sum".to_string()),
                             mutable: true,
                             type_: Some(Type::Custom("f64".to_string())),
-                            value: Expression::Literal {
+                            value: test_alloc_expr(Expression::Literal {
                                 value: Literal::Float(0.0),
                                 location: None,
-                            },
+                            }),
                             else_block: None,
                             location: None,
-                        },
-                        Statement::For {
+                        }),
+                        test_alloc_stmt(Statement::For {
                             pattern: Pattern::Identifier("i".to_string()),
-                            iterable: Expression::Range {
-                                start: Box::new(Expression::Literal {
+                            iterable: test_alloc_expr(Expression::Range {
+                                start: test_alloc_expr(Expression::Literal {
                                     value: Literal::Int(0),
                                     location: None,
                                 }),
-                                end: Box::new(Expression::Identifier {
+                                end: test_alloc_expr(Expression::Identifier {
                                     name: "n".to_string(),
                                     location: None,
                                 }),
                                 inclusive: false,
                                 location: None,
-                            },
-                            body: vec![Statement::Expression {
-                                expr: Expression::Binary {
-                                    left: Box::new(Expression::Identifier {
+                            }),
+                            body: vec![test_alloc_stmt(Statement::Expression {
+                                expr: test_alloc_expr(Expression::Binary {
+                                    left: test_alloc_expr(Expression::Identifier {
                                         name: "sum".to_string(),
                                         location: None,
                                     }),
                                     op: BinaryOp::Add,
-                                    right: Box::new(Expression::Index {
-                                        object: Box::new(Expression::Identifier {
+                                    right: test_alloc_expr(Expression::Index {
+                                        object: test_alloc_expr(Expression::Identifier {
                                             name: "array".to_string(),
                                             location: None,
                                         }),
-                                        index: Box::new(Expression::Identifier {
+                                        index: test_alloc_expr(Expression::Identifier {
                                             name: "i".to_string(),
                                             location: None,
                                         }),
                                         location: None,
                                     }),
                                     location: None,
-                                },
+                                }),
                                 location: None,
-                            }],
+                            })],
                             location: None,
-                        },
+                        }),
                     ],
                     type_params: vec![],
                     where_clause: vec![],
@@ -466,7 +466,8 @@ mod tests {
             }],
         };
 
-        let (optimized, stats) = optimize_simd_vectorization(&program);
+        let optimizer = crate::optimizer::Optimizer::with_defaults();
+        let (optimized, stats) = optimize_simd_vectorization(&program, &optimizer);
 
         // Should attempt to vectorize the reduction loop
         // Note: The current implementation may not vectorize all patterns yet
@@ -489,33 +490,33 @@ mod tests {
                     name: "complex".to_string(),
                     parameters: vec![],
                     return_type: None,
-                    body: vec![Statement::For {
+                    body: vec![test_alloc_stmt(Statement::For {
                         pattern: Pattern::Identifier("i".to_string()),
-                        iterable: Expression::Range {
-                            start: Box::new(Expression::Literal {
+                        iterable: test_alloc_expr(Expression::Range {
+                            start: test_alloc_expr(Expression::Literal {
                                 value: Literal::Int(0),
                                 location: None,
                             }),
-                            end: Box::new(Expression::Literal {
+                            end: test_alloc_expr(Expression::Literal {
                                 value: Literal::Int(10),
                                 location: None,
                             }),
                             inclusive: false,
                             location: None,
-                        },
-                        body: vec![Statement::Expression {
-                            expr: Expression::Call {
-                                function: Box::new(Expression::Identifier {
+                        }),
+                        body: vec![test_alloc_stmt(Statement::Expression {
+                            expr: test_alloc_expr(Expression::Call {
+                                function: test_alloc_expr(Expression::Identifier {
                                     name: "println".to_string(),
                                     location: None,
                                 }),
                                 arguments: vec![],
                                 location: None,
-                            },
+                            }),
                             location: None,
-                        }],
+                        })],
                         location: None,
-                    }],
+                    })],
                     type_params: vec![],
                     where_clause: vec![],
                     is_async: false,
@@ -527,7 +528,8 @@ mod tests {
             }],
         };
 
-        let (_, stats) = optimize_simd_vectorization(&program);
+        let optimizer = crate::optimizer::Optimizer::with_defaults();
+        let (_, stats) = optimize_simd_vectorization(&program, &optimizer);
 
         // Should NOT vectorize (has function call)
         assert_eq!(stats.loops_vectorized, 0);

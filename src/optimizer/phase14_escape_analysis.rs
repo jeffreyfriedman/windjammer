@@ -449,32 +449,32 @@ mod tests {
                     name: "test".to_string(),
                     parameters: vec![],
                     return_type: None,
-                    body: vec![Statement::Let {
+                    body: vec![test_alloc_stmt(Statement::Let {
                         pattern: Pattern::Identifier("temp".to_string()),
                         mutable: false,
                         type_: None,
-                        value: Expression::MacroInvocation {
+                        value: test_alloc_expr(Expression::MacroInvocation {
                             name: "vec".to_string(),
                             args: vec![
-                                Expression::Literal {
+                                test_alloc_expr(Expression::Literal {
                                     value: Literal::Int(1),
                                     location: None,
-                                },
-                                Expression::Literal {
+                                }),
+                                test_alloc_expr(Expression::Literal {
                                     value: Literal::Int(2),
                                     location: None,
-                                },
-                                Expression::Literal {
+                                }),
+                                test_alloc_expr(Expression::Literal {
                                     value: Literal::Int(3),
                                     location: None,
-                                },
+                                }),
                             ],
                             delimiter: MacroDelimiter::Brackets,
                             location: None,
-                        },
+                        }),
                         else_block: None,
                         location: None,
-                    }],
+                    })],
                     type_params: vec![],
                     where_clause: vec![],
                     is_async: false,
@@ -486,18 +486,21 @@ mod tests {
             }],
         };
 
-        let (optimized, stats) = optimize_escape_analysis(&program);
+        let optimizer = crate::optimizer::Optimizer::with_defaults();
+        let (optimized, stats) = optimize_escape_analysis(&program, &optimizer);
         assert_eq!(stats.vectors_stack_allocated, 1);
         assert_eq!(stats.total_optimizations, 1);
 
         // Verify the optimization was applied
         if let Item::Function { decl: func, .. } = &optimized.items[0] {
             if let Statement::Let {
-                value: Expression::MacroInvocation { name, .. },
+                value,
                 ..
-            } = &func.body[0]
+            } = func.body[0]
             {
-                assert_eq!(name, "smallvec");
+                if let Expression::MacroInvocation { name, .. } = value {
+                    assert_eq!(name, "smallvec");
+                }
             }
         }
     }
@@ -514,29 +517,29 @@ mod tests {
                     parameters: vec![],
                     return_type: None,
                     body: vec![
-                        Statement::Let {
+                        test_alloc_stmt(Statement::Let {
                             pattern: Pattern::Identifier("temp".to_string()),
                             mutable: false,
                             type_: None,
-                            value: Expression::MacroInvocation {
+                            value: test_alloc_expr(Expression::MacroInvocation {
                                 name: "vec".to_string(),
-                                args: vec![Expression::Literal {
+                                args: vec![test_alloc_expr(Expression::Literal {
                                     value: Literal::Int(1),
                                     location: None,
-                                }],
+                                })],
                                 delimiter: MacroDelimiter::Brackets,
                                 location: None,
-                            },
+                            }),
                             else_block: None,
                             location: None,
-                        },
-                        Statement::Return {
-                            value: Some(Expression::Identifier {
+                        }),
+                        test_alloc_stmt(Statement::Return {
+                            value: Some(test_alloc_expr(Expression::Identifier {
                                 name: "temp".to_string(),
                                 location: None,
-                            }),
+                            })),
                             location: None,
-                        },
+                        }),
                     ],
                     type_params: vec![],
                     where_clause: vec![],
@@ -549,7 +552,8 @@ mod tests {
             }],
         };
 
-        let (_, stats) = optimize_escape_analysis(&program);
+        let optimizer = crate::optimizer::Optimizer::with_defaults();
+        let (_, stats) = optimize_escape_analysis(&program, &optimizer);
         // Should NOT optimize because temp is returned
         assert_eq!(stats.vectors_stack_allocated, 0);
     }
