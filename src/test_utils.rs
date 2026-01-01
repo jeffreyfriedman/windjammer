@@ -7,8 +7,6 @@
 //!
 //! IMPORTANT: Only use these helpers in `#[cfg(test)]` code!
 
-#![cfg(test)]
-
 use crate::parser::{Expression, Statement, Pattern};
 
 /// Allocate an expression with 'static lifetime for testing

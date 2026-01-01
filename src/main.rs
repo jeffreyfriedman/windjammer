@@ -27,8 +27,8 @@ pub mod lexer;
 pub mod optimizer;
 pub mod parser; // Parser module (refactored structure)
 pub mod parser_impl; // Parser implementation (being migrated to parser/)
-#[cfg(test)]
-pub mod test_utils; // Test utilities for arena-allocated AST construction
+// Test utilities for arena-allocated AST construction (available for integration tests)
+pub mod test_utils;
 pub mod parser_recovery;
 pub mod source_map; // Source map for error message translation
 pub mod source_map_cache; // Source map caching for performance
