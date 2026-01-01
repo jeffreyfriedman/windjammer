@@ -7,6 +7,14 @@
   - `test_explicit_mut_borrowed_respected`
 - **Total Ignored Tests**: 14 tests now ignored during coverage (all spawn subprocesses)
 - **Impact**: Code coverage CI now completes successfully without timeouts
+- **Cross-compilation for ARM64 Linux**: Fixed linker configuration for `aarch64-unknown-linux-gnu` target
+  - Added `.cargo/config.toml` entry to specify `aarch64-linux-gnu-gcc` as linker
+  - Resolves "incompatible with elf64-x86-64" errors during release builds
+  - **Impact**: ARM64 Linux release binaries now build successfully
+- **Windows Test Hanging**: Improved documentation for `test_trait_explicit_mut_self_preserved`
+  - Test remains ignored on Windows due to subprocess hanging (60+ seconds)
+  - Added explicit piped stdout/stderr to prevent potential buffer deadlocks
+  - Works correctly on macOS/Ubuntu (0.04s)
 
 ## [0.39.0] - 2025-12-25
 ### Added
