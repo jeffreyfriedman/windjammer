@@ -105,7 +105,11 @@ impl AnalysisDatabase {
     fn full_analysis(
         &self,
         content: &str,
-    ) -> (Vec<Diagnostic>, Option<Program<'static>>, Vec<AnalyzedFunction<'static>>) {
+    ) -> (
+        Vec<Diagnostic>,
+        Option<Program<'static>>,
+        Vec<AnalyzedFunction<'static>>,
+    ) {
         let mut diagnostics = Vec::new();
         let mut program_result = None;
         let mut analyzed_functions = Vec::new();
