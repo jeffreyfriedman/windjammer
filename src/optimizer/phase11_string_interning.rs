@@ -231,7 +231,7 @@ fn collect_strings_from_statement(stmt: &Statement, frequency: &mut HashMap<Stri
         Statement::Match { value, arms, .. } => {
             collect_strings_from_expression(value, frequency);
             for arm in arms {
-                collect_strings_from_expression(&arm.body, frequency);
+                collect_strings_from_expression(arm.body, frequency);
             }
         }
         _ => {}
@@ -269,6 +269,7 @@ fn create_pool_map(pool: &[StringPoolEntry]) -> HashMap<String, String> {
 }
 
 /// Replace string literals in an expression with pool references
+#[allow(clippy::transmute_undefined_repr)]
 fn replace_strings_in_expression<'a: 'ast, 'ast>(
     expr: &'a Expression<'a>,
     pool_map: &HashMap<String, String>,
@@ -587,7 +588,7 @@ fn replace_strings_in_statement<'a: 'ast, 'ast>(
                 .collect(),
             location: location.clone(),
         }) }),
-        other => stmt, // Return as-is for other statement types
+        _ => stmt, // Return as-is for other statement types
     }
 }
 
@@ -686,7 +687,7 @@ fn replace_strings_in_item<'ast>(
             value: replace_strings_in_expression(value, pool_map, optimizer),
             location: location.clone(),
         },
-        other => item.clone(),
+        _ => item.clone(),
     }
 }
 

@@ -1962,7 +1962,7 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
             }
             Statement::Match { arms, .. } => arms.iter().any(|arm| {
                 // Match arms have a body expression, check if it contains modifications
-                self.expression_modifies_self(&arm.body)
+                self.expression_modifies_self(arm.body)
             }),
             _ => false,
         }
@@ -3056,8 +3056,8 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
                         // Check if any arm produces a String (format!, to_string(), etc.)
                         // OR if any arm has a block whose last expression is converted to String
                         arms.iter().any(|arm| {
-                            string_analysis::expression_produces_string(&arm.body)
-                                || arm_string_analysis::arm_returns_converted_string(&arm.body)
+                            string_analysis::expression_produces_string(arm.body)
+                                || arm_string_analysis::arm_returns_converted_string(arm.body)
                         })
                     }
                 };
@@ -3081,7 +3081,7 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
                     }
 
                     // Auto-convert string literals to String when any arm produces String
-                    let mut arm_str = self.generate_expression(&arm.body);
+                    let mut arm_str = self.generate_expression(arm.body);
 
                     self.in_match_arm_needing_string = old_in_match_arm;
                     let is_string_literal = matches!(
@@ -3769,7 +3769,7 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
                 // Wrap operands in parens if they have lower precedence
                 let mut left_str = match left {
                     Expression::Binary { op: left_op, .. } => {
-                        if operators::op_precedence(&left_op) < operators::op_precedence(&op) {
+                        if operators::op_precedence(left_op) < operators::op_precedence(op) {
                             format!("({})", self.generate_expression(left))
                         } else {
                             self.generate_expression(left)
@@ -3779,7 +3779,7 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
                 };
                 let mut right_str = match right {
                     Expression::Binary { op: right_op, .. } => {
-                        if operators::op_precedence(&right_op) < operators::op_precedence(&op) {
+                        if operators::op_precedence(right_op) < operators::op_precedence(op) {
                             format!("({})", self.generate_expression(right))
                         } else {
                             self.generate_expression(right)
@@ -3880,7 +3880,7 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
                             if name == "format" && !macro_args.is_empty() {
                                 // Unwrap the format! call and put its arguments directly into println!
                                 // format!("text {}", var) -> println!("text {}", var)
-                                let format_str = self.generate_expression(&macro_args[0]);
+                                let format_str = self.generate_expression(macro_args[0]);
                                 let format_args: Vec<String> = macro_args[1..]
                                     .iter()
                                     .map(|arg| self.generate_expression(arg))
@@ -4824,7 +4824,7 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
                             }
                         )
                     {
-                        vec!["\"{}\"".to_string(), self.generate_expression(&args[0])]
+                        vec!["\"{}\"".to_string(), self.generate_expression(args[0])]
                     } else {
                         args.iter().map(|e| self.generate_expression(e)).collect()
                     }
@@ -4898,9 +4898,9 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
                                 _ => {
                                     // Also check if any arm explicitly produces String
                                     arms.iter().any(|arm| {
-                                        string_analysis::expression_produces_string(&arm.body)
+                                        string_analysis::expression_produces_string(arm.body)
                                             || arm_string_analysis::arm_returns_converted_string(
-                                                &arm.body,
+                                                arm.body,
                                             )
                                     })
                                 }
@@ -4916,7 +4916,7 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
                         let arm_strings: Vec<(String, bool)> = arms
                             .iter()
                             .map(|arm| {
-                                let body_str = self.generate_expression(&arm.body);
+                                let body_str = self.generate_expression(arm.body);
                                 let is_string_literal = matches!(
                                     &arm.body,
                                     Expression::Literal {

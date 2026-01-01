@@ -232,7 +232,7 @@ fn optimize_statement_simd<'a: 'ast, 'ast>(stmt: &'a Statement<'a>, stats: &mut 
             // Not vectorizable, recurse into body
             optimizer.alloc_stmt(unsafe { std::mem::transmute(Statement::For {
                 pattern: pattern.clone(),
-                iterable: iterable.clone(),
+                iterable,
                 body: optimize_statements_simd(body, stats, optimizer),
                 location: None,
             }) })
@@ -243,7 +243,7 @@ fn optimize_statement_simd<'a: 'ast, 'ast>(stmt: &'a Statement<'a>, stats: &mut 
             else_block,
             ..
         } => optimizer.alloc_stmt(unsafe { std::mem::transmute(Statement::If {
-            condition: condition.clone(),
+            condition,
             then_block: optimize_statements_simd(then_block, stats, optimizer),
             else_block: else_block
                 .as_ref()
@@ -253,7 +253,7 @@ fn optimize_statement_simd<'a: 'ast, 'ast>(stmt: &'a Statement<'a>, stats: &mut 
         Statement::While {
             condition, body, ..
         } => optimizer.alloc_stmt(unsafe { std::mem::transmute(Statement::While {
-            condition: condition.clone(),
+            condition,
             body: optimize_statements_simd(body, stats, optimizer),
             location: None,
         }) }),
@@ -379,7 +379,7 @@ fn create_vectorized_loop<'ast>(
     // and track it in stats.
     optimizer.alloc_stmt(unsafe { std::mem::transmute(Statement::For {
         pattern: Pattern::Identifier(variable.to_string()),
-        iterable: iterable,
+        iterable,
         body: body.to_vec(),
         location: None,
     }) })
