@@ -64,6 +64,7 @@
 //   - parser/items.rs - Top-level item parsing
 
 use crate::lexer::Token;
+use typed_arena::Arena;
 
 // Import all AST types from the new parser::ast module
 pub use crate::parser::ast::*;
@@ -78,15 +79,45 @@ pub struct Parser {
     pub(crate) filename: String,
     #[allow(dead_code)]
     pub(crate) source: String,
+    // Arena allocators for AST nodes (eliminates recursive Drop)
+    // When Parser is dropped, these arenas drop all allocated AST nodes at once
+    // without recursive calls to Drop, solving the Windows stack overflow issue
+    //
+    // SAFETY: We use 'static here because the arena owns the memory. The actual
+    // lifetime is tied to Parser through the parse() method signature. References
+    // returned from parse() will have lifetime 'parser tied to &'parser self.
+    pub(crate) expr_arena: Arena<Expression<'static>>,
+    pub(crate) stmt_arena: Arena<Statement<'static>>,
+    pub(crate) pattern_arena: Arena<Pattern<'static>>,
 }
 
 impl Parser {
+    /// Check if there was a newline before the current token (for ASI - Automatic Semicolon Insertion)
+    pub(crate) fn had_newline_before_current(&self) -> bool {
+        if self.position == 0 {
+            return false; // No previous token
+        }
+
+        let prev_token = self.tokens.get(self.position - 1);
+        let curr_token = self.tokens.get(self.position);
+
+        match (prev_token, curr_token) {
+            (Some(prev), Some(curr)) => {
+                // If the line number changed, there was a newline
+                curr.line > prev.line
+            }
+            _ => false,
+        }
+    }
     pub fn new(tokens: Vec<crate::lexer::TokenWithLocation>) -> Self {
         Parser {
             tokens,
             position: 0,
             filename: String::new(),
             source: String::new(),
+            expr_arena: Arena::new(),
+            stmt_arena: Arena::new(),
+            pattern_arena: Arena::new(),
         }
     }
 
@@ -100,6 +131,40 @@ impl Parser {
             position: 0,
             filename,
             source,
+            expr_arena: Arena::new(),
+            stmt_arena: Arena::new(),
+            pattern_arena: Arena::new(),
+        }
+    }
+
+    /// Allocate an expression in the arena
+    /// SAFETY: We transmute the lifetime from 'static (arena storage) to 'ast (result lifetime)
+    /// This is safe because:
+    /// 1. Parser owns the arena, so references live as long as Parser does
+    /// 2. We use a separate 'ast lifetime (not tied to &self borrow) to allow multiple allocations
+    /// 3. The arena uses interior mutability (Cell), so &self is sufficient
+    pub(crate) fn alloc_expr<'ast>(&self, expr: Expression<'static>) -> &'ast Expression<'ast> {
+        unsafe {
+            let ptr = self.expr_arena.alloc(expr);
+            std::mem::transmute(ptr)
+        }
+    }
+
+    /// Allocate a statement in the arena
+    /// SAFETY: Same as alloc_expr
+    pub(crate) fn alloc_stmt<'ast>(&self, stmt: Statement<'static>) -> &'ast Statement<'ast> {
+        unsafe {
+            let ptr = self.stmt_arena.alloc(stmt);
+            std::mem::transmute(ptr)
+        }
+    }
+
+    /// Allocate a pattern in the arena
+    /// SAFETY: Same as alloc_expr
+    pub(crate) fn alloc_pattern<'ast>(&self, pattern: Pattern<'static>) -> &'ast Pattern<'ast> {
+        unsafe {
+            let ptr = self.pattern_arena.alloc(pattern);
+            std::mem::transmute(ptr)
         }
     }
 
@@ -141,11 +206,44 @@ impl Parser {
         }
     }
 
+    /// Handle closing of nested generic types where `>>` should be treated as two `>` tokens
+    pub(crate) fn expect_gt_or_split_shr(&mut self) -> Result<bool, String> {
+        match self.current_token() {
+            Token::Gt => {
+                self.advance();
+                Ok(false) // Not a split, normal >
+            }
+            Token::Shr => {
+                // Split >> into two > tokens
+                // We consume one > and insert another > after it
+                let current_location = self.tokens[self.position].clone();
+                let mut gt_token = current_location.clone();
+                gt_token.token = Token::Gt;
+
+                // Replace current Shr with Gt
+                self.tokens[self.position] = gt_token.clone();
+
+                // Insert another Gt right after this position
+                self.tokens.insert(self.position + 1, gt_token);
+
+                // Advance to consume the first >
+                self.advance();
+
+                Ok(true) // Was a split >>
+            }
+            _ => Err(format!(
+                "Expected '>' or '>>', got {:?} (at token position {})",
+                self.current_token(),
+                self.position
+            )),
+        }
+    }
+
     // ========================================================================
     // SECTION 3: TOP-LEVEL PARSING
     // ========================================================================
 
-    pub fn parse(&mut self) -> Result<Program, String> {
+    pub fn parse(&mut self) -> Result<Program<'static>, String> {
         let mut items = Vec::new();
 
         while self.current_token() != &Token::Eof {
@@ -155,7 +253,19 @@ impl Parser {
         Ok(Program { items })
     }
 
-    fn parse_item(&mut self) -> Result<Item, String> {
+    pub(crate) fn parse_item(&mut self) -> Result<Item<'static>, String> {
+        // Collect doc comments (/// lines) that appear before the item
+        let mut doc_lines = Vec::new();
+        while let Token::DocComment(content) = self.current_token() {
+            doc_lines.push(content.clone());
+            self.advance();
+        }
+        let doc_comment = if doc_lines.is_empty() {
+            None
+        } else {
+            Some(doc_lines.join("\n"))
+        };
+
         // Check for decorators
         let mut decorators = Vec::new();
         while let Token::Decorator(_) = self.current_token() {
@@ -171,11 +281,25 @@ impl Parser {
         };
 
         match self.current_token() {
+            Token::Extern => {
+                self.advance(); // Consume the Extern token
+                self.expect(Token::Fn)?; // Expect fn after extern
+                let mut func = self.parse_function()?;
+                func.is_extern = true; // Mark as extern function
+                func.is_pub = is_pub;
+                func.decorators = decorators;
+                func.doc_comment = doc_comment;
+                Ok(Item::Function {
+                    decl: func,
+                    location: self.current_location(),
+                })
+            }
             Token::Fn => {
                 self.advance(); // Consume the Fn token
                 let mut func = self.parse_function()?;
                 func.decorators = decorators.clone();
                 func.is_pub = is_pub;
+                func.doc_comment = doc_comment;
                 // Check if @async decorator is present
                 if decorators.iter().any(|d| d.name == "async") {
                     func.is_async = true;
@@ -192,6 +316,7 @@ impl Parser {
                 func.is_async = true;
                 func.is_pub = is_pub;
                 func.decorators = decorators;
+                func.doc_comment = doc_comment;
                 Ok(Item::Function {
                     decl: func,
                     location: self.current_location(),
@@ -202,6 +327,7 @@ impl Parser {
                 let mut struct_decl = self.parse_struct()?;
                 struct_decl.decorators = decorators;
                 struct_decl.is_pub = is_pub;
+                struct_decl.doc_comment = doc_comment;
                 Ok(Item::Struct {
                     decl: struct_decl,
                     location: self.current_location(),
@@ -211,6 +337,7 @@ impl Parser {
                 self.advance();
                 let mut enum_decl = self.parse_enum()?;
                 enum_decl.is_pub = is_pub;
+                enum_decl.doc_comment = doc_comment;
                 Ok(Item::Enum {
                     decl: enum_decl,
                     location: self.current_location(),
@@ -218,8 +345,10 @@ impl Parser {
             }
             Token::Trait => {
                 self.advance();
+                let mut trait_decl = self.parse_trait()?;
+                trait_decl.doc_comment = doc_comment;
                 Ok(Item::Trait {
-                    decl: self.parse_trait()?,
+                    decl: trait_decl,
                     location: self.current_location(),
                 })
             }
@@ -265,15 +394,30 @@ impl Parser {
             Token::Use => {
                 self.advance(); // consume 'use'
                 let (path, alias) = self.parse_use()?;
+                // Consume optional semicolon (ASI - automatic semicolon insertion)
+                if self.current_token() == &Token::Semicolon {
+                    self.advance();
+                }
                 Ok(Item::Use {
                     path,
                     alias,
+                    is_pub, // THE WINDJAMMER WAY: Track pub use for re-exports
                     location: self.current_location(),
                 })
             }
             Token::Bound => {
                 self.advance(); // consume 'bound'
                 self.parse_bound_alias()
+            }
+            Token::Mod => {
+                self.advance(); // consume 'mod'
+                let (name, items, _) = self.parse_mod()?;
+                Ok(Item::Mod {
+                    name,
+                    items,
+                    is_public: is_pub,
+                    location: self.current_location(),
+                })
             }
             _ => Err(format!(
                 "Unexpected token: {:?} (at token position {})",
@@ -283,7 +427,7 @@ impl Parser {
         }
     }
 
-    fn parse_bound_alias(&mut self) -> Result<Item, String> {
+    fn parse_bound_alias(&mut self) -> Result<Item<'static>, String> {
         // bound Name = Trait + Trait + ...
         let name = if let Token::Ident(n) = self.current_token() {
             let name = n.clone();
@@ -319,7 +463,9 @@ impl Parser {
         })
     }
 
-    pub(crate) fn parse_const_or_static(&mut self) -> Result<(String, Type, Expression), String> {
+    pub(crate) fn parse_const_or_static(
+        &mut self,
+    ) -> Result<(String, Type, &'static Expression<'static>), String> {
         let name = if let Token::Ident(n) = self.current_token() {
             let name = n.clone();
             self.advance();
@@ -340,11 +486,11 @@ impl Parser {
     // Helper: Extract a name from a pattern for backward compatibility
 
     // Public wrapper methods for component compiler
-    pub fn parse_expression_public(&mut self) -> Result<Expression, String> {
+    pub fn parse_expression_public(&mut self) -> Result<&'static Expression<'static>, String> {
         self.parse_expression()
     }
 
-    pub fn parse_function_public(&mut self) -> Result<FunctionDecl, String> {
+    pub fn parse_function_public(&mut self) -> Result<FunctionDecl<'static>, String> {
         self.parse_function()
     }
 }

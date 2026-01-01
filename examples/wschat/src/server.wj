@@ -346,7 +346,7 @@ fn broadcast_to_room(room: &string, msg: ServerMessage, state: &ServerState) {
     let connections = state.connections.lock().await
     
     // Find sockets for room members
-    for (conn_id, conn_info) in connections.iter() {
+    for (conn_id, conn_info) in connections {
         if members.contains(&conn_info.user_id) {
             // Send message (in real impl, we'd store WebSocket handles)
             // For now, this is a placeholder

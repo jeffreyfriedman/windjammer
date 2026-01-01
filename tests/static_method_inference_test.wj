@@ -1,0 +1,67 @@
+// Test: Static methods (new, from_*) should NOT infer &self
+// Bug: Compiler incorrectly adds &self when struct literals use field names
+
+pub struct Point {
+    pub x: f32,
+    pub y: f32,
+}
+
+impl Point {
+    // Static constructor - should NOT have &self
+    pub fn new(x: f32, y: f32) -> Point {
+        Point { x: x, y: y }
+    }
+    
+    // Static factory method - should NOT have &self
+    pub fn from_coords(x: f32, y: f32) -> Point {
+        Point { x: x, y: y }
+    }
+    
+    // Static zero constructor - should NOT have &self
+    pub fn zero() -> Point {
+        Point { x: 0.0, y: 0.0 }
+    }
+    
+    // Instance method - SHOULD have &self
+    pub fn distance(&self, other: Point) -> f32 {
+        let dx = self.x - other.x
+        let dy = self.y - other.y
+        (dx * dx + dy * dy).sqrt()
+    }
+}
+
+// Complex constructor with loops and local variables
+pub struct Grid {
+    pub width: i32,
+    pub height: i32,
+    pub data: Vec<i32>,
+}
+
+impl Grid {
+    // This was triggering the bug because it uses field names in struct literal
+    pub fn new(width: i32, height: i32) -> Grid {
+        let mut data = Vec::new()
+        for i in 0..width * height {
+            data.push(0)
+        }
+        Grid {
+            width: width,
+            height: height,
+            data: data,
+        }
+    }
+}
+
+pub fn test_static_methods() {
+    // These should work without needing an instance
+    let p1 = Point::new(1.0, 2.0)
+    let p2 = Point::from_coords(3.0, 4.0)
+    let p3 = Point::zero()
+    
+    // This should work (instance method)
+    let dist = p1.distance(p2)
+    
+    // This was triggering the bug
+    let grid = Grid::new(10, 10)
+}
+

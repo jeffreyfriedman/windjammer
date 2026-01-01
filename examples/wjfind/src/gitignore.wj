@@ -49,7 +49,7 @@ impl GitignoreRules {
             .unwrap_or(path.as_ref())
             .to_string()
         
-        for pattern in self.patterns.iter() {
+        for pattern in self.patterns {
             if self.matches_pattern(&name, pattern) 
                 || self.matches_pattern(path, pattern) {
                 return true

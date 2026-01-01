@@ -107,6 +107,7 @@ impl<'a> ExtractFunction<'a> {
                         .unwrap_or_else(|| "unknown".to_string()),
                 ),
                 ownership: windjammer::parser::OwnershipHint::Inferred,
+                is_mutable: false,
             })
             .collect();
 

@@ -1,0 +1,51 @@
+// Test: Automatic mutability inference for function parameters
+// Bug: Parameters that are mutated should be inferred as &mut
+// This should compile without errors
+
+struct Point {
+    pub x: f32,
+    pub y: f32,
+}
+
+// Function that mutates its parameter
+// Should be inferred as: fn move_point(p: &mut Point, dx: f32, dy: f32)
+fn move_point(p: Point, dx: f32, dy: f32) {
+    p.x = p.x + dx
+    p.y = p.y + dy
+}
+
+// Function that mutates multiple parameters
+// Should be inferred as: fn swap_points(a: &mut Point, b: &mut Point)
+fn swap_points(a: Point, b: Point) {
+    let temp_x = a.x
+    let temp_y = a.y
+    a.x = b.x
+    a.y = b.y
+    b.x = temp_x
+    b.y = temp_y
+}
+
+// Function that only reads parameters (no mutation)
+// Should be inferred as: fn distance(a: &Point, b: &Point) -> f32
+fn distance(a: Point, b: Point) -> f32 {
+    let dx = b.x - a.x
+    let dy = b.y - a.y
+    return (dx * dx + dy * dy).sqrt()
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

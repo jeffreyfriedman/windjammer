@@ -54,8 +54,8 @@ impl JavaScriptGenerator {
         }
     }
 
-    fn contains_await_in_body(&self, statements: &[Statement]) -> bool {
-        statements.iter().any(Self::contains_await_stmt)
+    fn contains_await_in_body<'ast>(&self, statements: &[&'ast Statement<'ast>]) -> bool {
+        statements.iter().any(|s| Self::contains_await_stmt(s))
     }
 
     fn contains_await_stmt(stmt: &Statement) -> bool {
@@ -72,10 +72,10 @@ impl JavaScriptGenerator {
                 ..
             } => {
                 Self::contains_await_expr(condition)
-                    || then_block.iter().any(Self::contains_await_stmt)
+                    || then_block.iter().any(|s| Self::contains_await_stmt(s))
                     || else_block
                         .as_ref()
-                        .is_some_and(|block| block.iter().any(Self::contains_await_stmt))
+                        .is_some_and(|block| block.iter().any(|s| Self::contains_await_stmt(s)))
             }
             _ => false,
         }
@@ -290,8 +290,9 @@ if (import.meta.url === `file://${process.argv[1]}`) {
                 use crate::parser::EnumPatternBinding;
                 // JavaScript doesn't have pattern matching like Rust, simplify
                 match binding {
-                    EnumPatternBinding::Named(bind) => bind.clone(),
+                    EnumPatternBinding::Single(bind) => bind.clone(),
                     EnumPatternBinding::Wildcard | EnumPatternBinding::None => variant.clone(),
+                    _ => variant.clone(), // Tuple and Struct patterns also simplified to variant name
                 }
             }
             crate::parser::Pattern::Literal(lit) => {
@@ -474,7 +475,7 @@ if (import.meta.url === `file://${process.argv[1]}`) {
                         output.push_str("else if (");
                     }
                     output.push_str(&self.generate_pattern_match(&arm.pattern, "__match_value"));
-                    if let Some(ref guard) = arm.guard {
+                    if let Some(guard) = arm.guard {
                         output.push_str(" && ");
                         output.push_str(&self.generate_expression(guard));
                     }
@@ -482,10 +483,7 @@ if (import.meta.url === `file://${process.argv[1]}`) {
 
                     self.indent_level += 1;
                     output.push_str(&self.indent());
-                    output.push_str(&format!(
-                        "return {};\n",
-                        self.generate_expression(&arm.body)
-                    ));
+                    output.push_str(&format!("return {};\n", self.generate_expression(arm.body)));
                     self.indent_level -= 1;
 
                     output.push_str(&self.indent());
@@ -835,12 +833,13 @@ if (import.meta.url === `file://${process.argv[1]}`) {
             Pattern::EnumVariant(name, binding) => {
                 use crate::parser::EnumPatternBinding;
                 match binding {
-                    EnumPatternBinding::Named(var) => {
+                    EnumPatternBinding::Single(var) => {
                         format!("{} === {}.{}", match_value, name, var)
                     }
                     EnumPatternBinding::Wildcard | EnumPatternBinding::None => {
                         format!("{} === {}", match_value, name)
                     }
+                    _ => format!("{} === {}", match_value, name), // Tuple and Struct patterns
                 }
             }
             Pattern::Or(patterns) => {
@@ -869,6 +868,11 @@ if (import.meta.url === `file://${process.argv[1]}`) {
             BinaryOp::Ge => ">=",
             BinaryOp::And => "&&",
             BinaryOp::Or => "||",
+            BinaryOp::BitAnd => "&",
+            BinaryOp::BitOr => "|",
+            BinaryOp::BitXor => "^",
+            BinaryOp::Shl => "<<",
+            BinaryOp::Shr => ">>",
         }
         .to_string()
     }
@@ -943,6 +947,7 @@ mod tests {
                 decl: FunctionDecl {
                     name: "greet".to_string(),
                     is_pub: false,
+                    is_extern: false,
                     parameters: vec![],
                     return_type: None,
                     body: vec![],
@@ -951,6 +956,7 @@ mod tests {
                     type_params: vec![],
                     where_clause: vec![],
                     parent_type: None,
+                    doc_comment: None,
                 },
                 location: None,
             }],
