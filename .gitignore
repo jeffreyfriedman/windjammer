@@ -81,3 +81,4 @@ build_editor/
 build_game_editor/
 *.bak
 .pr-comments/
+tests/generated/
