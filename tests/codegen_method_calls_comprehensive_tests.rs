@@ -254,6 +254,7 @@ pub fn create_point() -> Point {
 // ============================================================================
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_method_borrowed_param() {
     let code = r#"
 @derive(Clone, Debug)
@@ -311,6 +312,7 @@ impl Container {
 // ============================================================================
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_method_chaining_vec() {
     let code = r#"
 pub fn chain_example(items: &Vec<i32>) -> i32 {
@@ -326,6 +328,7 @@ pub fn chain_example(items: &Vec<i32>) -> i32 {
 }
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_method_chaining_string() {
     let code = r#"
 pub fn chain_string(s: &string) -> string {
@@ -378,6 +381,7 @@ impl Outer {
 // ============================================================================
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_generic_method_call() {
     let code = r#"
 @derive(Clone, Debug)
