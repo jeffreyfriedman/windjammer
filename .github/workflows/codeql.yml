@@ -1,5 +1,10 @@
 name: "CodeQL Security Scanning"
 
+# NOTE: GitHub's default CodeQL setup must be DISABLED for this workflow to run.
+# Go to: Settings > Code security and analysis > Code scanning
+# If "CodeQL analysis" shows "Default", click "Edit" and select "Advanced" or "None"
+# Then this workflow can upload results.
+
 on:
   push:
     branches: [ "main" ]
