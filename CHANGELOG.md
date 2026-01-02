@@ -13,15 +13,22 @@
   - Added MCP and Runtime crate dependency tracking
   - Covers all 4 workspace crates now
 
+### Changed
+- **Compiler Cleanup**: Removed game-specific code from the compiler
+  - **Deleted**: `tests/ambiguous_import_disambiguation_test.rs` (game-specific import tests)
+  - **Genericized**: Import disambiguation heuristics (removed hardcoded game module names like `collision2d`, `sprite`, `texture_atlas`)
+  - **Genericized**: Decorator implementations (removed Vec3-specific logic from `@game` decorator)
+  - **Updated**: TypeRegistry tests to use generic examples instead of game-specific ones
+  - **Impact**: Compiler is now truly generic and domain-agnostic
+
 ### Fixed
-- **Code Coverage CI**: Added `#[cfg_attr(tarpaulin, ignore)]` to 24 more tests that spawn subprocesses and timeout under coverage instrumentation
+- **Code Coverage CI**: Added `#[cfg_attr(tarpaulin, ignore)]` to 20 tests that spawn subprocesses and timeout under coverage instrumentation
   - Batch 1 (4): `test_borrow_for_iteration`, `test_conditional_mutation`, `test_explicit_borrowed_respected`, `test_explicit_mut_borrowed_respected`
   - Batch 2 (4): `test_method_with_read_only_string_param`, `test_method_with_stored_string_param`, `test_method_returning_computed_value`, `test_chained_method_calls_with_strings`
   - Batch 3 (4): `test_int_var_compared_with_len_should_cast_len`, `test_int_local_var_compared_with_len`, `test_usize_var_compared_with_len_no_cast`, `test_int_field_compared_with_len_in_if`
   - Batch 4 (4): `test_multiple_use`, `test_option_some`, `test_option_none`, `test_result_err`
   - Batch 5 (4): `test_custom_method_with_ref_param`, `test_hashmap_get_adds_ref`, `test_hashmap_remove_adds_ref`, `test_mixed_owned_and_literal`
-  - **Batch 6 (4)**: `test_ambiguity_prevention_with_mod_rs_globs`, `test_collision2d_module_preserves_path`, `test_entity_component_imports_preserve_paths`, `test_math_directory_prefix_stripped`
-- **Total Ignored Tests**: 34 tests now ignored during coverage (all spawn subprocesses)
+- **Total Ignored Tests**: 30 tests now ignored during coverage (all spawn subprocesses)
 - **Impact**: Code coverage CI now completes successfully without timeouts
 - **Cross-compilation for ARM64 Linux**: Fixed linker configuration for `aarch64-unknown-linux-gnu` target
   - Added `.cargo/config.toml` entry to specify `aarch64-linux-gnu-gcc` as linker
