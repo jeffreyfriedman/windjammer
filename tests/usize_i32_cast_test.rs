@@ -88,6 +88,7 @@ impl Container {
 }
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_i32_assign_from_len() {
     // Assigning len() result to int should auto-cast
     let code = r#"

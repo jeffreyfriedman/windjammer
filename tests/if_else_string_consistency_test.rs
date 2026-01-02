@@ -62,6 +62,7 @@ fn compile_and_verify(code: &str) -> (bool, String, String) {
 // Skip in coverage - spawns subprocess (very slow under tarpaulin)
 #[cfg_attr(tarpaulin, ignore)]
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_if_else_literal_vs_field() {
     // If one branch returns literal, the other returns field
     let code = r#"
@@ -96,6 +97,7 @@ impl Item {
 
 // Skip in coverage - spawns subprocess (very slow under tarpaulin)
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_if_else_both_literals() {
     // Both branches return literals
     let code = r#"
@@ -124,6 +126,7 @@ pub fn get_status(active: bool) -> string {
 
 // Skip in coverage - spawns subprocess (very slow under tarpaulin)
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_if_else_field_vs_literal() {
     // Reversed: field first, literal second
     let code = r#"
@@ -158,6 +161,7 @@ impl Config {
 
 // Skip in coverage - spawns subprocess (very slow under tarpaulin)
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_nested_if_else_strings() {
     // Nested if-else with strings
     let code = r#"

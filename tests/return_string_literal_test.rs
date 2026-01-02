@@ -80,6 +80,7 @@ pub fn get_default() -> string {
 }
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_return_string_literal() {
     // Return non-empty string literal
     let code = r#"
@@ -104,6 +105,7 @@ pub fn get_message() -> string {
 }
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_early_return_string_literal() {
     // Early return with string literal
     let code = r#"
@@ -136,6 +138,7 @@ impl Widget {
 }
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_conditional_return_strings() {
     // Multiple conditional returns
     let code = r#"

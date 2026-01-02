@@ -102,6 +102,7 @@ impl Container {
 }
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_remove_item_rebuild_vec() {
     // Pattern: rebuild vec without certain items
     let code = r#"
@@ -147,6 +148,7 @@ impl Mixer {
 }
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_copy_matching_items() {
     // Copy items that match a condition
     let code = r#"

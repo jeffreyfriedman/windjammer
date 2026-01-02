@@ -73,6 +73,7 @@ pub struct Camera {
 }
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_super_super_math_flattens_to_super() {
     // Test: use super::super::math::vec3::Vec3 should generate use super::Vec3;
     let source = r#"
@@ -132,6 +133,7 @@ pub struct Camera {
 }
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_std_ops_imports_use_rust_stdlib() {
     // Test: std::ops imports should NOT map to windjammer_runtime
     let source = r#"
@@ -212,6 +214,7 @@ impl Add for Vec2 {
 }
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_non_sibling_imports_unchanged() {
     // Test: Non-sibling module imports should NOT use super::
     let source = r#"

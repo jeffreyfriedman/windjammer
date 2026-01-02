@@ -90,3 +90,4 @@ fn main() {
 
     println!("✅ Cargo.toml has correct [[bin]] section");
 }
+

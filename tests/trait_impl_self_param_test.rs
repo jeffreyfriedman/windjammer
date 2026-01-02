@@ -93,6 +93,7 @@ fn test_trait_impl_self_param_owned() {
 }
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_trait_impl_self_param_borrowed() {
     // TDD: Test that &self in trait is respected
 
@@ -132,6 +133,7 @@ fn test_trait_impl_self_param_borrowed() {
 }
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_trait_impl_self_param_mutable() {
     // TDD: Test that &mut self in trait is respected
 

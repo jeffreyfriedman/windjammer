@@ -79,6 +79,7 @@ pub struct Camera3D {
 }
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_single_super_import_preserved() {
     // A simple super:: import should still work
     let source = r#"
@@ -138,6 +139,7 @@ pub struct Camera3D {
 }
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_deeply_nested_super_import_flattens() {
     // Even deeper nesting should flatten correctly
     let source = r#"

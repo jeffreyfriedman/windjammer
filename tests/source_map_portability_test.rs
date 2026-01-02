@@ -86,6 +86,7 @@ fn main() {
 }
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_source_map_has_required_fields() {
     let source = r#"
 fn greet(name: String) {
@@ -121,6 +122,7 @@ fn main() {
 }
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_source_map_workspace_root_handling() {
     let source = r#"
 fn add(a: int, b: int) -> int {
@@ -156,6 +158,7 @@ fn main() {
 }
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_source_map_portable_structure() {
     // This test verifies the source map has a structure that's portable
     let source = r#"

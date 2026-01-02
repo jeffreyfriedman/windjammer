@@ -377,3 +377,4 @@ let program = parser.parse()?; // ✅ program has 'static lifetime
 **Branch**: `feature/fix-constructor-ownership`  
 **Status**: **SHIPPED** 🚀
 
+

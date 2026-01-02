@@ -93,6 +93,7 @@ impl GameLoop for MyGame {
 }
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_trait_param_inference_across_files() {
     let temp_dir = TempDir::new().unwrap();
     let src_dir = temp_dir.path().join("src_wj");

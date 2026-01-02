@@ -72,6 +72,7 @@ impl Point {
 }
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_self_inference_mutating() {
     let code = r#"
 pub struct Counter {
@@ -115,6 +116,7 @@ impl Counter {
 }
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_self_inference_consuming() {
     let code = r#"
 pub struct Builder {
@@ -151,6 +153,7 @@ impl Builder {
 }
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_self_inference_mixed() {
     let code = r#"
 pub struct Vector {

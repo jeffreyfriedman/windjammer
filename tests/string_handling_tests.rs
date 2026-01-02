@@ -74,6 +74,7 @@ pub fn build_html() -> string {
 }
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_mutable_string_with_initial_value() {
     let code = r#"
 pub fn greet(name: string) -> string {
@@ -96,6 +97,7 @@ pub fn greet(name: string) -> string {
 }
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_immutable_string_no_to_string() {
     let code = r#"
 pub fn get_message() -> &'static str {
@@ -116,6 +118,7 @@ pub fn get_message() -> &'static str {
 // ============================================================================
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_string_literal_to_stored_param() {
     // When parameter is stored (not just returned), it should be owned
     let code = r#"
@@ -147,6 +150,7 @@ pub fn create() -> Container {
 }
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_string_literal_to_method_contains() {
     let code = r#"
 pub fn has_word(text: string) -> bool {
@@ -170,6 +174,7 @@ pub fn has_word(text: string) -> bool {
 // ============================================================================
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_match_arms_all_literals() {
     let code = r#"
 pub fn status_message(code: i32) -> string {
@@ -197,6 +202,7 @@ pub fn status_message(code: i32) -> string {
 }
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_match_arms_mixed_types() {
     let code = r#"
 pub fn format_value(opt: Option<string>) -> string {
@@ -223,6 +229,7 @@ pub fn format_value(opt: Option<string>) -> string {
 // ============================================================================
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_return_string_literal() {
     let code = r#"
 pub fn get_name() -> string {
@@ -242,6 +249,7 @@ pub fn get_name() -> string {
 }
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_implicit_return_string_literal() {
     let code = r#"
 pub fn get_version() -> string {
@@ -265,6 +273,7 @@ pub fn get_version() -> string {
 // ============================================================================
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_replace_method() {
     let code = r#"
 pub fn escape_html(text: string) -> string {
@@ -289,6 +298,7 @@ pub fn escape_html(text: string) -> string {
 }
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_split_method() {
     let code = r#"
 pub fn get_parts(text: string) -> Vec<string> {
@@ -316,6 +326,7 @@ pub fn get_parts(text: string) -> Vec<string> {
 // ============================================================================
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_struct_string_fields() {
     let code = r#"
 pub struct Person {
@@ -347,6 +358,7 @@ pub fn create_person() -> Person {
 // ============================================================================
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_vec_push_string_literal() {
     let code = r#"
 pub fn get_colors() -> Vec<string> {
@@ -374,6 +386,7 @@ pub fn get_colors() -> Vec<string> {
 // ============================================================================
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_if_else_string_returns() {
     let code = r#"
 pub fn classify(n: i32) -> string {

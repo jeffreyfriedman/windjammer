@@ -106,6 +106,7 @@ pub fn test_editor() {
 }
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_push_cloned_struct_to_vec() {
     // When iterating and pushing clones, the vec should work correctly
     // WINDJAMMER FIX: No need for .as_str() when parameter is already inferred to &str
@@ -146,6 +147,7 @@ impl Container {
 }
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_constructor_with_multiple_string_params() {
     // Constructor with multiple string params that are stored
     let code = r#"
@@ -181,6 +183,7 @@ pub fn create_person() -> Person {
 }
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_method_call_chain_with_borrowed_params() {
     // Method that takes borrowed params and passes to another method
     let code = r#"

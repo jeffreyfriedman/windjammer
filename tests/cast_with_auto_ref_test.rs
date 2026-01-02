@@ -113,3 +113,4 @@ fn test_method_call_with_multiple_casts() {
         "Should handle cast in let binding"
     );
 }
+

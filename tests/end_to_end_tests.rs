@@ -267,6 +267,7 @@ fn test_all_targets_all_cases() {
 }
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_javascript_string_interpolation() {
     // Acquire mutex to serialize this test
     let _lock = TEST_MUTEX.lock().unwrap();
@@ -304,6 +305,7 @@ fn main() {
 }
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_javascript_jsdoc_generation() {
     // Acquire mutex to serialize this test
     let _lock = TEST_MUTEX.lock().unwrap();
@@ -378,6 +380,7 @@ fn create_user(name: string, age: int) -> User {
 }
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_complex_program_all_targets() {
     // Acquire mutex to serialize this test
     let _lock = TEST_MUTEX.lock().unwrap();

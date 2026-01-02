@@ -114,6 +114,7 @@ pub fn find_item(items: Vec<Item>, target_ids: Vec<string>) -> bool {
 }
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_iterator_var_no_double_ref_for_get() {
     // HashMap.get() should not double-reference iterator variables
     let code = r#"
@@ -147,6 +148,7 @@ pub fn lookup(map: HashMap<string, i32>, keys: Vec<string>) -> i32 {
 // ============================================================================
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_push_infers_owned_parameter() {
     // When a parameter is pushed to a Vec, it should be inferred as owned
     let code = r#"
@@ -179,6 +181,7 @@ impl Container {
 }
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_push_in_else_branch_infers_owned() {
     // Push in else branch should still infer owned parameter
     let code = r#"
@@ -209,6 +212,7 @@ impl NameList {
 }
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_insert_infers_owned_parameter() {
     // HashMap insert should infer owned parameters
     let code = r#"
@@ -246,6 +250,7 @@ impl Cache {
 // ============================================================================
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_push_in_for_loop_infers_owned() {
     // Push inside a for loop should infer owned parameter
     let code = r#"
@@ -268,6 +273,7 @@ impl Collector {
 }
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_push_in_while_loop_infers_owned() {
     // Push inside a while loop should detect storage
     let code = r#"
@@ -295,6 +301,7 @@ impl Buffer {
 // ============================================================================
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_load_method_no_to_string() {
     // Methods like .load() should NOT add .to_string() to path arguments
     let code = r#"
@@ -326,6 +333,7 @@ pub fn load_asset() -> Asset {
 }
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_string_literal_in_struct_init() {
     // String literals in struct initialization should work
     let code = r#"
@@ -358,6 +366,7 @@ pub fn default_config() -> Config {
 // ============================================================================
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_mutable_string_auto_to_string() {
     // Mutable string variables should be String, not &str
     let code = r#"
@@ -387,6 +396,7 @@ pub fn build_message() -> string {
 // ============================================================================
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_match_arms_string_consistency() {
     // All match arms returning strings should have consistent types
     let code = r#"
@@ -419,6 +429,7 @@ pub fn get_status(code: i32) -> string {
 // ============================================================================
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_contains_takes_str_ref() {
     // String.contains() takes &str, should not add .to_string()
     let code = r#"
@@ -439,6 +450,7 @@ pub fn has_hello(text: string) -> bool {
 }
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_replace_takes_str_ref() {
     // String.replace() takes &str for pattern
     let code = r#"
@@ -459,6 +471,7 @@ pub fn sanitize(text: string) -> string {
 }
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_starts_with_takes_str_ref() {
     // String.starts_with() takes &str
     let code = r#"
@@ -483,6 +496,7 @@ pub fn is_http(url: string) -> bool {
 // ============================================================================
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_complex_ownership_toggle_pattern() {
     // Common pattern: check if exists, then add or remove
     let code = r#"
@@ -522,6 +536,7 @@ impl SelectionManager {
 }
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_complex_ownership_map_iteration() {
     // Iterating over HashMap and using keys
     let code = r#"
