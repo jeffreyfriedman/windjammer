@@ -23,7 +23,7 @@
   - **Impact**: Compiler is now truly generic and domain-agnostic. All tests pass.
 
 ### Fixed
-- **Code Coverage CI**: Added `#[cfg_attr(tarpaulin, ignore)]` to 34 tests that spawn subprocesses and timeout under coverage instrumentation
+- **Code Coverage CI**: Added `#[cfg_attr(tarpaulin, ignore)]` to 38 tests that spawn subprocesses and timeout under coverage instrumentation
   - Batch 1 (4): `test_borrow_for_iteration`, `test_conditional_mutation`, `test_explicit_borrowed_respected`, `test_explicit_mut_borrowed_respected`
   - Batch 2 (4): `test_method_with_read_only_string_param`, `test_method_with_stored_string_param`, `test_method_returning_computed_value`, `test_chained_method_calls_with_strings`
   - Batch 3 (4): `test_int_var_compared_with_len_should_cast_len`, `test_int_local_var_compared_with_len`, `test_usize_var_compared_with_len_no_cast`, `test_int_field_compared_with_len_in_if`
@@ -33,7 +33,8 @@
   - **Batch 8 (4)**: `test_extern_fn_multiple_declarations`, `test_extern_fn_multiple_params`, `test_extern_fn_semicolon_optional`, `test_extern_fn_simple`
   - **Batch 9 (1)**: `test_string_literal_var_to_method`
   - **Batch 10 (5)**: `test_impl_associated_fn`, `test_impl_basic`, `test_impl_enum`, `test_impl_generic` (2 files)
-- **Total Ignored Tests**: 44 tests (34 for coverage timeouts, 10 from previous PRs)
+  - **Batch 11 (4)**: `test_method_consuming_self`, `test_method_multiple_params`, `test_method_mut_self`, `test_method_mut_self_returns_self`
+- **Total Ignored Tests**: 48 tests (38 for coverage timeouts, 10 from previous PRs)
 - **Impact**: Code coverage CI now completes successfully without timeouts or failures
 - **Cross-compilation for ARM64 Linux**: Fixed linker configuration for `aarch64-unknown-linux-gnu` target
   - Added `.cargo/config.toml` entry to specify `aarch64-linux-gnu-gcc` as linker
