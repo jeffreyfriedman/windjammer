@@ -14,10 +14,11 @@
   - Covers all 4 workspace crates now
 
 ### Fixed
-- **Code Coverage CI**: Added `#[cfg_attr(tarpaulin, ignore)]` to 8 more tests that spawn subprocesses and timeout under coverage instrumentation
-  - Existing (4): `test_borrow_for_iteration`, `test_conditional_mutation`, `test_explicit_borrowed_respected`, `test_explicit_mut_borrowed_respected`
-  - **New (4)**: `test_method_with_read_only_string_param`, `test_method_with_stored_string_param`, `test_method_returning_computed_value`, `test_chained_method_calls_with_strings`
-- **Total Ignored Tests**: 18 tests now ignored during coverage (all spawn subprocesses)
+- **Code Coverage CI**: Added `#[cfg_attr(tarpaulin, ignore)]` to 12 more tests that spawn subprocesses and timeout under coverage instrumentation
+  - Batch 1 (4): `test_borrow_for_iteration`, `test_conditional_mutation`, `test_explicit_borrowed_respected`, `test_explicit_mut_borrowed_respected`
+  - Batch 2 (4): `test_method_with_read_only_string_param`, `test_method_with_stored_string_param`, `test_method_returning_computed_value`, `test_chained_method_calls_with_strings`
+  - **Batch 3 (4)**: `test_int_var_compared_with_len_should_cast_len`, `test_int_local_var_compared_with_len`, `test_usize_var_compared_with_len_no_cast`, `test_int_field_compared_with_len_in_if`
+- **Total Ignored Tests**: 22 tests now ignored during coverage (all spawn subprocesses)
 - **Impact**: Code coverage CI now completes successfully without timeouts
 - **Cross-compilation for ARM64 Linux**: Fixed linker configuration for `aarch64-unknown-linux-gnu` target
   - Added `.cargo/config.toml` entry to specify `aarch64-linux-gnu-gcc` as linker
