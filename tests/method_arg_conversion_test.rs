@@ -120,6 +120,7 @@ fn compile_fixture(fixture_name: &str) -> Result<String, String> {
 // ============================================================================
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_contains_adds_reference() {
     let generated = compile_fixture("method_arg_conversion").expect("Compilation failed");
 

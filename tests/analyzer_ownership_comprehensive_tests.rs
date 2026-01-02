@@ -75,6 +75,7 @@ fn compile_and_verify(code: &str) -> (bool, String, String) {
 // ============================================================================
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_infer_borrowed_for_readonly_param() {
     let code = r#"
 @derive(Clone, Debug)
@@ -303,7 +304,6 @@ pub fn add(x: i32, y: i32) -> i32 {
 // ============================================================================
 
 #[test]
-#[cfg_attr(tarpaulin, ignore)]
 fn test_explicit_borrowed_respected() {
     let code = r#"
 @derive(Clone, Debug)
@@ -326,7 +326,6 @@ pub fn process(d: &Data) -> i32 {
 }
 
 #[test]
-#[cfg_attr(tarpaulin, ignore)]
 fn test_explicit_mut_borrowed_respected() {
     let code = r#"
 @derive(Clone, Debug)
@@ -463,7 +462,6 @@ pub fn set_inner_value(o: Outer, v: i32) {
 }
 
 #[test]
-#[cfg_attr(tarpaulin, ignore)]
 fn test_conditional_mutation() {
     let code = r#"
 @derive(Clone, Debug)
@@ -519,7 +517,6 @@ pub fn increment_n_times(c: Counter, n: i32) {
 // ============================================================================
 
 #[test]
-#[cfg_attr(tarpaulin, ignore)]
 fn test_borrow_for_iteration() {
     let code = r#"
 @derive(Clone, Debug)

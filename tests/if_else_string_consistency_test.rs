@@ -95,7 +95,6 @@ impl Item {
 }
 
 // Skip in coverage - spawns subprocess (very slow under tarpaulin)
-#[cfg_attr(tarpaulin, ignore)]
 #[test]
 fn test_if_else_both_literals() {
     // Both branches return literals
@@ -124,7 +123,6 @@ pub fn get_status(active: bool) -> string {
 }
 
 // Skip in coverage - spawns subprocess (very slow under tarpaulin)
-#[cfg_attr(tarpaulin, ignore)]
 #[test]
 fn test_if_else_field_vs_literal() {
     // Reversed: field first, literal second
@@ -159,7 +157,6 @@ impl Config {
 }
 
 // Skip in coverage - spawns subprocess (very slow under tarpaulin)
-#[cfg_attr(tarpaulin, ignore)]
 #[test]
 fn test_nested_if_else_strings() {
     // Nested if-else with strings

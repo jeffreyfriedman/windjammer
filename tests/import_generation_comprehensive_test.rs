@@ -9,6 +9,7 @@ use std::fs;
 use std::process::Command;
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_math_module_import_uses_super() {
     // Test: use math::Vec3 should generate use super::Vec3;
     let source = r#"

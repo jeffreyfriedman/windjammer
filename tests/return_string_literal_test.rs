@@ -55,6 +55,7 @@ fn compile_and_verify(code: &str) -> (bool, String, String) {
 }
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_return_empty_string() {
     // Return empty string literal
     let code = r#"

@@ -64,7 +64,6 @@ fn test_int_var_compared_with_len_should_cast_len() {
 }
 
 #[test]
-#[cfg_attr(tarpaulin, ignore)]
 fn test_int_local_var_compared_with_len() {
     let code = r#"
     pub fn check_bounds(items: Vec<i32>, pos: int) -> bool {
@@ -83,7 +82,6 @@ fn test_int_local_var_compared_with_len() {
 }
 
 #[test]
-#[cfg_attr(tarpaulin, ignore)]
 fn test_usize_var_compared_with_len_no_cast() {
     // When both are usize, NO cast needed
     let code = r#"
@@ -103,7 +101,6 @@ fn test_usize_var_compared_with_len_no_cast() {
 }
 
 #[test]
-#[cfg_attr(tarpaulin, ignore)]
 fn test_int_field_compared_with_len_in_if() {
     let code = r#"
     pub struct State {

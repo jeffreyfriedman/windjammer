@@ -4,6 +4,7 @@
 use std::process::Command;
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_copy_type_method_params() {
     // Compile the Windjammer file
     let output = Command::new("cargo")
