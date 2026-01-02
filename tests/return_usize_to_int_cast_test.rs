@@ -36,6 +36,7 @@ fn compile_code(code: &str) -> Result<String, String> {
 }
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_return_vec_len_should_cast_to_int() {
     // BUG: Compiler doesn't auto-cast .len() to i64 in return
     let code = r#"

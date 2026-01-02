@@ -153,6 +153,7 @@ fn compile_should_fail(code: &str, expected_error: &str, test_name: &str) {
 // ============================================================================
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_tuple_enum_definition_single_field() {
     let code = r#"
 enum Option<T> {

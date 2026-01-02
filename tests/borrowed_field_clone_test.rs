@@ -54,6 +54,7 @@ fn compile_and_verify(code: &str) -> (bool, String, String) {
 }
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_borrowed_item_field_access() {
     // When iterating over borrowed items, fields need .clone()
     let code = r#"

@@ -57,6 +57,7 @@ fn compile_and_verify(code: &str) -> (bool, String, String) {
 }
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_method_chain_string_args() {
     // Method chain with string literal arguments
     let code = r#"

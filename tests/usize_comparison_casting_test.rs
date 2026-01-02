@@ -42,6 +42,7 @@ fn compile_and_check_casts(code: &str) -> Result<String, String> {
 }
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_vec_len_comparison_should_not_cast_to_i32() {
     // BUG: Compiler incorrectly adds (len as i32) when comparing with usize variable
     let code = r#"

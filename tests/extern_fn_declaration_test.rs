@@ -84,7 +84,6 @@ fn test_extern_fn_with_return_type() {
 }
 
 #[test]
-#[cfg_attr(tarpaulin, ignore)]
 fn test_extern_fn_multiple_params() {
     // TDD: Extern function with multiple parameters
     let code = r#"
@@ -127,7 +126,6 @@ fn test_extern_fn_used_in_code() {
 }
 
 #[test]
-#[cfg_attr(tarpaulin, ignore)]
 fn test_extern_fn_multiple_declarations() {
     // TDD: Multiple extern functions
     let code = r#"
@@ -178,7 +176,6 @@ fn test_extern_fn_with_generics() {
 }
 
 #[test]
-#[cfg_attr(tarpaulin, ignore)]
 fn test_extern_fn_semicolon_optional() {
     // TDD: Semicolons should be optional (Windjammer philosophy)
     let code = r#"

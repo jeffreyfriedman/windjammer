@@ -70,6 +70,7 @@ fn compile_and_verify(code: &str) -> (bool, String, String) {
 // ============================================================================
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_e2e_counter() {
     let code = r#"
 @derive(Clone, Debug)

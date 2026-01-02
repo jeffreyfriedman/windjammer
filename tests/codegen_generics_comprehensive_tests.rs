@@ -77,6 +77,7 @@ fn compile_and_verify(code: &str) -> (bool, String, String) {
 // ============================================================================
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_generic_function_simple() {
     let code = r#"
 pub fn identity<T>(x: T) -> T {

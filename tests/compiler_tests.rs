@@ -39,6 +39,7 @@ fn compile_fixture(fixture_name: &str) -> Result<String, String> {
 }
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_automatic_reference_insertion() {
     let generated = compile_fixture("auto_reference").expect("Compilation failed");
 

@@ -9,6 +9,7 @@ use std::fs;
 use tempfile::TempDir;
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_trait_signature_updates_on_regeneration() {
     let temp_dir = TempDir::new().unwrap();
     let src_dir = temp_dir.path().join("src_wj");

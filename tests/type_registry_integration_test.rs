@@ -79,6 +79,7 @@ impl Game {
 }
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_type_registry_fixes_import_paths() {
     let (project_dir, output_dir) = setup_test_project();
     let src_dir = project_dir.join("src");

@@ -38,6 +38,7 @@ fn compile_code_to_cargo_toml(code: &str, test_name: &str) -> Result<String, Str
 }
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_crate_keyword_not_in_dependencies() {
     // Code that uses "use crate::foo" should NOT add "crate" to Cargo.toml
     let code = r#"

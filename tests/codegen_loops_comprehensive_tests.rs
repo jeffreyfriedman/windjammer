@@ -77,6 +77,7 @@ fn compile_and_verify(code: &str) -> (bool, String, String) {
 // ============================================================================
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_for_range() {
     let code = r#"
 pub fn sum_to_n(n: i32) -> i32 {

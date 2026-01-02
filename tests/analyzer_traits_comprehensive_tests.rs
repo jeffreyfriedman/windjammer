@@ -162,7 +162,6 @@ impl Config {
 // ============================================================================
 
 #[test]
-#[cfg_attr(tarpaulin, ignore)]
 fn test_impl_generic() {
     let code = r#"
 @derive(Clone, Debug)
@@ -265,7 +264,6 @@ impl Wrapper {
 // ============================================================================
 
 #[test]
-#[cfg_attr(tarpaulin, ignore)]
 fn test_impl_associated_fn() {
     let code = r#"
 @derive(Clone, Debug)
@@ -301,7 +299,6 @@ impl Point {
 // ============================================================================
 
 #[test]
-#[cfg_attr(tarpaulin, ignore)]
 fn test_impl_enum() {
     let code = r#"
 @derive(Clone, Debug)

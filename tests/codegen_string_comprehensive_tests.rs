@@ -78,6 +78,7 @@ fn compile_and_verify(code: &str) -> (bool, String, String) {
 // ============================================================================
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_string_literal_assignment() {
     let code = r#"
 pub fn greeting() -> string {
@@ -306,7 +307,6 @@ pub fn describe(n: i32) -> string {
 }
 
 #[test]
-#[cfg_attr(tarpaulin, ignore)]
 fn test_match_mixed_return() {
     let code = r#"
 pub fn get_message(code: i32) -> string {

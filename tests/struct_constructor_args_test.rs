@@ -57,6 +57,7 @@ fn compile_and_verify(code: &str) -> (bool, String, String) {
 }
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_push_struct_with_borrowed_param() {
     // When a method has a borrowed string param and we use it to create a struct,
     // the struct constructor should receive the correct type

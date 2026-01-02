@@ -36,6 +36,7 @@ fn compile_code(code: &str) -> Result<String, String> {
 }
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_string_literal_to_str_param_no_conversion() {
     // BUG: Compiler incorrectly adds .to_string() when function expects &str
     let code = r#"

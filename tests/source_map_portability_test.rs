@@ -41,6 +41,7 @@ fn compile_with_source_map(source: &str, test_name: &str) -> Result<PathBuf, Str
 }
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_source_map_valid_json() {
     let source = r#"
 fn main() {

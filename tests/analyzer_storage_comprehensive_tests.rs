@@ -74,6 +74,7 @@ fn compile_and_verify(code: &str) -> (bool, String, String) {
 // ============================================================================
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_push_to_vec_requires_owned() {
     let code = r#"
 @derive(Clone, Debug)

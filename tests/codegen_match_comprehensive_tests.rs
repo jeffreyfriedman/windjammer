@@ -77,6 +77,7 @@ fn compile_and_verify(code: &str) -> (bool, String, String) {
 // ============================================================================
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_match_integer() {
     let code = r#"
 pub fn describe_number(n: i32) -> i32 {
