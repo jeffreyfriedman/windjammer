@@ -14,12 +14,10 @@
   - Covers all 4 workspace crates now
 
 ### Fixed
-- **Code Coverage CI**: Added `#[cfg_attr(tarpaulin, ignore)]` to 4 more tests that spawn subprocesses and timeout under coverage instrumentation
-  - `test_borrow_for_iteration`
-  - `test_conditional_mutation`
-  - `test_explicit_borrowed_respected`
-  - `test_explicit_mut_borrowed_respected`
-- **Total Ignored Tests**: 14 tests now ignored during coverage (all spawn subprocesses)
+- **Code Coverage CI**: Added `#[cfg_attr(tarpaulin, ignore)]` to 8 more tests that spawn subprocesses and timeout under coverage instrumentation
+  - Existing (4): `test_borrow_for_iteration`, `test_conditional_mutation`, `test_explicit_borrowed_respected`, `test_explicit_mut_borrowed_respected`
+  - **New (4)**: `test_method_with_read_only_string_param`, `test_method_with_stored_string_param`, `test_method_returning_computed_value`, `test_chained_method_calls_with_strings`
+- **Total Ignored Tests**: 18 tests now ignored during coverage (all spawn subprocesses)
 - **Impact**: Code coverage CI now completes successfully without timeouts
 - **Cross-compilation for ARM64 Linux**: Fixed linker configuration for `aarch64-unknown-linux-gnu` target
   - Added `.cargo/config.toml` entry to specify `aarch64-linux-gnu-gcc` as linker
@@ -35,6 +33,7 @@
 - **Unmaintained Dependencies**: 2 warnings (paste, yaml-rust) - both transitive, low impact
 - **Security Tooling**: CodeQL, Dependabot, cargo-audit integrated
 - **Supply Chain**: 453 crate dependencies monitored daily
+- **CodeQL Configuration**: Documented requirement to disable GitHub's default setup to use custom workflow
 
 ## [0.39.0] - 2025-12-25
 ### Added
