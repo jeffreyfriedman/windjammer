@@ -54,6 +54,31 @@ Steps:
 - ✅ Catches common security bugs
 - ✅ Integrates with GitHub Security Dashboard
 
+**⚠️ IMPORTANT Configuration Requirement**:
+
+GitHub's **default CodeQL setup** must be **DISABLED** for this custom workflow to work.
+
+**Error if not disabled**:
+```
+CodeQL analyses from advanced configurations cannot be processed
+when the default setup is enabled
+```
+
+**How to fix**:
+1. Navigate to: **Settings > Code security and analysis**
+2. Find "Code scanning" section
+3. If "CodeQL analysis" shows **"Default"**, click **"Edit"**
+4. Select **"Advanced"** or **"None"** to disable default setup
+5. Save changes
+6. Our custom workflow can now upload results
+
+**Why use custom workflow instead of default**:
+- ✅ More control over scan frequency (weekly + on-demand)
+- ✅ Custom caching for faster builds
+- ✅ Explicit Rust toolchain version
+- ✅ Integrated with our CI/CD pipeline
+- ✅ Can customize queries and configuration
+
 ---
 
 ### 2. **Security Policy** 📋
