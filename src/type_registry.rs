@@ -19,7 +19,7 @@ pub struct TypeRegistry {
     types: HashMap<String, String>,
     
     /// Map: FunctionName -> ModulePath
-    /// Example: "check_collision" -> "collision2d"
+    /// Example: "check_validity" -> "validator"
     functions: HashMap<String, String>,
     
     /// Map: TypeName -> FilePath (for debugging)
@@ -126,7 +126,7 @@ impl TypeRegistry {
     /// Convert a file path to a module path
     /// Since all generated files are FLAT in src/generated/, we only use the filename
     /// Example: "src_wj/math/vec2.wj" -> "vec2"
-    /// Example: "src_wj/physics/collision2d.wj" -> "collision2d"
+    /// Example: "src_wj/utils/validator.wj" -> "validator"
     fn file_path_to_module_path(file_path: &Path) -> Result<String, String> {
         // Extract just the filename without extension
         let filename = file_path
@@ -211,15 +211,15 @@ mod tests {
         );
         
         registry.register_function(
-            "check_collision".to_string(),
-            "collision2d".to_string()
+            "check_validity".to_string(),
+            "validator".to_string()
         );
         
         assert_eq!(registry.lookup_type("Vec2"), Some("vec2"));
         assert_eq!(registry.lookup_type("Vec3"), None);
-        assert_eq!(registry.lookup_function("check_collision"), Some("collision2d"));
+        assert_eq!(registry.lookup_function("check_validity"), Some("validator"));
         assert_eq!(registry.lookup("Vec2"), Some("vec2"));
-        assert_eq!(registry.lookup("check_collision"), Some("collision2d"));
+        assert_eq!(registry.lookup("check_validity"), Some("validator"));
     }
     
     #[test]
