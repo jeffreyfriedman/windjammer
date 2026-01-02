@@ -125,6 +125,7 @@ impl Counter {
 // ============================================================================
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_method_mut_self() {
     let code = r#"
 @derive(Clone, Debug)
@@ -147,6 +148,7 @@ pub fn use_counter(c: &mut Counter) {
 }
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_method_mut_self_returns_self() {
     let code = r#"
 @derive(Clone, Debug)
@@ -174,6 +176,7 @@ impl Builder {
 // ============================================================================
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_method_consuming_self() {
     let code = r#"
 @derive(Clone, Debug)
@@ -442,6 +445,7 @@ pub fn get_ref(c: &Container) -> i32 {
 // ============================================================================
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_method_multiple_params() {
     let code = r#"
 @derive(Clone, Debug)
