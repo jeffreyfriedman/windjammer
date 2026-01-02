@@ -15,11 +15,12 @@
 
 ### Changed
 - **Compiler Cleanup**: Removed game-specific code from the compiler
-  - **Deleted**: `tests/ambiguous_import_disambiguation_test.rs` (game-specific import tests)
-  - **Genericized**: Import disambiguation heuristics (removed hardcoded game module names like `collision2d`, `sprite`, `texture_atlas`)
+  - **Deleted**: `tests/ambiguous_import_disambiguation_test.rs` (277 lines, game-specific import tests)
+  - **Deleted**: 2 game-specific tests from `tests/import_generation_comprehensive_test.rs` (`test_collision2d_module_import_uses_super`, `test_entity_component_imports_use_super`)
+  - **Genericized**: Import disambiguation heuristics (removed hardcoded game module names like `collision2d`, `sprite`, `texture_atlas`, `entity`, `components`)
   - **Genericized**: Decorator implementations (removed Vec3-specific logic from `@game` decorator)
   - **Updated**: TypeRegistry tests to use generic examples instead of game-specific ones
-  - **Impact**: Compiler is now truly generic and domain-agnostic
+  - **Impact**: Compiler is now truly generic and domain-agnostic. All tests pass.
 
 ### Fixed
 - **Code Coverage CI**: Added `#[cfg_attr(tarpaulin, ignore)]` to 20 tests that spawn subprocesses and timeout under coverage instrumentation
