@@ -37,6 +37,7 @@ fn compile_code(code: &str) -> Result<String, String> {
 }
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_unit_struct_simple() {
     // TDD: Simple unit struct
     let code = r#"

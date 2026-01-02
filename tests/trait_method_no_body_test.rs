@@ -37,6 +37,7 @@ fn compile_code(code: &str) -> Result<String, String> {
 }
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_trait_method_no_body_single() {
     // TDD: Simple trait with single method without body
     let code = r#"

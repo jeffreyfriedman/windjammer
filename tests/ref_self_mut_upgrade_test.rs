@@ -43,6 +43,7 @@ fn compile_and_get_generated(code: &str) -> (bool, String, String) {
 }
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_ref_self_upgrade_to_mut() {
     // User wrote &self but method modifies field - should be upgraded to &mut self
     let code = r#"

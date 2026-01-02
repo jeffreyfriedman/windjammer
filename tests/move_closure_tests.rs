@@ -103,6 +103,7 @@ fn compile_fixture(fixture_name: &str) -> Result<String, String> {
 }
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_closures_auto_generate_move() {
     let generated = compile_fixture("move_closures").expect("Compilation failed");
 

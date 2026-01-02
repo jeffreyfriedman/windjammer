@@ -144,6 +144,7 @@ fn compile_to_target(source: &str, target: &str, temp_dir: &TempDir) -> Result<P
 }
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_all_targets_all_cases() {
     // Acquire mutex to serialize this test
     let _lock = TEST_MUTEX.lock().unwrap();

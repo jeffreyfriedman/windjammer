@@ -51,6 +51,7 @@ fn compile_and_verify_rust(code: &str) -> (bool, String, String) {
 // ============================================================================
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_mutable_string_empty_init() {
     let code = r#"
 pub fn build_html() -> string {

@@ -57,6 +57,7 @@ fn compile_and_check_rust(code: &str, test_name: &str) -> Result<String, String>
 }
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_method_returning_mut_ref_needs_mut_self() {
     // Method returning &mut T should have &mut self
     let code = r#"

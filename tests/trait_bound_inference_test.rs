@@ -41,6 +41,7 @@ fn compile_wj(source: &str, test_name: &str) -> Result<String, String> {
 }
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_display_trait_inferred() {
     let source = r#"
 fn print_item<T>(item: T) {
