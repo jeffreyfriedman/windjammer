@@ -36,6 +36,7 @@ fn compile_code(code: &str) -> Result<String, String> {
 }
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_vec_remove_should_not_add_reference() {
     // BUG: Compiler incorrectly adds & to usize argument for Vec::remove
     let code = r#"

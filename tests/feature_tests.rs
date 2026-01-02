@@ -87,6 +87,7 @@ fn compile_and_check(source: &str, expected_patterns: &[&str]) -> String {
 }
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_basic_function() {
     let source = r#"
 fn add(x: int, y: int) -> int {

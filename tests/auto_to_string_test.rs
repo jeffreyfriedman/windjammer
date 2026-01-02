@@ -41,6 +41,7 @@ fn compile_code(code: &str) -> Result<String, String> {
 }
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_vec_push_string_literal() {
     // TDD: Vec<String>::push("literal") should add .to_string()
     let code = r#"

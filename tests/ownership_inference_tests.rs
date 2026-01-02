@@ -82,6 +82,7 @@ fn compile_and_verify_rust(code: &str) -> (bool, String, String) {
 // ============================================================================
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_iterator_var_no_double_ref_for_contains() {
     // When iterating with .iter(), the loop variable is already a reference
     // Calling .contains() should NOT add another &

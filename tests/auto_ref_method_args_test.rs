@@ -92,7 +92,6 @@ pub fn test() -> i32 {
 }
 
 #[test]
-#[cfg_attr(tarpaulin, ignore)]
 fn test_auto_ref_option_arg() {
     // Method expects &Option<String> but we pass Option<String>
     let code = r#"

@@ -48,6 +48,7 @@ fn compile_fixture(fixture_name: &str) -> Result<String, String> {
 }
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_iter_inference_field_access() {
     let generated = compile_fixture("iter_inference").expect("Compilation failed");
 

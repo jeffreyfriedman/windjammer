@@ -17,6 +17,7 @@ use std::fs;
 use tempfile::TempDir;
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_module_imports_within_directory() {
     // Create a temporary directory for our test project
     let temp_dir = TempDir::new().unwrap();

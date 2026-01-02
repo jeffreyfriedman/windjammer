@@ -77,6 +77,7 @@ fn compile_and_verify(code: &str) -> (bool, String, String) {
 // ============================================================================
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_method_ref_self() {
     let code = r#"
 @derive(Clone, Debug)
@@ -125,7 +126,6 @@ impl Counter {
 // ============================================================================
 
 #[test]
-#[cfg_attr(tarpaulin, ignore)]
 fn test_method_mut_self() {
     let code = r#"
 @derive(Clone, Debug)
@@ -148,7 +148,6 @@ pub fn use_counter(c: &mut Counter) {
 }
 
 #[test]
-#[cfg_attr(tarpaulin, ignore)]
 fn test_method_mut_self_returns_self() {
     let code = r#"
 @derive(Clone, Debug)
@@ -176,7 +175,6 @@ impl Builder {
 // ============================================================================
 
 #[test]
-#[cfg_attr(tarpaulin, ignore)]
 fn test_method_consuming_self() {
     let code = r#"
 @derive(Clone, Debug)
@@ -257,7 +255,6 @@ pub fn create_point() -> Point {
 // ============================================================================
 
 #[test]
-#[cfg_attr(tarpaulin, ignore)]
 fn test_method_borrowed_param() {
     let code = r#"
 @derive(Clone, Debug)
@@ -315,7 +312,6 @@ impl Container {
 // ============================================================================
 
 #[test]
-#[cfg_attr(tarpaulin, ignore)]
 fn test_method_chaining_vec() {
     let code = r#"
 pub fn chain_example(items: &Vec<i32>) -> i32 {
@@ -331,7 +327,6 @@ pub fn chain_example(items: &Vec<i32>) -> i32 {
 }
 
 #[test]
-#[cfg_attr(tarpaulin, ignore)]
 fn test_method_chaining_string() {
     let code = r#"
 pub fn chain_string(s: &string) -> string {
@@ -384,7 +379,6 @@ impl Outer {
 // ============================================================================
 
 #[test]
-#[cfg_attr(tarpaulin, ignore)]
 fn test_generic_method_call() {
     let code = r#"
 @derive(Clone, Debug)
@@ -445,7 +439,6 @@ pub fn get_ref(c: &Container) -> i32 {
 // ============================================================================
 
 #[test]
-#[cfg_attr(tarpaulin, ignore)]
 fn test_method_multiple_params() {
     let code = r#"
 @derive(Clone, Debug)

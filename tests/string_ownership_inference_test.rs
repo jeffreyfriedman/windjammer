@@ -38,6 +38,7 @@ fn compile_code(code: &str) -> Result<String, String> {
 }
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_read_only_param_infers_str_ref() {
     let code = r#"
     pub fn print_msg(text: string) {

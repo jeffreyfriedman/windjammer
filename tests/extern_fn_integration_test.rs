@@ -57,6 +57,7 @@ fn compile_wj(source: &str) -> (String, bool) {
 }
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_extern_fn_declarations() {
     let source = r#"
 extern fn printf(format: string);

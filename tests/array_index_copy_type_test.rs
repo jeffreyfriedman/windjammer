@@ -38,6 +38,7 @@ fn compile_code(code: &str, test_name: &str) -> Result<String, String> {
 }
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_array_index_of_copy_type_should_not_add_mut_ref() {
     // BUG: Compiler incorrectly adds &mut when reading Copy type from array
     let code = r#"

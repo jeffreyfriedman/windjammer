@@ -39,6 +39,7 @@ fn compile_to_target(source: &str, target: &str) -> Result<TempDir, String> {
 }
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_simple_function_rust() {
     let source = r#"
 fn add(a: int, b: int) -> int {
