@@ -89,6 +89,7 @@ fn test_sprite_region_import_preserves_module_path() {
 }
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_math_directory_prefix_stripped() {
     // Test: math::Vec2 should generate use super::Vec2; (directory prefix stripped)
     let code = r#"
@@ -181,6 +182,7 @@ fn test_multiple_imports_mixed_types() {
 }
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_collision2d_module_preserves_path() {
     // Test: collision2d::check_collision should preserve module path
     let code = r#"
@@ -202,6 +204,7 @@ fn test_collision2d_module_preserves_path() {
 }
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_entity_component_imports_preserve_paths() {
     // Test: ECS imports should preserve module paths
     let code = r#"
@@ -231,6 +234,7 @@ fn test_entity_component_imports_preserve_paths() {
 }
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_ambiguity_prevention_with_mod_rs_globs() {
     // Test: Ensures generated code won't have ambiguous imports when mod.rs has glob re-exports
     // This is the EXACT scenario that caused the original bug
