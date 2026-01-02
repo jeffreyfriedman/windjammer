@@ -137,6 +137,7 @@ fn test_contains_adds_reference() {
 // ============================================================================
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_push_with_owned_string() {
     let generated = compile_fixture("method_arg_conversion").expect("Compilation failed");
 
@@ -149,6 +150,7 @@ fn test_push_with_owned_string() {
 }
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_push_string_literal() {
     let generated = compile_fixture("method_arg_conversion").expect("Compilation failed");
 
@@ -165,6 +167,7 @@ fn test_push_string_literal() {
 // ============================================================================
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_starts_with() {
     let generated = compile_fixture("method_arg_conversion").expect("Compilation failed");
 
@@ -177,6 +180,7 @@ fn test_starts_with() {
 }
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_ends_with_with_literal() {
     let generated = compile_fixture("method_arg_conversion").expect("Compilation failed");
 
@@ -193,6 +197,7 @@ fn test_ends_with_with_literal() {
 // ============================================================================
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_fixture_compiles_successfully() {
     let generated = compile_fixture("method_arg_conversion").expect("Compilation failed");
 

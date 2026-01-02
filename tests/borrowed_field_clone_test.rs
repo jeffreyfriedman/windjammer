@@ -88,6 +88,7 @@ pub fn process_properties(props: &Vec<Property>) -> string {
 }
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_method_call_with_borrowed_fields() {
     // Method calls with borrowed item fields
     let code = r#"

@@ -165,6 +165,7 @@ enum Option<T> {
 }
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_tuple_enum_definition_multiple_fields() {
     let code = r#"
 enum Color {
@@ -176,6 +177,7 @@ enum Color {
 }
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_tuple_enum_definition_mixed() {
     let code = r#"
 enum Shape {
@@ -192,6 +194,7 @@ enum Shape {
 // ============================================================================
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_tuple_enum_match_single_binding() {
     let code = r#"
 enum Option<T> {
@@ -210,6 +213,7 @@ fn unwrap(opt: Option<i32>) -> i32 {
 }
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_tuple_enum_match_multiple_bindings() {
     let code = r#"
 enum Color {
@@ -226,6 +230,7 @@ fn sum_rgb(color: Color) -> i32 {
 }
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_tuple_enum_match_wildcards() {
     let code = r#"
 enum Color {
@@ -246,6 +251,7 @@ fn get_red(color: Color) -> i32 {
 // ============================================================================
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_let_tuple_destructuring() {
     let code = r#"
 fn test() -> i32 {
@@ -257,6 +263,7 @@ fn test() -> i32 {
 }
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_let_nested_tuple_destructuring() {
     let code = r#"
 fn test() -> i32 {
@@ -268,6 +275,7 @@ fn test() -> i32 {
 }
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_let_wildcard() {
     let code = r#"
 fn test() -> i32 {
@@ -284,6 +292,7 @@ fn test() -> i32 {
 // ============================================================================
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_let_enum_variant_rejected() {
     let code = r#"
 enum Option<T> {
@@ -301,6 +310,7 @@ fn test() -> i32 {
 }
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_let_literal_rejected() {
     let code = r#"
 fn test() -> i32 {
@@ -317,6 +327,7 @@ fn test() -> i32 {
 // ============================================================================
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_hex_literals() {
     let code = r#"
 fn test() -> i64 {
@@ -329,6 +340,7 @@ fn test() -> i64 {
 }
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_binary_literals() {
     let code = r#"
 fn test() -> i64 {
@@ -341,6 +353,7 @@ fn test() -> i64 {
 }
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_octal_literals() {
     let code = r#"
 fn test() -> i64 {
@@ -357,6 +370,7 @@ fn test() -> i64 {
 // ============================================================================
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_module_path_double_colon() {
     let code = r#"
 use std::fs::File
@@ -365,6 +379,7 @@ use std::fs::File
 }
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_module_path_slash_rejected() {
     let code = r#"
 use std/fs
@@ -377,6 +392,7 @@ use std/fs
 }
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_module_path_dot_rejected() {
     let code = r#"
 use std.fs
@@ -393,6 +409,7 @@ use std.fs
 // ============================================================================
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_qualified_path_in_type() {
     let code = r#"
 struct Event {
@@ -403,6 +420,7 @@ struct Event {
 }
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_qualified_path_in_match() {
     let code = r#"
 enum Color {
@@ -426,6 +444,7 @@ fn test(c: Color) -> i32 {
 // ============================================================================
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_struct_pattern_basic() {
     let code = r#"
 enum Shape {
@@ -448,6 +467,7 @@ fn calculate_area(shape: Shape) -> f32 {
 }
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_struct_pattern_with_wildcard() {
     let code = r#"
 enum Shape {
@@ -464,6 +484,7 @@ fn has_large_width(shape: Shape) -> bool {
 }
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_struct_pattern_multiple_variants() {
     let code = r#"
 enum Shape {
@@ -484,6 +505,7 @@ fn get_first_dimension(shape: Shape) -> f32 {
 }
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_module_import_resolution() {
     // This test verifies that when multiple types are imported from the same module,
     // the compiler correctly resolves which module file each type is defined in.
@@ -502,6 +524,7 @@ fn test_module_import_resolution() {
 }
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_operator_precedence_negation() {
     // Test that !(a || b) generates correct Rust with parentheses preserved
     // Bug: Compiler was generating !a || b instead of !(a || b)
@@ -517,6 +540,7 @@ fn test_operator_precedence_negation() {
 }
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_array_indexing_with_int() {
     // Test that array indexing with 'int' type automatically casts to usize
     // Bug: arr[index] where index: int generates arr[index as i64] which fails
@@ -526,6 +550,7 @@ fn test_array_indexing_with_int() {
 }
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_param_mutability_inference() {
     // Test that function parameters are automatically inferred as &mut when mutated
     // Bug: fn move_point(p: Point, dx: f32) { p.x = ... } generates p: Point instead of p: &mut Point

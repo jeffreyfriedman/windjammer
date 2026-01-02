@@ -93,6 +93,7 @@ pub fn describe_number(n: i32) -> i32 {
 }
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_match_return_string() {
     let code = r#"
 pub fn number_name(n: i32) -> string {
@@ -112,6 +113,7 @@ pub fn number_name(n: i32) -> string {
 }
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_match_boolean() {
     let code = r#"
 pub fn bool_to_int(b: bool) -> i32 {
@@ -130,6 +132,7 @@ pub fn bool_to_int(b: bool) -> i32 {
 // ============================================================================
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_match_multiple_values() {
     let code = r#"
 pub fn is_vowel(c: char) -> bool {
@@ -148,6 +151,7 @@ pub fn is_vowel(c: char) -> bool {
 }
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_match_range() {
     // Range patterns may not be supported yet - test basic case
     let code = r#"
@@ -167,6 +171,7 @@ pub fn is_zero(n: i32) -> bool {
 // ============================================================================
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_match_with_guard() {
     let code = r#"
 pub fn classify(n: i32) -> i32 {
@@ -182,6 +187,7 @@ pub fn classify(n: i32) -> i32 {
 }
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_match_guard_complex() {
     let code = r#"
 pub fn grade(score: i32) -> char {
@@ -207,6 +213,7 @@ pub fn grade(score: i32) -> char {
 // ============================================================================
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_match_option() {
     let code = r#"
 pub fn unwrap_or_default(opt: Option<i32>) -> i32 {
@@ -221,6 +228,7 @@ pub fn unwrap_or_default(opt: Option<i32>) -> i32 {
 }
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_match_option_ref() {
     let code = r#"
 pub fn is_some(opt: &Option<i32>) -> bool {
@@ -239,6 +247,7 @@ pub fn is_some(opt: &Option<i32>) -> bool {
 // ============================================================================
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_match_result() {
     // Result matching - using owned Result, not borrowed
     let code = r#"
@@ -264,6 +273,7 @@ pub fn get_or_error(res: Result<i32, string>) -> i32 {
 // ============================================================================
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_match_struct_destructure() {
     let code = r#"
 @derive(Clone, Debug)
@@ -288,6 +298,7 @@ pub fn is_origin(p: Point) -> bool {
 }
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_match_struct_partial() {
     // Partial struct matching - using explicit fields
     let code = r#"
@@ -317,6 +328,7 @@ pub fn on_x_axis(p: Point) -> bool {
 // ============================================================================
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_match_tuple() {
     let code = r#"
 pub fn classify_pair(pair: (i32, i32)) -> i32 {
@@ -333,6 +345,7 @@ pub fn classify_pair(pair: (i32, i32)) -> i32 {
 }
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_match_tuple_nested() {
     let code = r#"
 pub fn nested_match(t: (i32, (i32, i32))) -> i32 {
@@ -351,6 +364,7 @@ pub fn nested_match(t: (i32, (i32, i32))) -> i32 {
 // ============================================================================
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_match_enum() {
     let code = r#"
 pub enum Color {
@@ -372,6 +386,7 @@ pub fn color_value(c: Color) -> i32 {
 }
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_match_enum_with_data() {
     let code = r#"
 pub enum Message {
@@ -400,6 +415,7 @@ pub fn is_quit(msg: Message) -> bool {
 // ============================================================================
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_match_in_expression() {
     let code = r#"
 pub fn compute(n: i32) -> i32 {
@@ -419,6 +435,7 @@ pub fn compute(n: i32) -> i32 {
 }
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_match_chained() {
     let code = r#"
 pub fn process(opt: Option<i32>) -> i32 {
@@ -442,6 +459,7 @@ pub fn process(opt: Option<i32>) -> i32 {
 // ============================================================================
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_match_binding() {
     // Simple binding without range pattern
     let code = r#"
@@ -457,6 +475,7 @@ pub fn describe(n: i32) -> i32 {
 }
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_match_wildcard() {
     let code = r#"
 pub fn first_or_zero(opt: Option<(i32, i32)>) -> i32 {

@@ -210,3 +210,4 @@ cargo check 2>&1 | less  # See all errors
 
 **Note:** This is a massive architectural change. It's the *right* solution but requires significant effort. Consider the trade-offs carefully.
 
+

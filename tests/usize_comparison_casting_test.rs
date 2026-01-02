@@ -70,6 +70,7 @@ fn test_vec_len_comparison_should_not_cast_to_i32() {
 }
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_sparse_vec_len_comparison_with_usize() {
     // Real-world case from components.rs
     let code = r#"
@@ -98,6 +99,7 @@ fn test_sparse_vec_len_comparison_with_usize() {
 }
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_usize_variable_in_comparison_keeps_type() {
     // Ensure usize variables stay usize in comparisons
     let code = r#"
@@ -122,6 +124,7 @@ fn test_usize_variable_in_comparison_keeps_type() {
 }
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_len_in_while_loop_condition() {
     // Test .len() in while loop conditions
     let code = r#"

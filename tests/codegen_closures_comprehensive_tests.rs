@@ -90,6 +90,7 @@ pub fn use_closure() -> i32 {
 }
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_closure_multiple_params() {
     let code = r#"
 pub fn use_closure() -> i32 {
@@ -106,6 +107,7 @@ pub fn use_closure() -> i32 {
 }
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_closure_no_params() {
     let code = r#"
 pub fn use_closure() -> i32 {
@@ -122,6 +124,7 @@ pub fn use_closure() -> i32 {
 // ============================================================================
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_closure_capture_immutable() {
     let code = r#"
 pub fn use_closure() -> i32 {
@@ -135,6 +138,7 @@ pub fn use_closure() -> i32 {
 }
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_closure_capture_multiple() {
     let code = r#"
 pub fn use_closure() -> i32 {
@@ -153,6 +157,7 @@ pub fn use_closure() -> i32 {
 // ============================================================================
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_closure_map() {
     let code = r#"
 pub fn double_all(items: Vec<i32>) -> Vec<i32> {
@@ -164,6 +169,7 @@ pub fn double_all(items: Vec<i32>) -> Vec<i32> {
 }
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_closure_filter() {
     let code = r#"
 pub fn positive_only(items: Vec<i32>) -> Vec<i32> {
@@ -175,6 +181,7 @@ pub fn positive_only(items: Vec<i32>) -> Vec<i32> {
 }
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_closure_fold() {
     let code = r#"
 pub fn sum_all(items: Vec<i32>) -> i32 {
@@ -186,6 +193,7 @@ pub fn sum_all(items: Vec<i32>) -> i32 {
 }
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_closure_for_each() {
     let code = r#"
 pub fn print_all(items: Vec<i32>) {
@@ -201,6 +209,7 @@ pub fn print_all(items: Vec<i32>) {
 // ============================================================================
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_closure_chain() {
     let code = r#"
 pub fn process(items: Vec<i32>) -> i32 {
@@ -215,6 +224,7 @@ pub fn process(items: Vec<i32>) -> i32 {
 }
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_closure_complex_chain() {
     let code = r#"
 pub fn transform(items: Vec<i32>) -> Vec<i32> {
@@ -234,6 +244,7 @@ pub fn transform(items: Vec<i32>) -> Vec<i32> {
 // ============================================================================
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_closure_block_body() {
     let code = r#"
 pub fn use_closure() -> i32 {
@@ -254,6 +265,7 @@ pub fn use_closure() -> i32 {
 // ============================================================================
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_closure_sort_by() {
     let code = r#"
 pub fn sort_descending(items: &mut Vec<i32>) {
@@ -269,6 +281,7 @@ pub fn sort_descending(items: &mut Vec<i32>) {
 // ============================================================================
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_closure_count() {
     // Test count() which returns usize (simpler case)
     let code = r#"
@@ -281,6 +294,7 @@ pub fn count_positive(items: &Vec<i32>) -> usize {
 }
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_closure_any() {
     let code = r#"
 pub fn has_positive(items: &Vec<i32>) -> bool {
@@ -292,6 +306,7 @@ pub fn has_positive(items: &Vec<i32>) -> bool {
 }
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_closure_all() {
     let code = r#"
 pub fn all_positive(items: &Vec<i32>) -> bool {

@@ -239,3 +239,4 @@ All unit tests successfully migrated to arena allocation. The test utilities inf
 - `docs/UNIT_TESTS_ARENA_STATUS.md` - Initial deferral (now obsolete)
 - `src/test_utils.rs` - Test utilities implementation
 
+

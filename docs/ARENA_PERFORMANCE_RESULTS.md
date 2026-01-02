@@ -362,3 +362,4 @@ Previous (Box): O(n) - recursive drops through entire AST
 **Conclusion:** Arena allocation is a **clear win** for the Windjammer compiler. The 87.5% stack reduction, O(1) deallocation, and zero crashes make this a critical improvement for production readiness.
 
 
+
