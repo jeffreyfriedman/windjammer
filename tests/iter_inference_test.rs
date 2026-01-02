@@ -62,6 +62,7 @@ fn test_iter_inference_field_access() {
 }
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_iter_inference_names_field() {
     let generated = compile_fixture("iter_inference").expect("Compilation failed");
 
@@ -74,6 +75,7 @@ fn test_iter_inference_names_field() {
 }
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_no_double_iter() {
     let generated = compile_fixture("iter_inference").expect("Compilation failed");
 
@@ -86,6 +88,7 @@ fn test_no_double_iter() {
 }
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_no_iter_after_enumerate() {
     let generated = compile_fixture("iter_inference").expect("Compilation failed");
 
@@ -98,6 +101,7 @@ fn test_no_iter_after_enumerate() {
 }
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_iter_inference_simple_vec() {
     let generated = compile_fixture("iter_inference").expect("Compilation failed");
 
@@ -110,6 +114,7 @@ fn test_iter_inference_simple_vec() {
 }
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_iter_count() {
     let generated = compile_fixture("iter_inference").expect("Compilation failed");
 

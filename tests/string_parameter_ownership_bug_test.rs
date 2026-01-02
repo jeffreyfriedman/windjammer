@@ -79,3 +79,4 @@ fn test_explicit_string_parameter_stays_owned() {
         String::from_utf8_lossy(&rustc_result.stderr)
     );
 }
+

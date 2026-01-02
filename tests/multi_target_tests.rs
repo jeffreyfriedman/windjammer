@@ -72,6 +72,7 @@ fn main() {
 }
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_simple_function_javascript() {
     let source = r#"
 fn add(a: int, b: int) -> int {
@@ -119,6 +120,7 @@ fn main() {
 }
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_simple_function_wasm() {
     let source = r#"
 fn add(a: int, b: int) -> int {
@@ -180,6 +182,7 @@ fn calculate(x: int, y: int) -> int {
 }
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_javascript_async_detection() {
     let source = r#"
 @async
@@ -213,6 +216,7 @@ fn main() {
 }
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_javascript_struct_generation() {
     let source = r#"
 struct Point {
@@ -246,6 +250,7 @@ fn main() {
 }
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_javascript_enum_generation() {
     let source = r#"
 enum Color {
@@ -275,6 +280,7 @@ fn main() {
 }
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_package_json_generation() {
     let source = r#"
 fn hello() {
@@ -299,6 +305,7 @@ fn hello() {
 }
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_javascript_control_flow() {
     let source = r#"
 fn test_if(x: int) -> int {
@@ -337,6 +344,7 @@ fn test_for() {
 }
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_javascript_jsdoc_comments() {
     let source = r#"
 fn multiply(a: int, b: int) -> int {
@@ -361,6 +369,7 @@ fn multiply(a: int, b: int) -> int {
 }
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_rust_output_still_works() {
     // Ensure Rust output hasn't regressed
     let source = r#"
@@ -392,6 +401,7 @@ fn main() {
 }
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_all_targets_compile_same_source() {
     // Verify the same source can compile to all three targets without errors
     let source = r#"

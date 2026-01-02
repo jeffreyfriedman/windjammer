@@ -77,3 +77,4 @@ fn test_if_let_with_function_return() {
     // All branches should return String consistently
     println!("Generated:\n{}", generated);
 }
+

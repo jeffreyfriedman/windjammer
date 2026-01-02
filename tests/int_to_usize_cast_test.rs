@@ -86,3 +86,4 @@ fn test_method_result_to_usize_cast() {
         "Should generate valid cast from method call"
     );
 }
+

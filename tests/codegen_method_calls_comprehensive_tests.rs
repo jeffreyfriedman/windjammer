@@ -100,6 +100,7 @@ pub fn use_counter(c: &Counter) -> i32 {
 }
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_method_ref_self_chain() {
     let code = r#"
 @derive(Clone, Debug)
@@ -126,6 +127,7 @@ impl Counter {
 // ============================================================================
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_method_mut_self() {
     let code = r#"
 @derive(Clone, Debug)
@@ -148,6 +150,7 @@ pub fn use_counter(c: &mut Counter) {
 }
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_method_mut_self_returns_self() {
     let code = r#"
 @derive(Clone, Debug)
@@ -175,6 +178,7 @@ impl Builder {
 // ============================================================================
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_method_consuming_self() {
     let code = r#"
 @derive(Clone, Debug)
@@ -201,6 +205,7 @@ pub fn use_wrapper(w: Wrapper) -> i32 {
 // ============================================================================
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_static_method() {
     let code = r#"
 @derive(Clone, Debug)
@@ -224,6 +229,7 @@ pub fn get_origin() -> Point {
 }
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_static_method_with_params() {
     let code = r#"
 @derive(Clone, Debug)
@@ -255,6 +261,7 @@ pub fn create_point() -> Point {
 // ============================================================================
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_method_borrowed_param() {
     let code = r#"
 @derive(Clone, Debug)
@@ -281,6 +288,7 @@ impl Container {
 // ============================================================================
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_method_owned_param() {
     let code = r#"
 @derive(Clone, Debug)
@@ -312,6 +320,7 @@ impl Container {
 // ============================================================================
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_method_chaining_vec() {
     let code = r#"
 pub fn chain_example(items: &Vec<i32>) -> i32 {
@@ -327,6 +336,7 @@ pub fn chain_example(items: &Vec<i32>) -> i32 {
 }
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_method_chaining_string() {
     let code = r#"
 pub fn chain_string(s: &string) -> string {
@@ -346,6 +356,7 @@ pub fn chain_string(s: &string) -> string {
 // ============================================================================
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_method_on_field() {
     let code = r#"
 @derive(Clone, Debug)
@@ -379,6 +390,7 @@ impl Outer {
 // ============================================================================
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_generic_method_call() {
     let code = r#"
 @derive(Clone, Debug)
@@ -409,6 +421,7 @@ pub fn use_container(c: &Container<i32>) -> i32 {
 // ============================================================================
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_method_returning_ref() {
     let code = r#"
 @derive(Clone, Debug)
@@ -439,6 +452,7 @@ pub fn get_ref(c: &Container) -> i32 {
 // ============================================================================
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_method_multiple_params() {
     let code = r#"
 @derive(Clone, Debug)
@@ -469,6 +483,7 @@ pub fn use_calc(c: &Calculator) -> i32 {
 // ============================================================================
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_method_on_i32() {
     let code = r#"
 pub fn abs_value(n: i32) -> i32 {
@@ -480,6 +495,7 @@ pub fn abs_value(n: i32) -> i32 {
 }
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_method_on_string() {
     let code = r#"
 pub fn string_len(s: &string) -> usize {

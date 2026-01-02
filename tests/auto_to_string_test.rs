@@ -70,6 +70,7 @@ fn test_vec_push_string_literal() {
 }
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_vec_push_string_variable_no_conversion() {
     // TDD: Vec<String>::push(variable) should NOT add .to_string()
     let code = r#"
@@ -91,6 +92,7 @@ fn test_vec_push_string_variable_no_conversion() {
 }
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_custom_method_string_param() {
     // TDD: Custom method expecting String should auto-convert literals
     let code = r#"
@@ -121,6 +123,7 @@ fn test_custom_method_string_param() {
 }
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_str_param_no_conversion() {
     // TDD: Methods expecting &str should NOT add .to_string()
     let code = r#"
@@ -150,6 +153,7 @@ fn test_str_param_no_conversion() {
 }
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_multiple_string_params() {
     // TDD: Multiple String parameters should all get .to_string()
     let code = r#"
@@ -175,6 +179,7 @@ fn test_multiple_string_params() {
 }
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_mixed_str_and_string_params() {
     // TDD: Mixed &str and String parameters
     let code = r#"
@@ -198,6 +203,7 @@ fn test_mixed_str_and_string_params() {
 }
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_chained_method_calls() {
     // TDD: Chained method calls with String parameters
     let code = r#"
@@ -236,6 +242,7 @@ fn test_chained_method_calls() {
 }
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_hashmap_insert_string_keys() {
     // TDD: HashMap<String, T>::insert should convert key literals
     let code = r#"
@@ -264,3 +271,4 @@ fn test_hashmap_insert_string_keys() {
         generated
     );
 }
+

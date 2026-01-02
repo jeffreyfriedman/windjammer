@@ -7,3 +7,4 @@ pub enum OwnershipHint {
     Mut,
     Inferred, // Let the analyzer decide
 }
+
