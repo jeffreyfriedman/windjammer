@@ -191,7 +191,6 @@ enum Shape {
 // ============================================================================
 
 #[test]
-#[ignore = "Parser bug: enum with unit variant after tuple variant fails"]
 fn test_tuple_enum_match_single_binding() {
     let code = r#"
 enum Option<T> {
@@ -210,7 +209,6 @@ fn unwrap(opt: Option<i32>) -> i32 {
 }
 
 #[test]
-#[ignore = "Parser bug: enum with unit variant after tuple variant fails"]
 fn test_tuple_enum_match_multiple_bindings() {
     let code = r#"
 enum Color {
