@@ -128,6 +128,7 @@ fn test_closures_auto_generate_move() {
 }
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_no_explicit_move_keyword_needed() {
     // This test verifies the Windjammer philosophy:
     // The developer writes: |x| x + 1

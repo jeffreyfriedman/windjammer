@@ -147,3 +147,4 @@ Based on rustc benchmarks:
 
 **Action Item:** Create follow-up PR after CI is green: `feat: Use arena allocation for AST to improve performance and eliminate Drop recursion`
 
+

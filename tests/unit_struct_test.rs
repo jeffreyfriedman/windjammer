@@ -55,6 +55,7 @@ fn test_unit_struct_simple() {
 }
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_unit_struct_with_impl() {
     // TDD: Unit struct with implementation
     let code = r#"
@@ -83,6 +84,7 @@ fn test_unit_struct_with_impl() {
 }
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_unit_struct_multiple() {
     // TDD: Multiple unit structs
     let code = r#"
@@ -111,6 +113,7 @@ fn test_unit_struct_multiple() {
 }
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_unit_struct_with_trait_impl() {
     // TDD: Unit struct implementing a trait
     let code = r#"
@@ -143,6 +146,7 @@ fn test_unit_struct_with_trait_impl() {
 }
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_unit_struct_instantiation() {
     // TDD: Unit struct can be instantiated
     let code = r#"
@@ -170,6 +174,7 @@ fn test_unit_struct_instantiation() {
 }
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_unit_struct_with_visibility() {
     // TDD: Unit structs with different visibility modifiers
     let code = r#"
@@ -193,6 +198,7 @@ fn test_unit_struct_with_visibility() {
 }
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_unit_struct_with_decorators() {
     // TDD: Unit struct with derive decorators
     let code = r#"
@@ -214,3 +220,4 @@ fn test_unit_struct_with_decorators() {
         generated
     );
 }
+

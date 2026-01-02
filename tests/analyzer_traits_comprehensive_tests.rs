@@ -94,6 +94,7 @@ impl Point {
 }
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_impl_multiple_methods() {
     let code = r#"
 @derive(Clone, Debug)
@@ -128,6 +129,7 @@ impl Counter {
 }
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_impl_static_and_instance() {
     let code = r#"
 @derive(Clone, Debug)
@@ -162,6 +164,7 @@ impl Config {
 // ============================================================================
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_impl_generic() {
     let code = r#"
 @derive(Clone, Debug)
@@ -180,6 +183,7 @@ impl<T> Container<T> {
 }
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_impl_generic_with_bound() {
     let code = r#"
 @derive(Clone, Debug)
@@ -206,6 +210,7 @@ impl<T: Clone> Container<T> {
 // ============================================================================
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_impl_ref_self() {
     let code = r#"
 @derive(Clone, Debug)
@@ -224,6 +229,7 @@ impl Data {
 }
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_impl_mut_self() {
     let code = r#"
 @derive(Clone, Debug)
@@ -242,6 +248,7 @@ impl Data {
 }
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_impl_owned_self() {
     let code = r#"
 @derive(Clone, Debug)
@@ -264,6 +271,7 @@ impl Wrapper {
 // ============================================================================
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_impl_associated_fn() {
     let code = r#"
 @derive(Clone, Debug)
@@ -299,6 +307,7 @@ impl Point {
 // ============================================================================
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_impl_enum() {
     let code = r#"
 @derive(Clone, Debug)
@@ -329,6 +338,7 @@ impl Direction {
 // ============================================================================
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_multiple_impl_blocks() {
     let code = r#"
 @derive(Clone, Debug)
@@ -366,6 +376,7 @@ impl Point {
 // ============================================================================
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_impl_return_self_type() {
     let code = r#"
 @derive(Clone, Debug)
@@ -393,6 +404,7 @@ impl Builder {
 // ============================================================================
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_impl_with_default() {
     let code = r#"
 @derive(Clone, Debug, Default)

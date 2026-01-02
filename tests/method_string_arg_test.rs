@@ -93,6 +93,7 @@ pub fn create_menu() -> MenuItem {
 }
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_builder_pattern_string_args() {
     // Builder pattern with multiple string methods
     let code = r#"
@@ -143,6 +144,7 @@ pub fn create_config() -> Config {
 }
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_vec_push_string_literal() {
     // Vec::push with string literal
     let code = r#"

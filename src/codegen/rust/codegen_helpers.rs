@@ -53,3 +53,4 @@ pub fn format_where_clause(where_clause: &[(String, Vec<String>)]) -> String {
 
     format!("\nwhere\n{}", clauses.join(",\n"))
 }
+
