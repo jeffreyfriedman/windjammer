@@ -5,6 +5,7 @@ use std::path::PathBuf;
 use std::process::Command;
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_trait_copy_params_not_borrowed() {
     let wj_code = r#"
 pub trait Calculator {

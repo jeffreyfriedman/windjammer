@@ -46,6 +46,7 @@ fn compile_code(code: &str) -> Result<String, String> {
 }
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_vec_remove_usize_variable() {
     let code = r#"
         fn remove_at(items: Vec<int>, index: usize) -> Vec<int> {
@@ -73,6 +74,7 @@ fn test_vec_remove_usize_variable() {
 }
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_vec_remove_with_cast() {
     let code = r#"
         fn remove_at(items: Vec<int>, index: int) -> Vec<int> {
@@ -95,6 +97,7 @@ fn test_vec_remove_with_cast() {
 }
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_vec_remove_on_struct_field() {
     let code = r#"
         struct Storage {
@@ -128,6 +131,7 @@ fn test_vec_remove_on_struct_field() {
 }
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_vec_remove_with_local_usize_cast() {
     // This matches the exact pattern from the game engine ECS code
     let code = r#"
@@ -171,6 +175,7 @@ fn test_vec_remove_with_local_usize_cast() {
 }
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_hashmap_remove_with_owned_key() {
     let code = r#"
         use std::collections::HashMap
