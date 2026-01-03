@@ -74,6 +74,7 @@ fn compile_and_verify(code: &str) -> (bool, String, String) {
 // ============================================================================
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_push_to_vec_requires_owned() {
     let code = r#"
 @derive(Clone, Debug)
@@ -98,6 +99,7 @@ impl Container {
 }
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_push_to_local_vec() {
     let code = r#"
 @derive(Clone, Debug)
@@ -120,6 +122,7 @@ pub fn collect_item(item: Item) -> Vec<Item> {
 // ============================================================================
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_hashmap_basic() {
     // HashMap basic operations
     let code = r#"
@@ -141,6 +144,7 @@ pub fn create_map() -> HashMap<i32, i32> {
 // ============================================================================
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_assign_to_field() {
     let code = r#"
 @derive(Clone, Debug)
@@ -164,6 +168,7 @@ impl Outer {
 }
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_assign_in_struct_literal() {
     let code = r#"
 @derive(Clone, Debug)
@@ -195,6 +200,7 @@ pub fn make_line(start: Point, end: Point) -> Line {
 // ============================================================================
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_return_value() {
     let code = r#"
 @derive(Clone, Debug)
@@ -212,6 +218,7 @@ pub fn identity(item: Item) -> Item {
 }
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_return_in_match() {
     let code = r#"
 @derive(Clone, Debug)
@@ -235,6 +242,7 @@ pub fn maybe_return(item: Item, flag: bool) -> Option<Item> {
 // ============================================================================
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_read_field_not_stored() {
     let code = r#"
 @derive(Clone, Debug)
@@ -252,6 +260,7 @@ pub fn get_value(item: Item) -> i32 {
 }
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_print_debug_not_stored() {
     let code = r#"
 @derive(Clone, Debug)
@@ -272,6 +281,7 @@ pub fn print_item(item: Item) {
 // ============================================================================
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_conditional_push() {
     let code = r#"
 @derive(Clone, Debug)
@@ -291,6 +301,7 @@ pub fn maybe_store(item: Item, items: &mut Vec<Item>, flag: bool) {
 }
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_conditional_return() {
     let code = r#"
 @derive(Clone, Debug)
@@ -315,6 +326,7 @@ pub fn conditional_return(item: Item, flag: bool) -> Option<Item> {
 // ============================================================================
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_push_in_loop() {
     let code = r#"
 @derive(Clone, Debug)
@@ -339,6 +351,7 @@ pub fn collect_items(items: &Vec<Item>) -> Vec<Item> {
 // ============================================================================
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_pass_to_consuming_function() {
     // Simple consuming function pattern
     let code = r#"
@@ -356,6 +369,7 @@ pub fn get_value(item: Item) -> i32 {
 }
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_pass_to_borrowing_function() {
     let code = r#"
 @derive(Clone, Debug)
@@ -384,6 +398,7 @@ pub fn forward(item: Item) -> i32 {
 // ============================================================================
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_clone_then_push() {
     let code = r#"
 @derive(Clone, Debug)
@@ -404,6 +419,7 @@ pub fn clone_and_store(item: &Item, items: &mut Vec<Item>) {
 // ============================================================================
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_nested_struct_storage() {
     let code = r#"
 @derive(Clone, Debug)
@@ -436,6 +452,7 @@ impl Container {
 // ============================================================================
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_tuple_storage() {
     let code = r#"
 @derive(Clone, Debug)
@@ -460,6 +477,7 @@ pub fn wrap_in_tuple(item: Item) -> (i32, Item) {
 // ============================================================================
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_wrap_in_some() {
     let code = r#"
 @derive(Clone, Debug)
@@ -476,6 +494,7 @@ pub fn wrap_some(item: Item) -> Option<Item> {
 }
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_wrap_in_ok() {
     let code = r#"
 @derive(Clone, Debug)

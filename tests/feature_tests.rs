@@ -87,6 +87,7 @@ fn compile_and_check(source: &str, expected_patterns: &[&str]) -> String {
 }
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_basic_function() {
     let source = r#"
 fn add(x: int, y: int) -> int {
@@ -98,6 +99,7 @@ fn add(x: int, y: int) -> int {
 }
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_assignment_statement() {
     let source = r#"
 fn increment(x: int) {
@@ -110,6 +112,7 @@ fn increment(x: int) {
 }
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_if_else_expression() {
     let source = r#"
 fn sign(x: int) -> string {
@@ -121,6 +124,7 @@ fn sign(x: int) -> string {
 }
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_string_interpolation() {
     let source = r#"
 fn greet(name: string) -> string {
@@ -131,6 +135,7 @@ fn greet(name: string) -> string {
 }
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_pipe_operator() {
     let source = r#"
 fn double(x: int) -> int { x * 2 }
@@ -150,6 +155,7 @@ fn process(x: int) -> int {
 }
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_struct_definition() {
     let source = r#"
 struct Point {
@@ -161,6 +167,7 @@ struct Point {
 }
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_struct_with_auto_derive() {
     let source = r#"
 @auto
@@ -179,6 +186,7 @@ struct Point {
 }
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_impl_block() {
     let source = r#"
 struct Point {
@@ -208,6 +216,7 @@ impl Point {
 }
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_trait_definition() {
     let source = r#"
 trait Drawable {
@@ -220,6 +229,7 @@ trait Drawable {
 }
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_trait_implementation() {
     let source = r#"
 trait Show {
@@ -243,6 +253,7 @@ impl Show for Point {
 }
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_enum_definition() {
     let source = r#"
 enum Color {
@@ -255,6 +266,7 @@ enum Color {
 }
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_enum_with_data() {
     let source = r#"
 enum Result {
@@ -266,6 +278,7 @@ enum Result {
 }
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_pattern_matching() {
     let source = r#"
 fn handle(x: int) -> string {
@@ -283,6 +296,7 @@ fn handle(x: int) -> string {
 }
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_match_with_guard() {
     let source = r#"
 fn classify(x: int) -> string {
@@ -297,6 +311,7 @@ fn classify(x: int) -> string {
 }
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_for_loop() {
     let source = r#"
 fn main() {
@@ -315,6 +330,7 @@ fn main() {
 }
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_while_loop() {
     let source = r#"
 fn countdown(n: int) {
@@ -329,6 +345,7 @@ fn countdown(n: int) {
 }
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_closures() {
     let source = r#"
 fn main() {
@@ -341,6 +358,7 @@ fn main() {
 }
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_character_literals() {
     let source = r#"
 fn get_char() -> char {
@@ -351,6 +369,7 @@ fn get_char() -> char {
 }
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_character_escapes() {
     let source = r#"
 fn newline() -> char { '\n' }
@@ -364,6 +383,7 @@ fn quote() -> char { '\'' }
 }
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_let_bindings() {
     let source = r#"
 fn test() {
@@ -376,6 +396,7 @@ fn test() {
 }
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_mutable_bindings() {
     let source = r#"
 fn test() {
@@ -388,6 +409,7 @@ fn test() {
 }
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_if_else() {
     let source = r#"
 fn abs(x: int) -> int {
@@ -402,6 +424,7 @@ fn abs(x: int) -> int {
 }
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_return_statement() {
     let source = r#"
 fn early_return(x: int) -> int {
@@ -415,6 +438,7 @@ fn early_return(x: int) -> int {
 }
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_automatic_reference_insertion() {
     let source = r#"
 fn double(x: int) -> int {
@@ -431,6 +455,7 @@ fn main() {
 }
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_automatic_mut_reference() {
     let source = r#"
 fn increment(x: int) {
@@ -451,6 +476,7 @@ fn main() {
 }
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_const_declaration() {
     let source = r#"
 const MAX: int = 100
@@ -459,6 +485,7 @@ const MAX: int = 100
 }
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_static_declaration() {
     let source = r#"
 static mut COUNTER: int = 0
@@ -467,6 +494,7 @@ static mut COUNTER: int = 0
 }
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_tuple_type() {
     let source = r#"
 fn coords() -> (int, int) {
@@ -477,6 +505,7 @@ fn coords() -> (int, int) {
 }
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_range_expressions() {
     let source = r#"
 fn ranges() {
@@ -488,6 +517,7 @@ fn ranges() {
 }
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_array_indexing() {
     let source = r#"
 fn get_first(arr: Vec<int>) -> int {
@@ -499,6 +529,7 @@ fn get_first(arr: Vec<int>) -> int {
 }
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_method_calls() {
     let source = r#"
 fn length(s: string) -> int {
@@ -509,6 +540,7 @@ fn length(s: string) -> int {
 }
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_field_access() {
     let source = r#"
 struct Point { x: int, y: int }

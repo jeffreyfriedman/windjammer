@@ -77,6 +77,7 @@ fn compile_and_verify(code: &str) -> (bool, String, String) {
 // ============================================================================
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_for_range() {
     let code = r#"
 pub fn sum_to_n(n: i32) -> i32 {
@@ -92,6 +93,7 @@ pub fn sum_to_n(n: i32) -> i32 {
 }
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_for_range_inclusive() {
     let code = r#"
 pub fn sum_to_n_inclusive(n: i32) -> i32 {
@@ -111,6 +113,7 @@ pub fn sum_to_n_inclusive(n: i32) -> i32 {
 }
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_for_vec_iter() {
     let code = r#"
 pub fn sum_vec(items: Vec<i32>) -> i32 {
@@ -128,6 +131,7 @@ pub fn sum_vec(items: Vec<i32>) -> i32 {
 }
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_for_vec_owned() {
     let code = r#"
 pub fn process_owned(items: Vec<i32>) -> Vec<i32> {
@@ -147,6 +151,7 @@ pub fn process_owned(items: Vec<i32>) -> Vec<i32> {
 // ============================================================================
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_for_iter_mut() {
     // iter_mut() for in-place mutation
     let code = r#"
@@ -165,6 +170,7 @@ pub fn double_all(items: &mut Vec<i32>) {
 }
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_for_loop_var_mutation() {
     let code = r#"
 pub fn increment_all(items: Vec<i32>) -> Vec<i32> {
@@ -189,6 +195,7 @@ pub fn increment_all(items: Vec<i32>) -> Vec<i32> {
 // ============================================================================
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_while_basic() {
     let code = r#"
 pub fn countdown(n: i32) -> i32 {
@@ -206,6 +213,7 @@ pub fn countdown(n: i32) -> i32 {
 }
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_while_let() {
     let code = r#"
 pub fn sum_optional(items: Vec<i32>) -> i32 {
@@ -226,6 +234,7 @@ pub fn sum_optional(items: Vec<i32>) -> i32 {
 // ============================================================================
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_loop_with_break() {
     let code = r#"
 pub fn find_first(items: &Vec<i32>, target: i32) -> i32 {
@@ -244,6 +253,7 @@ pub fn find_first(items: &Vec<i32>, target: i32) -> i32 {
 }
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_loop_with_continue() {
     let code = r#"
 pub fn sum_positive(items: &Vec<i32>) -> i32 {
@@ -262,6 +272,7 @@ pub fn sum_positive(items: &Vec<i32>) -> i32 {
 }
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_infinite_loop() {
     let code = r#"
 pub fn find_value() -> i32 {
@@ -288,6 +299,7 @@ pub fn find_value() -> i32 {
 // ============================================================================
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_nested_for() {
     // Nested for loops with ranges
     let code = r#"
@@ -306,6 +318,7 @@ pub fn multiply(a: i32, b: i32) -> i32 {
 }
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_nested_while() {
     let code = r#"
 pub fn multiply(a: i32, b: i32) -> i32 {
@@ -331,6 +344,7 @@ pub fn multiply(a: i32, b: i32) -> i32 {
 // ============================================================================
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_iter_map() {
     let code = r#"
 pub fn double_all(items: Vec<i32>) -> Vec<i32> {
@@ -342,6 +356,7 @@ pub fn double_all(items: Vec<i32>) -> Vec<i32> {
 }
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_iter_filter() {
     // Use iter().cloned() for simpler type handling
     let code = r#"
@@ -354,6 +369,7 @@ pub fn only_positive(items: Vec<i32>) -> Vec<i32> {
 }
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_iter_fold() {
     let code = r#"
 pub fn sum_all(items: Vec<i32>) -> i32 {
@@ -365,6 +381,7 @@ pub fn sum_all(items: Vec<i32>) -> i32 {
 }
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_iter_chain() {
     let code = r#"
 pub fn double_filter_sum(items: Vec<i32>) -> i32 {
@@ -383,6 +400,7 @@ pub fn double_filter_sum(items: Vec<i32>) -> i32 {
 // ============================================================================
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_enumerate_basic() {
     let code = r#"
 pub fn find_index(items: Vec<i32>, target: i32) -> i32 {
@@ -403,6 +421,7 @@ pub fn find_index(items: Vec<i32>, target: i32) -> i32 {
 // ============================================================================
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_iterate_struct_vec() {
     let code = r#"
 @derive(Clone, Debug)
@@ -423,6 +442,7 @@ pub fn sum_items(items: Vec<Item>) -> i32 {
 }
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_iterate_and_clone() {
     let code = r#"
 @derive(Clone, Debug)

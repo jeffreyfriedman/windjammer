@@ -38,6 +38,7 @@ fn compile_code_to_cargo_toml(code: &str, test_name: &str) -> Result<String, Str
 }
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_crate_keyword_not_in_dependencies() {
     // Code that uses "use crate::foo" should NOT add "crate" to Cargo.toml
     let code = r#"
@@ -59,6 +60,7 @@ fn test_crate_keyword_not_in_dependencies() {
 }
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_super_keyword_not_in_dependencies() {
     // Code that uses "use super::foo" should NOT add "super" to Cargo.toml
     let code = r#"
@@ -80,6 +82,7 @@ fn test_super_keyword_not_in_dependencies() {
 }
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_self_keyword_not_in_dependencies() {
     // Code that uses "use self::foo" should NOT add "self" to Cargo.toml
     let code = r#"
@@ -101,6 +104,7 @@ fn test_self_keyword_not_in_dependencies() {
 }
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_multiple_rust_keywords_filtered() {
     // Code using multiple Rust keywords should filter all of them
     // NOTE: Only testing crate:: and super:: since self:: isn't parser-supported yet

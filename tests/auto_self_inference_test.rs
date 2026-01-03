@@ -47,6 +47,7 @@ fn compile_code(code: &str) -> Result<String, String> {
 }
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_auto_infer_immutable_self() {
     let source = r#"
 struct Avatar {
@@ -96,6 +97,7 @@ impl Avatar {
 }
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_auto_infer_mutable_self() {
     let source = r#"
 struct Counter {
@@ -140,6 +142,7 @@ impl Counter {
 }
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_auto_infer_owned_self() {
     let source = r#"
 struct Builder {
@@ -171,6 +174,7 @@ impl Builder {
 }
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_no_self_when_not_used() {
     let source = r#"
 struct Math {}

@@ -38,6 +38,7 @@ fn compile_code(code: &str, test_name: &str) -> Result<String, String> {
 }
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_array_index_of_copy_type_should_not_add_mut_ref() {
     // BUG: Compiler incorrectly adds &mut when reading Copy type from array
     let code = r#"
@@ -72,6 +73,7 @@ fn test_array_index_of_copy_type_should_not_add_mut_ref() {
 }
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_inline_array_index_copy_type_in_return() {
     // Real case from entity.rs
     let code = r#"
@@ -103,6 +105,7 @@ fn test_inline_array_index_copy_type_in_return() {
 }
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_array_index_non_copy_type_may_add_ref() {
     // For non-Copy types, borrowing might be correct
     let code = r#"
@@ -127,6 +130,7 @@ fn test_array_index_non_copy_type_may_add_ref() {
 }
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_copy_type_used_in_function_call() {
     let code = r#"
     pub fn process(id: i64) -> i64 {
