@@ -44,6 +44,7 @@ fn compile_code(code: &str) -> Result<String, String> {
 }
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_explicit_string_type_honored() {
     let source = r#"
 fn greet(name: string) {
@@ -74,6 +75,7 @@ fn main() {
 }
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_borrowed_string_type_honored() {
     let source = r#"
 fn greet(name: &string) {
@@ -98,6 +100,7 @@ fn main() {
 }
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_string_for_storage() {
     let source = r#"
 struct User {
@@ -127,6 +130,7 @@ fn main() {
 }
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_copy_types_passed_by_value() {
     let source = r#"
 fn double(x: int) -> int {

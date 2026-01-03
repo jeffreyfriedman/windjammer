@@ -41,6 +41,7 @@ fn compile_code(code: &str) -> Result<String, String> {
 }
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_iter_var_method_call() {
     let code = r#"
     pub fn process_strings(items: Vec<string>) -> Vec<bool> {
@@ -67,6 +68,7 @@ fn test_iter_var_method_call() {
 }
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_iter_var_method_call_in_comparison() {
     let code = r#"
     struct ThemeSwitcher {

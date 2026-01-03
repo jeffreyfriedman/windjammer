@@ -6,6 +6,7 @@ use std::path::PathBuf;
 use tempfile::TempDir;
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_multi_file_no_inline_modules() {
     // Create temporary directory with multi-file project
     let temp_dir = TempDir::new().unwrap();

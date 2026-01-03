@@ -8,6 +8,7 @@ use std::process::Command;
 use tempfile::TempDir;
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_trace_module_item_creation() {
     // Create simple test structure
     let temp_dir = TempDir::new().expect("Failed to create temp dir");

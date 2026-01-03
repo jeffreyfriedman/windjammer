@@ -18,6 +18,7 @@ use std::process::Command;
 use tempfile::TempDir;
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_no_inline_modules_in_individual_files() {
     let temp_dir = TempDir::new().expect("Failed to create temp dir");
     let src_wj = temp_dir.path().join("src_wj");
