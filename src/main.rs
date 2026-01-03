@@ -3835,9 +3835,9 @@ pub fn generate_nested_module_structure(source_dir: &Path, output_dir: &Path) ->
         output_dir: &Path,
     ) -> Result<()> {
         if module.is_directory && !module.submodules.is_empty() {
-            let mod_rs_content = generate_mod_rs_for_submodule(module)?;
             let module_output_dir = output_dir.join(&module.name);
             std::fs::create_dir_all(&module_output_dir)?;
+            let mod_rs_content = generate_mod_rs_for_submodule(module, &module_output_dir)?;
             let mod_rs_path = module_output_dir.join("mod.rs");
             std::fs::write(&mod_rs_path, mod_rs_content)?;
 
