@@ -1,10 +1,10 @@
 [package]
 name = "windjammer-mcp"
-version = "0.39.1"
-edition = "2021"
-authors = ["Jeffrey Friedman <jeff@example.com>"]
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
 description = "Model Context Protocol (MCP) server for Windjammer - AI-powered development"
-license = "MIT OR Apache-2.0"
+license.workspace = true
 repository = "https://github.com/jeffreyfriedman/windjammer"
 keywords = ["mcp", "ai", "language-server", "code-generation", "anthropic"]
 categories = ["development-tools", "parser-implementations"]
@@ -19,8 +19,8 @@ path = "src/main.rs"
 
 [dependencies]
 # Core Windjammer dependencies
-windjammer = { path = "../..", version = "0.39.1" }
-windjammer-lsp = { path = "../windjammer-lsp", version = "0.39.1" }
+windjammer = { path = "../..", version = "0.39.2" }
+windjammer-lsp = { path = "../windjammer-lsp", version = "0.39.2" }
 
 # JSON-RPC and MCP protocol
 serde = { version = "1.0", features = ["derive"] }
