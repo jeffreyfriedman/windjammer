@@ -1781,7 +1781,20 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
         // Generate decorators (map Windjammer decorators to Rust attributes)
         for decorator in &impl_block.decorators {
             let rust_attr = self.map_decorator(&decorator.name);
-            output.push_str(&format!("#[{}]\n", rust_attr));
+            if decorator.arguments.is_empty() {
+                output.push_str(&format!("#[{}]\n", rust_attr));
+            } else {
+                output.push_str(&format!("#[{}(", rust_attr));
+                let args: Vec<String> = decorator
+                    .arguments
+                    .iter()
+                    .map(|(key, expr)| {
+                        format!("{} = {}", key, self.generate_expression_immut(expr))
+                    })
+                    .collect();
+                output.push_str(&args.join(", "));
+                output.push_str(")]\n");
+            }
         }
 
         // Generate impl with type parameters
@@ -2172,8 +2185,22 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
                 continue;
             }
 
+            // Map Windjammer decorator to Rust attribute (same as struct decorator handling)
             let rust_attr = self.map_decorator(&decorator.name);
-            output.push_str(&format!("#[{}]\n", rust_attr));
+            if decorator.arguments.is_empty() {
+                output.push_str(&format!("#[{}]\n", rust_attr));
+            } else {
+                output.push_str(&format!("#[{}(", rust_attr));
+                let args: Vec<String> = decorator
+                    .arguments
+                    .iter()
+                    .map(|(key, expr)| {
+                        format!("{} = {}", key, self.generate_expression_immut(expr))
+                    })
+                    .collect();
+                output.push_str(&args.join(", "));
+                output.push_str(")]\n");
+            }
         }
 
         // Add `pub` if function is marked pub OR we're in a #[wasm_bindgen] impl block OR compiling a module OR has @export decorator
