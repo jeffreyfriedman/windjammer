@@ -315,7 +315,7 @@ pub fn generate_lib_rs(module_tree: &ModuleTree, project_root: &Path) -> Result<
 }
 
 /// Generate mod.rs content for a submodule directory
-pub fn generate_mod_rs_for_submodule(module: &Module) -> Result<String> {
+pub fn generate_mod_rs_for_submodule(module: &Module, output_dir: &Path) -> Result<String> {
     let mut content = String::from("// Auto-generated mod.rs by Windjammer\n\n");
 
     // THE WINDJAMMER WAY: Find all .wj files in the directory (except mod.wj)
@@ -331,6 +331,76 @@ pub fn generate_mod_rs_for_submodule(module: &Module) -> Result<String> {
         }
     }
     module_files.sort();
+
+    // THE WINDJAMMER FIX: Extract type exports from generated .rs files to detect conflicts
+    let mut type_exports: std::collections::HashMap<String, Vec<String>> =
+        std::collections::HashMap::new();
+    
+    for module_file in &module_files {
+        let rs_file = output_dir.join(format!("{}.rs", module_file));
+        if rs_file.exists() {
+            if let Ok(content) = fs::read_to_string(&rs_file) {
+                let mut exports = Vec::new();
+                for line in content.lines() {
+                    let trimmed = line.trim();
+                    if trimmed.starts_with("pub struct ") {
+                        if let Some(name) = trimmed
+                            .strip_prefix("pub struct ")
+                            .and_then(|s| s.split_whitespace().next())
+                        {
+                            exports.push(name.to_string());
+                        }
+                    } else if trimmed.starts_with("pub enum ") {
+                        if let Some(name) = trimmed
+                            .strip_prefix("pub enum ")
+                            .and_then(|s| s.split_whitespace().next())
+                        {
+                            exports.push(name.to_string());
+                        }
+                    }
+                }
+                if !exports.is_empty() {
+                    type_exports.insert(module_file.clone(), exports);
+                }
+            }
+        }
+    }
+
+    // Detect symbol conflicts
+    let mut symbol_conflicts: std::collections::HashMap<String, Vec<String>> =
+        std::collections::HashMap::new();
+    
+    for (module_name, exports) in &type_exports {
+        for symbol in exports {
+            symbol_conflicts
+                .entry(symbol.clone())
+                .or_insert_with(Vec::new)
+                .push(module_name.clone());
+        }
+    }
+    
+    let has_conflicts = symbol_conflicts
+        .values()
+        .any(|modules_list| modules_list.len() > 1);
+    
+    if has_conflicts {
+        eprintln!(
+            "⚠ Detected conflicting symbol exports in {}:",
+            module.name
+        );
+        for (symbol, modules_list) in &symbol_conflicts {
+            if modules_list.len() > 1 {
+                eprintln!(
+                    "  • {} exported by: {}",
+                    symbol,
+                    modules_list.join(", ")
+                );
+            }
+        }
+        eprintln!(
+            "→ Skipping glob re-exports to prevent ambiguity"
+        );
+    }
 
     // Check if this module has a mod.wj
     let mod_wj_path = module.path.join("mod.wj");
@@ -416,24 +486,30 @@ pub fn generate_mod_rs_for_submodule(module: &Module) -> Result<String> {
             }
         }
 
-        content.push_str("\n// Auto-generated re-exports\n");
-        for module_file in &module_files {
-            let needs_desktop_gate = module_file.starts_with("desktop_")
-                || (module_file.starts_with("app_") && module_file != "app_reactive");
-            
-            if needs_desktop_gate {
-                content.push_str("#[cfg(feature = \"desktop\")]\n");
+        // Only add glob re-exports if no conflicts
+        if !has_conflicts {
+            content.push_str("\n// Auto-generated re-exports\n");
+            for module_file in &module_files {
+                let needs_desktop_gate = module_file.starts_with("desktop_")
+                    || (module_file.starts_with("app_") && module_file != "app_reactive");
+                
+                if needs_desktop_gate {
+                    content.push_str("#[cfg(feature = \"desktop\")]\n");
+                }
+                content.push_str(&format!("pub use {}::*;\n", module_file));
             }
-            content.push_str(&format!("pub use {}::*;\n", module_file));
-        }
-        for submodule in &module.submodules {
-            let needs_desktop_gate = submodule.name.starts_with("desktop_")
-                || (submodule.name.starts_with("app_") && submodule.name != "app_reactive");
-            
-            if needs_desktop_gate {
-                content.push_str("#[cfg(feature = \"desktop\")]\n");
+            for submodule in &module.submodules {
+                let needs_desktop_gate = submodule.name.starts_with("desktop_")
+                    || (submodule.name.starts_with("app_") && submodule.name != "app_reactive");
+                
+                if needs_desktop_gate {
+                    content.push_str("#[cfg(feature = \"desktop\")]\n");
+                }
+                content.push_str(&format!("pub use {}::*;\n", submodule.name));
             }
-            content.push_str(&format!("pub use {}::*;\n", submodule.name));
+        } else {
+            content.push_str("\n// Note: Glob re-exports skipped due to symbol conflicts\n");
+            content.push_str(&format!("// Use explicit imports: use parent::{}::SymbolName;\n", module.name));
         }
     }
 
