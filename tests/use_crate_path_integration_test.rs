@@ -5,6 +5,7 @@ use std::path::PathBuf;
 use std::process::Command;
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_use_crate_path_preserved() {
     let wj_code = r#"
 use crate::ffi

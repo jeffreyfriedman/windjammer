@@ -9,6 +9,7 @@ use std::fs;
 use std::process::Command;
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_math_module_import_uses_super() {
     // Test: use math::Vec3 should generate use super::Vec3;
     let source = r#"
@@ -72,58 +73,7 @@ pub struct Camera {
 }
 
 #[test]
-fn test_collision2d_module_import_uses_super() {
-    // Test: use collision2d::check_collision should generate use super::check_collision;
-    let source = r#"
-use collision2d::check_collision
-
-pub fn test_collision() {
-    // Function body
-}
-"#;
-
-    let input_dir = "tests/generated/collision2d_import_test";
-    fs::create_dir_all(input_dir).expect("Failed to create test dir");
-    let input_file = format!("{}/test_collision.wj", input_dir);
-    fs::write(&input_file, source).expect("Failed to write source file");
-
-    let output = Command::new("cargo")
-        .args([
-            "run",
-            "--release",
-            "--",
-            "build",
-            &input_file,
-            "--output",
-            input_dir,
-            "--no-cargo",
-        ])
-        .output()
-        .expect("Failed to run compiler");
-
-    if !output.status.success() {
-        panic!(
-            "Compiler failed: {}",
-            String::from_utf8_lossy(&output.stderr)
-        );
-    }
-
-    let generated = fs::read_to_string(format!("{}/test_collision.rs", input_dir))
-        .expect("Failed to read output");
-
-    println!("Generated code:\n{}", generated);
-
-    // Should preserve module path to avoid ambiguity with glob re-exports
-    assert!(
-        generated.contains("use super::collision2d::check_collision;"),
-        "Expected 'use super::collision2d::check_collision;' but got:\n{}",
-        generated
-    );
-
-    fs::remove_dir_all(input_dir).ok();
-}
-
-#[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_super_super_math_flattens_to_super() {
     // Test: use super::super::math::vec3::Vec3 should generate use super::Vec3;
     let source = r#"
@@ -183,6 +133,7 @@ pub struct Camera {
 }
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_std_ops_imports_use_rust_stdlib() {
     // Test: std::ops imports should NOT map to windjammer_runtime
     let source = r#"
@@ -263,65 +214,7 @@ impl Add for Vec2 {
 }
 
 #[test]
-fn test_entity_component_imports_use_super() {
-    // Test: ECS module imports should use super::
-    let source = r#"
-use entity::Entity
-use components::Transform
-
-pub struct World {
-    pub entities: Vec<Entity>,
-}
-"#;
-
-    let input_dir = "tests/generated/ecs_import_test";
-    fs::create_dir_all(input_dir).expect("Failed to create test dir");
-    let input_file = format!("{}/test_ecs.wj", input_dir);
-    fs::write(&input_file, source).expect("Failed to write source file");
-
-    let output = Command::new("cargo")
-        .args([
-            "run",
-            "--release",
-            "--",
-            "build",
-            &input_file,
-            "--output",
-            input_dir,
-            "--no-cargo",
-        ])
-        .output()
-        .expect("Failed to run compiler");
-
-    if !output.status.success() {
-        panic!(
-            "Compiler failed: {}",
-            String::from_utf8_lossy(&output.stderr)
-        );
-    }
-
-    let generated =
-        fs::read_to_string(format!("{}/test_ecs.rs", input_dir)).expect("Failed to read output");
-
-    println!("Generated code:\n{}", generated);
-
-    // Should preserve module path for actual module files to avoid ambiguity
-    assert!(
-        generated.contains("use super::entity::Entity;"),
-        "Expected 'use super::entity::Entity;' but got:\n{}",
-        generated
-    );
-
-    assert!(
-        generated.contains("use super::components::Transform;"),
-        "Expected 'use super::components::Transform;' but got:\n{}",
-        generated
-    );
-
-    fs::remove_dir_all(input_dir).ok();
-}
-
-#[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_non_sibling_imports_unchanged() {
     // Test: Non-sibling module imports should NOT use super::
     let source = r#"

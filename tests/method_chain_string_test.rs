@@ -41,6 +41,7 @@ fn compile_code(code: &str) -> Result<String, String> {
 }
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_method_chain_string_conversion() {
     let code = r#"
     struct MenuItem {

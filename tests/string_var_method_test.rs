@@ -34,6 +34,7 @@ fn compile_and_get_generated(code: &str) -> (bool, String) {
 }
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_string_literal_var_to_method() {
     let code = r#"
 fn process(content: string) -> string { content }

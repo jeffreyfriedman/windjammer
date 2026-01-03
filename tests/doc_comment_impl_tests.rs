@@ -41,6 +41,7 @@ fn compile_fixture(fixture_name: &str) -> Result<String, String> {
 }
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_doc_comment_in_impl_block() {
     let generated = compile_fixture("doc_comments_impl").expect("Compilation failed");
 

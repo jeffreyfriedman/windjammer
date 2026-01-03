@@ -57,6 +57,7 @@ fn compile_wj(source: &str) -> (String, bool) {
 }
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_extern_fn_declarations() {
     let source = r#"
 extern fn printf(format: string);
@@ -90,6 +91,7 @@ pub fn test() {
 }
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_extern_fn_with_generics() {
     let source = r#"
 extern fn run_game_loop<G: GameLoop>(game: G);

@@ -70,6 +70,7 @@ fn compile_and_verify(code: &str) -> (bool, String, String) {
 // ============================================================================
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_e2e_counter() {
     let code = r#"
 @derive(Clone, Debug)
@@ -113,6 +114,7 @@ pub fn test_counter() -> i32 {
 }
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_e2e_stack() {
     let code = r#"
 @derive(Clone, Debug)
@@ -151,6 +153,7 @@ impl Stack {
 }
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_e2e_point_operations() {
     let code = r#"
 @derive(Clone, Debug, Copy)
@@ -184,6 +187,7 @@ impl Point {
 }
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_e2e_linked_list_node() {
     // Simpler version without Box
     let code = r#"
@@ -208,6 +212,7 @@ impl Node {
 }
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_e2e_calculator() {
     let code = r#"
 pub enum Operation {
@@ -237,6 +242,7 @@ pub fn calculate(a: i32, b: i32, op: Operation) -> Option<i32> {
 }
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_e2e_event_handler() {
     // Simpler event enum
     let code = r#"
@@ -271,6 +277,7 @@ impl EventHandler {
 }
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_e2e_state_machine() {
     let code = r#"
 @derive(Clone, Debug, PartialEq)
@@ -323,6 +330,7 @@ impl StateMachine {
 }
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_e2e_iterator_pipeline() {
     let code = r#"
 pub fn process_numbers(numbers: &Vec<i32>) -> i32 {
@@ -346,6 +354,7 @@ pub fn count_positive(numbers: &Vec<i32>) -> usize {
 }
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_e2e_recursive_sum() {
     let code = r#"
 pub fn sum_recursive(n: i32) -> i32 {
@@ -373,6 +382,7 @@ pub fn factorial(n: i32) -> i32 {
 }
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_e2e_builder_pattern() {
     let code = r#"
 @derive(Clone, Debug, Default)
@@ -409,6 +419,7 @@ impl Config {
 }
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_e2e_generic_container() {
     let code = r#"
 @derive(Clone, Debug)
@@ -442,6 +453,7 @@ impl<T: Clone> Pair<T> {
 }
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_e2e_game_entity() {
     let code = r#"
 @derive(Clone, Debug)

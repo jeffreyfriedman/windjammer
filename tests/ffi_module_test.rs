@@ -11,6 +11,7 @@ use std::fs;
 use tempfile::TempDir;
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_ffi_module_declaration() {
     let temp_dir = TempDir::new().unwrap();
     let src_dir = temp_dir.path().join("src_wj");
@@ -100,6 +101,7 @@ pub fn get_window_width() -> i64 {
 }
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_ffi_subdirectory() {
     let temp_dir = TempDir::new().unwrap();
     let src_dir = temp_dir.path().join("src_wj");

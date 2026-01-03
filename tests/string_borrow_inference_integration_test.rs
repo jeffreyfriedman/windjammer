@@ -5,6 +5,7 @@ use std::path::PathBuf;
 use std::process::Command;
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_string_borrow_inference() {
     let test_file = PathBuf::from("tests/string_borrow_inference_test.wj");
     let output_dir = PathBuf::from("target/test_output/string_borrow_inference");

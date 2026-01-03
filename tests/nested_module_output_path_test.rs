@@ -94,6 +94,7 @@ fn test_single_nested_file_compiles_to_correct_path() {
 }
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_full_project_nested_modules_compile_to_correct_paths() {
     let temp_dir = TempDir::new().expect("Failed to create temp dir");
     let project_root = temp_dir.path();

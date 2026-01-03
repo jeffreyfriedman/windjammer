@@ -2,88 +2,210 @@
 
 ## Supported Versions
 
-We release patches for security vulnerabilities in the following versions:
+We release security updates for the following versions:
 
 | Version | Supported          |
 | ------- | ------------------ |
-| 0.36.x  | :white_check_mark: |
-| 0.35.x  | :white_check_mark: |
-| < 0.35  | :x:                |
+| 0.39.x  | :white_check_mark: |
+| 0.38.x  | :white_check_mark: |
+| < 0.38  | :x:                |
 
 ## Reporting a Vulnerability
 
-We take the security of Windjammer seriously. If you believe you have found a security vulnerability, please report it to us responsibly.
+**Please do not report security vulnerabilities through public GitHub issues.**
 
-### Please Do Not
+Instead, please report them via one of the following methods:
 
-- Open a public GitHub issue for security vulnerabilities
-- Disclose the vulnerability publicly before it has been addressed
+### 1. GitHub Security Advisories (Preferred)
 
-### Please Do
+Report vulnerabilities through [GitHub Security Advisories](https://github.com/jeffreyfriedman/windjammer/security/advisories/new).
 
-1. **Email us directly** at [INSERT SECURITY EMAIL]
-2. **Provide details** including:
-   - Description of the vulnerability
-   - Steps to reproduce
-   - Potential impact
-   - Suggested fix (if any)
-3. **Allow time** for us to address the issue before public disclosure
+### 2. Email
 
-### What to Expect
+Send an email to: **security@windjammer.dev** (if available)
 
-- **Acknowledgment**: We will acknowledge receipt of your report within 48 hours
-- **Assessment**: We will assess the vulnerability and determine its severity
-- **Fix**: We will work on a fix and coordinate a release timeline with you
-- **Credit**: We will credit you in the security advisory (unless you prefer to remain anonymous)
-- **Disclosure**: We will publicly disclose the vulnerability after a fix is released
+Or contact the maintainer directly: **jeffrey@example.com**
 
-## Security Best Practices
+### What to Include
 
-When using Windjammer:
+Please include the following information:
 
-1. **Keep updated**: Always use the latest stable version
-2. **Review dependencies**: Regularly audit your project's dependencies
-3. **Validate input**: Sanitize user input in your Windjammer applications
-4. **Follow guidelines**: Adhere to secure coding practices
-5. **Report issues**: Help us identify and fix security issues
+- Type of vulnerability (e.g., buffer overflow, SQL injection, cross-site scripting, etc.)
+- Full paths of source file(s) related to the vulnerability
+- Location of the affected source code (tag/branch/commit or direct URL)
+- Step-by-step instructions to reproduce the issue
+- Proof-of-concept or exploit code (if possible)
+- Impact of the issue, including how an attacker might exploit it
 
-## Security Features
+### Response Timeline
 
-Windjammer includes several security features:
+- **Initial Response**: Within 48 hours
+- **Status Update**: Within 7 days
+- **Fix Timeline**: Depends on severity
+  - **Critical**: Within 7 days
+  - **High**: Within 14 days
+  - **Medium**: Within 30 days
+  - **Low**: Next regular release
 
-- **Memory safety**: Leverages Rust's memory safety guarantees
-- **Type safety**: Strong static typing prevents many common vulnerabilities
-- **Dependency scanning**: Automated dependency vulnerability checks via Dependabot
-- **CI/CD security**: Automated security checks in our build pipeline
+## Security Measures
 
-## Vulnerability Disclosure Timeline
+### Automated Scanning
 
-Our typical vulnerability disclosure timeline:
+- **CodeQL**: Automated security scanning on every push and pull request
+- **Dependabot**: Daily checks for vulnerable dependencies
+- **cargo-audit**: Security audit in pre-commit hook and CI
 
-1. **Day 0**: Vulnerability reported
-2. **Day 1-2**: Acknowledgment sent
-3. **Day 3-7**: Assessment and severity determination
-4. **Day 8-30**: Fix development and testing
-5. **Day 31**: Coordinated disclosure and patch release
+### Dependency Management
 
-## Security Updates
+- All dependencies are tracked in `Cargo.lock`
+- Dependabot automatically creates PRs for security updates
+- Security advisories are reviewed weekly
+- Unmaintained dependencies are monitored and replaced when alternatives exist
 
-Security updates are released as:
+### Code Review
 
-- **Patch releases** (0.36.x) for minor vulnerabilities
-- **Minor releases** (0.x.0) for moderate vulnerabilities
-- **Immediate hotfixes** for critical vulnerabilities
+- All code changes require review before merging
+- Security-sensitive changes require additional review
+- Pre-commit hooks run security checks locally
 
-Subscribe to our [GitHub releases](https://github.com/jeffreyfriedman/windjammer/releases) to stay informed about security updates.
+### Release Process
 
-## Bug Bounty Program
+- Security patches are released as patch versions (0.x.Y)
+- Security advisories are published after fixes are released
+- Users are notified through GitHub releases and CHANGELOG
 
-We currently do not have a formal bug bounty program, but we deeply appreciate security researchers who responsibly disclose vulnerabilities. We will publicly acknowledge your contribution in our security advisories and release notes.
+## Known Security Considerations
+
+### 1. Subprocess Execution
+
+Windjammer spawns subprocesses for compilation. When using Windjammer:
+
+- **Do NOT compile untrusted code** without sandboxing
+- Consider running in a container or VM for untrusted sources
+- File system access is unrestricted during compilation
+
+### 2. Generated Code
+
+Windjammer generates Rust code that is then compiled by `rustc`:
+
+- Generated code may contain bugs (compiler is in active development)
+- Always review generated code for production use
+- Use `--no-cargo` flag to inspect generated code before running
+
+### 3. LSP Server
+
+The Language Server Protocol (LSP) server:
+
+- Runs with user privileges
+- Has file system access
+- Should only be used with trusted projects
+
+### 4. Dependency Supply Chain
+
+Windjammer depends on ~400+ crates:
+
+- All dependencies are audited with `cargo-audit`
+- Unmaintained dependencies are monitored
+- Consider vendoring dependencies for production use
+
+## Security Best Practices for Users
+
+### For Development
+
+1. **Keep Windjammer Updated**: Always use the latest version
+2. **Run `cargo audit`**: Check your project dependencies
+3. **Review Generated Code**: Use `--no-cargo` flag to inspect output
+4. **Use Pre-commit Hooks**: Enable security checks before commits
+
+### For Production
+
+1. **Vendor Dependencies**: Use `cargo vendor` for reproducible builds
+2. **Pin Versions**: Lock dependency versions in `Cargo.lock`
+3. **Scan Container Images**: If using Docker, scan with tools like Trivy
+4. **Sandbox Compilation**: Run Windjammer in isolated environments
+5. **Review Generated Code**: Never blindly trust compiler output
+
+### For CI/CD
+
+1. **Use Official Images**: Pull from verified GitHub Container Registry
+2. **Scan Dependencies**: Run `cargo audit` in CI pipeline
+3. **SBOM Generation**: Generate Software Bill of Materials
+4. **Sign Artifacts**: Use checksums and signatures for releases
+
+## Dependency Audit Results
+
+Last audit: 2026-01-01
+
+### Current Warnings (Non-Critical)
+
+1. **paste** (v1.0.15) - Unmaintained
+   - Used by: `ratatui` (transitive dependency)
+   - Severity: Low
+   - Status: Monitoring, no replacement needed yet
+   - Impact: Procedural macro, no runtime security impact
+
+2. **yaml-rust** (v0.4.5) - Unmaintained
+   - Used by: `syntect` (transitive dependency)
+   - Severity: Low
+   - Status: Monitoring, `syntect` team aware
+   - Impact: Syntax highlighting only, no user input parsing
+
+**No critical vulnerabilities found.**
+
+## Security Tooling
+
+### Tools We Use
+
+- **cargo-audit**: Dependency vulnerability scanner
+- **CodeQL**: Static analysis security testing (SAST)
+- **Dependabot**: Automated dependency updates
+- **Clippy**: Rust linter (catches common bugs)
+- **cargo-deny**: License and security policy enforcement (future)
+
+### Recommended for Users
+
+- **cargo-audit**: Scan your projects
+- **cargo-outdated**: Check for outdated dependencies
+- **cargo-tree**: Inspect dependency tree
+- **cargo-geiger**: Detect unsafe code usage
+
+## Security Disclosure Policy
+
+### Coordinated Disclosure
+
+We follow **coordinated disclosure**:
+
+1. Reporter notifies maintainers privately
+2. Maintainers confirm and develop fix
+3. Fix is released
+4. Security advisory is published
+5. CVE is assigned (if applicable)
+
+### Public Disclosure
+
+Security advisories will be published:
+
+- In GitHub Security Advisories
+- In CHANGELOG.md (after fix is released)
+- In release notes
+- On security mailing lists (if established)
+
+## Security Hall of Fame
+
+We recognize security researchers who responsibly disclose vulnerabilities:
+
+- *No vulnerabilities reported yet*
 
 ## Questions?
 
-If you have questions about our security policy, please open a [GitHub Discussion](https://github.com/jeffreyfriedman/windjammer/discussions).
+For security-related questions that are not vulnerabilities:
+
+- Open a [GitHub Discussion](https://github.com/jeffreyfriedman/windjammer/discussions)
+- Email the maintainer
+- Join our community chat (if available)
 
 ---
 
-**Last Updated**: November 25, 2024
+**Last Updated**: 2026-01-01  
+**Version**: 0.39.1  
+**Next Review**: 2026-02-01

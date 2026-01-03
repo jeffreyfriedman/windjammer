@@ -36,6 +36,7 @@ fn compile_code(code: &str) -> Result<String, String> {
 }
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_return_vec_len_should_cast_to_int() {
     // BUG: Compiler doesn't auto-cast .len() to i64 in return
     let code = r#"
@@ -55,6 +56,7 @@ fn test_return_vec_len_should_cast_to_int() {
 }
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_return_len_from_method() {
     // Real case from components.rs
     let code = r#"
@@ -81,6 +83,7 @@ fn test_return_len_from_method() {
 }
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_implicit_return_len_should_cast() {
     // Test implicit returns (no return keyword)
     let code = r#"
@@ -100,6 +103,7 @@ fn test_implicit_return_len_should_cast() {
 }
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_return_usize_variable_to_int() {
     // When a usize variable is returned as int
     let code = r#"
@@ -120,6 +124,7 @@ fn test_return_usize_variable_to_int() {
 }
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_return_computed_usize_to_int() {
     // Return expression with usize operations
     let code = r#"

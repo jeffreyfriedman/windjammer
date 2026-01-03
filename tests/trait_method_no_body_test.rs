@@ -37,6 +37,7 @@ fn compile_code(code: &str) -> Result<String, String> {
 }
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_trait_method_no_body_single() {
     // TDD: Simple trait with single method without body
     let code = r#"
@@ -56,6 +57,7 @@ fn test_trait_method_no_body_single() {
 }
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_trait_method_no_body_multiple() {
     // TDD: Trait with multiple methods without bodies
     let code = r#"
@@ -86,6 +88,7 @@ fn test_trait_method_no_body_multiple() {
 }
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_trait_method_mixed_bodies() {
     // TDD: Trait with some methods having default implementations and some not
     let code = r#"
@@ -116,6 +119,7 @@ fn test_trait_method_mixed_bodies() {
 }
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_trait_impl_with_no_body_trait() {
     // TDD: Full trait + impl scenario
     let code = r#"
@@ -159,6 +163,7 @@ fn test_trait_impl_with_no_body_trait() {
 }
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_trait_method_with_return_type() {
     // TDD: Trait method without body but with return type
     let code = r#"
