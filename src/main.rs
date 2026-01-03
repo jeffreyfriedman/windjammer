@@ -3830,6 +3830,17 @@ pub fn generate_nested_module_structure(source_dir: &Path, output_dir: &Path) ->
                                 continue; // Skip copying - this is a Windjammer module directory
                             }
 
+                            // CRITICAL FIX: Don't copy directories that contain the output directory!
+                            // This prevents infinite recursion when output is inside the source tree
+                            // Example: Don't copy src/components/ when output is src/components/generated/
+                            if let Ok(canonical_dir) = path.canonicalize() {
+                                if let Ok(canonical_output) = output_dir.canonicalize() {
+                                    if canonical_output.starts_with(&canonical_dir) {
+                                        continue; // Skip copying - this dir contains the output directory
+                                    }
+                                }
+                            }
+
                             // Check if this directory has a mod.rs (it's a Rust module)
                             let mod_rs = path.join("mod.rs");
                             if mod_rs.exists() {
