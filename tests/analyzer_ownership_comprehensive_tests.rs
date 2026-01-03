@@ -75,6 +75,7 @@ fn compile_and_verify(code: &str) -> (bool, String, String) {
 // ============================================================================
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_infer_borrowed_for_readonly_param() {
     let code = r#"
 @derive(Clone, Debug)
@@ -99,6 +100,7 @@ pub fn print_point(p: Point) {
 }
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_infer_borrowed_for_field_read() {
     let code = r#"
 @derive(Clone, Debug)
@@ -123,6 +125,7 @@ pub fn area(rect: Rectangle) -> i32 {
 }
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_infer_borrowed_for_method_read() {
     let code = r#"
 @derive(Clone, Debug)
@@ -151,6 +154,7 @@ pub fn read_counter(c: Counter) -> i32 {
 // ============================================================================
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_infer_mut_ref_for_field_mutation() {
     let code = r#"
 @derive(Clone, Debug)
@@ -173,6 +177,7 @@ pub fn increment(c: Counter) {
 }
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_infer_mut_ref_for_method_mutation() {
     // When calling a &mut self method, should either:
     // 1. Infer &mut for the parameter, OR
@@ -205,6 +210,7 @@ pub fn bump(c: &mut Counter) {
 }
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_infer_mut_ref_for_compound_assignment() {
     let code = r#"
 @derive(Clone, Debug)
@@ -231,6 +237,7 @@ pub fn add_points(s: Stats, points: i32) {
 // ============================================================================
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_owned_when_stored() {
     let code = r#"
 @derive(Clone, Debug)
@@ -262,6 +269,7 @@ impl Container {
 }
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_owned_when_returned() {
     let code = r#"
 @derive(Clone, Debug)
@@ -281,6 +289,7 @@ pub fn identity(p: Point) -> Point {
 }
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_owned_for_copy_types() {
     let code = r#"
 pub fn add(x: i32, y: i32) -> i32 {
@@ -303,6 +312,7 @@ pub fn add(x: i32, y: i32) -> i32 {
 // ============================================================================
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_explicit_borrowed_respected() {
     let code = r#"
 @derive(Clone, Debug)
@@ -325,6 +335,7 @@ pub fn process(d: &Data) -> i32 {
 }
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_explicit_mut_borrowed_respected() {
     let code = r#"
 @derive(Clone, Debug)
@@ -351,6 +362,7 @@ pub fn modify(d: &mut Data) {
 // ============================================================================
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_self_borrowed_for_read() {
     let code = r#"
 @derive(Clone, Debug)
@@ -372,6 +384,7 @@ impl Point {
 }
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_self_mut_for_mutation() {
     let code = r#"
 @derive(Clone, Debug)
@@ -402,6 +415,7 @@ impl Point {
 // ============================================================================
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_mixed_read_and_mut_params() {
     let code = r#"
 @derive(Clone, Debug)
@@ -434,6 +448,7 @@ pub fn copy_data(src: Source, dst: Target) {
 }
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_nested_field_mutation() {
     let code = r#"
 @derive(Clone, Debug)
@@ -461,6 +476,7 @@ pub fn set_inner_value(o: Outer, v: i32) {
 }
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_conditional_mutation() {
     let code = r#"
 @derive(Clone, Debug)
@@ -486,6 +502,7 @@ pub fn maybe_increment(c: Counter, do_it: bool) {
 }
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_loop_mutation() {
     let code = r#"
 @derive(Clone, Debug)
@@ -516,6 +533,7 @@ pub fn increment_n_times(c: Counter, n: i32) {
 // ============================================================================
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_borrow_for_iteration() {
     let code = r#"
 @derive(Clone, Debug)
@@ -538,6 +556,7 @@ pub fn sum_items(c: Container) -> i32 {
 }
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_mut_borrow_for_item_modification() {
     let code = r#"
 @derive(Clone, Debug)
@@ -564,6 +583,7 @@ pub fn double_items(c: Container) {
 // ============================================================================
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_trait_impl_preserves_signature() {
     let code = r#"
 trait Printable {
@@ -592,6 +612,7 @@ impl Printable for MyType {
 // ============================================================================
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_generic_param_ownership() {
     let code = r#"
 @derive(Clone, Debug)
@@ -610,6 +631,7 @@ pub fn get_value<T>(c: Container<T>) -> T {
 }
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_generic_with_clone() {
     let code = r#"
 pub fn clone_item<T: Clone>(item: T) -> T {

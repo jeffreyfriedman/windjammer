@@ -41,6 +41,7 @@ fn compile_wj(source: &str, test_name: &str) -> Result<String, String> {
 }
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_display_trait_inferred() {
     let source = r#"
 fn print_item<T>(item: T) {
@@ -63,6 +64,7 @@ fn main() {
 }
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_debug_trait_inferred() {
     let source = r#"
 fn debug_item<T>(item: T) {
@@ -85,6 +87,7 @@ fn main() {
 }
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_clone_trait_inferred() {
     let source = r#"
 fn dup<T>(item: T) -> T {
@@ -108,6 +111,7 @@ fn main() {
 }
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_multiple_bounds_inferred() {
     let source = r#"
 fn clone_and_print<T>(item: T) -> T {
@@ -131,6 +135,7 @@ fn main() {
 }
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_add_operator_trait_inferred() {
     let source = r#"
 fn double<T>(x: T) -> T {

@@ -37,6 +37,7 @@ fn compile_code(code: &str) -> Result<String, String> {
 }
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_extern_fn_simple() {
     // TDD: Simple extern function declaration
     let code = r#"
@@ -60,6 +61,7 @@ fn test_extern_fn_simple() {
 }
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_extern_fn_with_return_type() {
     // TDD: Extern function with return type
     let code = r#"
@@ -83,6 +85,7 @@ fn test_extern_fn_with_return_type() {
 }
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_extern_fn_multiple_params() {
     // TDD: Extern function with multiple parameters
     let code = r#"
@@ -99,6 +102,7 @@ fn test_extern_fn_multiple_params() {
 }
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_extern_fn_used_in_code() {
     // TDD: Extern function can be called
     let code = r#"
@@ -125,6 +129,7 @@ fn test_extern_fn_used_in_code() {
 }
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_extern_fn_multiple_declarations() {
     // TDD: Multiple extern functions
     let code = r#"
@@ -153,6 +158,7 @@ fn test_extern_fn_multiple_declarations() {
 }
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_extern_fn_with_generics() {
     // TDD: Extern function with generic parameters
     let code = r#"
@@ -175,6 +181,7 @@ fn test_extern_fn_with_generics() {
 }
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_extern_fn_semicolon_optional() {
     // TDD: Semicolons should be optional (Windjammer philosophy)
     let code = r#"

@@ -43,6 +43,7 @@ fn compile_and_get_generated(code: &str) -> (bool, String, String) {
 }
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_method_no_self_access_should_borrow() {
     // Method that doesn't access self at all should be &self
     let code = r#"

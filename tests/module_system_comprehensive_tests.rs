@@ -77,6 +77,7 @@ fn compile_and_verify(code: &str) -> (bool, String, String) {
 // ============================================================================
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_use_std_collections() {
     let code = r#"
 use std::collections::HashMap
@@ -94,6 +95,7 @@ pub fn create_map() -> HashMap<i32, i32> {
 }
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_use_std_vec() {
     let code = r#"
 pub fn create_vec() -> Vec<i32> {
@@ -108,6 +110,7 @@ pub fn create_vec() -> Vec<i32> {
 }
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_use_option() {
     let code = r#"
 pub fn wrap(x: i32) -> Option<i32> {
@@ -123,6 +126,7 @@ pub fn wrap(x: i32) -> Option<i32> {
 }
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_use_result() {
     let code = r#"
 pub fn parse(n: i32) -> Result<i32, i32> {
@@ -142,6 +146,7 @@ pub fn parse(n: i32) -> Result<i32, i32> {
 // ============================================================================
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_multiple_use() {
     let code = r#"
 use std::collections::HashMap
@@ -160,6 +165,7 @@ pub fn test_both() -> (HashMap<i32, i32>, HashSet<i32>) {
 // ============================================================================
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_vec_of_i32() {
     let code = r#"
 pub fn int_items() -> Vec<i32> {
@@ -179,6 +185,7 @@ pub fn int_items() -> Vec<i32> {
 // ============================================================================
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_option_some() {
     let code = r#"
 pub fn make_some(x: i32) -> Option<i32> {
@@ -190,6 +197,7 @@ pub fn make_some(x: i32) -> Option<i32> {
 }
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_option_none() {
     let code = r#"
 pub fn make_none() -> Option<i32> {
@@ -201,6 +209,7 @@ pub fn make_none() -> Option<i32> {
 }
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_result_ok() {
     let code = r#"
 pub fn make_ok(x: i32) -> Result<i32, i32> {
@@ -212,6 +221,7 @@ pub fn make_ok(x: i32) -> Result<i32, i32> {
 }
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_result_err() {
     let code = r#"
 pub fn make_err(e: i32) -> Result<i32, i32> {

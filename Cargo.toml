@@ -8,7 +8,7 @@ members = [
 ]
 
 [workspace.package]
-version = "0.39.0"
+version = "0.39.1"
 edition = "2021"
 authors = ["Jeffrey Friedman <20387583+jeffreyfriedman@users.noreply.github.com>", "Windjammer Contributors"]
 license = "MIT OR Apache-2.0"
@@ -120,12 +120,3 @@ harness = false
 [[bench]]
 name = "regression_benchmarks"
 harness = false
-
-[[bench]]
-name = "arena_performance"
-harness = false
-
-# Allow tarpaulin cfg for coverage testing
-# Tarpaulin sets this cfg when running, so we need to tell Rust it's expected
-[lints.rust]
-unexpected_cfgs = { level = "warn", check-cfg = ['cfg(tarpaulin)'] }

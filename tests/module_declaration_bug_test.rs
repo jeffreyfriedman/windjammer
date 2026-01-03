@@ -12,6 +12,7 @@ use std::process::Command;
 use tempfile::TempDir;
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_module_declarations_only_include_local_modules() {
     // Create a test project structure:
     // src/
@@ -149,6 +150,7 @@ fn test_module_declarations_only_include_local_modules() {
 }
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_lib_rs_declares_only_top_level_modules() {
     // Create a test project structure
     let temp_dir = TempDir::new().expect("Failed to create temp dir");

@@ -10,6 +10,7 @@ use std::process::Command;
 // The tarpaulin cfg is declared in Cargo.toml [lints.rust] section
 #[cfg_attr(tarpaulin, ignore)]
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_generic_owned_param_inference() {
     // Compile the Windjammer test file
     let output = Command::new("cargo")
