@@ -3800,6 +3800,14 @@ pub fn generate_nested_module_structure(source_dir: &Path, output_dir: &Path) ->
                                 continue; // Skip copying - this file is generated from .wj
                             }
 
+                            // CRITICAL FIX: Don't copy .rs files that have corresponding subdirectories
+                            // Example: Don't copy events.rs if events/ directory exists
+                            // (events.rs declares submodules which won't work in generated context)
+                            let corresponding_dir = path.parent().unwrap().join(stem.as_ref());
+                            if corresponding_dir.exists() && corresponding_dir.is_dir() {
+                                continue; // Skip copying - this is a module parent file
+                            }
+
                             // Only copy hand-written .rs files (like ffi.rs)
                             let dest = output_dir.join(name);
                             if let Err(e) = std::fs::copy(&path, &dest) {
