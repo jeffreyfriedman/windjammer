@@ -3495,27 +3495,24 @@ pub fn generate_mod_file(output_dir: &Path) -> Result<()> {
     // Check if multiple modules export the same type name
     let mut symbol_conflicts: std::collections::HashMap<String, Vec<String>> =
         std::collections::HashMap::new();
-    
+
     for (module, exports) in &type_exports {
         for symbol in exports {
             symbol_conflicts
                 .entry(symbol.clone())
-                .or_insert_with(Vec::new)
+                .or_default()
                 .push(module.clone());
         }
     }
-    
+
     // Find actual conflicts (symbols exported by 2+ modules)
     let has_conflicts = symbol_conflicts
         .values()
         .any(|modules_list| modules_list.len() > 1);
-    
+
     if has_conflicts {
         use colored::*;
-        println!(
-            "{} Detected conflicting symbol exports:",
-            "⚠".yellow()
-        );
+        println!("{} Detected conflicting symbol exports:", "⚠".yellow());
         for (symbol, modules_list) in &symbol_conflicts {
             if modules_list.len() > 1 {
                 println!(
@@ -3541,7 +3538,7 @@ pub fn generate_mod_file(output_dir: &Path) -> Result<()> {
         // Naming convention: desktop_*, app_* (except app_reactive) require #[cfg(feature = "desktop")]
         let needs_desktop_gate = module.starts_with("desktop_")
             || (module.starts_with("app_") && module != "app_reactive");
-        
+
         if needs_desktop_gate {
             content.push_str("#[cfg(feature = \"desktop\")]\n");
         }
@@ -3554,7 +3551,7 @@ pub fn generate_mod_file(output_dir: &Path) -> Result<()> {
         for module in &modules {
             let needs_desktop_gate = module.starts_with("desktop_")
                 || (module.starts_with("app_") && module != "app_reactive");
-            
+
             if needs_desktop_gate {
                 content.push_str("#[cfg(feature = \"desktop\")]\n");
             }
@@ -3742,7 +3739,7 @@ pub fn generate_nested_module_structure(source_dir: &Path, output_dir: &Path) ->
     } else {
         source_dir
     };
-    
+
     // Determine if we should generate lib.rs or mod.rs
     // Generate mod.rs when output is a subdirectory (e.g., src/components/generated)
     // Generate lib.rs when output is a crate root (e.g., out/, target/generated)
@@ -3761,13 +3758,13 @@ pub fn generate_nested_module_structure(source_dir: &Path, output_dir: &Path) ->
             }
         }
     }
-    
+
     let (module_file_name, module_file_path) = if is_subdirectory {
         ("mod.rs", output_dir.join("mod.rs"))
     } else {
         ("lib.rs", output_dir.join("lib.rs"))
     };
-    
+
     let module_content = generate_lib_rs(&module_tree, project_root, output_dir)?;
     std::fs::write(&module_file_path, module_content)?;
 

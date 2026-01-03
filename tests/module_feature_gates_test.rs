@@ -1,7 +1,6 @@
 // Test that desktop-only modules get proper #[cfg(feature = "desktop")] gates
 
 use std::fs;
-use std::path::PathBuf;
 use tempfile::TempDir;
 
 #[test]
@@ -13,7 +12,11 @@ fn test_desktop_module_feature_gates() {
 
     // Create some test modules
     fs::write(src_dir.join("button.wj"), "pub struct Button {}").unwrap();
-    fs::write(src_dir.join("desktop_renderer.wj"), "pub struct DesktopRenderer {}").unwrap();
+    fs::write(
+        src_dir.join("desktop_renderer.wj"),
+        "pub struct DesktopRenderer {}",
+    )
+    .unwrap();
     fs::write(src_dir.join("app_docking.wj"), "pub struct AppDocking {}").unwrap();
     fs::write(src_dir.join("app_reactive.wj"), "pub struct AppReactive {}").unwrap();
 
@@ -36,8 +39,7 @@ fn test_desktop_module_feature_gates() {
     assert!(status.success(), "wj build should succeed");
 
     // Read the generated mod.rs
-    let mod_rs = fs::read_to_string(output_dir.join("mod.rs"))
-        .expect("mod.rs should be generated");
+    let mod_rs = fs::read_to_string(output_dir.join("mod.rs")).expect("mod.rs should be generated");
 
     println!("Generated mod.rs:\n{}", mod_rs);
 
@@ -53,13 +55,15 @@ fn test_desktop_module_feature_gates() {
 
     // Verify non-desktop modules don't have feature gates
     assert!(
-        mod_rs.contains("pub mod button;") && !mod_rs.contains("#[cfg(feature = \"desktop\")]\npub mod button;"),
+        mod_rs.contains("pub mod button;")
+            && !mod_rs.contains("#[cfg(feature = \"desktop\")]\npub mod button;"),
         "button should NOT have feature gate"
     );
-    
+
     // app_reactive is an exception - it should NOT have a feature gate
     assert!(
-        mod_rs.contains("pub mod app_reactive;") && !mod_rs.contains("#[cfg(feature = \"desktop\")]\npub mod app_reactive;"),
+        mod_rs.contains("pub mod app_reactive;")
+            && !mod_rs.contains("#[cfg(feature = \"desktop\")]\npub mod app_reactive;"),
         "app_reactive should NOT have feature gate (exception)"
     );
 
@@ -103,8 +107,7 @@ fn test_no_feature_gates_for_regular_modules() {
 
     assert!(status.success());
 
-    let mod_rs = fs::read_to_string(output_dir.join("mod.rs"))
-        .expect("mod.rs should be generated");
+    let mod_rs = fs::read_to_string(output_dir.join("mod.rs")).expect("mod.rs should be generated");
 
     // Verify NO feature gates are present
     assert!(
@@ -112,4 +115,3 @@ fn test_no_feature_gates_for_regular_modules() {
         "No feature gates should be present for non-desktop modules"
     );
 }
-
