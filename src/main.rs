@@ -3428,7 +3428,15 @@ pub fn generate_mod_file(output_dir: &Path) -> Result<()> {
 
         if path.is_file() {
             if let Some(file_name) = path.file_name().and_then(|n| n.to_str()) {
-                if file_name.ends_with(".rs") && file_name != "mod.rs" && file_name != "main.rs" {
+                // THE WINDJAMMER FIX: Exclude lib.rs, mod.rs, and main.rs from module declarations
+                // - lib.rs is the library entry point, not a module
+                // - mod.rs would create circular self-reference
+                // - main.rs is the binary entry point, not a module
+                if file_name.ends_with(".rs")
+                    && file_name != "mod.rs"
+                    && file_name != "main.rs"
+                    && file_name != "lib.rs"
+                {
                     // Get module name (strip .rs extension)
                     if let Some(module_name) = file_name.strip_suffix(".rs") {
                         modules.push(module_name.to_string());
@@ -3462,6 +3470,14 @@ pub fn generate_mod_file(output_dir: &Path) -> Result<()> {
                     }
                 }
             }
+        } else if path.is_dir() {
+            // THE WINDJAMMER FIX: Include subdirectories as modules if they have a mod.rs
+            if let Some(dir_name) = path.file_name().and_then(|n| n.to_str()) {
+                let mod_rs_path = path.join("mod.rs");
+                if mod_rs_path.exists() {
+                    modules.push(dir_name.to_string());
+                }
+            }
         }
     }
 
@@ -3475,19 +3491,75 @@ pub fn generate_mod_file(output_dir: &Path) -> Result<()> {
 
     modules.sort();
 
+    // THE WINDJAMMER FIX: Detect ambiguous glob re-exports (Bug #3)
+    // Check if multiple modules export the same type name
+    let mut symbol_conflicts: std::collections::HashMap<String, Vec<String>> =
+        std::collections::HashMap::new();
+
+    for (module, exports) in &type_exports {
+        for symbol in exports {
+            symbol_conflicts
+                .entry(symbol.clone())
+                .or_default()
+                .push(module.clone());
+        }
+    }
+
+    // Find actual conflicts (symbols exported by 2+ modules)
+    let has_conflicts = symbol_conflicts
+        .values()
+        .any(|modules_list| modules_list.len() > 1);
+
+    if has_conflicts {
+        use colored::*;
+        println!("{} Detected conflicting symbol exports:", "⚠".yellow());
+        for (symbol, modules_list) in &symbol_conflicts {
+            if modules_list.len() > 1 {
+                println!(
+                    "  • {} exported by: {}",
+                    symbol.cyan(),
+                    modules_list.join(", ")
+                );
+            }
+        }
+        println!(
+            "{} Skipping glob re-exports to prevent ambiguity",
+            "→".yellow()
+        );
+    }
+
     // Generate mod.rs content
     let mut content = String::from("// Auto-generated mod.rs by Windjammer CLI\n");
     content.push_str("// This file declares all generated Windjammer modules\n\n");
 
     // Add pub mod declarations
     for module in &modules {
+        // THE WINDJAMMER FIX: Desktop-only modules need feature gates
+        // Naming convention: desktop_*, app_* (except app_reactive) require #[cfg(feature = "desktop")]
+        let needs_desktop_gate = module.starts_with("desktop_")
+            || (module.starts_with("app_") && module != "app_reactive");
+
+        if needs_desktop_gate {
+            content.push_str("#[cfg(feature = \"desktop\")]\n");
+        }
         content.push_str(&format!("pub mod {};\n", module));
     }
 
-    // Add re-exports for all public types
-    content.push_str("\n// Re-export all public items\n");
-    for module in &modules {
-        content.push_str(&format!("pub use {}::*;\n", module));
+    // Add re-exports (only if no conflicts)
+    if !has_conflicts {
+        content.push_str("\n// Re-export all public items\n");
+        for module in &modules {
+            let needs_desktop_gate = module.starts_with("desktop_")
+                || (module.starts_with("app_") && module != "app_reactive");
+
+            if needs_desktop_gate {
+                content.push_str("#[cfg(feature = \"desktop\")]\n");
+            }
+            content.push_str(&format!("pub use {}::*;\n", module));
+        }
+    } else {
+        content.push_str("\n// Note: Glob re-exports skipped due to symbol conflicts\n");
+        content.push_str("// Use explicit imports: use your_crate::module_name::SymbolName;\n");
     }
 
     // Write mod.rs
@@ -3655,7 +3727,7 @@ pub fn generate_nested_module_structure(source_dir: &Path, output_dir: &Path) ->
     let module_tree =
         discover_nested_modules(source_dir).context("Failed to discover module structure")?;
 
-    // Generate lib.rs (or mod.rs for root)
+    // Generate lib.rs (for crate root) or mod.rs (for subdirectory)
     // THE WINDJAMMER WAY: Auto-discover hand-written Rust modules (FFI/interop)
     // Look for hand-written .rs files in the project root (parent of src_wj)
     let project_root = if let Some(parent) = source_dir.parent() {
@@ -3667,9 +3739,34 @@ pub fn generate_nested_module_structure(source_dir: &Path, output_dir: &Path) ->
     } else {
         source_dir
     };
-    let lib_rs_content = generate_lib_rs(&module_tree, project_root)?;
-    let lib_rs_path = output_dir.join("lib.rs");
-    std::fs::write(&lib_rs_path, lib_rs_content)?;
+
+    // Determine if we should generate lib.rs or mod.rs
+    // Generate mod.rs when output is a subdirectory (e.g., src/components/generated)
+    // Generate lib.rs when output is a crate root (e.g., out/, target/generated)
+    //
+    // Detection heuristic:
+    // - If path contains ".../src/..." with more components after src, generate mod.rs
+    // - Otherwise, generate lib.rs
+    let components: Vec<_> = output_dir.components().collect();
+    let mut is_subdirectory = false;
+    for (i, component) in components.iter().enumerate() {
+        if let std::path::Component::Normal(name) = component {
+            if name.to_string_lossy() == "src" && i + 1 < components.len() {
+                // Path contains ".../src/..." with more components after src
+                is_subdirectory = true;
+                break;
+            }
+        }
+    }
+
+    let (module_file_name, module_file_path) = if is_subdirectory {
+        ("mod.rs", output_dir.join("mod.rs"))
+    } else {
+        ("lib.rs", output_dir.join("lib.rs"))
+    };
+
+    let module_content = generate_lib_rs(&module_tree, project_root, output_dir)?;
+    std::fs::write(&module_file_path, module_content)?;
 
     // Copy hand-written modules to output directory
     // THE WINDJAMMER WAY: Seamless FFI integration!
@@ -3698,6 +3795,14 @@ pub fn generate_nested_module_structure(source_dir: &Path, output_dir: &Path) ->
 
                             if corresponding_wj.exists() {
                                 continue; // Skip copying - this file is generated from .wj
+                            }
+
+                            // CRITICAL FIX: Don't copy .rs files that have corresponding subdirectories
+                            // Example: Don't copy events.rs if events/ directory exists
+                            // (events.rs declares submodules which won't work in generated context)
+                            let corresponding_dir = path.parent().unwrap().join(stem.as_ref());
+                            if corresponding_dir.exists() && corresponding_dir.is_dir() {
+                                continue; // Skip copying - this is a module parent file
                             }
 
                             // Only copy hand-written .rs files (like ffi.rs)
@@ -3730,6 +3835,17 @@ pub fn generate_nested_module_structure(source_dir: &Path, output_dir: &Path) ->
                                 continue; // Skip copying - this is a Windjammer module directory
                             }
 
+                            // CRITICAL FIX: Don't copy directories that contain the output directory!
+                            // This prevents infinite recursion when output is inside the source tree
+                            // Example: Don't copy src/components/ when output is src/components/generated/
+                            if let Ok(canonical_dir) = path.canonicalize() {
+                                if let Ok(canonical_output) = output_dir.canonicalize() {
+                                    if canonical_output.starts_with(&canonical_dir) {
+                                        continue; // Skip copying - this dir contains the output directory
+                                    }
+                                }
+                            }
+
                             // Check if this directory has a mod.rs (it's a Rust module)
                             let mod_rs = path.join("mod.rs");
                             if mod_rs.exists() {
@@ -3749,8 +3865,9 @@ pub fn generate_nested_module_structure(source_dir: &Path, output_dir: &Path) ->
     }
 
     println!(
-        "{} Generated lib.rs with {} top-level modules",
+        "{} Generated {} with {} top-level modules",
         "✓".green(),
+        module_file_name,
         module_tree.root_modules.len()
     );
 
@@ -3760,9 +3877,9 @@ pub fn generate_nested_module_structure(source_dir: &Path, output_dir: &Path) ->
         output_dir: &Path,
     ) -> Result<()> {
         if module.is_directory && !module.submodules.is_empty() {
-            let mod_rs_content = generate_mod_rs_for_submodule(module)?;
             let module_output_dir = output_dir.join(&module.name);
             std::fs::create_dir_all(&module_output_dir)?;
+            let mod_rs_content = generate_mod_rs_for_submodule(module, &module_output_dir)?;
             let mod_rs_path = module_output_dir.join("mod.rs");
             std::fs::write(&mod_rs_path, mod_rs_content)?;
 

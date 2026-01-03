@@ -1,10 +1,10 @@
 [package]
 name = "windjammer-runtime"
-version = "0.39.1"
-edition = "2021"
-authors = ["Windjammer Contributors"]
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
 description = "Runtime library for Windjammer standard library implementations"
-license = "MIT OR Apache-2.0"
+license.workspace = true
 repository = "https://github.com/jeffreyfriedman/windjammer"
 
 [features]
