@@ -74,4 +74,3 @@ impl Helper {
         generated
     );
 }
-

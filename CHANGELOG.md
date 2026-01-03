@@ -3572,4 +3572,3 @@ fn main() {
 - **v0.3** - Ergonomic improvements (ternary, smart derive)
 - **v0.2** - Modern features (interpolation, pipe, patterns)
 - **v0.1** - Core language and compiler
-
