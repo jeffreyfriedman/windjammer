@@ -39,6 +39,7 @@ fn compile_fixture(fixture_name: &str) -> Result<String, String> {
 }
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_automatic_reference_insertion() {
     let generated = compile_fixture("auto_reference").expect("Compilation failed");
 
@@ -71,6 +72,7 @@ fn test_automatic_reference_insertion() {
 }
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_string_interpolation() {
     let generated = compile_fixture("string_interpolation").expect("Compilation failed");
 
@@ -90,6 +92,7 @@ fn test_string_interpolation() {
 }
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_pipe_operator() {
     let generated = compile_fixture("pipe_operator").expect("Compilation failed");
 
@@ -105,6 +108,7 @@ fn test_pipe_operator() {
 }
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_structs_and_impl() {
     let generated = compile_fixture("structs_and_impl").expect("Compilation failed");
 
@@ -136,6 +140,7 @@ fn test_structs_and_impl() {
 }
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_combined_features() {
     // Test that automatic reference insertion works with pipe operator
     let fixture = r#"
@@ -173,6 +178,7 @@ fn main() {
 }
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_ownership_inference_borrowed() {
     // Test that parameters used read-only are inferred correctly
     let fixture = r#"
@@ -211,6 +217,7 @@ fn main() {
 }
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_ternary_operator() {
     let generated = compile_fixture("ternary_operator").expect("Compilation failed");
 
@@ -238,6 +245,7 @@ fn test_ternary_operator() {
 }
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_smart_auto_derive() {
     let generated = compile_fixture("smart_auto_derive").expect("Compilation failed");
 
@@ -277,6 +285,7 @@ fn test_smart_auto_derive() {
 }
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_ownership_inference_mut_borrowed() {
     let generated = compile_fixture("mut_borrowed").expect("Compilation failed");
 

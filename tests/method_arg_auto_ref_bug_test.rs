@@ -36,6 +36,7 @@ fn compile_code(code: &str) -> Result<String, String> {
 }
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_vec_remove_should_not_add_reference() {
     // BUG: Compiler incorrectly adds & to usize argument for Vec::remove
     let code = r#"
@@ -62,6 +63,7 @@ fn test_vec_remove_should_not_add_reference() {
 }
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_vec_remove_with_cast_should_not_add_reference() {
     // Real case from components.rs
     let code = r#"
@@ -89,6 +91,7 @@ fn test_vec_remove_with_cast_should_not_add_reference() {
 }
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_hashmap_remove_expects_reference() {
     // HashMap::remove DOES expect &K, should add &
     let code = r#"
@@ -110,6 +113,7 @@ fn test_hashmap_remove_expects_reference() {
 }
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_method_signature_determines_ref_not_type() {
     // The method signature should determine if & is needed, not the type
     let code = r#"

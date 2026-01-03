@@ -1120,43 +1120,8 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
         // 2. Actual module files (texture_atlas, sprite_region) - should be preserved
         // THE WINDJAMMER WAY: With nested module system (lib.rs), use crate:: for cross-directory imports
         // Only use super:: for same-directory imports
-        let directory_prefixes = [
-            "math",
-            "rendering",
-            "physics",
-            "ecs",
-            "audio",
-            "effects",
-            "input",
-            "game_loop",
-            "world",
-            "debug",
-            "assets",
-        ];
-        let common_sibling_modules = [
-            "vec2",
-            "vec3",
-            "vec4",
-            "mat4",
-            "quat",
-            "collision2d",
-            "rigidbody2d",
-            "physics_world",
-            "entity",
-            "components",
-            "query",
-            "world",
-            "ecs",
-            "texture",
-            "texture_atlas",
-            "sprite",
-            "sprite_region",
-            "camera2d",
-            "camera3d",
-            "color",
-            "render_context",
-            "render_api",
-        ];
+        let directory_prefixes = ["math", "utils", "helpers", "core", "common"];
+        let common_sibling_modules = ["vec2", "vec3", "vec4", "mat4", "quat", "color"];
 
         // Handle super::super::math::vec3::Vec3 -> super::Vec3
         // This handles cases where Windjammer source uses "use super.super.math.vec3::Vec3"
@@ -2722,16 +2687,8 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
                             if let Some(name) = var_name {
                                 // HEURISTIC: Only apply smart borrowing for struct-like variable names
                                 // Primitive types (int, float, bool) are Copy and don't need special handling
-                                let struct_like_names = [
-                                    "frame",
-                                    "point",
-                                    "pos",
-                                    "position",
-                                    "region",
-                                    "sprite",
-                                    "entity_data",
-                                    "component",
-                                ];
+                                let struct_like_names =
+                                    ["frame", "point", "pos", "position", "region", "data"];
                                 let is_likely_struct = struct_like_names
                                     .iter()
                                     .any(|pattern| name.contains(pattern));
@@ -5875,7 +5832,7 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
     fn generate_game_impl(&mut self, s: &StructDecl) -> String {
         let mut output = String::new();
 
-        // Generate Default implementation for game state
+        // Generate Default implementation
         // All fields are initialized to their default values (0, 0.0, false, etc.)
         output.push_str(&format!("impl Default for {} {{\n", s.name));
         output.push_str("    fn default() -> Self {\n");
@@ -5889,7 +5846,6 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
                 Type::String => "String::new()",
                 Type::Vec(_) => "Vec::new()",
                 Type::Custom(name) if name == "String" => "String::new()",
-                Type::Custom(name) if name == "Vec3" => "Vec3::new(0.0, 0.0, 0.0)",
                 Type::Custom(name) if name.starts_with("Vec") => "Vec::new()",
                 _ => "Default::default()",
             };

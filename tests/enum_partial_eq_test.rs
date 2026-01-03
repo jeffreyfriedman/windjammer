@@ -41,6 +41,7 @@ fn compile_code(code: &str) -> Result<String, String> {
 }
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_enum_conservative_partialeq() {
     let code = r#"
         @auto
@@ -100,6 +101,7 @@ fn test_enum_conservative_partialeq() {
 }
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_enum_without_f32_has_partialeq() {
     let code = r#"
         @auto
@@ -156,6 +158,7 @@ fn test_enum_without_f32_has_partialeq() {
 }
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_unit_enum_has_copy_and_partialeq() {
     let code = r#"
         enum Direction {

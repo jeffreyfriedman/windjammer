@@ -78,6 +78,7 @@ fn compile_and_verify(code: &str) -> (bool, String, String) {
 // ============================================================================
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_string_literal_assignment() {
     let code = r#"
 pub fn greeting() -> string {
@@ -94,6 +95,7 @@ pub fn greeting() -> string {
 }
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_string_literal_return() {
     let code = r#"
 pub fn hello() -> string {
@@ -107,6 +109,7 @@ pub fn hello() -> string {
 }
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_mutable_string_initialization() {
     let code = r#"
 pub fn build_message() -> string {
@@ -132,6 +135,7 @@ pub fn build_message() -> string {
 // ============================================================================
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_string_param_to_function() {
     // Test that string parameters are properly handled
     let code = r#"
@@ -144,6 +148,7 @@ pub fn get_length(s: string) -> i32 {
 }
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_borrowed_string_param() {
     let code = r#"
 pub fn length(s: &string) -> i32 {
@@ -163,6 +168,7 @@ pub fn length(s: &string) -> i32 {
 // ============================================================================
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_string_contains() {
     let code = r#"
 pub fn has_hello(s: string) -> bool {
@@ -176,6 +182,7 @@ pub fn has_hello(s: string) -> bool {
 }
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_string_replace() {
     let code = r#"
 pub fn sanitize(s: string) -> string {
@@ -189,6 +196,7 @@ pub fn sanitize(s: string) -> string {
 }
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_string_split() {
     // split() returns an iterator of &str - test basic split functionality
     let code = r#"
@@ -205,6 +213,7 @@ pub fn count_words(s: string) -> i32 {
 }
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_string_trim() {
     // trim() returns &str, so we need explicit .to_string() for now
     let code = r#"
@@ -217,6 +226,7 @@ pub fn clean(s: string) -> string {
 }
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_string_to_uppercase() {
     let code = r#"
 pub fn shout(s: string) -> string {
@@ -236,6 +246,7 @@ pub fn shout(s: string) -> string {
 // ============================================================================
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_string_concat_literals() {
     let code = r#"
 pub fn full_name() -> string {
@@ -247,6 +258,7 @@ pub fn full_name() -> string {
 }
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_string_concat_with_variable() {
     let code = r#"
 pub fn greet(name: string) -> string {
@@ -262,6 +274,7 @@ pub fn greet(name: string) -> string {
 }
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_string_concat_compound() {
     let code = r#"
 pub fn build_list() -> string {
@@ -285,6 +298,7 @@ pub fn build_list() -> string {
 // ============================================================================
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_match_return_string() {
     let code = r#"
 pub fn describe(n: i32) -> string {
@@ -330,6 +344,7 @@ pub fn get_message(code: i32) -> string {
 // ============================================================================
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_struct_with_string_field() {
     let code = r#"
 @derive(Clone, Debug)
@@ -357,6 +372,7 @@ impl Person {
 }
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_struct_string_field_init() {
     let code = r#"
 @derive(Clone, Debug)
@@ -383,6 +399,7 @@ pub fn create_config() -> Config {
 // ============================================================================
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_vec_push_string() {
     let code = r#"
 pub fn create_list() -> Vec<string> {
@@ -403,6 +420,7 @@ pub fn create_list() -> Vec<string> {
 }
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_vec_string_iteration() {
     let code = r#"
 pub fn join_all(items: Vec<string>) -> string {
@@ -427,6 +445,7 @@ pub fn join_all(items: Vec<string>) -> string {
 // ============================================================================
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_hashmap_string_keys() {
     let code = r#"
 use std::collections::HashMap
@@ -447,6 +466,7 @@ pub fn create_map() -> HashMap<string, i32> {
 }
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_hashmap_get_string() {
     // Test hashmap with string keys - basic containment check
     let code = r#"
@@ -469,6 +489,7 @@ pub fn has_key(map: &HashMap<string, i32>, key: &string) -> bool {
 // ============================================================================
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_string_interpolation() {
     let code = r#"
 pub fn format_greeting(name: string) -> string {
@@ -486,6 +507,7 @@ pub fn format_greeting(name: string) -> string {
 }
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_string_interpolation_expression() {
     let code = r#"
 pub fn format_sum(a: i32, b: i32) -> string {
@@ -505,6 +527,7 @@ pub fn format_sum(a: i32, b: i32) -> string {
 // ============================================================================
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_empty_string() {
     let code = r#"
 pub fn empty() -> string {
@@ -516,6 +539,7 @@ pub fn empty() -> string {
 }
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_string_with_escapes() {
     let code = r#"
 pub fn with_escapes() -> string {
@@ -531,6 +555,7 @@ pub fn with_escapes() -> string {
 }
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_string_clone() {
     let code = r#"
 pub fn duplicate(s: string) -> string {

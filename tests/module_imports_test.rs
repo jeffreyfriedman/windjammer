@@ -17,6 +17,7 @@ use std::fs;
 use tempfile::TempDir;
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_module_imports_within_directory() {
     // Create a temporary directory for our test project
     let temp_dir = TempDir::new().unwrap();
@@ -121,6 +122,7 @@ pub mod world
 }
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_prelude_reexports() {
     // Test that a prelude.wj can re-export types from other modules
     let temp_dir = TempDir::new().unwrap();

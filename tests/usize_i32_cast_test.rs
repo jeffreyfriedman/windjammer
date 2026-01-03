@@ -57,6 +57,7 @@ fn compile_and_verify(code: &str) -> (bool, String, String) {
 }
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_i32_compare_with_len() {
     // int compared with .len() should auto-cast
     let code = r#"
@@ -87,6 +88,7 @@ impl Container {
 }
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_i32_assign_from_len() {
     // Assigning len() result to int should auto-cast
     let code = r#"

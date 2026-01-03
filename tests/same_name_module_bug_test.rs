@@ -12,6 +12,7 @@ use std::process::Command;
 use tempfile::TempDir;
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_same_name_module_compiles_correctly() {
     let temp_dir = TempDir::new().expect("Failed to create temp dir");
     let project_root = temp_dir.path();

@@ -8,8 +8,7 @@ updates:
   - package-ecosystem: "cargo"
     directory: "/"
     schedule:
-      interval: "weekly"
-      day: "monday"
+      interval: "daily"  # Check for security updates daily
       time: "09:00"
       timezone: "America/New_York"
     open-pull-requests-limit: 10
@@ -29,19 +28,16 @@ updates:
         update-types:
           - "minor"
           - "patch"
-    # Ignore alpha/beta/rc versions
+    # Ignore alpha/beta/rc versions (but allow security updates)
     ignore:
       - dependency-name: "*"
         update-types: ["version-update:semver-major"]
-    # Auto-merge patch updates (optional - remove if you prefer manual review)
-    # versioning-strategy: increase
 
   # LSP crate dependencies
   - package-ecosystem: "cargo"
     directory: "/crates/windjammer-lsp"
     schedule:
-      interval: "weekly"
-      day: "monday"
+      interval: "daily"  # Check for security updates daily
       time: "09:00"
       timezone: "America/New_York"
     open-pull-requests-limit: 5
@@ -56,6 +52,56 @@ updates:
       include: "scope"
     groups:
       lsp-dependencies:
+        patterns:
+          - "*"
+        update-types:
+          - "minor"
+          - "patch"
+
+  # MCP crate dependencies
+  - package-ecosystem: "cargo"
+    directory: "/crates/windjammer-mcp"
+    schedule:
+      interval: "daily"  # Check for security updates daily
+      time: "09:00"
+      timezone: "America/New_York"
+    open-pull-requests-limit: 5
+    reviewers:
+      - "jeffreyfriedman"
+    labels:
+      - "dependencies"
+      - "mcp"
+      - "rust"
+    commit-message:
+      prefix: "chore(deps/mcp)"
+      include: "scope"
+    groups:
+      mcp-dependencies:
+        patterns:
+          - "*"
+        update-types:
+          - "minor"
+          - "patch"
+
+  # Runtime crate dependencies
+  - package-ecosystem: "cargo"
+    directory: "/crates/windjammer-runtime"
+    schedule:
+      interval: "daily"  # Check for security updates daily
+      time: "09:00"
+      timezone: "America/New_York"
+    open-pull-requests-limit: 5
+    reviewers:
+      - "jeffreyfriedman"
+    labels:
+      - "dependencies"
+      - "runtime"
+      - "rust"
+    commit-message:
+      prefix: "chore(deps/runtime)"
+      include: "scope"
+    groups:
+      runtime-dependencies:
         patterns:
           - "*"
         update-types:

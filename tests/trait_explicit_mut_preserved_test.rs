@@ -5,11 +5,18 @@
 ///
 /// EXPECTED: Explicit `&mut self` in trait definitions should ALWAYS be preserved,
 /// regardless of what the body does.
-use std::process::Command;
+///
+/// NOTE: Ignored on Windows due to subprocess hanging issue (60+ seconds).
+/// Possible causes: Windows pipe buffering, file I/O blocking, or compiler deadlock.
+/// Test passes instantly on macOS/Ubuntu (0.04s).
+use std::process::{Command, Stdio};
 
 #[test]
 #[cfg_attr(tarpaulin, ignore)]
-#[cfg_attr(target_os = "windows", ignore = "Hangs on Windows CI - investigating")]
+#[cfg_attr(
+    target_os = "windows",
+    ignore = "Subprocess hangs on Windows - investigating"
+)]
 fn test_trait_explicit_mut_self_preserved() {
     let temp_dir = tempfile::tempdir().expect("Failed to create temp dir");
     let src_wj = temp_dir.path().join("src_wj");
@@ -40,6 +47,7 @@ pub trait GameLoop {
     eprintln!("   Input: {}", input_file.display());
     eprintln!("   Output: {}", output_dir.display());
 
+    // Use piped stdout/stderr to prevent potential Windows pipe buffer deadlock
     let compile_result = Command::new(env!("CARGO_BIN_EXE_wj"))
         .arg("build")
         .arg(&input_file)
@@ -47,8 +55,12 @@ pub trait GameLoop {
         .arg(&output_dir)
         .arg("--library")
         .arg("--no-cargo")
-        .output()
-        .expect("Failed to execute compiler");
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .expect("Failed to spawn compiler")
+        .wait_with_output()
+        .expect("Failed to wait for compiler");
 
     // Add small delay for file I/O to complete (especially on Windows)
     std::thread::sleep(std::time::Duration::from_millis(100));

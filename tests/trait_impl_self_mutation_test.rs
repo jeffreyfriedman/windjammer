@@ -45,6 +45,7 @@ fn compile_code(code: &str) -> Result<String, String> {
 }
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_trait_method_impl_mutates_self() {
     let code = r#"
         trait GameLoop {
@@ -76,6 +77,7 @@ fn test_trait_method_impl_mutates_self() {
 }
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_trait_method_impl_reads_self() {
     let code = r#"
         trait GameLoop {
@@ -106,6 +108,7 @@ fn test_trait_method_impl_reads_self() {
 }
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_trait_method_impl_consumes_self() {
     let code = r#"
         trait GameLoop {
@@ -137,6 +140,7 @@ fn test_trait_method_impl_consumes_self() {
 }
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_trait_method_default_impl_mutates() {
     let code = r#"
         struct Counter {

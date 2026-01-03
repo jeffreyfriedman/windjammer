@@ -279,6 +279,7 @@ fn test_impl_trait() {
 }
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_impl_generic() {
     let code = r#"
     impl<T> Container<T> {

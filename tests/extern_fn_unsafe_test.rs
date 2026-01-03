@@ -43,6 +43,7 @@ fn compile_windjammer_code(code: &str) -> Result<String, String> {
 }
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_extern_fn_calls_wrapped_in_unsafe() {
     let code = r#"
     extern fn unsafe_function(x: i32) -> i32 {}
@@ -72,6 +73,7 @@ fn test_extern_fn_calls_wrapped_in_unsafe() {
 }
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_rendering_api_with_extern_calls() {
     let code = r#"
     extern fn renderer_clear(r: f32, g: f32, b: f32, a: f32) {}
