@@ -196,6 +196,15 @@ fn discover_hand_written_modules(
             if path.is_file() {
                 if let Some(name) = path.file_stem() {
                     let name_str = name.to_string_lossy().to_string();
+                    
+                    // CRITICAL FIX: Skip .rs files that have corresponding subdirectories
+                    // Example: Skip events.rs if events/ directory exists
+                    // (these are module parent files that won't work in generated context)
+                    let corresponding_dir = search_dir.join(&name_str);
+                    if corresponding_dir.exists() && corresponding_dir.is_dir() {
+                        continue; // Skip this file - it's a module parent
+                    }
+                    
                     // Skip lib.rs, mod.rs, and generated modules
                     if name_str != "lib" 
                         && name_str != "mod"  // THE WINDJAMMER WAY: mod.rs is for module declarations, not a module itself
