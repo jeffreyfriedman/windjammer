@@ -3428,7 +3428,15 @@ pub fn generate_mod_file(output_dir: &Path) -> Result<()> {
 
         if path.is_file() {
             if let Some(file_name) = path.file_name().and_then(|n| n.to_str()) {
-                if file_name.ends_with(".rs") && file_name != "mod.rs" && file_name != "main.rs" {
+                // THE WINDJAMMER FIX: Exclude lib.rs, mod.rs, and main.rs from module declarations
+                // - lib.rs is the library entry point, not a module
+                // - mod.rs would create circular self-reference
+                // - main.rs is the binary entry point, not a module
+                if file_name.ends_with(".rs")
+                    && file_name != "mod.rs"
+                    && file_name != "main.rs"
+                    && file_name != "lib.rs"
+                {
                     // Get module name (strip .rs extension)
                     if let Some(module_name) = file_name.strip_suffix(".rs") {
                         modules.push(module_name.to_string());
@@ -3460,6 +3468,14 @@ pub fn generate_mod_file(output_dir: &Path) -> Result<()> {
                             type_exports.insert(module_name.to_string(), exports);
                         }
                     }
+                }
+            }
+        } else if path.is_dir() {
+            // THE WINDJAMMER FIX: Include subdirectories as modules if they have a mod.rs
+            if let Some(dir_name) = path.file_name().and_then(|n| n.to_str()) {
+                let mod_rs_path = path.join("mod.rs");
+                if mod_rs_path.exists() {
+                    modules.push(dir_name.to_string());
                 }
             }
         }
