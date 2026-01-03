@@ -36,6 +36,7 @@ fn compile_code(code: &str) -> Result<String, String> {
 }
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_string_literal_to_str_param_no_conversion() {
     // BUG: Compiler incorrectly adds .to_string() when function expects &str
     let code = r#"
@@ -66,6 +67,7 @@ fn test_string_literal_to_str_param_no_conversion() {
 }
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_ffi_function_str_param() {
     // Real case: FFI functions expecting &str
     let code = r#"
@@ -87,6 +89,7 @@ fn test_ffi_function_str_param() {
 }
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_method_call_with_str_param() {
     let code = r#"
     pub struct Loader;
@@ -114,6 +117,7 @@ fn test_method_call_with_str_param() {
 }
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_string_param_needs_conversion() {
     // WINDJAMMER FIX: When string parameter is only read, it's inferred to &str
     // This is more efficient - no .to_string() needed at call site
@@ -144,6 +148,7 @@ fn test_string_param_needs_conversion() {
 }
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_mixed_str_and_string_params() {
     let code = r#"
     pub fn process_str(text: &str) -> int {

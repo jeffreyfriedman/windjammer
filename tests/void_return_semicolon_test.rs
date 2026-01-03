@@ -41,6 +41,7 @@ fn compile_code(code: &str) -> Result<String, String> {
 }
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_void_return_preserves_semicolon() {
     let code = r#"
     use std::collections::HashMap;

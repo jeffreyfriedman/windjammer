@@ -111,6 +111,7 @@ pub fn test_process() {
 }
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_format_with_borrowed_string() {
     // format!() should work with borrowed strings
     let code = r#"

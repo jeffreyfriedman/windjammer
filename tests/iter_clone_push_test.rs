@@ -57,6 +57,7 @@ fn compile_and_verify(code: &str) -> (bool, String, String) {
 }
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_filter_push_clone() {
     // When filtering a Vec and pushing to new Vec, need to clone
     let code = r#"

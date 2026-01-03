@@ -45,6 +45,7 @@ fn compile_code(code: &str) -> Result<String, String> {
 }
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_add_trait_copy_type_uses_owned_self() {
     let code = r#"
         use std::ops::Add
@@ -74,6 +75,7 @@ fn test_add_trait_copy_type_uses_owned_self() {
 }
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_sub_trait_copy_type_uses_owned_self() {
     let code = r#"
         use std::ops::Sub
@@ -102,6 +104,7 @@ fn test_sub_trait_copy_type_uses_owned_self() {
 }
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_mul_trait_copy_type_uses_owned_self() {
     let code = r#"
         use std::ops::Mul
@@ -130,6 +133,7 @@ fn test_mul_trait_copy_type_uses_owned_self() {
 }
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_neg_trait_copy_type_uses_owned_self() {
     let code = r#"
         use std::ops::Neg

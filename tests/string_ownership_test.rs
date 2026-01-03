@@ -42,6 +42,7 @@ fn compile_code(code: &str) -> Result<String, String> {
 }
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_string_passed_owned_to_method() {
     let source = r#"
 struct Renderer {}
@@ -79,6 +80,7 @@ fn main() {
 }
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_string_literal_converted_to_string() {
     let source = r#"
 struct Renderer {}

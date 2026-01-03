@@ -42,6 +42,7 @@ fn compile_code(code: &str) -> Result<String, String> {
 }
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_hashmap_remove_adds_ref() {
     // TDD: HashMap::remove(&K) should auto-add & to owned key
     let code = r#"
@@ -63,6 +64,7 @@ fn test_hashmap_remove_adds_ref() {
 }
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_hashmap_get_adds_ref() {
     // TDD: HashMap::get(&K) should auto-add & to owned key
     let code = r#"
@@ -84,6 +86,7 @@ fn test_hashmap_get_adds_ref() {
 }
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_string_contains_adds_ref() {
     // TDD: String::contains(&str) should auto-add & to owned String
     let code = r#"
@@ -104,6 +107,7 @@ fn test_string_contains_adds_ref() {
 }
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_vec_remove_no_ref() {
     // TDD: Vec::remove(usize) should NOT add & (Copy type passed by value)
     let code = r#"
@@ -123,6 +127,7 @@ fn test_vec_remove_no_ref() {
 }
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_vec_contains_adds_ref() {
     // TDD: Vec::contains(&T) should auto-add & to owned value
     let code = r#"
@@ -142,6 +147,7 @@ fn test_vec_contains_adds_ref() {
 }
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_string_literal_no_ref() {
     // TDD: String literals are already &str, no & needed
     let code = r#"
@@ -162,6 +168,7 @@ fn test_string_literal_no_ref() {
 }
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_mixed_owned_and_literal() {
     // TDD: Mix of owned and literal arguments
     let code = r#"
@@ -192,6 +199,7 @@ fn test_mixed_owned_and_literal() {
 }
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_custom_method_with_ref_param() {
     // TDD: Custom methods with & parameters should get auto-ref
     let code = r#"

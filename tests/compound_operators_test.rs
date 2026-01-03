@@ -33,6 +33,7 @@ fn compile_and_check(code: &str) -> (bool, String) {
 }
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_compound_addition() {
     let code = r#"
 pub struct Counter {
@@ -63,6 +64,7 @@ impl Counter {
 }
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_compound_all_operators() {
     let code = r#"
 pub struct Math {
@@ -106,6 +108,7 @@ impl Math {
 }
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_compound_with_field_access() {
     let code = r#"
 pub struct Vec2 {
