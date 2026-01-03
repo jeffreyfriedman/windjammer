@@ -156,4 +156,3 @@ fn test_neg_trait_copy_type_uses_owned_self() {
         generated
     );
 }
-
