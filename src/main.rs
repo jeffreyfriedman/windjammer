@@ -3491,6 +3491,46 @@ pub fn generate_mod_file(output_dir: &Path) -> Result<()> {
 
     modules.sort();
 
+    // THE WINDJAMMER FIX: Detect ambiguous glob re-exports (Bug #3)
+    // Check if multiple modules export the same type name
+    let mut symbol_conflicts: std::collections::HashMap<String, Vec<String>> =
+        std::collections::HashMap::new();
+    
+    for (module, exports) in &type_exports {
+        for symbol in exports {
+            symbol_conflicts
+                .entry(symbol.clone())
+                .or_insert_with(Vec::new)
+                .push(module.clone());
+        }
+    }
+    
+    // Find actual conflicts (symbols exported by 2+ modules)
+    let has_conflicts = symbol_conflicts
+        .values()
+        .any(|modules_list| modules_list.len() > 1);
+    
+    if has_conflicts {
+        use colored::*;
+        println!(
+            "{} Detected conflicting symbol exports:",
+            "⚠".yellow()
+        );
+        for (symbol, modules_list) in &symbol_conflicts {
+            if modules_list.len() > 1 {
+                println!(
+                    "  • {} exported by: {}",
+                    symbol.cyan(),
+                    modules_list.join(", ")
+                );
+            }
+        }
+        println!(
+            "{} Skipping glob re-exports to prevent ambiguity",
+            "→".yellow()
+        );
+    }
+
     // Generate mod.rs content
     let mut content = String::from("// Auto-generated mod.rs by Windjammer CLI\n");
     content.push_str("// This file declares all generated Windjammer modules\n\n");
@@ -3508,16 +3548,21 @@ pub fn generate_mod_file(output_dir: &Path) -> Result<()> {
         content.push_str(&format!("pub mod {};\n", module));
     }
 
-    // Add re-exports for all public types
-    content.push_str("\n// Re-export all public items\n");
-    for module in &modules {
-        let needs_desktop_gate = module.starts_with("desktop_")
-            || (module.starts_with("app_") && module != "app_reactive");
-        
-        if needs_desktop_gate {
-            content.push_str("#[cfg(feature = \"desktop\")]\n");
+    // Add re-exports (only if no conflicts)
+    if !has_conflicts {
+        content.push_str("\n// Re-export all public items\n");
+        for module in &modules {
+            let needs_desktop_gate = module.starts_with("desktop_")
+                || (module.starts_with("app_") && module != "app_reactive");
+            
+            if needs_desktop_gate {
+                content.push_str("#[cfg(feature = \"desktop\")]\n");
+            }
+            content.push_str(&format!("pub use {}::*;\n", module));
         }
-        content.push_str(&format!("pub use {}::*;\n", module));
+    } else {
+        content.push_str("\n// Note: Glob re-exports skipped due to symbol conflicts\n");
+        content.push_str("// Use explicit imports: use your_crate::module_name::SymbolName;\n");
     }
 
     // Write mod.rs
