@@ -43,13 +43,13 @@ tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 
 # CLI
-clap = { version = "4.4", features = ["derive"] }
+clap = { version = "4.5", features = ["derive"] }
 
 # HTTP transport and OAuth
 axum = { version = "0.8", optional = true }
 tower = { version = "0.4", optional = true }
 tower-http = { version = "0.5", features = ["cors", "trace"], optional = true }
-uuid = { version = "1.6", features = ["v4", "serde"] }
+uuid = { version = "1.19", features = ["v4", "serde"] }
 
 # OAuth 2.0 authentication
 jsonwebtoken = "9.2"
@@ -65,7 +65,7 @@ url = "2.5"
 
 [dev-dependencies]
 tokio-test = "0.4"
-tempfile = "3.8"
+tempfile = "3.24"
 criterion = { version = "0.7", features = ["html_reports", "async_tokio"] }
 
 [[bench]]
