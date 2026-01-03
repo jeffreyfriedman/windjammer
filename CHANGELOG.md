@@ -1,3 +1,31 @@
+## [0.39.2] - 2026-01-03
+### Fixed
+- **Bug #1-10**: Complete compiler bug fixes using TDD (no tech debt!)
+  - Bug #1: `@cfg` decorator support (feature gates for desktop/web)
+  - Bug #2: Module existence checks (lib.rs, mod.rs, main.rs exclusion)
+  - Bug #3: Ambiguous glob re-exports detection (top-level + nested modules)
+  - Bug #4: Rc<F> to Rc<dyn Fn()> coercion in Effect::new
+  - Bug #5: Doc comments before macros (changed to regular comments)
+  - Bug #6: Missing 'static lifetime bound in Computed<T>
+  - Bug #7: Unused variable warnings (prefix with _)
+  - Bug #2B: lib.rs vs mod.rs generation (crate root vs subdirectories)
+  - Bug #8: Recursive directory copying prevention
+  - Bug #9: Module parent files with subdirectories (skip copying)
+  - Bug #10: Parent directory module declarations (skip ancestors)
+- **Version Alignment**: All workspace crates now use `version.workspace = true`
+- **Lib Test Failures**: Fixed `generate_lib_rs()` test after signature change
+- **Formatting**: Fixed trailing blank lines in `src/main.rs`
+
+### Changed
+- **CI Fail-Fast**: Added `quality-checks` job to run fmt and clippy before tests
+  - Saves CI time by failing fast on code quality issues
+  - Both `windjammer` and `windjammer-ui` now have this improvement
+- **Pre-commit Hook**: Added lib tests as separate step for earlier failure detection
+
+### Testing
+- Added 7 new comprehensive test files for TDD bug fixes (24 total new tests)
+- All 249 compiler tests passing (225 lib + 24 integration)
+
 ## [0.39.1] - 2026-01-01
 ### Added
 - **Security Scanning**: CodeQL workflow for automated security analysis
