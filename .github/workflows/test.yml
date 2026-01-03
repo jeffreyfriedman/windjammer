@@ -64,13 +64,23 @@ jobs:
           
           for crate_toml in crates/*/Cargo.toml; do
             CRATE_NAME=$(grep '^name = ' "$crate_toml" | head -1 | sed 's/.*name = "\(.*\)"/\1/')
-            CRATE_VERSION=$(grep '^version = ' "$crate_toml" | head -1 | sed 's/.*version = "\(.*\)"/\1/')
             
-            if [ "$CRATE_VERSION" != "$WORKSPACE_VERSION" ]; then
-              echo "❌ $CRATE_NAME: $CRATE_VERSION (expected: $WORKSPACE_VERSION)"
-              MISMATCHES=$((MISMATCHES + 1))
+            # Check if using workspace version inheritance
+            if grep -q '^version\.workspace = true' "$crate_toml"; then
+              echo "✅ $CRATE_NAME: $WORKSPACE_VERSION (inherited from workspace)"
             else
-              echo "✅ $CRATE_NAME: $CRATE_VERSION"
+              # Check explicit version
+              CRATE_VERSION=$(grep '^version = ' "$crate_toml" | head -1 | sed 's/.*version = "\(.*\)"/\1/')
+              
+              if [ -z "$CRATE_VERSION" ]; then
+                echo "❌ $CRATE_NAME: No version found (expected: $WORKSPACE_VERSION or version.workspace = true)"
+                MISMATCHES=$((MISMATCHES + 1))
+              elif [ "$CRATE_VERSION" != "$WORKSPACE_VERSION" ]; then
+                echo "❌ $CRATE_NAME: $CRATE_VERSION (expected: $WORKSPACE_VERSION)"
+                MISMATCHES=$((MISMATCHES + 1))
+              else
+                echo "✅ $CRATE_NAME: $CRATE_VERSION"
+              fi
             fi
           done
           
