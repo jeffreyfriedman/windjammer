@@ -160,7 +160,7 @@ jobs:
       
       - name: Cache cargo dependencies
         continue-on-error: true
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: |
             ~/.cargo/registry
@@ -241,7 +241,7 @@ jobs:
       
       - name: Cache cargo dependencies
         continue-on-error: true
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: |
             ~/.cargo/registry
@@ -343,7 +343,7 @@ jobs:
         uses: dtolnay/rust-toolchain@stable
       
       - name: Cache Cargo registry and build artifacts
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: |
             ~/.cargo/registry
