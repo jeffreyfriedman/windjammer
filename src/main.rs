@@ -3730,7 +3730,7 @@ pub fn generate_nested_module_structure(source_dir: &Path, output_dir: &Path) ->
     let module_tree =
         discover_nested_modules(source_dir).context("Failed to discover module structure")?;
 
-    // Generate lib.rs (or mod.rs for root)
+    // Generate lib.rs (for crate root) or mod.rs (for subdirectory)
     // THE WINDJAMMER WAY: Auto-discover hand-written Rust modules (FFI/interop)
     // Look for hand-written .rs files in the project root (parent of src_wj)
     let project_root = if let Some(parent) = source_dir.parent() {
@@ -3742,9 +3742,34 @@ pub fn generate_nested_module_structure(source_dir: &Path, output_dir: &Path) ->
     } else {
         source_dir
     };
-    let lib_rs_content = generate_lib_rs(&module_tree, project_root)?;
-    let lib_rs_path = output_dir.join("lib.rs");
-    std::fs::write(&lib_rs_path, lib_rs_content)?;
+    
+    // Determine if we should generate lib.rs or mod.rs
+    // Generate mod.rs when output is a subdirectory (e.g., src/components/generated)
+    // Generate lib.rs when output is a crate root (e.g., out/, target/generated)
+    //
+    // Detection heuristic:
+    // - If path contains ".../src/..." with more components after src, generate mod.rs
+    // - Otherwise, generate lib.rs
+    let components: Vec<_> = output_dir.components().collect();
+    let mut is_subdirectory = false;
+    for (i, component) in components.iter().enumerate() {
+        if let std::path::Component::Normal(name) = component {
+            if name.to_string_lossy() == "src" && i + 1 < components.len() {
+                // Path contains ".../src/..." with more components after src
+                is_subdirectory = true;
+                break;
+            }
+        }
+    }
+    
+    let (module_file_name, module_file_path) = if is_subdirectory {
+        ("mod.rs", output_dir.join("mod.rs"))
+    } else {
+        ("lib.rs", output_dir.join("lib.rs"))
+    };
+    
+    let module_content = generate_lib_rs(&module_tree, project_root)?;
+    std::fs::write(&module_file_path, module_content)?;
 
     // Copy hand-written modules to output directory
     // THE WINDJAMMER WAY: Seamless FFI integration!
@@ -3824,8 +3849,9 @@ pub fn generate_nested_module_structure(source_dir: &Path, output_dir: &Path) ->
     }
 
     println!(
-        "{} Generated lib.rs with {} top-level modules",
+        "{} Generated {} with {} top-level modules",
         "✓".green(),
+        module_file_name,
         module_tree.root_modules.len()
     );
 
