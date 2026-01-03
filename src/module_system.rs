@@ -165,6 +165,7 @@ fn discover_modules_recursive(dir_path: &Path, _is_root: bool) -> Result<Vec<Mod
 fn discover_hand_written_modules(
     project_root: &Path,
     module_tree: &ModuleTree,
+    output_dir: &Path,
 ) -> Result<Vec<String>> {
     let mut modules = Vec::new();
 
@@ -196,6 +197,15 @@ fn discover_hand_written_modules(
             if path.is_file() {
                 if let Some(name) = path.file_stem() {
                     let name_str = name.to_string_lossy().to_string();
+
+                    // CRITICAL FIX: Skip .rs files that have corresponding subdirectories
+                    // Example: Skip events.rs if events/ directory exists
+                    // (these are module parent files that won't work in generated context)
+                    let corresponding_dir = search_dir.join(&name_str);
+                    if corresponding_dir.exists() && corresponding_dir.is_dir() {
+                        continue; // Skip this file - it's a module parent
+                    }
+
                     // Skip lib.rs, mod.rs, and generated modules
                     if name_str != "lib" 
                         && name_str != "mod"  // THE WINDJAMMER WAY: mod.rs is for module declarations, not a module itself
@@ -207,6 +217,16 @@ fn discover_hand_written_modules(
                     }
                 }
             } else if path.is_dir() {
+                // CRITICAL FIX: Don't declare directories that are ancestors of output_dir
+                // Example: Don't declare "pub mod components;" when output is src/components/generated/
+                if let (Ok(canonical_dir), Ok(canonical_output)) =
+                    (path.canonicalize(), output_dir.canonicalize())
+                {
+                    if canonical_output.starts_with(&canonical_dir) {
+                        continue; // Skip - this directory is an ancestor of output
+                    }
+                }
+
                 // Check if directory has a mod.rs (but skip common non-FFI directories)
                 let dir_name = path.file_name().and_then(|n| n.to_str()).unwrap_or("");
                 let skip_dirs = [
@@ -239,13 +259,18 @@ fn discover_hand_written_modules(
     Ok(modules)
 }
 
-pub fn generate_lib_rs(module_tree: &ModuleTree, project_root: &Path) -> Result<String> {
+pub fn generate_lib_rs(
+    module_tree: &ModuleTree,
+    project_root: &Path,
+    output_dir: &Path,
+) -> Result<String> {
     let mut content = String::from("// Auto-generated lib.rs by Windjammer\n");
     content.push_str("// This file declares all modules in your Windjammer project\n\n");
 
     // THE WINDJAMMER WAY: Discover hand-written Rust modules (like ffi.rs)
     // These live in the project root alongside src_wj/ and are automatically integrated
-    let hand_written_modules = discover_hand_written_modules(project_root, module_tree)?;
+    let hand_written_modules =
+        discover_hand_written_modules(project_root, module_tree, output_dir)?;
 
     // Check if mod.wj exists in root
     let root_mod_path = module_tree.root_path.join("mod.wj");
@@ -315,7 +340,7 @@ pub fn generate_lib_rs(module_tree: &ModuleTree, project_root: &Path) -> Result<
 }
 
 /// Generate mod.rs content for a submodule directory
-pub fn generate_mod_rs_for_submodule(module: &Module) -> Result<String> {
+pub fn generate_mod_rs_for_submodule(module: &Module, output_dir: &Path) -> Result<String> {
     let mut content = String::from("// Auto-generated mod.rs by Windjammer\n\n");
 
     // THE WINDJAMMER WAY: Find all .wj files in the directory (except mod.wj)
@@ -331,6 +356,67 @@ pub fn generate_mod_rs_for_submodule(module: &Module) -> Result<String> {
         }
     }
     module_files.sort();
+
+    // THE WINDJAMMER FIX: Extract type exports from generated .rs files to detect conflicts
+    let mut type_exports: std::collections::HashMap<String, Vec<String>> =
+        std::collections::HashMap::new();
+
+    for module_file in &module_files {
+        let rs_file = output_dir.join(format!("{}.rs", module_file));
+        if rs_file.exists() {
+            if let Ok(content) = fs::read_to_string(&rs_file) {
+                let mut exports = Vec::new();
+                for line in content.lines() {
+                    let trimmed = line.trim();
+                    if trimmed.starts_with("pub struct ") {
+                        if let Some(name) = trimmed
+                            .strip_prefix("pub struct ")
+                            .and_then(|s| s.split_whitespace().next())
+                        {
+                            exports.push(name.to_string());
+                        }
+                    } else if trimmed.starts_with("pub enum ") {
+                        if let Some(name) = trimmed
+                            .strip_prefix("pub enum ")
+                            .and_then(|s| s.split_whitespace().next())
+                        {
+                            exports.push(name.to_string());
+                        }
+                    }
+                }
+                if !exports.is_empty() {
+                    type_exports.insert(module_file.clone(), exports);
+                }
+            }
+        }
+    }
+
+    // Detect symbol conflicts
+    let mut symbol_conflicts: std::collections::HashMap<String, Vec<String>> =
+        std::collections::HashMap::new();
+
+    for (module_name, exports) in &type_exports {
+        for symbol in exports {
+            symbol_conflicts
+                .entry(symbol.clone())
+                .or_default()
+                .push(module_name.clone());
+        }
+    }
+
+    let has_conflicts = symbol_conflicts
+        .values()
+        .any(|modules_list| modules_list.len() > 1);
+
+    if has_conflicts {
+        eprintln!("⚠ Detected conflicting symbol exports in {}:", module.name);
+        for (symbol, modules_list) in &symbol_conflicts {
+            if modules_list.len() > 1 {
+                eprintln!("  • {} exported by: {}", symbol, modules_list.join(", "));
+            }
+        }
+        eprintln!("→ Skipping glob re-exports to prevent ambiguity");
+    }
 
     // Check if this module has a mod.wj
     let mod_wj_path = module.path.join("mod.wj");
@@ -349,6 +435,13 @@ pub fn generate_mod_rs_for_submodule(module: &Module) -> Result<String> {
             if !submodule_names.contains(module_file)
                 && (pub_mods.is_empty() || pub_mods.contains(module_file))
             {
+                // THE WINDJAMMER FIX: Desktop-only modules need feature gates
+                let needs_desktop_gate = module_file.starts_with("desktop_")
+                    || (module_file.starts_with("app_") && module_file != "app_reactive");
+
+                if needs_desktop_gate {
+                    content.push_str("#[cfg(feature = \"desktop\")]\n");
+                }
                 content.push_str(&format!("pub mod {};\n", module_file));
             }
         }
@@ -358,6 +451,13 @@ pub fn generate_mod_rs_for_submodule(module: &Module) -> Result<String> {
             content.push_str("\n// Submodule declarations\n");
             for submodule in &module.submodules {
                 if pub_mods.is_empty() || pub_mods.contains(&submodule.name) {
+                    let needs_desktop_gate = submodule.name.starts_with("desktop_")
+                        || (submodule.name.starts_with("app_") && submodule.name != "app_reactive");
+
+                    if needs_desktop_gate {
+                        content.push_str("#[cfg(feature = \"desktop\")]\n");
+                    }
+
                     if submodule.is_public {
                         content.push_str(&format!("pub mod {};\n", submodule.name));
                     } else {
@@ -378,22 +478,57 @@ pub fn generate_mod_rs_for_submodule(module: &Module) -> Result<String> {
         // No mod.wj - auto-generate declarations for all .wj files and subdirectories
         content.push_str("// Auto-discovered modules\n");
         for module_file in &module_files {
+            // THE WINDJAMMER FIX: Desktop-only modules need feature gates
+            // Naming convention: desktop_*, app_* (except app_reactive) require #[cfg(feature = "desktop")]
+            let needs_desktop_gate = module_file.starts_with("desktop_")
+                || (module_file.starts_with("app_") && module_file != "app_reactive");
+
+            if needs_desktop_gate {
+                content.push_str("#[cfg(feature = \"desktop\")]\n");
+            }
             content.push_str(&format!("pub mod {};\n", module_file));
         }
 
         if !module.submodules.is_empty() {
             content.push_str("\n// Auto-discovered submodules\n");
             for submodule in &module.submodules {
+                let needs_desktop_gate = submodule.name.starts_with("desktop_")
+                    || (submodule.name.starts_with("app_") && submodule.name != "app_reactive");
+
+                if needs_desktop_gate {
+                    content.push_str("#[cfg(feature = \"desktop\")]\n");
+                }
                 content.push_str(&format!("pub mod {};\n", submodule.name));
             }
         }
 
-        content.push_str("\n// Auto-generated re-exports\n");
-        for module_file in &module_files {
-            content.push_str(&format!("pub use {}::*;\n", module_file));
-        }
-        for submodule in &module.submodules {
-            content.push_str(&format!("pub use {}::*;\n", submodule.name));
+        // Only add glob re-exports if no conflicts
+        if !has_conflicts {
+            content.push_str("\n// Auto-generated re-exports\n");
+            for module_file in &module_files {
+                let needs_desktop_gate = module_file.starts_with("desktop_")
+                    || (module_file.starts_with("app_") && module_file != "app_reactive");
+
+                if needs_desktop_gate {
+                    content.push_str("#[cfg(feature = \"desktop\")]\n");
+                }
+                content.push_str(&format!("pub use {}::*;\n", module_file));
+            }
+            for submodule in &module.submodules {
+                let needs_desktop_gate = submodule.name.starts_with("desktop_")
+                    || (submodule.name.starts_with("app_") && submodule.name != "app_reactive");
+
+                if needs_desktop_gate {
+                    content.push_str("#[cfg(feature = \"desktop\")]\n");
+                }
+                content.push_str(&format!("pub use {}::*;\n", submodule.name));
+            }
+        } else {
+            content.push_str("\n// Note: Glob re-exports skipped due to symbol conflicts\n");
+            content.push_str(&format!(
+                "// Use explicit imports: use parent::{}::SymbolName;\n",
+                module.name
+            ));
         }
     }
 
@@ -530,8 +665,14 @@ pub use rendering::Color
         ]);
 
         let tree = discover_nested_modules(temp_dir.path()).unwrap();
-        let lib_rs =
-            generate_lib_rs(&tree, temp_dir.path().parent().unwrap_or(temp_dir.path())).unwrap();
+        let output_dir = temp_dir.path().join("out");
+        fs::create_dir_all(&output_dir).unwrap();
+        let lib_rs = generate_lib_rs(
+            &tree,
+            temp_dir.path().parent().unwrap_or(temp_dir.path()),
+            &output_dir,
+        )
+        .unwrap();
 
         assert!(lib_rs.contains("pub mod math;"));
         assert!(lib_rs.contains("pub use math::Vec2;"));
