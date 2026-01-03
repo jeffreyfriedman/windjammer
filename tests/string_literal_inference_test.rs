@@ -42,6 +42,7 @@ fn compile_code(code: &str) -> Result<String, String> {
 }
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_match_arm_string_inference() {
     let code = r#"
         fn get_status(opt: Option<i32>) -> string {
@@ -72,6 +73,7 @@ fn test_match_arm_string_inference() {
 }
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_nested_match_string_inference() {
     let code = r#"
         fn get_class(selected: Option<string>, id: string) -> string {
@@ -94,6 +96,7 @@ fn test_nested_match_string_inference() {
 }
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_if_else_string_inference() {
     let code = r#"
         fn get_status(is_active: bool) -> string {
@@ -113,6 +116,7 @@ fn test_if_else_string_inference() {
 }
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_struct_field_string_inference() {
     let code = r#"
         struct Config {
@@ -140,6 +144,7 @@ fn test_struct_field_string_inference() {
 }
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_option_some_string_inference() {
     let code = r#"
         fn get_parent() -> Option<string> {
@@ -159,6 +164,7 @@ fn test_option_some_string_inference() {
 }
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_result_string_inference() {
     let code = r#"
         fn validate(value: i32) -> Result<string, string> {
@@ -179,6 +185,7 @@ fn test_result_string_inference() {
 }
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_ternary_like_match_string_inference() {
     let code = r#"
         fn get_label(is_root: bool) -> string {
@@ -198,6 +205,7 @@ fn test_ternary_like_match_string_inference() {
 }
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_match_with_blocks_string_inference() {
     let code = r#"
         fn process(value: Option<i32>) -> string {
@@ -227,6 +235,7 @@ fn test_match_with_blocks_string_inference() {
 }
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_no_inference_for_str_return() {
     let code = r#"
         fn get_static() -> &str {
