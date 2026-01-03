@@ -165,6 +165,7 @@ fn discover_modules_recursive(dir_path: &Path, _is_root: bool) -> Result<Vec<Mod
 fn discover_hand_written_modules(
     project_root: &Path,
     module_tree: &ModuleTree,
+    output_dir: &Path,
 ) -> Result<Vec<String>> {
     let mut modules = Vec::new();
 
@@ -216,6 +217,16 @@ fn discover_hand_written_modules(
                     }
                 }
             } else if path.is_dir() {
+                // CRITICAL FIX: Don't declare directories that are ancestors of output_dir
+                // Example: Don't declare "pub mod components;" when output is src/components/generated/
+                if let (Ok(canonical_dir), Ok(canonical_output)) = 
+                    (path.canonicalize(), output_dir.canonicalize()) 
+                {
+                    if canonical_output.starts_with(&canonical_dir) {
+                        continue; // Skip - this directory is an ancestor of output
+                    }
+                }
+                
                 // Check if directory has a mod.rs (but skip common non-FFI directories)
                 let dir_name = path.file_name().and_then(|n| n.to_str()).unwrap_or("");
                 let skip_dirs = [
@@ -248,13 +259,13 @@ fn discover_hand_written_modules(
     Ok(modules)
 }
 
-pub fn generate_lib_rs(module_tree: &ModuleTree, project_root: &Path) -> Result<String> {
+pub fn generate_lib_rs(module_tree: &ModuleTree, project_root: &Path, output_dir: &Path) -> Result<String> {
     let mut content = String::from("// Auto-generated lib.rs by Windjammer\n");
     content.push_str("// This file declares all modules in your Windjammer project\n\n");
 
     // THE WINDJAMMER WAY: Discover hand-written Rust modules (like ffi.rs)
     // These live in the project root alongside src_wj/ and are automatically integrated
-    let hand_written_modules = discover_hand_written_modules(project_root, module_tree)?;
+    let hand_written_modules = discover_hand_written_modules(project_root, module_tree, output_dir)?;
 
     // Check if mod.wj exists in root
     let root_mod_path = module_tree.root_path.join("mod.wj");
