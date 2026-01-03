@@ -349,6 +349,13 @@ pub fn generate_mod_rs_for_submodule(module: &Module) -> Result<String> {
             if !submodule_names.contains(module_file)
                 && (pub_mods.is_empty() || pub_mods.contains(module_file))
             {
+                // THE WINDJAMMER FIX: Desktop-only modules need feature gates
+                let needs_desktop_gate = module_file.starts_with("desktop_")
+                    || (module_file.starts_with("app_") && module_file != "app_reactive");
+                
+                if needs_desktop_gate {
+                    content.push_str("#[cfg(feature = \"desktop\")]\n");
+                }
                 content.push_str(&format!("pub mod {};\n", module_file));
             }
         }
@@ -358,6 +365,13 @@ pub fn generate_mod_rs_for_submodule(module: &Module) -> Result<String> {
             content.push_str("\n// Submodule declarations\n");
             for submodule in &module.submodules {
                 if pub_mods.is_empty() || pub_mods.contains(&submodule.name) {
+                    let needs_desktop_gate = submodule.name.starts_with("desktop_")
+                        || (submodule.name.starts_with("app_") && submodule.name != "app_reactive");
+                    
+                    if needs_desktop_gate {
+                        content.push_str("#[cfg(feature = \"desktop\")]\n");
+                    }
+                    
                     if submodule.is_public {
                         content.push_str(&format!("pub mod {};\n", submodule.name));
                     } else {
@@ -378,21 +392,47 @@ pub fn generate_mod_rs_for_submodule(module: &Module) -> Result<String> {
         // No mod.wj - auto-generate declarations for all .wj files and subdirectories
         content.push_str("// Auto-discovered modules\n");
         for module_file in &module_files {
+            // THE WINDJAMMER FIX: Desktop-only modules need feature gates
+            // Naming convention: desktop_*, app_* (except app_reactive) require #[cfg(feature = "desktop")]
+            let needs_desktop_gate = module_file.starts_with("desktop_")
+                || (module_file.starts_with("app_") && module_file != "app_reactive");
+            
+            if needs_desktop_gate {
+                content.push_str("#[cfg(feature = \"desktop\")]\n");
+            }
             content.push_str(&format!("pub mod {};\n", module_file));
         }
 
         if !module.submodules.is_empty() {
             content.push_str("\n// Auto-discovered submodules\n");
             for submodule in &module.submodules {
+                let needs_desktop_gate = submodule.name.starts_with("desktop_")
+                    || (submodule.name.starts_with("app_") && submodule.name != "app_reactive");
+                
+                if needs_desktop_gate {
+                    content.push_str("#[cfg(feature = \"desktop\")]\n");
+                }
                 content.push_str(&format!("pub mod {};\n", submodule.name));
             }
         }
 
         content.push_str("\n// Auto-generated re-exports\n");
         for module_file in &module_files {
+            let needs_desktop_gate = module_file.starts_with("desktop_")
+                || (module_file.starts_with("app_") && module_file != "app_reactive");
+            
+            if needs_desktop_gate {
+                content.push_str("#[cfg(feature = \"desktop\")]\n");
+            }
             content.push_str(&format!("pub use {}::*;\n", module_file));
         }
         for submodule in &module.submodules {
+            let needs_desktop_gate = submodule.name.starts_with("desktop_")
+                || (submodule.name.starts_with("app_") && submodule.name != "app_reactive");
+            
+            if needs_desktop_gate {
+                content.push_str("#[cfg(feature = \"desktop\")]\n");
+            }
             content.push_str(&format!("pub use {}::*;\n", submodule.name));
         }
     }

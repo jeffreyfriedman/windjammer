@@ -3481,12 +3481,26 @@ pub fn generate_mod_file(output_dir: &Path) -> Result<()> {
 
     // Add pub mod declarations
     for module in &modules {
+        // THE WINDJAMMER FIX: Desktop-only modules need feature gates
+        // Naming convention: desktop_*, app_* (except app_reactive) require #[cfg(feature = "desktop")]
+        let needs_desktop_gate = module.starts_with("desktop_")
+            || (module.starts_with("app_") && module != "app_reactive");
+        
+        if needs_desktop_gate {
+            content.push_str("#[cfg(feature = \"desktop\")]\n");
+        }
         content.push_str(&format!("pub mod {};\n", module));
     }
 
     // Add re-exports for all public types
     content.push_str("\n// Re-export all public items\n");
     for module in &modules {
+        let needs_desktop_gate = module.starts_with("desktop_")
+            || (module.starts_with("app_") && module != "app_reactive");
+        
+        if needs_desktop_gate {
+            content.push_str("#[cfg(feature = \"desktop\")]\n");
+        }
         content.push_str(&format!("pub use {}::*;\n", module));
     }
 
