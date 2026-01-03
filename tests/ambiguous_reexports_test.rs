@@ -178,8 +178,8 @@ pub struct Error {
 }
 
 #[test]
-fn test_nested_module_reexports() {
-    // Test that nested modules handle re-exports correctly
+fn test_nested_module_reexports_unique() {
+    // Test that nested modules handle re-exports correctly when no conflicts
     let temp_dir = TempDir::new().unwrap();
     let src_dir = temp_dir.path().join("src");
     fs::create_dir(&src_dir).unwrap();
@@ -212,9 +212,66 @@ fn test_nested_module_reexports() {
     let nested_mod = fs::read_to_string(output_dir.join("ui/mod.rs")).unwrap();
     println!("Nested ui/mod.rs:\n{}", nested_mod);
     
-    // Should have unique re-exports
+    // Should have unique re-exports (no conflicts)
     assert!(nested_mod.contains("pub use button::*;"));
     assert!(nested_mod.contains("pub use input::*;"));
+}
+
+#[test]
+fn test_nested_module_conflicts() {
+    // Test that nested modules also detect and handle conflicts
+    let temp_dir = TempDir::new().unwrap();
+    let src_dir = temp_dir.path().join("src");
+    fs::create_dir(&src_dir).unwrap();
+    
+    // Create nested directory with conflicting exports
+    let components_dir = src_dir.join("components");
+    fs::create_dir(&components_dir).unwrap();
+    
+    // Both export "State"
+    fs::write(components_dir.join("toggle.wj"), r#"
+pub struct Toggle {}
+pub struct State {
+    enabled: bool,
+}
+"#).unwrap();
+    
+    fs::write(components_dir.join("slider.wj"), r#"
+pub struct Slider {}
+pub struct State {
+    value: int,
+}
+"#).unwrap();
+    
+    let output_dir = temp_dir.path().join("out");
+    fs::create_dir(&output_dir).unwrap();
+    
+    let status = std::process::Command::new(env!("CARGO_BIN_EXE_wj"))
+        .arg("build")
+        .arg(&src_dir)
+        .arg("-o")
+        .arg(&output_dir)
+        .arg("--target")
+        .arg("rust")
+        .arg("--module-file")
+        .arg("--no-cargo")
+        .status()
+        .expect("Failed to execute wj");
+    
+    assert!(status.success());
+    
+    // Check nested components/mod.rs
+    let nested_mod = fs::read_to_string(output_dir.join("components/mod.rs")).unwrap();
+    println!("Nested components/mod.rs:\n{}", nested_mod);
+    
+    // Should NOT have glob re-exports due to conflict
+    let has_glob_reexports = nested_mod.contains("pub use toggle::*;") 
+        && nested_mod.contains("pub use slider::*;");
+    
+    if has_glob_reexports {
+        // If it has glob re-exports, verify it would cause an error
+        panic!("Nested module should also detect and prevent ambiguous re-exports");
+    }
 }
 
 #[test]
