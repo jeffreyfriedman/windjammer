@@ -40,6 +40,7 @@ fn compile_code(code: &str) -> Result<String, String> {
 }
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_if_let_string_literal_consistency() {
     let code = r#"
     fn classify(x: Option<i32>) -> string {
@@ -63,6 +64,7 @@ fn test_if_let_string_literal_consistency() {
 }
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_if_let_with_function_return() {
     let code = r#"
     fn get_status(active: Option<i32>) -> string {
