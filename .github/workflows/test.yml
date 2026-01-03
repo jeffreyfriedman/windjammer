@@ -11,9 +11,128 @@ env:
   RUST_BACKTRACE: 1
 
 jobs:
+  # Fast quality checks - fail immediately if issues found
+  quality-checks:
+    name: Code Quality (Format & Lint)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v6
+      
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+      
+      - name: Check formatting
+        run: |
+          echo "🎨 Checking code formatting..."
+          cargo fmt --all -- --check
+          echo "✅ Formatting check passed"
+      
+      - name: Run clippy
+        run: |
+          echo "🔎 Running clippy..."
+          cargo clippy --all-targets --all-features -- -D warnings
+          echo "✅ Clippy passed"
+
+  # Fast validation checks (independent)
+  version-check:
+    name: Version Alignment
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v6
+      
+      - name: Check all crate versions match workspace version
+        run: |
+          echo "🔍 Checking version alignment across all crates..."
+          
+          # Get workspace version from root Cargo.toml
+          WORKSPACE_VERSION=$(grep -A 1 '\[workspace.package\]' Cargo.toml | grep 'version = ' | sed 's/.*version = "\(.*\)"/\1/')
+          
+          if [ -z "$WORKSPACE_VERSION" ]; then
+            echo "❌ ERROR: Could not find workspace.package.version in root Cargo.toml"
+            exit 1
+          fi
+          
+          echo "📦 Workspace version: $WORKSPACE_VERSION"
+          echo ""
+          
+          # Check each crate's version
+          MISMATCHES=0
+          
+          for crate_toml in crates/*/Cargo.toml; do
+            CRATE_NAME=$(grep '^name = ' "$crate_toml" | head -1 | sed 's/.*name = "\(.*\)"/\1/')
+            
+            # Check if using workspace version inheritance
+            if grep -q '^version\.workspace = true' "$crate_toml"; then
+              echo "✅ $CRATE_NAME: $WORKSPACE_VERSION (inherited from workspace)"
+            else
+              # Check explicit version
+              CRATE_VERSION=$(grep '^version = ' "$crate_toml" | head -1 | sed 's/.*version = "\(.*\)"/\1/')
+              
+              if [ -z "$CRATE_VERSION" ]; then
+                echo "❌ $CRATE_NAME: No version found (expected: $WORKSPACE_VERSION or version.workspace = true)"
+                MISMATCHES=$((MISMATCHES + 1))
+              elif [ "$CRATE_VERSION" != "$WORKSPACE_VERSION" ]; then
+                echo "❌ $CRATE_NAME: $CRATE_VERSION (expected: $WORKSPACE_VERSION)"
+                MISMATCHES=$((MISMATCHES + 1))
+              else
+                echo "✅ $CRATE_NAME: $CRATE_VERSION"
+              fi
+            fi
+          done
+          
+          echo ""
+          if [ $MISMATCHES -gt 0 ]; then
+            echo "❌ ERROR: $MISMATCHES crate(s) have mismatched versions!"
+            echo ""
+            echo "To fix:"
+            echo "  1. Update version in each crate's Cargo.toml to match workspace version"
+            echo "  2. Or use 'version.workspace = true' to inherit from workspace"
+            exit 1
+          fi
+          
+          echo "✅ All crate versions are aligned with workspace version $WORKSPACE_VERSION"
+  
+  # Fast lockfile validation (independent)
+  lockfile-check:
+    name: Cargo.lock Validation
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v6
+      
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+      
+      - name: Check Cargo.lock exists
+        run: |
+          if [ ! -f "Cargo.lock" ]; then
+            echo "❌ ERROR: Cargo.lock is not committed!"
+            echo "Please run 'cargo generate-lockfile' and commit Cargo.lock"
+            exit 1
+          fi
+          echo "✅ Cargo.lock is committed"
+      
+      - name: Verify Cargo.lock is up-to-date
+        run: |
+          echo "🔍 Checking if Cargo.lock is up-to-date with Cargo.toml..."
+          cp Cargo.lock Cargo.lock.before
+          cargo update --workspace --dry-run
+          if ! diff Cargo.lock Cargo.lock.before > /dev/null 2>&1; then
+            echo "❌ ERROR: Cargo.lock is out of sync with Cargo.toml!"
+            echo "Please run 'cargo update' and commit the updated Cargo.lock"
+            exit 1
+          fi
+          echo "✅ Cargo.lock is up-to-date"
+
+  # Cross-platform tests - only run if quality checks pass
   test:
     name: Test on ${{ matrix.os }} with Rust ${{ matrix.rust }}
     runs-on: ${{ matrix.os }}
+    needs: [quality-checks, version-check, lockfile-check]  # Wait for all fast checks to pass
     strategy:
       fail-fast: false
       matrix:
@@ -34,7 +153,6 @@ jobs:
         uses: dtolnay/rust-toolchain@master
         with:
           toolchain: ${{ matrix.rust }}
-          components: rustfmt, clippy
       
       - name: Generate Cargo.lock if missing
         shell: bash
@@ -51,14 +169,6 @@ jobs:
           key: ${{ runner.os }}-cargo-${{ hashFiles('Cargo.lock') }}
           restore-keys: |
             ${{ runner.os }}-cargo-
-      
-      - name: Check formatting
-        if: matrix.rust == 'stable' && matrix.os == 'ubuntu-latest'
-        run: cargo fmt --all -- --check
-      
-      - name: Run clippy
-        if: matrix.rust == 'stable'
-        run: cargo clippy --all-targets --all-features -- -D warnings
       
       - name: Build
         run: cargo build --verbose
@@ -84,9 +194,11 @@ jobs:
           .\target\release\windjammer.exe build --path examples\18_stdlib_math_test --output C:\temp\test_math --target wasm
         continue-on-error: true
 
+  # Code coverage (independent, can run in parallel)
   coverage:
     name: Code Coverage
     runs-on: ubuntu-latest
+    needs: [quality-checks]  # Only need quality checks to pass
     steps:
       - name: Checkout code
         uses: actions/checkout@v6
@@ -106,9 +218,11 @@ jobs:
           files: ./cobertura.xml
           fail_ci_if_error: false
 
+  # Multi-target tests (independent, can run in parallel)
   multi-target-tests:
     name: Multi-Target Compilation Tests
     runs-on: ubuntu-latest
+    needs: [quality-checks]  # Only need quality checks to pass
     steps:
       - name: Checkout code
         uses: actions/checkout@v6
@@ -196,93 +310,31 @@ jobs:
           
           echo "✅ All targets compile complex code successfully"
   
-  # Validate package versions are aligned
-  version-check:
-    name: Version Alignment Check
+  # Docker build test (independent)
+  docker-build:
+    name: Test Docker Build
     runs-on: ubuntu-latest
+    needs: [quality-checks]  # Only need quality checks to pass
+    permissions:
+      contents: read
     steps:
       - name: Checkout code
         uses: actions/checkout@v6
-      
-      - name: Check all crate versions match workspace version
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Test Docker build
         run: |
-          echo "🔍 Checking version alignment across all crates..."
-          
-          # Get workspace version from root Cargo.toml
-          WORKSPACE_VERSION=$(grep -A 1 '\[workspace.package\]' Cargo.toml | grep 'version = ' | sed 's/.*version = "\(.*\)"/\1/')
-          
-          if [ -z "$WORKSPACE_VERSION" ]; then
-            echo "❌ ERROR: Could not find workspace.package.version in root Cargo.toml"
-            exit 1
-          fi
-          
-          echo "📦 Workspace version: $WORKSPACE_VERSION"
-          echo ""
-          
-          # Check each crate's version
-          MISMATCHES=0
-          
-          for crate_toml in crates/*/Cargo.toml; do
-            CRATE_NAME=$(grep '^name = ' "$crate_toml" | head -1 | sed 's/.*name = "\(.*\)"/\1/')
-            CRATE_VERSION=$(grep '^version = ' "$crate_toml" | head -1 | sed 's/.*version = "\(.*\)"/\1/')
-            
-            if [ "$CRATE_VERSION" != "$WORKSPACE_VERSION" ]; then
-              echo "❌ $CRATE_NAME: $CRATE_VERSION (expected: $WORKSPACE_VERSION)"
-              MISMATCHES=$((MISMATCHES + 1))
-            else
-              echo "✅ $CRATE_NAME: $CRATE_VERSION"
-            fi
-          done
-          
-          echo ""
-          if [ $MISMATCHES -gt 0 ]; then
-            echo "❌ ERROR: $MISMATCHES crate(s) have mismatched versions!"
-            echo ""
-            echo "To fix:"
-            echo "  1. Update version in each crate's Cargo.toml to match workspace version"
-            echo "  2. Or use 'version.workspace = true' to inherit from workspace"
-            exit 1
-          fi
-          
-          echo "✅ All crate versions are aligned with workspace version $WORKSPACE_VERSION"
-  
-  # Validate Cargo.lock is committed and up-to-date
-  lockfile-check:
-    name: Cargo.lock Validation
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v6
-      
-      - name: Install Rust toolchain
-        uses: dtolnay/rust-toolchain@stable
-      
-      - name: Check Cargo.lock exists
-        run: |
-          if [ ! -f "Cargo.lock" ]; then
-            echo "❌ ERROR: Cargo.lock is not committed!"
-            echo "Please run 'cargo generate-lockfile' and commit Cargo.lock"
-            exit 1
-          fi
-          echo "✅ Cargo.lock is committed"
-      
-      - name: Verify Cargo.lock is up-to-date
-        run: |
-          echo "🔍 Checking if Cargo.lock is up-to-date with Cargo.toml..."
-          cp Cargo.lock Cargo.lock.before
-          cargo update --workspace --dry-run
-          if ! diff Cargo.lock Cargo.lock.before > /dev/null 2>&1; then
-            echo "❌ ERROR: Cargo.lock is out of sync with Cargo.toml!"
-            echo "Please run 'cargo update' and commit the updated Cargo.lock"
-            exit 1
-          fi
-          echo "✅ Cargo.lock is up-to-date"
-  
-  # Validate that crates can be published (dry-run)
+          echo "🐳 Testing Docker build (no push)..."
+          docker build -t windjammer:test .
+          echo "✅ Docker build successful!"
+
+  # Publish dry-run (only after all checks pass)
   publish-dryrun:
     name: Publish Dry-Run (Pre-merge Validation)
     runs-on: ubuntu-latest
-    needs: [version-check, lockfile-check]  # Only run if versions and lockfile are valid
+    needs: [quality-checks, version-check, lockfile-check]
     steps:
       - name: Checkout code
         uses: actions/checkout@v6
@@ -318,20 +370,3 @@ jobs:
           echo ""
           echo "✅ Core crates are ready to publish!"
 
-  docker-build:
-    name: Test Docker Build
-    runs-on: ubuntu-latest
-    permissions:
-      contents: read
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v6
-
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
-
-      - name: Test Docker build
-        run: |
-          echo "🐳 Testing Docker build (no push)..."
-          docker build -t windjammer:test .
-          echo "✅ Docker build successful!"
