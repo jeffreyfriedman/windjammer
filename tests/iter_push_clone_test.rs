@@ -57,6 +57,7 @@ fn compile_and_verify(code: &str) -> (bool, String, String) {
 }
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_filter_self_items_to_new_vec() {
     // Common pattern: filter items from self and collect into new Vec
     let code = r#"
@@ -101,6 +102,7 @@ impl Container {
 }
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_remove_item_rebuild_vec() {
     // Pattern: rebuild vec without certain items
     let code = r#"
@@ -146,6 +148,7 @@ impl Mixer {
 }
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_copy_matching_items() {
     // Copy items that match a condition
     let code = r#"

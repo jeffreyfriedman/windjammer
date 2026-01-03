@@ -41,6 +41,7 @@ fn compile_code(code: &str) -> Result<String, String> {
 }
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_match_string_literal_in_return_position() {
     let code = r#"
     enum Status {
@@ -72,6 +73,7 @@ fn test_match_string_literal_in_return_position() {
 }
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_match_empty_string_return() {
     let code = r#"
     enum ObjectType {

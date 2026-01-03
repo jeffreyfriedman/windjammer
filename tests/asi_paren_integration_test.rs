@@ -5,6 +5,7 @@ use std::path::PathBuf;
 use std::process::Command;
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_asi_before_parenthesized_expression() {
     let wj_code = r#"
 pub fn test_asi() -> f32 {

@@ -9,6 +9,7 @@ use std::process::Command;
 use tempfile::TempDir;
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_ffi_module_auto_discovery() {
     let temp_dir = TempDir::new().expect("Failed to create temp dir");
     let project_root = temp_dir.path();

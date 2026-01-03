@@ -76,6 +76,7 @@ fn compile_and_verify(code: &str) -> (bool, String, String) {
 // ============================================================================
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_derive_clone() {
     let code = r#"
 @derive(Clone)
@@ -94,6 +95,7 @@ pub fn duplicate(p: &Point) -> Point {
 }
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_derive_debug() {
     let code = r#"
 @derive(Debug)
@@ -112,6 +114,7 @@ pub fn print_point(p: &Point) {
 }
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_derive_partial_eq() {
     let code = r#"
 @derive(PartialEq)
@@ -133,6 +136,7 @@ pub fn are_equal(a: &Point, b: &Point) -> bool {
 }
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_derive_copy() {
     let code = r#"
 @derive(Copy, Clone)
@@ -151,6 +155,7 @@ pub fn use_copy(p: Point) -> (Point, Point) {
 }
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_derive_default() {
     let code = r#"
 @derive(Default)
@@ -169,6 +174,7 @@ pub fn default_config() -> Config {
 }
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_derive_multiple() {
     let code = r#"
 @derive(Clone, Debug, PartialEq)
@@ -194,6 +200,7 @@ pub fn test_all(a: &Point, b: &Point) -> bool {
 // ============================================================================
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_auto_simple_struct() {
     let code = r#"
 @auto
@@ -212,6 +219,7 @@ pub struct Point {
 }
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_auto_with_string() {
     // String is not Copy, so @auto should not derive Copy
     let code = r#"
@@ -232,6 +240,7 @@ pub fn clone_person(p: &Person) -> Person {
 }
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_auto_with_vec() {
     // Vec is not Copy, so @auto should not derive Copy
     let code = r#"
@@ -254,6 +263,7 @@ pub fn clone_container(c: &Container) -> Container {
 // ============================================================================
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_derive_enum() {
     let code = r#"
 @derive(Clone, Debug, PartialEq)
@@ -272,6 +282,7 @@ pub fn is_red(c: &Color) -> bool {
 }
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_derive_enum_with_data() {
     let code = r#"
 @derive(Clone, Debug)
@@ -297,6 +308,7 @@ pub fn clone_message(m: &Message) -> Message {
 // ============================================================================
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_derive_nested() {
     let code = r#"
 @derive(Clone, Debug)
@@ -326,6 +338,7 @@ pub fn clone_outer(o: &Outer) -> Outer {
 // ============================================================================
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_derive_generic() {
     let code = r#"
 @derive(Clone, Debug)
