@@ -60,6 +60,7 @@ fn compile_and_verify(code: &str) -> (bool, String, String) {
 }
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_method_with_read_only_string_param() {
     // A method that only reads its string parameter should work when called with literals
     let code = r#"
@@ -100,6 +101,7 @@ pub fn create_editor() {
 }
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_method_with_stored_string_param() {
     // A method that stores its string parameter should take owned String
     let code = r#"
@@ -136,6 +138,7 @@ pub fn test_name_list() {
 }
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_method_returning_computed_value() {
     // A method that uses string for computation should handle correctly
     let code = r#"
@@ -175,6 +178,7 @@ pub fn test_counter() {
 }
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_chained_method_calls_with_strings() {
     // Chained method calls with string parameters
     let code = r#"

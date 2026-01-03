@@ -57,6 +57,7 @@ fn compile_and_check_rust(code: &str, test_name: &str) -> Result<String, String>
 }
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_method_returning_mut_ref_needs_mut_self() {
     // Method returning &mut T should have &mut self
     let code = r#"
@@ -84,6 +85,7 @@ fn test_method_returning_mut_ref_needs_mut_self() {
 }
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_method_mutating_field_needs_mut_self() {
     // Method that mutates a field should have &mut self
     let code = r#"
@@ -108,6 +110,7 @@ fn test_method_mutating_field_needs_mut_self() {
 }
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_method_calling_mutating_method_needs_mut_self() {
     // Method that calls another mutating method should have &mut self
     let code = r#"
@@ -138,6 +141,7 @@ fn test_method_calling_mutating_method_needs_mut_self() {
 }
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_read_only_method_uses_ref_self() {
     // Method that only reads should have &self (not &mut self)
     let code = r#"
@@ -163,6 +167,7 @@ fn test_read_only_method_uses_ref_self() {
 }
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_compound_assignment_needs_mut_self() {
     // Method using compound assignment (+=) should have &mut self
     let code = r#"
@@ -187,6 +192,7 @@ fn test_compound_assignment_needs_mut_self() {
 }
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_method_mutating_vec_needs_mut_self() {
     // Method calling Vec::push should have &mut self
     let code = r#"

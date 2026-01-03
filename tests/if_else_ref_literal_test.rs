@@ -41,6 +41,7 @@ fn compile_code(code: &str) -> Result<String, String> {
 }
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_if_else_ref_field_vs_literal() {
     let code = r###"
     struct Rating {
@@ -73,6 +74,7 @@ fn test_if_else_ref_field_vs_literal() {
 }
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_if_else_ref_vs_literal_in_let() {
     let code = r#"
     struct Config {

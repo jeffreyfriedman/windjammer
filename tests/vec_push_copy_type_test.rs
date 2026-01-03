@@ -43,6 +43,7 @@ fn compile_code(code: &str) -> Result<String, String> {
 }
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_vec_push_copy_type() {
     let source = r#"
 @derive(Copy, Clone, Debug)
@@ -87,6 +88,7 @@ fn main() {
 }
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_hashmap_insert_copy_key() {
     let source = r#"
 use std::collections::HashMap
@@ -133,6 +135,7 @@ fn main() {
 }
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_method_call_with_copy_param() {
     let source = r#"
 @derive(Copy, Clone)

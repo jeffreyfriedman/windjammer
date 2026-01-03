@@ -7,6 +7,7 @@ use std::process::Command;
 use tempfile::TempDir;
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_local_variable_shadows_field() {
     let code = r#"
     pub struct QueryBuilder {
@@ -42,6 +43,7 @@ fn test_local_variable_shadows_field() {
 }
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_nested_shadowing() {
     let code = r#"
     pub struct Point {
@@ -69,6 +71,7 @@ fn test_nested_shadowing() {
 }
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_parameter_does_not_shadow() {
     let code = r#"
     pub struct Counter {
@@ -93,6 +96,7 @@ fn test_parameter_does_not_shadow() {
 }
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_local_var_method_call() {
     let code = r#"
     pub struct Container {

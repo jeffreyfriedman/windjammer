@@ -41,6 +41,7 @@ fn compile_code(code: &str) -> Result<String, String> {
 }
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_push_str_with_string_variable() {
     let code = r#"
     pub fn build_html(display: string) -> string {
@@ -64,6 +65,7 @@ fn test_push_str_with_string_variable() {
 }
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_push_str_with_string_expression() {
     let code = r#"
     pub fn build_tag(tag: string) -> string {
@@ -83,6 +85,7 @@ fn test_push_str_with_string_expression() {
 }
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_push_str_with_conditional() {
     let code = r#"
     pub fn build_style(enabled: bool) -> string {

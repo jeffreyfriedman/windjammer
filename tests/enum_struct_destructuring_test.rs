@@ -54,6 +54,7 @@ fn compile_and_run(code: &str) -> Result<String, String> {
 }
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_enum_struct_wildcard() {
     let code = r#"
     enum Shape {
@@ -93,6 +94,7 @@ fn test_enum_struct_wildcard() {
 }
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_enum_struct_extract_fields() {
     let code = r#"
     enum Shape {
@@ -132,6 +134,7 @@ fn test_enum_struct_extract_fields() {
 }
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_enum_struct_partial_extract() {
     let code = r#"
     enum Light {
@@ -163,6 +166,7 @@ fn test_enum_struct_partial_extract() {
 }
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_enum_mixed_variants() {
     let code = r#"
     enum Value {

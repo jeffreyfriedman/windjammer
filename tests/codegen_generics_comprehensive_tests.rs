@@ -77,6 +77,7 @@ fn compile_and_verify(code: &str) -> (bool, String, String) {
 // ============================================================================
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_generic_function_simple() {
     let code = r#"
 pub fn identity<T>(x: T) -> T {
@@ -88,6 +89,7 @@ pub fn identity<T>(x: T) -> T {
 }
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_generic_function_multiple_params() {
     let code = r#"
 pub fn pair<A, B>(a: A, b: B) -> (A, B) {
@@ -107,6 +109,7 @@ pub fn pair<A, B>(a: A, b: B) -> (A, B) {
 // ============================================================================
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_generic_struct() {
     let code = r#"
 @derive(Clone, Debug)
@@ -129,6 +132,7 @@ impl<T> Container<T> {
 }
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_generic_struct_multiple() {
     let code = r#"
 @derive(Clone, Debug)
@@ -156,6 +160,7 @@ impl<A, B> Pair<A, B> {
 // ============================================================================
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_trait_bound_clone() {
     let code = r#"
 pub fn duplicate<T: Clone>(item: T) -> (T, T) {
@@ -167,6 +172,7 @@ pub fn duplicate<T: Clone>(item: T) -> (T, T) {
 }
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_trait_bound_multiple() {
     // Multiple trait bounds
     let code = r#"
@@ -181,6 +187,7 @@ pub fn clone_twice<T: Clone>(item: T) -> (T, T) {
 }
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_trait_bound_default() {
     let code = r#"
 pub fn get_default<T: Default>() -> T {
@@ -196,6 +203,7 @@ pub fn get_default<T: Default>() -> T {
 // ============================================================================
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_generic_enum() {
     // Simple generic enum definition
     let code = r#"
@@ -220,6 +228,7 @@ pub fn is_just<T>(m: &Maybe<T>) -> bool {
 // ============================================================================
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_simple_impl() {
     // Simple impl block
     let code = r#"
@@ -247,6 +256,7 @@ impl Counter {
 // ============================================================================
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_generic_method() {
     // Simpler generic method
     let code = r#"
@@ -270,6 +280,7 @@ impl<T: Clone> Container<T> {
 // ============================================================================
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_vec_generic() {
     let code = r#"
 pub fn first<T: Clone>(items: &Vec<T>) -> Option<T> {
@@ -281,6 +292,7 @@ pub fn first<T: Clone>(items: &Vec<T>) -> Option<T> {
 }
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_option_generic() {
     // Simple option usage
     let code = r#"
@@ -300,6 +312,7 @@ pub fn is_some<T>(opt: &Option<T>) -> bool {
 // ============================================================================
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_iterator_usage() {
     // Basic iterator usage with Vec
     let code = r#"
@@ -316,6 +329,7 @@ pub fn count_items(items: &Vec<i32>) -> usize {
 // ============================================================================
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_reference_return() {
     // Simple reference return (lifetime inferred)
     let code = r#"
