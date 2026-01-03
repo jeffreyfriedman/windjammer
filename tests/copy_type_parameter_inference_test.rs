@@ -54,6 +54,7 @@ fn compile_code(code: &str) -> Result<String, String> {
 }
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_copy_type_param_not_inferred_as_mut_ref() {
     let source = r#"
 @derive(Copy, Clone, Debug)
@@ -103,6 +104,7 @@ fn main() {
 }
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_copy_type_with_clone() {
     let source = r#"
 @derive(Copy, Clone, Hash, Eq, PartialEq)
@@ -150,6 +152,7 @@ fn main() {
 }
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_copy_type_passed_to_multiple_methods() {
     let source = r#"
 @derive(Copy, Clone)

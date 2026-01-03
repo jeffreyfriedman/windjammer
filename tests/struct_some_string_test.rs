@@ -41,6 +41,7 @@ fn compile_code(code: &str) -> Result<String, String> {
 }
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_struct_field_some_string_literal() {
     let code = r#"
     struct Config {
@@ -71,6 +72,7 @@ fn test_struct_field_some_string_literal() {
 }
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_struct_field_ok_string_literal() {
     let code = r#"
     struct Response {
