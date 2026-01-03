@@ -3768,7 +3768,7 @@ pub fn generate_nested_module_structure(source_dir: &Path, output_dir: &Path) ->
         ("lib.rs", output_dir.join("lib.rs"))
     };
     
-    let module_content = generate_lib_rs(&module_tree, project_root)?;
+    let module_content = generate_lib_rs(&module_tree, project_root, output_dir)?;
     std::fs::write(&module_file_path, module_content)?;
 
     // Copy hand-written modules to output directory
