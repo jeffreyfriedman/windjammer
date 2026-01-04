@@ -22,7 +22,7 @@ windjammer = { path = "../..", version = "0.39.4" }
 tower-lsp = "0.20"
 # lsp-types exported from tower-lsp
 tower = "0.4"
-tokio = { version = "1.35", features = ["full"] }
+tokio = { version = "1.49", features = ["full"] }
 
 # Incremental computation with Salsa
 salsa = "0.24"
@@ -70,7 +70,7 @@ cargo_metadata = "0.23"
 # Testing
 assert_cmd = "2.0"
 predicates = "3.0"
-tempfile = "3.8"
+tempfile = "3.24"
 
 # Benchmarking
 criterion = { version = "0.7", features = ["html_reports"] }
