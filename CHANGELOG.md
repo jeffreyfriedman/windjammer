@@ -1,3 +1,12 @@
+## [0.39.4] - 2026-01-04
+### Fixed
+- **Bug #12 (PROPER FIX)**: Fix module discovery scope filtering
+  - Module discovery no longer includes parent directory files (e.g., `src/app.rs`)
+  - When output is `src/components/generated/`, only `src/components/` files are discovered
+  - Sibling hand-written modules (e.g., `src/components/platform.rs`) are correctly included
+  - Eliminates duplicate symbol errors and incorrect module declarations in generated `mod.rs`
+  - **TDD Tests Added**: `module_discovery_scope_test.rs` (2 comprehensive tests)
+
 ## [0.39.3] - 2026-01-03
 ### Fixed
 - **Bug #2B (PROPER FIX)**: Prevent `lib.rs` generation in subdirectories
