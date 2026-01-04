@@ -58,6 +58,7 @@ fn compile_wj_project(source_dir: &Path, output_dir: &Path) -> Result<(), String
 }
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)] // Skip during coverage: too slow, requires wj binary
 fn test_lib_rs_not_generated_in_subdirectory() {
     // Create temp directory structure:
     // project/
@@ -171,6 +172,7 @@ fn test_lib_rs_not_generated_in_subdirectory() {
 }
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)] // Skip during coverage: too slow, requires wj binary
 fn test_lib_rs_generated_at_crate_root() {
     // Create temp directory structure:
     // project/

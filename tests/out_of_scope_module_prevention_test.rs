@@ -65,6 +65,7 @@ fn compile_wj_project(source_dir: &Path, output_dir: &Path) -> Result<(), String
 }
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)] // Skip during coverage: too slow, requires wj binary
 fn test_out_of_scope_modules_not_declared() {
     // Create project structure:
     // project/
@@ -179,6 +180,7 @@ fn test_out_of_scope_modules_not_declared() {
 }
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)] // Skip during coverage: too slow, requires wj binary
 fn test_ffi_modules_in_project_root_are_declared() {
     // Create project structure:
     // project/
