@@ -3844,10 +3844,64 @@ pub fn generate_nested_module_structure(source_dir: &Path, output_dir: &Path) ->
                                 continue; // Skip copying - this is a module parent file
                             }
 
-                            // Only copy hand-written .rs files (like ffi.rs)
-                            let dest = output_dir.join(name);
-                            if let Err(e) = std::fs::copy(&path, &dest) {
-                                eprintln!("Warning: Failed to copy {}: {}", name_str, e);
+                            // BUG #12 FIX: Don't copy out-of-scope .rs files
+                            // -----------------------------------------------
+                            // When output is a subdirectory like src/components/generated/,
+                            // we should NOT copy .rs files from the parent src/ directory
+                            // (like src/app.rs, src/examples_wasm.rs).
+                            //
+                            // These are top-level modules declared in src/lib.rs, not part
+                            // of the generated components.
+                            //
+                            // Only copy .rs files that are within the same subdirectory tree
+                            // as the output directory.
+                            let should_copy = if copy_dir.ends_with("src") {
+                                // When scanning src/, check if output is also in src/
+                                if let Ok(rel_output) = output_dir.strip_prefix(copy_dir) {
+                                    // Output is within src/ (e.g., src/components/generated/)
+                                    // Check if this .rs file is within the output tree
+                                    if let Ok(rel_path) = path.strip_prefix(copy_dir) {
+                                        // Get the first component of the output relative path
+                                        // e.g., for src/components/generated/ -> "components"
+                                        let output_first_component = rel_output.components().next();
+                                        let path_first_component = rel_path.components().next();
+
+                                        // Only copy if they share the same first component
+                                        // (i.e., they're in the same subdirectory tree)
+                                        // OR if the file is in the immediate directory (no subdirectory)
+                                        if let (Some(output_comp), Some(path_comp)) =
+                                            (output_first_component, path_first_component)
+                                        {
+                                            output_comp == path_comp
+                                        } else {
+                                            // File is directly in src/ (e.g., src/app.rs)
+                                            // Don't copy - these are top-level modules
+                                            false
+                                        }
+                                    } else {
+                                        false
+                                    }
+                                } else {
+                                    // Output is NOT within src/, so we're at project root scope
+                                    // Copy all .rs files from src/ (they're in scope)
+                                    true
+                                }
+                            } else {
+                                // Not scanning src/, so copy (project root FFI files)
+                                true
+                            };
+
+                            if should_copy {
+                                // Only copy hand-written .rs files (like ffi.rs)
+                                let dest = output_dir.join(name);
+                                if let Err(e) = std::fs::copy(&path, &dest) {
+                                    eprintln!("Warning: Failed to copy {}: {}", name_str, e);
+                                }
+                            } else {
+                                eprintln!(
+                                    "⏭️  Skipping out-of-scope file: {} (not within output tree)",
+                                    path.display()
+                                );
                             }
                         }
                     }
