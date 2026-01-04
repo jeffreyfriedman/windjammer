@@ -182,15 +182,51 @@ fn discover_hand_written_modules(
 
     // THE WINDJAMMER WAY: Rust convention is to put library code in src/
     // So we need to check both project_root/ and project_root/src/ for hand-written modules
-    let search_dirs = vec![project_root.to_path_buf(), project_root.join("src")];
+    let mut search_dirs = vec![project_root.to_path_buf()];
 
-    for search_dir in search_dirs {
+    // Only add src/ if it's different from project_root
+    let src_dir = project_root.join("src");
+    if src_dir.exists() && src_dir != project_root {
+        search_dirs.push(src_dir);
+    }
+
+    // BUG #12 FIX: Also search the parent directory of output_dir for sibling modules
+    // Example: If output is src/components/generated/, search src/components/ for siblings
+    // like platform.rs
+    if let Some(output_parent) = output_dir.parent() {
+        if output_parent != project_root && output_parent != project_root.join("src") {
+            search_dirs.push(output_parent.to_path_buf());
+        }
+    }
+
+    for search_dir in &search_dirs {
         if !search_dir.exists() {
             continue;
         }
 
+        // BUG #12 FIX: Determine if we need scope filtering
+        // We need scope filtering only when:
+        // 1. Output is within search_dir (not a direct child)
+        // 2. We're NOT searching the immediate parent of output (siblings should be included)
+        let is_output_parent = output_dir.parent() == Some(search_dir.as_path());
+        let needs_scope_filter = if is_output_parent {
+            // Searching immediate parent of output - include siblings, no filtering
+            false
+        } else if output_dir.strip_prefix(search_dir).is_ok() {
+            // Output is within search_dir, but not immediate child
+            // Apply filtering to avoid including unrelated files
+            if let Ok(rel) = output_dir.strip_prefix(search_dir) {
+                // If rel has 2+ components, we're searching an ancestor directory
+                rel.components().count() >= 2
+            } else {
+                false
+            }
+        } else {
+            false
+        };
+
         // Look for .rs files (not lib.rs, mod.rs, or generated files)
-        for entry in fs::read_dir(&search_dir)? {
+        for entry in fs::read_dir(search_dir)? {
             let entry = entry?;
             let path = entry.path();
 
@@ -204,6 +240,59 @@ fn discover_hand_written_modules(
                     let corresponding_dir = search_dir.join(&name_str);
                     if corresponding_dir.exists() && corresponding_dir.is_dir() {
                         continue; // Skip this file - it's a module parent
+                    }
+
+                    // BUG #12 FIX: Apply scope filtering
+                    if needs_scope_filter {
+                        // Output is within src/ (e.g., src/components/generated/)
+                        // Only include files that are within the same subdirectory tree
+                        if let Ok(rel_output) = output_dir.strip_prefix(search_dir) {
+                            if let Ok(rel_path) = path.strip_prefix(search_dir) {
+                                // Check if the file has a parent directory within search_dir
+                                // e.g., src/components/platform.rs -> parent is "components"
+                                // e.g., src/app.rs -> no parent (directly in search_dir)
+                                if let Some(file_parent) = rel_path.parent() {
+                                    if file_parent == Path::new("") {
+                                        // File is directly in search_dir (e.g., src/app.rs)
+                                        // But output is in a subdirectory (e.g., src/components/generated/)
+                                        // Skip these top-level files
+                                        continue;
+                                    }
+
+                                    // Get the first component of the output and file paths
+                                    // e.g., for src/components/generated/ -> "components"
+                                    // e.g., for src/components/platform.rs -> "components"
+                                    let output_first_component = rel_output.components().next();
+                                    let path_first_component = file_parent.components().next();
+
+                                    // Only include if they share the same first component
+                                    if let (Some(output_comp), Some(path_comp)) =
+                                        (output_first_component, path_first_component)
+                                    {
+                                        if output_comp != path_comp {
+                                            continue; // Skip - different subdirectory tree
+                                        }
+                                    } else {
+                                        continue; // Skip - incompatible paths
+                                    }
+                                } else {
+                                    // No parent -> file is at root (shouldn't happen for files in search_dir)
+                                    continue;
+                                }
+                            }
+                        }
+                    } else if let Some(output_parent) = output_dir.parent() {
+                        // When searching output_dir.parent(), only include files
+                        // that are SIBLINGS of the output directory
+                        if *search_dir == output_parent {
+                            // We're searching the immediate parent of output_dir
+                            // Make sure the file is NOT from a parent of output_parent
+                            if let Some(file_parent) = path.parent() {
+                                if file_parent != output_parent {
+                                    continue; // Skip - file is not a direct sibling
+                                }
+                            }
+                        }
                     }
 
                     // Skip lib.rs, mod.rs, and generated modules
