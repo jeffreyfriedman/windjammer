@@ -1,3 +1,11 @@
+## [0.39.5] - 2026-01-04
+### Fixed
+- **Bug #12 Follow-up**: Apply scope filtering to directory discovery
+  - Directories with mod.rs are now properly scope-filtered
+  - Example: `src/platform/` no longer declared in `src/components/generated/mod.rs`
+  - Same scope filtering logic as files now applied to directories
+  - Validated with windjammer-ui (wasm32 build succeeds)
+
 ## [0.39.4] - 2026-01-04
 ### Fixed
 - **Bug #12 (PROPER FIX)**: Fix module discovery scope filtering
