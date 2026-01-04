@@ -316,6 +316,59 @@ fn discover_hand_written_modules(
                     }
                 }
 
+                // BUG #12 FIX: Apply same scope filtering to directories as we do for files
+                if needs_scope_filter {
+                    // Output is within search_dir (e.g., src/components/generated/)
+                    // Only include directories that are within the same subdirectory tree
+                    if let Ok(rel_output) = output_dir.strip_prefix(search_dir) {
+                        if let Ok(rel_path) = path.strip_prefix(search_dir) {
+                            // Check if the directory has a parent within search_dir
+                            // e.g., src/components/platform/ -> parent is "components"
+                            // e.g., src/platform/ -> no parent (directly in search_dir)
+                            if let Some(dir_parent) = rel_path.parent() {
+                                if dir_parent == Path::new("") {
+                                    // Directory is directly in search_dir (e.g., src/platform/)
+                                    // But output is in a subdirectory (e.g., src/components/generated/)
+                                    // Skip these top-level directories
+                                    continue;
+                                }
+
+                                // Get the first component of the output and directory paths
+                                // e.g., for src/components/generated/ -> "components"
+                                // e.g., for src/components/platform/ -> "components"
+                                let output_first_component = rel_output.components().next();
+                                let path_first_component = dir_parent.components().next();
+
+                                // Only include if they share the same first component
+                                if let (Some(output_comp), Some(path_comp)) =
+                                    (output_first_component, path_first_component)
+                                {
+                                    if output_comp != path_comp {
+                                        continue; // Skip - different subdirectory tree
+                                    }
+                                } else {
+                                    continue; // Skip - incompatible paths
+                                }
+                            } else {
+                                // No parent -> directory is at root (shouldn't happen)
+                                continue;
+                            }
+                        }
+                    }
+                } else if let Some(output_parent) = output_dir.parent() {
+                    // When searching output_dir.parent(), only include directories
+                    // that are SIBLINGS of the output directory
+                    if *search_dir == output_parent {
+                        // We're searching the immediate parent of output_dir
+                        // Make sure the directory is NOT from a parent of output_parent
+                        if let Some(dir_parent) = path.parent() {
+                            if dir_parent != output_parent {
+                                continue; // Skip - directory is not a direct sibling
+                            }
+                        }
+                    }
+                }
+
                 // Check if directory has a mod.rs (but skip common non-FFI directories)
                 let dir_name = path.file_name().and_then(|n| n.to_str()).unwrap_or("");
                 let skip_dirs = [
