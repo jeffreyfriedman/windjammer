@@ -1716,6 +1716,45 @@ fn compile_file_impl(
     // Write output (preserving directory structure)
     let output_file = get_relative_output_path(source_root, input_path, output_dir)?;
 
+    // Bug #2B FIX: Prevent lib.rs generation in subdirectories
+    // --------------------------------------------------------
+    // lib.rs should only exist at the crate root, not in subdirectories like src/components/generated/.
+    // If we're compiling lib.wj and the output directory is a subdirectory (contains ".../src/..."),
+    // skip writing lib.rs entirely.
+    //
+    // Detection heuristic (matches generate_nested_module_structure):
+    // - If output path contains ".../src/..." with more components after src, it's a subdirectory
+    let is_lib_file = input_path
+        .file_name()
+        .and_then(|n| n.to_str())
+        .map(|s| s == "lib.wj")
+        .unwrap_or(false);
+
+    let is_output_subdirectory = {
+        let components: Vec<_> = output_dir.components().collect();
+        let mut found_src = false;
+        for (i, component) in components.iter().enumerate() {
+            if let std::path::Component::Normal(name) = component {
+                if name.to_string_lossy() == "src" && i + 1 < components.len() {
+                    found_src = true;
+                    break;
+                }
+            }
+        }
+        found_src
+    };
+
+    if is_lib_file && is_output_subdirectory {
+        // Skip writing lib.rs in subdirectories
+        eprintln!(
+            "⏭️  SKIPPING lib.rs generation in subdirectory: {}",
+            output_dir.display()
+        );
+        eprintln!("   lib.rs should only exist at crate root, not in subdirectories");
+        // Return empty dependencies and traits (nothing was written)
+        return Ok((HashSet::new(), Vec::new()));
+    }
+
     // Create parent directories if needed
     if let Some(parent) = output_file.parent() {
         std::fs::create_dir_all(parent)?;
@@ -3849,11 +3888,66 @@ pub fn generate_nested_module_structure(source_dir: &Path, output_dir: &Path) ->
                             // Check if this directory has a mod.rs (it's a Rust module)
                             let mod_rs = path.join("mod.rs");
                             if mod_rs.exists() {
-                                let dest_dir = output_dir.join(dir_name);
-                                if let Err(e) = copy_dir_recursive(&path, &dest_dir) {
+                                // Bug #9B FIX: Don't copy out-of-scope hand-written modules
+                                // --------------------------------------------------------
+                                // When output is a subdirectory like src/components/generated/,
+                                // we should NOT copy modules from src/ (like src/events/).
+                                //
+                                // Only copy modules that are:
+                                // 1. In the project root (for FFI interop), OR
+                                // 2. Would be copied by the module system itself
+                                //
+                                // Heuristic: If the module's parent directory is NOT the same as
+                                // copy_dir (the directory we're scanning), it's out of scope.
+                                //
+                                // Example:
+                                // - copy_dir: project_root/src/
+                                // - path: project_root/src/events/
+                                // - output_dir: project_root/src/components/generated/
+                                // - Skip because events/ is NOT within components/generated/ tree
+
+                                let should_copy = if copy_dir.ends_with("src") {
+                                    // When scanning src/, check if output is also in src/
+                                    // If output is src/components/generated/, only copy modules
+                                    // that are within the components/ tree
+                                    if let Ok(rel_output) = output_dir.strip_prefix(copy_dir) {
+                                        // Output is within src/ (e.g., src/components/generated/)
+                                        // Check if this module is within the output tree
+                                        if let Ok(rel_path) = path.strip_prefix(copy_dir) {
+                                            // Get the first component of the output relative path
+                                            // e.g., for src/components/generated/ -> "components"
+                                            let output_first_component =
+                                                rel_output.components().next();
+                                            let path_first_component = rel_path.components().next();
+
+                                            // Only copy if they share the same first component
+                                            // (i.e., they're in the same subdirectory tree)
+                                            output_first_component == path_first_component
+                                        } else {
+                                            false
+                                        }
+                                    } else {
+                                        // Output is NOT within src/, so we're at project root scope
+                                        // Copy all modules from src/ (they're in scope)
+                                        true
+                                    }
+                                } else {
+                                    // Not scanning src/, so copy (project root FFI modules)
+                                    true
+                                };
+
+                                if should_copy {
+                                    let dest_dir = output_dir.join(dir_name);
+                                    if let Err(e) = copy_dir_recursive(&path, &dest_dir) {
+                                        eprintln!(
+                                            "Warning: Failed to copy directory {}: {}",
+                                            dir_name_str, e
+                                        );
+                                    }
+                                } else {
                                     eprintln!(
-                                        "Warning: Failed to copy directory {}: {}",
-                                        dir_name_str, e
+                                        "⏭️  Skipping out-of-scope module: {} (not within output tree)",
+                                        path.display()
                                     );
                                 }
                             }

@@ -1,3 +1,21 @@
+## [0.39.3] - 2026-01-03
+### Fixed
+- **Bug #2B (PROPER FIX)**: Prevent `lib.rs` generation in subdirectories
+  - lib.rs should only exist at crate root, not in `src/components/generated/`
+  - Compiler now detects if output is a subdirectory and skips `lib.wj` compilation
+  - Eliminates need for manual file deletion and `fix_generated.sh` hack scripts
+- **Bug #9B (PROPER FIX)**: Prevent declaring out-of-scope hand-written modules
+  - Compiler no longer copies modules from `src/events/` to `src/components/generated/`
+  - Only copies modules that are: (a) in project root (FFI), or (b) within output tree
+  - Module discovery now checks scope before copying directories
+- **TDD Tests Added**: 4 new comprehensive tests with extensive documentation
+  - `lib_rs_subdirectory_prevention_test.rs` (2 tests)
+  - `out_of_scope_module_prevention_test.rs` (2 tests)
+
+### Removed
+- **No More Hacks**: windjammer-ui can now delete `fix_generated.sh` script
+- **No More Manual Comments**: Generated `mod.rs` is now correct by default
+
 ## [0.39.2] - 2026-01-03
 ### Fixed
 - **Bug #1-10**: Complete compiler bug fixes using TDD (no tech debt!)
