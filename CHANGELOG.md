@@ -1,3 +1,28 @@
+## [0.39.6] - 2026-01-04
+### Fixed
+- **Bug #13**: Early return statement parsing
+  - Parser now consumes trailing semicolons after return/break/continue statements
+  - Enables guard clause patterns and early exit idioms
+  - Fixes "Unexpected token: Semicolon" error when return followed by other statements
+  - **TDD Tests Added**: `early_return_test.rs` (8 comprehensive tests)
+- **Bug #18**: Tuple field access (`.0`, `.1`, `.2`, etc.)
+  - Parser now accepts numeric indices after dot operator
+  - Essential for tuple destructuring and coordinate systems
+  - Enables patterns like `let x = tuple.0;` and `coords.0 + coords.1`
+  - **TDD Tests Added**: `tuple_field_access_test.rs` (10 tests, 1 known limitation)
+  - Known limitation: Nested tuple access requires parentheses: `(outer.0).0`
+
+### Testing
+- **+33 new tests** (+500 lines of test coverage)
+- `primitive_method_calls_test.rs` (14 validation tests - all pass!)
+- All fixes validated through TDD (test-first development)
+- Zero regressions introduced
+
+### Dogfooding
+- **windjammer-game voxel system**: 4/4 files now compile (405 lines)
+- Validated real-world patterns: guard clauses, coordinate conversion, bounds checking
+- Unblocked Phase 2: 3D mesh generation in Windjammer
+
 ## [0.39.5] - 2026-01-04
 ### Fixed
 - **Bug #12 Follow-up**: Apply scope filtering to directory discovery
