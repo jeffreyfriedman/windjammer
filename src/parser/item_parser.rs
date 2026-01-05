@@ -8,6 +8,21 @@ use crate::parser::ast::*;
 use crate::parser_impl::Parser;
 
 impl Parser {
+    /// Collect all consecutive doc comments into a single string
+    fn collect_doc_comments(&mut self) -> Option<String> {
+        let mut doc_comments = Vec::new();
+        while let Token::DocComment(comment) = self.current_token() {
+            doc_comments.push(comment.clone());
+            self.advance();
+        }
+
+        if doc_comments.is_empty() {
+            None
+        } else {
+            Some(doc_comments.join("\n"))
+        }
+    }
+
     pub(crate) fn parse_impl(&mut self) -> Result<ImplBlock<'static>, String> {
         // Parse: impl<T> Type { } or impl Trait for Type { } or impl Trait<TypeArgs> for Type { }
 
@@ -166,14 +181,8 @@ impl Parser {
                 continue;
             }
 
-            // Capture doc comment if present (/// or //!)
-            let doc_comment = if let Token::DocComment(comment) = self.current_token() {
-                let comment = comment.clone();
-                self.advance();
-                Some(comment)
-            } else {
-                None
-            };
+            // Capture all consecutive doc comments (/// or //!)
+            let doc_comment = self.collect_doc_comments();
 
             // Skip decorators for now (could be added later)
             let mut decorators = Vec::new();
@@ -310,14 +319,8 @@ impl Parser {
                 continue;
             }
 
-            // Capture doc comment if present (/// or //!)
-            let doc_comment = if let Token::DocComment(comment) = self.current_token() {
-                let comment = comment.clone();
-                self.advance();
-                Some(comment)
-            } else {
-                None
-            };
+            // Capture all consecutive doc comments (/// or //!)
+            let doc_comment = self.collect_doc_comments();
 
             // Parse trait method signature
             let is_async = if self.current_token() == &Token::Async {

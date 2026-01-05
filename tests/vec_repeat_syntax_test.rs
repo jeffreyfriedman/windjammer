@@ -10,6 +10,7 @@ use std::fs;
 use std::process::Command;
 use tempfile::tempdir;
 
+#[allow(dead_code)]
 fn compile_wj_code(code: &str) -> Result<String, String> {
     let temp_dir = tempdir().map_err(|e| e.to_string())?;
     let test_file = temp_dir.path().join("test.wj");
