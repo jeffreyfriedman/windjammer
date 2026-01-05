@@ -1786,13 +1786,30 @@ impl Parser {
                         self.advance(); // consume opening delimiter
 
                         let mut args = Vec::new();
-                        while self.current_token() != &end_token {
+
+                        // Check for empty macro: vec![], println!()
+                        if self.current_token() != &end_token {
+                            // Parse first argument
                             args.push(self.parse_expression()?);
 
-                            if self.current_token() == &Token::Comma {
-                                self.advance();
+                            // Check for vec![item; count] repetition syntax
+                            if delimiter == MacroDelimiter::Brackets
+                                && self.current_token() == &Token::Semicolon
+                            {
+                                self.advance(); // consume semicolon
+                                args.push(self.parse_expression()?);
                             } else {
-                                break;
+                                // Parse remaining comma-separated arguments
+                                while self.current_token() == &Token::Comma {
+                                    self.advance();
+
+                                    // Allow trailing comma
+                                    if self.current_token() == &end_token {
+                                        break;
+                                    }
+
+                                    args.push(self.parse_expression()?);
+                                }
                             }
                         }
 
