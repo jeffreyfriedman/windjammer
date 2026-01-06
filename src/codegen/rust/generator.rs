@@ -2241,6 +2241,11 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
             .iter()
             .filter(|d| d.name == "ensures")
             .collect();
+        let invariant_decorators: Vec<_> = func
+            .decorators
+            .iter()
+            .filter(|d| d.name == "invariant")
+            .collect();
         let property_test_decorator = func.decorators.iter().find(|d| d.name == "property_test");
         let test_decorator = func
             .decorators
@@ -2391,6 +2396,15 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
             output.push_str(&self.generate_statement(stmt));
         }
 
+        // Add @invariant checks (after function body)
+        for inv_decorator in &invariant_decorators {
+            if let Some((_, expr)) = inv_decorator.arguments.first() {
+                let condition = self.generate_expression_immut(expr);
+                output.push_str(&self.indent());
+                output.push_str(&format!("invariant({}, \"{}\");\n", condition, condition));
+            }
+        }
+
         // Close @ensures block and add checks
         if needs_ensures {
             self.indent_level -= 1;
@@ -2399,7 +2413,9 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
 
             for ens_decorator in ensures_decorators {
                 if let Some((_, expr)) = ens_decorator.arguments.first() {
-                    let condition = self.generate_expression_immut(expr);
+                    let mut condition = self.generate_expression_immut(expr);
+                    // Replace 'result' with '__result' in ensures conditions
+                    condition = condition.replace("result", "__result");
                     output.push_str(&self.indent());
                     output.push_str(&format!("ensures({}, \"{}\");\n", condition, condition));
                 }
