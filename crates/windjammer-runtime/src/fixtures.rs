@@ -26,11 +26,13 @@ impl FixtureRegistry {
     }
 
     /// Register a fixture with a name and factory function
-    pub fn register<T: 'static + Send>(&mut self, name: &str, factory: impl Fn() -> T + 'static + Send + Sync) {
-        self.factories.insert(
-            name.to_string(),
-            Box::new(move || Box::new(factory())),
-        );
+    pub fn register<T: 'static + Send>(
+        &mut self,
+        name: &str,
+        factory: impl Fn() -> T + 'static + Send + Sync,
+    ) {
+        self.factories
+            .insert(name.to_string(), Box::new(move || Box::new(factory())));
         self.type_ids.insert(name.to_string(), TypeId::of::<T>());
     }
 
@@ -60,13 +62,16 @@ pub fn global_registry() -> Arc<Mutex<FixtureRegistry>> {
         *guard = Some(FixtureRegistry::new());
     }
     drop(guard);
-    
+
     // Return a reference to the registry
     Arc::new(Mutex::new(FixtureRegistry::new()))
 }
 
 /// Register a fixture globally
-pub fn register_fixture<T: 'static + Send>(name: &str, factory: impl Fn() -> T + 'static + Send + Sync) {
+pub fn register_fixture<T: 'static + Send>(
+    name: &str,
+    factory: impl Fn() -> T + 'static + Send + Sync,
+) {
     let registry = global_registry();
     let mut guard = registry.lock().unwrap();
     guard.register(name, factory);
@@ -117,9 +122,9 @@ mod tests {
     #[test]
     fn test_fixture_registry() {
         let mut registry = FixtureRegistry::new();
-        
+
         registry.register("test_data", || TestData { value: 42 });
-        
+
         let data: Option<TestData> = registry.get("test_data");
         assert!(data.is_some());
         assert_eq!(data.unwrap().value, 42);
@@ -128,9 +133,9 @@ mod tests {
     #[test]
     fn test_fixture_wrong_type() {
         let mut registry = FixtureRegistry::new();
-        
+
         registry.register("test_data", || TestData { value: 42 });
-        
+
         // Try to get with wrong type
         let data: Option<String> = registry.get("test_data");
         assert!(data.is_none());
@@ -139,7 +144,7 @@ mod tests {
     #[test]
     fn test_fixture_not_found() {
         let registry = FixtureRegistry::new();
-        
+
         let data: Option<TestData> = registry.get("nonexistent");
         assert!(data.is_none());
     }
@@ -148,7 +153,7 @@ mod tests {
     fn test_fixture_scope() {
         let scope = FixtureScope::new(TestData { value: 42 });
         assert_eq!(scope.get().value, 42);
-        
+
         // scope is dropped here, cleanup happens automatically
     }
 
@@ -159,4 +164,3 @@ mod tests {
         assert_eq!(scope.get().value, 100);
     }
 }
-

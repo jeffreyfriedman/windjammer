@@ -55,15 +55,12 @@ where
     F: Clone,
 {
     FUNCTION_MOCKS.with(|mocks| {
-        mocks
-            .borrow()
-            .get(name)
-            .and_then(|mock| {
-                let guard = mock.lock().unwrap();
-                let any_ref = &**guard;
-                // Try to downcast to the function type
-                (any_ref as &dyn std::any::Any).downcast_ref::<F>().cloned()
-            })
+        mocks.borrow().get(name).and_then(|mock| {
+            let guard = mock.lock().unwrap();
+            let any_ref = &**guard;
+            // Try to downcast to the function type
+            (any_ref as &dyn std::any::Any).downcast_ref::<F>().cloned()
+        })
     })
 }
 
@@ -186,30 +183,34 @@ mod tests {
         mock_function("func2", || 2);
         assert!(is_mocked("func1"));
         assert!(is_mocked("func2"));
-        
+
         clear_all_mocks();
-        
+
         assert!(!is_mocked("func1"));
         assert!(!is_mocked("func2"));
     }
 
     #[test]
     fn test_with_mock_cleanup() {
-        with_mock("test_function", || 999, || {
-            // Test body
-        });
-        
+        with_mock(
+            "test_function",
+            || 999,
+            || {
+                // Test body
+            },
+        );
+
         assert!(!is_mocked("test_function")); // Auto-cleared
     }
 
     #[test]
     fn test_mock_registry() {
         let mut registry = MockRegistry::new();
-        
+
         registry.record_call("func1");
         registry.record_call("func1");
         registry.record_call("func2");
-        
+
         assert_eq!(registry.call_count("func1"), 2);
         assert_eq!(registry.call_count("func2"), 1);
         assert!(registry.was_called("func1"));
@@ -221,7 +222,7 @@ mod tests {
         let mut registry = MockRegistry::new();
         registry.record_call("func");
         registry.record_call("func");
-        
+
         registry.verify_called_times("func", 2); // Should not panic
     }
 
@@ -231,7 +232,7 @@ mod tests {
         let mut registry = MockRegistry::new();
         registry.record_call("func");
         registry.record_call("func");
-        
+
         registry.verify_called_times("func", 3); // Should panic
     }
 
@@ -240,9 +241,8 @@ mod tests {
         let mut registry = MockRegistry::new();
         registry.record_call("func");
         assert_eq!(registry.call_count("func"), 1);
-        
+
         registry.reset();
         assert_eq!(registry.call_count("func"), 0);
     }
 }
-
