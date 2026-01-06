@@ -110,10 +110,13 @@ mod tests {
     }
 
     #[test]
+    #[cfg_attr(tarpaulin, ignore)]
     fn test_bench_compare() {
         // Test that bench_compare returns reasonable measurements
         // Note: We can't reliably test timing relationships in CI due to
         // thread scheduling variance, so just verify the function works
+        // This test is ignored in tarpaulin because coverage instrumentation
+        // adds overhead that makes timing measurements unreliable
         let (time_slow, time_fast, speedup) = bench_compare(
             || {
                 // Use busy-wait instead of sleep for more deterministic timing
