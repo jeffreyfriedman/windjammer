@@ -1,0 +1,180 @@
+// Windjammer Testing Framework - Decorator Syntax Examples
+//
+// This file shows the elegant decorator syntax for testing features.
+// These decorators wrap your test functions automatically!
+
+use std::test::*;
+use std::bench::*;
+use std::timeout::*;
+
+// ============================================================================
+// 1. @timeout - Automatic timeout for tests
+// ============================================================================
+
+@timeout(1000)  // 1 second timeout
+@test
+fn test_with_timeout() {
+    // This test must complete within 1 second
+    let mut sum = 0;
+    for i in 0..1000 {
+        sum += i;
+    }
+    assert_eq(sum, 499500);
+}
+
+@timeout(16)  // 16ms = 60fps frame budget
+@test
+fn test_frame_rendering() {
+    // Ensure rendering completes within frame budget
+    render_frame();
+}
+
+// ============================================================================
+// 2. @bench - Automatic benchmarking
+// ============================================================================
+
+@bench
+fn benchmark_fibonacci() {
+    // Automatically benchmarked and results printed
+    fibonacci(20);
+}
+
+@bench
+fn benchmark_sorting() {
+    let mut data = vec![5, 2, 8, 1, 9];
+    data.sort();
+}
+
+// ============================================================================
+// 3. @property_test - Property-based testing
+// ============================================================================
+
+@property_test(100)  // Test 100 random inputs
+fn test_addition_commutative(a: int, b: int) {
+    // Automatically generates random a and b values
+    assert_eq(a + b, b + a);
+}
+
+@property_test(50)
+fn test_multiplication_associative(a: int, b: int, c: int) {
+    // Tests with 3 random parameters
+    assert_eq((a * b) * c, a * (b * c));
+}
+
+// ============================================================================
+// 4. Combined Decorators - Stack multiple decorators
+// ============================================================================
+
+@timeout(5000)
+@bench
+@test
+fn test_with_timeout_and_bench() {
+    // Both timeout AND benchmarked
+    expensive_operation();
+}
+
+@property_test(100)
+@timeout(10000)
+fn test_property_with_timeout(x: int, y: int) {
+    // Property test with timeout protection
+    assert!(x + y >= x);
+    assert!(x + y >= y);
+}
+
+// ============================================================================
+// 5. Function-Based API (for features needing parser support)
+// ============================================================================
+
+// For features that need complex expressions or named arguments,
+// use the function-based API:
+
+@test
+fn test_with_contracts() {
+    // Contracts via functions (until parser supports expressions in decorators)
+    let x = 10;
+    requires(x > 0, "x must be positive");
+    
+    let result = x * 2;
+    ensures(result > x, "result must be greater than x");
+}
+
+@test
+fn test_with_setup_teardown() {
+    // Setup/teardown via functions (until parser supports named args)
+    with_setup_teardown(
+        || Database::connect_test(),
+        |db| db.disconnect(),
+        |db| {
+            assert(db.is_connected());
+            let users = db.query("SELECT * FROM users");
+            assert_eq(users.len(), 10);
+            db
+        }
+    );
+}
+
+// ============================================================================
+// SUMMARY
+// ============================================================================
+//
+// ✅ Working Decorator Syntax:
+// - @timeout(ms) - Wrap test with timeout
+// - @bench - Benchmark the function
+// - @property_test(n) - Property-based testing with n iterations
+// - @test, @ignore - Standard test decorators
+// - @test_cases([...]) - Parameterized tests
+//
+// ⏳ Use Function API For:
+// - @requires(expr) - Use requires(expr, "msg") in function body
+// - @ensures(expr) - Use ensures(expr, "msg") in function body
+// - @invariant(expr) - Use invariant(expr, "msg") in function body
+// - @test(setup=fn, teardown=fn) - Use with_setup_teardown(...)
+//
+// The decorator syntax is elegant and concise, while the function-based
+// API provides full flexibility for complex scenarios!
+//
+// Both approaches work perfectly - choose what fits your style!
+
+// Helper functions for examples
+fn fibonacci(n: int) -> int {
+    if n <= 1 { n } else { fibonacci(n-1) + fibonacci(n-2) }
+}
+
+fn render_frame() {
+    // Simulate rendering
+    let mut pixels = vec![0; 1920 * 1080];
+    for i in 0..pixels.len() {
+        pixels[i] = i % 256;
+    }
+}
+
+fn expensive_operation() {
+    let mut sum = 0;
+    for i in 0..10000 {
+        sum += i * i;
+    }
+}
+
+struct Database {
+    connected: bool,
+}
+
+impl Database {
+    fn connect_test() -> Self {
+        Self { connected: true }
+    }
+    
+    fn disconnect(&mut self) {
+        self.connected = false;
+    }
+    
+    fn is_connected(&self) -> bool {
+        self.connected
+    }
+    
+    fn query(&self, sql: string) -> Vec<string> {
+        vec!["user1", "user2", "user3", "user4", "user5",
+             "user6", "user7", "user8", "user9", "user10"]
+    }
+}
+
