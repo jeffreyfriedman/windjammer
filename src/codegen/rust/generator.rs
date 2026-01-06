@@ -371,6 +371,15 @@ impl<'ast> CodeGenerator<'ast> {
             }
             ("test", _) => "test".to_string(),
             ("async", _) => "async".to_string(),
+            ("ignore", _) => "ignore".to_string(),
+            ("timeout", _) => {
+                // TODO: Timeout requires special body wrapping
+                "test".to_string()
+            }
+            ("bench", _) => {
+                // TODO: Benchmark tests use criterion
+                "bench".to_string()
+            }
             // HTTP method decorators for Axum
             ("get", _) => "axum::routing::get".to_string(),
             ("post", _) => "axum::routing::post".to_string(),
