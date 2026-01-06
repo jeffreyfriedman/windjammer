@@ -38,6 +38,7 @@ pub mod testing;
 pub mod thread;
 pub mod bench;
 pub mod property;
+pub mod mock;
 pub mod time;
 
 // Re-export commonly used types
