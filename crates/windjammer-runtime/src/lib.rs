@@ -44,6 +44,7 @@ pub mod timeout;
 pub mod setup_teardown;
 pub mod fixtures;
 pub mod doc_test;
+pub mod contracts;
 pub mod time;
 
 // Re-export commonly used types
