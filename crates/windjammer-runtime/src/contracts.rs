@@ -295,8 +295,7 @@ mod tests {
 
     #[test]
     fn test_contract_violation_display() {
-        let violation =
-            ContractViolation::new(ContractKind::Precondition, "x > 0".to_string());
+        let violation = ContractViolation::new(ContractKind::Precondition, "x > 0".to_string());
         assert_eq!(violation.to_string(), "Precondition violation: x > 0");
     }
 
@@ -310,4 +309,3 @@ mod tests {
         );
     }
 }
-

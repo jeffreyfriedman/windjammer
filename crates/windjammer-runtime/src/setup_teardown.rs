@@ -36,11 +36,11 @@ where
 {
     let resource = setup();
     let resource_clone = resource.clone();
-    
+
     let result = panic::catch_unwind(panic::AssertUnwindSafe(|| test(resource)));
-    
+
     teardown(resource_clone);
-    
+
     match result {
         Ok(r) => r,
         Err(e) => panic::resume_unwind(e),
@@ -155,9 +155,8 @@ mod tests {
     fn test_database_helper() {
         let db = TestDatabase::new();
         assert_eq!(db.connection_string, "test://localhost");
-        
+
         db.setup();
         db.teardown();
     }
 }
-

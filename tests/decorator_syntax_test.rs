@@ -30,15 +30,15 @@ fn test_timeout_decorator() {
         assert_eq(1 + 1, 2);
     }
     "#;
-    
+
     let output = parse_and_generate(source);
     println!("Generated Rust:\n{}", output);
-    
+
     // Should use with_timeout from runtime
     assert!(output.contains("with_timeout"));
     assert!(output.contains("Duration::from_millis(1000)"));
-    assert!(output.contains("assert_eq"));  // Expression may be simplified
-    assert!(output.contains(".unwrap()"));  // Timeout returns Result
+    assert!(output.contains("assert_eq")); // Expression may be simplified
+    assert!(output.contains(".unwrap()")); // Timeout returns Result
 }
 
 #[test]
@@ -49,13 +49,13 @@ fn test_bench_decorator() {
         let x = 1 + 1;
     }
     "#;
-    
+
     let output = parse_and_generate(source);
     println!("Generated Rust:\n{}", output);
-    
+
     // Should wrap with bench() call
     assert!(output.contains("bench(||"));
-    assert!(output.contains("let x ="));  // Expression may be simplified
+    assert!(output.contains("let x =")); // Expression may be simplified
     assert!(output.contains("println!(\"Benchmark:"));
 }
 
@@ -68,10 +68,10 @@ fn test_requires_decorator() {
         x + y
     }
     "#;
-    
+
     let output = parse_and_generate(source);
     println!("Generated Rust:\n{}", output);
-    
+
     // Should have requires() calls at start of function
     assert!(output.contains("requires(x > 0"));
     assert!(output.contains("requires(y > 0"));
@@ -85,10 +85,10 @@ fn test_ensures_decorator() {
         if x < 0 { -x } else { x }
     }
     "#;
-    
+
     let output = parse_and_generate(source);
     println!("Generated Rust:\n{}", output);
-    
+
     // Should have result capture and ensures() check
     assert!(output.contains("let __result ="));
     assert!(output.contains("ensures(__result > 0"));
@@ -102,10 +102,10 @@ fn test_invariant_decorator() {
         count + 1
     }
     "#;
-    
+
     let output = parse_and_generate(source);
     println!("Generated Rust:\n{}", output);
-    
+
     // Should have invariant check at end
     assert!(output.contains("invariant("));
 }
@@ -118,10 +118,10 @@ fn test_property_test_decorator() {
         assert_eq(a + b, b + a);
     }
     "#;
-    
+
     let output = parse_and_generate(source);
     println!("Generated Rust:\n{}", output);
-    
+
     // Should wrap with property_test_with_gen2
     assert!(output.contains("property_test_with_gen2"));
     assert!(output.contains("100"));
@@ -135,10 +135,10 @@ fn test_test_with_setup_teardown() {
         assert(db.is_connected());
     }
     "#;
-    
+
     let output = parse_and_generate(source);
     println!("Generated Rust:\n{}", output);
-    
+
     // Should use with_setup_teardown
     assert!(output.contains("with_setup_teardown"));
     assert!(output.contains("setup_db"));
@@ -155,13 +155,12 @@ fn test_combined_decorators() {
         let x = 1 + 1;
     }
     "#;
-    
+
     let output = parse_and_generate(source);
     println!("Generated Rust:\n{}", output);
-    
+
     // Should have both timeout and bench
     assert!(output.contains("with_timeout"));
     assert!(output.contains("Duration::from_millis(5000)"));
     assert!(output.contains("bench(||"));
 }
-
