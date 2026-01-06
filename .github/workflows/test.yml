@@ -173,8 +173,22 @@ jobs:
       - name: Build
         run: cargo build --verbose
       
-      - name: Build release (needed for integration tests)
-        run: cargo build --release --verbose
+      - name: Build release binary (needed for integration tests)
+        run: |
+          echo "Building release binary for integration tests..."
+          # Force rebuild of the wj binary (cache might have stale artifacts)
+          cargo build --release --bin wj --verbose
+          echo "Verifying wj binary exists..."
+          if [ -f target/release/wj ]; then
+            ls -lh target/release/wj
+            echo "✅ wj binary found"
+          elif [ -f target/release/wj.exe ]; then
+            ls -lh target/release/wj.exe
+            echo "✅ wj.exe binary found"
+          else
+            echo "❌ ERROR: wj binary not found!"
+            exit 1
+          fi
       
       - name: Run tests
         run: cargo test --release --verbose --all-features
