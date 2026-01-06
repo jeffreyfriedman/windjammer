@@ -1877,9 +1877,51 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
 
     // Helper method for expressions that need to be evaluated without &mut self
     fn generate_expression_immut(&self, expr: &Expression) -> String {
+        use crate::parser::ast::operators::{BinaryOp, UnaryOp};
+
         match expr {
             Expression::Literal { value: lit, .. } => self.generate_literal(lit),
             Expression::Identifier { name, .. } => name.clone(),
+            Expression::Unary { op, operand, .. } => {
+                let op_str = match op {
+                    UnaryOp::Not => "!",
+                    UnaryOp::Neg => "-",
+                    UnaryOp::Ref => "&",
+                    UnaryOp::MutRef => "&mut ",
+                    UnaryOp::Deref => "*",
+                };
+                format!("({}{})", op_str, self.generate_expression_immut(operand))
+            }
+            Expression::Binary {
+                left, op, right, ..
+            } => {
+                let op_str = match op {
+                    BinaryOp::Add => "+",
+                    BinaryOp::Sub => "-",
+                    BinaryOp::Mul => "*",
+                    BinaryOp::Div => "/",
+                    BinaryOp::Mod => "%",
+                    BinaryOp::Eq => "==",
+                    BinaryOp::Ne => "!=",
+                    BinaryOp::Lt => "<",
+                    BinaryOp::Le => "<=",
+                    BinaryOp::Gt => ">",
+                    BinaryOp::Ge => ">=",
+                    BinaryOp::And => "&&",
+                    BinaryOp::Or => "||",
+                    BinaryOp::BitAnd => "&",
+                    BinaryOp::BitOr => "|",
+                    BinaryOp::BitXor => "^",
+                    BinaryOp::Shl => "<<",
+                    BinaryOp::Shr => ">>",
+                };
+                format!(
+                    "{} {} {}",
+                    self.generate_expression_immut(left),
+                    op_str,
+                    self.generate_expression_immut(right)
+                )
+            }
             _ => "/* expression */".to_string(),
         }
     }
@@ -2044,8 +2086,122 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
         output
     }
 
+    /// Generate multiple test functions from a parameterized test (@test_cases)
+    ///
+    /// Example Windjammer:
+    /// ```text
+    /// @test_cases([
+    ///     (5, 3, 8),
+    ///     (10, -5, 5),
+    ///     (0, 0, 0),
+    /// ])
+    /// fn add_numbers(a: int, b: int, expected: int) {
+    ///     assert_eq(a + b, expected);
+    /// }
+    /// ```
+    ///
+    /// Generates:
+    /// ```text
+    /// fn add_numbers_case_0() { add_numbers_impl(5, 3, 8); }
+    /// fn add_numbers_case_1() { add_numbers_impl(10, -5, 5); }
+    /// fn add_numbers_case_2() { add_numbers_impl(0, 0, 0); }
+    /// fn add_numbers_impl(a: i64, b: i64, expected: i64) {
+    ///     assert_eq!(a + b, expected);
+    /// }
+    /// ```
+    fn generate_parameterized_tests(
+        &mut self,
+        analyzed: &AnalyzedFunction<'ast>,
+        test_cases_decorator: &Decorator<'ast>,
+    ) -> String {
+        use crate::parser::Expression;
+
+        let func = &analyzed.decl;
+        let mut output = String::new();
+
+        // Extract test cases from decorator arguments
+        // Expected format: @test_cases([(val1, val2, ...), (val1, val2, ...), ...])
+        let test_cases = if let Some((_, cases_expr)) = test_cases_decorator.arguments.first() {
+            // Parse the array literal
+            if let Expression::Array { elements, .. } = cases_expr {
+                elements.clone()
+            } else {
+                // Not an array, try to extract it directly
+                vec![*cases_expr]
+            }
+        } else {
+            // No arguments provided, skip parameterized test generation
+            return "// ERROR: @test_cases decorator requires arguments\n".to_string();
+        };
+
+        if test_cases.is_empty() {
+            return "// ERROR: @test_cases decorator requires at least one test case\n".to_string();
+        }
+
+        // Generate the implementation function (with _impl suffix)
+        let impl_func_name = format!("{}_impl", func.name);
+
+        // Create a modified function declaration for the implementation
+        let mut impl_func_decl = func.clone();
+        impl_func_decl.name = impl_func_name.clone();
+        // Remove the @test_cases decorator from the impl function
+        impl_func_decl
+            .decorators
+            .retain(|d| d.name != "test_cases" && d.name != "test");
+
+        // Create a modified AnalyzedFunction for the implementation
+        let mut impl_analyzed = analyzed.clone();
+        impl_analyzed.decl = impl_func_decl;
+
+        // Generate the implementation function (non-test, just regular function)
+        output.push_str(&self.generate_function_impl(&impl_analyzed));
+        output.push_str("\n\n");
+
+        // Generate a test function for each test case
+        for (case_idx, case_expr) in test_cases.iter().enumerate() {
+            output.push_str("#[test]\n");
+            output.push_str(&format!("fn {}_case_{}() {{\n", func.name, case_idx));
+
+            // Generate the call to the implementation function with the test case arguments
+            output.push_str("    ");
+            output.push_str(&impl_func_name);
+            output.push('(');
+
+            // Extract arguments from the tuple expression
+            if let Expression::Tuple { elements, .. } = case_expr {
+                let args: Vec<String> = elements
+                    .iter()
+                    .map(|arg| self.generate_expression_immut(arg))
+                    .collect();
+                output.push_str(&args.join(", "));
+            } else {
+                // Single argument (not a tuple)
+                output.push_str(&self.generate_expression_immut(case_expr));
+            }
+
+            output.push_str(");\n");
+            output.push_str("}\n\n");
+        }
+
+        output
+    }
+
+    /// Generate a function without test decorators (used by parameterized tests)
+    fn generate_function_impl(&mut self, analyzed: &AnalyzedFunction<'ast>) -> String {
+        // Just call the regular generate_function since we've already removed the decorators
+        self.generate_function(analyzed)
+    }
+
     fn generate_function(&mut self, analyzed: &AnalyzedFunction<'ast>) -> String {
         let func = &analyzed.decl;
+
+        // PARAMETERIZED TESTS: Check for @test_cases decorator
+        // If present, generate multiple test functions instead of one
+        if let Some(test_cases_decorator) = func.decorators.iter().find(|d| d.name == "test_cases")
+        {
+            return self.generate_parameterized_tests(analyzed, test_cases_decorator);
+        }
+
         let mut output = String::new();
 
         // LOCAL VARIABLE TRACKING: Push new scope for this function
