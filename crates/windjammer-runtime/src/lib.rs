@@ -40,6 +40,7 @@ pub mod bench;
 pub mod property;
 pub mod mock;
 pub mod test_output;
+pub mod timeout;
 pub mod time;
 
 // Re-export commonly used types
