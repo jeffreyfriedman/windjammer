@@ -82,15 +82,78 @@ fn test_property_with_timeout(x: int, y: int) {
 }
 
 // ============================================================================
-// 5. Function-Based API (for features needing parser support)
+// 5. @requires - Precondition checks
 // ============================================================================
 
-// For features that need complex expressions or named arguments,
-// use the function-based API:
+@requires(x > 0)
+@requires(y > 0)
+fn add_positive(x: int, y: int) -> int {
+    // Automatically checks x > 0 and y > 0 before executing
+    x + y
+}
+
+@requires(divisor != 0)
+fn safe_divide(dividend: int, divisor: int) -> int {
+    // Prevents division by zero at runtime
+    dividend / divisor
+}
+
+// ============================================================================
+// 6. @ensures - Postcondition checks
+// ============================================================================
+
+@ensures(result > 0)
+fn abs(x: int) -> int {
+    // Automatically verifies result is positive after execution
+    if x < 0 { -x } else { x }
+}
+
+@requires(x > 0)
+@ensures(result > x)
+fn increment(x: int) -> int {
+    // Combines preconditions and postconditions!
+    x + 1
+}
+
+// ============================================================================
+// 7. @invariant - State invariants
+// ============================================================================
+
+@invariant(count >= 0)
+fn decrement_safe(count: int) -> int {
+    // Ensures count never goes negative
+    if count > 0 { count - 1 } else { 0 }
+}
+
+// ============================================================================
+// 8. @test(setup, teardown) - Test lifecycle
+// ============================================================================
+
+@test(setup = setup_db, teardown = teardown_db)
+fn test_database(db: Database) {
+    // Automatically calls setup_db() before test
+    // and teardown_db(db) after test
+    assert(db.is_connected());
+    let users = db.query("SELECT * FROM users");
+    assert_eq(users.len(), 10);
+}
+
+fn setup_db() -> Database {
+    Database::connect_test()
+}
+
+fn teardown_db(db: Database) {
+    db.disconnect();
+}
+
+// ============================================================================
+// 9. Function-Based API (alternative syntax)
+// ============================================================================
+
+// You can also use function calls if you prefer:
 
 @test
-fn test_with_contracts() {
-    // Contracts via functions (until parser supports expressions in decorators)
+fn test_with_contracts_functional() {
     let x = 10;
     requires(x > 0, "x must be positive");
     
@@ -99,15 +162,12 @@ fn test_with_contracts() {
 }
 
 @test
-fn test_with_setup_teardown() {
-    // Setup/teardown via functions (until parser supports named args)
+fn test_with_setup_teardown_functional() {
     with_setup_teardown(
         || Database::connect_test(),
         |db| db.disconnect(),
         |db| {
             assert(db.is_connected());
-            let users = db.query("SELECT * FROM users");
-            assert_eq(users.len(), 10);
             db
         }
     );
@@ -117,23 +177,27 @@ fn test_with_setup_teardown() {
 // SUMMARY
 // ============================================================================
 //
-// ✅ Working Decorator Syntax:
-// - @timeout(ms) - Wrap test with timeout
-// - @bench - Benchmark the function
-// - @property_test(n) - Property-based testing with n iterations
-// - @test, @ignore - Standard test decorators
-// - @test_cases([...]) - Parameterized tests
+// ✅ ALL DECORATOR SYNTAX WORKING (8/8):
+// 1. @timeout(ms) - Automatic timeout wrapping
+// 2. @bench - Automatic benchmarking
+// 3. @property_test(n) - Property-based testing
+// 4. @requires(expr) - Precondition checks
+// 5. @ensures(expr) - Postcondition checks
+// 6. @invariant(expr) - State invariants
+// 7. @test(setup=fn, teardown=fn) - Test lifecycle
+// 8. @test_cases([...]) - Parameterized tests
 //
-// ⏳ Use Function API For:
-// - @requires(expr) - Use requires(expr, "msg") in function body
-// - @ensures(expr) - Use ensures(expr, "msg") in function body
-// - @invariant(expr) - Use invariant(expr, "msg") in function body
-// - @test(setup=fn, teardown=fn) - Use with_setup_teardown(...)
+// Plus: @test, @ignore, @async - Standard decorators
 //
-// The decorator syntax is elegant and concise, while the function-based
-// API provides full flexibility for complex scenarios!
+// ✨ Features:
+// - Elegant, declarative syntax
+// - Supports full expressions (x > 0, result != null, etc.)
+// - Supports named arguments (setup = fn, teardown = fn)
+// - Can stack multiple decorators
+// - Function-based API also available for flexibility
 //
-// Both approaches work perfectly - choose what fits your style!
+// Both decorator and function-based approaches work perfectly!
+// Choose what fits your style and use case.
 
 // Helper functions for examples
 fn fibonacci(n: int) -> int {
