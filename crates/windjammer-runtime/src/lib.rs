@@ -43,6 +43,7 @@ pub mod test_output;
 pub mod timeout;
 pub mod setup_teardown;
 pub mod fixtures;
+pub mod doc_test;
 pub mod time;
 
 // Re-export commonly used types
