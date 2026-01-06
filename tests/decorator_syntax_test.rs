@@ -59,23 +59,55 @@ fn test_bench_decorator() {
     assert!(output.contains("println!(\"Benchmark:"));
 }
 
-// NOTE: @requires and @ensures need parser support for expressions in decorators
-// For now, use the function-based API:
-//   requires(x > 0, "x must be positive");
-//   ensures(result > 0, "result must be positive");
-
 #[test]
-#[ignore] // Requires parser support for expressions in decorator arguments
 fn test_requires_decorator() {
-    // This would require parser changes to support expressions like "x > 0"
-    // in decorator arguments. Currently the parser expects simple literals.
+    let source = r#"
+    @requires(x > 0)
+    @requires(y > 0)
+    fn add(x: int, y: int) -> int {
+        x + y
+    }
+    "#;
+    
+    let output = parse_and_generate(source);
+    println!("Generated Rust:\n{}", output);
+    
+    // Should have requires() calls at start of function
+    assert!(output.contains("requires(x > 0"));
+    assert!(output.contains("requires(y > 0"));
 }
 
 #[test]
-#[ignore] // Requires parser support for expressions in decorator arguments
 fn test_ensures_decorator() {
-    // This would require parser changes to support expressions like "result > 0"
-    // in decorator arguments. Currently the parser expects simple literals.
+    let source = r#"
+    @ensures(result > 0)
+    fn abs(x: int) -> int {
+        if x < 0 { -x } else { x }
+    }
+    "#;
+    
+    let output = parse_and_generate(source);
+    println!("Generated Rust:\n{}", output);
+    
+    // Should have result capture and ensures() check
+    assert!(output.contains("let __result ="));
+    assert!(output.contains("ensures(__result > 0"));
+}
+
+#[test]
+fn test_invariant_decorator() {
+    let source = r#"
+    @invariant(count >= 0)
+    fn increment(count: int) -> int {
+        count + 1
+    }
+    "#;
+    
+    let output = parse_and_generate(source);
+    println!("Generated Rust:\n{}", output);
+    
+    // Should have invariant check at end
+    assert!(output.contains("invariant("));
 }
 
 #[test]
@@ -95,15 +127,22 @@ fn test_property_test_decorator() {
     assert!(output.contains("100"));
 }
 
-// NOTE: @test(setup=fn, teardown=fn) needs parser support for named arguments
-// For now, use the function-based API:
-//   with_setup_teardown(setup_fn, teardown_fn, |resource| { ... });
-
 #[test]
-#[ignore] // Requires parser support for named arguments in decorators
 fn test_test_with_setup_teardown() {
-    // This would require parser changes to support named arguments like "setup = fn"
-    // in decorator arguments. Currently the parser doesn't support this syntax.
+    let source = r#"
+    @test(setup = setup_db, teardown = teardown_db)
+    fn test_database(db: Database) {
+        assert(db.is_connected());
+    }
+    "#;
+    
+    let output = parse_and_generate(source);
+    println!("Generated Rust:\n{}", output);
+    
+    // Should use with_setup_teardown
+    assert!(output.contains("with_setup_teardown"));
+    assert!(output.contains("setup_db"));
+    assert!(output.contains("teardown_db"));
 }
 
 #[test]
