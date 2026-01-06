@@ -413,26 +413,31 @@ impl Parser {
         let mut args = Vec::new();
 
         while self.current_token() != &Token::RParen {
-            // Check if it's a named argument (key: value)
-            if let Token::Ident(key) = self.current_token() {
-                let key = key.clone();
-                self.advance();
+            // Try to detect named arguments by lookahead
+            let is_named_arg = if let Token::Ident(_) = self.current_token() {
+                // Look ahead to see if there's : or = after the identifier
+                if let Some(next_token) = self.peek(1) {
+                    matches!(next_token, Token::Colon | Token::Assign)
+                } else {
+                    false
+                }
+            } else {
+                false
+            };
 
-                if self.current_token() == &Token::Colon {
+            if is_named_arg {
+                // Named argument (key: value or key = value)
+                if let Token::Ident(key) = self.current_token() {
+                    let key = key.clone();
                     self.advance();
+                    self.advance(); // consume : or =
                     let value = self.parse_expression()?;
                     args.push((key, value));
                 } else {
-                    // Positional argument (just a string or expression)
-                    // Reparse as expression
-                    let expr = self.alloc_expr(Expression::Identifier {
-                        name: key,
-                        location: self.current_location(),
-                    });
-                    args.push((String::new(), expr));
+                    unreachable!("is_named_arg should only be true for Ident");
                 }
             } else {
-                // Positional expression argument
+                // Positional expression argument (parse full expression)
                 let expr = self.parse_expression()?;
                 args.push((String::new(), expr));
             }
