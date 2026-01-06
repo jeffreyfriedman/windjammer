@@ -127,7 +127,9 @@ impl MockObject {
             }
 
             if let Some(expected_args) = &expectation.expected_args {
-                let found = matching_calls.iter().any(|call| &call.args == expected_args);
+                let found = matching_calls
+                    .iter()
+                    .any(|call| &call.args == expected_args);
                 if !found {
                     panic!(
                         "Expected call to '{}' with args {:?}, but not found",
@@ -193,7 +195,7 @@ impl Clone for MockObject {
 /// Example usage in generated code:
 /// ```
 /// // For trait Database { fn query(&self, sql: &str) -> Vec<Row>; }
-/// 
+///
 /// struct MockDatabase {
 ///     mock: MockObject,
 /// }
@@ -204,7 +206,7 @@ impl Clone for MockObject {
 ///             mock: MockObject::new(),
 ///         }
 ///     }
-/// 
+///
 ///     fn expect_query(&self) -> Expectation {
 ///         Expectation::new("query".to_string())
 ///     }
@@ -242,7 +244,7 @@ mod tests {
         mock.record_call("query", vec!["SELECT *".to_string()]);
         mock.record_call("query", vec!["INSERT".to_string()]);
         mock.record_call("insert", vec!["data".to_string()]);
-        
+
         assert_eq!(mock.call_count("query"), 2);
         assert_eq!(mock.call_count("insert"), 1);
     }
@@ -252,7 +254,7 @@ mod tests {
         let mock = MockObject::new();
         mock.record_call("query", vec!["SELECT *".to_string()]);
         mock.record_call("query", vec!["INSERT".to_string()]);
-        
+
         let calls = mock.get_calls("query");
         assert_eq!(calls.len(), 2);
         assert_eq!(calls[0].args[0], "SELECT *");
@@ -263,7 +265,7 @@ mod tests {
     fn test_set_and_get_return() {
         let mock = MockObject::new();
         mock.set_return("query", 42);
-        
+
         let result: Option<i32> = mock.get_return("query");
         assert_eq!(result, Some(42));
     }
@@ -274,7 +276,7 @@ mod tests {
         mock.set_return("query", 1);
         mock.set_return("query", 2);
         mock.set_return("query", 3);
-        
+
         assert_eq!(mock.get_return::<i32>("query"), Some(1));
         assert_eq!(mock.get_return::<i32>("query"), Some(2));
         assert_eq!(mock.get_return::<i32>("query"), Some(3));
@@ -287,9 +289,12 @@ mod tests {
             .with_args(vec!["SELECT *".to_string()])
             .returns("result".to_string())
             .times(2);
-        
+
         assert_eq!(expectation.method_name, "query");
-        assert_eq!(expectation.expected_args, Some(vec!["SELECT *".to_string()]));
+        assert_eq!(
+            expectation.expected_args,
+            Some(vec!["SELECT *".to_string()])
+        );
         assert_eq!(expectation.return_value, Some("result".to_string()));
         assert_eq!(expectation.call_count, Some(2));
     }
@@ -298,10 +303,10 @@ mod tests {
     fn test_verify_success() {
         let mock = MockObject::new();
         mock.expect(Expectation::new("query".to_string()).times(2));
-        
+
         mock.record_call("query", vec!["SELECT *".to_string()]);
         mock.record_call("query", vec!["INSERT".to_string()]);
-        
+
         mock.verify(); // Should not panic
     }
 
@@ -310,9 +315,9 @@ mod tests {
     fn test_verify_call_count_failure() {
         let mock = MockObject::new();
         mock.expect(Expectation::new("query".to_string()).times(2));
-        
+
         mock.record_call("query", vec!["SELECT *".to_string()]);
-        
+
         mock.verify(); // Should panic
     }
 
@@ -320,13 +325,10 @@ mod tests {
     #[should_panic(expected = "Expected call to 'query' with args")]
     fn test_verify_args_failure() {
         let mock = MockObject::new();
-        mock.expect(
-            Expectation::new("query".to_string())
-                .with_args(vec!["SELECT *".to_string()])
-        );
-        
+        mock.expect(Expectation::new("query".to_string()).with_args(vec!["SELECT *".to_string()]));
+
         mock.record_call("query", vec!["INSERT".to_string()]);
-        
+
         mock.verify(); // Should panic
     }
 
@@ -335,11 +337,11 @@ mod tests {
         let mock = MockObject::new();
         mock.record_call("query", vec!["SELECT *".to_string()]);
         mock.set_return("query", 42);
-        
+
         assert_eq!(mock.call_count("query"), 1);
-        
+
         mock.reset();
-        
+
         assert_eq!(mock.call_count("query"), 0);
         assert_eq!(mock.get_return::<i32>("query"), None);
     }
@@ -348,14 +350,13 @@ mod tests {
     fn test_mock_clone() {
         let mock1 = MockObject::new();
         mock1.record_call("query", vec!["SELECT *".to_string()]);
-        
+
         let mock2 = mock1.clone();
-        
+
         // Both share the same state
         assert_eq!(mock2.call_count("query"), 1);
-        
+
         mock2.record_call("query", vec!["INSERT".to_string()]);
         assert_eq!(mock1.call_count("query"), 2); // Changes visible in mock1
     }
 }
-

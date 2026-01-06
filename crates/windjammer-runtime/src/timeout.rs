@@ -41,9 +41,7 @@ where
         }
         Err(_) => {
             // Timeout occurred
-            Err(TimeoutError {
-                duration: timeout,
-            })
+            Err(TimeoutError { duration: timeout })
         }
     }
 }
@@ -56,11 +54,7 @@ pub struct TimeoutError {
 
 impl std::fmt::Display for TimeoutError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(
-            f,
-            "Test timed out after {:?}",
-            self.duration
-        )
+        write!(f, "Test timed out after {:?}", self.duration)
     }
 }
 
@@ -101,4 +95,3 @@ mod tests {
         });
     }
 }
-

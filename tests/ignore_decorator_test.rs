@@ -29,11 +29,10 @@ fn expensive_test() {
 "#;
 
     let rust_code = parse_and_generate(source);
-    
+
     println!("Generated Rust:\n{}", rust_code);
-    
+
     // Should have both #[test] and #[ignore]
     assert!(rust_code.contains("#[test]"), "Missing #[test]");
     assert!(rust_code.contains("#[ignore]"), "Missing #[ignore]");
 }
-

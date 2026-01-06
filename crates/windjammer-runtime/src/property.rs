@@ -89,8 +89,7 @@ pub fn property_test_with_gen2<T1, T2, G1, G2, F>(
     gen1: G1,
     gen2: G2,
     property: F,
-)
-where
+) where
     G1: Fn() -> T1,
     G2: Fn() -> T2,
     F: Fn(T1, T2),
@@ -119,8 +118,7 @@ pub fn property_test_with_gen3<T1, T2, T3, G1, G2, G3, F>(
     gen2: G2,
     gen3: G3,
     property: F,
-)
-where
+) where
     G1: Fn() -> T1,
     G2: Fn() -> T2,
     G3: Fn() -> T3,
@@ -130,9 +128,8 @@ where
         let val1 = gen1();
         let val2 = gen2();
         let val3 = gen3();
-        match std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-            property(val1, val2, val3)
-        })) {
+        match std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| property(val1, val2, val3)))
+        {
             Ok(_) => {}
             Err(e) => {
                 panic!(
@@ -175,11 +172,7 @@ pub fn shrink_int(value: i64) -> Vec<i64> {
 ///     println!("Minimal failing value: {}", min);
 /// }
 /// ```
-pub fn find_minimal_failing<T: Copy + Debug, F, S>(
-    initial: T,
-    shrink: S,
-    property: F,
-) -> Option<T>
+pub fn find_minimal_failing<T: Copy + Debug, F, S>(initial: T, shrink: S, property: F) -> Option<T>
 where
     F: Fn(T) -> bool,
     S: Fn(T) -> Vec<T>,
@@ -225,23 +218,38 @@ mod tests {
 
     #[test]
     fn test_property_test_with_gen() {
-        property_test_with_gen(10, || 42, |value| {
-            assert_eq!(value, 42);
-        });
+        property_test_with_gen(
+            10,
+            || 42,
+            |value| {
+                assert_eq!(value, 42);
+            },
+        );
     }
 
     #[test]
     fn test_property_test_with_gen2() {
-        property_test_with_gen2(10, || 1, || 2, |a, b| {
-            assert_eq!(a + b, 3);
-        });
+        property_test_with_gen2(
+            10,
+            || 1,
+            || 2,
+            |a, b| {
+                assert_eq!(a + b, 3);
+            },
+        );
     }
 
     #[test]
     fn test_property_test_with_gen3() {
-        property_test_with_gen3(10, || 1, || 2, || 3, |a, b, c| {
-            assert_eq!(a + b + c, 6);
-        });
+        property_test_with_gen3(
+            10,
+            || 1,
+            || 2,
+            || 3,
+            |a, b, c| {
+                assert_eq!(a + b + c, 6);
+            },
+        );
     }
 
     #[test]
@@ -266,4 +274,3 @@ mod tests {
         assert!(min >= 100); // Should find a value >= 100
     }
 }
-
