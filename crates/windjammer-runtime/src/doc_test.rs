@@ -51,10 +51,7 @@ impl DocTestRegistry {
 
     /// Register a doc test
     pub fn register(&mut self, module: &str, test: DocTest) {
-        self.tests
-            .entry(module.to_string())
-            .or_default()
-            .push(test);
+        self.tests.entry(module.to_string()).or_default().push(test);
     }
 
     /// Get all tests for a module
@@ -114,14 +111,14 @@ pub fn extract_doc_tests(module: &str, doc_comment: &str) -> Vec<DocTest> {
                         current_code.clone(),
                         start_line,
                     );
-                    
+
                     if should_panic {
                         test = test.with_should_panic();
                     }
                     if ignore {
                         test = test.with_ignore();
                     }
-                    
+
                     tests.push(test);
                 }
                 in_code_block = false;
@@ -132,7 +129,7 @@ pub fn extract_doc_tests(module: &str, doc_comment: &str) -> Vec<DocTest> {
                 // Start of code block
                 in_code_block = true;
                 start_line = line_num;
-                
+
                 // Check for attributes
                 let block_type = trimmed.trim_start_matches("```");
                 should_panic = block_type.contains("should_panic");
@@ -271,4 +268,3 @@ mod tests {
         assert_eq!(tests.len(), 0);
     }
 }
-

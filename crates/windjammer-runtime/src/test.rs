@@ -275,20 +275,14 @@ pub fn assert_panics_with<F: FnOnce() + std::panic::UnwindSafe>(expected_msg: &s
 /// This is a simplified version - full pattern matching requires compiler support
 pub fn assert_result_ok<T, E: std::fmt::Debug>(result: &Result<T, E>) {
     if let Err(e) = result {
-        panic!(
-            "assertion failed: expected Ok(_), got Err({:?})",
-            e
-        );
+        panic!("assertion failed: expected Ok(_), got Err({:?})", e);
     }
 }
 
 /// Assert that a Result matches Err pattern
 pub fn assert_result_err<T: std::fmt::Debug, E>(result: &Result<T, E>) {
     if let Ok(val) = result {
-        panic!(
-            "assertion failed: expected Err(_), got Ok({:?})",
-            val
-        );
+        panic!("assertion failed: expected Err(_), got Ok({:?})", val);
     }
 }
 

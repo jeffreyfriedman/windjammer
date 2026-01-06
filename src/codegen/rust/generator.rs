@@ -2163,11 +2163,11 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
 
         output.push_str("fn ");
         output.push_str(&func.name);
-        output.push_str("(");
+        output.push('(');
 
         // For @property_test, remove parameters (they become generators)
         let has_property_test = func.decorators.iter().any(|d| d.name == "property_test");
-        
+
         // For @test(setup/teardown), remove parameters (they come from setup)
         let has_setup_teardown = func
             .decorators
@@ -2261,18 +2261,25 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
             };
 
             output.push_str(&self.indent());
-            output.push_str(&format!("property_test_with_gen{}({},\n", func.parameters.len(), iterations));
+            output.push_str(&format!(
+                "property_test_with_gen{}({},\n",
+                func.parameters.len(),
+                iterations
+            ));
             self.indent_level += 1;
 
             // Generate generators for each parameter
             for param in &func.parameters {
                 output.push_str(&self.indent());
-                output.push_str(&format!("|| rand::random::<{}>(),\n", self.type_to_rust(&param.type_)));
+                output.push_str(&format!(
+                    "|| rand::random::<{}>(),\n",
+                    self.type_to_rust(&param.type_)
+                ));
             }
 
             // Generate test closure
             output.push_str(&self.indent());
-            output.push_str("|");
+            output.push('|');
             let param_names: Vec<_> = func.parameters.iter().map(|p| p.name.as_str()).collect();
             output.push_str(&param_names.join(", "));
             output.push_str("| {\n");
@@ -2311,12 +2318,18 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
             self.indent_level += 1;
 
             output.push_str(&self.indent());
-            output.push_str(&format!("{},\n", setup_fn.unwrap_or_else(|| "|| ()".to_string())));
+            output.push_str(&format!(
+                "{},\n",
+                setup_fn.unwrap_or_else(|| "|| ()".to_string())
+            ));
             output.push_str(&self.indent());
-            output.push_str(&format!("{},\n", teardown_fn.unwrap_or_else(|| "|_| ()".to_string())));
+            output.push_str(&format!(
+                "{},\n",
+                teardown_fn.unwrap_or_else(|| "|_| ()".to_string())
+            ));
 
             output.push_str(&self.indent());
-            output.push_str("|");
+            output.push('|');
             if !func.parameters.is_empty() {
                 output.push_str(&func.parameters[0].name);
             } else {
@@ -2337,7 +2350,7 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
             } else {
                 output.push_str("_resource");
             }
-            output.push_str("\n");
+            output.push('\n');
 
             self.indent_level -= 1;
             output.push_str(&self.indent());

@@ -20,19 +20,19 @@ use std::time::{Duration, Instant};
 /// ```
 pub fn bench_iterations<F: Fn()>(iterations: usize, f: F) -> Duration {
     let mut total = Duration::ZERO;
-    
+
     // Warmup
     for _ in 0..10 {
         f();
     }
-    
+
     // Actual benchmark
     for _ in 0..iterations {
         let start = Instant::now();
         f();
         total += start.elapsed();
     }
-    
+
     total / iterations as u32
 }
 
@@ -75,16 +75,12 @@ pub fn bench<F: FnOnce()>(f: F) -> Duration {
 ///
 /// println!("Old: {:?}, New: {:?}, Speedup: {:.2}x", time_a, time_b, speedup);
 /// ```
-pub fn bench_compare<F: Fn(), G: Fn()>(
-    f: F,
-    g: G,
-    iterations: usize,
-) -> (Duration, Duration, f64) {
+pub fn bench_compare<F: Fn(), G: Fn()>(f: F, g: G, iterations: usize) -> (Duration, Duration, f64) {
     let time_f = bench_iterations(iterations, f);
     let time_g = bench_iterations(iterations, g);
-    
+
     let speedup = time_f.as_secs_f64() / time_g.as_secs_f64();
-    
+
     (time_f, time_g, speedup)
 }
 
@@ -98,7 +94,7 @@ mod tests {
         let avg = bench_iterations(10, || {
             thread::sleep(Duration::from_millis(1));
         });
-        
+
         // Should be around 1ms (with some variance)
         assert!(avg.as_millis() >= 1 && avg.as_millis() <= 5);
     }
@@ -108,7 +104,7 @@ mod tests {
         let duration = bench(|| {
             thread::sleep(Duration::from_millis(10));
         });
-        
+
         // Should be around 10ms
         assert!(duration.as_millis() >= 10 && duration.as_millis() <= 20);
     }
@@ -124,10 +120,9 @@ mod tests {
             },
             5,
         );
-        
+
         // Slow should be about 2x slower than fast
         assert!(time_slow > time_fast);
         assert!(speedup > 1.5 && speedup < 2.5);
     }
 }
-
