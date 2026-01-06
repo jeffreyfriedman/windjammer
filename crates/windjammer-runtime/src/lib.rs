@@ -46,6 +46,7 @@ pub mod fixtures;
 pub mod doc_test;
 pub mod contracts;
 pub mod mock_interface;
+pub mod mock_function;
 pub mod time;
 
 // Re-export commonly used types
