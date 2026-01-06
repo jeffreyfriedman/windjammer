@@ -36,6 +36,7 @@ pub mod sync;
 pub mod test;
 pub mod testing;
 pub mod thread;
+pub mod bench;
 pub mod time;
 
 // Re-export commonly used types
