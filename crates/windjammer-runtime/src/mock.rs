@@ -120,7 +120,7 @@ impl<T: Clone> MockReturn<T> {
     pub fn next(&self) -> Option<T> {
         let mut index = self.index.lock().unwrap();
         let values = self.values.lock().unwrap();
-        
+
         if *index < values.len() {
             let value = values[*index].clone();
             *index += 1;
@@ -144,9 +144,9 @@ mod tests {
     #[test]
     fn test_mock_tracker_basic() {
         let tracker = MockTracker::new();
-        
+
         tracker.record_call("foo", vec!["arg1".to_string()]);
-        
+
         assert!(tracker.was_called("foo"));
         assert!(!tracker.was_called("bar"));
         assert_eq!(tracker.call_count("foo"), 1);
@@ -156,14 +156,14 @@ mod tests {
     #[test]
     fn test_mock_tracker_multiple_calls() {
         let tracker = MockTracker::new();
-        
+
         tracker.record_call("foo", vec!["1".to_string()]);
         tracker.record_call("foo", vec!["2".to_string()]);
         tracker.record_call("bar", vec!["3".to_string()]);
-        
+
         assert_eq!(tracker.call_count("foo"), 2);
         assert_eq!(tracker.call_count("bar"), 1);
-        
+
         let foo_calls = tracker.get_calls("foo");
         assert_eq!(foo_calls.len(), 2);
         assert_eq!(foo_calls[0], vec!["1".to_string()]);
@@ -173,10 +173,10 @@ mod tests {
     #[test]
     fn test_mock_tracker_reset() {
         let tracker = MockTracker::new();
-        
+
         tracker.record_call("foo", vec![]);
         assert_eq!(tracker.call_count("foo"), 1);
-        
+
         tracker.reset();
         assert_eq!(tracker.call_count("foo"), 0);
     }
@@ -212,14 +212,13 @@ mod tests {
     #[test]
     fn test_mock_return() {
         let mock = MockReturn::new(vec![1, 2, 3]);
-        
+
         assert_eq!(mock.next(), Some(1));
         assert_eq!(mock.next(), Some(2));
         assert_eq!(mock.next(), Some(3));
         assert_eq!(mock.next(), None);
-        
+
         mock.reset();
         assert_eq!(mock.next(), Some(1));
     }
 }
-
