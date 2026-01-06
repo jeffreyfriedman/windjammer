@@ -211,6 +211,97 @@ pub fn assert_in_range<T: PartialOrd + std::fmt::Debug>(value: T, min: T, max: T
     }
 }
 
+// ============================================================================
+// ADVANCED ASSERTIONS
+// ============================================================================
+
+/// Assert that a closure panics
+///
+/// # Example
+/// ```
+/// use windjammer_runtime::test::assert_panics;
+///
+/// assert_panics(|| {
+///     panic!("This should panic");
+/// });
+/// ```
+pub fn assert_panics<F: FnOnce() + std::panic::UnwindSafe>(f: F) {
+    let result = std::panic::catch_unwind(f);
+    if result.is_ok() {
+        panic!("assertion failed: expected panic, but function completed successfully");
+    }
+}
+
+/// Assert that a closure panics with a specific message
+///
+/// # Example
+/// ```
+/// use windjammer_runtime::test::assert_panics_with;
+///
+/// assert_panics_with("division by zero", || {
+///     let _ = 1 / 0;
+/// });
+/// ```
+pub fn assert_panics_with<F: FnOnce() + std::panic::UnwindSafe>(expected_msg: &str, f: F) {
+    let result = std::panic::catch_unwind(f);
+    match result {
+        Ok(_) => {
+            panic!(
+                "assertion failed: expected panic with message '{}', but function completed successfully",
+                expected_msg
+            );
+        }
+        Err(err) => {
+            // Try to extract the panic message
+            let panic_msg = if let Some(s) = err.downcast_ref::<&str>() {
+                s.to_string()
+            } else if let Some(s) = err.downcast_ref::<String>() {
+                s.clone()
+            } else {
+                "unknown panic message".to_string()
+            };
+
+            if !panic_msg.contains(expected_msg) {
+                panic!(
+                    "assertion failed: panic message mismatch\n  expected (substring): \"{}\"\n  actual: \"{}\"",
+                    expected_msg, panic_msg
+                );
+            }
+        }
+    }
+}
+
+/// Assert that a Result matches a pattern (Ok or Err)
+/// This is a simplified version - full pattern matching requires compiler support
+pub fn assert_result_ok<T, E: std::fmt::Debug>(result: &Result<T, E>) {
+    if let Err(e) = result {
+        panic!(
+            "assertion failed: expected Ok(_), got Err({:?})",
+            e
+        );
+    }
+}
+
+/// Assert that a Result matches Err pattern
+pub fn assert_result_err<T: std::fmt::Debug, E>(result: &Result<T, E>) {
+    if let Ok(val) = result {
+        panic!(
+            "assertion failed: expected Err(_), got Ok({:?})",
+            val
+        );
+    }
+}
+
+/// Assert that two values are deeply equal (same as assert_eq, but explicit name)
+pub fn assert_deep_eq<T: PartialEq + std::fmt::Debug>(left: &T, right: &T) {
+    if left != right {
+        panic!(
+            "assertion failed: deep equality check failed\n  left: {:?}\n  right: {:?}",
+            left, right
+        );
+    }
+}
+
 /// Mark a test as passed
 pub fn pass() {
     TESTS_PASSED.fetch_add(1, Ordering::SeqCst);
@@ -384,5 +475,77 @@ mod tests {
     #[should_panic(expected = "assertion failed: value not in range")]
     fn test_assert_in_range_fails() {
         assert_in_range(15, 0, 10);
+    }
+
+    // Advanced assertions tests
+    #[test]
+    fn test_assert_panics_passes() {
+        assert_panics(|| {
+            panic!("This should panic");
+        });
+    }
+
+    #[test]
+    #[should_panic(expected = "expected panic, but function completed successfully")]
+    fn test_assert_panics_fails() {
+        assert_panics(|| {
+            // This doesn't panic
+        });
+    }
+
+    #[test]
+    fn test_assert_panics_with_passes() {
+        assert_panics_with("division by zero", || {
+            panic!("Error: division by zero occurred");
+        });
+    }
+
+    #[test]
+    #[should_panic(expected = "panic message mismatch")]
+    fn test_assert_panics_with_fails() {
+        assert_panics_with("expected message", || {
+            panic!("different message");
+        });
+    }
+
+    #[test]
+    fn test_assert_result_ok_passes() {
+        let result: Result<i32, &str> = Ok(42);
+        assert_result_ok(&result);
+    }
+
+    #[test]
+    #[should_panic(expected = "expected Ok(_), got Err")]
+    fn test_assert_result_ok_fails() {
+        let result: Result<i32, &str> = Err("error");
+        assert_result_ok(&result);
+    }
+
+    #[test]
+    fn test_assert_result_err_passes() {
+        let result: Result<i32, &str> = Err("error");
+        assert_result_err(&result);
+    }
+
+    #[test]
+    #[should_panic(expected = "expected Err(_), got Ok")]
+    fn test_assert_result_err_fails() {
+        let result: Result<i32, &str> = Ok(42);
+        assert_result_err(&result);
+    }
+
+    #[test]
+    fn test_assert_deep_eq_passes() {
+        let vec1 = vec![1, 2, 3];
+        let vec2 = vec![1, 2, 3];
+        assert_deep_eq(&vec1, &vec2);
+    }
+
+    #[test]
+    #[should_panic(expected = "deep equality check failed")]
+    fn test_assert_deep_eq_fails() {
+        let vec1 = vec![1, 2, 3];
+        let vec2 = vec![1, 2, 4];
+        assert_deep_eq(&vec1, &vec2);
     }
 }
