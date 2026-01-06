@@ -33,6 +33,7 @@ pub mod random;
 pub mod regex_mod;
 pub mod strings;
 pub mod sync;
+pub mod test;
 pub mod testing;
 pub mod thread;
 pub mod time;
