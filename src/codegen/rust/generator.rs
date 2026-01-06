@@ -2095,6 +2095,339 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
         output
     }
 
+    /// Check if function has decorators that need to wrap the function body
+    fn has_wrapping_decorator(&self, func: &FunctionDecl<'ast>) -> bool {
+        func.decorators.iter().any(|d| {
+            matches!(
+                d.name.as_str(),
+                "timeout" | "bench" | "requires" | "ensures" | "property_test" | "invariant"
+            ) || (d.name == "test" && !d.arguments.is_empty())
+        })
+    }
+
+    /// Generate function with decorator wrapping (timeout, bench, requires, ensures, etc.)
+    fn generate_function_with_wrapping(&mut self, analyzed: &AnalyzedFunction<'ast>) -> String {
+        let func = &analyzed.decl;
+        let mut output = String::new();
+
+        // Generate doc comment if present
+        if let Some(doc_comment) = &func.doc_comment {
+            for line in doc_comment.lines() {
+                output.push_str(&format!("/// {}\n", line.trim()));
+            }
+        }
+
+        // Check for @async decorator
+        let is_async = func.decorators.iter().any(|d| d.name == "async");
+        if is_async && func.name == "main" {
+            output.push_str("#[tokio::main]\n");
+        }
+
+        // Generate non-wrapping decorators (like @test, @ignore)
+        for decorator in &func.decorators {
+            if decorator.name == "async" {
+                continue;
+            }
+            if decorator.name == "export" && self.target != CompilationTarget::Wasm {
+                continue;
+            }
+            // Skip wrapping decorators - they'll be handled in the body
+            if matches!(
+                decorator.name.as_str(),
+                "timeout" | "bench" | "requires" | "ensures" | "property_test" | "invariant"
+            ) {
+                continue;
+            }
+            // Skip @test with arguments (setup/teardown) - handled in body
+            if decorator.name == "test" && !decorator.arguments.is_empty() {
+                continue;
+            }
+
+            let rust_attr = self.map_decorator(&decorator.name);
+            if decorator.arguments.is_empty() {
+                output.push_str(&format!("#[{}]\n", rust_attr));
+            }
+        }
+
+        // Function signature
+        let has_export = func.decorators.iter().any(|d| d.name == "export");
+        if !self.in_trait_impl
+            && (func.is_pub || self.in_wasm_bindgen_impl || self.is_module || has_export)
+        {
+            output.push_str("pub ");
+        }
+
+        if is_async {
+            output.push_str("async ");
+        }
+
+        output.push_str("fn ");
+        output.push_str(&func.name);
+        output.push_str("(");
+
+        // For @property_test, remove parameters (they become generators)
+        let has_property_test = func.decorators.iter().any(|d| d.name == "property_test");
+        
+        // For @test(setup/teardown), remove parameters (they come from setup)
+        let has_setup_teardown = func
+            .decorators
+            .iter()
+            .any(|d| d.name == "test" && !d.arguments.is_empty());
+
+        if !has_property_test && !has_setup_teardown {
+            // Generate normal parameters
+            let params: Vec<String> = func
+                .parameters
+                .iter()
+                .enumerate()
+                .map(|(idx, param)| {
+                    let param_type = analyzed
+                        .inferred_param_types
+                        .get(idx)
+                        .unwrap_or(&param.type_);
+                    let ownership = analyzed
+                        .inferred_ownership
+                        .get(&param.name)
+                        .unwrap_or(&crate::analyzer::OwnershipMode::Owned);
+                    let rust_type = self.type_to_rust(param_type);
+                    let ownership_prefix = match ownership {
+                        crate::analyzer::OwnershipMode::Borrowed => "&",
+                        crate::analyzer::OwnershipMode::MutBorrowed => "&mut ",
+                        crate::analyzer::OwnershipMode::Owned => "",
+                    };
+                    format!("{}: {}{}", param.name, ownership_prefix, rust_type)
+                })
+                .collect();
+            output.push_str(&params.join(", "));
+        }
+
+        output.push(')');
+
+        // Return type (not for @property_test or @test(setup/teardown))
+        if !has_property_test && !has_setup_teardown {
+            if let Some(return_type) = &func.return_type {
+                output.push_str(" -> ");
+                output.push_str(&self.type_to_rust(return_type));
+            }
+        }
+
+        output.push_str(" {\n");
+        self.indent_level += 1;
+
+        // Generate wrapped body
+        output.push_str(&self.generate_wrapped_function_body(analyzed));
+
+        self.indent_level -= 1;
+        output.push_str("}\n\n");
+
+        output
+    }
+
+    /// Generate function body with decorator wrapping
+    fn generate_wrapped_function_body(&mut self, analyzed: &AnalyzedFunction<'ast>) -> String {
+        let func = &analyzed.decl;
+        let mut output = String::new();
+
+        // Collect decorators
+        let timeout_decorator = func.decorators.iter().find(|d| d.name == "timeout");
+        let bench_decorator = func.decorators.iter().find(|d| d.name == "bench");
+        let requires_decorators: Vec<_> = func
+            .decorators
+            .iter()
+            .filter(|d| d.name == "requires")
+            .collect();
+        let ensures_decorators: Vec<_> = func
+            .decorators
+            .iter()
+            .filter(|d| d.name == "ensures")
+            .collect();
+        let property_test_decorator = func.decorators.iter().find(|d| d.name == "property_test");
+        let test_decorator = func
+            .decorators
+            .iter()
+            .find(|d| d.name == "test" && !d.arguments.is_empty());
+
+        // Handle @property_test
+        if let Some(prop_decorator) = property_test_decorator {
+            let iterations = if let Some((_, expr)) = prop_decorator.arguments.first() {
+                self.generate_expression_immut(expr)
+            } else {
+                "100".to_string()
+            };
+
+            output.push_str(&self.indent());
+            output.push_str(&format!("property_test_with_gen{}({},\n", func.parameters.len(), iterations));
+            self.indent_level += 1;
+
+            // Generate generators for each parameter
+            for param in &func.parameters {
+                output.push_str(&self.indent());
+                output.push_str(&format!("|| rand::random::<{}>(),\n", self.type_to_rust(&param.type_)));
+            }
+
+            // Generate test closure
+            output.push_str(&self.indent());
+            output.push_str("|");
+            let param_names: Vec<_> = func.parameters.iter().map(|p| p.name.as_str()).collect();
+            output.push_str(&param_names.join(", "));
+            output.push_str("| {\n");
+            self.indent_level += 1;
+
+            // Generate body
+            for stmt in &func.body {
+                output.push_str(&self.generate_statement(stmt));
+            }
+
+            self.indent_level -= 1;
+            output.push_str(&self.indent());
+            output.push_str("}\n");
+            self.indent_level -= 1;
+            output.push_str(&self.indent());
+            output.push_str(");\n");
+
+            return output;
+        }
+
+        // Handle @test(setup=fn, teardown=fn)
+        if let Some(test_dec) = test_decorator {
+            let mut setup_fn = None;
+            let mut teardown_fn = None;
+
+            for (key, expr) in &test_dec.arguments {
+                if key == "setup" {
+                    setup_fn = Some(self.generate_expression_immut(expr));
+                } else if key == "teardown" {
+                    teardown_fn = Some(self.generate_expression_immut(expr));
+                }
+            }
+
+            output.push_str(&self.indent());
+            output.push_str("with_setup_teardown(\n");
+            self.indent_level += 1;
+
+            output.push_str(&self.indent());
+            output.push_str(&format!("{},\n", setup_fn.unwrap_or_else(|| "|| ()".to_string())));
+            output.push_str(&self.indent());
+            output.push_str(&format!("{},\n", teardown_fn.unwrap_or_else(|| "|_| ()".to_string())));
+
+            output.push_str(&self.indent());
+            output.push_str("|");
+            if !func.parameters.is_empty() {
+                output.push_str(&func.parameters[0].name);
+            } else {
+                output.push_str("_resource");
+            }
+            output.push_str("| {\n");
+            self.indent_level += 1;
+
+            // Generate body
+            for stmt in &func.body {
+                output.push_str(&self.generate_statement(stmt));
+            }
+
+            // Return the resource
+            output.push_str(&self.indent());
+            if !func.parameters.is_empty() {
+                output.push_str(&func.parameters[0].name);
+            } else {
+                output.push_str("_resource");
+            }
+            output.push_str("\n");
+
+            self.indent_level -= 1;
+            output.push_str(&self.indent());
+            output.push_str("}\n");
+            self.indent_level -= 1;
+            output.push_str(&self.indent());
+            output.push_str(");\n");
+
+            return output;
+        }
+
+        // Start with timeout wrapper if present
+        let needs_timeout = timeout_decorator.is_some();
+        if needs_timeout {
+            let timeout_ms = if let Some((_, expr)) = timeout_decorator.unwrap().arguments.first() {
+                self.generate_expression_immut(expr)
+            } else {
+                "1000".to_string()
+            };
+
+            output.push_str(&self.indent());
+            output.push_str(&format!(
+                "with_timeout(std::time::Duration::from_millis({}), || {{\n",
+                timeout_ms
+            ));
+            self.indent_level += 1;
+        }
+
+        // Start with bench wrapper if present
+        let needs_bench = bench_decorator.is_some();
+        if needs_bench {
+            output.push_str(&self.indent());
+            output.push_str("let _bench_result = bench(|| {\n");
+            self.indent_level += 1;
+        }
+
+        // Add @requires checks
+        for req_decorator in requires_decorators {
+            if let Some((_, expr)) = req_decorator.arguments.first() {
+                let condition = self.generate_expression_immut(expr);
+                output.push_str(&self.indent());
+                output.push_str(&format!("requires({}, \"{}\");\n", condition, condition));
+            }
+        }
+
+        // If we have @ensures, wrap body in a block and capture result
+        let needs_ensures = !ensures_decorators.is_empty();
+        if needs_ensures {
+            output.push_str(&self.indent());
+            output.push_str("let __result = {\n");
+            self.indent_level += 1;
+        }
+
+        // Generate function body
+        for stmt in &func.body {
+            output.push_str(&self.generate_statement(stmt));
+        }
+
+        // Close @ensures block and add checks
+        if needs_ensures {
+            self.indent_level -= 1;
+            output.push_str(&self.indent());
+            output.push_str("};\n");
+
+            for ens_decorator in ensures_decorators {
+                if let Some((_, expr)) = ens_decorator.arguments.first() {
+                    let condition = self.generate_expression_immut(expr);
+                    output.push_str(&self.indent());
+                    output.push_str(&format!("ensures({}, \"{}\");\n", condition, condition));
+                }
+            }
+
+            output.push_str(&self.indent());
+            output.push_str("__result\n");
+        }
+
+        // Close bench wrapper
+        if needs_bench {
+            self.indent_level -= 1;
+            output.push_str(&self.indent());
+            output.push_str("});\n");
+            output.push_str(&self.indent());
+            output.push_str("println!(\"Benchmark: {:?}\", _bench_result);\n");
+        }
+
+        // Close timeout wrapper
+        if needs_timeout {
+            self.indent_level -= 1;
+            output.push_str(&self.indent());
+            output.push_str("}).unwrap();\n");
+        }
+
+        output
+    }
+
     /// Generate multiple test functions from a parameterized test (@test_cases)
     ///
     /// Example Windjammer:
@@ -2209,6 +2542,12 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
         if let Some(test_cases_decorator) = func.decorators.iter().find(|d| d.name == "test_cases")
         {
             return self.generate_parameterized_tests(analyzed, test_cases_decorator);
+        }
+
+        // TESTING DECORATORS: Check for decorators that need to wrap the function body
+        // These include: @timeout, @bench, @requires, @ensures, @property_test, @test(setup/teardown)
+        if self.has_wrapping_decorator(func) {
+            return self.generate_function_with_wrapping(analyzed);
         }
 
         let mut output = String::new();
