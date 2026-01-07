@@ -216,12 +216,21 @@ impl Parser {
                         });
                     } else {
                         self.advance();
-                        let field = if let Token::Ident(name) = self.current_token() {
-                            let name = name.clone();
-                            self.advance();
-                            name
-                        } else {
-                            return Err("Expected field name after .".to_string());
+                        let field = match self.current_token() {
+                            Token::Ident(name) => {
+                                let name = name.clone();
+                                self.advance();
+                                name
+                            }
+                            Token::IntLiteral(n) => {
+                                // Tuple field access: tuple.0, tuple.1, etc.
+                                let field_name = n.to_string();
+                                self.advance();
+                                field_name
+                            }
+                            _ => {
+                                return Err("Expected field or method name after .".to_string());
+                            }
                         };
                         left = self.alloc_expr(Expression::FieldAccess {
                             object: left,
@@ -1403,11 +1412,12 @@ impl Parser {
                         })
                     } else {
                         self.advance();
-                        // Allow keywords as field names (e.g., std.thread, std.async)
+                        // Allow keywords and numeric indices as field names (e.g., std.thread, tuple.0)
                         let field_opt = match self.current_token() {
                             Token::Ident(f) => Some(f.clone()),
                             Token::Thread => Some("thread".to_string()),
                             Token::Async => Some("async".to_string()),
+                            Token::IntLiteral(n) => Some(n.to_string()), // Tuple field access
                             _ => None,
                         };
                         if let Some(field) = field_opt {
@@ -1776,13 +1786,30 @@ impl Parser {
                         self.advance(); // consume opening delimiter
 
                         let mut args = Vec::new();
-                        while self.current_token() != &end_token {
+
+                        // Check for empty macro: vec![], println!()
+                        if self.current_token() != &end_token {
+                            // Parse first argument
                             args.push(self.parse_expression()?);
 
-                            if self.current_token() == &Token::Comma {
-                                self.advance();
+                            // Check for vec![item; count] repetition syntax
+                            if delimiter == MacroDelimiter::Brackets
+                                && self.current_token() == &Token::Semicolon
+                            {
+                                self.advance(); // consume semicolon
+                                args.push(self.parse_expression()?);
                             } else {
-                                break;
+                                // Parse remaining comma-separated arguments
+                                while self.current_token() == &Token::Comma {
+                                    self.advance();
+
+                                    // Allow trailing comma
+                                    if self.current_token() == &end_token {
+                                        break;
+                                    }
+
+                                    args.push(self.parse_expression()?);
+                                }
                             }
                         }
 
