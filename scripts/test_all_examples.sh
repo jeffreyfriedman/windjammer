@@ -66,8 +66,8 @@ echo ""
 echo -e "${BLUE}Part 2: Workspace Tests${NC}"
 echo "----------------------------------------"
 
-test_command "Lib tests" "cargo test --workspace --lib --quiet"
-test_command "Compiler integration tests" "cargo test --test compiler_tests --quiet"
+test_command "Lib tests" "cargo test --workspace --lib --release" true
+test_command "Compiler integration tests" "cargo test --test compiler_tests --release" true
 echo ""
 
 # ============================================================================

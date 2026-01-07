@@ -1,0 +1,23 @@
+// Simple test to validate Windjammer testing framework
+
+@test
+fn test_addition() {
+    let result = 2 + 2;
+    assert_eq!(result, 4);
+}
+
+@test
+fn test_subtraction() {
+    let result = 10 - 5;
+    assert_eq!(result, 5);
+}
+
+@test
+fn test_string_concat() {
+    let greeting = "Hello, ";
+    let name = "World!";
+    let full = greeting + name;
+    assert_eq!(full, "Hello, World!");
+}
+
+
