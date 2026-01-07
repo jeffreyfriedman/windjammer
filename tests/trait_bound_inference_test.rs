@@ -15,12 +15,48 @@ fn compile_wj(source: &str, test_name: &str) -> Result<String, String> {
 
     std::fs::write(&wj_path, source).map_err(|e| e.to_string())?;
 
-    // Compile with wj
-    let output = Command::new("cargo")
+    // Determine the correct wj binary path based on test mode
+    let wj_binary = if cfg!(debug_assertions) {
+        // In debug mode, look for debug binary
+        std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .join("target")
+            .join("debug")
+            .join("wj")
+    } else {
+        // In release mode, look for release binary
+        std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .join("target")
+            .join("release")
+            .join("wj")
+    };
+
+    // If binary doesn't exist, build it first
+    if !wj_binary.exists() {
+        let build_mode = if cfg!(debug_assertions) { "debug" } else { "release" };
+        let build_args = if cfg!(debug_assertions) {
+            vec!["build", "--bin", "wj"]
+        } else {
+            vec!["build", "--release", "--bin", "wj"]
+        };
+        
+        let build_output = Command::new("cargo")
+            .args(&build_args)
+            .current_dir(env!("CARGO_MANIFEST_DIR"))
+            .output()
+            .map_err(|e| format!("Failed to build wj binary ({}): {}", build_mode, e))?;
+            
+        if !build_output.status.success() {
+            return Err(format!(
+                "Failed to build wj binary ({}):\n{}",
+                build_mode,
+                String::from_utf8_lossy(&build_output.stderr)
+            ));
+        }
+    }
+
+    // Compile with wj using the binary directly
+    let output = Command::new(&wj_binary)
         .args([
-            "run",
-            "--release",
-            "--",
             "build",
             wj_path.to_str().unwrap(),
             "-o",
@@ -29,7 +65,7 @@ fn compile_wj(source: &str, test_name: &str) -> Result<String, String> {
         ])
         .current_dir(env!("CARGO_MANIFEST_DIR"))
         .output()
-        .map_err(|e| e.to_string())?;
+        .map_err(|e| format!("Failed to execute wj: {}", e))?;
 
     if !output.status.success() {
         return Err(String::from_utf8_lossy(&output.stderr).to_string());
