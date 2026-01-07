@@ -58,6 +58,7 @@ impl Expectation {
 pub struct MockObject {
     calls: Arc<Mutex<Vec<MethodCall>>>,
     expectations: Arc<Mutex<Vec<Expectation>>>,
+    #[allow(clippy::type_complexity)]
     return_values: Arc<Mutex<HashMap<String, Vec<Box<dyn Any + Send>>>>>,
 }
 
@@ -219,7 +220,6 @@ impl Clone for MockObject {
 ///     }
 /// }
 /// ```
-
 #[cfg(test)]
 mod tests {
     use super::*;

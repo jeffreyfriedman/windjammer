@@ -17,6 +17,7 @@ use std::sync::{Arc, Mutex};
 /// assert!(tracker.was_called("my_function"));
 /// ```
 pub struct MockTracker {
+    #[allow(clippy::type_complexity)]
     calls: Arc<Mutex<Vec<(String, Vec<String>)>>>,
 }
 
