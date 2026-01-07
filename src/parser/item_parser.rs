@@ -8,6 +8,21 @@ use crate::parser::ast::*;
 use crate::parser_impl::Parser;
 
 impl Parser {
+    /// Collect all consecutive doc comments into a single string
+    fn collect_doc_comments(&mut self) -> Option<String> {
+        let mut doc_comments = Vec::new();
+        while let Token::DocComment(comment) = self.current_token() {
+            doc_comments.push(comment.clone());
+            self.advance();
+        }
+
+        if doc_comments.is_empty() {
+            None
+        } else {
+            Some(doc_comments.join("\n"))
+        }
+    }
+
     pub(crate) fn parse_impl(&mut self) -> Result<ImplBlock<'static>, String> {
         // Parse: impl<T> Type { } or impl Trait for Type { } or impl Trait<TypeArgs> for Type { }
 
@@ -166,14 +181,8 @@ impl Parser {
                 continue;
             }
 
-            // Capture doc comment if present (/// or //!)
-            let doc_comment = if let Token::DocComment(comment) = self.current_token() {
-                let comment = comment.clone();
-                self.advance();
-                Some(comment)
-            } else {
-                None
-            };
+            // Capture all consecutive doc comments (/// or //!)
+            let doc_comment = self.collect_doc_comments();
 
             // Skip decorators for now (could be added later)
             let mut decorators = Vec::new();
@@ -310,14 +319,8 @@ impl Parser {
                 continue;
             }
 
-            // Capture doc comment if present (/// or //!)
-            let doc_comment = if let Token::DocComment(comment) = self.current_token() {
-                let comment = comment.clone();
-                self.advance();
-                Some(comment)
-            } else {
-                None
-            };
+            // Capture all consecutive doc comments (/// or //!)
+            let doc_comment = self.collect_doc_comments();
 
             // Parse trait method signature
             let is_async = if self.current_token() == &Token::Async {
@@ -410,26 +413,31 @@ impl Parser {
         let mut args = Vec::new();
 
         while self.current_token() != &Token::RParen {
-            // Check if it's a named argument (key: value)
-            if let Token::Ident(key) = self.current_token() {
-                let key = key.clone();
-                self.advance();
+            // Try to detect named arguments by lookahead
+            let is_named_arg = if let Token::Ident(_) = self.current_token() {
+                // Look ahead to see if there's : or = after the identifier
+                if let Some(next_token) = self.peek(1) {
+                    matches!(next_token, Token::Colon | Token::Assign)
+                } else {
+                    false
+                }
+            } else {
+                false
+            };
 
-                if self.current_token() == &Token::Colon {
+            if is_named_arg {
+                // Named argument (key: value or key = value)
+                if let Token::Ident(key) = self.current_token() {
+                    let key = key.clone();
                     self.advance();
+                    self.advance(); // consume : or =
                     let value = self.parse_expression()?;
                     args.push((key, value));
                 } else {
-                    // Positional argument (just a string or expression)
-                    // Reparse as expression
-                    let expr = self.alloc_expr(Expression::Identifier {
-                        name: key,
-                        location: self.current_location(),
-                    });
-                    args.push((String::new(), expr));
+                    unreachable!("is_named_arg should only be true for Ident");
                 }
             } else {
-                // Positional expression argument
+                // Positional expression argument (parse full expression)
                 let expr = self.parse_expression()?;
                 args.push((String::new(), expr));
             }
