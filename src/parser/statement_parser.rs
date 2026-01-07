@@ -67,15 +67,25 @@ impl Parser {
             Token::Defer => self.parse_defer(),
             Token::Break => {
                 self.advance();
-                Ok(self.alloc_stmt(Statement::Break {
+                let stmt = self.alloc_stmt(Statement::Break {
                     location: self.current_location(),
-                }))
+                });
+                // Consume trailing semicolon if present
+                if self.current_token() == &Token::Semicolon {
+                    self.advance();
+                }
+                Ok(stmt)
             }
             Token::Continue => {
                 self.advance();
-                Ok(self.alloc_stmt(Statement::Continue {
+                let stmt = self.alloc_stmt(Statement::Continue {
                     location: self.current_location(),
-                }))
+                });
+                // Consume trailing semicolon if present
+                if self.current_token() == &Token::Semicolon {
+                    self.advance();
+                }
+                Ok(stmt)
             }
             Token::Use => {
                 self.advance(); // consume 'use'
@@ -327,18 +337,25 @@ impl Parser {
     fn parse_return(&mut self) -> Result<&'static Statement<'static>, String> {
         self.advance();
 
-        if matches!(self.current_token(), Token::RBrace | Token::Semicolon) {
-            Ok(self.alloc_stmt(Statement::Return {
+        let stmt = if matches!(self.current_token(), Token::RBrace | Token::Semicolon) {
+            self.alloc_stmt(Statement::Return {
                 value: None,
                 location: self.current_location(),
-            }))
+            })
         } else {
             let value = self.parse_expression()?;
-            Ok(self.alloc_stmt(Statement::Return {
+            self.alloc_stmt(Statement::Return {
                 value: Some(value),
                 location: self.current_location(),
-            }))
+            })
+        };
+
+        // Consume trailing semicolon if present
+        if self.current_token() == &Token::Semicolon {
+            self.advance();
         }
+
+        Ok(stmt)
     }
 
     pub(crate) fn parse_if(&mut self) -> Result<&'static Statement<'static>, String> {
