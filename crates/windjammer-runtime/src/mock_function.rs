@@ -10,6 +10,7 @@ use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 
 thread_local! {
+    #[allow(clippy::type_complexity)]
     static FUNCTION_MOCKS: RefCell<HashMap<String, Arc<Mutex<Box<dyn std::any::Any + Send>>>>> = RefCell::new(HashMap::new());
 }
 
@@ -50,9 +51,9 @@ pub fn mock_function<F: 'static + Send>(name: &str, mock_fn: F) {
 }
 
 /// Get a mocked function
-pub fn get_mock<F: 'static>(name: &str) -> Option<F>
+pub fn get_mock<F>(name: &str) -> Option<F>
 where
-    F: Clone,
+    F: Clone + 'static,
 {
     FUNCTION_MOCKS.with(|mocks| {
         mocks.borrow().get(name).and_then(|mock| {
