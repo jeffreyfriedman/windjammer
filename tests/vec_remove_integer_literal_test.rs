@@ -63,7 +63,6 @@ fn compile_and_verify(code: &str) -> (bool, String, String) {
 
 #[test]
 #[cfg_attr(tarpaulin, ignore)]
-#[ignore] // TODO: Not yet fixed - integer literals getting auto-ref'd incorrectly
 fn test_vec_remove_integer_literal() {
     let code = r#"
 pub fn remove_first<T: Clone>(vec: &mut Vec<T>) -> Option<T> {
