@@ -1,3 +1,13 @@
+## [0.39.8] - 2026-01-07
+### Fixed
+- **Bug #21**: Vec.remove() integer literal auto-ref bug
+  - Transpiler was incorrectly adding `&` to integer literals in method arguments
+  - Bug: `vec.remove(0)` was generating `vec.remove(&0)` (type error: expected usize, found &{integer})
+  - Fix: Integer, float, and boolean literals are Copy types and should never get auto-ref'd
+  - Extended literal check to cover all Copy literal types (Int, Float, Bool)
+  - **TDD Tests Added**: `vec_remove_integer_literal_test.rs` (1 test passing)
+  - **Impact**: Fixes method calls with literal arguments for usize parameters
+
 ## [0.39.7] - 2026-01-07
 ### Fixed
 - **HashMap.get() double-reference bug**: Fixed transpiler adding `&` to already-borrowed iterator variables
