@@ -1,3 +1,14 @@
+## [0.39.7] - 2026-01-07
+### Fixed
+- **HashMap.get() double-reference bug**: Fixed transpiler adding `&` to already-borrowed iterator variables
+  - Bug: `for key in map.keys() { map.get(key) }` was generating `map.get(&key)` (double-ref)
+  - Fix: Detect borrowed iterator variables (.keys(), .values(), .iter()) and skip auto-ref
+  - Enhanced `is_iterating_over_borrowed()` to recognize iterator methods
+  - **TDD Tests Added**: `hashmap_get_double_ref_test.rs` (3 tests, 2 passing, 1 known issue)
+
+### Known Issues
+- Owned String parameters not getting `&` added for HashMap.get() (pre-existing bug, marked as TODO)
+
 ## [0.39.6] - 2026-01-04
 ### Fixed
 - **Bug #13**: Early return statement parsing

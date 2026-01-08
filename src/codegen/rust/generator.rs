@@ -4804,6 +4804,7 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
                             &method_signature,
                             &self.usize_variables,
                             &self.current_function_params,
+                            &self.borrowed_iterator_vars,
                         ) {
                             arg_str = format!("&{}", arg_str);
                         }
@@ -6067,6 +6068,14 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
             Expression::Identifier { name, .. } => self.current_function_params.iter().any(|p| {
                 &p.name == name && matches!(p.ownership, crate::parser::OwnershipHint::Ref)
             }),
+            // Method calls that return iterators over references
+            // .keys(), .values(), .iter() all return iterators over &T
+            Expression::MethodCall { method, .. } => {
+                matches!(
+                    method.as_str(),
+                    "keys" | "values" | "iter" | "iter_mut" | "lines" | "chars" | "bytes"
+                )
+            }
             _ => false,
         }
     }
