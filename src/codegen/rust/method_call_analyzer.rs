@@ -25,6 +25,7 @@ pub struct MethodCallAnalyzer;
 
 impl MethodCallAnalyzer {
     /// Determine if we should add & to this argument
+    #[allow(clippy::too_many_arguments)]
     pub fn should_add_ref(
         arg: &Expression,
         arg_str: &str,
@@ -33,6 +34,7 @@ impl MethodCallAnalyzer {
         method_signature: &Option<crate::analyzer::FunctionSignature>,
         usize_variables: &HashSet<String>,
         current_function_params: &[Parameter],
+        borrowed_iterator_vars: &HashSet<String>,
     ) -> bool {
         // String literals are ALREADY &str - never add &
         let is_string_literal = matches!(
@@ -60,6 +62,15 @@ impl MethodCallAnalyzer {
             }
         ) {
             return false;
+        }
+
+        // BORROWED ITERATOR VARIABLES: Variables from borrowed iterators (.keys(), .values(), .iter())
+        // are already borrowed (e.g., &String from .keys()). Don't add another &.
+        // Example: for key in map.keys() { map.get(key) }  // key is already &String
+        if let Expression::Identifier { name, .. } = arg {
+            if borrowed_iterator_vars.contains(name) {
+                return false;
+            }
         }
 
         // SPECIAL CASE: Dereference of Copy types should NOT get &
@@ -105,7 +116,13 @@ impl MethodCallAnalyzer {
         );
 
         if is_stdlib_method {
-            return Self::needs_stdlib_ref(method, arg, usize_variables, current_function_params);
+            return Self::needs_stdlib_ref(
+                method,
+                arg,
+                usize_variables,
+                current_function_params,
+                borrowed_iterator_vars,
+            );
         }
 
         // Check signature for non-stdlib methods
@@ -338,17 +355,23 @@ impl MethodCallAnalyzer {
         arg: &Expression,
         usize_variables: &HashSet<String>,
         current_function_params: &[Parameter],
+        borrowed_iterator_vars: &HashSet<String>,
     ) -> bool {
-        // Check if argument is already a reference parameter
-        let arg_is_ref_param = if let Expression::Identifier { name, .. } = arg {
-            current_function_params.iter().any(|p| {
+        // Check if argument is already a reference (parameter or iterator variable)
+        let arg_is_already_borrowed = if let Expression::Identifier { name, .. } = arg {
+            // Check if it's a reference parameter
+            let is_ref_param = current_function_params.iter().any(|p| {
                 &p.name == name && matches!(p.ownership, OwnershipHint::Ref | OwnershipHint::Mut)
-            })
+            });
+            // Check if it's from a borrowed iterator (.keys(), .iter(), etc.)
+            let is_borrowed_iter_var = borrowed_iterator_vars.contains(name);
+
+            is_ref_param || is_borrowed_iter_var
         } else {
             false
         };
 
-        if arg_is_ref_param {
+        if arg_is_already_borrowed {
             return false;
         }
 

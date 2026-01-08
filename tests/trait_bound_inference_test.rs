@@ -32,19 +32,23 @@ fn compile_wj(source: &str, test_name: &str) -> Result<String, String> {
 
     // If binary doesn't exist, build it first
     if !wj_binary.exists() {
-        let build_mode = if cfg!(debug_assertions) { "debug" } else { "release" };
+        let build_mode = if cfg!(debug_assertions) {
+            "debug"
+        } else {
+            "release"
+        };
         let build_args = if cfg!(debug_assertions) {
             vec!["build", "--bin", "wj"]
         } else {
             vec!["build", "--release", "--bin", "wj"]
         };
-        
+
         let build_output = Command::new("cargo")
             .args(&build_args)
             .current_dir(env!("CARGO_MANIFEST_DIR"))
             .output()
             .map_err(|e| format!("Failed to build wj binary ({}): {}", build_mode, e))?;
-            
+
         if !build_output.status.success() {
             return Err(format!(
                 "Failed to build wj binary ({}):\n{}",
