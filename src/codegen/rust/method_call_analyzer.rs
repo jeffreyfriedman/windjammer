@@ -48,6 +48,44 @@ impl MethodCallAnalyzer {
             return false;
         }
 
+        // Integer literals are Copy types - never add &
+        // Example: vec.remove(0) should stay as-is, NOT become vec.remove(&0)
+        // Integer literals are passed by value, not by reference
+        let is_integer_literal = matches!(
+            arg,
+            Expression::Literal {
+                value: Literal::Int(_),
+                ..
+            }
+        );
+        if is_integer_literal {
+            return false;
+        }
+
+        // Float literals are also Copy types - never add &
+        let is_float_literal = matches!(
+            arg,
+            Expression::Literal {
+                value: Literal::Float(_),
+                ..
+            }
+        );
+        if is_float_literal {
+            return false;
+        }
+
+        // Boolean literals are Copy types - never add &
+        let is_bool_literal = matches!(
+            arg,
+            Expression::Literal {
+                value: Literal::Bool(_),
+                ..
+            }
+        );
+        if is_bool_literal {
+            return false;
+        }
+
         // Already has & - don't add another
         if arg_str.starts_with('&') {
             return false;
