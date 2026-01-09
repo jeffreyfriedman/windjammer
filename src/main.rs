@@ -3359,6 +3359,10 @@ fn detect_and_compile_library(
     // Use build_project to compile the library
     match build_project(&src_wj_dir, &lib_output_dir, CompilationTarget::Rust) {
         Ok(_) => {
+            // Generate lib.rs entry point for the compiled library
+            // build_project generates Rust files but doesn't create lib.rs
+            generate_lib_rs_for_library(&lib_output_dir)?;
+
             // Fix the generated Cargo.toml to use the correct library name and add user dependencies
             let cargo_toml_path = lib_output_dir.join("Cargo.toml");
             if let Ok(mut cargo_toml) = fs::read_to_string(&cargo_toml_path) {
@@ -3452,6 +3456,54 @@ fn detect_and_compile_library(
             Ok(None)
         }
     }
+}
+
+/// Generate lib.rs entry point for a compiled library
+/// This creates a proper Rust library crate structure that tests can import from
+fn generate_lib_rs_for_library(lib_output_dir: &Path) -> Result<()> {
+    use std::fs;
+
+    // Find all top-level directories (modules)
+    let mut modules = Vec::new();
+
+    for entry in fs::read_dir(lib_output_dir)? {
+        let entry = entry?;
+        let path = entry.path();
+
+        // Only process directories (potential modules)
+        if path.is_dir() {
+            if let Some(dir_name) = path.file_name().and_then(|n| n.to_str()) {
+                // Check if directory has a mod.rs
+                if path.join("mod.rs").exists() {
+                    modules.push(dir_name.to_string());
+                }
+            }
+        }
+    }
+
+    if modules.is_empty() {
+        return Ok(()); // No modules to export
+    }
+
+    modules.sort();
+
+    // Generate lib.rs content
+    let mut lib_rs = String::from("// Auto-generated library entry point\n\n");
+
+    // Declare all modules
+    for module in &modules {
+        lib_rs.push_str(&format!("pub mod {};\n", module));
+    }
+
+    lib_rs.push_str("\n// Re-export for convenience\n");
+    for module in &modules {
+        lib_rs.push_str(&format!("pub use {}::*;\n", module));
+    }
+
+    // Write lib.rs
+    fs::write(lib_output_dir.join("lib.rs"), lib_rs)?;
+
+    Ok(())
 }
 
 /// Find windjammer-runtime path using robust search logic
