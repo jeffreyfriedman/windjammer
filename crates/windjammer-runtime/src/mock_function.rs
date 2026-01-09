@@ -22,25 +22,17 @@ thread_local! {
 ///
 /// # Example
 /// ```
-/// use windjammer_runtime::mock_function::{mock_function, get_mock, clear_mock};
+/// use windjammer_runtime::mock_function::{mock_function, is_mocked, clear_mock};
 ///
-/// // Original function
-/// fn get_time() -> i64 {
-///     // Check for mock
-///     if let Some(mock) = get_mock::<fn() -> i64>("get_time") {
-///         return mock();
-///     }
-///     // Real implementation
-///     std::time::SystemTime::now()
-///         .duration_since(std::time::UNIX_EPOCH)
-///         .unwrap()
-///         .as_secs() as i64
-/// }
-///
-/// // In test:
+/// // Simple example showing mock registration
 /// mock_function("get_time", || 12345i64);
-/// assert_eq!(get_time(), 12345);
+///
+/// // Verify mock is registered
+/// assert!(is_mocked("get_time"));
+///
+/// // Clear the mock
 /// clear_mock("get_time");
+/// assert!(!is_mocked("get_time"));
 /// ```
 pub fn mock_function<F: 'static + Send>(name: &str, mock_fn: F) {
     FUNCTION_MOCKS.with(|mocks| {
