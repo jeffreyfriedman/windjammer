@@ -3359,7 +3359,7 @@ fn detect_and_compile_library(
     // Use build_project to compile the library
     match build_project(&src_wj_dir, &lib_output_dir, CompilationTarget::Rust) {
         Ok(_) => {
-            // Fix the generated Cargo.toml to use the correct library name
+            // Fix the generated Cargo.toml to use the correct library name and add user dependencies
             let cargo_toml_path = lib_output_dir.join("Cargo.toml");
             if let Ok(mut cargo_toml) = fs::read_to_string(&cargo_toml_path) {
                 // Replace the package name
@@ -3372,6 +3372,74 @@ fn detect_and_compile_library(
                     "name = \"windjammer_app\"",
                     &format!("name = \"{}\"", lib_name.replace('-', "_")),
                 );
+
+                // Add user dependencies from wj.toml (replace wildcards with proper specs)
+                if let Some(cfg) = &config {
+                    let mut deps_section = String::new();
+                    for (dep_name, dep_spec) in &cfg.dependencies {
+                        // If dependency exists with wildcard version, replace it
+                        let wildcard_pattern = format!("{} = \"*\"", dep_name);
+                        if cargo_toml.contains(&wildcard_pattern) {
+                            // Remove the wildcard line
+                            cargo_toml = cargo_toml.replace(&format!("{}\n", wildcard_pattern), "");
+                        }
+                        // If dependency already exists with a proper spec, skip it
+                        else if cargo_toml.contains(&format!("{} =", dep_name)) {
+                            continue;
+                        }
+
+                        use crate::config::DependencySpec;
+                        match dep_spec {
+                            DependencySpec::Simple(version) => {
+                                deps_section.push_str(&format!("{} = \"{}\"\n", dep_name, version));
+                            }
+                            DependencySpec::Detailed {
+                                version,
+                                features,
+                                path,
+                                git,
+                                branch,
+                            } => {
+                                deps_section.push_str(&format!("{} = {{ ", dep_name));
+                                if let Some(v) = version {
+                                    deps_section.push_str(&format!("version = \"{}\", ", v));
+                                }
+                                if let Some(p) = path {
+                                    // Make path relative to project root
+                                    let abs_path = project_root.join(p);
+                                    deps_section
+                                        .push_str(&format!("path = \"{}\", ", abs_path.display()));
+                                }
+                                // Add desktop feature for windjammer-ui
+                                if dep_name == "windjammer-ui" && !features.is_some() {
+                                    deps_section.push_str("features = [\"desktop\"], ");
+                                }
+                                if let Some(g) = git {
+                                    deps_section.push_str(&format!("git = \"{}\", ", g));
+                                }
+                                if let Some(b) = branch {
+                                    deps_section.push_str(&format!("branch = \"{}\", ", b));
+                                }
+                                if let Some(f) = features {
+                                    deps_section.push_str(&format!("features = {:?}, ", f));
+                                }
+                                // Remove trailing comma and space
+                                if deps_section.ends_with(", ") {
+                                    deps_section.truncate(deps_section.len() - 2);
+                                }
+                                deps_section.push_str(" }\n");
+                            }
+                        }
+                    }
+
+                    // Insert dependencies before [lib] section
+                    if !deps_section.is_empty() {
+                        if let Some(lib_pos) = cargo_toml.find("[lib]") {
+                            cargo_toml.insert_str(lib_pos, &deps_section);
+                        }
+                    }
+                }
+
                 let _ = fs::write(&cargo_toml_path, cargo_toml);
             }
 
