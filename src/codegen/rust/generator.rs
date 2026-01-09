@@ -4900,7 +4900,8 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
                             "http",
                             "fs",
                             "strings",
-                            "json",
+                            // NOTE: "json" removed - it's a common variable name!
+                            // Use "serde_json" for the module instead
                             "regex",
                             "cli",
                             "log",
