@@ -3344,8 +3344,11 @@ fn detect_and_compile_library(
         })
         .unwrap_or_else(|| "lib".to_string());
 
-    // Create library output directory
+    // Create library output directory (clean it first to avoid stale files)
     let lib_output_dir = test_output_dir.join("lib");
+    if lib_output_dir.exists() {
+        fs::remove_dir_all(&lib_output_dir)?;
+    }
     fs::create_dir_all(&lib_output_dir)?;
 
     // Compile the library
@@ -3357,98 +3360,164 @@ fn detect_and_compile_library(
     );
 
     // Use build_project to compile the library
+    eprintln!("DEBUG: About to call build_project");
     match build_project(&src_wj_dir, &lib_output_dir, CompilationTarget::Rust) {
         Ok(_) => {
+            eprintln!("DEBUG: build_project returned Ok");
             // Generate lib.rs entry point for the compiled library
             // build_project generates Rust files but doesn't create lib.rs
-            generate_lib_rs_for_library(&lib_output_dir)?;
+            if let Err(e) = generate_lib_rs_for_library(&lib_output_dir) {
+                eprintln!("WARNING: Failed to generate lib.rs: {}", e);
+                // Continue anyway - the library might still work
+            } else {
+                eprintln!("DEBUG: generate_lib_rs_for_library succeeded");
+            }
+
+            eprintln!("DEBUG: About to fix Cargo.toml");
 
             // Fix the generated Cargo.toml to use the correct library name and add user dependencies
             let cargo_toml_path = lib_output_dir.join("Cargo.toml");
-            if let Ok(mut cargo_toml) = fs::read_to_string(&cargo_toml_path) {
-                // Replace the package name
-                cargo_toml = cargo_toml.replace(
-                    "name = \"windjammer-app\"",
-                    &format!("name = \"{}\"", lib_name),
-                );
-                // Replace the lib name
-                cargo_toml = cargo_toml.replace(
-                    "name = \"windjammer_app\"",
-                    &format!("name = \"{}\"", lib_name.replace('-', "_")),
-                );
+            let test_lib_name = format!("{}_testlib", lib_name.replace('-', "_"));
+            let test_lib_package_name = test_lib_name.replace('_', "-");
 
-                // Add user dependencies from wj.toml (replace wildcards with proper specs)
-                if let Some(cfg) = &config {
-                    let mut deps_section = String::new();
-                    for (dep_name, dep_spec) in &cfg.dependencies {
-                        // If dependency exists with wildcard version, replace it
-                        let wildcard_pattern = format!("{} = \"*\"", dep_name);
-                        if cargo_toml.contains(&wildcard_pattern) {
-                            // Remove the wildcard line
-                            cargo_toml = cargo_toml.replace(&format!("{}\n", wildcard_pattern), "");
-                        }
-                        // If dependency already exists with a proper spec, skip it
-                        else if cargo_toml.contains(&format!("{} =", dep_name)) {
-                            continue;
-                        }
+            eprintln!("DEBUG: cargo_toml_path = {}", cargo_toml_path.display());
+            eprintln!("DEBUG: test_lib_name = {}", test_lib_name);
+            eprintln!("DEBUG: test_lib_package_name = {}", test_lib_package_name);
 
-                        use crate::config::DependencySpec;
-                        match dep_spec {
-                            DependencySpec::Simple(version) => {
-                                deps_section.push_str(&format!("{} = \"{}\"\n", dep_name, version));
-                            }
-                            DependencySpec::Detailed {
-                                version,
-                                features,
-                                path,
-                                git,
-                                branch,
-                            } => {
-                                deps_section.push_str(&format!("{} = {{ ", dep_name));
-                                if let Some(v) = version {
-                                    deps_section.push_str(&format!("version = \"{}\", ", v));
-                                }
-                                if let Some(p) = path {
-                                    // Make path relative to project root
-                                    let abs_path = project_root.join(p);
-                                    deps_section
-                                        .push_str(&format!("path = \"{}\", ", abs_path.display()));
-                                }
-                                // Add desktop feature for windjammer-ui
-                                if dep_name == "windjammer-ui" && !features.is_some() {
-                                    deps_section.push_str("features = [\"desktop\"], ");
-                                }
-                                if let Some(g) = git {
-                                    deps_section.push_str(&format!("git = \"{}\", ", g));
-                                }
-                                if let Some(b) = branch {
-                                    deps_section.push_str(&format!("branch = \"{}\", ", b));
-                                }
-                                if let Some(f) = features {
-                                    deps_section.push_str(&format!("features = {:?}, ", f));
-                                }
-                                // Remove trailing comma and space
-                                if deps_section.ends_with(", ") {
-                                    deps_section.truncate(deps_section.len() - 2);
-                                }
-                                deps_section.push_str(" }\n");
+            println!(
+                "   {} Reading Cargo.toml from: {}",
+                "→".blue().bold(),
+                cargo_toml_path.display()
+            );
+
+            match fs::read_to_string(&cargo_toml_path) {
+                Ok(mut cargo_toml) => {
+                    // Replace [package] name with unique test library name
+                    if let Some(pkg_start) = cargo_toml.find("[package]") {
+                        if let Some(name_start) = cargo_toml[pkg_start..].find("name = \"") {
+                            let abs_name_start = pkg_start + name_start + "name = \"".len();
+                            if let Some(name_end) = cargo_toml[abs_name_start..].find('"') {
+                                let abs_name_end = abs_name_start + name_end;
+                                cargo_toml.replace_range(
+                                    abs_name_start..abs_name_end,
+                                    &test_lib_package_name,
+                                );
                             }
                         }
                     }
 
-                    // Insert dependencies before [lib] section
-                    if !deps_section.is_empty() {
-                        if let Some(lib_pos) = cargo_toml.find("[lib]") {
-                            cargo_toml.insert_str(lib_pos, &deps_section);
+                    // Replace [lib] name with unique test library name
+                    if let Some(lib_start) = cargo_toml.find("[lib]") {
+                        if let Some(name_start) = cargo_toml[lib_start..].find("name = \"") {
+                            let abs_name_start = lib_start + name_start + "name = \"".len();
+                            if let Some(name_end) = cargo_toml[abs_name_start..].find('"') {
+                                let abs_name_end = abs_name_start + name_end;
+                                cargo_toml
+                                    .replace_range(abs_name_start..abs_name_end, &test_lib_name);
+                            }
                         }
+                    }
+
+                    // Remove self-referential dependency (library importing itself)
+                    let self_dep_pattern = format!("{} = {{", lib_name);
+                    if let Some(start) = cargo_toml.find(&self_dep_pattern) {
+                        // Find the end of this dependency line
+                        if let Some(end) = cargo_toml[start..].find('\n') {
+                            let line_end = start + end + 1;
+                            cargo_toml.replace_range(start..line_end, "");
+                        }
+                    }
+
+                    // Add user dependencies from wj.toml (replace wildcards with proper specs)
+                    if let Some(cfg) = &config {
+                        let mut deps_section = String::new();
+                        for (dep_name, dep_spec) in &cfg.dependencies {
+                            // If dependency exists with wildcard version, replace it
+                            let wildcard_pattern = format!("{} = \"*\"", dep_name);
+                            if cargo_toml.contains(&wildcard_pattern) {
+                                // Remove the wildcard line
+                                cargo_toml =
+                                    cargo_toml.replace(&format!("{}\n", wildcard_pattern), "");
+                            }
+                            // If dependency already exists with a proper spec, skip it
+                            else if cargo_toml.contains(&format!("{} =", dep_name)) {
+                                continue;
+                            }
+
+                            use crate::config::DependencySpec;
+                            match dep_spec {
+                                DependencySpec::Simple(version) => {
+                                    deps_section
+                                        .push_str(&format!("{} = \"{}\"\n", dep_name, version));
+                                }
+                                DependencySpec::Detailed {
+                                    version,
+                                    features,
+                                    path,
+                                    git,
+                                    branch,
+                                } => {
+                                    deps_section.push_str(&format!("{} = {{ ", dep_name));
+                                    if let Some(v) = version {
+                                        deps_section.push_str(&format!("version = \"{}\", ", v));
+                                    }
+                                    if let Some(p) = path {
+                                        // Make path relative to project root
+                                        let abs_path = project_root.join(p);
+                                        deps_section.push_str(&format!(
+                                            "path = \"{}\", ",
+                                            abs_path.display()
+                                        ));
+                                    }
+                                    // Add desktop feature for windjammer-ui
+                                    if dep_name == "windjammer-ui" && !features.is_some() {
+                                        deps_section.push_str("features = [\"desktop\"], ");
+                                    }
+                                    if let Some(g) = git {
+                                        deps_section.push_str(&format!("git = \"{}\", ", g));
+                                    }
+                                    if let Some(b) = branch {
+                                        deps_section.push_str(&format!("branch = \"{}\", ", b));
+                                    }
+                                    if let Some(f) = features {
+                                        deps_section.push_str(&format!("features = {:?}, ", f));
+                                    }
+                                    // Remove trailing comma and space
+                                    if deps_section.ends_with(", ") {
+                                        deps_section.truncate(deps_section.len() - 2);
+                                    }
+                                    deps_section.push_str(" }\n");
+                                }
+                            }
+                        }
+
+                        // Insert dependencies before [lib] section
+                        if !deps_section.is_empty() {
+                            if let Some(lib_pos) = cargo_toml.find("[lib]") {
+                                cargo_toml.insert_str(lib_pos, &deps_section);
+                            }
+                        }
+                    }
+
+                    if let Err(e) = fs::write(&cargo_toml_path, &cargo_toml) {
+                        eprintln!("WARNING: Failed to write Cargo.toml: {}", e);
+                    } else {
+                        println!(
+                            "   {} Updated library Cargo.toml (package: {}, lib: {})",
+                            "✓".green().bold(),
+                            test_lib_package_name,
+                            test_lib_name
+                        );
                     }
                 }
-
-                let _ = fs::write(&cargo_toml_path, cargo_toml);
+                Err(e) => {
+                    eprintln!("WARNING: Failed to read Cargo.toml: {}", e);
+                }
             }
 
             println!("   {} Library compiled successfully", "✓".green().bold());
-            Ok(Some((lib_name, lib_output_dir)))
+            // Return the test library package name (with -testlib suffix) for Cargo dependency
+            Ok(Some((test_lib_package_name, lib_output_dir)))
         }
         Err(e) => {
             println!("   {} Library compilation failed: {}", "✗".red().bold(), e);

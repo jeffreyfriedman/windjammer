@@ -238,8 +238,8 @@ pub fn assert_panics<F: FnOnce() + std::panic::UnwindSafe>(f: F) {
 /// ```
 /// use windjammer_runtime::test::assert_panics_with;
 ///
-/// assert_panics_with("division by zero", || {
-///     let _ = 1 / 0;
+/// assert_panics_with("error", || {
+///     panic!("error");
 /// });
 /// ```
 pub fn assert_panics_with<F: FnOnce() + std::panic::UnwindSafe>(expected_msg: &str, f: F) {
