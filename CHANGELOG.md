@@ -1,3 +1,28 @@
+## [0.39.9] - 2026-01-08
+### Fixed
+- **Bug #22**: Multi-line `pub use` statement parsing
+  - Module system was incorrectly parsing multi-line `pub use` statements in mod.wj files
+  - Bug: `pub use module::{Item1, Item2}` was generating `pub use module::{;` (malformed syntax)
+  - Root cause: Line-by-line parser didn't accumulate multi-line statements
+  - Fix: Enhanced `parse_mod_declarations()` to track state across lines and properly handle:
+    - Multi-line `pub use` with braces: `pub use module::{...}`
+    - Single-line `pub use` with semicolons: `pub use module::*;`
+    - Single-line `pub use` without semicolons: `pub use module::Item`
+  - **TDD Tests Added**: 2 new tests for multi-line and single-line pub use parsing
+  - **Impact**: Fixes module re-exports in generated code, enables proper library compilation
+
+### Test Framework Improvements
+- **Generic library detection**: Test framework now auto-detects and compiles user libraries
+  - Reads `wj.toml` to find library name and source directory
+  - Compiles `src_wj/` as library dependency for tests
+  - Generates proper Cargo.toml with library dependency
+  - No hardcoded project names - fully generic and reusable
+- **Robust path resolution**: Enhanced `find_windjammer_runtime_path()` with:
+  - 10-level parent directory search
+  - Multiple pattern matching (nested/flat/sibling structures)
+  - Path canonicalization for absolute paths
+  - Handles monorepo and nested project layouts
+
 ## [0.39.8] - 2026-01-07
 ### Fixed
 - **Bug #21**: Vec.remove() integer literal auto-ref bug
