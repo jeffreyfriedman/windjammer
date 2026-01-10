@@ -1,5 +1,5 @@
 /// Test that if-else expressions don't get semicolons added to branches
-/// 
+///
 /// Bug: When if-else is used as an expression (assigned to variable or returned),
 /// transpiler was adding semicolons to branches, turning them into statements.
 /// This causes type errors: expected Option<T>, found ()
@@ -58,12 +58,14 @@ pub fn get_last_inline(is_empty: bool, value: i64) -> Option<i64> {
     // Read generated Rust
     let generated_rs = out_dir.join("test.rs");
     let result = fs::read_to_string(&generated_rs).expect("Failed to read generated Rust");
-    
+
     // Should NOT add semicolons to if-else branches when used as expression
     // The generated code should compile without type errors
-    assert!(!result.contains("None;\n"), 
-        "Should not add semicolon after None in if-else expression");
-    
+    assert!(
+        !result.contains("None;\n"),
+        "Should not add semicolon after None in if-else expression"
+    );
+
     // Verify the code actually compiles (rustc should succeed)
     let rustc_output = Command::new("rustc")
         .arg("--crate-type=lib")
@@ -73,7 +75,7 @@ pub fn get_last_inline(is_empty: bool, value: i64) -> Option<i64> {
         .arg(temp_dir.path().join("test.rlib"))
         .output()
         .expect("Failed to run rustc");
-    
+
     if !rustc_output.status.success() {
         panic!(
             "Generated Rust has type errors:\n{}",
@@ -81,4 +83,3 @@ pub fn get_last_inline(is_empty: bool, value: i64) -> Option<i64> {
         );
     }
 }
-
