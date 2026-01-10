@@ -4147,6 +4147,12 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
                 // - Vec/slice: get, first, last
                 matches!(method.as_str(), "get" | "first" | "last")
             }
+            // BUGFIX: Some(...) is a constructor, not a method call
+            // Don't add .cloned() to Some(squad) when squad is already &Squad
+            Expression::Call { .. } => {
+                // Function calls (like Some, None, Ok, Err) are not methods
+                false
+            }
             _ => false,
         }
     }
@@ -4570,13 +4576,43 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
                             ) {
                                 format!("{}.to_string()", arg_str)
                             } else if let Expression::Identifier { name, .. } = arg {
+                                // BUGFIX: Don't clone if function returns Option<&T>, Option<&mut T>, or Result<&T, E>
+                                // When returning Option<&Squad>, Some(squad) should NOT become Some(squad.clone())
+
+                                // Check if return type is Option<&T> or Option<&mut T> (reference inside)
+                                let returns_option_ref = match &self.current_function_return_type {
+                                    Some(Type::Option(inner_type)) => {
+                                        matches!(
+                                            **inner_type,
+                                            Type::Reference(_) | Type::MutableReference(_)
+                                        )
+                                    }
+                                    _ => false,
+                                };
+
+                                // Check if return type is Result<&T, E> or Result<&mut T, E>
+                                let returns_result_ref = match &self.current_function_return_type {
+                                    Some(Type::Result(ok_type, _err_type)) => {
+                                        matches!(
+                                            **ok_type,
+                                            Type::Reference(_) | Type::MutableReference(_)
+                                        )
+                                    }
+                                    _ => false,
+                                };
+
                                 // AUTO-CLONE: When wrapping a borrowed iterator variable in Some/Ok/Err,
                                 // we need to clone it since the wrapper takes ownership
-                                if self.borrowed_iterator_vars.contains(name)
+                                // UNLESS we're returning Option<&T>, Option<&mut T>, Result<&T, E>, etc.
+                                if !returns_option_ref
+                                    && !returns_result_ref
+                                    && self.borrowed_iterator_vars.contains(name)
                                     && !arg_str.ends_with(".clone()")
                                 {
+                                    // Function returns owned, but variable is borrowed - need to clone
                                     format!("{}.clone()", arg_str)
                                 } else {
+                                    // Function returns reference, or variable not borrowed - don't clone
                                     arg_str
                                 }
                             } else {
