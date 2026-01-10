@@ -4405,7 +4405,7 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
                     // Check if the first argument is a format! macro (from string interpolation)
                     if let Some((_, first_arg)) = arguments.first() {
                         // Check for MacroInvocation (explicit format! calls)
-                        if let Expression::MacroInvocation {
+                        if let Expression::MacroInvocation { is_repeat, 
                             name,
                             args: macro_args,
                             ..
@@ -5320,7 +5320,7 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
                 // vec! macro creates heap-allocated vectors: vec![1, 2, 3]
                 format!("[{}]", expr_strs.join(", "))
             }
-            Expression::MacroInvocation {
+            Expression::MacroInvocation { is_repeat, 
                 name,
                 args,
                 delimiter,
@@ -5362,7 +5362,7 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
 
                 let arg_strs: Vec<String> = if should_flatten {
                     // Flatten format! macro arguments into the print macro
-                    if let Expression::MacroInvocation {
+                    if let Expression::MacroInvocation { is_repeat, 
                         args: format_args, ..
                     } = &args[0]
                     {
@@ -5403,17 +5403,9 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
                 };
 
                 // WINDJAMMER FIX: vec![value; count] repeat syntax
-                // The parser detects semicolon in vec![x; n] but stores as 2 args without separator info.
-                // If this is vec![] with exactly 2 args, use semicolon (repeat syntax) instead of comma.
-                // This handles: vec![0; 5], vec![None; 10], vec![vec![x; m]; n]
-                let separator = if name == "vec"
-                    && args.len() == 2
-                    && matches!(delimiter, MacroDelimiter::Brackets)
-                {
-                    "; "
-                } else {
-                    ", "
-                };
+                // The parser sets is_repeat=true for vec![x; n] syntax
+                // Use semicolon for repeat, comma for regular args
+                let separator = if *is_repeat { "; " } else { ", " };
 
                 format!("{}!{}{}{}", name, open, arg_strs.join(separator), close)
             }

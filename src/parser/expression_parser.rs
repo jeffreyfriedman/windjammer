@@ -91,6 +91,7 @@ impl Parser {
                         name: "vec".to_string(),
                         args: vec![first_element, count],
                         delimiter: MacroDelimiter::Brackets,
+                        is_repeat: true, // This is vec![x; n] repeat syntax
                         location: self.current_location(),
                     }));
                 }
@@ -730,6 +731,7 @@ impl Parser {
                     name: "format".to_string(),
                     args: macro_args,
                     delimiter: MacroDelimiter::Parens,
+                    is_repeat: false,
                     location: self.current_location(),
                 })
             }
@@ -925,6 +927,7 @@ impl Parser {
                             name: "vec".to_string(),
                             args: vec![first_element, count],
                             delimiter: MacroDelimiter::Brackets,
+                            is_repeat: true, // This is vec![x; n] repeat syntax
                             location: self.current_location(),
                         })
                     } else {
@@ -1788,6 +1791,7 @@ impl Parser {
                         let mut args = Vec::new();
 
                         // Check for empty macro: vec![], println!()
+                        let mut is_repeat_flag = false;
                         if self.current_token() != &end_token {
                             // Parse first argument
                             args.push(self.parse_expression()?);
@@ -1798,6 +1802,7 @@ impl Parser {
                             {
                                 self.advance(); // consume semicolon
                                 args.push(self.parse_expression()?);
+                                is_repeat_flag = true; // This is vec![x; n] repeat syntax
                             } else {
                                 // Parse remaining comma-separated arguments
                                 while self.current_token() == &Token::Comma {
@@ -1819,6 +1824,7 @@ impl Parser {
                             name: name.clone(),
                             args,
                             delimiter,
+                            is_repeat: is_repeat_flag,
                             location: self.current_location(),
                         })
                     } else {
