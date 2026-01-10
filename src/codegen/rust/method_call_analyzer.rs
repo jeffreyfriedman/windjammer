@@ -193,14 +193,18 @@ impl MethodCallAnalyzer {
         current_function_params: &[Parameter],
         inferred_borrowed_params: &HashSet<String>,
     ) -> bool {
-        // Special case: push() on borrowed iterator variables
-        if method == "push" {
-            if let Expression::Identifier { name, .. } = arg {
-                if borrowed_iterator_vars.contains(name) && !arg_str.ends_with(".clone()") {
-                    return true;
-                }
-            }
-        }
+        // BUGFIX: Don't auto-clone for push() on borrowed iterator variables!
+        // Problem: When building Vec<&T>, we want to push &T, not clone it.
+        // Example: for quest in &self.quests { result.push(quest) }
+        // If result is Vec<&Quest>, we should push quest (&Quest), not quest.clone() (Quest)
+        //
+        // Old behavior: Always added .clone() for borrowed iterator vars
+        // New behavior: Don't add .clone() - let user be explicit if needed
+        //
+        // This aligns with Windjammer philosophy: explicit about what matters
+        // (cloning is something you should be explicit about)
+
+        // NOTE: Removed auto-clone for push() - was causing Vec<&T> type errors
 
         // Check if method expects owned value and arg is a borrowed field
         if let Some(sig) = method_signature {
@@ -424,7 +428,9 @@ impl MethodCallAnalyzer {
         // BUT: Vec.remove(index) takes usize by value, not &usize!
         if matches!(method, "remove" | "get" | "contains_key" | "get_mut") {
             // Special case: Vec.remove(index) where index is usize (Copy type)
-            if method == "remove" && Self::is_copy_type(arg, usize_variables, current_function_params) {
+            if method == "remove"
+                && Self::is_copy_type(arg, usize_variables, current_function_params)
+            {
                 return false; // Don't add & for Vec.remove(usize_index)
             }
             return true; // Add & for HashMap.remove(&key)
