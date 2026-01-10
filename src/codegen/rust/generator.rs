@@ -5401,7 +5401,21 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
                     MacroDelimiter::Brackets => ("[", "]"),
                     MacroDelimiter::Braces => ("{", "}"),
                 };
-                format!("{}!{}{}{}", name, open, arg_strs.join(", "), close)
+
+                // WINDJAMMER FIX: vec![value; count] repeat syntax
+                // The parser detects semicolon in vec![x; n] but stores as 2 args without separator info.
+                // If this is vec![] with exactly 2 args, use semicolon (repeat syntax) instead of comma.
+                // This handles: vec![0; 5], vec![None; 10], vec![vec![x; m]; n]
+                let separator = if name == "vec"
+                    && args.len() == 2
+                    && matches!(delimiter, MacroDelimiter::Brackets)
+                {
+                    "; "
+                } else {
+                    ", "
+                };
+
+                format!("{}!{}{}{}", name, open, arg_strs.join(separator), close)
             }
             Expression::Cast { expr, type_, .. } => {
                 // Add parentheses around binary expressions for correct precedence

@@ -186,10 +186,10 @@ impl MethodCallAnalyzer {
     pub fn should_add_clone(
         arg: &Expression,
         arg_str: &str,
-        method: &str,
+        _method: &str,
         param_idx: usize,
         method_signature: &Option<crate::analyzer::FunctionSignature>,
-        borrowed_iterator_vars: &HashSet<String>,
+        _borrowed_iterator_vars: &HashSet<String>,
         current_function_params: &[Parameter],
         inferred_borrowed_params: &HashSet<String>,
     ) -> bool {
