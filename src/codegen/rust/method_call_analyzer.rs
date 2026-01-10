@@ -138,9 +138,23 @@ impl MethodCallAnalyzer {
             }
         }
 
-        // Check stdlib methods FIRST - these have well-known signatures that must be respected
-        // even if we have a different signature in the registry (might be a user-defined method
-        // with the same name)
+        // BUGFIX: Check method signature FIRST if available!
+        // User-defined methods with names like "remove" should use their actual signature,
+        // not stdlib HashMap assumptions.
+        // Example: ComponentArray<T>.remove(entity: Entity) takes Entity by value, not &Entity
+        if let Some(sig) = method_signature {
+            let sig_param_idx = if sig.has_self_receiver {
+                param_idx + 1
+            } else {
+                param_idx
+            };
+            if let Some(&ownership) = sig.param_ownership.get(sig_param_idx) {
+                // Signature is available - use it!
+                return matches!(ownership, OwnershipMode::Borrowed);
+            }
+        }
+
+        // No signature available - fall back to stdlib heuristics
         let is_stdlib_method = matches!(
             method,
             "remove"
@@ -161,18 +175,6 @@ impl MethodCallAnalyzer {
                 current_function_params,
                 borrowed_iterator_vars,
             );
-        }
-
-        // Check signature for non-stdlib methods
-        if let Some(sig) = method_signature {
-            let sig_param_idx = if sig.has_self_receiver {
-                param_idx + 1
-            } else {
-                param_idx
-            };
-            if let Some(&ownership) = sig.param_ownership.get(sig_param_idx) {
-                return matches!(ownership, OwnershipMode::Borrowed);
-            }
         }
 
         // Final fallback
@@ -418,7 +420,6 @@ impl MethodCallAnalyzer {
             return false;
         }
 
-        // Stdlib method patterns
         // HashMap/BTreeMap methods that expect &K
         if matches!(method, "remove" | "get" | "contains_key" | "get_mut") {
             return true;
