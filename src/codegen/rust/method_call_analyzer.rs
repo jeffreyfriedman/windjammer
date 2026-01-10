@@ -421,8 +421,13 @@ impl MethodCallAnalyzer {
         }
 
         // HashMap/BTreeMap methods that expect &K
+        // BUT: Vec.remove(index) takes usize by value, not &usize!
         if matches!(method, "remove" | "get" | "contains_key" | "get_mut") {
-            return true;
+            // Special case: Vec.remove(index) where index is usize (Copy type)
+            if method == "remove" && Self::is_copy_type(arg, usize_variables, current_function_params) {
+                return false; // Don't add & for Vec.remove(usize_index)
+            }
+            return true; // Add & for HashMap.remove(&key)
         }
 
         // Vec/slice methods that expect &T (not usize index)
