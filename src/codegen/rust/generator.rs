@@ -231,6 +231,49 @@ impl<'ast> CodeGenerator<'ast> {
         "    ".repeat(self.indent_level)
     }
 
+    /// BUG #8 FIX: Infer the type name from an expression
+    /// This enables qualified method signature lookup (Type::method)
+    fn infer_type_name(&self, expr: &Expression) -> Option<String> {
+        match expr {
+            Expression::Identifier { name, .. } => {
+                // Try to infer from struct name if we're in an impl block
+                if self.in_impl_block {
+                    if let Some(struct_name) = &self.current_struct_name {
+                        if self.current_struct_fields.contains(name) {
+                            return Some(struct_name.clone());
+                        }
+                    }
+                }
+                None
+            }
+            Expression::FieldAccess { object, .. } => {
+                // Recursively infer from the object
+                self.infer_type_name(object)
+            }
+            Expression::Unary {
+                op:
+                    crate::parser::UnaryOp::Deref
+                    | crate::parser::UnaryOp::Ref
+                    | crate::parser::UnaryOp::MutRef,
+                operand,
+                ..
+            } => {
+                // Look through references/derefs
+                self.infer_type_name(operand)
+            }
+            Expression::MethodCall { object, .. } => {
+                // Try to infer from the object
+                self.infer_type_name(object)
+            }
+            Expression::Index { object, .. } => {
+                // For array[i], the element type is unknown without full type inference
+                // But we can try to infer the array type
+                self.infer_type_name(object)
+            }
+            _ => None,
+        }
+    }
+
     /// Generate an item inside an inline module
     fn generate_inline_module_item(
         &mut self,
@@ -4405,7 +4448,8 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
                     // Check if the first argument is a format! macro (from string interpolation)
                     if let Some((_, first_arg)) = arguments.first() {
                         // Check for MacroInvocation (explicit format! calls)
-                        if let Expression::MacroInvocation { is_repeat, 
+                        if let Expression::MacroInvocation {
+                            is_repeat: _,
                             name,
                             args: macro_args,
                             ..
@@ -4802,8 +4846,18 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
             } => {
                 let obj_str = self.generate_expression_with_precedence(object);
 
-                // Look up method signature for auto-ref
-                let method_signature = self.signature_registry.get_signature(method).cloned();
+                // BUG #8 FIX: Look up method signature with qualified name (Type::method)
+                // First try to infer the type from the object expression
+                let type_name = self.infer_type_name(object);
+                let method_signature = if let Some(type_name) = type_name {
+                    let qualified_name = format!("{}::{}", type_name, method);
+                    self.signature_registry
+                        .get_signature(&qualified_name)
+                        .cloned()
+                        .or_else(|| self.signature_registry.get_signature(method).cloned())
+                } else {
+                    self.signature_registry.get_signature(method).cloned()
+                };
 
                 let args: Vec<String> = arguments
                     .iter()
@@ -5320,7 +5374,8 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
                 // vec! macro creates heap-allocated vectors: vec![1, 2, 3]
                 format!("[{}]", expr_strs.join(", "))
             }
-            Expression::MacroInvocation { is_repeat, 
+            Expression::MacroInvocation {
+                is_repeat,
                 name,
                 args,
                 delimiter,
@@ -5362,8 +5417,10 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
 
                 let arg_strs: Vec<String> = if should_flatten {
                     // Flatten format! macro arguments into the print macro
-                    if let Expression::MacroInvocation { is_repeat, 
-                        args: format_args, ..
+                    if let Expression::MacroInvocation {
+                        is_repeat: _,
+                        args: format_args,
+                        ..
                     } = &args[0]
                     {
                         format_args
