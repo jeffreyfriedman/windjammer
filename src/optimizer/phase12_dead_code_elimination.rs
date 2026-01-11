@@ -787,14 +787,14 @@ fn eliminate_dead_code_in_expression<'a: 'ast, 'ast>(
                 location: location.clone(),
             })
         }),
-        Expression::MacroInvocation { 
+        Expression::MacroInvocation {
             name,
             args,
             delimiter,
             is_repeat,
             location,
         } => optimizer.alloc_expr(unsafe {
-            std::mem::transmute::<Expression<'_>, Expression<'_>>(Expression::MacroInvocation { 
+            std::mem::transmute::<Expression<'_>, Expression<'_>>(Expression::MacroInvocation {
                 name: name.clone(),
                 args: args
                     .iter()
@@ -889,7 +889,7 @@ mod tests {
                             location: None,
                         }),
                         test_alloc_stmt(Statement::Expression {
-                            expr: test_alloc_expr(Expression::MacroInvocation { 
+                            expr: test_alloc_expr(Expression::MacroInvocation {
                                 name: "println".to_string(),
                                 args: vec![test_alloc_expr(Expression::Literal {
                                     value: Literal::String("unreachable".to_string()),

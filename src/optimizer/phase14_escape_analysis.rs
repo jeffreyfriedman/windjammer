@@ -466,7 +466,7 @@ fn try_optimize_vec_to_smallvec<'ast>(
                 // This is a marker that codegen will handle
                 return Some(optimizer.alloc_expr(unsafe {
                     std::mem::transmute::<Expression<'_>, Expression<'_>>(
-                        Expression::MacroInvocation { 
+                        Expression::MacroInvocation {
                             name: "smallvec".to_string(),
                             args: args.clone(),
                             delimiter: MacroDelimiter::Brackets,
@@ -502,7 +502,7 @@ mod tests {
                         pattern: Pattern::Identifier("temp".to_string()),
                         mutable: false,
                         type_: None,
-                        value: test_alloc_expr(Expression::MacroInvocation { 
+                        value: test_alloc_expr(Expression::MacroInvocation {
                             name: "vec".to_string(),
                             args: vec![
                                 test_alloc_expr(Expression::Literal {
@@ -568,7 +568,7 @@ mod tests {
                             pattern: Pattern::Identifier("temp".to_string()),
                             mutable: false,
                             type_: None,
-                            value: test_alloc_expr(Expression::MacroInvocation { 
+                            value: test_alloc_expr(Expression::MacroInvocation {
                                 name: "vec".to_string(),
                                 args: vec![test_alloc_expr(Expression::Literal {
                                     value: Literal::Int(1),

@@ -240,6 +240,14 @@ impl SignatureRegistry {
     pub fn get_signature(&self, name: &str) -> Option<&FunctionSignature> {
         self.signatures.get(name)
     }
+
+    /// BUG #8 FIX: Merge signatures from another registry
+    /// This enables cross-file signature sharing
+    pub fn merge(&mut self, other: &SignatureRegistry) {
+        for (name, sig) in &other.signatures {
+            self.signatures.insert(name.clone(), sig.clone());
+        }
+    }
 }
 
 pub struct Analyzer<'ast> {
@@ -503,7 +511,14 @@ impl<'ast> Analyzer<'ast> {
                         analyzed_func.cow_optimizations = self.detect_cow_opportunities(func);
 
                         let signature = self.build_signature(&analyzed_func);
+
+                        // BUG #8 FIX: Store method signatures with BOTH qualified and simple names
+                        // Qualified (Type::method) enables precise cross-module resolution
+                        // Simple (method) provides fallback when type inference fails
+                        let qualified_name = format!("{}::{}", impl_block.type_name, func.name);
+                        registry.add_function(qualified_name, signature.clone());
                         registry.add_function(func.name.clone(), signature);
+
                         analyzed.push(analyzed_func);
                     }
                 }

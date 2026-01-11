@@ -609,14 +609,14 @@ fn optimize_loops_in_expression<'a: 'ast, 'ast>(
                 location: location.clone(),
             })
         }),
-        Expression::MacroInvocation { 
+        Expression::MacroInvocation {
             name,
             args,
             delimiter,
             is_repeat,
             location,
         } => optimizer.alloc_expr(unsafe {
-            std::mem::transmute::<Expression<'_>, Expression<'_>>(Expression::MacroInvocation { 
+            std::mem::transmute::<Expression<'_>, Expression<'_>>(Expression::MacroInvocation {
                 name: name.clone(),
                 args: args
                     .iter()
@@ -990,13 +990,14 @@ mod tests {
                             location: None,
                         }),
                         body: vec![test_alloc_stmt(Statement::Expression {
-                            expr: test_alloc_expr(Expression::MacroInvocation { 
+                            expr: test_alloc_expr(Expression::MacroInvocation {
                                 name: "println".to_string(),
                                 args: vec![test_alloc_expr(Expression::Identifier {
                                     name: "i".to_string(),
                                     location: None,
                                 })],
                                 delimiter: crate::parser::MacroDelimiter::Parens,
+                                is_repeat: false,
                                 location: None,
                             }),
                             location: None,
