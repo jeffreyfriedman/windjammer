@@ -5274,10 +5274,10 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
                 let params = parameters.join(", ");
                 let body_str = self.generate_expression(body);
 
-                // In Windjammer, closures automatically use move semantics when needed
-                // This is more ergonomic than requiring explicit 'move' keyword
-                // We always generate 'move' for safety in concurrent contexts
-                format!("move |{}| {}", params, body_str)
+                // Don't automatically add 'move' - it causes E0382 errors when closures
+                // need to borrow their environment mutably (like egui UI closures).
+                // Rust's borrow checker will infer 'move' when actually needed.
+                format!("|{}| {}", params, body_str)
             }
             Expression::Index { object, index, .. } => {
                 let obj_str = self.generate_expression(object);
