@@ -111,6 +111,20 @@ impl MethodCallAnalyzer {
             }
         }
 
+        // TDD FIX: PARAMETERS THAT ARE ALREADY REFERENCE TYPES
+        // If a function parameter is declared as &T or &mut T, the identifier
+        // itself is already a reference. Don't add another &.
+        // Example: fn remove(&mut self, key: &str) { self.items.remove(key) }
+        // key is already &str, so we pass it directly, not &key (which would be &&str)
+        if let Expression::Identifier { name, .. } = arg {
+            if current_function_params.iter().any(|param| {
+                param.name == *name
+                    && matches!(&param.type_, Type::Reference(_) | Type::MutableReference(_))
+            }) {
+                return false;
+            }
+        }
+
         // SPECIAL CASE: Dereference of Copy types should NOT get &
         // Example: `*entity` (where entity: &Entity and Entity is Copy) should stay as-is,
         // NOT become `&*entity` which is redundant and wrong
@@ -186,25 +200,62 @@ impl MethodCallAnalyzer {
     pub fn should_add_clone(
         arg: &Expression,
         arg_str: &str,
-        _method: &str,
+        method: &str,
         param_idx: usize,
         method_signature: &Option<crate::analyzer::FunctionSignature>,
-        _borrowed_iterator_vars: &HashSet<String>,
+        borrowed_iterator_vars: &HashSet<String>,
         current_function_params: &[Parameter],
         inferred_borrowed_params: &HashSet<String>,
+        current_function_return_type: &Option<Type>,
     ) -> bool {
-        // BUGFIX: Don't auto-clone for push() on borrowed iterator variables!
-        // Problem: When building Vec<&T>, we want to push &T, not clone it.
-        // Example: for quest in &self.quests { result.push(quest) }
-        // If result is Vec<&Quest>, we should push quest (&Quest), not quest.clone() (Quest)
+        // THE WINDJAMMER WAY: Auto-clone borrowed iterator vars when pushing to Vec<T>
         //
-        // Old behavior: Always added .clone() for borrowed iterator vars
-        // New behavior: Don't add .clone() - let user be explicit if needed
+        // When we have:
+        //   for item in self.items { new_vec.push(item) }
         //
-        // This aligns with Windjammer philosophy: explicit about what matters
-        // (cloning is something you should be explicit about)
+        // The compiler adds & automatically, making it:
+        //   for item in &self.items { ... }
+        //
+        // So `item` is &T, but Vec::push() expects T (owned).
+        // We need to automatically insert .clone() in this case.
+        //
+        // EXCEPTION: If the function returns Vec<&T>, don't clone!
+        // Example: fn get_quests(&self) -> Vec<&Quest>
+        // In this case, we want to push &Quest, not Quest.
 
-        // NOTE: Removed auto-clone for push() - was causing Vec<&T> type errors
+        // Check if arg is a borrowed iterator variable
+        if let Expression::Identifier { name, .. } = arg {
+            if borrowed_iterator_vars.contains(name) && !arg_str.ends_with(".clone()") {
+                // For push(), check if we're building a Vec<&T>
+                if method == "push" {
+                    // Check if the function returns Vec<&T>
+                    if let Some(Type::Vec(inner_type)) = current_function_return_type {
+                        // Check if the Vec's element type is a reference
+                        if matches!(**inner_type, Type::Reference(_) | Type::MutableReference(_)) {
+                            // Function returns Vec<&T>, so don't clone
+                            return false;
+                        }
+                    }
+
+                    // Not returning Vec<&T>, so clone is needed
+                    return true;
+                }
+
+                // For other methods, check the signature
+                if let Some(sig) = method_signature {
+                    let sig_param_idx = if sig.has_self_receiver {
+                        param_idx + 1
+                    } else {
+                        param_idx
+                    };
+                    if let Some(&ownership) = sig.param_ownership.get(sig_param_idx) {
+                        if matches!(ownership, OwnershipMode::Owned) {
+                            return true;
+                        }
+                    }
+                }
+            }
+        }
 
         // Check if method expects owned value and arg is a borrowed field
         if let Some(sig) = method_signature {
@@ -324,11 +375,32 @@ impl MethodCallAnalyzer {
                     return true;
                 }
 
-                // Check if it's a usize parameter
-                if current_function_params
-                    .iter()
-                    .any(|p| &p.name == name && matches!(&p.type_, Type::Custom(t) if t == "usize"))
-                {
+                // Check if parameter has a Copy type (integers, floats, bool, char)
+                if current_function_params.iter().any(|p| {
+                    if &p.name == name {
+                        if let Type::Custom(t) = &p.type_ {
+                            return matches!(
+                                t.as_str(),
+                                "i8" | "i16"
+                                    | "i32"
+                                    | "i64"
+                                    | "i128"
+                                    | "isize"
+                                    | "u8"
+                                    | "u16"
+                                    | "u32"
+                                    | "u64"
+                                    | "u128"
+                                    | "usize"
+                                    | "f32"
+                                    | "f64"
+                                    | "bool"
+                                    | "char"
+                            );
+                        }
+                    }
+                    false
+                }) {
                     return true;
                 }
 

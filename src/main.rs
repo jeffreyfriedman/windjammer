@@ -3273,11 +3273,25 @@ fn visit_dirs(dir: &Path, test_files: &mut Vec<PathBuf>) -> Result<()> {
 }
 
 /// Check if a file is a test file
+/// TDD FIX: Only discover test files in tests_wj/ directories or files ending in _test.wj
+/// THE WINDJAMMER WAY: Avoid false positives by checking directory structure
 fn is_test_file(path: &Path) -> bool {
     if let Some(name) = path.file_name() {
         let name_str = name.to_string_lossy();
-        (name_str.ends_with("_test.wj") || name_str.starts_with("test_"))
-            && name_str.ends_with(".wj")
+
+        // Must end with .wj
+        if !name_str.ends_with(".wj") {
+            return false;
+        }
+
+        // Check if file is in tests_wj/ directory OR ends with _test.wj
+        let in_tests_dir = path
+            .components()
+            .any(|c| c.as_os_str().to_string_lossy() == "tests_wj");
+
+        let ends_with_test = name_str.ends_with("_test.wj");
+
+        in_tests_dir || ends_with_test
     } else {
         false
     }
@@ -3295,7 +3309,13 @@ fn compile_test_file(test_file: &Path, _output_dir: &Path) -> Result<Vec<TestFun
     let mut lexer = Lexer::new(&source);
     let tokens = lexer.tokenize_with_locations();
     let mut parser = Parser::new(tokens);
-    let program = parser.parse().map_err(|e| anyhow::anyhow!("{}", e))?;
+
+    // TDD DEBUG: Add file context to parser errors
+    let program = parser.parse().map_err(|e| {
+        eprintln!("DEBUG: Parser error in file: {}", test_file.display());
+        eprintln!("DEBUG: Error message: {}", e);
+        anyhow::anyhow!("In file {}: {}", test_file.display(), e)
+    })?;
 
     // Find test functions
     let mut tests = Vec::new();
@@ -3399,16 +3419,22 @@ fn detect_and_compile_library(
                 eprintln!("DEBUG: generate_lib_rs_for_library succeeded");
             }
 
+            // TDD FIX: Copy FFI files from src/ffi to test library
+            // THE WINDJAMMER WAY: Dynamic, robust FFI integration
+            // This enables tests to work with full FFI functionality
+            if let Err(e) = copy_ffi_files_to_test_library(project_root, &lib_output_dir) {
+                eprintln!("WARNING: Failed to copy FFI files: {}", e);
+                // Continue anyway - tests might not need FFI
+            } else {
+                eprintln!("DEBUG: FFI files copied successfully");
+            }
+
             eprintln!("DEBUG: About to fix Cargo.toml");
 
             // Fix the generated Cargo.toml to use the correct library name and add user dependencies
             let cargo_toml_path = lib_output_dir.join("Cargo.toml");
             let test_lib_name = format!("{}_testlib", lib_name.replace('-', "_"));
             let test_lib_package_name = test_lib_name.replace('_', "-");
-
-            eprintln!("DEBUG: cargo_toml_path = {}", cargo_toml_path.display());
-            eprintln!("DEBUG: test_lib_name = {}", test_lib_name);
-            eprintln!("DEBUG: test_lib_package_name = {}", test_lib_package_name);
 
             println!(
                 "   {} Reading Cargo.toml from: {}",
@@ -3588,6 +3614,15 @@ fn generate_lib_rs_for_library(lib_output_dir: &Path) -> Result<()> {
         return Ok(()); // No modules to export
     }
 
+    // TDD FIX: Filter out "lib" module to prevent E0761 conflict
+    // "lib" is a reserved name for the library itself, not a module to import
+    // This prevents: error[E0761]: file for module `lib` found at both "lib.rs" and "lib/mod.rs"
+    modules.retain(|m| m != "lib");
+
+    if modules.is_empty() {
+        return Ok(()); // No modules to export after filtering
+    }
+
     modules.sort();
 
     // Generate lib.rs content
@@ -3605,6 +3640,236 @@ fn generate_lib_rs_for_library(lib_output_dir: &Path) -> Result<()> {
 
     // Write lib.rs
     fs::write(lib_output_dir.join("lib.rs"), lib_rs)?;
+
+    Ok(())
+}
+
+/// TDD FIX: Copy FFI files from project src/ffi to test library output
+/// THE WINDJAMMER WAY: Dynamic, robust FFI integration for tests
+///
+/// This function:
+/// 1. Checks if project has src/ffi directory
+/// 2. Recursively copies all .rs files
+/// 3. Copies shader files (.wgsl) if they exist
+/// 4. Updates lib.rs to include pub mod ffi
+/// 5. Returns Ok even if no FFI files exist (optional feature)
+fn copy_ffi_files_to_test_library(project_root: &Path, lib_output_dir: &Path) -> Result<()> {
+    use colored::*;
+    use std::fs;
+
+    // TDD FIX: Check for FFI directory in multiple locations
+    // THE WINDJAMMER WAY: Support both src/ffi (library) and ffi/ (game engine) layouts
+    // 1. Check ffi/ at project root (game engine layout)
+    // 2. Check src/ffi/ (library layout)
+    let ffi_locations = [
+        project_root.join("ffi"),
+        project_root.join("src").join("ffi"),
+    ];
+
+    let src_ffi_dir = ffi_locations
+        .iter()
+        .find(|path| path.exists() && path.is_dir())
+        .cloned();
+
+    let src_ffi_dir = match src_ffi_dir {
+        Some(dir) => dir,
+        None => {
+            // No FFI directory - this is fine, not all projects need FFI
+            return Ok(());
+        }
+    };
+
+    println!(
+        "   {} Copying FFI files from {}",
+        "→".bright_blue().bold(),
+        src_ffi_dir.display()
+    );
+
+    // Create ffi directory in lib output
+    let dest_ffi_dir = lib_output_dir.join("ffi");
+    fs::create_dir_all(&dest_ffi_dir)?;
+
+    // Recursively copy all .rs files from src/ffi
+    copy_ffi_files_recursive(&src_ffi_dir, &dest_ffi_dir)?;
+
+    // Update lib.rs to include ffi module
+    let lib_rs_path = lib_output_dir.join("lib.rs");
+    if lib_rs_path.exists() {
+        let mut lib_rs_content = fs::read_to_string(&lib_rs_path)?;
+
+        // Check if ffi module is already declared
+        if !lib_rs_content.contains("pub mod ffi") {
+            // Insert ffi module declaration after other module declarations
+            // but before re-exports
+            if let Some(reexport_pos) = lib_rs_content.find("// Re-export for convenience") {
+                lib_rs_content
+                    .insert_str(reexport_pos, "pub mod ffi; // FFI Rust implementations\n\n");
+            } else {
+                // No re-export comment found, append at end
+                lib_rs_content.push_str("\npub mod ffi; // FFI Rust implementations\n");
+            }
+
+            fs::write(&lib_rs_path, lib_rs_content)?;
+            println!(
+                "   {} Updated lib.rs to include FFI module",
+                "✓".green().bold()
+            );
+        }
+    }
+
+    // TDD FIX: Copy FFI dependencies from project Cargo.toml to test library Cargo.toml
+    // This ensures that FFI code that uses external crates (like wgpu) can compile
+    copy_ffi_dependencies_to_test_library(project_root, lib_output_dir)?;
+
+    println!("   {} FFI files copied successfully", "✓".green().bold());
+
+    Ok(())
+}
+
+/// TDD FIX: Copy FFI dependencies from project Cargo.toml to test library Cargo.toml
+/// THE WINDJAMMER WAY: Dynamic, robust dependency management for FFI
+fn copy_ffi_dependencies_to_test_library(project_root: &Path, lib_output_dir: &Path) -> Result<()> {
+    use colored::*;
+    use std::fs;
+
+    // Read project's Cargo.toml
+    let project_cargo_toml = project_root.join("Cargo.toml");
+    if !project_cargo_toml.exists() {
+        // No Cargo.toml - no FFI dependencies to copy
+        return Ok(());
+    }
+
+    let cargo_toml_content = fs::read_to_string(&project_cargo_toml)?;
+    let cargo_toml: toml::Value = toml::from_str(&cargo_toml_content)?;
+
+    // Extract dependencies
+    let mut ffi_deps = Vec::new();
+    if let Some(deps) = cargo_toml.get("dependencies").and_then(|v| v.as_table()) {
+        for (dep_name, dep_spec) in deps {
+            // Skip windjammer-runtime (already added by test framework)
+            // Skip dependencies that are paths to local crates
+            if dep_name == "windjammer-runtime" {
+                continue;
+            }
+
+            // Add all other dependencies (these are typically external crates needed by FFI)
+            ffi_deps.push((dep_name.clone(), dep_spec.clone()));
+        }
+    }
+
+    if ffi_deps.is_empty() {
+        // No FFI dependencies to copy
+        return Ok(());
+    }
+
+    println!(
+        "   {} Copying {} FFI dependencies to test library",
+        "→".bright_blue().bold(),
+        ffi_deps.len()
+    );
+
+    // Read test library's Cargo.toml
+    let test_cargo_toml_path = lib_output_dir.join("Cargo.toml");
+    let mut test_cargo_toml_content = fs::read_to_string(&test_cargo_toml_path)?;
+
+    // Add FFI dependencies to the [dependencies] section
+    for (dep_name, dep_spec) in ffi_deps {
+        // Skip if dependency already exists
+        if test_cargo_toml_content.contains(&format!("{} =", dep_name)) {
+            continue;
+        }
+
+        // Format dependency spec as TOML
+        let dep_line = if let Some(version_str) = dep_spec.as_str() {
+            // Simple version string: dep = "1.0"
+            format!("{} = \"{}\"", dep_name, version_str)
+        } else if let Some(table) = dep_spec.as_table() {
+            // Complex dependency with features, etc.
+            let mut parts = Vec::new();
+            if let Some(version) = table.get("version").and_then(|v| v.as_str()) {
+                parts.push(format!("version = \"{}\"", version));
+            }
+            if let Some(features) = table.get("features") {
+                // Handle features array more carefully
+                if let Ok(features_str) = toml::to_string(features) {
+                    parts.push(format!("features = {}", features_str.trim()));
+                } else if let Some(arr) = features.as_array() {
+                    // Manual array formatting as fallback
+                    let feature_list: Vec<String> = arr
+                        .iter()
+                        .filter_map(|v| v.as_str())
+                        .map(|s| format!("\"{}\"", s))
+                        .collect();
+                    parts.push(format!("features = [{}]", feature_list.join(", ")));
+                }
+            }
+            if let Some(path) = table.get("path").and_then(|v| v.as_str()) {
+                // Make path absolute for test library
+                let abs_path = project_root.join(path);
+                parts.push(format!("path = \"{}\"", abs_path.display()));
+            }
+            if parts.is_empty() {
+                // No useful parts extracted, skip this dependency
+                continue;
+            }
+            format!("{} = {{ {} }}", dep_name, parts.join(", "))
+        } else {
+            continue;
+        };
+
+        // Find [dependencies] section and add the dependency
+        if let Some(deps_pos) = test_cargo_toml_content.find("[dependencies]") {
+            // Find the end of the [dependencies] section (next [section] or EOF)
+            let after_deps = &test_cargo_toml_content[deps_pos + "[dependencies]".len()..];
+            if let Some(next_section_pos) = after_deps.find("\n[") {
+                // Insert before next section
+                let insert_pos = deps_pos + "[dependencies]".len() + next_section_pos;
+                test_cargo_toml_content.insert_str(insert_pos, &format!("\n{}", dep_line));
+            } else {
+                // Append at end of file
+                test_cargo_toml_content.push_str(&format!("\n{}\n", dep_line));
+            }
+        }
+    }
+
+    // Write updated Cargo.toml
+    fs::write(&test_cargo_toml_path, test_cargo_toml_content)?;
+
+    println!(
+        "   {} FFI dependencies added to test library Cargo.toml",
+        "✓".green().bold()
+    );
+
+    Ok(())
+}
+
+/// Recursively copy .rs and .wgsl files from source to destination
+fn copy_ffi_files_recursive(src: &Path, dest: &Path) -> Result<()> {
+    use std::fs;
+
+    for entry in fs::read_dir(src)? {
+        let entry = entry?;
+        let path = entry.path();
+        let file_name = match path.file_name() {
+            Some(name) => name,
+            None => continue,
+        };
+
+        if path.is_dir() {
+            // Recursively copy subdirectories (e.g., shaders/)
+            let dest_subdir = dest.join(file_name);
+            fs::create_dir_all(&dest_subdir)?;
+            copy_ffi_files_recursive(&path, &dest_subdir)?;
+        } else if path.is_file() {
+            // Copy .rs files and .wgsl shader files
+            if let Some(file_name_str) = file_name.to_str() {
+                if file_name_str.ends_with(".rs") || file_name_str.ends_with(".wgsl") {
+                    let dest_file = dest.join(file_name);
+                    fs::copy(&path, &dest_file)?;
+                }
+            }
+        }
+    }
 
     Ok(())
 }
@@ -4234,8 +4499,12 @@ pub fn generate_nested_module_structure(source_dir: &Path, output_dir: &Path) ->
                 if path.is_file() {
                     if let Some(name) = path.file_name() {
                         let name_str = name.to_string_lossy();
-                        // Copy .rs files that aren't lib.rs or mod.rs
-                        if name_str.ends_with(".rs") && name_str != "lib.rs" && name_str != "mod.rs"
+                        // Copy .rs files that aren't lib.rs, mod.rs, or build.rs
+                        // build.rs is a Cargo build script and should not be copied to output
+                        if name_str.ends_with(".rs")
+                            && name_str != "lib.rs"
+                            && name_str != "mod.rs"
+                            && name_str != "build.rs"
                         {
                             // THE WINDJAMMER WAY: Check if there's a corresponding .wj file
                             // If runtime.wj exists, don't copy runtime.rs (it would overwrite the generated file!)

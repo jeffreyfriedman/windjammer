@@ -18,7 +18,8 @@ fn compile_code(code: &str) -> Result<String, String> {
     file.write_all(code.as_bytes())
         .map_err(|e| format!("Failed to write source: {}", e))?;
 
-    let wj_binary = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("target/release/wj");
+    // TDD FIX: Use pre-compiled test binary to avoid race conditions
+    let wj_binary = PathBuf::from(env!("CARGO_BIN_EXE_wj"));
 
     let output = Command::new(&wj_binary)
         .arg("build")

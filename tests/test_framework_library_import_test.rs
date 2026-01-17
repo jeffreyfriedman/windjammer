@@ -9,6 +9,7 @@
 // 3. Library exports public symbols that tests can import
 
 use std::fs;
+use std::path::PathBuf;
 use std::process::Command;
 use tempfile::TempDir;
 
@@ -18,16 +19,28 @@ fn test_library_compilation_creates_linkable_crate() {
     let temp_dir = TempDir::new().unwrap();
     let project_root = temp_dir.path();
 
+    // TDD FIX: Use absolute path to windjammer-runtime from manifest dir
+    // Relative paths don't work from temporary directories
+    let runtime_path = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .parent()
+        .unwrap()
+        .join("windjammer")
+        .join("crates")
+        .join("windjammer-runtime");
+
     // Create wj.toml
-    let wj_toml = r#"
+    let wj_toml = format!(
+        r#"
 [package]
 name = "test-lib"
 version = "0.1.0"
 
 [dependencies]
-windjammer-runtime = { path = "../../../windjammer/crates/windjammer-runtime" }
-"#;
-    fs::write(project_root.join("wj.toml"), wj_toml).unwrap();
+windjammer-runtime = {{ path = "{}" }}
+"#,
+        runtime_path.display()
+    );
+    fs::write(project_root.join("wj.toml"), &wj_toml).unwrap();
 
     // Create src_wj directory with a simple library
     let src_wj = project_root.join("src_wj");
@@ -61,18 +74,21 @@ impl TestStruct {
 
     // After compilation, the library should have:
     // 1. Cargo.toml with [lib] section
-    let cargo_toml = r#"[package]
+    let cargo_toml = format!(
+        r#"[package]
 name = "test-lib"
 version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-windjammer-runtime = { path = "../../../windjammer/crates/windjammer-runtime" }
+windjammer-runtime = {{ path = "{}" }}
 
 [lib]
 name = "test_lib"
 path = "lib.rs"
-"#;
+"#,
+        runtime_path.display()
+    );
     fs::write(lib_output.join("Cargo.toml"), cargo_toml).unwrap();
 
     // 2. lib.rs entry point that re-exports modules
