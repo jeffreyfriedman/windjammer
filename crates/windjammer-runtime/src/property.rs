@@ -68,6 +68,16 @@ where
     }
 }
 
+/// Alias for `property_test_with_gen` to match the naming convention of gen2/gen3
+/// This is used by the Windjammer compiler's code generation
+pub fn property_test_with_gen1<T, G, F>(iterations: usize, gen: G, property: F)
+where
+    G: Fn() -> T,
+    F: Fn(T),
+{
+    property_test_with_gen(iterations, gen, property)
+}
+
 /// Test a property with two generated inputs
 ///
 /// # Example
