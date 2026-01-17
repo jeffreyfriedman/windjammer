@@ -78,8 +78,8 @@ fn add(a: i32, b: i32) -> i32 {
         .arg("--library")
         .output()?;
 
-    let stderr = String::from_utf8_lossy(&output.stderr);
-    let stdout = String::from_utf8_lossy(&output.stdout);
+    let _stderr = String::from_utf8_lossy(&output.stderr);
+    let _stdout = String::from_utf8_lossy(&output.stdout);
 
     // Check the generated lib.rs file
     let lib_rs_path = lib_output.join("lib.rs");
