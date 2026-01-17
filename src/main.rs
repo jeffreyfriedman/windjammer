@@ -3447,11 +3447,9 @@ fn detect_and_compile_library(
                             if let Some(name_start) = content[lib_section_start..].find("name = \"")
                             {
                                 let abs_start = lib_section_start + name_start + "name = \"".len();
-                                if let Some(name_end) = content[abs_start..].find('"') {
-                                    Some(content[abs_start..abs_start + name_end].to_string())
-                                } else {
-                                    None
-                                }
+                                content[abs_start..].find('"').map(|name_end| {
+                                    content[abs_start..abs_start + name_end].to_string()
+                                })
                             } else {
                                 None
                             }
