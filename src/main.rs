@@ -3431,10 +3431,47 @@ fn detect_and_compile_library(
 
             eprintln!("DEBUG: About to fix Cargo.toml");
 
+            // TDD FIX: Use the project's actual lib name, not a _testlib suffix
+            // THE WINDJAMMER WAY: Test library name must match project lib name so imports work
+            // Bug: Tests were failing with E0433: unresolved module windjammer_game_core
+            // Root Cause: Test library was using *_testlib suffix, breaking imports
+            // Fix: Read the actual [lib] name from project's Cargo.toml
+
+            // Read project's Cargo.toml to get the actual lib name
+            let project_cargo_toml = project_root.join("Cargo.toml");
+            let actual_lib_name = if project_cargo_toml.exists() {
+                match fs::read_to_string(&project_cargo_toml) {
+                    Ok(content) => {
+                        // Parse [lib] name from Cargo.toml
+                        if let Some(lib_section_start) = content.find("[lib]") {
+                            if let Some(name_start) = content[lib_section_start..].find("name = \"")
+                            {
+                                let abs_start = lib_section_start + name_start + "name = \"".len();
+                                if let Some(name_end) = content[abs_start..].find('"') {
+                                    Some(content[abs_start..abs_start + name_end].to_string())
+                                } else {
+                                    None
+                                }
+                            } else {
+                                None
+                            }
+                        } else {
+                            None
+                        }
+                    }
+                    Err(_) => None,
+                }
+            } else {
+                None
+            };
+
+            // Use actual lib name from Cargo.toml, or infer from package name
+            let test_lib_name = actual_lib_name.unwrap_or_else(|| lib_name.replace('-', "_"));
+            // Package name can be unique to avoid conflicts (e.g., my-game-core-testlib)
+            let test_lib_package_name = format!("{}-testlib", lib_name.replace('_', "-"));
+
             // Fix the generated Cargo.toml to use the correct library name and add user dependencies
             let cargo_toml_path = lib_output_dir.join("Cargo.toml");
-            let test_lib_name = format!("{}_testlib", lib_name.replace('-', "_"));
-            let test_lib_package_name = test_lib_name.replace('_', "-");
 
             println!(
                 "   {} Reading Cargo.toml from: {}",
