@@ -134,27 +134,34 @@ impl MutabilityChecker {
                 compound_op,
                 location,
             } => {
-                // Check if this is a mutation of an immutable variable
+                // TDD: Auto-mutability inference
+                // THE WINDJAMMER WAY: Compiler infers `mut` when field mutations detected
                 if let Some(var_name) = self.get_variable_name(target) {
                     if let Some(&is_mutable) = self.declared_variables.get(&var_name) {
                         if !is_mutable {
-                            let error_type = if compound_op.is_some() {
-                                MutabilityErrorType::CompoundAssignment
-                            } else if self.is_field_access(target) {
-                                MutabilityErrorType::FieldMutation
+                            // Check if this is a field mutation (e.g., point.x = 10)
+                            if self.is_field_access(target) {
+                                // AUTO-MUTABILITY: Automatically mark as mutable!
+                                // No error - the compiler infers `mut` for us
+                                self.declared_variables.insert(var_name.clone(), true);
                             } else {
-                                MutabilityErrorType::Reassignment
-                            };
+                                // Direct reassignment or compound assignment still errors
+                                let error_type = if compound_op.is_some() {
+                                    MutabilityErrorType::CompoundAssignment
+                                } else {
+                                    MutabilityErrorType::Reassignment
+                                };
 
-                            self.errors.push(MutabilityError {
-                                variable: var_name.clone(),
-                                error_type,
-                                location: location.clone(),
-                                suggestion: format!(
-                                    "make this binding mutable: `mut {}`",
-                                    var_name
-                                ),
-                            });
+                                self.errors.push(MutabilityError {
+                                    variable: var_name.clone(),
+                                    error_type,
+                                    location: location.clone(),
+                                    suggestion: format!(
+                                        "make this binding mutable: `mut {}`",
+                                        var_name
+                                    ),
+                                });
+                            }
                         }
                     }
                 }

@@ -123,8 +123,8 @@ version = "0.1.0"
         .arg("--library")
         .output()?;
 
-    let stderr = String::from_utf8_lossy(&output.stderr);
-    let stdout = String::from_utf8_lossy(&output.stdout);
+    let _stderr = String::from_utf8_lossy(&output.stderr);
+    let _stdout = String::from_utf8_lossy(&output.stdout);
 
     // Check the generated sprite.rs file
     let sprite_rs_path = lib_output.join("rendering").join("sprite.rs");

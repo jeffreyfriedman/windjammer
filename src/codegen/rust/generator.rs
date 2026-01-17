@@ -3460,9 +3460,17 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
                     _ => None,
                 };
 
+                // TDD: Auto-mutability inference
+                // THE WINDJAMMER WAY: Compiler infers `mut` when fields are mutated
+                let needs_auto_mut = if let Some(name) = var_name {
+                    self.variable_needs_mut(name)
+                } else {
+                    false
+                };
+
                 if needs_mut_ref {
                     // Don't add mut keyword, but we'll add &mut to the value
-                } else if *mutable {
+                } else if *mutable || needs_auto_mut {
                     output.push_str("mut ");
                 }
 
@@ -6525,6 +6533,79 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
         // FIXED: Don't add &mut for index access
         // The auto-clone analysis will add .clone() when needed
         // Copy types will be automatically copied (no .clone() needed)
+        false
+    }
+
+    /// TDD: Auto-mutability inference
+    /// THE WINDJAMMER WAY: Compiler infers `mut` when variable fields are mutated
+    ///
+    /// Analyzes the current function body to determine if a variable's fields
+    /// are mutated. If yes, the variable needs `mut` keyword.
+    fn variable_needs_mut(&self, var_name: &str) -> bool {
+        // Get the current function's statements
+        let statements = &self.current_function_body;
+
+        // Check if any statement mutates this variable's fields
+        for stmt in statements.iter() {
+            if self.statement_mutates_variable_field(stmt, var_name) {
+                return true;
+            }
+        }
+
+        false
+    }
+
+    /// Helper: Check if a statement mutates a variable's field
+    fn statement_mutates_variable_field(&self, stmt: &Statement, var_name: &str) -> bool {
+        match stmt {
+            Statement::Assignment { target, .. } => {
+                // Check if assignment target is var_name.field
+                self.expression_is_field_of_variable(target, var_name)
+            }
+            Statement::Expression { expr, .. } => {
+                // Check if expression contains field mutation (e.g., method calls)
+                self.expression_mutates_variable_field(expr, var_name)
+            }
+            Statement::If {
+                then_block,
+                else_block,
+                ..
+            } => {
+                // Check both branches
+                then_block
+                    .iter()
+                    .any(|s| self.statement_mutates_variable_field(s, var_name))
+                    || else_block.as_ref().is_some_and(|block| {
+                        block
+                            .iter()
+                            .any(|s| self.statement_mutates_variable_field(s, var_name))
+                    })
+            }
+            Statement::While { body, .. } | Statement::Loop { body, .. } => body
+                .iter()
+                .any(|s| self.statement_mutates_variable_field(s, var_name)),
+            Statement::For { body, .. } => body
+                .iter()
+                .any(|s| self.statement_mutates_variable_field(s, var_name)),
+            _ => false,
+        }
+    }
+
+    /// Helper: Check if an expression is a field access on a specific variable
+    fn expression_is_field_of_variable(&self, expr: &Expression, var_name: &str) -> bool {
+        match expr {
+            Expression::FieldAccess { object, .. } => {
+                // Check if object is the variable we're looking for
+                matches!(**object, Expression::Identifier { ref name, .. } if name == var_name)
+            }
+            _ => false,
+        }
+    }
+
+    /// Helper: Check if an expression mutates a variable's field
+    fn expression_mutates_variable_field(&self, _expr: &Expression, _var_name: &str) -> bool {
+        // For now, return false - we primarily care about assignments
+        // Could be enhanced to detect method calls that mutate self
         false
     }
 
