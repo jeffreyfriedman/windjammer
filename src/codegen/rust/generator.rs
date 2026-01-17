@@ -857,6 +857,22 @@ impl<'ast> CodeGenerator<'ast> {
             }
         }
 
+        // Check for property testing decorators and collect max parameter count
+        let mut max_property_test_params = 0;
+        for analyzed_func in analyzed {
+            if analyzed_func
+                .decl
+                .decorators
+                .iter()
+                .any(|d| d.name == "property_test")
+            {
+                let param_count = analyzed_func.decl.parameters.len();
+                if param_count > max_property_test_params {
+                    max_property_test_params = param_count;
+                }
+            }
+        }
+
         // Inject implicit imports if needed
         let mut implicit_imports = String::new();
 
@@ -910,6 +926,19 @@ impl<'ast> CodeGenerator<'ast> {
             implicit_imports.push_str("use std::fmt::Write;\n");
         }
 
+        // Add property testing imports if needed
+        if max_property_test_params > 0 {
+            // Import the specific property_test_with_genN functions needed
+            for param_count in 1..=max_property_test_params {
+                implicit_imports.push_str(&format!(
+                    "use windjammer_runtime::property::property_test_with_gen{};\n",
+                    param_count
+                ));
+            }
+            // Add rand re-export from windjammer_runtime for random value generation in property tests
+            implicit_imports.push_str("use windjammer_runtime::rand;\n");
+        }
+
         // Add Tauri invoke helper for WASM target if needed
         let mut tauri_helper = String::new();
         if self.target == CompilationTarget::Wasm && self.needs_serde_imports {
@@ -953,12 +982,132 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
         output
     }
 
+    /// Calculate the import prefix for cross-module imports based on output file nesting
+    /// Returns the number of directory levels to go up (for super:: prefixes)
+    fn get_import_prefix_for_nested_output(&self) -> Option<usize> {
+        if self.current_output_file.as_os_str().is_empty() {
+            return None;
+        }
+
+        // Count directory levels by checking parent directories
+        // For src/generated/core/commands/command.rs:
+        // - command.rs (file)
+        // - commands/ (parent 1)
+        // - core/ (parent 2)
+        // - generated/ (parent 3 - this is our module root)
+        // - src/ (parent 4)
+        // So from core/commands/ we need to go up 2 levels to get to generated/
+
+        // Get the path and count parent directories excluding the filename
+        let mut parent = self.current_output_file.parent();
+        let mut depth = 0;
+
+        while let Some(p) = parent {
+            let dir_name = p.file_name().and_then(|n| n.to_str()).unwrap_or("");
+
+            // Stop when we hit a known module root directory
+            // These are directories that typically contain the generated modules
+            if dir_name == "generated"
+                || dir_name == "build"
+                || dir_name == "out"
+                || dir_name == "src"
+            {
+                // Found module root - return current depth
+                if depth > 0 {
+                    return Some(depth);
+                }
+                break;
+            }
+
+            depth += 1;
+            parent = p.parent();
+        }
+
+        None
+    }
+
+    fn get_module_root_name(&self) -> Option<String> {
+        // Walk up the directory tree to find the module root name
+        // KEY DISTINCTION:
+        // - If directory has lib.rs: it's the crate root -> return None
+        // - If directory has mod.rs AND parent has lib.rs: it's a submodule -> return dir name
+        // - Otherwise: not a module boundary -> keep searching
+
+        let mut parent = self.current_output_file.parent();
+
+        while let Some(p) = parent {
+            let dir_name = p.file_name().and_then(|n| n.to_str()).unwrap_or("");
+
+            // Check if this is a known module root directory
+            if dir_name == "generated" || dir_name == "build" || dir_name == "out" {
+                // If this directory contains lib.rs, it IS the crate root
+                if p.join("lib.rs").exists() {
+                    // Example: build/lib.rs exists
+                    // So crate:: refers to build/ itself, not build::something
+                    return None;
+                }
+
+                // Check if parent directory has lib.rs
+                // If so, this is a submodule (regardless of whether mod.rs exists yet)
+                // NOTE: Don't check for mod.rs existence because the CLI generates it AFTER
+                // compiling the individual files (chicken-and-egg problem)
+                if let Some(parent_of_p) = p.parent() {
+                    // Check immediate parent for lib.rs
+                    if parent_of_p.join("lib.rs").exists() {
+                        // Example: src/lib.rs exists, so src/generated/ is a submodule
+                        return Some(dir_name.to_string());
+                    }
+                }
+
+                // No lib.rs in this directory or parent
+                // This directory is the crate root
+                return None;
+            }
+
+            // Stop at src/ directory (don't go higher)
+            if dir_name == "src" {
+                break;
+            }
+
+            parent = p.parent();
+        }
+
+        None
+    }
+
     fn generate_use(&self, path: &[String], alias: Option<&str>) -> String {
         if path.is_empty() {
             return String::new();
         }
 
         let full_path = path.join(".");
+
+        // SPECIAL CASE: Handle crate:: imports when in nested module output
+        // Examples:
+        // - use crate::scene::{A, B} -> use crate::generated::scene::{A, B}
+        // - use crate::scene::Scene -> use crate::generated::scene::Scene
+        // This applies to both braced and non-braced imports
+        if full_path.starts_with("crate::") || full_path.starts_with("crate.") {
+            // Find the module root (e.g., "generated", "build", "out")
+            let module_root = if self.is_module {
+                self.get_module_root_name()
+            } else {
+                None
+            };
+
+            let rewritten = if let Some(root_name) = module_root {
+                // Normalize to use :: separator
+                let normalized = full_path.replace('.', "::");
+                // Rewrite: crate::scene::X -> crate::generated::scene::X
+                let path_without_crate = normalized.strip_prefix("crate::").unwrap();
+                format!("crate::{}::{}", root_name, path_without_crate)
+            } else {
+                // No module root detected, keep as-is
+                full_path.replace('.', "::")
+            };
+
+            return format!("use {};\n", rewritten);
+        }
 
         // Handle stdlib imports FIRST (before glob handling)
         // This ensures std::ui::*, std::fs::*, etc. are properly skipped
@@ -1163,17 +1312,66 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
         // Otherwise, it's a module and we should add ::*
         let rust_path = full_path.replace('.', "::");
 
+        // TDD FIX: Handle imports from sibling modules (Part 2 - Nested Import Bug)
+        // When in a subdirectory (e.g., rendering/sprite.wj) and importing a sibling (texture::Texture),
+        // we need to detect this and rewrite to super::texture::Texture
+        //
+        // Detection strategy:
+        // 1. Check if we're in a subdirectory (output_file contains a directory separator)
+        // 2. Check if the import is bare (no std::, crate::, super:: prefix)
+        // 3. Assume it's a sibling module and use super:: prefix
+        //
+        // THE WINDJAMMER WAY: Smart defaults that work 99% of the time
+        let is_in_subdirectory = self
+            .current_output_file
+            .to_str()
+            .map(|s| s.contains('/'))
+            .unwrap_or(false);
+
+        // TDD FIX: Detect imports from parent module's re-exports
+        // When in rendering/sprite.wj and seeing "use rendering::Texture",
+        // this means the parent module's re-export, so convert to "use super::Texture"
+        if is_in_subdirectory {
+            if let Some(parent_dir) = self
+                .current_output_file
+                .parent()
+                .and_then(|p| p.file_name())
+                .and_then(|n| n.to_str())
+            {
+                // Check if the import starts with our parent directory name
+                if rust_path.starts_with(&format!("{}::", parent_dir)) {
+                    // Strip the parent directory name and use super:: instead
+                    let path_without_parent = rust_path
+                        .strip_prefix(&format!("{}::", parent_dir))
+                        .unwrap();
+                    return format!("use super::{};\n", path_without_parent);
+                }
+            }
+        }
+
         // BUGFIX: Handle imports from sibling modules (flat directory structure)
         // When importing from common module names like math, rendering, collision2d, etc.,
         // these are sibling files in src/generated/, so use super:: instead of absolute paths
         //
         // IMPORTANT: Distinguish between:
-        // 1. Directory prefixes (math, rendering, physics) - should be stripped
-        // 2. Actual module files (texture_atlas, sprite_region) - should be preserved
+        // 1. Directory prefixes (math, rendering, physics) - should be handled with crate::
+        // 2. Actual module files (texture_atlas, sprite_region) - should be handled with super::
         // THE WINDJAMMER WAY: With nested module system (lib.rs), use crate:: for cross-directory imports
         // Only use super:: for same-directory imports
-        let directory_prefixes = ["math", "utils", "helpers", "core", "common"];
         let common_sibling_modules = ["vec2", "vec3", "vec4", "mat4", "quat", "color"];
+
+        // Extract first segment early so we can use it in multiple places
+        let first_segment = rust_path.split("::").next().unwrap_or("");
+
+        // TDD FIX: Dynamically detect if first_segment is a directory by checking the generated output directory
+        let is_directory_prefix =
+            if let Some(output_dir) = self.current_output_file.parent().and_then(|p| p.parent()) {
+                // Check if a directory exists in the output root for this module name
+                let potential_dir = output_dir.join(first_segment);
+                potential_dir.is_dir()
+            } else {
+                false
+            };
 
         // Handle super::super::math::vec3::Vec3 -> super::Vec3
         // This handles cases where Windjammer source uses "use super.super.math.vec3::Vec3"
@@ -1191,18 +1389,61 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
             }
         }
 
-        let first_segment = rust_path.split("::").next().unwrap_or("");
-        let is_directory_prefix = directory_prefixes.contains(&first_segment);
-        let is_actual_module_file =
-            common_sibling_modules.contains(&first_segment) && !is_directory_prefix;
+        // TDD FIX: Detect sibling modules dynamically by checking file existence
+        // If we're in a subdirectory and the import doesn't have a known prefix (std::, crate::, super::),
+        // check if it's a sibling module file that needs super:: prefix
+        let is_sibling_module_file = if is_in_subdirectory {
+            // Check if a .wj or .rs file exists for this module in the same directory
+            if let Some(parent_dir) = self.current_output_file.parent() {
+                let potential_wj_file = parent_dir.join(format!("{}.wj", first_segment));
+                let potential_rs_file = parent_dir.join(format!("{}.rs", first_segment));
+                let potential_subdir = parent_dir.join(first_segment);
+
+                // If the file/directory exists, it's a sibling module
+                potential_wj_file.exists()
+                    || potential_rs_file.exists()
+                    || potential_subdir.is_dir()
+            } else {
+                false
+            }
+        } else {
+            false
+        };
+
+        let is_actual_module_file = if is_sibling_module_file {
+            // Sibling module file exists - use super::
+            !is_directory_prefix && first_segment != "super" && first_segment != "self"
+        } else {
+            // Not a sibling module file - use the old hardcoded list for backwards compatibility
+            common_sibling_modules.contains(&first_segment) && !is_directory_prefix
+        };
+
         let _is_sibling_module =
             is_directory_prefix || is_actual_module_file || first_segment == "super";
 
+        // Calculate import prefix for nested output structures
+        // When is_module is true, we're generating reusable modules that may be nested
+        // In that case, use relative imports based on detected nesting
+        let import_prefix = if self.is_module {
+            if let Some(nesting_level) = self.get_import_prefix_for_nested_output() {
+                // In nested output (e.g., src/generated/core/commands/)
+                // Use super:: to navigate up to the root of the generated module
+                "super::".repeat(nesting_level)
+            } else {
+                // Module mode but flat structure - still use crate::
+                "crate::".to_string()
+            }
+        } else {
+            // Not in module mode - use crate:: as before
+            "crate::".to_string()
+        };
+
         if let Some(alias_name) = alias {
             if is_directory_prefix {
-                // THE WINDJAMMER WAY: Use crate:: for cross-directory imports
-                // math::Vec2 as V -> use crate::math::Vec2 as V;
-                format!("use crate::{} as {};\n", rust_path, alias_name)
+                // THE WINDJAMMER WAY: Use calculated prefix for cross-directory imports
+                // math::Vec2 as V -> use super::super::math::Vec2 as V; (in nested output)
+                // or use crate::math::Vec2 as V; (in flat output)
+                format!("use {}{} as {};\n", import_prefix, rust_path, alias_name)
             } else if is_actual_module_file {
                 // Keep module path for actual module files: texture_atlas::TextureAtlas as TA -> use super::texture_atlas::TextureAtlas as TA;
                 format!("use super::{} as {};\n", rust_path, alias_name)
@@ -1214,30 +1455,41 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
             if rust_path.ends_with("::*") {
                 format!("use {};\n", rust_path)
             } else if is_directory_prefix {
-                // THE WINDJAMMER WAY: Use crate:: for cross-directory imports
-                // math::Vec2 -> use crate::math::Vec2;
-                format!("use crate::{};\n", rust_path)
+                // THE WINDJAMMER WAY: Use calculated prefix for cross-directory imports
+                // math::Vec2 -> use super::super::math::Vec2; (in nested output)
+                // or use crate::math::Vec2; (in flat output)
+                format!("use {}{};\n", import_prefix, rust_path)
             } else if is_actual_module_file {
                 // Keep full path for actual module files to avoid ambiguity
                 // texture_atlas::TextureAtlas -> use super::texture_atlas::TextureAtlas;
                 format!("use super::{};\n", rust_path)
             } else {
-                // Check if the last segment looks like a type (starts with uppercase)
-                let last_segment = rust_path.split("::").last().unwrap_or("");
-                if last_segment
-                    .chars()
-                    .next()
-                    .is_some_and(|c| c.is_uppercase())
-                {
-                    // Likely a type, don't add ::*
-                    format!("use {};\n", rust_path)
-                } else if rust_path.starts_with("crate::") {
-                    // For crate::module imports, don't add ::*
-                    // This allows qualified usage like module::func() in the code
+                // Check for crate:: prefix FIRST (before checking if it's a type)
+                // This ensures crate::scene::Vec3 gets rewritten to super::super::scene::Vec3
+                if rust_path.starts_with("crate::") {
+                    // For crate::module imports, rewrite based on nesting
+                    // In nested output (e.g., src/generated/core/commands/),
+                    // crate::scene::Vec3 should become super::super::scene::Vec3
+                    let path_without_crate = rust_path.strip_prefix("crate::").unwrap();
+                    format!("use {}{};\n", import_prefix, path_without_crate)
+                } else if rust_path.chars().next().is_some_and(|c| c.is_uppercase()) {
+                    // Path starts with uppercase (e.g., Vec3, String) - likely a re-exported type
+                    // Don't add ::*
                     format!("use {};\n", rust_path)
                 } else {
-                    // Likely a module, add ::*
-                    format!("use {}::*;\n", rust_path)
+                    // Check if the last segment looks like a type (starts with uppercase)
+                    let last_segment = rust_path.split("::").last().unwrap_or("");
+                    if last_segment
+                        .chars()
+                        .next()
+                        .is_some_and(|c| c.is_uppercase())
+                    {
+                        // Likely a type, don't add ::*
+                        format!("use {};\n", rust_path)
+                    } else {
+                        // Likely a module, add ::*
+                        format!("use {}::*;\n", rust_path)
+                    }
                 }
             }
         }
@@ -2192,6 +2444,12 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
             }
         }
 
+        // Add #[test] attribute for @property_test decorated functions
+        let has_property_test = func.decorators.iter().any(|d| d.name == "property_test");
+        if has_property_test {
+            output.push_str("#[test]\n");
+        }
+
         // Function signature
         let has_export = func.decorators.iter().any(|d| d.name == "export");
         if !self.in_trait_impl
@@ -2320,11 +2578,15 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
                 ));
             }
 
-            // Generate test closure
+            // Generate test closure with typed parameters
             output.push_str(&self.indent());
             output.push('|');
-            let param_names: Vec<_> = func.parameters.iter().map(|p| p.name.as_str()).collect();
-            output.push_str(&param_names.join(", "));
+            let param_with_types: Vec<String> = func
+                .parameters
+                .iter()
+                .map(|p| format!("{}: {}", p.name, self.type_to_rust(&p.type_)))
+                .collect();
+            output.push_str(&param_with_types.join(", "));
             output.push_str("| {\n");
             self.indent_level += 1;
 
@@ -4736,9 +4998,26 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
                                             }
                                         );
 
+                                        // TDD FIX: Check if parameter is already a reference type
+                                        // If param is &string, don't add another & (would be &&string)
+                                        let is_param_already_ref =
+                                            if let Expression::Identifier { name, .. } = arg {
+                                                self.current_function_params.iter().any(|param| {
+                                                    param.name == *name
+                                                        && matches!(
+                                                            &param.type_,
+                                                            Type::Reference(_)
+                                                                | Type::MutableReference(_)
+                                                        )
+                                                })
+                                            } else {
+                                                false
+                                            };
+
                                         // Insert & if not already a reference and not a string literal
                                         if !expression_helpers::is_reference_expression(arg)
                                             && !is_string_literal
+                                            && !is_param_already_ref
                                         {
                                             return format!("&{}", arg_str);
                                         }
@@ -4881,6 +5160,7 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
                             &self.borrowed_iterator_vars,
                             &self.current_function_params,
                             &self.inferred_borrowed_params,
+                            &self.current_function_return_type,
                         ) {
                             arg_str = format!("{}.clone()", arg_str);
                         }
@@ -5274,10 +5554,25 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
                 let params = parameters.join(", ");
                 let body_str = self.generate_expression(body);
 
-                // Don't automatically add 'move' - it causes E0382 errors when closures
-                // need to borrow their environment mutably (like egui UI closures).
-                // Rust's borrow checker will infer 'move' when actually needed.
-                format!("|{}| {}", params, body_str)
+                // THE WINDJAMMER WAY: Smart `move` inference for closures
+                //
+                // Add `move` automatically UNLESS the closure captures `self`.
+                // Rationale:
+                // 1. Simple closures that capture local variables → add `move` (safer, works for threads)
+                // 2. Method closures that capture `self` → don't add `move` (UI callbacks need to borrow)
+                //
+                // This makes Windjammer code simpler while avoiding E0382 errors in UI code.
+
+                // Check if the closure body references `self`
+                let captures_self = self.expression_references_self(body);
+
+                if captures_self {
+                    // Don't add `move` - closure needs to borrow `self`
+                    format!("|{}| {}", params, body_str)
+                } else {
+                    // Add `move` - closure can safely capture by value
+                    format!("move |{}| {}", params, body_str)
+                }
             }
             Expression::Index { object, index, .. } => {
                 let obj_str = self.generate_expression(object);
@@ -6313,6 +6608,73 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
                 cond_usage
             }
             _ => VariableUsage::NotUsed,
+        }
+    }
+
+    /// Check if an expression references `self`
+    /// Used to determine if a closure should use `move` or borrow semantics
+    fn expression_references_self(&self, expr: &Expression) -> bool {
+        match expr {
+            Expression::Identifier { name, .. } => name == "self",
+            Expression::FieldAccess { object, .. } => self.expression_references_self(object),
+            Expression::MethodCall {
+                object, arguments, ..
+            } => {
+                self.expression_references_self(object)
+                    || arguments
+                        .iter()
+                        .any(|(_, arg)| self.expression_references_self(arg))
+            }
+            Expression::Call {
+                function,
+                arguments,
+                ..
+            } => {
+                self.expression_references_self(function)
+                    || arguments
+                        .iter()
+                        .any(|(_, arg)| self.expression_references_self(arg))
+            }
+            Expression::Binary { left, right, .. } => {
+                self.expression_references_self(left) || self.expression_references_self(right)
+            }
+            Expression::Unary { operand, .. } => self.expression_references_self(operand),
+            Expression::Block { statements, .. } => statements
+                .iter()
+                .any(|stmt| self.statement_references_self(stmt)),
+            _ => false,
+        }
+    }
+
+    /// Check if a statement references `self`
+    fn statement_references_self(&self, stmt: &Statement) -> bool {
+        match stmt {
+            Statement::Let { value, .. } => self.expression_references_self(value),
+            Statement::Assignment { target, value, .. } => {
+                self.expression_references_self(target) || self.expression_references_self(value)
+            }
+            Statement::Return { value, .. } => {
+                value.is_some_and(|v| self.expression_references_self(v))
+            }
+            Statement::If {
+                condition,
+                then_block,
+                else_block,
+                ..
+            } => {
+                self.expression_references_self(condition)
+                    || then_block.iter().any(|s| self.statement_references_self(s))
+                    || else_block.as_ref().is_some_and(|block| {
+                        block.iter().any(|s| self.statement_references_self(s))
+                    })
+            }
+            Statement::Match { value, arms, .. } => {
+                self.expression_references_self(value)
+                    || arms
+                        .iter()
+                        .any(|arm| self.expression_references_self(arm.body))
+            }
+            _ => false,
         }
     }
 
