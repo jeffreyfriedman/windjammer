@@ -426,11 +426,15 @@ pub fn generate_lib_rs(
         // THE WINDJAMMER WAY: Auto-discover ALL modules (compiler does the work!)
         // mod.wj controls re-exports, but module declarations are auto-discovered
         content.push_str("// Module declarations (auto-discovered)\n");
+
+        // TDD FIX: Filter out "lib" module to prevent E0761 conflict
         for module in &module_tree.root_modules {
-            if module.is_public {
-                content.push_str(&format!("pub mod {};\n", module.name));
-            } else {
-                content.push_str(&format!("mod {};\n", module.name));
+            if module.name != "lib" {
+                if module.is_public {
+                    content.push_str(&format!("pub mod {};\n", module.name));
+                } else {
+                    content.push_str(&format!("mod {};\n", module.name));
+                }
             }
         }
 
@@ -451,8 +455,10 @@ pub fn generate_lib_rs(
         } else {
             // No explicit pub use - use wildcard re-exports
             content.push_str("\n// Auto-generated re-exports\n");
+
+            // TDD FIX: Also skip "lib" in re-exports
             for module in &module_tree.root_modules {
-                if module.is_public {
+                if module.is_public && module.name != "lib" {
                     content.push_str(&format!("pub use {}::*;\n", module.name));
                 }
             }
@@ -460,8 +466,14 @@ pub fn generate_lib_rs(
     } else {
         // No mod.wj - auto-generate everything
         content.push_str("// Auto-discovered modules\n");
+
+        // TDD FIX: Filter out "lib" module to prevent E0761 conflict
+        // "lib" is a reserved name for the library itself, not a module to import
+        // This prevents: error[E0761]: file for module `lib` found at both "lib.rs" and "lib/mod.rs"
         for module in &module_tree.root_modules {
-            content.push_str(&format!("pub mod {};\n", module.name));
+            if module.name != "lib" {
+                content.push_str(&format!("pub mod {};\n", module.name));
+            }
         }
 
         // Add hand-written modules (like ffi)
@@ -473,8 +485,12 @@ pub fn generate_lib_rs(
         }
 
         content.push_str("\n// Auto-generated re-exports\n");
+
+        // TDD FIX: Also skip "lib" in re-exports
         for module in &module_tree.root_modules {
-            content.push_str(&format!("pub use {}::*;\n", module.name));
+            if module.name != "lib" {
+                content.push_str(&format!("pub use {}::*;\n", module.name));
+            }
         }
     }
 
@@ -618,22 +634,36 @@ pub fn generate_mod_rs_for_submodule(module: &Module, output_dir: &Path) -> Resu
         }
     } else {
         // No mod.wj - auto-generate declarations for all .wj files and subdirectories
-        content.push_str("// Auto-discovered modules\n");
-        for module_file in &module_files {
-            // THE WINDJAMMER FIX: Desktop-only modules need feature gates
-            // Naming convention: desktop_*, app_* (except app_reactive) require #[cfg(feature = "desktop")]
-            let needs_desktop_gate = module_file.starts_with("desktop_")
-                || (module_file.starts_with("app_") && module_file != "app_reactive");
+        // Use module.submodules exclusively (contains both files and directories)
+        // Separate files from subdirectories based on is_directory flag
 
-            if needs_desktop_gate {
-                content.push_str("#[cfg(feature = \"desktop\")]\n");
+        let files: Vec<_> = module
+            .submodules
+            .iter()
+            .filter(|m| !m.is_directory)
+            .collect();
+        let subdirs: Vec<_> = module
+            .submodules
+            .iter()
+            .filter(|m| m.is_directory)
+            .collect();
+
+        if !files.is_empty() {
+            content.push_str("// Auto-discovered modules\n");
+            for submodule in files {
+                let needs_desktop_gate = submodule.name.starts_with("desktop_")
+                    || (submodule.name.starts_with("app_") && submodule.name != "app_reactive");
+
+                if needs_desktop_gate {
+                    content.push_str("#[cfg(feature = \"desktop\")]\n");
+                }
+                content.push_str(&format!("pub mod {};\n", submodule.name));
             }
-            content.push_str(&format!("pub mod {};\n", module_file));
         }
 
-        if !module.submodules.is_empty() {
+        if !subdirs.is_empty() {
             content.push_str("\n// Auto-discovered submodules\n");
-            for submodule in &module.submodules {
+            for submodule in subdirs {
                 let needs_desktop_gate = submodule.name.starts_with("desktop_")
                     || (submodule.name.starts_with("app_") && submodule.name != "app_reactive");
 
@@ -647,15 +677,7 @@ pub fn generate_mod_rs_for_submodule(module: &Module, output_dir: &Path) -> Resu
         // Only add glob re-exports if no conflicts
         if !has_conflicts {
             content.push_str("\n// Auto-generated re-exports\n");
-            for module_file in &module_files {
-                let needs_desktop_gate = module_file.starts_with("desktop_")
-                    || (module_file.starts_with("app_") && module_file != "app_reactive");
-
-                if needs_desktop_gate {
-                    content.push_str("#[cfg(feature = \"desktop\")]\n");
-                }
-                content.push_str(&format!("pub use {}::*;\n", module_file));
-            }
+            // Use module.submodules exclusively (no duplication)
             for submodule in &module.submodules {
                 let needs_desktop_gate = submodule.name.starts_with("desktop_")
                     || (submodule.name.starts_with("app_") && submodule.name != "app_reactive");
