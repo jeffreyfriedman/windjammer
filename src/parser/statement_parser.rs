@@ -489,7 +489,57 @@ impl Parser {
             };
 
             self.expect(Token::FatArrow)?;
-            let body = self.parse_expression()?;
+
+            // TDD: Match arms can contain assignments (statements), not just expressions
+            // Check if this is a block or a single statement/expression
+            let body = if self.current_token() == &Token::LBrace {
+                // Block expression: match x { Pattern => { ... } }
+                self.advance();
+                let statements = self.parse_block_statements()?;
+                self.expect(Token::RBrace)?;
+                self.alloc_expr(Expression::Block {
+                    statements,
+                    location: self.current_location(),
+                })
+            } else {
+                // Try to parse as statement first (for assignments), then as expression
+                let _checkpoint = self.position;
+
+                // Peek ahead to see if this looks like an assignment
+                let is_assignment = if let Token::Ident(_) = self.current_token() {
+                    // Check for identifier followed by = (or .field = for field assignment)
+                    let mut ahead = 1;
+                    loop {
+                        match self.peek(ahead) {
+                            Some(Token::Assign) => break true,
+                            Some(Token::Dot) | Some(Token::LBracket) => {
+                                ahead += 1;
+                                if let Some(Token::Ident(_)) = self.peek(ahead) {
+                                    ahead += 1;
+                                } else {
+                                    break false;
+                                }
+                            }
+                            _ => break false,
+                        }
+                    }
+                } else {
+                    false
+                };
+
+                if is_assignment {
+                    // Parse as statement (assignment)
+                    let stmt = self.parse_statement()?;
+                    // Wrap in block expression
+                    self.alloc_expr(Expression::Block {
+                        statements: vec![stmt],
+                        location: self.current_location(),
+                    })
+                } else {
+                    // Parse as expression
+                    self.parse_expression()?
+                }
+            };
 
             arms.push(MatchArm {
                 pattern,
@@ -497,8 +547,20 @@ impl Parser {
                 body,
             });
 
+            // TDD: Match arms must be comma-separated
+            // If no comma, we're done parsing match arms
             if self.current_token() == &Token::Comma {
                 self.advance();
+                // Allow trailing comma before closing brace
+                if self.current_token() == &Token::RBrace {
+                    break;
+                }
+            } else if self.current_token() != &Token::RBrace {
+                // No comma and not at end - this is an error
+                return Err(format!(
+                    "Expected ',' or '}}' after match arm, got {:?}",
+                    self.current_token()
+                ));
             }
         }
 
