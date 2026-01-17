@@ -6603,10 +6603,103 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
     }
 
     /// Helper: Check if an expression mutates a variable's field
-    fn expression_mutates_variable_field(&self, _expr: &Expression, _var_name: &str) -> bool {
-        // For now, return false - we primarily care about assignments
-        // Could be enhanced to detect method calls that mutate self
-        false
+    /// TDD: Extended to detect mutating method calls
+    fn expression_mutates_variable_field(&self, expr: &Expression, var_name: &str) -> bool {
+        match expr {
+            Expression::MethodCall { object, method, .. } => {
+                // Check if this is a mutating method call on our variable
+                if let Expression::Identifier { name, .. } = &**object {
+                    if name == var_name && self.is_mutating_method(method) {
+                        return true;
+                    }
+                }
+                false
+            }
+            Expression::Binary { left, right, .. } => {
+                // Check both sides recursively
+                self.expression_mutates_variable_field(left, var_name)
+                    || self.expression_mutates_variable_field(right, var_name)
+            }
+            Expression::Call { arguments, .. } => {
+                // Check arguments for mutations
+                arguments
+                    .iter()
+                    .any(|(_, arg)| self.expression_mutates_variable_field(arg, var_name))
+            }
+            Expression::Block { statements, .. } => {
+                // Check statements in block
+                statements
+                    .iter()
+                    .any(|stmt| self.statement_mutates_variable_field(stmt, var_name))
+            }
+            _ => false,
+        }
+    }
+
+    /// Helper: Check if a method is mutating (common patterns)
+    fn is_mutating_method(&self, method: &str) -> bool {
+        // Common mutating methods from stdlib collections
+        if matches!(
+            method,
+            "push"
+                | "pop"
+                | "insert"
+                | "remove"
+                | "clear"
+                | "append"
+                | "extend"
+                | "push_front"
+                | "push_back"
+                | "pop_front"
+                | "pop_back"
+                | "retain"
+                | "dedup"
+                | "sort"
+                | "reverse"
+                | "swap"
+                | "drain"
+                | "truncate"
+                | "resize"
+                | "reserve"
+                | "shrink_to_fit"
+        ) {
+            return true;
+        }
+
+        // Common user-defined mutating method patterns
+        // Methods starting with "add_", "remove_", "set_", "update_", etc.
+        if method.starts_with("add_")
+            || method.starts_with("remove_")
+            || method.starts_with("delete_")
+            || method.starts_with("set_")
+            || method.starts_with("update_")
+            || method.starts_with("reset_")
+            || method.starts_with("clear_")
+            || method.starts_with("insert_")
+            || method.starts_with("append_")
+        {
+            return true;
+        }
+
+        // Common mutating verbs without prefix
+        matches!(
+            method,
+            "increment"
+                | "decrement"
+                | "add"
+                | "subtract"
+                | "multiply"
+                | "divide"
+                | "apply"
+                | "modify"
+                | "mutate"
+                | "change"
+                | "toggle"
+                | "enable"
+                | "disable"
+                | "activate"
+                | "deactivate"
+        )
     }
 
     fn variable_is_only_field_accessed(&self, var_name: &str) -> bool {
