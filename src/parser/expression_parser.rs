@@ -978,15 +978,16 @@ impl Parser {
 
                     // TDD: Match arms can contain assignments (statements), not just expressions
                     // Check if this is a block or a single statement/expression
-                    let body = if self.current_token() == &Token::LBrace {
+                    let (body, is_block) = if self.current_token() == &Token::LBrace {
                         // Block expression: match x { Pattern => { ... } }
                         self.advance();
                         let statements = self.parse_block_statements()?;
                         self.expect(Token::RBrace)?;
-                        self.alloc_expr(Expression::Block {
+                        let block = self.alloc_expr(Expression::Block {
                             statements,
                             location: self.current_location(),
-                        })
+                        });
+                        (block, true)
                     } else {
                         // Try to parse as statement first (for assignments), then as expression
                         let _checkpoint = self.position;
@@ -1017,13 +1018,14 @@ impl Parser {
                             // Parse as statement (assignment)
                             let stmt = self.parse_statement()?;
                             // Wrap in block expression
-                            self.alloc_expr(Expression::Block {
+                            let block = self.alloc_expr(Expression::Block {
                                 statements: vec![stmt],
                                 location: self.current_location(),
-                            })
+                            });
+                            (block, false)
                         } else {
                             // Parse as expression
-                            self.parse_expression()?
+                            (self.parse_expression()?, false)
                         }
                     };
 
@@ -1034,20 +1036,24 @@ impl Parser {
                     });
 
                     // TDD: Match arms must be comma-separated
-                    // If no comma, we're done parsing match arms
+                    // Exception: Commas are optional after block expressions (Rust-style)
                     if self.current_token() == &Token::Comma {
                         self.advance();
                         // Allow trailing comma before closing brace
                         if self.current_token() == &Token::RBrace {
                             break;
                         }
-                    } else if self.current_token() != &Token::RBrace {
-                        // No comma and not at end - this is an error
+                    } else if self.current_token() == &Token::RBrace {
+                        // End of match arms
+                        break;
+                    } else if !is_block {
+                        // No comma after a non-block expression (and not at end) - this is an error
                         return Err(format!(
                             "Expected ',' or '}}' after match arm, got {:?}",
                             self.current_token()
                         ));
                     }
+                    // If is_block is true and no comma, continue to next arm (comma is optional)
                 }
 
                 self.expect(Token::RBrace)?;
