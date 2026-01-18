@@ -3463,10 +3463,38 @@ fn detect_and_compile_library(
                 None
             };
 
+            // TDD FIX: Use actual library package name from project's Cargo.toml
+            // THE WINDJAMMER WAY: Test dependencies must use real library names
+            // Bug: Tests failing with E0433: unresolved module windjammer_game_core
+            // Root Cause: Test Cargo.toml uses windjammer-game-core-testlib, but tests import windjammer_game_core
+            // Fix: Read actual [package] name from project's Cargo.toml and use that for test dependency
+
+            let actual_package_name = if project_cargo_toml.exists() {
+                match fs::read_to_string(&project_cargo_toml) {
+                    Ok(content) => {
+                        // Parse [package] name from Cargo.toml
+                        content.find("[package]").and_then(|pkg_start| {
+                            content[pkg_start..]
+                                .find("name = \"")
+                                .and_then(|name_start| {
+                                    let abs_start = pkg_start + name_start + "name = \"".len();
+                                    content[abs_start..].find('"').map(|name_end| {
+                                        content[abs_start..abs_start + name_end].to_string()
+                                    })
+                                })
+                        })
+                    }
+                    Err(_) => None,
+                }
+            } else {
+                None
+            };
+
             // Use actual lib name from Cargo.toml, or infer from package name
             let test_lib_name = actual_lib_name.unwrap_or_else(|| lib_name.replace('-', "_"));
-            // Package name can be unique to avoid conflicts (e.g., my-game-core-testlib)
-            let test_lib_package_name = format!("{}-testlib", lib_name.replace('_', "-"));
+            // Use actual package name from Cargo.toml, or infer from directory (NO -testlib suffix!)
+            let test_lib_package_name =
+                actual_package_name.unwrap_or_else(|| lib_name.replace('_', "-"));
 
             // Fix the generated Cargo.toml to use the correct library name and add user dependencies
             let cargo_toml_path = lib_output_dir.join("Cargo.toml");
