@@ -491,21 +491,28 @@ impl MethodCallAnalyzer {
             return false;
         }
 
-        // Check if argument is a Copy type (shouldn't add &)
-        if Self::is_copy_type(arg, usize_variables, current_function_params) {
-            return false;
-        }
-
-        // HashMap/BTreeMap methods that expect &K
+        // TDD FIX: HashMap/BTreeMap methods that expect &K
+        // IMPORTANT: Check HashMap methods BEFORE the general Copy type check!
+        // HashMap methods like contains_key(&K), get(&K) ALWAYS need &, even for Copy types.
+        // Example: HashMap<i64, String>.contains_key(&user_id) where user_id: i64
         // BUT: Vec.remove(index) takes usize by value, not &usize!
         if matches!(method, "remove" | "get" | "contains_key" | "get_mut") {
             // Special case: Vec.remove(index) where index is usize (Copy type)
+            // Vec.remove wants owned usize, not &usize
             if method == "remove"
                 && Self::is_copy_type(arg, usize_variables, current_function_params)
             {
                 return false; // Don't add & for Vec.remove(usize_index)
             }
-            return true; // Add & for HashMap.remove(&key)
+            // For all other cases (HashMap methods), add &
+            // This includes Copy types like i64, u32, etc.
+            return true; // Add & for HashMap.get(&key), HashMap.contains_key(&key)
+        }
+
+        // General Copy type check (for non-HashMap methods)
+        // Copy types generally don't need & (passed by value)
+        if Self::is_copy_type(arg, usize_variables, current_function_params) {
+            return false;
         }
 
         // Vec/slice methods that expect &T (not usize index)
