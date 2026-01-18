@@ -5192,6 +5192,31 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
                             arg_str = format!("{}.to_string()", arg_str);
                         }
 
+                        // TDD FIX: AUTO-CONVERT &str/&String → String for method calls
+                        // When passing a &str parameter to a method expecting owned String, convert it
+                        // This handles cases like: recipe.add_ingredient("herb", 1) where add_ingredient expects String
+                        if let Expression::Identifier { name, .. } = arg {
+                            // Find the parameter type
+                            let param_type = self.current_function_params.iter()
+                                .find(|p| &p.name == name)
+                                .map(|p| &p.type_);
+                            
+                            // Check if parameter type is &str (Type::Reference(Type::String))
+                            if let Some(Type::Reference(inner_type)) = param_type {
+                                if matches!(**inner_type, Type::String) {
+                                    // Check if method signature expects owned String for this parameter
+                                    let expects_owned = method_signature
+                                        .as_ref()
+                                        .and_then(|sig| sig.param_ownership.get(i))
+                                        .map_or(false, |&ownership| matches!(ownership, OwnershipMode::Owned));
+                                    
+                                    if expects_owned && !arg_str.ends_with(".to_string()") && !arg_str.ends_with(".clone()") {
+                                        arg_str = format!("{}.to_string()", arg_str);
+                                    }
+                                }
+                            }
+                        }
+
                         // AUTO .clone(): Add .clone() when needed for borrowed values
                         if crate::codegen::rust::method_call_analyzer::MethodCallAnalyzer::should_add_clone(
                             arg,
