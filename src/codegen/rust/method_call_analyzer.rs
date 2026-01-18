@@ -341,6 +341,22 @@ impl MethodCallAnalyzer {
             }
         }
 
+        // TDD FIX: Heuristic fallback for methods without signatures
+        // Common patterns that typically expect owned String for string-like params
+        // - add_*: add_ingredient, add_item, add_member, add_choice, etc.
+        // - set_*: set_name, set_description, set_value, etc.
+        // - new: Constructor pattern often stores owned strings
+        // For first parameter (param_idx 0), these usually expect owned String
+        if param_idx == 0 {
+            if method.starts_with("add_")
+                || method.starts_with("set_")
+                || method == "new"
+                || method.ends_with("_new")
+            {
+                return true;
+            }
+        }
+
         // Final fallback
         false
     }
