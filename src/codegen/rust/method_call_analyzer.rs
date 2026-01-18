@@ -168,6 +168,15 @@ impl MethodCallAnalyzer {
             }
         }
 
+        // TDD FIX: No signature available for method call expressions
+        // Method calls like velocity.mul(dt) return owned values (often Copy types)
+        // Don't add & to them unless we have explicit signature info saying otherwise
+        // Example: position.add(velocity.mul(dt)) should NOT become position.add(&velocity.mul(dt))
+        if matches!(arg, Expression::MethodCall { .. }) {
+            // Method calls return owned values - default to no &
+            return false;
+        }
+
         // No signature available - fall back to stdlib heuristics
         let is_stdlib_method = matches!(
             method,
