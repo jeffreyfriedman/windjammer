@@ -774,7 +774,9 @@ impl Parser {
                 // Only parse as struct literal if the name looks like a type (starts with uppercase)
                 // AND the next tokens look like struct literal syntax (field: value or field,)
                 // This avoids ambiguity in contexts like "for item in items { ... }"
-                let looks_like_type = qualified_name
+                // For qualified names (e.g., "ffi::GpuVertex"), check the LAST component
+                let last_component = qualified_name.split("::").last().unwrap_or(&qualified_name);
+                let looks_like_type = last_component
                     .chars()
                     .next()
                     .is_some_and(|c| c.is_uppercase());
