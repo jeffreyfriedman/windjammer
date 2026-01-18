@@ -73,3 +73,4 @@ impl QuestManager {
         "Should push quest without .clone() to Vec<&Quest>"
     );
 }
+
