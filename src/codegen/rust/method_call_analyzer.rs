@@ -498,11 +498,56 @@ impl MethodCallAnalyzer {
         // BUT: Vec.remove(index) takes usize by value, not &usize!
         if matches!(method, "remove" | "get" | "contains_key" | "get_mut") {
             // Special case: Vec.remove(index) where index is usize (Copy type)
-            // Vec.remove wants owned usize, not &usize
+            // We need to distinguish between:
+            // - Vec<T>.remove(index: usize) -> takes by value
+            // - HashMap<K, V>.remove(&key) -> takes by reference
+            //
+            // HEURISTIC: Use parameter name to distinguish:
+            // - "index", "idx", "i" -> likely Vec index -> no borrow
+            // - "id", "key", "entity", "_id", "_key" -> likely HashMap key -> borrow
             if method == "remove"
                 && Self::is_copy_type(arg, usize_variables, current_function_params)
             {
-                return false; // Don't add & for Vec.remove(usize_index)
+                // Check the argument name to determine if it's a Vec index or HashMap key
+                let arg_name = if let Expression::Identifier { name, .. } = arg {
+                    Some(name.as_str())
+                } else {
+                    None
+                };
+
+                let looks_like_vec_index = arg_name.map_or(false, |name| {
+                    name == "index"
+                        || name == "idx"
+                        || name == "i"
+                        || name.starts_with("index_")
+                        || name.ends_with("_index")
+                        || name.ends_with("_idx")
+                });
+
+                let looks_like_hashmap_key = arg_name.map_or(false, |name| {
+                    name == "id"
+                        || name == "key"
+                        || name == "entity"
+                        || name.contains("_id")
+                        || name.contains("_key")
+                        || name == "entity_id"
+                        || name == "user_id"
+                        || name == "npc_id"
+                });
+
+                // If it looks like a Vec index, don't add &
+                if looks_like_vec_index {
+                    return false; // Vec.remove(index)
+                }
+
+                // If it looks like a HashMap key, add &
+                if looks_like_hashmap_key {
+                    return true; // HashMap.remove(&entity_id)
+                }
+
+                // Default for .remove() on Copy types: assume Vec index
+                // This is safer because Vec.remove is more common than HashMap.remove
+                return false;
             }
             // For all other cases (HashMap methods), add &
             // This includes Copy types like i64, u32, etc.
