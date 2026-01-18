@@ -76,3 +76,4 @@ fn test_method_chain_string_conversion() {
         generated
     );
 }
+
