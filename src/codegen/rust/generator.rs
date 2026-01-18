@@ -5077,13 +5077,19 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
                                                     arg_str = format!("{}.clone()", arg_str);
                                                 }
                                             } else {
+                                                // TDD FIX: Check if it's from a borrowed iterator (for loop)
+                                                // Example: for npc_id in npc_ids { Member::new(npc_id) }
+                                                // npc_id is &String from iterator, needs .clone() for owned String
+                                                let is_borrowed_iterator_var =
+                                                    self.borrowed_iterator_vars.contains(name);
+                                                
                                                 // Also check if it's inferred as borrowed
                                                 let is_inferred_borrowed =
                                                     self.inferred_borrowed_params.contains(name);
                                                 
-                                                if is_inferred_borrowed && !arg_str.ends_with(".clone()") {
-                                                    // Inferred borrowed - use .clone() (we don't know if it's &str or &T)
-                                                    // This is a safe default that works for most types
+                                                if (is_borrowed_iterator_var || is_inferred_borrowed) && !arg_str.ends_with(".clone()") {
+                                                    // Borrowed from iterator or inferred - use .clone()
+                                                    // This handles &String → String, &T → T
                                                     arg_str = format!("{}.clone()", arg_str);
                                                 }
                                             }
@@ -6535,10 +6541,12 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
                 }
                 false
             }
-            // Direct variable that's a borrowed parameter
-            Expression::Identifier { name, .. } => self.current_function_params.iter().any(|p| {
-                &p.name == name && matches!(p.ownership, crate::parser::OwnershipHint::Ref)
-            }),
+            // Direct variable that's a borrowed parameter (explicit or inferred)
+            Expression::Identifier { name, .. } => {
+                self.current_function_params.iter().any(|p| {
+                    &p.name == name && matches!(p.ownership, crate::parser::OwnershipHint::Ref)
+                }) || self.inferred_borrowed_params.contains(name)
+            },
             // Method calls that return iterators over references
             // .keys(), .values(), .iter() all return iterators over &T
             Expression::MethodCall { method, .. } => {
