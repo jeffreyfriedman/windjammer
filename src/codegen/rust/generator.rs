@@ -1106,7 +1106,12 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
                 full_path.replace('.', "::")
             };
 
-            return format!("use {};\n", rewritten);
+            // TDD FIX: Preserve alias for crate:: imports
+            if let Some(alias_name) = alias {
+                return format!("use {} as {};\n", rewritten, alias_name);
+            } else {
+                return format!("use {};\n", rewritten);
+            }
         }
 
         // Handle stdlib imports FIRST (before glob handling)
@@ -1126,8 +1131,12 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
                 || module_base.starts_with("ops")
                 || module_base == "ops"
             {
-                // Pass through to Rust's std library
-                return format!("use std::{};\n", module_name);
+                // TDD FIX: Pass through to Rust's std library with alias support
+                if let Some(alias_name) = alias {
+                    return format!("use std::{} as {};\n", module_name, alias_name);
+                } else {
+                    return format!("use std::{};\n", module_name);
+                }
             }
 
             // Handle UI framework - skip explicit import (handled by implicit imports)
