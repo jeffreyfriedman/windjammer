@@ -1135,7 +1135,7 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
                 if let Some(alias_name) = alias {
                     return format!("use std::{} as {};\n", module_name, alias_name);
                 } else {
-                    return format!("use std::{};\n", module_name);
+                return format!("use std::{};\n", module_name);
                 }
             }
 
@@ -1485,19 +1485,19 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
                     // Path starts with uppercase (e.g., Vec3, String) - likely a re-exported type
                     // Don't add ::*
                     format!("use {};\n", rust_path)
+            } else {
+                // Check if the last segment looks like a type (starts with uppercase)
+                let last_segment = rust_path.split("::").last().unwrap_or("");
+                if last_segment
+                    .chars()
+                    .next()
+                    .is_some_and(|c| c.is_uppercase())
+                {
+                    // Likely a type, don't add ::*
+                    format!("use {};\n", rust_path)
                 } else {
-                    // Check if the last segment looks like a type (starts with uppercase)
-                    let last_segment = rust_path.split("::").last().unwrap_or("");
-                    if last_segment
-                        .chars()
-                        .next()
-                        .is_some_and(|c| c.is_uppercase())
-                    {
-                        // Likely a type, don't add ::*
-                        format!("use {};\n", rust_path)
-                    } else {
-                        // Likely a module, add ::*
-                        format!("use {}::*;\n", rust_path)
+                    // Likely a module, add ::*
+                    format!("use {}::*;\n", rust_path)
                     }
                 }
             }
@@ -5544,6 +5544,24 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
                             expr_str = format!("{}.to_string()", expr_str);
                         }
 
+                        // CRITICAL: Auto-convert &str parameters to String for struct fields
+                        // Pattern: fn create(name: &str) -> User { User { name: name } }
+                        // When struct field is String but parameter is &str, add .to_string()
+                        if let Expression::Identifier { name: id, .. } = expr {
+                            // Check if this identifier is a &str parameter
+                            // In the AST, &str parameters have type Reference(Custom("str"))
+                            let is_str_param = self.current_function_params.iter().any(|p| {
+                                p.name == *id && matches!(
+                                    &p.type_,
+                                    crate::parser::Type::Reference(inner) if matches!(**inner, crate::parser::Type::Custom(ref name) if name == "str")
+                                )
+                            });
+                            
+                            if is_str_param && !expr_str.contains(".to_string()") {
+                                expr_str = format!("{}.to_string()", expr_str);
+                            }
+                        }
+
                         // CRITICAL: Auto-clone self.field when constructing struct from borrowed self
                         // Pattern: fn method(&self) -> Self { Self { field: self.field } }
                         // Non-Copy fields from borrowed self need to be cloned
@@ -5568,10 +5586,13 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
                             }
                         }
 
-                        // Check for field shorthand: if expr is just the field name, use shorthand
+                        // Check for field shorthand: if expr is just the field name AND no conversion applied, use shorthand
+                        // Only use shorthand if the generated expression exactly matches the field name
+                        // (no .to_string(), .clone(), etc. conversions)
                         if let Expression::Identifier { name: id, .. } = expr {
-                            if id == field_name {
+                            if id == field_name && expr_str == *field_name {
                                 // Shorthand: User { name } instead of User { name: name }
+                                // Only safe when no type conversion was needed
                                 return field_name.clone();
                             }
                         }
@@ -5653,7 +5674,7 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
                     format!("|{}| {}", params, body_str)
                 } else {
                     // Add `move` - closure can safely capture by value
-                    format!("move |{}| {}", params, body_str)
+                format!("move |{}| {}", params, body_str)
                 }
             }
             Expression::Index { object, index, .. } => {
@@ -6544,7 +6565,7 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
             // Direct variable that's a borrowed parameter (explicit or inferred)
             Expression::Identifier { name, .. } => {
                 self.current_function_params.iter().any(|p| {
-                    &p.name == name && matches!(p.ownership, crate::parser::OwnershipHint::Ref)
+                &p.name == name && matches!(p.ownership, crate::parser::OwnershipHint::Ref)
                 }) || self.inferred_borrowed_params.contains(name)
             },
             // Method calls that return iterators over references
