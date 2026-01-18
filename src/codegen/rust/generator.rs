@@ -6555,12 +6555,23 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
         false
     }
 
-    /// Helper: Check if a statement mutates a variable's field
+    /// Helper: Check if a statement mutates a variable's field or uses compound assignment
     fn statement_mutates_variable_field(&self, stmt: &Statement, var_name: &str) -> bool {
         match stmt {
-            Statement::Assignment { target, .. } => {
+            Statement::Assignment { target, compound_op, .. } => {
                 // Check if assignment target is var_name.field
-                self.expression_is_field_of_variable(target, var_name)
+                if self.expression_is_field_of_variable(target, var_name) {
+                    return true;
+                }
+                // TDD: Also check for compound assignments (e.g., count += 1)
+                // THE WINDJAMMER WAY: Compiler infers `mut` for compound assignments
+                if compound_op.is_some() {
+                    // Check if target is the variable itself
+                    if let Expression::Identifier { name, .. } = target {
+                        return name == var_name;
+                    }
+                }
+                false
             }
             Statement::Expression { expr, .. } => {
                 // Check if expression contains field mutation (e.g., method calls)
