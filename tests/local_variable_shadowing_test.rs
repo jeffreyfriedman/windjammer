@@ -164,3 +164,4 @@ fn compile_code(code: &str) -> Result<String, String> {
     let rust_file = output_dir.join("test.rs");
     fs::read_to_string(&rust_file).map_err(|e| format!("Failed to read generated file: {}", e))
 }
+

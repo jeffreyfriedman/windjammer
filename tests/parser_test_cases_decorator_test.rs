@@ -114,3 +114,4 @@ fn test_basic() {
         stderr
     );
 }
+

@@ -261,3 +261,4 @@ fn test_edge_case_both_file_and_directory() {
         "config/ directory should NOT be copied (module parent tree)"
     );
 }
+

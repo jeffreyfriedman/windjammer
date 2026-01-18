@@ -267,3 +267,4 @@ mod tests {
         assert!(output.contains("Total: 1 tests"));
     }
 }
+
