@@ -94,3 +94,4 @@ fn test_struct_field_ok_string_literal() {
         generated
     );
 }
+

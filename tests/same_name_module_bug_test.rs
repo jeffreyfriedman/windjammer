@@ -170,3 +170,4 @@ fn test_same_name_module_compiles_correctly() {
         String::from_utf8_lossy(&rustc_result.stderr)
     );
 }
+

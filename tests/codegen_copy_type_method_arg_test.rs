@@ -93,3 +93,4 @@ impl World {
         "Should pass Copy type by value to get()"
     );
 }
+
