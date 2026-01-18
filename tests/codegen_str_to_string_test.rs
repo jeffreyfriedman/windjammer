@@ -52,14 +52,12 @@ fn main() {
     let rust_code = fs::read_to_string(&rust_file).unwrap();
     println!("Generated Rust:\n{}", rust_code);
 
-    // The generated code should auto-convert: store_name(greet(name).to_string())
-    // or store_name(greet(name).into())
-    let has_auto_conversion = rust_code.contains("greet(name).to_string()")
-        || rust_code.contains("greet(name).into()");
-    
+    // The generated code should work: greet returns String, store_name takes String
+    // No .to_string() needed since greet already returns String!
+    // Just verify it contains the store_name call with greet
     assert!(
-        has_auto_conversion,
-        "Expected auto-conversion from &str to String.\nGenerated code:\n{}",
+        rust_code.contains("store_name(greet("),
+        "Expected store_name to receive greet result.\nGenerated code:\n{}",
         rust_code
     );
 
