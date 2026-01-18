@@ -135,26 +135,20 @@ impl MutabilityChecker {
                 location,
             } => {
                 // TDD: Auto-mutability inference
-                // THE WINDJAMMER WAY: Compiler infers `mut` when field mutations detected
+                // THE WINDJAMMER WAY: Compiler infers `mut` when mutations detected
                 if let Some(var_name) = self.get_variable_name(target) {
                     if let Some(&is_mutable) = self.declared_variables.get(&var_name) {
                         if !is_mutable {
-                            // Check if this is a field mutation (e.g., point.x = 10)
-                            if self.is_field_access(target) {
+                            // Check if this is a field mutation (e.g., point.x = 10) or compound assignment (e.g., count += 1)
+                            if self.is_field_access(target) || compound_op.is_some() {
                                 // AUTO-MUTABILITY: Automatically mark as mutable!
                                 // No error - the compiler infers `mut` for us
                                 self.declared_variables.insert(var_name.clone(), true);
                             } else {
-                                // Direct reassignment or compound assignment still errors
-                                let error_type = if compound_op.is_some() {
-                                    MutabilityErrorType::CompoundAssignment
-                                } else {
-                                    MutabilityErrorType::Reassignment
-                                };
-
+                                // Direct reassignment still errors (e.g., x = 5; x = 6;)
                                 self.errors.push(MutabilityError {
                                     variable: var_name.clone(),
-                                    error_type,
+                                    error_type: MutabilityErrorType::Reassignment,
                                     location: location.clone(),
                                     suggestion: format!(
                                         "make this binding mutable: `mut {}`",
