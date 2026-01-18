@@ -5046,6 +5046,40 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
                                         }
                                     }
                                     OwnershipMode::Owned => {
+                                        // TDD FIX: AUTO-CONVERT for &str/&String → String, &T → T
+                                        // When passing a reference to a function expecting owned, convert it
+                                        // - &str → String: use .to_string()
+                                        // - &String → String: use .clone()
+                                        // - &T → T: use .clone()
+                                        if let Expression::Identifier { name, .. } = arg {
+                                            // Find the parameter type
+                                            let param_type = self.current_function_params.iter()
+                                                .find(|p| &p.name == name)
+                                                .map(|p| &p.type_);
+                                            
+                                            // Check if it's a reference parameter (&str, &String, &T)
+                                            if let Some(Type::Reference(inner_type)) = param_type {
+                                                // Special case: &str (Type::Reference(Type::String) in Rust parlance)
+                                                // &str.clone() → &str, but we need String, so use .to_string()
+                                                if matches!(**inner_type, Type::String) && !arg_str.ends_with(".to_string()") && !arg_str.ends_with(".clone()") {
+                                                    arg_str = format!("{}.to_string()", arg_str);
+                                                } else if !arg_str.ends_with(".clone()") {
+                                                    // For other reference types, .clone() works
+                                                    arg_str = format!("{}.clone()", arg_str);
+                                                }
+                                            } else {
+                                                // Also check if it's inferred as borrowed
+                                                let is_inferred_borrowed =
+                                                    self.inferred_borrowed_params.contains(name);
+                                                
+                                                if is_inferred_borrowed && !arg_str.ends_with(".clone()") {
+                                                    // Inferred borrowed - use .clone() (we don't know if it's &str or &T)
+                                                    // This is a safe default that works for most types
+                                                    arg_str = format!("{}.clone()", arg_str);
+                                                }
+                                            }
+                                        }
+
                                         // AUTO-CLONE: When passing a field from a borrowed parameter
                                         // to a function that expects an owned value, clone it
                                         if let Expression::FieldAccess {
