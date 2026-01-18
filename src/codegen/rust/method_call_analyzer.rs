@@ -538,6 +538,8 @@ impl MethodCallAnalyzer {
                         || name.starts_with("index_")
                         || name.ends_with("_index")
                         || name.ends_with("_idx")
+                        || name.ends_with("_usize")  // TDD FIX: sparse_idx_usize is a Vec index
+                        || name.contains("_idx_")
                 });
 
                 let looks_like_hashmap_key = arg_name.map_or(false, |name| {
