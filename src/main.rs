@@ -629,6 +629,7 @@ pub fn build_project(path: &Path, output: &Path, target: CompilationTarget) -> R
                 &all_stdlib_modules,
                 &filtered_external_crates,
                 target,
+                source_dir,
             )?;
         }
 
@@ -1854,9 +1855,60 @@ fn create_cargo_toml_with_deps(
     imported_modules: &HashSet<String>,
     external_crates: &[String],
     target: CompilationTarget,
+    source_dir: &Path,
 ) -> Result<()> {
     use std::env;
     use std::fs;
+
+    // THE WINDJAMMER WAY: Copy FFI dependencies from source project's Cargo.toml
+    // This enables projects with FFI (like windjammer-game-core) to compile correctly
+    let mut source_cargo_deps = Vec::new();
+
+    // Search upward for Cargo.toml (similar to windjammer.toml search)
+    let mut search_dir = source_dir;
+    let mut source_cargo_toml = None;
+    for _ in 0..5 {
+        let candidate = search_dir.join("Cargo.toml");
+        if candidate.exists() {
+            source_cargo_toml = Some(candidate);
+            break;
+        }
+
+        // Go up one directory
+        if let Some(parent) = search_dir.parent() {
+            search_dir = parent;
+        } else {
+            break;
+        }
+    }
+
+    // If we found a Cargo.toml, extract dependencies
+    if let Some(cargo_toml_path) = source_cargo_toml {
+        if let Ok(content) = fs::read_to_string(&cargo_toml_path) {
+            // Parse Cargo.toml to extract [dependencies] section
+            let mut in_dependencies = false;
+            for line in content.lines() {
+                let trimmed = line.trim();
+
+                // Check if we're entering [dependencies] section
+                if trimmed == "[dependencies]" {
+                    in_dependencies = true;
+                    continue;
+                }
+
+                // Check if we're leaving [dependencies] section (another [section])
+                if in_dependencies && trimmed.starts_with('[') {
+                    break;
+                }
+
+                // If we're in dependencies and line has content (not comment/empty)
+                if in_dependencies && !trimmed.is_empty() && !trimmed.starts_with('#') {
+                    // This is a dependency line - copy it
+                    source_cargo_deps.push(trimmed.to_string());
+                }
+            }
+        }
+    }
 
     // For WASM target, generate WASM-specific Cargo.toml
     if target == CompilationTarget::Wasm {
@@ -2113,6 +2165,10 @@ fn create_cargo_toml_with_deps(
     // TODO: Only add these if actually used by checking CodeGenerator flags
     deps.push("smallvec = \"1.13\"".to_string());
     deps.push("serde = { version = \"1.0\", features = [\"derive\"] }".to_string());
+
+    // THE WINDJAMMER WAY: Merge in FFI dependencies from source Cargo.toml
+    // This enables dogfooding with game engine that has FFI dependencies
+    deps.extend(source_cargo_deps);
 
     // Smart deduplication: extract package names and keep more specific versions
     let mut seen_packages = std::collections::HashSet::new();
