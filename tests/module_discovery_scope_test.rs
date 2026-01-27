@@ -278,4 +278,3 @@ fn test_sibling_hand_written_modules_are_discovered() {
         "mod.rs should declare sibling platform module"
     );
 }
-

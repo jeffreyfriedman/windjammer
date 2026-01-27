@@ -357,4 +357,3 @@ pub fn clone_container<T: Clone>(c: &Container<T>) -> Container<T> {
         err
     );
 }
-

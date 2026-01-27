@@ -1,13 +1,12 @@
-/// TDD Test: Great Error Messages When mut is Missing
+/// TDD Test: Auto-Mutability Inference
 ///
-/// Goal: Provide Rust-quality error messages when variables are mutated
-/// without the `mut` keyword, with helpful suggestions.
+/// Goal: Automatically infer `mut` when variables are mutated, following
+/// "The Windjammer Way" - the compiler does the work, not the developer.
 ///
-/// Error message should include:
-/// 1. Clear description of the problem
-/// 2. Source location (file, line, column)
-/// 3. Code snippet showing the issue
-/// 4. Helpful suggestion: "help: make this binding mutable: `mut x`"
+/// The compiler should:
+/// 1. Detect when variables are mutated (assignment, +=, field mutation, method calls)
+/// 2. Automatically add `mut` to the generated Rust code
+/// 3. Compile successfully without requiring explicit `mut` in Windjammer source
 use tempfile::TempDir;
 
 fn compile_wj(code: &str) -> Result<String, String> {
@@ -72,28 +71,24 @@ fn main() {
 }
 
 #[test]
-fn test_mut_error_message_compound_assignment() {
+fn test_mut_auto_inferred_compound_assignment() {
     let code = r#"
 fn main() {
     let count = 0
-    count += 1  // ERROR: cannot use compound assignment on immutable variable
+    count += 1  // Auto-infers: let mut count = 0
 }
 "#;
 
     let result = compile_wj(code);
-    assert!(result.is_err(), "Should fail compilation");
-
-    let error = result.unwrap_err();
-
     assert!(
-        error.contains("cannot") && (error.contains("mut") || error.contains("immutable")),
-        "Error should explain mutability issue, got:\n{}",
-        error
+        result.is_ok(),
+        "Should compile successfully with auto-inferred mut, got error:\n{:?}",
+        result.err()
     );
 }
 
 #[test]
-fn test_mut_error_message_field_mutation() {
+fn test_mut_auto_inferred_field_mutation() {
     let code = r#"
 struct Point {
     pub x: i32,
@@ -102,41 +97,33 @@ struct Point {
 
 fn main() {
     let p = Point { x: 0, y: 0 }
-    p.x = 10  // ERROR: cannot mutate field of immutable binding
+    p.x = 10  // Auto-infers: let mut p = Point { x: 0, y: 0 }
 }
 "#;
 
     let result = compile_wj(code);
-    assert!(result.is_err(), "Should fail compilation");
-
-    let error = result.unwrap_err();
-
     assert!(
-        error.contains("cannot") && (error.contains("mut") || error.contains("immutable")),
-        "Error should explain mutability issue for struct field, got:\n{}",
-        error
+        result.is_ok(),
+        "Should compile successfully with auto-inferred mut, got error:\n{:?}",
+        result.err()
     );
 }
 
 #[test]
-fn test_mut_error_message_method_call() {
+fn test_mut_auto_inferred_method_call() {
     let code = r#"
 fn main() {
     let items = Vec::new()
-    items.push(1)  // ERROR: cannot call mutating method on immutable binding
+    items.push(1)  // Auto-infers: let mut items = Vec::new()
     items.push(2)
 }
 "#;
 
     let result = compile_wj(code);
-    assert!(result.is_err(), "Should fail compilation");
-
-    let error = result.unwrap_err();
-
     assert!(
-        error.contains("cannot") && (error.contains("mut") || error.contains("immutable")),
-        "Error should explain mutability issue for method call, got:\n{}",
-        error
+        result.is_ok(),
+        "Should compile successfully with auto-inferred mut, got error:\n{:?}",
+        result.err()
     );
 }
 

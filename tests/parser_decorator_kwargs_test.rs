@@ -59,4 +59,3 @@ fn test_random_property(x: i32) {
         );
     }
 }
-
