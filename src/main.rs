@@ -1884,6 +1884,8 @@ fn create_cargo_toml_with_deps(
 
     // If we found a Cargo.toml, extract dependencies
     if let Some(cargo_toml_path) = source_cargo_toml {
+        let source_dir_for_paths = cargo_toml_path.parent().unwrap();
+
         if let Ok(content) = fs::read_to_string(&cargo_toml_path) {
             // Parse Cargo.toml to extract [dependencies] section
             let mut in_dependencies = false;
@@ -1903,8 +1905,43 @@ fn create_cargo_toml_with_deps(
 
                 // If we're in dependencies and line has content (not comment/empty)
                 if in_dependencies && !trimmed.is_empty() && !trimmed.starts_with('#') {
-                    // This is a dependency line - copy it
-                    source_cargo_deps.push(trimmed.to_string());
+                    // THE WINDJAMMER WAY: Convert relative paths to absolute
+                    // This prevents "No such file" errors when building from build/
+                    let processed_line = if trimmed.contains("path = ") {
+                        // Extract the path value
+                        if let Some(path_start) = trimmed.find("path = \"") {
+                            let after_quote = path_start + 8; // len("path = \"")
+                            if let Some(path_end) = trimmed[after_quote..].find('"') {
+                                let rel_path = &trimmed[after_quote..after_quote + path_end];
+
+                                // Check if it's a relative path (../ or ./)
+                                if rel_path.starts_with("../") || rel_path.starts_with("./") {
+                                    // Convert to absolute path
+                                    let abs_path = source_dir_for_paths.join(rel_path);
+                                    let abs_path = abs_path.canonicalize().unwrap_or(abs_path);
+
+                                    // Replace the relative path with absolute path
+                                    // Note: We don't use {:?} because path is already inside quotes
+                                    let before = &trimmed[..after_quote];
+                                    let after = &trimmed[after_quote + path_end..];
+                                    let new_line =
+                                        format!("{}{}{}", before, abs_path.display(), after);
+                                    new_line
+                                } else {
+                                    // Already absolute or not a path pattern we handle
+                                    trimmed.to_string()
+                                }
+                            } else {
+                                trimmed.to_string()
+                            }
+                        } else {
+                            trimmed.to_string()
+                        }
+                    } else {
+                        trimmed.to_string()
+                    };
+
+                    source_cargo_deps.push(processed_line);
                 }
             }
         }
