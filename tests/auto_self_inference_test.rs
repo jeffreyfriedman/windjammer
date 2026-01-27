@@ -203,4 +203,3 @@ impl Math {
         rust_code
     );
 }
-

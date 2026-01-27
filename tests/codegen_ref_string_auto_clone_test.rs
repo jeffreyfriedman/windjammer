@@ -13,7 +13,7 @@ fn test_ref_string_param_auto_clone_to_owned() {
     let test_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
         .join("target")
         .join("test_ref_string_clone");
-    
+
     fs::create_dir_all(&test_dir).unwrap();
 
     // Test that &string parameters are auto-cloned when passed to functions expecting string
@@ -87,4 +87,3 @@ fn main() {
     // Clean up
     let _ = fs::remove_dir_all(&test_dir);
 }
-

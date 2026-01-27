@@ -103,4 +103,3 @@ fn test_player_creation() {
         stderr
     );
 }
-

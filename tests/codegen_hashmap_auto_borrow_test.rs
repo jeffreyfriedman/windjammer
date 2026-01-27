@@ -13,7 +13,7 @@ fn test_hashmap_contains_key_auto_borrow() {
     let test_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
         .join("target")
         .join("test_hashmap_auto_borrow");
-    
+
     fs::create_dir_all(&test_dir).unwrap();
 
     // Test that HashMap methods auto-borrow Copy type arguments
@@ -89,7 +89,7 @@ fn test_hashmap_get_auto_borrow() {
     let test_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
         .join("target")
         .join("test_hashmap_get");
-    
+
     fs::create_dir_all(&test_dir).unwrap();
 
     let test_content = r#"
@@ -156,4 +156,3 @@ fn main() {
     // Clean up
     let _ = fs::remove_dir_all(&test_dir);
 }
-

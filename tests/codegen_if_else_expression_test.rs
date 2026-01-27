@@ -83,4 +83,3 @@ pub fn get_last_inline(is_empty: bool, value: i64) -> Option<i64> {
         );
     }
 }
-

@@ -252,4 +252,3 @@ pub fn test() {
         generated
     );
 }
-

@@ -13,7 +13,7 @@ fn test_auto_mut_on_compound_assignment() {
     let test_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
         .join("target")
         .join("test_auto_mut_compound");
-    
+
     fs::create_dir_all(&test_dir).unwrap();
 
     // Test that compound assignments trigger auto-mutability
@@ -68,5 +68,3 @@ fn main() {
     // Clean up
     let _ = fs::remove_dir_all(&test_dir);
 }
-
-

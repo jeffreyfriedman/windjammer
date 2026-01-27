@@ -13,7 +13,7 @@ fn test_import_with_as_alias() {
     let test_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
         .join("target")
         .join("test_import_alias");
-    
+
     fs::create_dir_all(&test_dir).unwrap();
 
     // Test that imports with "as" aliases are preserved
@@ -71,5 +71,3 @@ fn main() {
     // Clean up
     let _ = fs::remove_dir_all(&test_dir);
 }
-
-

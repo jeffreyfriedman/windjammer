@@ -13,7 +13,7 @@ fn test_hashmap_remove_auto_borrow() {
     let test_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
         .join("target")
         .join("test_hashmap_remove");
-    
+
     fs::create_dir_all(&test_dir).unwrap();
 
     // Test that HashMap.remove() auto-borrows for Copy type keys
@@ -90,7 +90,7 @@ fn test_vec_remove_no_borrow() {
     let test_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
         .join("target")
         .join("test_vec_remove");
-    
+
     fs::create_dir_all(&test_dir).unwrap();
 
     // Test that Vec.remove() does NOT auto-borrow for usize index
@@ -152,5 +152,3 @@ fn main() {
     // Clean up
     let _ = fs::remove_dir_all(&test_dir);
 }
-
-

@@ -220,4 +220,3 @@ fn test_unit_struct_with_decorators() {
         generated
     );
 }
-

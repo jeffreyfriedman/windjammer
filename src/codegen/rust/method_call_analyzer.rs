@@ -540,7 +540,7 @@ impl MethodCallAnalyzer {
                     None
                 };
 
-                let looks_like_vec_index = arg_name.map_or(false, |name| {
+                let looks_like_vec_index = arg_name.is_some_and(|name| {
                     name == "index"
                         || name == "idx"
                         || name == "i"
@@ -551,7 +551,7 @@ impl MethodCallAnalyzer {
                         || name.contains("_idx_")
                 });
 
-                let looks_like_hashmap_key = arg_name.map_or(false, |name| {
+                let looks_like_hashmap_key = arg_name.is_some_and(|name| {
                     name == "id"
                         || name == "key"
                         || name == "entity"
