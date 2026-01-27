@@ -13,7 +13,7 @@ fn test_vec3_copy_method_no_ref() {
     let test_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
         .join("target")
         .join("test_vec3_copy_no_ref");
-    
+
     fs::create_dir_all(&test_dir).unwrap();
 
     // Test that Vec3 (Copy type) methods don't add & to arguments
@@ -121,4 +121,3 @@ fn main() {
     // Clean up
     let _ = fs::remove_dir_all(&test_dir);
 }
-

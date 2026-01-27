@@ -186,4 +186,3 @@ fn test_trait_method_with_return_type() {
         generated
     );
 }
-

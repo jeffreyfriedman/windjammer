@@ -1207,7 +1207,7 @@ impl<'ast> Analyzer<'ast> {
     fn infer_parameter_ownership(
         &self,
         param_name: &str,
-        param_type: &Type,
+        _param_type: &Type,
         body: &[&'ast Statement<'ast>],
         _return_type: &Option<Type>,
     ) -> Result<OwnershipMode, String> {
@@ -1257,27 +1257,27 @@ impl<'ast> Analyzer<'ast> {
             return Ok(OwnershipMode::Owned);
         }
 
-        // 6. Default ownership based on type
-        // THE WINDJAMMER WAY: Respect explicit type annotations
-        //
-        // - Copy types → Owned (passed by value)
-        // - Generic types → Owned (trait bounds are on T, not &T)
-        // - String type → Owned (user said String, not &str)
-        // - Other types → Borrowed (optimize by default)
-
-        if self.is_copy_type(param_type) {
-            Ok(OwnershipMode::Owned)
-        } else if Self::is_generic_type_param(param_type) {
-            // Keep generic types owned - trait bounds are on T, not &T
-            Ok(OwnershipMode::Owned)
-        } else if matches!(param_type, Type::String) {
-            // THE WINDJAMMER WAY: Explicit String type annotation means owned String
-            // User wrote `text: string` → they want `text: String`, not `text: &str`
-            Ok(OwnershipMode::Owned)
-        } else {
-            // Other non-Copy types can be borrowed by default
-            Ok(OwnershipMode::Borrowed)
+        // 6. TDD: Check if parameter is iterated over in a for loop
+        // When `for item in vec` is used (not `for item in &vec`), the vec is consumed
+        // and elements are moved out. The parameter must be owned, not borrowed.
+        if self.is_iterated_over(param_name, body) {
+            return Ok(OwnershipMode::Owned);
         }
+
+        // 7. Default ownership: Owned (THE WINDJAMMER WAY!)
+        //
+        // **PHILOSOPHY**: The compiler does the work, not the user.
+        // - Default to **Owned** (safer, simpler, what user expects)
+        // - Only borrow when we have clear evidence it's safe/beneficial
+        // - Borrowed parameters are an **optimization**, not the default
+        //
+        // This prevents type mismatches and makes Windjammer feel like a high-level language
+        // where you don't think about &/&mut constantly (unlike Rust).
+        //
+        // The checks above (is_mutated, is_stored, is_iterated_over, etc.) determine when
+        // we need specific ownership modes. If none of those apply, default to Owned.
+
+        Ok(OwnershipMode::Owned)
     }
 
     fn is_used_in_if_else_expression(
@@ -1649,16 +1649,18 @@ impl<'ast> Analyzer<'ast> {
                     value,
                     ..
                 } => {
-                    // CRITICAL FIX: Only consider it "stored" if the parameter is DIRECTLY assigned
-                    // to a field (self.field = param), not if it's just used in a calculation
-                    // (self.field = self.field * param).
+                    // TDD FIX: Check if the parameter is DIRECTLY assigned to ANY struct field
+                    // (not just self.field, but also local_var.field)
                     //
-                    // Direct assignment: self.field = param
-                    // Calculation: self.field = self.field * param (or any other expression)
+                    // Examples:
+                    // - self.field = param (method storing parameter)
+                    // - node.items = items (constructor storing parameter)
+                    // - config.data = data (factory function storing parameter)
                     //
                     // We check if the value is JUST the identifier, not part of a larger expression.
-                    if matches!(&**object, Expression::Identifier { name: id, .. } if id == "self")
-                    {
+                    // Direct assignment: obj.field = param
+                    // Calculation: obj.field = obj.field * param (not "stored")
+                    if matches!(&**object, Expression::Identifier { .. }) {
                         // Only return true if the value is EXACTLY the parameter identifier
                         if matches!(value, Expression::Identifier { name: id, .. } if id == name) {
                             return true;
@@ -1716,6 +1718,24 @@ impl<'ast> Analyzer<'ast> {
                                 }
                             }
                         }
+
+                        // TDD FIX: Also check for method calls on LOCAL struct fields: local_var.field.push(param)
+                        // e.g., choice.conditions.push(condition) where choice is a local variable
+                        if let Expression::FieldAccess {
+                            object: field_obj, ..
+                        } = &**object
+                        {
+                            // Check if it's a local variable (not self)
+                            if matches!(&**field_obj, Expression::Identifier { name: id, .. } if id != "self")
+                            {
+                                for (_label, arg) in arguments {
+                                    if matches!(arg, Expression::Identifier { name: id, .. } if id == name)
+                                    {
+                                        return true;
+                                    }
+                                }
+                            }
+                        }
                     }
 
                     // Also check for method calls on local variables: props.push(Property { name, ... })
@@ -1767,6 +1787,50 @@ impl<'ast> Analyzer<'ast> {
                 // Recursively check loop bodies
                 Statement::While { body, .. } | Statement::For { body, .. } => {
                     if self.is_stored(name, body) {
+                        return true;
+                    }
+                }
+                _ => {}
+            }
+        }
+        false
+    }
+
+    /// TDD: Check if a parameter is iterated over in a for loop (consumed by iteration)
+    /// e.g., `for item in items` (not `for item in &items`)
+    /// When you iterate over a Vec without `&`, the Vec is consumed and elements are moved.
+    fn is_iterated_over(&self, name: &str, statements: &[&'ast Statement<'ast>]) -> bool {
+        for stmt in statements {
+            match stmt {
+                Statement::For { iterable, body, .. } => {
+                    // Check if the iterable is exactly the parameter (direct iteration)
+                    if let Expression::Identifier { name: id, .. } = iterable {
+                        if id == name {
+                            return true;
+                        }
+                    }
+
+                    // Recursively check nested for loops
+                    if self.is_iterated_over(name, body) {
+                        return true;
+                    }
+                }
+                Statement::If {
+                    then_block,
+                    else_block,
+                    ..
+                } => {
+                    if self.is_iterated_over(name, then_block) {
+                        return true;
+                    }
+                    if let Some(else_stmts) = else_block {
+                        if self.is_iterated_over(name, else_stmts) {
+                            return true;
+                        }
+                    }
+                }
+                Statement::While { body, .. } | Statement::Loop { body, .. } => {
+                    if self.is_iterated_over(name, body) {
                         return true;
                     }
                 }

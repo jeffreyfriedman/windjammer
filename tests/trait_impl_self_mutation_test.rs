@@ -170,4 +170,3 @@ fn test_trait_method_default_impl_mutates() {
         generated
     );
 }
-

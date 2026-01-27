@@ -36,4 +36,3 @@ fn expensive_test() {
     assert!(rust_code.contains("#[test]"), "Missing #[test]");
     assert!(rust_code.contains("#[ignore]"), "Missing #[ignore]");
 }
-

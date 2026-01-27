@@ -13,7 +13,7 @@ fn test_vec_remove_usize_no_ref() {
     let test_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
         .join("target")
         .join("test_vec_remove_usize");
-    
+
     fs::create_dir_all(&test_dir).unwrap();
 
     // Test that Vec.remove(usize_var) does NOT add &
@@ -85,5 +85,3 @@ fn main() {
     // Clean up
     let _ = fs::remove_dir_all(&test_dir);
 }
-
-

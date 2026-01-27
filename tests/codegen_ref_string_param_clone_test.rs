@@ -13,7 +13,7 @@ fn test_ref_string_param_to_owned_string() {
     let test_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
         .join("target")
         .join("test_ref_string_param_clone");
-    
+
     fs::create_dir_all(&test_dir).unwrap();
 
     // Test that iterator variables (&String from for loops) are auto-cloned
@@ -92,4 +92,3 @@ fn main() {
     // Clean up
     let _ = fs::remove_dir_all(&test_dir);
 }
-
