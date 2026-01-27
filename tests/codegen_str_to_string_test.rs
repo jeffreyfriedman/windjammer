@@ -13,7 +13,7 @@ fn test_str_param_to_string_arg_auto_conversion() {
     let test_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
         .join("target")
         .join("test_str_to_string");
-    
+
     fs::create_dir_all(&test_dir).unwrap();
 
     // Test that &str parameters are auto-converted to string when needed
@@ -91,7 +91,7 @@ fn test_struct_field_str_to_string() {
     let test_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
         .join("target")
         .join("test_field_str_to_string");
-    
+
     fs::create_dir_all(&test_dir).unwrap();
 
     // Test that struct field assignments auto-convert &str to string
@@ -155,4 +155,3 @@ fn main() {
     // Clean up
     let _ = fs::remove_dir_all(&test_dir);
 }
-

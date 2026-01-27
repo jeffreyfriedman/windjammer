@@ -13,7 +13,7 @@ fn test_string_param_stays_owned() {
     let test_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
         .join("target")
         .join("test_string_ownership");
-    
+
     fs::create_dir_all(&test_dir).unwrap();
 
     // Test that string parameters stay as owned String, not &String
@@ -74,4 +74,3 @@ fn main() {
     // Clean up
     let _ = fs::remove_dir_all(&test_dir);
 }
-

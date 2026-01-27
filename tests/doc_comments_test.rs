@@ -174,4 +174,3 @@ pub struct Camera2D {
         result.err()
     );
 }
-
