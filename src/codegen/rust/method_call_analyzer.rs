@@ -102,6 +102,16 @@ impl MethodCallAnalyzer {
             return false;
         }
 
+        // TDD FIX: METHOD CALL EXPRESSIONS SHOULD NEVER BE BORROWED (CHECKED FIRST!)
+        // Method calls like input.is_key_down(Key::W) return owned values (often Copy types)
+        // Don't add & to them, EVEN IF the method signature says the parameter should be borrowed.
+        // Example: paddle.update(delta, input.is_key_down(Key::W), input.is_key_down(Key::S))
+        // should NOT become paddle.update(delta, &input.is_key_down(Key::W), input.is_key_down(Key::S))
+        // This check MUST come before the signature check to prevent over-borrowing Copy types.
+        if matches!(arg, Expression::MethodCall { .. }) {
+            return false;
+        }
+
         // BORROWED ITERATOR VARIABLES: Variables from borrowed iterators (.keys(), .values(), .iter())
         // are already borrowed (e.g., &String from .keys()). Don't add another &.
         // Example: for key in map.keys() { map.get(key) }  // key is already &String
@@ -168,15 +178,6 @@ impl MethodCallAnalyzer {
             }
         }
 
-        // TDD FIX: No signature available for method call expressions
-        // Method calls like velocity.mul(dt) return owned values (often Copy types)
-        // Don't add & to them unless we have explicit signature info saying otherwise
-        // Example: position.add(velocity.mul(dt)) should NOT become position.add(&velocity.mul(dt))
-        if matches!(arg, Expression::MethodCall { .. }) {
-            // Method calls return owned values - default to no &
-            return false;
-        }
-
         // No signature available - fall back to stdlib heuristics
         let is_stdlib_method = matches!(
             method,
@@ -217,6 +218,16 @@ impl MethodCallAnalyzer {
         inferred_borrowed_params: &HashSet<String>,
         current_function_return_type: &Option<Type>,
     ) -> bool {
+        // TDD FIX: METHOD CALL EXPRESSIONS NEVER NEED .clone() (CHECKED FIRST!)
+        // Method calls like input.is_key_down(Key::W) return owned values (often Copy types)
+        // They never need .clone(), EVEN IF the method signature says the parameter should be owned.
+        // Example: paddle.update(delta, input.is_key_down(Key::W), input.is_key_down(Key::S))
+        // should NOT become paddle.update(delta, input.is_key_down(Key::W).clone(), ...)
+        // This check MUST come before any signature checks to prevent unnecessary clones.
+        if matches!(arg, Expression::MethodCall { .. }) {
+            return false;
+        }
+
         // THE WINDJAMMER WAY: Auto-clone borrowed iterator vars when pushing to Vec<T>
         //
         // When we have:
