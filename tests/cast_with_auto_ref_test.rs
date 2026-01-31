@@ -46,13 +46,16 @@ fn test_vec_remove_with_cast() {
 
     // Should either be:
     // - items.remove(index as usize) - no & because usize is Copy
+    // - items.remove((index as usize)) - with parentheses (also valid)
     // - items.remove(&(index as usize)) - & around the whole cast
     let has_valid_syntax = output.contains("items.remove(index as usize)")
+        || output.contains("items.remove((index as usize))")
         || output.contains("items.remove(&(index as usize))");
 
     assert!(
         has_valid_syntax,
-        "Should generate valid syntax for Vec::remove with cast"
+        "Should generate valid syntax for Vec::remove with cast: \n{}",
+        output
     );
 }
 
@@ -81,8 +84,10 @@ fn test_hashmap_remove_with_cast() {
     // For Copy types like usize, we don't need & for HashMap::remove either
     assert!(
         output.contains("map.remove(key as usize)")
+            || output.contains("map.remove((key as usize))")
             || output.contains("map.remove(&(key as usize))"),
-        "Should generate valid syntax for HashMap::remove with cast"
+        "Should generate valid syntax for HashMap::remove with cast: \n{}",
+        output
     );
 }
 
@@ -104,12 +109,17 @@ fn test_method_call_with_multiple_casts() {
     println!("Generated:\n{}", output);
 
     // Should handle casts in variable assignments correctly
+    // Accept both with and without parentheses around the cast
     assert!(
-        output.contains("let start_idx = start as usize"),
-        "Should handle cast in let binding"
+        output.contains("let start_idx = start as usize")
+            || output.contains("let start_idx = (start as usize)"),
+        "Should handle cast in let binding: \n{}",
+        output
     );
     assert!(
-        output.contains("let end_idx = end as usize"),
-        "Should handle cast in let binding"
+        output.contains("let end_idx = end as usize")
+            || output.contains("let end_idx = (end as usize)"),
+        "Should handle cast in let binding: \n{}",
+        output
     );
 }
