@@ -90,9 +90,15 @@ pub struct CodeGenerator<'ast> {
     partial_eq_types: std::collections::HashSet<String>,
     // MATCH ARM CONTEXT: Force string conversion in match arm blocks
     in_match_arm_needing_string: bool,
+    // MATCH STATEMENT CONTEXT: Track if we're in a match used as a statement (not expression)
+    // In statement-context matches, arm blocks should have semicolons on all statements
+    in_statement_match: bool,
     // BORROWED ITERATOR VARIABLES: Track variables that are iterating over borrowed collections
     // These variables are references, so accessing their fields requires .clone()
     borrowed_iterator_vars: std::collections::HashSet<String>,
+    // OWNED STRING ITERATOR VARIABLES: Track variables from for-loops over Vec<String>
+    // These need to be borrowed when used in String += operations
+    owned_string_iterator_vars: std::collections::HashSet<String>,
     // USIZE VARIABLES: Track variables assigned from .len() for auto-casting
     usize_variables: std::collections::HashSet<String>,
     // INFERRED BORROWED PARAMS: Parameters inferred to be borrowed (for field access cloning)
@@ -182,11 +188,13 @@ impl<'ast> CodeGenerator<'ast> {
             workspace_root: None,
             suppress_string_conversion: false,
             borrowed_iterator_vars: std::collections::HashSet::new(),
+            owned_string_iterator_vars: std::collections::HashSet::new(),
             usize_variables: std::collections::HashSet::new(),
             inferred_borrowed_params: std::collections::HashSet::new(),
             generating_assignment_target: false,
             partial_eq_types: std::collections::HashSet::new(),
             in_match_arm_needing_string: false,
+            in_statement_match: false,
             local_variable_scopes: Vec::new(),
             in_expression_context: false,
             analyzed_trait_methods: std::collections::HashMap::new(),
@@ -4190,6 +4198,15 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
                     }
                 };
 
+                // TDD FIX: Track if this is a statement-context match (not used as an expression)
+                // In statement matches, arm blocks should preserve semicolons on all statements
+                // Only apply this when the function returns void (no return type)
+                let old_in_statement_match = self.in_statement_match;
+                let match_is_statement = self.current_function_return_type.is_none();
+                if match_is_statement {
+                    self.in_statement_match = true;
+                }
+
                 for arm in arms {
                     output.push_str(&self.indent());
                     output.push_str(&self.generate_pattern(&arm.pattern));
@@ -4241,6 +4258,10 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
                     output.push_str(&arm_str);
                     output.push_str(",\n");
                 }
+
+                // Restore statement match context
+                self.in_statement_match = old_in_statement_match;
+
                 self.indent_level -= 1;
 
                 output.push_str(&self.indent());
@@ -4330,6 +4351,16 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
                     }
                 }
 
+                // TDD FIX: Track owned String iterator variables (from Vec<String>)
+                // These need to be borrowed when used in String += operations
+                // Heuristic: If NOT borrowed iterator AND iterable looks like a Vec parameter
+                let is_owned_string_iterator = !is_borrowed_iterator;
+                if is_owned_string_iterator {
+                    if let Some(var) = &loop_var {
+                        self.owned_string_iterator_vars.insert(var.clone());
+                    }
+                }
+
                 for stmt in body {
                     output.push_str(&self.generate_statement(stmt));
                 }
@@ -4338,6 +4369,11 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
                 if is_borrowed_iterator {
                     if let Some(var) = &loop_var {
                         self.borrowed_iterator_vars.remove(var);
+                    }
+                }
+                if is_owned_string_iterator {
+                    if let Some(var) = &loop_var {
+                        self.owned_string_iterator_vars.remove(var);
                     }
                 }
 
@@ -4398,7 +4434,21 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
                         CompoundOp::Shr => " >>= ",
                     });
 
-                    output.push_str(&self.generate_expression(value));
+                    // TDD FIX: For String += String, we need to borrow the RHS
+                    // String implements AddAssign<&str>, not AddAssign<String>
+                    let mut value_str = self.generate_expression(value);
+                    if matches!(op, CompoundOp::Add) {
+                        // Check if the value is an identifier (owned String)
+                        if let Expression::Identifier { name, .. } = value {
+                            // Only add & if this is a tracked owned String iterator variable
+                            // These are owned Strings from for-loops over Vec<String>
+                            if self.owned_string_iterator_vars.contains(name) {
+                                value_str = format!("&{}", value_str);
+                            }
+                        }
+                    }
+
+                    output.push_str(&value_str);
                     output.push_str(";\n");
                     return output;
                 }
@@ -6472,7 +6522,14 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
                                 }
 
                                 output.push_str(&expr_str);
-                                output.push('\n');
+
+                                // TDD FIX: In statement-context matches, add semicolons to all statements
+                                // even if they're the last expression (match arms that return void)
+                                if self.in_statement_match {
+                                    output.push_str(";\n");
+                                } else {
+                                    output.push('\n');
+                                }
                             }
                             Statement::Thread { body, .. } => {
                                 // Generate as expression (returns JoinHandle)
