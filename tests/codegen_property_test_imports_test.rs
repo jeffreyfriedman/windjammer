@@ -1,8 +1,13 @@
 // TDD Test: Property test should automatically import windjammer_runtime::property functions
 
 use std::fs;
+use std::path::PathBuf;
 use std::process::Command;
 use tempfile::TempDir;
+
+fn get_wj_compiler() -> PathBuf {
+    PathBuf::from(env!("CARGO_BIN_EXE_wj"))
+}
 
 #[test]
 fn test_property_test_imports_property_functions() {
@@ -21,8 +26,7 @@ fn test_addition_commutative(a: i32) {
     fs::write(&wj_path, source).expect("Failed to write test file");
     fs::create_dir_all(&out_dir).expect("Failed to create output dir");
 
-    let wj_binary = std::env::var("CARGO_BIN_EXE_wj").unwrap_or_else(|_| "wj".to_string());
-    let output = Command::new(&wj_binary)
+    let output = Command::new(get_wj_compiler())
         .args([
             "build",
             wj_path.to_str().unwrap(),
@@ -82,8 +86,7 @@ fn test_addition_commutative(a: i32, b: i32) {
     fs::write(&wj_path, source).expect("Failed to write test file");
     fs::create_dir_all(&out_dir).expect("Failed to create output dir");
 
-    let wj_binary = std::env::var("CARGO_BIN_EXE_wj").unwrap_or_else(|_| "wj".to_string());
-    let output = Command::new(&wj_binary)
+    let output = Command::new(get_wj_compiler())
         .args([
             "build",
             wj_path.to_str().unwrap(),
