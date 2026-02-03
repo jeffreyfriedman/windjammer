@@ -31,8 +31,9 @@ fn test_create_user() {
     let input_path = temp_dir.path().join("test.wj");
     fs::write(&input_path, source).unwrap();
 
-    // Build with wj
-    let output = Command::new("wj")
+    // Build with wj (use cargo-built binary or PATH)
+    let wj_binary = std::env::var("CARGO_BIN_EXE_wj").unwrap_or_else(|_| "wj".to_string());
+    let output = Command::new(&wj_binary)
         .args(["build", input_path.to_str().unwrap(), "--no-cargo"])
         .current_dir(&temp_dir)
         .output()
@@ -116,7 +117,8 @@ fn create_point(label: string, x: i32, y: i32) -> Point {
     let input_path = temp_dir.path().join("test.wj");
     fs::write(&input_path, source).unwrap();
 
-    let output = Command::new("wj")
+    let wj_binary = std::env::var("CARGO_BIN_EXE_wj").unwrap_or_else(|_| "wj".to_string());
+    let output = Command::new(&wj_binary)
         .args(["build", input_path.to_str().unwrap(), "--no-cargo"])
         .current_dir(&temp_dir)
         .output()

@@ -6192,9 +6192,19 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
                 // 1. Simple identifier: arr[idx] -> arr[idx as usize]
                 // 2. Integer literal: arr[0] -> arr[0 as usize]
                 // 3. Cast to int/i64: arr[x as int] -> arr[x as usize]
-                // 4. Already usize: don't double-cast
-                let final_idx = if idx_str.ends_with("as i64") || idx_str.ends_with("as int") {
-                    // Replace i64/int cast with usize
+                // 4. Parenthesized cast: arr[(x as int)] -> arr[x as usize]
+                // 5. Already usize: don't double-cast
+                let final_idx = if idx_str.ends_with("as i64)") || idx_str.ends_with("as int)") {
+                    // Replace (... as i64/int) with (... as usize)
+                    let base = idx_str
+                        .trim_end_matches("as i64)")
+                        .trim_end_matches("as int)")
+                        .trim()
+                        .trim_start_matches('(')
+                        .trim();
+                    format!("{} as usize", base)
+                } else if idx_str.ends_with("as i64") || idx_str.ends_with("as int") {
+                    // Replace ... as i64/int with ... as usize
                     let base = idx_str
                         .trim_end_matches("as i64")
                         .trim_end_matches("as int")
