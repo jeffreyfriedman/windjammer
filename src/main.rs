@@ -3738,10 +3738,12 @@ fn detect_and_compile_library(
 /// Generate lib.rs entry point for a compiled library
 /// This creates a proper Rust library crate structure that tests can import from
 fn generate_lib_rs_for_library(lib_output_dir: &Path) -> Result<()> {
+    use std::collections::HashSet;
     use std::fs;
 
     // Find all modules (directories with mod.rs AND top-level .rs files)
-    let mut modules = Vec::new();
+    let mut dir_modules = HashSet::new();
+    let mut file_modules = Vec::new();
 
     for entry in fs::read_dir(lib_output_dir)? {
         let entry = entry?;
@@ -3751,7 +3753,7 @@ fn generate_lib_rs_for_library(lib_output_dir: &Path) -> Result<()> {
             // Directory modules (must have mod.rs)
             if let Some(dir_name) = path.file_name().and_then(|n| n.to_str()) {
                 if path.join("mod.rs").exists() {
-                    modules.push(dir_name.to_string());
+                    dir_modules.insert(dir_name.to_string());
                 }
             }
         } else if path.is_file() {
@@ -3760,9 +3762,21 @@ fn generate_lib_rs_for_library(lib_output_dir: &Path) -> Result<()> {
                 if file_name.ends_with(".rs") && file_name != "lib.rs" {
                     // Extract module name (remove .rs extension)
                     let module_name = file_name.trim_end_matches(".rs");
-                    modules.push(module_name.to_string());
+                    file_modules.push(module_name.to_string());
                 }
             }
+        }
+    }
+
+    // TDD FIX: When both window.rs and window/mod.rs exist, prefer directory module
+    // This prevents E0761: file for module `window` found at both locations
+    // Directory modules take precedence (standard Rust convention)
+    let mut modules: Vec<String> = dir_modules.iter().cloned().collect();
+
+    // Add file modules that don't conflict with directory modules
+    for file_module in file_modules {
+        if !dir_modules.contains(&file_module) {
+            modules.push(file_module);
         }
     }
 
@@ -4034,6 +4048,16 @@ fn copy_ffi_files_recursive(src: &Path, dest: &Path) -> Result<()> {
 fn find_windjammer_runtime_path() -> Result<PathBuf> {
     use std::env;
 
+    // TDD FIX: Use CARGO_MANIFEST_DIR when available (set during cargo test/build)
+    // This gives us the windjammer compiler's directory directly
+    if let Ok(manifest_dir) = env::var("CARGO_MANIFEST_DIR") {
+        let manifest_path = PathBuf::from(manifest_dir);
+        let runtime_path = manifest_path.join("crates/windjammer-runtime");
+        if runtime_path.join("Cargo.toml").exists() {
+            return Ok(runtime_path);
+        }
+    }
+
     // Start from current directory and search upward
     let mut current = env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
 
@@ -4109,8 +4133,17 @@ fn find_windjammer_runtime_path() -> Result<PathBuf> {
         }
     }
 
-    // Last resort: assume it's in the workspace
-    Ok(PathBuf::from("./crates/windjammer-runtime"))
+    // Last resort: assume it's in the workspace (try to make it absolute)
+    let fallback_path = PathBuf::from("./crates/windjammer-runtime");
+    if fallback_path.exists() {
+        // Try to canonicalize to get absolute path
+        if let Ok(canonical) = fallback_path.canonicalize() {
+            return Ok(canonical);
+        }
+    }
+
+    // Final fallback: return relative path and hope for the best
+    Ok(fallback_path)
 }
 
 /// Generate Rust test harness from Windjammer tests
@@ -4165,8 +4198,62 @@ fn generate_test_harness(
     // Detect and compile the library if it exists
     let library_dependency = detect_and_compile_library(project_root, output_dir)?;
 
-    // Create Cargo.toml with library dependency (if found)
+    // TDD FIX: Copy windjammer-runtime to test directory so tests can find it
+    // THE WINDJAMMER WAY: Self-contained test environments
     let windjammer_runtime_path = find_windjammer_runtime_path()?;
+    let test_runtime_path = output_dir.join("crates").join("windjammer-runtime");
+
+    // Create crates directory and copy windjammer-runtime
+    use colored::*;
+    println!(
+        "   {} Copying windjammer-runtime to test directory",
+        "→".bright_blue().bold()
+    );
+    println!(
+        "   {} Source: {}",
+        "→".bright_blue().bold(),
+        windjammer_runtime_path.display()
+    );
+    println!(
+        "   {} Dest: {}",
+        "→".bright_blue().bold(),
+        test_runtime_path.display()
+    );
+    fs::create_dir_all(output_dir.join("crates"))
+        .map_err(|e| anyhow::anyhow!("Failed to create crates directory: {}", e))?;
+
+    if !windjammer_runtime_path.exists() {
+        anyhow::bail!(
+            "windjammer-runtime source path does not exist: {}",
+            windjammer_runtime_path.display()
+        );
+    }
+
+    copy_dir_recursive(&windjammer_runtime_path, &test_runtime_path)
+        .map_err(|e| anyhow::anyhow!("Failed to copy windjammer-runtime: {}", e))?;
+
+    // TDD FIX: Patch windjammer-runtime's Cargo.toml to remove workspace inheritance
+    // When copied to a temp directory, there's no workspace root, so all fields must be explicit
+    let runtime_cargo_toml = test_runtime_path.join("Cargo.toml");
+    if runtime_cargo_toml.exists() {
+        let content = fs::read_to_string(&runtime_cargo_toml)?;
+        // Replace all workspace-inherited fields with explicit values
+        let patched = content
+            .replace("version.workspace = true", "version = \"0.1.0\"")
+            .replace("version = { workspace = true }", "version = \"0.1.0\"")
+            .replace("edition.workspace = true", "edition = \"2021\"")
+            .replace("edition = { workspace = true }", "edition = \"2021\"")
+            .replace("authors.workspace = true", "authors = []")
+            .replace("authors = { workspace = true }", "authors = []")
+            .replace("license.workspace = true", "license = \"MIT\"")
+            .replace("license = { workspace = true }", "license = \"MIT\"");
+        fs::write(&runtime_cargo_toml, patched)?;
+    }
+
+    println!(
+        "   {} windjammer-runtime copied successfully",
+        "✓".green().bold()
+    );
 
     let library_dep_str = if let Some((lib_name, lib_path)) = library_dependency {
         format!("\n{} = {{ path = \"{}\" }}", lib_name, lib_path.display())
@@ -4181,14 +4268,13 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-windjammer-runtime = {{ path = "{}" }}
+windjammer-runtime = {{ path = "crates/windjammer-runtime" }}
 smallvec = "1.13"{}
 
 [lib]
 name = "windjammer_tests"
 path = "lib.rs"
 "#,
-        windjammer_runtime_path.display(),
         library_dep_str
     );
     fs::write(output_dir.join("Cargo.toml"), cargo_toml)?;
@@ -4561,6 +4647,34 @@ pub fn get_relative_output_path(
     // Get the relative path from source_root to input_path
     let relative = input_path.strip_prefix(source_root).unwrap_or(input_path);
 
+    // Get the base name without extension
+    let base_name = relative
+        .file_stem()
+        .and_then(|n| n.to_str())
+        .ok_or_else(|| anyhow::anyhow!("Invalid filename"))?;
+
+    // TDD FIX: Check if there's a directory module with the same name
+    // If both window.wj and window/ exist, put window.wj content into window/mod.rs
+    // This prevents E0761: file for module `window` found at both "window.rs" and "window/mod.rs"
+    let source_dir_for_module = if let Some(parent) = input_path.parent() {
+        parent.join(base_name)
+    } else {
+        PathBuf::from(base_name)
+    };
+
+    let has_directory_module = source_dir_for_module.is_dir()
+        && source_dir_for_module
+            .read_dir()
+            .map(|mut entries| {
+                entries.any(|e| {
+                    e.ok()
+                        .and_then(|e| e.file_name().into_string().ok())
+                        .map(|name| name.ends_with(".wj"))
+                        .unwrap_or(false)
+                })
+            })
+            .unwrap_or(false);
+
     // Replace .wj extension with .rs
     let rs_filename = relative
         .file_name()
@@ -4578,8 +4692,14 @@ pub fn get_relative_output_path(
         }
     }
 
-    // Add the .rs filename
-    output_path.push(rs_filename);
+    // If there's a directory module, put content into mod.rs instead of window.rs
+    if has_directory_module {
+        output_path.push(base_name);
+        output_path.push("mod.rs");
+    } else {
+        // Add the .rs filename
+        output_path.push(rs_filename);
+    }
 
     Ok(output_path)
 }

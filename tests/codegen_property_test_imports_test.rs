@@ -21,18 +21,15 @@ fn test_addition_commutative(a: i32) {
     fs::write(&wj_path, source).expect("Failed to write test file");
     fs::create_dir_all(&out_dir).expect("Failed to create output dir");
 
-    let output = Command::new("cargo")
+    let wj_binary = std::env::var("CARGO_BIN_EXE_wj").unwrap_or_else(|_| "wj".to_string());
+    let output = Command::new(&wj_binary)
         .args([
-            "run",
-            "--release",
-            "--",
             "build",
             wj_path.to_str().unwrap(),
             "-o",
             out_dir.to_str().unwrap(),
             "--no-cargo",
         ])
-        .current_dir(env!("CARGO_MANIFEST_DIR"))
         .output()
         .expect("Failed to run compiler");
 
@@ -85,18 +82,15 @@ fn test_addition_commutative(a: i32, b: i32) {
     fs::write(&wj_path, source).expect("Failed to write test file");
     fs::create_dir_all(&out_dir).expect("Failed to create output dir");
 
-    let output = Command::new("cargo")
+    let wj_binary = std::env::var("CARGO_BIN_EXE_wj").unwrap_or_else(|_| "wj".to_string());
+    let output = Command::new(&wj_binary)
         .args([
-            "run",
-            "--release",
-            "--",
             "build",
             wj_path.to_str().unwrap(),
             "-o",
             out_dir.to_str().unwrap(),
             "--no-cargo",
         ])
-        .current_dir(env!("CARGO_MANIFEST_DIR"))
         .output()
         .expect("Failed to run compiler");
 
