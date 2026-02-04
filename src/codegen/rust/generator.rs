@@ -1339,10 +1339,11 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
         // 3. Assume it's a sibling module and use super:: prefix
         //
         // THE WINDJAMMER WAY: Smart defaults that work 99% of the time
+        // TDD FIX: Check for both Unix (/) and Windows (\) path separators
         let is_in_subdirectory = self
             .current_output_file
             .to_str()
-            .map(|s| s.contains('/'))
+            .map(|s| s.contains('/') || s.contains('\\'))
             .unwrap_or(false);
 
         // TDD FIX: Detect imports from parent module's re-exports
