@@ -2,7 +2,6 @@
 ///
 /// Bug: Transpiler was adding .cloned() to Some(squad) when squad is already &Squad
 /// This caused type mismatches: expected &Squad, found Squad
-
 use std::fs;
 use std::path::PathBuf;
 use std::process::Command;
@@ -14,7 +13,6 @@ fn get_wj_compiler() -> PathBuf {
 
 #[test]
 fn test_return_some_ref_no_clone() {
-
     let source = r#"
 struct Squad {
     pub id: string,
