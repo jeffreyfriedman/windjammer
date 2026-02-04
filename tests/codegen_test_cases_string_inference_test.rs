@@ -11,8 +11,13 @@
 /// The compiler should automatically infer and convert string literals to String
 /// when the parameter type expects String.
 use std::fs;
+use std::path::PathBuf;
 use std::process::Command;
 use tempfile::TempDir;
+
+fn get_wj_compiler() -> PathBuf {
+    PathBuf::from(env!("CARGO_BIN_EXE_wj"))
+}
 
 #[test]
 fn test_test_cases_with_string_literals_auto_converts_to_string() {
@@ -38,7 +43,7 @@ fn test_user(id: string, name: string, age: i32) {
     fs::write(&input_path, source).unwrap();
 
     // Compile with wj
-    let output = Command::new("wj")
+    let output = Command::new(get_wj_compiler())
         .args(["build", input_path.to_str().unwrap(), "--no-cargo"])
         .current_dir(temp_dir.path())
         .output()
@@ -112,7 +117,7 @@ fn test_greet() {
     fs::write(&input_path, source).unwrap();
 
     // Compile with wj
-    let output = Command::new("wj")
+    let output = Command::new(get_wj_compiler())
         .args(["build", input_path.to_str().unwrap(), "--no-cargo"])
         .current_dir(temp_dir.path())
         .output()

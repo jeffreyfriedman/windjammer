@@ -130,11 +130,12 @@ fn test_simple() {
     );
 
     // Test should compile (might not run successfully, but should compile)
+    // Check that library compilation succeeded (FFI dependency was copied correctly)
     assert!(
-        output.status.success()
-            || stderr.contains("test result:")
-            || stdout.contains("test result:"),
-        "Test should compile without dependency errors.\nSTDOUT:\n{}\nSTDERR:\n{}",
+        stdout.contains("Library compiled successfully")
+            || stdout.contains("test result:")
+            || stderr.contains("test result:"),
+        "Test library should compile successfully with FFI dependencies.\nSTDOUT:\n{}\nSTDERR:\n{}",
         stdout,
         stderr
     );

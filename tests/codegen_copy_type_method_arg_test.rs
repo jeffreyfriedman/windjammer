@@ -2,12 +2,17 @@
 ///
 /// Bug: Transpiler was adding & to Copy type arguments in method calls
 /// This caused type mismatches: expected Entity, found &Entity
+use std::fs;
+use std::path::PathBuf;
+use std::process::Command;
+use tempfile::TempDir;
+
+fn get_wj_compiler() -> PathBuf {
+    PathBuf::from(env!("CARGO_BIN_EXE_wj"))
+}
+
 #[test]
 fn test_copy_type_passed_by_value_to_methods() {
-    use std::fs;
-    use std::process::Command;
-    use tempfile::TempDir;
-
     let source = r#"
 @derive(Copy, Clone, Debug, PartialEq, Eq, Hash)
 pub struct Entity {
@@ -51,18 +56,14 @@ impl World {
     fs::write(&wj_path, source).expect("Failed to write test file");
     fs::create_dir_all(&out_dir).expect("Failed to create output dir");
 
-    let output = Command::new("cargo")
+    let output = Command::new(get_wj_compiler())
         .args([
-            "run",
-            "--release",
-            "--",
             "build",
             wj_path.to_str().unwrap(),
             "-o",
             out_dir.to_str().unwrap(),
             "--no-cargo",
         ])
-        .current_dir(env!("CARGO_MANIFEST_DIR"))
         .output()
         .expect("Failed to run compiler");
 
