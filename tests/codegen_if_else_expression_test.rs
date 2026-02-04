@@ -3,12 +3,17 @@
 /// Bug: When if-else is used as an expression (assigned to variable or returned),
 /// transpiler was adding semicolons to branches, turning them into statements.
 /// This causes type errors: expected Option<T>, found ()
+use std::fs;
+use std::path::PathBuf;
+use std::process::Command;
+use tempfile::TempDir;
+
+fn get_wj_compiler() -> PathBuf {
+    PathBuf::from(env!("CARGO_BIN_EXE_wj"))
+}
+
 #[test]
 fn test_if_else_expression_no_semicolons() {
-    use std::fs;
-    use std::process::Command;
-    use tempfile::TempDir;
-
     let source = r#"
 pub fn get_last_selected(is_empty: bool, value: i64) -> Option<i64> {
     let result = if is_empty {
@@ -35,18 +40,14 @@ pub fn get_last_inline(is_empty: bool, value: i64) -> Option<i64> {
     fs::write(&wj_path, source).expect("Failed to write test file");
     fs::create_dir_all(&out_dir).expect("Failed to create output dir");
 
-    let output = Command::new("cargo")
+    let output = Command::new(get_wj_compiler())
         .args([
-            "run",
-            "--release",
-            "--",
             "build",
             wj_path.to_str().unwrap(),
             "-o",
             out_dir.to_str().unwrap(),
             "--no-cargo",
         ])
-        .current_dir(env!("CARGO_MANIFEST_DIR"))
         .output()
         .expect("Failed to run compiler");
 
