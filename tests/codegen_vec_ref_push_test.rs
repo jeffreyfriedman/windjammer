@@ -3,12 +3,17 @@
 /// Bug: When building Vec<&Quest> from iterator, transpiler was adding
 /// .clone() to borrowed iterator variables, causing type mismatch:
 /// expected Vec<&Quest>, found Vec<Quest>
+use std::fs;
+use std::path::PathBuf;
+use std::process::Command;
+use tempfile::TempDir;
+
+fn get_wj_compiler() -> PathBuf {
+    PathBuf::from(env!("CARGO_BIN_EXE_wj"))
+}
+
 #[test]
 fn test_push_borrowed_iter_var_to_vec_ref() {
-    use std::fs;
-    use std::process::Command;
-    use tempfile::TempDir;
-
     let source = r#"
 struct Quest {
     pub id: string,
@@ -39,18 +44,14 @@ impl QuestManager {
     fs::write(&wj_path, source).expect("Failed to write test file");
     fs::create_dir_all(&out_dir).expect("Failed to create output dir");
 
-    let output = Command::new("cargo")
+    let output = Command::new(get_wj_compiler())
         .args([
-            "run",
-            "--release",
-            "--",
             "build",
             wj_path.to_str().unwrap(),
             "-o",
             out_dir.to_str().unwrap(),
             "--no-cargo",
         ])
-        .current_dir(env!("CARGO_MANIFEST_DIR"))
         .output()
         .expect("Failed to run compiler");
 
