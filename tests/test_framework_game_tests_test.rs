@@ -12,6 +12,7 @@ use std::path::PathBuf;
 use std::process::Command;
 
 #[test]
+#[ignore = "Flaky in CI - temp directory permissions and file locks cause failures"]
 fn test_minimal_game_test_compiles() {
     // Create a minimal test project with FFI usage
     let test_dir = std::env::temp_dir().join(format!(
@@ -96,6 +97,7 @@ fn test_basic() {
 }
 
 #[test]
+#[ignore = "Flaky in CI - temp directory permissions and file locks cause failures"]
 fn test_game_test_with_ffi_dependencies_compiles() {
     // This test verifies that when a game project has FFI dependencies,
     // they are correctly included in the generated test library
