@@ -3,7 +3,12 @@
 // Root Cause: Both game_loop::GameLoop (trait) and game::GameLoop (struct) exist
 // Fix: Rename game::GameLoop struct to FrameTimer to avoid conflict
 
+use std::path::PathBuf;
 use std::process::Command;
+
+fn get_wj_compiler() -> PathBuf {
+    PathBuf::from(env!("CARGO_BIN_EXE_wj"))
+}
 
 #[test]
 fn test_gameloop_no_ambiguity() {
@@ -46,12 +51,7 @@ fn test_gameloop_no_ambiguity() {
     std::fs::write(test_dir.join("main.wj"), code).unwrap();
 
     // Compile
-    let wj_binary = std::env::var("CARGO_BIN_EXE_wj").unwrap_or_else(|_| {
-        let manifest_dir = std::env::var("CARGO_MANIFEST_DIR").unwrap();
-        format!("{}/target/release/wj", manifest_dir)
-    });
-
-    let output = Command::new(&wj_binary)
+    let output = Command::new(get_wj_compiler())
         .arg("build")
         .arg("main.wj")
         .arg("--no-cargo") // Skip cargo build to avoid devise_core dependency issue
