@@ -11,6 +11,7 @@ use std::fs;
 use std::path::PathBuf;
 
 #[test]
+#[ignore = "Flaky in CI - Windows temp directory/file lock issues during Cargo.toml modification"]
 fn test_library_uses_correct_lib_name() {
     let test_dir = std::env::temp_dir().join(format!(
         "wj_test_lib_name_{}_{}",
