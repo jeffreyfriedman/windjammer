@@ -10,8 +10,13 @@
 /// - x.powf(y) - Power function
 /// - etc.
 use std::fs;
+use std::path::PathBuf;
 use std::process::Command;
 use tempfile::tempdir;
+
+fn get_wj_compiler() -> PathBuf {
+    PathBuf::from(env!("CARGO_BIN_EXE_wj"))
+}
 
 fn compile_wj_code(code: &str) -> Result<String, String> {
     let temp_dir = tempdir().map_err(|e| e.to_string())?;
@@ -19,10 +24,9 @@ fn compile_wj_code(code: &str) -> Result<String, String> {
 
     fs::write(&test_file, code).map_err(|e| e.to_string())?;
 
-    let output = Command::new("cargo")
-        .args(["run", "--release", "--", "build", "--no-cargo"])
+    let output = Command::new(get_wj_compiler())
+        .args(["build", "--no-cargo"])
         .arg(&test_file)
-        .current_dir(env!("CARGO_MANIFEST_DIR"))
         .output()
         .map_err(|e| e.to_string())?;
 
