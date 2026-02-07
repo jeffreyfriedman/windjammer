@@ -2030,7 +2030,7 @@ fn create_cargo_toml_with_deps(
 
         deps.push(format!(
             "windjammer-runtime = {{ path = \"{}\" }}",
-            windjammer_runtime_path.display()
+            path_to_toml_string(&windjammer_runtime_path)
         ));
     }
 
@@ -2413,7 +2413,7 @@ lto = true
         if uses_platform_apis {
             format!(
                 "windjammer-runtime = {{ path = \"{}\", features = [\"wasm\"] }}",
-                windjammer_runtime_path.display()
+                path_to_toml_string(&windjammer_runtime_path)
             )
         } else {
             String::new()
@@ -3976,7 +3976,7 @@ fn copy_ffi_dependencies_to_test_library(project_root: &Path, lib_output_dir: &P
             if let Some(path) = table.get("path").and_then(|v| v.as_str()) {
                 // Make path absolute for test library
                 let abs_path = project_root.join(path);
-                parts.push(format!("path = \"{}\"", abs_path.display()));
+                parts.push(format!("path = \"{}\"", path_to_toml_string(&abs_path)));
             }
             if parts.is_empty() {
                 // No useful parts extracted, skip this dependency
@@ -4042,6 +4042,12 @@ fn copy_ffi_files_recursive(src: &Path, dest: &Path) -> Result<()> {
     }
 
     Ok(())
+}
+
+/// Convert a path to TOML-safe format (forward slashes on all platforms)
+/// Windows paths with backslashes cause TOML parse errors, but forward slashes work everywhere
+fn path_to_toml_string(path: &Path) -> String {
+    path.display().to_string().replace('\\', "/")
 }
 
 /// Find windjammer-runtime path using robust search logic
@@ -4256,7 +4262,11 @@ fn generate_test_harness(
     );
 
     let library_dep_str = if let Some((lib_name, lib_path)) = library_dependency {
-        format!("\n{} = {{ path = \"{}\" }}", lib_name, lib_path.display())
+        format!(
+            "\n{} = {{ path = \"{}\" }}",
+            lib_name,
+            path_to_toml_string(&lib_path)
+        )
     } else {
         String::new()
     };
