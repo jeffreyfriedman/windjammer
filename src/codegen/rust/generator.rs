@@ -31,6 +31,8 @@ pub struct CodeGenerator<'ast> {
     needs_write_import: bool,    // For string capacity optimization (write! macro)
     needs_smallvec_import: bool, // For Phase 8 SmallVec optimization
     needs_cow_import: bool,      // For Phase 9 Cow optimization
+    needs_hashmap_import: bool,  // Auto-detect HashMap usage
+    needs_hashset_import: bool,  // Auto-detect HashSet usage
     target: CompilationTarget,
     is_module: bool, // true if generating code for a reusable module (not main file)
     source_map: crate::source_map::SourceMap,
@@ -160,6 +162,8 @@ impl<'ast> CodeGenerator<'ast> {
             needs_write_import: false,
             needs_smallvec_import: false,
             needs_cow_import: false,
+            needs_hashmap_import: false,
+            needs_hashset_import: false,
             target,
             is_module: false,
             source_map: crate::source_map::SourceMap::new(),
@@ -624,6 +628,10 @@ impl<'ast> CodeGenerator<'ast> {
             }
         }
 
+        // Track explicitly imported traits to avoid duplication with auto-imports
+        let mut explicitly_imported_traits: std::collections::HashSet<String> =
+            std::collections::HashSet::new();
+
         // Check for stdlib modules that need special imports
         for item in &program.items {
             if let Item::Use { path, .. } = item {
@@ -633,7 +641,62 @@ impl<'ast> CodeGenerator<'ast> {
                 {
                     self.needs_serde_imports = true;
                 }
+                // If user already imports HashMap/HashSet from std::collections, mark them
+                if path_str.contains("HashMap") {
+                    self.needs_hashmap_import = true;
+                }
+                if path_str.contains("HashSet") {
+                    self.needs_hashset_import = true;
+                }
+                // Track explicit std::ops imports to prevent duplication
+                if path_str.starts_with("std::ops::") {
+                    if let Some(trait_name) = path_str.strip_prefix("std::ops::") {
+                        explicitly_imported_traits.insert(trait_name.to_string());
+                    }
+                }
+                // Track explicit std::fmt imports to prevent duplication
+                if path_str.starts_with("std::fmt::") {
+                    if let Some(trait_name) = path_str.strip_prefix("std::fmt::") {
+                        explicitly_imported_traits.insert(trait_name.to_string());
+                    }
+                }
                 // http, time, crypto modules don't need special imports (used directly)
+            }
+        }
+
+        // THE WINDJAMMER WAY: Auto-detect usage of common stdlib types and traits
+        // Scan the program for HashMap/HashSet references and operator trait impls
+        // This prevents the developer from needing to write boilerplate imports
+        {
+            let program_text = format!("{:?}", program);
+            if !self.needs_hashmap_import && program_text.contains("HashMap") {
+                self.needs_hashmap_import = true;
+            }
+            if !self.needs_hashset_import && program_text.contains("HashSet") {
+                self.needs_hashset_import = true;
+            }
+        }
+
+        // Auto-detect operator trait implementations (impl Add, impl Sub, etc.)
+        // and add the necessary std::ops imports (only if not already explicitly imported)
+        for item in &program.items {
+            if let Item::Impl { block, .. } = item {
+                if let Some(ref trait_name) = block.trait_name {
+                    // Skip if the user already has an explicit import for this trait
+                    if explicitly_imported_traits.contains(trait_name.as_str()) {
+                        continue;
+                    }
+                    match trait_name.as_str() {
+                        "Add" | "Sub" | "Mul" | "Div" | "Neg" | "Rem" | "AddAssign"
+                        | "SubAssign" | "MulAssign" | "DivAssign" => {
+                            self.needs_trait_imports.insert(trait_name.clone());
+                        }
+                        "Display" | "Debug" => {
+                            self.needs_trait_imports.insert(trait_name.clone());
+                        }
+                        _ => {}
+                    }
+                }
             }
         }
 
@@ -896,7 +959,8 @@ impl<'ast> CodeGenerator<'ast> {
                     "Clone" => {
                         // Clone is in prelude, no import needed
                     }
-                    "Add" | "Sub" | "Mul" | "Div" => {
+                    "Add" | "Sub" | "Mul" | "Div" | "Neg" | "Rem" | "AddAssign" | "SubAssign"
+                    | "MulAssign" | "DivAssign" => {
                         implicit_imports.push_str(&format!("use std::ops::{};\n", trait_name));
                     }
                     "PartialEq" | "Eq" | "PartialOrd" | "Ord" => {
@@ -932,6 +996,23 @@ impl<'ast> CodeGenerator<'ast> {
         }
         if self.needs_write_import {
             implicit_imports.push_str("use std::fmt::Write;\n");
+        }
+        if self.needs_hashmap_import && !imports.contains("std::collections::HashMap") {
+            implicit_imports.push_str("use std::collections::HashMap;\n");
+        }
+        if self.needs_hashset_import && !imports.contains("std::collections::HashSet") {
+            implicit_imports.push_str("use std::collections::HashSet;\n");
+        }
+
+        // THE WINDJAMMER WAY: Auto-import sibling types in module directories
+        // When compiling a multi-file project, each file in a module directory
+        // should have access to sibling types re-exported by the parent mod.rs.
+        // This prevents the need for explicit imports of types within the same module.
+        // Example: quest/manager.rs gets `use super::*;` which imports QuestId, Quest, etc.
+        // from quest/mod.rs's re-exports.
+        // For root-level modules, `super` refers to the crate root (lib.rs), which is harmless.
+        if self.is_module {
+            implicit_imports.push_str("#[allow(unused_imports)]\nuse super::*;\n");
         }
 
         // Add property testing imports if needed
