@@ -380,6 +380,7 @@ fn discover_hand_written_modules(
                     "node_modules",
                     ".git",
                     "src",
+                    "lib", // TDD FIX: "lib" is reserved - lib.rs IS the library entry point
                 ];
                 if !skip_dirs.contains(&dir_name) {
                     let mod_rs = path.join("mod.rs");
