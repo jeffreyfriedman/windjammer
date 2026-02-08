@@ -35,6 +35,7 @@ impl MethodCallAnalyzer {
         usize_variables: &HashSet<String>,
         current_function_params: &[Parameter],
         borrowed_iterator_vars: &HashSet<String>,
+        arg_count: usize,
     ) -> bool {
         // String literals are ALREADY &str - never add &
         let is_string_literal = matches!(
@@ -173,8 +174,27 @@ impl MethodCallAnalyzer {
                 param_idx
             };
             if let Some(&ownership) = sig.param_ownership.get(sig_param_idx) {
-                // Signature is available - use it!
-                return matches!(ownership, OwnershipMode::Borrowed);
+                if matches!(ownership, OwnershipMode::Borrowed) {
+                    // CRITICAL FIX: For Copy types, the codegen generates `param: Type`
+                    // (not `param: &Type`) even when ownership is Borrowed, because Copy
+                    // types are efficient to pass by value. We must NOT add & at the call
+                    // site, or we'd pass &i32 to a parameter expecting i32.
+                    // Example: fn matches(&self, current_state: i32) — analyzer says Borrowed
+                    // but codegen generates `current_state: i32`, not `current_state: &i32`
+                    //
+                    // TDD FIX: BUT Reference types (&str, &T) are NOT treated as Copy here.
+                    // If param type is &str, the generated code has `pattern: &str`,
+                    // and the caller passing String needs `&text` to auto-deref to &str.
+                    if let Some(param_type) = sig.param_types.get(sig_param_idx) {
+                        if !matches!(param_type, Type::Reference(_) | Type::MutableReference(_))
+                            && Self::is_copy_type_annotation(param_type)
+                        {
+                            return false; // Copy type — pass by value
+                        }
+                    }
+                    return true; // Non-Copy Borrowed type needs &
+                }
+                return false; // Owned or MutBorrowed — don't add &
             }
         }
 
@@ -198,6 +218,7 @@ impl MethodCallAnalyzer {
                 usize_variables,
                 current_function_params,
                 borrowed_iterator_vars,
+                arg_count,
             );
         }
 
@@ -470,6 +491,12 @@ impl MethodCallAnalyzer {
 
     /// Check if a Type annotation is a Copy type
     /// Copy types in Rust: integers, floats, bool, char, and some small tuples
+    /// Public wrapper for is_copy_type_annotation
+    /// Used by the Call expression handler in generator.rs
+    pub fn is_copy_type_annotation_pub(type_: &Type) -> bool {
+        Self::is_copy_type_annotation(type_)
+    }
+
     fn is_copy_type_annotation(type_: &Type) -> bool {
         match type_ {
             Type::Custom(name) => {
@@ -508,6 +535,7 @@ impl MethodCallAnalyzer {
         usize_variables: &HashSet<String>,
         current_function_params: &[Parameter],
         borrowed_iterator_vars: &HashSet<String>,
+        arg_count: usize,
     ) -> bool {
         // Check if argument is already a reference (parameter or iterator variable)
         let arg_is_already_borrowed = if let Expression::Identifier { name, .. } = arg {
@@ -524,6 +552,14 @@ impl MethodCallAnalyzer {
         };
 
         if arg_is_already_borrowed {
+            return false;
+        }
+
+        // TDD FIX: Multi-argument methods are NOT stdlib collection methods
+        // HashMap::get, HashMap::remove, Vec::remove, etc. all take exactly 1 argument.
+        // If a method named "get" or "remove" takes 2+ arguments, it's a user-defined method
+        // (e.g., Heightmap::get(x, z)) and we should NOT add & based on stdlib assumptions.
+        if arg_count > 1 && matches!(method, "get" | "get_mut" | "remove" | "contains_key") {
             return false;
         }
 
