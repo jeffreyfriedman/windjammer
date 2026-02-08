@@ -53,7 +53,18 @@ pub fn count_statements<'ast>(body: &[&'ast Statement<'ast>]) -> usize {
 pub fn extract_function_name(expr: &Expression) -> String {
     match expr {
         Expression::Identifier { name, .. } => name.clone(),
-        Expression::FieldAccess { field, .. } => field.clone(),
+        Expression::FieldAccess { object, field, .. } => {
+            // TDD FIX: For static method calls like Quest::new(), return qualified name "Quest::new"
+            // This ensures the correct signature is looked up from the registry
+            // (instead of just "new" which could match ANY struct's new method)
+            if let Expression::Identifier { name: obj_name, .. } = &**object {
+                // Check if object starts with uppercase (type name) → static method call
+                if obj_name.chars().next().is_some_and(|c| c.is_uppercase()) {
+                    return format!("{}::{}", obj_name, field);
+                }
+            }
+            field.clone()
+        }
         _ => String::new(), // Can't determine function name
     }
 }
