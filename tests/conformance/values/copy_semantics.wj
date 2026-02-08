@@ -1,0 +1,90 @@
+// Conformance Test: Copy Semantics
+//
+// SEMANTIC CONTRACT:
+// Copy types (int, float, bool) are always independent copies.
+// Assigning or passing a copy type creates a new, independent value.
+// Mutating a copy never affects the original.
+//
+// EXPECTED OUTPUT: (must be identical across all backends)
+// [copy_int] a=42, b=42
+// [copy_int] after b=99: a=42, b=99
+// [copy_float] a=3.14, b=3.14
+// [copy_float] after b=2.72: a=3.14, b=2.72
+// [copy_bool] a=true, b=true
+// [copy_bool] after b=false: a=true, b=false
+// [copy_param] original=10, doubled=20
+// [copy_param] after call: original=10
+// [copy_nested] p1.x=1, p1.y=2
+// [copy_nested] p2.x=1, p2.y=2
+// [copy_nested] after p2.x=99: p1.x=1, p2.x=99
+// [copy_all] PASSED
+
+// --- Test: Integer copy ---
+fn test_copy_int() {
+    let a = 42
+    let b = a  // b is an independent copy
+    println("[copy_int] a=${a}, b=${b}")
+
+    let mut b = a
+    b = 99
+    println("[copy_int] after b=99: a=${a}, b=${b}")
+}
+
+// --- Test: Float copy ---
+fn test_copy_float() {
+    let a = 3.14
+    let b = a
+    println("[copy_float] a=${a}, b=${b}")
+
+    let mut b = a
+    b = 2.72
+    println("[copy_float] after b=2.72: a=${a}, b=${b}")
+}
+
+// --- Test: Bool copy ---
+fn test_copy_bool() {
+    let a = true
+    let b = a
+    println("[copy_bool] a=${a}, b=${b}")
+
+    let mut b = a
+    b = false
+    println("[copy_bool] after b=false: a=${a}, b=${b}")
+}
+
+// --- Test: Copy types passed to functions remain independent ---
+fn double(x: int) -> int {
+    x * 2
+}
+
+fn test_copy_param() {
+    let original = 10
+    let doubled = double(original)
+    println("[copy_param] original=${original}, doubled=${doubled}")
+    println("[copy_param] after call: original=${original}")
+}
+
+// --- Test: Struct fields that are copy types ---
+struct Point {
+    x: int,
+    y: int,
+}
+
+fn test_copy_nested() {
+    let p1 = Point { x: 1, y: 2 }
+    let mut p2 = Point { x: p1.x, y: p1.y }
+    println("[copy_nested] p1.x=${p1.x}, p1.y=${p1.y}")
+    println("[copy_nested] p2.x=${p2.x}, p2.y=${p2.y}")
+
+    p2.x = 99
+    println("[copy_nested] after p2.x=99: p1.x=${p1.x}, p2.x=${p2.x}")
+}
+
+fn main() {
+    test_copy_int()
+    test_copy_float()
+    test_copy_bool()
+    test_copy_param()
+    test_copy_nested()
+    println("[copy_all] PASSED")
+}
