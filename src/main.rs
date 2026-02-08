@@ -590,6 +590,10 @@ pub fn build_project(path: &Path, output: &Path, target: CompilationTarget) -> R
                 path
             };
             generate_nested_module_structure(source_dir, output)?;
+
+            // CLEANUP: Remove stale .rs files that conflict with generated directory modules
+            // Example: If lighting/ directory exists with mod.rs, remove lighting.rs (stale FFI file)
+            cleanup_stale_module_files(output)?;
         }
 
         // Create Cargo.toml with stdlib and external dependencies (unless it's a component project)
@@ -972,16 +976,21 @@ impl ModuleCompiler {
             .analyze_program(&program)
             .map_err(|e| anyhow::anyhow!("Analysis error: {}", e))?;
 
-        // BUG #8 FIX: Merge this file's signatures into the global registry
-        // This enables cross-file method signature resolution
-        self.global_signatures.merge(&signatures);
+        // MODULE-SCOPED SIGNATURE RESOLUTION:
+        // Create a per-file registry that starts with global signatures (for cross-module lookups)
+        // then overlays per-file signatures (for local type priority).
+        // This prevents name collisions when two modules define types with the same name
+        // (e.g., narrative::Quest::new vs quest::Quest::new).
+        let mut per_file_registry = self.global_signatures.clone();
+        per_file_registry.merge(&signatures);
 
-        // BUG #8 FIX: Use global signatures (not per-file) for code generation
-        // This ensures methods from imported modules have correct signatures
         let mut generator =
-            codegen::CodeGenerator::new_for_module(self.global_signatures.clone(), self.target);
+            codegen::CodeGenerator::new_for_module(per_file_registry, self.target);
         generator.set_analyzed_trait_methods(analyzed_trait_methods);
         let rust_code = generator.generate_program(&program, &analyzed);
+
+        // THEN merge into global for future files' cross-module lookups
+        self.global_signatures.merge(&signatures);
 
         // Extract module name from path
         // For "std::json" -> "json"
@@ -1517,6 +1526,13 @@ fn compile_file_impl(
         .analyze_program(&program)
         .map_err(|e| anyhow::anyhow!("Analysis error: {}", e))?;
 
+    // BUG FIX: Merge per-file signatures into global registry during PASS 1
+    // This ensures extern function signatures (and all other signatures) are available
+    // during PASS 2 regeneration for cross-file and same-file signature resolution
+    if store_program {
+        module_compiler.global_signatures.merge(&signatures);
+    }
+
     // MUTABILITY CHECK: Check for mut errors with great error messages
     let mut mut_checker = errors::MutabilityChecker::new(input_path.to_path_buf());
     let mut has_mut_errors = false;
@@ -1625,15 +1641,13 @@ fn compile_file_impl(
             return Ok((HashSet::new(), Vec::new()));
         } else {
             // Use old generator for non-component WASM
-            // THE WINDJAMMER WAY: Use new_for_module in multi-file projects to prevent inlining
-            // BUG #8 FIX: During regeneration, use global signatures for cross-module resolution
-            let generator_signatures = if !store_program && is_multi_file_project {
-                // Regeneration pass - use global signatures
-                module_compiler.global_signatures.clone()
-            } else {
-                // First pass - use per-file signatures
-                signatures
-            };
+            // MODULE-SCOPED SIGNATURE RESOLUTION:
+            // Always start with global signatures (for cross-module lookups),
+            // then overlay per-file signatures (for local type priority).
+            // This prevents name collisions when two modules define types with the same name.
+            let mut generator_signatures = module_compiler.global_signatures.clone();
+            generator_signatures.merge(&signatures);
+
             let mut generator = if is_multi_file_project {
                 codegen::CodeGenerator::new_for_module(generator_signatures, target)
             } else {
@@ -1670,15 +1684,11 @@ fn compile_file_impl(
         }
     } else {
         // Use old generator for Rust target
-        // THE WINDJAMMER WAY: Use new_for_module in multi-file projects to prevent inlining
-        // BUG #8 FIX: During regeneration, use global signatures for cross-module resolution
-        let generator_signatures = if !store_program && is_multi_file_project {
-            // Regeneration pass - use global signatures
-            module_compiler.global_signatures.clone()
-        } else {
-            // First pass - use per-file signatures
-            signatures
-        };
+        // MODULE-SCOPED SIGNATURE RESOLUTION:
+        // Always start with global signatures (for cross-module lookups),
+        // then overlay per-file signatures (for local type priority).
+        let mut generator_signatures = module_compiler.global_signatures.clone();
+        generator_signatures.merge(&signatures);
         let mut generator = if is_multi_file_project {
             codegen::CodeGenerator::new_for_module(generator_signatures, target)
         } else {
@@ -5059,4 +5069,58 @@ mod tests {
         // The actual implementation is in build_project()
         // If this test compiles and passes, the concept is sound
     }
+}
+
+/// Cleanup stale .rs files that conflict with generated directory modules.
+/// When a hand-written lighting.rs exists but we've generated a lighting/ directory
+/// with mod.rs, Rust complains about finding the module at two locations.
+/// This function recursively walks the output directory and removes such stale files.
+fn cleanup_stale_module_files(output_dir: &Path) -> Result<()> {
+    cleanup_stale_module_files_recursive(output_dir)
+}
+
+fn cleanup_stale_module_files_recursive(dir: &Path) -> Result<()> {
+    if !dir.is_dir() {
+        return Ok(());
+    }
+
+    if let Ok(entries) = std::fs::read_dir(dir) {
+        for entry in entries.flatten() {
+            let path = entry.path();
+            if path.is_dir() {
+                // Check if a sibling .rs file exists with the same name as this directory
+                let dir_name = path.file_name().unwrap().to_string_lossy();
+
+                // NEVER remove crate root files (lib.rs, main.rs)
+                if dir_name == "lib" || dir_name == "main" {
+                    cleanup_stale_module_files_recursive(&path)?;
+                    continue;
+                }
+
+                let sibling_rs = dir.join(format!("{}.rs", dir_name));
+
+                if sibling_rs.exists() {
+                    // Check that the directory has a mod.rs (confirming it's a module directory)
+                    let mod_rs = path.join("mod.rs");
+                    if mod_rs.exists() {
+                        eprintln!(
+                            "  Removing stale {}.rs (conflicts with {}/mod.rs)",
+                            dir_name, dir_name
+                        );
+                        std::fs::remove_file(&sibling_rs)?;
+                        // Also remove the .rs.map file if it exists
+                        let sibling_map = dir.join(format!("{}.rs.map", dir_name));
+                        if sibling_map.exists() {
+                            std::fs::remove_file(&sibling_map)?;
+                        }
+                    }
+                }
+
+                // Recurse into subdirectories
+                cleanup_stale_module_files_recursive(&path)?;
+            }
+        }
+    }
+
+    Ok(())
 }

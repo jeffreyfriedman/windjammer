@@ -516,7 +516,16 @@ impl<'ast> Analyzer<'ast> {
                         // Qualified (Type::method) enables precise cross-module resolution
                         // Simple (method) provides fallback when type inference fails
                         let qualified_name = format!("{}::{}", impl_block.type_name, func.name);
-                        registry.add_function(qualified_name, signature.clone());
+                        registry.add_function(qualified_name.clone(), signature.clone());
+                        // TDD FIX: For generic types like ComponentArray<T>, also register
+                        // with the base name (ComponentArray::method) so that type inference
+                        // from field types (which strips type params) can find the signature.
+                        if let Some(base_name) = impl_block.type_name.split('<').next() {
+                            if base_name != impl_block.type_name {
+                                let base_qualified = format!("{}::{}", base_name, func.name);
+                                registry.add_function(base_qualified, signature.clone());
+                            }
+                        }
                         registry.add_function(func.name.clone(), signature);
 
                         analyzed.push(analyzed_func);
@@ -3290,6 +3299,15 @@ impl<'ast> Analyzer<'ast> {
 
     /// Check if a method mutates the object
     fn is_mutating_method(&self, method: &str) -> bool {
+        // THE WINDJAMMER WAY: Comprehensive mutation detection
+        // Methods ending in _mut (values_mut, iter_mut, get_mut, etc.) are always mutating
+        if method.ends_with("_mut") {
+            return true;
+        }
+        // Methods starting with set_ are almost always mutating (setters)
+        if method.starts_with("set_") {
+            return true;
+        }
         matches!(
             method,
             "push"
@@ -3299,12 +3317,28 @@ impl<'ast> Analyzer<'ast> {
                 | "remove"
                 | "insert"
                 | "append"
-                | "get_mut"
+                | "extend"
+                | "drain"
+                | "truncate"
+                | "resize"
+                | "swap_remove"
+                | "retain"
+                | "sort"
+                | "sort_by"
+                | "sort_by_key"
+                | "sort_unstable"
+                | "sort_unstable_by"
+                | "dedup"
+                | "reverse"
+                | "swap"
                 | "allocate"
                 | "free"
                 | "update"
                 | "play"
                 | "reset"
+                | "set"
+                | "fill"
+                | "normalize"
         )
     }
 
@@ -3395,9 +3429,16 @@ impl<'ast> Analyzer<'ast> {
                             .any(|s| self.statement_calls_mutating_self_methods(s))
                     })
             }
-            Statement::While { body, .. } | Statement::For { body, .. } => body
+            Statement::While { body, .. } => body
                 .iter()
                 .any(|s| self.statement_calls_mutating_self_methods(s)),
+            Statement::For { iterable, body, .. } => {
+                // Check iterable for mutating self method calls too
+                self.expression_calls_mutating_self_methods(iterable)
+                    || body
+                        .iter()
+                        .any(|s| self.statement_calls_mutating_self_methods(s))
+            }
             _ => false,
         }
     }
@@ -3405,7 +3446,12 @@ impl<'ast> Analyzer<'ast> {
     /// Check if expression calls methods on self that require &mut self
     fn expression_calls_mutating_self_methods(&self, expr: &Expression) -> bool {
         match expr {
-            Expression::MethodCall { object, method, .. } => {
+            Expression::MethodCall {
+                object,
+                method,
+                arguments,
+                ..
+            } => {
                 // Check if calling a method on self (not self.field, just self)
                 if let Expression::Identifier { name, .. } = &**object {
                     if name == "self" {
@@ -3427,11 +3473,63 @@ impl<'ast> Analyzer<'ast> {
                         }
                     }
                 }
+
+                // TDD FIX: Cross-type mutation propagation via self.field.method()
+                //
+                // When we see self.field.method(), and method is a known mutating method,
+                // then self needs &mut because mutating a field's data requires mutable
+                // access to self. Example:
+                //   self.heightmap.set(x, y, val)  ->  heightmap.set() mutates heightmap
+                //   -> self.heightmap needs &mut -> self needs &mut
+                //
+                // Also handles deeper chains like self.field.subfield.method()
+                if self.expression_is_self_field_mutating_method_call(object, method) {
+                    return true;
+                }
+
+                // Recurse into arguments to find nested mutation patterns
+                for (_, arg) in arguments {
+                    if self.expression_calls_mutating_self_methods(arg) {
+                        return true;
+                    }
+                }
+
                 false
             }
             Expression::Block { statements, .. } => statements
                 .iter()
                 .any(|s| self.statement_calls_mutating_self_methods(s)),
+            _ => false,
+        }
+    }
+
+    /// Check if object.method() is a self.field[.subfield...].method() pattern
+    /// where method is a known mutating method. This enables cross-type mutation
+    /// propagation: if self.field calls a mutating method, self needs &mut.
+    fn expression_is_self_field_mutating_method_call(
+        &self,
+        object: &Expression,
+        method: &str,
+    ) -> bool {
+        // Check if the object traces back to self through field accesses
+        if self.expression_traces_to_self(object) && self.is_mutating_method(method) {
+            return true;
+        }
+        false
+    }
+
+    /// Check if an expression traces back to `self` through a chain of field accesses.
+    /// Returns true for: self.field, self.field.subfield, etc.
+    fn expression_traces_to_self(&self, expr: &Expression) -> bool {
+        match expr {
+            Expression::FieldAccess { object, .. } => {
+                if let Expression::Identifier { name, .. } = &**object {
+                    name == "self"
+                } else {
+                    // Recurse: self.a.b.c → check self.a.b → check self.a → check self
+                    self.expression_traces_to_self(object)
+                }
+            }
             _ => false,
         }
     }
@@ -3464,8 +3562,14 @@ impl<'ast> Analyzer<'ast> {
                         block.iter().any(|s| self.statement_modifies_self_fields(s))
                     })
             }
-            Statement::While { body, .. } | Statement::For { body, .. } => {
+            Statement::While { body, .. } => {
                 body.iter().any(|s| self.statement_modifies_self_fields(s))
+            }
+            Statement::For { iterable, body, .. } => {
+                // THE WINDJAMMER WAY: Check BOTH the iterable AND the body!
+                // `for x in self.field.values_mut()` requires &mut self
+                self.expression_mutates_self_fields(iterable)
+                    || body.iter().any(|s| self.statement_modifies_self_fields(s))
             }
             Statement::Match { value, arms, .. } => {
                 // THE WINDJAMMER WAY: Check match value for mutations!
@@ -3545,6 +3649,14 @@ impl<'ast> Analyzer<'ast> {
                     return true;
                 }
                 false
+            }
+            // TDD FIX: Detect `&mut self.field` as a mutation of self
+            // This is used in patterns like `for value in &mut self.data`
+            // which requires &mut self
+            Expression::Unary { op, operand, .. }
+                if matches!(op, crate::parser::UnaryOp::MutRef) =>
+            {
+                self.expression_is_self_field_access(operand)
             }
             _ => false,
         }

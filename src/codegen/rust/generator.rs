@@ -111,6 +111,14 @@ pub struct CodeGenerator<'ast> {
     generating_traits: std::collections::HashSet<String>,
     // RECURSION DEPTH: Track recursion depth to prevent stack overflow
     recursion_depth: usize,
+    // LOCAL VARIABLE TYPE TRACKING: Map variable names to their inferred types
+    // Populated from struct literals (let x = Foo { .. }), type annotations (let x: Foo = ..),
+    // and match-bound patterns (Some(x) from Option<Foo> → x: Foo).
+    // Enables qualified method signature lookup for local variables (e.g., x.method() → Foo::method)
+    local_var_types: std::collections::HashMap<String, Type>,
+    // STRUCT FIELD TYPE TRACKING: Map struct names to their field types
+    // Enables type inference for field accesses (e.g., self.transforms → ComponentArray<T>)
+    struct_field_types: std::collections::HashMap<String, std::collections::HashMap<String, Type>>,
 }
 
 // RECURSION GUARD MACRO: Check depth before entering recursive functions
@@ -204,6 +212,8 @@ impl<'ast> CodeGenerator<'ast> {
             analyzed_trait_methods: std::collections::HashMap::new(),
             generating_traits: std::collections::HashSet::new(),
             recursion_depth: 0,
+            local_var_types: std::collections::HashMap::new(),
+            struct_field_types: std::collections::HashMap::new(),
         }
     }
 
@@ -248,6 +258,10 @@ impl<'ast> CodeGenerator<'ast> {
     fn infer_type_name(&self, expr: &Expression) -> Option<String> {
         match expr {
             Expression::Identifier { name, .. } => {
+                // "self" refers to the current struct type
+                if name == "self" && self.in_impl_block {
+                    return self.current_struct_name.clone();
+                }
                 // Try to infer from struct name if we're in an impl block
                 if self.in_impl_block {
                     if let Some(struct_name) = &self.current_struct_name {
@@ -256,11 +270,45 @@ impl<'ast> CodeGenerator<'ast> {
                         }
                     }
                 }
+                // TDD FIX: Check function parameters for type info
+                // e.g., fn test(validator: Validator) → infer_type_name("validator") = "Validator"
+                for param in &self.current_function_params {
+                    if param.name == *name {
+                        return Self::type_to_name(&param.type_);
+                    }
+                }
+                // TDD FIX: Check local variable types
+                // e.g., let stack = Stack { .. } → infer_type_name("stack") = "Stack"
+                if let Some(var_type) = self.local_var_types.get(name) {
+                    return Self::type_to_name(var_type);
+                }
                 None
             }
-            Expression::FieldAccess { object, .. } => {
-                // Recursively infer from the object
-                self.infer_type_name(object)
+            Expression::FieldAccess { object, field, .. } => {
+                // TDD FIX: Try to resolve field type from struct field type tracking
+                // e.g., self.transforms → World.transforms → ComponentArray<int> → "ComponentArray"
+                let owner_type = self.infer_type_name(object);
+                if let Some(ref owner) = owner_type {
+                    // TDD FIX: For generic types like "ComponentArray<T>", also try base name "ComponentArray"
+                    if let Some(field_types) = self
+                        .struct_field_types
+                        .get(owner.as_str())
+                        .or_else(|| {
+                            owner
+                                .split('<')
+                                .next()
+                                .and_then(|base| self.struct_field_types.get(base))
+                        })
+                    {
+                        if let Some(field_type) = field_types.get(field) {
+                            if let Some(name) = Self::type_to_name(field_type) {
+                                return Some(name);
+                            }
+                        }
+                    }
+                }
+                // Fallback: use the owner type (for self.field_name → current struct type)
+                owner_type
             }
             Expression::Unary {
                 op:
@@ -281,6 +329,35 @@ impl<'ast> CodeGenerator<'ast> {
                 // For array[i], the element type is unknown without full type inference
                 // But we can try to infer the array type
                 self.infer_type_name(object)
+            }
+            _ => None,
+        }
+    }
+
+    /// Extract a type name from a Type enum (for signature lookup)
+    fn type_to_name(type_: &Type) -> Option<String> {
+        match type_ {
+            Type::Custom(name) => Some(name.clone()),
+            Type::Parameterized(name, _) => Some(name.clone()),
+            Type::Reference(inner) | Type::MutableReference(inner) => Self::type_to_name(inner),
+            // TDD FIX: Handle stdlib container types for method signature lookup
+            // Without this, self.dense (Vec<T>) can't resolve to "Vec" for Vec::remove lookup
+            Type::Vec(_) => Some("Vec".to_string()),
+            Type::Option(_) => Some("Option".to_string()),
+            Type::Result(_, _) => Some("Result".to_string()),
+            Type::Array(_, _) => Some("Array".to_string()),
+            _ => None,
+        }
+    }
+
+    /// Extract the element type from an iterable type.
+    /// Vec<T> → T, &Vec<T> → T, &mut Vec<T> → T, Array(T, _) → T
+    fn extract_iterator_element_type(iterable_type: &Type) -> Option<Type> {
+        match iterable_type {
+            Type::Vec(inner) => Some(inner.as_ref().clone()),
+            Type::Array(inner, _) => Some(inner.as_ref().clone()),
+            Type::Reference(inner) | Type::MutableReference(inner) => {
+                Self::extract_iterator_element_type(inner)
             }
             _ => None,
         }
@@ -1224,7 +1301,7 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
                 if let Some(alias_name) = alias {
                     return format!("use std::{} as {};\n", module_name, alias_name);
                 } else {
-                    return format!("use std::{};\n", module_name);
+                return format!("use std::{};\n", module_name);
                 }
             }
 
@@ -1575,14 +1652,14 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
                     // Path starts with uppercase (e.g., Vec3, String) - likely a re-exported type
                     // Don't add ::*
                     format!("use {};\n", rust_path)
-                } else {
-                    // Check if the last segment looks like a type (starts with uppercase)
-                    let last_segment = rust_path.split("::").last().unwrap_or("");
-                    if last_segment
-                        .chars()
-                        .next()
-                        .is_some_and(|c| c.is_uppercase())
-                    {
+            } else {
+                // Check if the last segment looks like a type (starts with uppercase)
+                let last_segment = rust_path.split("::").last().unwrap_or("");
+                if last_segment
+                    .chars()
+                    .next()
+                    .is_some_and(|c| c.is_uppercase())
+                {
                         // TDD FIX: For bare module imports (math::Vec3), convert to crate:: prefix
                         // This ensures cross-module imports are absolute, not relative
                         // THE WINDJAMMER WAY: Default to absolute paths for clarity
@@ -1652,15 +1729,15 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
                                 format!("use crate::{};\n", rust_path)
                             } else {
                                 // External crate - keep as-is
-                                format!("use {};\n", rust_path)
+                    format!("use {};\n", rust_path)
                             }
                         } else {
                             // Single identifier (Vec3) - likely a type, keep as-is
-                            format!("use {};\n", rust_path)
+                    format!("use {};\n", rust_path)
                         }
-                    } else {
-                        // Likely a module, add ::*
-                        format!("use {}::*;\n", rust_path)
+                } else {
+                    // Likely a module, add ::*
+                    format!("use {}::*;\n", rust_path)
                     }
                 }
             }
@@ -1679,6 +1756,14 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
         }
         self.usize_struct_fields
             .insert(s.name.clone(), usize_fields);
+
+        // STRUCT FIELD TYPE TRACKING: Record all field types for type inference
+        let mut field_types = std::collections::HashMap::new();
+        for field in &s.fields {
+            field_types.insert(field.name.clone(), field.field_type.clone());
+        }
+        self.struct_field_types
+            .insert(s.name.clone(), field_types);
 
         // Convert decorators to Rust attributes
         for decorator in &s.decorators {
@@ -2980,7 +3065,7 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
                     output.push('\n');
                 }
             } else {
-                output.push_str(&self.generate_statement(stmt));
+            output.push_str(&self.generate_statement(stmt));
             }
         }
 
@@ -3267,6 +3352,9 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
 
         // Track function parameters for compound assignment optimization
         self.current_function_params = func.parameters.clone();
+
+        // Clear local variable types for new function scope
+        self.local_var_types.clear();
 
         // Track function return type for string literal conversion
         self.current_function_return_type = func.return_type.clone();
@@ -3854,6 +3942,56 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
                     }
                 }
 
+                // LOCAL VARIABLE TYPE TRACKING: Infer type from value expression or annotation
+                // This enables qualified method signature lookup (e.g., stack.remove() → Stack::remove)
+                if let Some(name) = var_name {
+                    let inferred_type: Option<Type> = if let Some(type_) = type_ {
+                        // Explicit type annotation: let x: Foo = ...
+                        Some((*type_).clone())
+                    } else {
+                        // Infer from value expression
+                        match value {
+                            Expression::StructLiteral {
+                                name: struct_name, ..
+                            } => Some(Type::Custom(struct_name.to_string())),
+                            Expression::Call { function, .. } => {
+                                // Type::method() pattern (e.g., Foo::new())
+                                if let Expression::FieldAccess {
+                                    object, field, ..
+                                } = *function
+                                {
+                                    if let Expression::Identifier {
+                                        name: type_name, ..
+                                    } = *object
+                                    {
+                                        if type_name
+                                            .chars()
+                                            .next()
+                                            .is_some_and(|c| c.is_uppercase())
+                                            && (field == "new"
+                                                || field.starts_with("from_")
+                                                || field.starts_with("with_")
+                                                || field == "default")
+                                        {
+                                            Some(Type::Custom(type_name.to_string()))
+                                        } else {
+                                            None
+                                        }
+                                    } else {
+                                        None
+                                    }
+                                } else {
+                                    None
+                                }
+                            }
+                            _ => None,
+                        }
+                    };
+                    if let Some(t) = inferred_type {
+                        self.local_var_types.insert(name.to_string(), t);
+                    }
+                }
+
                 // PHASE 8: Check if this variable should use SmallVec
                 if let Some(name) = var_name {
                     if let Some(smallvec_opt) = self.smallvec_optimizations.get(name) {
@@ -4185,7 +4323,7 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
                 // This prevents semicolons in if-else branches when used as values
                 // e.g., `x = if cond { Some(42) } else { None }` (not `{ Some(42); }`)
                 if !self.in_expression_context {
-                    output.push_str(";\n");
+                output.push_str(";\n");
                 } else {
                     output.push('\n');
                 }
@@ -4235,9 +4373,6 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
                 output
             }
             Statement::Match { value, arms, .. } => {
-                let mut output = self.indent();
-                output.push_str("match ");
-
                 // Check if any arm has a string literal pattern
                 // If so, add .as_str() to the match value for String types
                 // BUT: Don't add .as_str() if the match value is a tuple (tuple patterns handle their own string matching)
@@ -4250,20 +4385,61 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
                     .any(|arm| matches!(arm.pattern, Pattern::Tuple(_)));
 
                 let value_str = self.generate_expression(value);
-                if has_string_literal && !is_tuple_match {
-                    // Add .as_str() if the value doesn't already end with it
-                    if !value_str.ends_with(".as_str()") {
-                        output.push_str(&format!("{}.as_str()", value_str));
+
+                // TDD FIX: Detect borrow conflict pattern in match on self.method()
+                //
+                // When the match scrutinee borrows from self (e.g., self.current_scene_id()
+                // returning Option<&str>) AND any arm body mutates self (e.g.,
+                // self.paused_scenes.remove(current)), Rust reports E0502 because the
+                // immutable borrow from the method call conflicts with the mutable borrow
+                // needed for the mutation.
+                //
+                // THE WINDJAMMER WAY: The compiler handles this automatically by extracting
+                // the scrutinee into an owned temporary, breaking the borrow chain:
+                //   let __match_borrow_break = self.method().map(|v| v.to_owned());
+                //   match __match_borrow_break.as_deref() { ... }
+                //
+                // This preserves the bound variable type (&str) while the owned data lives
+                // in the local temporary, freeing self for mutation in the arm body.
+                let match_binds_refs_early = self.match_expression_binds_refs(value);
+                let needs_borrow_break = match_binds_refs_early
+                    && self.match_scrutinee_is_self_method_call(value)
+                    && self.match_arms_mutate_self(arms);
+
+                let mut output = self.indent();
+
+                if needs_borrow_break {
+                    // Extract scrutinee into owned temporary to break borrow on self
+                    output.push_str(&format!(
+                        "let __match_borrow_break = {}.map(|__v| __v.to_owned());\n",
+                        value_str
+                    ));
+                    output.push_str(&self.indent());
+                    output.push_str("match __match_borrow_break.as_deref()");
+                } else {
+                    output.push_str("match ");
+                    if has_string_literal && !is_tuple_match {
+                        // Add .as_str() if the value doesn't already end with it
+                        if !value_str.ends_with(".as_str()") {
+                            output.push_str(&format!("{}.as_str()", value_str));
+                        } else {
+                            output.push_str(&value_str);
+                        }
                     } else {
                         output.push_str(&value_str);
                     }
-                } else {
-                    output.push_str(&value_str);
                 }
 
                 output.push_str(" {\n");
 
                 self.indent_level += 1;
+
+                // TDD FIX: Detect if match expression produces references for pattern-bound variables
+                // When matching on &expr (like `match &self.field { Some(var) => ... }`),
+                // `var` is automatically a reference (&T). We track these to prevent
+                // double-borrowing (e.g., HashMap.get(&var) where var is already &String).
+                // Also handles methods returning Option<&T> (like current_scene_id() -> Option<&str>).
+                let match_binds_refs = self.match_expression_binds_refs(value);
 
                 // WINDJAMMER PHILOSOPHY: Auto-convert match arm strings when return type is String
                 // OR when any other arm produces a String (e.g., format! macro, or blocks with converted strings)
@@ -4307,8 +4483,35 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
                     let mut bound_vars = std::collections::HashSet::new();
                     self.extract_pattern_bindings(&arm.pattern, &mut bound_vars);
 
+                    // TDD FIX: Track match-bound reference variables
+                    // When matching on &expr or Option<&T>, pattern-bound vars are already references.
+                    // We must NOT add & to them (would create &&T, which is incorrect).
+                    // Example: match &self.current_animation { Some(anim_name) => ... }
+                    //   → anim_name is &String, self.animations.get(anim_name) is correct
+                    //   → self.animations.get(&anim_name) would be WRONG (&&String)
+                    let added_borrowed: Vec<String> = if match_binds_refs {
+                        bound_vars.iter().cloned().collect()
+                    } else {
+                        Vec::new()
+                    };
+                    for var in &added_borrowed {
+                        self.borrowed_iterator_vars.insert(var.clone());
+                    }
+
                     // Create a new scope for this match arm
                     self.local_variable_scopes.push(bound_vars);
+
+                    // TDD FIX: Track types of match-bound variables
+                    // When matching `Some(x)` on an `Option<T>` expression,
+                    // `x` has type `T`. This enables qualified method signature lookup.
+                    // Example: let opt: Option<Stack> = ...; if let Some(s) = opt { s.remove(v) }
+                    //   → infer_type_name("s") should return "Stack" → Stack::remove is found
+                    let match_bound_type_entries: Vec<(String, Type)> =
+                        self.infer_match_bound_types(value, &arm.pattern);
+                    for (var_name, var_type) in &match_bound_type_entries {
+                        self.local_var_types
+                            .insert(var_name.clone(), var_type.clone());
+                    }
 
                     // Set context flag for block generation
                     let old_in_match_arm = self.in_match_arm_needing_string;
@@ -4323,6 +4526,16 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
 
                     // Pop the match arm scope
                     self.local_variable_scopes.pop();
+
+                    // Clean up match-bound type entries
+                    for (var_name, _) in &match_bound_type_entries {
+                        self.local_var_types.remove(var_name);
+                    }
+
+                    // Clean up match-bound borrowed variables
+                    for var in &added_borrowed {
+                        self.borrowed_iterator_vars.remove(var);
+                    }
                     let is_string_literal = matches!(
                         &arm.body,
                         Expression::Literal {
@@ -4443,6 +4656,19 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
                     }
                 }
 
+                // TDD FIX: Track for-loop variable types for method signature lookup
+                // When iterating `for slot in slots` where `slots: Vec<Option<T>>`,
+                // `slot` has type `Option<T>`. This enables match-bound type inference:
+                // `if let Some(x) = slot` → x has type T → x.method() resolves correctly.
+                if let Some(var) = &loop_var {
+                    if let Some(iterable_type) = self.infer_expression_type(iterable) {
+                        if let Some(elem_type) = Self::extract_iterator_element_type(&iterable_type)
+                        {
+                            self.local_var_types.insert(var.clone(), elem_type);
+                        }
+                    }
+                }
+
                 for stmt in body {
                     output.push_str(&self.generate_statement(stmt));
                 }
@@ -4457,6 +4683,10 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
                     if let Some(var) = &loop_var {
                         self.owned_string_iterator_vars.remove(var);
                     }
+                }
+                // Clean up for-loop variable type tracking
+                if let Some(var) = &loop_var {
+                    self.local_var_types.remove(var);
                 }
 
                 self.indent_level -= 1;
@@ -4785,6 +5015,218 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
                 // No bindings
             }
         }
+    }
+
+    /// TDD FIX: Detect if a match expression produces references for pattern-bound variables
+    /// Infer the types of variables bound in match arm patterns.
+    /// When matching `Some(x)` on `opt: Option<Stack>`, returns [("x", Type::Custom("Stack"))].
+    /// This enables qualified method signature lookup for match-bound variables.
+    fn infer_match_bound_types(
+        &self,
+        scrutinee: &Expression,
+        pattern: &Pattern,
+    ) -> Vec<(String, Type)> {
+        use crate::parser::EnumPatternBinding;
+        // Try to determine the scrutinee's type
+        let scrutinee_type = self.infer_expression_type(scrutinee);
+        let scrutinee_type = match scrutinee_type {
+            Some(t) => t,
+            None => return Vec::new(),
+        };
+
+        // Unwrap references: &T, &mut T → T
+        let inner_type = match &scrutinee_type {
+            Type::Reference(inner) | Type::MutableReference(inner) => inner.as_ref().clone(),
+            _ => scrutinee_type,
+        };
+
+        // Match pattern against type to extract bound variable types
+        match (pattern, &inner_type) {
+            // Some(var) matching Option<T> → var: T
+            (
+                Pattern::EnumVariant(variant, EnumPatternBinding::Single(var_name)),
+                Type::Option(inner_t),
+            ) if variant == "Some" => {
+                vec![(var_name.clone(), inner_t.as_ref().clone())]
+            }
+            _ => Vec::new(),
+        }
+    }
+
+    /// Try to infer the Type of an expression from local variable tracking and function parameters.
+    fn infer_expression_type(&self, expr: &Expression) -> Option<Type> {
+        match expr {
+            Expression::Identifier { name, .. } => {
+                // Check local variable types first
+                if let Some(t) = self.local_var_types.get(name) {
+                    return Some(t.clone());
+                }
+                // Check function parameters
+                for param in &self.current_function_params {
+                    if param.name == *name {
+                        return Some(param.type_.clone());
+                    }
+                }
+                None
+            }
+            // self.field → look up field type from struct_field_types
+            Expression::FieldAccess { object, field, .. } => {
+                // Resolve the object's type first
+                if let Expression::Identifier { name, .. } = &**object {
+                    if name == "self" {
+                        // self.field → current struct's field type
+                        // TDD FIX: Also try base name for generic types
+                        // e.g., "ComponentArray<T>" → try "ComponentArray"
+                        if let Some(struct_name) = &self.current_struct_name {
+                            if let Some(fields) = self
+                                .struct_field_types
+                                .get(struct_name.as_str())
+                                .or_else(|| {
+                                    struct_name
+                                        .split('<')
+                                        .next()
+                                        .and_then(|base| self.struct_field_types.get(base))
+                                })
+                            {
+                                if let Some(field_type) = fields.get(field.as_str()) {
+                                    return Some(field_type.clone());
+                                }
+                            }
+                        }
+                    } else {
+                        // var.field → look up var's type, then its field
+                        if let Some(var_type) = self.local_var_types.get(name.as_str()) {
+                            let type_name = match var_type {
+                                Type::Custom(n) => n.as_str(),
+                                _ => "",
+                            };
+                            if let Some(fields) = self.struct_field_types.get(type_name) {
+                                if let Some(field_type) = fields.get(field.as_str()) {
+                                    return Some(field_type.clone());
+                                }
+                            }
+                        }
+                    }
+                }
+                None
+            }
+            // &expr or &mut expr → Reference(inner_type)
+            Expression::Unary {
+                op: crate::parser::UnaryOp::Ref,
+                operand,
+                ..
+            } => self
+                .infer_expression_type(operand)
+                .map(|t| Type::Reference(Box::new(t))),
+            Expression::Unary {
+                op: crate::parser::UnaryOp::MutRef,
+                operand,
+                ..
+            } => self
+                .infer_expression_type(operand)
+                .map(|t| Type::MutableReference(Box::new(t))),
+            _ => None,
+        }
+    }
+
+    /// When matching on:
+    ///   1. &expr (explicit reference) - pattern vars are references (e.g., match &self.field)
+    ///   2. method() returning Option<&T> - pattern vars are references (e.g., match self.current_scene_id())
+    /// This prevents double-borrowing: HashMap.get(&var) where var is already &String would be &&String
+    fn match_expression_binds_refs(&self, expr: &Expression) -> bool {
+        match expr {
+            // match &expr { Some(var) => ... } — var is a reference
+            Expression::Unary {
+                op: crate::parser::UnaryOp::Ref | crate::parser::UnaryOp::MutRef,
+                ..
+            } => true,
+
+            // match method_call() { Some(var) => ... } — check if return type contains &T
+            Expression::MethodCall {
+                method, object, ..
+            } => {
+                let type_name = self.infer_type_name(object);
+                let sig = if let Some(ref type_name) = type_name {
+                    let qualified = format!("{}::{}", type_name, method);
+                    self.signature_registry.get_signature(&qualified)
+                } else {
+                    self.signature_registry.get_signature(method)
+                };
+                if let Some(sig) = sig {
+                    if let Some(ref ret_type) = sig.return_type {
+                        Self::type_contains_reference(ret_type)
+                    } else {
+                        false
+                    }
+                } else {
+                    false
+                }
+            }
+
+            // match func_call() - check if return type contains &T
+            Expression::Call { function, .. } => {
+                let func_name =
+                    crate::codegen::rust::ast_utilities::extract_function_name(function);
+                if !func_name.is_empty() {
+                    if let Some(sig) = self.signature_registry.get_signature(&func_name) {
+                        if let Some(ref ret_type) = sig.return_type {
+                            return Self::type_contains_reference(ret_type);
+                        }
+                    }
+                }
+                false
+            }
+
+            _ => false,
+        }
+    }
+
+    /// Check if a type contains a reference (directly or inside Option/Result)
+    fn type_contains_reference(ty: &Type) -> bool {
+        match ty {
+            Type::Reference(_) | Type::MutableReference(_) => true,
+            Type::Option(inner) => Self::type_contains_reference(inner),
+            Type::Result(ok, _err) => Self::type_contains_reference(ok),
+            _ => false,
+        }
+    }
+
+    /// Check if the match scrutinee is a method call on self (e.g., self.current_scene_id())
+    /// or on self.field (e.g., self.scene_stack.last())
+    fn match_scrutinee_is_self_method_call(&self, expr: &Expression) -> bool {
+        match expr {
+            Expression::MethodCall { object, .. } => {
+                // self.method()
+                if let Expression::Identifier { name, .. } = &**object {
+                    if name == "self" {
+                        return true;
+                    }
+                }
+                // self.field.method()
+                if let Expression::FieldAccess {
+                    object: inner_obj, ..
+                } = &**object
+                {
+                    if let Expression::Identifier { name, .. } = &**inner_obj {
+                        if name == "self" {
+                            return true;
+                        }
+                    }
+                }
+                false
+            }
+            _ => false,
+        }
+    }
+
+    /// Check if any match arm body mutates self fields.
+    /// Used to detect borrow conflicts in match on self.method().
+    fn match_arms_mutate_self(&self, arms: &[crate::parser::MatchArm]) -> bool {
+        let ctx = self_analysis::AnalysisContext::new(&[], &self.current_struct_fields);
+        arms.iter().any(|arm| {
+            // The arm body is an Expression (often a Block)
+            self_analysis::expression_mutates_fields(&ctx, arm.body)
+        })
     }
 
     /// Check if match needs .clone() to avoid partial move from self
@@ -5150,20 +5592,21 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
                 // If BOTH are usize, no cast needed!
                 if is_comparison && left_is_usize && !right_is_usize {
                     // Left is usize, right is NOT usize
-                    // Prefer casting literals to usize instead of casting .len() to i64
+                    // Prefer casting the non-usize side to usize (safer for comparisons)
                     if right_is_int_literal {
                         right_str = format!("({} as usize)", right_str);
                     } else {
-                        left_str = format!("({} as i64)", left_str);
+                        // TDD FIX: Cast to usize instead of i64, and use double parens
+                        // to handle compound expressions correctly
+                        // e.g., `i < width * height` → `(i as usize) < width * height`
+                        // instead of `i < (width * height as i64)` (wrong precedence!)
+                        left_str = format!("({} as usize)", left_str);
                     }
                 } else if is_comparison && right_is_usize && !left_is_usize {
                     // Right is usize, left is NOT usize
-                    // Prefer casting literals to usize instead of casting .len() to i64
-                    if left_is_int_literal {
+                    // Cast the non-usize side (LEFT) to usize
+                    // e.g., `self.index >= self.entities.len()` → `(self.index as usize) >= self.entities.len()`
                         left_str = format!("({} as usize)", left_str);
-                    } else {
-                        right_str = format!("({} as i64)", right_str);
-                    }
                 }
                 // If both are usize: no cast (usize == usize is fine)
                 // If neither is usize: no cast (i64 == i64 is fine)
@@ -5525,6 +5968,8 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
                         }
                     });
 
+
+
                 let args: Vec<String> = arguments
                     .iter()
                     .enumerate()
@@ -5593,17 +6038,49 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
                                                 false
                                             };
 
+                                        // TDD FIX: Don't add & for Copy type parameters
+                                        // When signature says Borrowed but param type is Copy,
+                                        // codegen keeps it as owned (e.g., x: usize not x: &usize)
+                                        // So the call site should NOT add &
+                                        // BUT: Reference types (&Vec<T>, &[T]) are NOT treated as
+                                        // Copy here - if param type is &T, caller still needs &
+                                        let is_copy_param = sig.param_types.get(i)
+                                            .map(|t| {
+                                                !matches!(t, Type::Reference(_) | Type::MutableReference(_))
+                                                    && crate::codegen::rust::method_call_analyzer::MethodCallAnalyzer::is_copy_type_annotation_pub(t)
+                                            })
+                                            .unwrap_or(false);
+
                                         // Insert & if not already a reference and not a string literal
                                         if !expression_helpers::is_reference_expression(arg)
                                             && !is_string_literal
                                             && !is_param_already_ref
+                                            && !is_copy_param
                                         {
                                             return format!("&{}", arg_str);
                                         }
                                     }
                                     OwnershipMode::MutBorrowed => {
+                                        // TDD FIX: Don't add &mut if arg is already a &mut parameter
+                                        // e.g., fn foo(mesh: &mut Mesh) { bar(mesh) } where bar expects &mut Mesh
+                                        // mesh is already &mut Mesh, don't make it &mut &mut Mesh
+                                        let is_already_mut_ref =
+                                            if let Expression::Identifier { name, .. } = arg {
+                                                self.current_function_params.iter().any(|param| {
+                                                    param.name == *name
+                                                        && matches!(
+                                                            &param.type_,
+                                                            Type::MutableReference(_)
+                                                        )
+                                                })
+                                            } else {
+                                                false
+                                            };
+
                                         // Insert &mut if not already a reference
-                                        if !expression_helpers::is_reference_expression(arg) {
+                                        if !expression_helpers::is_reference_expression(arg)
+                                            && !is_already_mut_ref
+                                        {
                                             // CRITICAL FIX: Remove .clone() if present - we want to mutate the original!
                                             // &mut counter.clone() → &mut counter
                                             // When passing &mut, we're giving mutable access to the original,
@@ -5760,9 +6237,26 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
                     self.signature_registry
                         .get_signature(&qualified_name)
                         .cloned()
-                        .or_else(|| self.signature_registry.get_signature(method).cloned())
+                    // CRITICAL: Do NOT fall back to unqualified method name lookup!
+                    // Unqualified lookup for common names like "get", "remove", "contains"
+                    // can match WRONG user-defined methods (e.g., ComponentArray::get when
+                    // we want HashMap::get), causing incorrect auto-ref/auto-clone behavior.
+                    // When the qualified name isn't found, method_signature stays None and
+                    // the stdlib heuristics in should_add_ref handle common patterns correctly.
                 } else {
-                    self.signature_registry.get_signature(method).cloned()
+                    // No type info available - only look up methods that are unlikely to
+                    // conflict with stdlib methods (i.e., not "get", "remove", "contains_key" etc.)
+                    let is_common_stdlib_name = matches!(method.as_str(),
+                        "get" | "get_mut" | "remove" | "contains_key" | "contains"
+                        | "insert" | "push" | "pop" | "len" | "is_empty"
+                        | "iter" | "keys" | "values" | "first" | "last" | "clear"
+                        | "binary_search" | "starts_with" | "ends_with"
+                    );
+                    if is_common_stdlib_name {
+                        None // Use stdlib heuristics instead of potentially wrong signature
+                    } else {
+                        self.signature_registry.get_signature(method).cloned()
+                    }
                 };
 
                 let args: Vec<String> = arguments
@@ -5818,7 +6312,7 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
                         }
 
                         // AUTO-REF: Add & when parameter expects reference but arg is owned
-                        if crate::codegen::rust::method_call_analyzer::MethodCallAnalyzer::should_add_ref(
+                        let should_ref = crate::codegen::rust::method_call_analyzer::MethodCallAnalyzer::should_add_ref(
                             arg,
                             &arg_str,
                             method,
@@ -5827,7 +6321,9 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
                             &self.usize_variables,
                             &self.current_function_params,
                             &self.borrowed_iterator_vars,
-                        ) {
+                            arguments.len(),
+                        );
+                        if should_ref {
                             arg_str = format!("&{}", arg_str);
                         }
 
@@ -6244,7 +6740,7 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
                     format!("|{}| {}", params, body_str)
                 } else {
                     // Add `move` - closure can safely capture by value
-                    format!("move |{}| {}", params, body_str)
+                format!("move |{}| {}", params, body_str)
                 }
             }
             Expression::Index { object, index, .. } => {
@@ -6620,7 +7116,7 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
                                 if self.in_statement_match {
                                     output.push_str(";\n");
                                 } else {
-                                    output.push('\n');
+                                output.push('\n');
                                 }
                             }
                             Statement::Thread { body, .. } => {
@@ -6957,10 +7453,12 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
         match ty {
             Type::Int | Type::Int32 | Type::Uint | Type::Float | Type::Bool | Type::String => true,
             // Handle Rust-style type names that aren't Windjammer keywords
+            // Also handle "String" (uppercase) since Windjammer keyword is "string" (lowercase)
             Type::Custom(name)
                 if matches!(
                     name.as_str(),
-                    "f32"
+                    "String"
+                        | "f32"
                         | "f64"
                         | "i8"
                         | "i16"
@@ -7000,10 +7498,13 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
             Type::Float => false, // Floats don't implement Eq
             // Handle Rust-style type names - floats don't support Eq
             Type::Custom(name) if matches!(name.as_str(), "f32" | "f64") => false,
+            // Handle "String" (uppercase Rust-style) and all integer types
             Type::Custom(name)
                 if matches!(
                     name.as_str(),
-                    "i8" | "i16"
+                    "String"
+                        | "i8"
+                        | "i16"
                         | "i32"
                         | "i64"
                         | "i128"
@@ -7033,12 +7534,36 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
         match ty {
             Type::Int | Type::Int32 | Type::Uint | Type::Bool | Type::String => true,
             Type::Float => false, // Floats are not Hash
+            // Handle Rust-style type names - floats are not Hash
+            Type::Custom(name) if matches!(name.as_str(), "f32" | "f64") => false,
+            // Handle "String" (uppercase Rust-style) and all integer types
+            Type::Custom(name)
+                if matches!(
+                    name.as_str(),
+                    "String"
+                        | "i8"
+                        | "i16"
+                        | "i32"
+                        | "i64"
+                        | "i128"
+                        | "u8"
+                        | "u16"
+                        | "u32"
+                        | "u64"
+                        | "u128"
+                        | "usize"
+                        | "isize"
+                        | "char"
+                ) =>
+            {
+                true
+            }
             Type::Reference(inner) => self.is_hashable_type(inner),
             Type::MutableReference(_) => false,
             Type::Tuple(types) => types.iter().all(|t| self.is_hashable_type(t)),
             Type::Vec(_) => false, // Vec is not Hash
             Type::Option(inner) => self.is_hashable_type(inner),
-            _ => false, // Result, Custom types - assume not Hash
+            _ => false, // Result, other Custom types - assume not Hash
         }
     }
 
@@ -7050,7 +7575,19 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
             Type::Vec(_) => true,    // Vec has Default (empty vec)
             Type::Option(_) => true, // Option has Default (None)
             Type::Tuple(types) => types.iter().all(|t| self.has_default(t)),
-            _ => false, // Refs don't have Default, Result/Custom types unknown
+            // Handle "String" (uppercase) and numeric types
+            Type::Custom(name)
+                if matches!(
+                    name.as_str(),
+                    "String"
+                        | "i8" | "i16" | "i32" | "i64" | "i128"
+                        | "u8" | "u16" | "u32" | "u64" | "u128"
+                        | "usize" | "isize" | "f32" | "f64" | "bool" | "char"
+                ) =>
+            {
+                true
+            }
+            _ => false, // Refs don't have Default, other Custom types unknown
         }
     }
 
@@ -7155,7 +7692,7 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
             // Direct variable that's a borrowed parameter (explicit or inferred)
             Expression::Identifier { name, .. } => {
                 self.current_function_params.iter().any(|p| {
-                    &p.name == name && matches!(p.ownership, crate::parser::OwnershipHint::Ref)
+                &p.name == name && matches!(p.ownership, crate::parser::OwnershipHint::Ref)
                 }) || self.inferred_borrowed_params.contains(name)
             }
             // Method calls that return iterators over references
