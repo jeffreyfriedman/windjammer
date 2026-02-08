@@ -2300,8 +2300,24 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
                 output.push_str(" {\n");
                 self.indent_level += 1;
 
-                for stmt in body {
-                    output.push_str(&self.generate_statement(stmt));
+                // THE WINDJAMMER WAY: Handle implicit returns in default trait methods.
+                // The last expression in a block must NOT have a trailing semicolon
+                // if it's the return value. `0;` evaluates to `()`, not `i32`.
+                let body_len = body.len();
+                for (i, stmt) in body.iter().enumerate() {
+                    let is_last = i == body_len - 1;
+
+                    if is_last && matches!(stmt, Statement::Expression { .. }) {
+                        // Last statement is an expression - generate without semicolon
+                        // (it's the implicit return value of the default implementation)
+                        if let Statement::Expression { expr, .. } = stmt {
+                            output.push_str(&self.indent());
+                            output.push_str(&self.generate_expression(expr));
+                            output.push('\n');
+                        }
+                    } else {
+                        output.push_str(&self.generate_statement(stmt));
+                    }
                 }
 
                 self.indent_level -= 1;
@@ -3765,8 +3781,15 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
                     }
                 };
 
-                // Check if parameter is declared with 'mut' keyword
-                let mut_prefix = if param.is_mutable { "mut " } else { "" };
+                // TDD FIX: Auto-infer `mut` for owned parameters
+                // THE WINDJAMMER WAY: Users don't track mutability - the compiler does.
+                // If a parameter has mutating method calls or field mutations,
+                // the binding needs `mut` even if not explicitly written.
+                let auto_needs_mut = param.name != "self"
+                    && !param.is_mutable
+                    && matches!(type_str.as_str(), s if !s.starts_with("&"))
+                    && self.variable_needs_mut(&param.name);
+                let mut_prefix = if param.is_mutable || auto_needs_mut { "mut " } else { "" };
 
                 // Check if this is a pattern parameter
                 if let Some(pattern) = &param.pattern {
@@ -6265,6 +6288,25 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
                     .map(|(i, (_label, arg))| {
                         let mut arg_str = self.generate_expression(arg);
 
+                        // TDD FIX: AUTO-WRAP function pointers in iterator adapter methods.
+                        // Rust's .filter()/.any()/.find() on iter() yield &&T, expecting FnMut(&&T) -> bool,
+                        // but bare function pointers fn(&T) -> bool don't auto-deref.
+                        // THE WINDJAMMER WAY: Users write the natural `filter(predicate)` and the
+                        // compiler generates `filter(|__e| predicate(__e))`.
+                        if i == 0
+                            && matches!(
+                                method.as_str(),
+                                "filter" | "any" | "all" | "find" | "find_map" | "position"
+                                    | "take_while" | "skip_while" | "map_while" | "partition"
+                                    | "rposition"
+                            )
+                            && matches!(arg, Expression::Identifier { .. })
+                        {
+                            // Bare identifier (function pointer) passed to iterator adapter -
+                            // wrap in closure so Rust's auto-deref handles &&T -> &T.
+                            arg_str = format!("|__e| {}(__e)", arg_str);
+                        }
+
                         // AUTO .to_string(): Convert string literals when parameter expects owned String
                         if matches!(arg, Expression::Literal { value: Literal::String(_), .. })
                             && crate::codegen::rust::method_call_analyzer::MethodCallAnalyzer::should_add_to_string(i, method, &method_signature) {
@@ -7286,10 +7328,22 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
     }
 
     fn infer_derivable_traits(&self, struct_: &StructDecl) -> Vec<String> {
-        let mut traits = vec!["Debug".to_string(), "Clone".to_string()]; // Always safe to derive
+        // THE WINDJAMMER WAY: Auto-derive common traits, but be smart about it.
+        // Structs containing trait objects (dyn Trait) can't derive Debug or Clone
+        // because trait objects don't implement these traits by default.
+        let has_trait_object_field = struct_.fields.iter().any(|f| {
+            self.type_contains_trait_object(&f.field_type)
+        });
 
-        // Check if all fields are Copy
-        if self.all_fields_are_copy(&struct_.fields) {
+        let mut traits = if has_trait_object_field {
+            // Can't derive Debug or Clone for structs with dyn Trait fields
+            vec![]
+        } else {
+            vec!["Debug".to_string(), "Clone".to_string()]
+        };
+
+        // Check if all fields are Copy (trait objects are never Copy)
+        if !has_trait_object_field && self.all_fields_are_copy(&struct_.fields) {
             traits.push("Copy".to_string());
         }
 
@@ -7314,6 +7368,23 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
         }
 
         traits
+    }
+
+    /// Check if a type contains a trait object (dyn Trait) anywhere in its structure.
+    /// Used to prevent auto-deriving Debug/Clone on structs containing Box<dyn Trait>.
+    fn type_contains_trait_object(&self, type_: &Type) -> bool {
+        match type_ {
+            Type::TraitObject(_) => true,
+            Type::Vec(inner) | Type::Option(inner) | Type::Reference(inner)
+            | Type::MutableReference(inner) => self.type_contains_trait_object(inner),
+            Type::Parameterized(_, args) => args.iter().any(|a| self.type_contains_trait_object(a)),
+            Type::Result(ok, err) => {
+                self.type_contains_trait_object(ok) || self.type_contains_trait_object(err)
+            }
+            Type::Array(inner, _) => self.type_contains_trait_object(inner),
+            Type::Tuple(types) => types.iter().any(|t| self.type_contains_trait_object(t)),
+            _ => false,
+        }
     }
 
     fn all_fields_are_copy(&self, fields: &[crate::parser::StructField]) -> bool {
@@ -7842,14 +7913,41 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
     }
 
     /// Helper: Check if an expression mutates a variable's field
-    /// TDD: Extended to detect mutating method calls
+    /// TDD: Extended to detect mutating method calls AND signature-registry-based detection
     fn expression_mutates_variable_field(&self, expr: &Expression, var_name: &str) -> bool {
         match expr {
             Expression::MethodCall { object, method, .. } => {
                 // Check if this is a mutating method call on our variable
                 if let Expression::Identifier { name, .. } = &**object {
-                    if name == var_name && self.is_mutating_method(method) {
-                        return true;
+                    if name == var_name {
+                        // First check heuristic list
+                        if self.is_mutating_method(method) {
+                            return true;
+                        }
+
+                        // TDD FIX: Also check the signature registry for methods that take &mut self.
+                        // THE WINDJAMMER WAY: The compiler knows which methods mutate - use that
+                        // knowledge to auto-infer `mut` for parameter bindings.
+                        // Look up the method's type by finding the parameter's type name.
+                        let type_name = self.current_function_params.iter()
+                            .find(|p| p.name == var_name)
+                            .and_then(|p| match &p.type_ {
+                                crate::parser::Type::Custom(name) => Some(name.clone()),
+                                crate::parser::Type::Parameterized(name, _) => Some(name.clone()),
+                                _ => None,
+                            });
+
+                        if let Some(type_name) = type_name {
+                            let qualified_name = format!("{}::{}", type_name, method);
+                            if let Some(sig) = self.signature_registry.get_signature(&qualified_name) {
+                                // Check if the method takes &mut self (first param is MutBorrowed)
+                                if sig.has_self_receiver {
+                                    if let Some(&crate::analyzer::OwnershipMode::MutBorrowed) = sig.param_ownership.first() {
+                                        return true;
+                                    }
+                                }
+                            }
+                        }
                     }
                 }
                 false

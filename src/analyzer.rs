@@ -532,14 +532,11 @@ impl<'ast> Analyzer<'ast> {
                     }
                 }
                 Item::Trait { decl, .. } => {
-                    // Analyze trait methods with default implementations
+                    // THE WINDJAMMER WAY: Analyze ALL trait methods, not just default impls.
+                    // Abstract methods need ownership inference too - the compiler must set
+                    // the correct self convention (&self, &mut self) even without a body.
+                    // This is refined later by infer_trait_signatures_from_impls.
                     for method in &decl.methods {
-                        // Only analyze methods with bodies (default implementations)
-                        if method.body.is_none() {
-                            // Abstract method - no analysis needed (no body)
-                            continue;
-                        }
-
                         // Convert TraitMethod to FunctionDecl for analysis
                         let func = FunctionDecl {
                             name: method.name.clone(),
@@ -556,7 +553,7 @@ impl<'ast> Analyzer<'ast> {
                             doc_comment: method.doc_comment.clone(),
                         };
 
-                        // Trait methods with default implementations should use &self
+                        // Trait methods (both abstract and default) should use &self or &mut self
                         // to work with unsized types. The Windjammer way: make it work!
                         let mut analyzed_func = self.analyze_trait_method(&func)?;
 
