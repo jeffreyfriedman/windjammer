@@ -1,0 +1,163 @@
+// Conformance Test: Structs and Methods
+//
+// SEMANTIC CONTRACT:
+// - Structs define named compound types with fields
+// - Impl blocks attach methods to structs
+// - Static methods (no self) work as constructors
+// - &self methods read but don't modify the struct
+// - &mut self methods can modify struct fields
+// - Field access works with dot notation
+// - Struct shorthand (Point { x, y }) works when variable names match
+//
+// EXPECTED OUTPUT:
+// [struct_basic] x=10, y=20
+// [struct_shorthand] x=5, y=10
+// [struct_constructor] x=3, y=4
+// [struct_method_read] distance_sq=25
+// [struct_method_read] is_origin=false
+// [struct_method_mut] before: x=0, y=0
+// [struct_method_mut] after translate(3,4): x=3, y=4
+// [struct_method_mut] after scale(2): x=6, y=8
+// [struct_compose] rect area=200
+// [struct_compose] rect is_square=false
+// [struct_compose] square is_square=true
+// [struct_default] counter=0
+// [struct_default] after 3 increments: counter=3
+// [struct_all] PASSED
+
+// --- Basic struct creation and field access ---
+struct Point {
+    x: int,
+    y: int,
+}
+
+fn test_basic_struct() {
+    let p = Point { x: 10, y: 20 }
+    println("[struct_basic] x=${p.x}, y=${p.y}")
+}
+
+// --- Struct shorthand ---
+fn test_struct_shorthand() {
+    let x = 5
+    let y = 10
+    let p = Point { x, y }
+    println("[struct_shorthand] x=${p.x}, y=${p.y}")
+}
+
+// --- Static methods as constructors ---
+impl Point {
+    fn new(x: int, y: int) -> Point {
+        Point { x, y }
+    }
+
+    fn origin() -> Point {
+        Point { x: 0, y: 0 }
+    }
+
+    fn distance_squared(&self) -> int {
+        self.x * self.x + self.y * self.y
+    }
+
+    fn is_origin(&self) -> bool {
+        self.x == 0 && self.y == 0
+    }
+
+    fn translate(&mut self, dx: int, dy: int) {
+        self.x += dx
+        self.y += dy
+    }
+
+    fn scale(&mut self, factor: int) {
+        self.x *= factor
+        self.y *= factor
+    }
+}
+
+fn test_constructor() {
+    let p = Point::new(3, 4)
+    println("[struct_constructor] x=${p.x}, y=${p.y}")
+}
+
+// --- Read-only methods ---
+fn test_method_read() {
+    let p = Point::new(3, 4)
+    println("[struct_method_read] distance_sq=${p.distance_squared()}")
+    println("[struct_method_read] is_origin=${p.is_origin()}")
+}
+
+// --- Mutable methods ---
+fn test_method_mut() {
+    let mut p = Point::origin()
+    println("[struct_method_mut] before: x=${p.x}, y=${p.y}")
+    p.translate(3, 4)
+    println("[struct_method_mut] after translate(3,4): x=${p.x}, y=${p.y}")
+    p.scale(2)
+    println("[struct_method_mut] after scale(2): x=${p.x}, y=${p.y}")
+}
+
+// --- Struct composition ---
+struct Rect {
+    width: int,
+    height: int,
+}
+
+impl Rect {
+    fn new(width: int, height: int) -> Rect {
+        Rect { width, height }
+    }
+
+    fn area(&self) -> int {
+        self.width * self.height
+    }
+
+    fn is_square(&self) -> bool {
+        self.width == self.height
+    }
+}
+
+fn test_struct_composition() {
+    let rect = Rect::new(10, 20)
+    println("[struct_compose] rect area=${rect.area()}")
+    println("[struct_compose] rect is_square=${rect.is_square()}")
+    let square = Rect::new(5, 5)
+    println("[struct_compose] square is_square=${square.is_square()}")
+}
+
+// --- Builder pattern with multiple mutations ---
+struct Counter {
+    value: int,
+}
+
+impl Counter {
+    fn new() -> Counter {
+        Counter { value: 0 }
+    }
+
+    fn increment(&mut self) {
+        self.value += 1
+    }
+
+    fn get(&self) -> int {
+        self.value
+    }
+}
+
+fn test_counter() {
+    let mut c = Counter::new()
+    println("[struct_default] counter=${c.get()}")
+    c.increment()
+    c.increment()
+    c.increment()
+    println("[struct_default] after 3 increments: counter=${c.get()}")
+}
+
+fn main() {
+    test_basic_struct()
+    test_struct_shorthand()
+    test_constructor()
+    test_method_read()
+    test_method_mut()
+    test_struct_composition()
+    test_counter()
+    println("[struct_all] PASSED")
+}

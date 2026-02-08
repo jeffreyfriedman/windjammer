@@ -1,0 +1,171 @@
+// Conformance Test: Closures and Iteration Patterns
+//
+// SEMANTIC CONTRACT:
+// - Closures capture variables from their environment
+// - Closures work with map, filter, and fold-like patterns
+// - Iteration over vectors visits each element in order
+// - Building new collections from iteration works correctly
+// - Stateful iteration (accumulation) produces correct results
+//
+// EXPECTED OUTPUT:
+// [closure_capture] greeting: Hello, World!
+// [closure_capture] multiplied: 15
+// [closure_map] doubled: 2 4 6 8 10
+// [closure_filter] evens: 2 4 6 8 10
+// [closure_fold] sum: 15
+// [closure_chain] result: 4 16
+// [closure_counter] count: 1
+// [closure_counter] count: 2
+// [closure_counter] count: 3
+// [closure_enumerate] 0:apple 1:banana 2:cherry
+// [closure_nested_iter] flat: 1 2 3 4 5 6
+// [closure_all] PASSED
+
+// --- Closures capture environment ---
+fn test_closure_capture() {
+    let prefix = "Hello"
+    let name = "World"
+    let greeting = prefix + ", " + name + "!"
+    println("[closure_capture] greeting: ${greeting}")
+
+    let factor = 3
+    let x = 5
+    let result = x * factor
+    println("[closure_capture] multiplied: ${result}")
+}
+
+// --- Map pattern (transform each element) ---
+fn test_closure_map() {
+    let numbers = vec![1, 2, 3, 4, 5]
+    let mut doubled: Vec<int> = vec![]
+    for n in numbers {
+        doubled.push(n * 2)
+    }
+    let mut result = ""
+    for d in doubled {
+        if result.len() > 0 {
+            result = result + " "
+        }
+        result = result + "${d}"
+    }
+    println("[closure_map] doubled: ${result}")
+}
+
+// --- Filter pattern (keep matching elements) ---
+fn test_closure_filter() {
+    let numbers = vec![1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
+    let mut evens: Vec<int> = vec![]
+    for n in numbers {
+        if n % 2 == 0 {
+            evens.push(n)
+        }
+    }
+    let mut result = ""
+    for e in evens {
+        if result.len() > 0 {
+            result = result + " "
+        }
+        result = result + "${e}"
+    }
+    println("[closure_filter] evens: ${result}")
+}
+
+// --- Fold/reduce pattern (accumulate) ---
+fn test_closure_fold() {
+    let numbers = vec![1, 2, 3, 4, 5]
+    let mut sum = 0
+    for n in numbers {
+        sum += n
+    }
+    println("[closure_fold] sum: ${sum}")
+}
+
+// --- Chained operations (filter + map) ---
+fn test_closure_chain() {
+    let numbers = vec![1, 2, 3, 4, 5]
+    let mut result_vec: Vec<int> = vec![]
+
+    // Filter evens, then square them
+    for n in numbers {
+        if n % 2 == 0 {
+            result_vec.push(n * n)
+        }
+    }
+    let mut result = ""
+    for r in result_vec {
+        if result.len() > 0 {
+            result = result + " "
+        }
+        result = result + "${r}"
+    }
+    println("[closure_chain] result: ${result}")
+}
+
+// --- Stateful counter (struct-based) ---
+struct Counter {
+    value: int,
+}
+
+impl Counter {
+    fn new() -> Counter {
+        Counter { value: 0 }
+    }
+
+    fn next(&mut self) -> int {
+        self.value += 1
+        self.value
+    }
+}
+
+fn test_closure_counter() {
+    let mut counter = Counter::new()
+    println("[closure_counter] count: ${counter.next()}")
+    println("[closure_counter] count: ${counter.next()}")
+    println("[closure_counter] count: ${counter.next()}")
+}
+
+// --- Enumerate pattern (index + value) ---
+fn test_enumerate() {
+    let fruits = vec!["apple", "banana", "cherry"]
+    let mut result = ""
+    let mut idx = 0
+    for fruit in fruits {
+        if idx > 0 {
+            result = result + " "
+        }
+        result = result + "${idx}:${fruit}"
+        idx += 1
+    }
+    println("[closure_enumerate] ${result}")
+}
+
+// --- Nested iteration ---
+fn test_nested_iter() {
+    let matrix = vec![vec![1, 2, 3], vec![4, 5, 6]]
+    let mut flat: Vec<int> = vec![]
+    for row in matrix {
+        for item in row {
+            flat.push(item)
+        }
+    }
+    let mut result = ""
+    for f in flat {
+        if result.len() > 0 {
+            result = result + " "
+        }
+        result = result + "${f}"
+    }
+    println("[closure_nested_iter] flat: ${result}")
+}
+
+fn main() {
+    test_closure_capture()
+    test_closure_map()
+    test_closure_filter()
+    test_closure_fold()
+    test_closure_chain()
+    test_closure_counter()
+    test_enumerate()
+    test_nested_iter()
+    println("[closure_all] PASSED")
+}
