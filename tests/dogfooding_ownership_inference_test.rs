@@ -543,3 +543,452 @@ impl SceneManager {
         generated
     );
 }
+
+// ============================================================================
+// TEST 5: Trait Method Self Inference Gap
+//
+// Real game code: systems.wj defines a System trait with abstract methods:
+//   fn name(self) -> string
+//   fn update(self, dt: f32)
+//   fn is_enabled(self) -> bool
+//   fn priority(self) -> i32 { 0 }  // has default body
+//
+// The compiler generates bare `self` for abstract methods (name, update, is_enabled)
+// but correctly generates `&self` for priority (which has a default body).
+//
+// This is a compiler bug: abstract trait methods should NEVER use bare `self`
+// (which moves ownership) unless explicitly requested. The compiler should:
+//   - Default abstract methods to `&self` (borrowed)
+//   - Upgrade to `&mut self` if ANY impl body mutates self for that method
+//   - Impls must match the inferred trait signature
+//
+// This tests the Windjammer philosophy: the compiler infers ownership, not the user.
+// ============================================================================
+
+#[test]
+fn test_trait_abstract_method_self_inference() {
+    let source = r#"
+pub trait System {
+    fn name(self) -> string
+    fn update(self, dt: f32)
+    fn is_enabled(self) -> bool
+    fn priority(self) -> i32 {
+        0
+    }
+}
+
+pub struct PhysicsSystem {
+    enabled: bool,
+    gravity: f32,
+}
+
+impl PhysicsSystem {
+    pub fn new(gravity: f32) -> PhysicsSystem {
+        PhysicsSystem { enabled: true, gravity: gravity }
+    }
+}
+
+impl System for PhysicsSystem {
+    fn name(self) -> string {
+        "PhysicsSystem".to_string()
+    }
+    fn update(self, dt: f32) {
+        // read-only: just reads self.gravity
+        let force = self.gravity * dt
+    }
+    fn is_enabled(self) -> bool {
+        self.enabled
+    }
+    fn priority(self) -> i32 {
+        100
+    }
+}
+
+pub struct RenderSystem {
+    enabled: bool,
+    draw_calls: i32,
+}
+
+impl RenderSystem {
+    pub fn new() -> RenderSystem {
+        RenderSystem { enabled: true, draw_calls: 0 }
+    }
+}
+
+impl System for RenderSystem {
+    fn name(self) -> string {
+        "RenderSystem".to_string()
+    }
+    fn update(self, dt: f32) {
+        // MUTATES self: resets draw_calls
+        self.draw_calls = 0
+    }
+    fn is_enabled(self) -> bool {
+        self.enabled
+    }
+    fn priority(self) -> i32 {
+        -100
+    }
+}
+"#;
+
+    let (generated, stderr) = compile_wj(source);
+    eprintln!("=== Generated Code ===\n{}", generated);
+    eprintln!("=== Compiler Stderr ===\n{}", stderr);
+
+    // CRITICAL: Abstract trait methods must NOT use bare `self`
+    // bare `self` moves ownership, making the trait non-object-safe
+    // and preventing calling the method more than once on the same object
+
+    // The trait definition should use &self for read-only methods
+    assert!(
+        generated.contains("fn name(&self) -> String"),
+        "COMPILER BUG: Trait method 'name' should be '&self' (read-only in all impls).\n\
+         Bare 'self' moves ownership, which is almost never intended for trait methods.\n\
+         Generated:\n{}",
+        generated
+    );
+
+    assert!(
+        generated.contains("fn is_enabled(&self) -> bool"),
+        "COMPILER BUG: Trait method 'is_enabled' should be '&self' (read-only in all impls).\n\
+         Generated:\n{}",
+        generated
+    );
+
+    // update() should be &mut self because RenderSystem::update mutates self.draw_calls
+    assert!(
+        generated.contains("fn update(&mut self, dt: f32)"),
+        "COMPILER BUG: Trait method 'update' should be '&mut self' because RenderSystem::update \
+         mutates self.draw_calls.\n\
+         Generated:\n{}",
+        generated
+    );
+
+    // priority() has a default body and should be &self (read-only default)
+    assert!(
+        generated.contains("fn priority(&self) -> i32"),
+        "COMPILER BUG: Trait method 'priority' should be '&self' (default impl is read-only).\n\
+         Generated:\n{}",
+        generated
+    );
+
+    // Impl methods must match the trait signature
+    // PhysicsSystem::update should be &mut self (matching trait, even though body is read-only)
+    assert!(
+        generated.contains("fn update(&mut self, dt: f32)"),
+        "COMPILER BUG: Impl method 'update' must match trait signature '&mut self'.\n\
+         Generated:\n{}",
+        generated
+    );
+
+    // name and is_enabled impls should be &self (matching trait)
+    // Count occurrences to verify both trait AND impl use &self
+    let name_ref_count = generated.matches("fn name(&self) -> String").count();
+    assert!(
+        name_ref_count >= 2,
+        "COMPILER BUG: Expected at least 2 occurrences of 'fn name(&self) -> String' \
+         (trait + impls), found {}.\nGenerated:\n{}",
+        name_ref_count,
+        generated
+    );
+}
+
+// ============================================================================
+// TEST 6: Trailing Semicolon on Return Expressions in Default Trait Methods
+//
+// In Rust, the last expression in a block must NOT have a trailing semicolon
+// if it's the return value. `fn priority(&self) -> i32 { 0; }` is a type error
+// because `0;` evaluates to `()` (unit), not `i32`.
+//
+// The correct code is `fn priority(&self) -> i32 { 0 }` (no semicolon).
+//
+// This affects default trait methods, match arm bodies, if/else return values,
+// and any block where the last expression is the implicit return.
+//
+// THE WINDJAMMER WAY: The compiler generates correct Rust code.
+// ============================================================================
+
+#[test]
+fn test_default_trait_method_return_no_trailing_semicolon() {
+    let source = r#"
+pub trait Configurable {
+    fn default_value(self) -> i32 {
+        42
+    }
+
+    fn default_name(self) -> string {
+        "unnamed".to_string()
+    }
+
+    fn is_valid(self) -> bool {
+        true
+    }
+
+    fn compute(self, x: f32) -> f32 {
+        x * 2.0
+    }
+}
+"#;
+
+    let (generated, stderr) = compile_wj(source);
+    eprintln!("=== Generated Code ===\n{}", generated);
+    eprintln!("=== Compiler Stderr ===\n{}", stderr);
+
+    // The return expression must NOT have a trailing semicolon
+    // Good: `fn default_value(&self) -> i32 { 42 }`
+    // Bad:  `fn default_value(&self) -> i32 { 42; }`
+
+    // Check that 42 is returned without semicolon
+    assert!(
+        generated.contains("42\n") || generated.contains("42 }") || generated.contains("42\r\n"),
+        "COMPILER BUG: Return expression '42' in default trait method should NOT have trailing semicolon.\n\
+         `42;` evaluates to `()`, not `i32`, causing E0308.\n\
+         Generated:\n{}",
+        generated
+    );
+
+    // Specifically check it doesn't have the bad pattern
+    // Find the default_value method body and check the return expression
+    let has_semicolon_42 = generated.lines().any(|line| {
+        let trimmed = line.trim();
+        trimmed == "42;" && !trimmed.starts_with("//")
+    });
+    assert!(
+        !has_semicolon_42,
+        "COMPILER BUG: Found '42;' with trailing semicolon in default trait method.\n\
+         This causes E0308: expected `i32`, found `()`.\n\
+         Generated:\n{}",
+        generated
+    );
+
+    // Check that true is returned without semicolon
+    let has_semicolon_true = generated.lines().any(|line| {
+        let trimmed = line.trim();
+        trimmed == "true;" && !trimmed.starts_with("//")
+    });
+    assert!(
+        !has_semicolon_true,
+        "COMPILER BUG: Found 'true;' with trailing semicolon in default trait method.\n\
+         Generated:\n{}",
+        generated
+    );
+}
+
+// ============================================================================
+// TEST: Auto-wrap function pointers in iterator adapters
+//
+// Real game code pattern (from ecs/query_system.wj, event/dispatcher.wj):
+//   pub fn count_where(self, predicate: fn(&Entity) -> bool) -> usize {
+//       self.entities.iter().filter(predicate).count()
+//   }
+//
+// BUG: Rust's .filter() on iter() yields &&Entity, but predicate expects &Entity.
+// Bare function pointers don't auto-deref, causing E0631.
+//
+// THE WINDJAMMER WAY: The compiler automatically wraps bare function pointers
+// in closures when passed to iterator adapters. The user writes the natural
+// `filter(predicate)` and the compiler generates `filter(|__e| predicate(__e))`.
+// ============================================================================
+
+#[test]
+fn test_auto_wrap_function_pointer_in_iterator_adapter() {
+    let source = r#"
+pub struct Item {
+    pub name: string,
+    pub value: i32,
+    pub active: bool,
+}
+
+pub struct Inventory {
+    items: Vec<Item>,
+}
+
+impl Inventory {
+    pub fn new() -> Inventory {
+        Inventory { items: Vec::new() }
+    }
+
+    /// Count items matching a predicate - uses filter with function pointer
+    pub fn count_where(self, predicate: fn(&Item) -> bool) -> usize {
+        self.items.iter().filter(predicate).count()
+    }
+
+    /// Check if any item matches - uses any with function pointer
+    pub fn any_match(self, predicate: fn(&Item) -> bool) -> bool {
+        self.items.iter().any(predicate)
+    }
+
+    /// Find first matching item - uses find with function pointer
+    pub fn find_item(self, predicate: fn(&Item) -> bool) -> Option<&Item> {
+        self.items.iter().find(predicate)
+    }
+
+    /// Count items NOT matching - uses filter with negated function pointer
+    pub fn count_not_matching(self, predicate: fn(&Item) -> bool) -> usize {
+        self.items.iter().filter(|e| !predicate(e)).count()
+    }
+}
+"#;
+
+    let (generated, stderr) = compile_wj(source);
+    eprintln!("=== Generated Code ===\n{}", generated);
+    eprintln!("=== Compiler Stderr ===\n{}", stderr);
+
+    // The key check: bare function pointers passed to .filter(), .any(), .find()
+    // must be wrapped in closures, NOT passed directly.
+    //
+    // GOOD: .filter(|__e| predicate(__e))
+    // BAD:  .filter(predicate)
+    //
+    // Bare `predicate` causes E0631 because .filter() on iter() expects
+    // FnMut(&&Item) -> bool, but fn(&Item) -> bool doesn't match.
+
+    // Check filter(predicate) is wrapped
+    assert!(
+        !generated.contains(".filter(predicate)"),
+        "COMPILER BUG: Bare function pointer 'predicate' passed to .filter().\n\
+         This causes E0631 because .filter() on iter() expects FnMut(&&Item),\n\
+         but fn(&Item) doesn't auto-deref. Must wrap: .filter(|__e| predicate(__e))\n\
+         Generated:\n{}",
+        generated
+    );
+
+    // Check any(predicate) is wrapped
+    assert!(
+        !generated.contains(".any(predicate)"),
+        "COMPILER BUG: Bare function pointer 'predicate' passed to .any().\n\
+         Must wrap: .any(|__e| predicate(__e))\n\
+         Generated:\n{}",
+        generated
+    );
+
+    // Check find(predicate) is wrapped
+    assert!(
+        !generated.contains(".find(predicate)"),
+        "COMPILER BUG: Bare function pointer 'predicate' passed to .find().\n\
+         Must wrap: .find(|__e| predicate(__e))\n\
+         Generated:\n{}",
+        generated
+    );
+
+    // Verify the closure wrapper pattern exists (any reasonable wrapping)
+    // The pattern should be something like |__e| predicate(__e) or |e| predicate(e)
+    let has_filter_wrapper = generated.contains(".filter(|")
+        && generated.contains("predicate(");
+    assert!(
+        has_filter_wrapper,
+        "COMPILER BUG: Expected .filter() to have a closure wrapper around 'predicate'.\n\
+         Generated:\n{}",
+        generated
+    );
+
+    let has_any_wrapper = generated.contains(".any(|")
+        && (generated.matches("predicate(").count() >= 2);  // at least filter + any
+    assert!(
+        has_any_wrapper,
+        "COMPILER BUG: Expected .any() to have a closure wrapper around 'predicate'.\n\
+         Generated:\n{}",
+        generated
+    );
+
+    // The manually-written closure in count_not_matching should pass through unchanged
+    // (it already IS a closure, no wrapping needed)
+    assert!(
+        generated.contains("|e| !predicate(e)") || generated.contains("|e| !(predicate(e))"),
+        "Manually written closure should pass through unchanged.\n\
+         Generated:\n{}",
+        generated
+    );
+}
+
+// ============================================================================
+// TEST: Auto-infer mut for parameters when mutating methods called on them
+//
+// Real game code pattern (from assets/loader.wj):
+//   pub fn load_game_level(loader: AssetLoader, level_name: string) -> ... {
+//       let tilemap = loader.load(...)
+//       let texture = loader.load(...)
+//   }
+//
+// BUG: .load() takes &mut self, so Rust needs `mut loader: AssetLoader`.
+// Without `mut`, Rust gives E0596: cannot borrow `loader` as mutable.
+//
+// THE WINDJAMMER WAY: The compiler automatically infers `mut` for parameters
+// when methods requiring `&mut self` are called on them. The user writes
+// the clean `loader: AssetLoader` and the compiler handles mutability.
+// ============================================================================
+
+#[test]
+fn test_auto_infer_mut_for_parameter_with_mutating_method_calls() {
+    let source = r#"
+pub struct ResourcePool {
+    items: Vec<string>,
+    count: i32,
+}
+
+impl ResourcePool {
+    pub fn new() -> ResourcePool {
+        ResourcePool { items: Vec::new(), count: 0 }
+    }
+
+    /// This method mutates self (pushes to items, increments count)
+    pub fn add(self, item: string) {
+        self.items.push(item)
+        self.count = self.count + 1
+    }
+
+    /// This method only reads self
+    pub fn size(self) -> i32 {
+        self.count
+    }
+}
+
+/// Function that takes owned ResourcePool and calls mutating methods on it
+/// THE WINDJAMMER WAY: User writes `pool: ResourcePool` without `mut`,
+/// compiler infers `mut` because .add() requires &mut self
+pub fn fill_pool(pool: ResourcePool) {
+    pool.add("water".to_string())
+    pool.add("food".to_string())
+    pool.add("ammo".to_string())
+}
+
+/// Function that takes owned ResourcePool but only reads it
+/// Should NOT get mut
+pub fn check_pool(pool: ResourcePool) -> i32 {
+    pool.size()
+}
+"#;
+
+    let (generated, stderr) = compile_wj(source);
+    eprintln!("=== Generated Code ===\n{}", generated);
+    eprintln!("=== Compiler Stderr ===\n{}", stderr);
+
+    // fill_pool: pool has .add() called on it, which requires &mut self.
+    // The parameter binding needs `mut`.
+    // GOOD: fn fill_pool(mut pool: ResourcePool)
+    // BAD:  fn fill_pool(pool: ResourcePool)
+    assert!(
+        generated.contains("mut pool: ResourcePool"),
+        "COMPILER BUG: Parameter 'pool' should be inferred as 'mut pool' because\n\
+         .add() is called on it, which requires &mut self. Without 'mut',\n\
+         Rust gives E0596: cannot borrow `pool` as mutable.\n\
+         Generated:\n{}",
+        generated
+    );
+
+    // check_pool: pool only has .size() called, which requires &self (read-only).
+    // The parameter should NOT have `mut`.
+    // We check that check_pool's signature does not have `mut pool`
+    let check_pool_line = generated.lines().find(|l| l.contains("fn check_pool"));
+    if let Some(line) = check_pool_line {
+        assert!(
+            !line.contains("mut pool"),
+            "Read-only parameter 'pool' in check_pool should NOT be inferred as 'mut'.\n\
+             Line: {}\n\
+             Generated:\n{}",
+            line,
+            generated
+        );
+    }
+}
