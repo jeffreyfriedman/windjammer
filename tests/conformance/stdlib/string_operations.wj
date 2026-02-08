@@ -1,0 +1,119 @@
+// Conformance Test: String Operations
+//
+// SEMANTIC CONTRACT:
+// - Strings are UTF-8 encoded text
+// - String literals create string values
+// - Concatenation with + joins strings
+// - String interpolation with ${expr} works
+// - len() returns byte length
+// - Equality comparison works
+// - Basic string methods work (to_uppercase, etc.)
+//
+// EXPECTED OUTPUT:
+// [str_literal] hello
+// [str_concat] hello world
+// [str_interp] name=Alice, age=30
+// [str_interp] result: 2 + 3 = 5
+// [str_len] empty=0, hello=5, emoji=4
+// [str_eq] same: true
+// [str_eq] different: false
+// [str_eq] not_equal: true
+// [str_multi_concat] a-b-c-d
+// [str_in_struct] greeting: Hello, Bob!
+// [str_empty] is empty: true
+// [str_empty] after assign: false
+// [str_all] PASSED
+
+// --- String literals ---
+fn test_str_literal() {
+    let s = "hello"
+    println("[str_literal] ${s}")
+}
+
+// --- String concatenation ---
+fn test_str_concat() {
+    let a = "hello"
+    let b = " world"
+    let c = a + b
+    println("[str_concat] ${c}")
+}
+
+// --- String interpolation ---
+fn test_str_interpolation() {
+    let name = "Alice"
+    let age = 30
+    println("[str_interp] name=${name}, age=${age}")
+
+    let x = 2
+    let y = 3
+    let sum = x + y
+    println("[str_interp] result: ${x} + ${y} = ${sum}")
+}
+
+// --- String length ---
+fn test_str_len() {
+    let empty = ""
+    let hello = "hello"
+    let emoji = "🎉"  // 4 bytes in UTF-8
+    println("[str_len] empty=${empty.len()}, hello=${hello.len()}, emoji=${emoji.len()}")
+}
+
+// --- String equality ---
+fn test_str_equality() {
+    let a = "test"
+    let b = "test"
+    let c = "other"
+    println("[str_eq] same: ${a == b}")
+    println("[str_eq] different: ${a == c}")
+    println("[str_eq] not_equal: ${a != c}")
+}
+
+// --- Multi-step concatenation ---
+fn test_str_multi_concat() {
+    let parts = vec!["a", "b", "c", "d"]
+    let mut result = ""
+    for part in parts {
+        if result.len() > 0 {
+            result = result + "-"
+        }
+        result = result + part
+    }
+    println("[str_multi_concat] ${result}")
+}
+
+// --- Strings in structs ---
+struct Greeter {
+    prefix: string,
+}
+
+impl Greeter {
+    fn greet(&self, name: string) -> string {
+        self.prefix.clone() + ", " + name + "!"
+    }
+}
+
+fn test_str_in_struct() {
+    let g = Greeter { prefix: "Hello" }
+    let msg = g.greet("Bob")
+    println("[str_in_struct] greeting: ${msg}")
+}
+
+// --- Empty string checks ---
+fn test_str_empty() {
+    let mut s = ""
+    println("[str_empty] is empty: ${s.is_empty()}")
+    s = "hello"
+    println("[str_empty] after assign: ${s.is_empty()}")
+}
+
+fn main() {
+    test_str_literal()
+    test_str_concat()
+    test_str_interpolation()
+    test_str_len()
+    test_str_equality()
+    test_str_multi_concat()
+    test_str_in_struct()
+    test_str_empty()
+    println("[str_all] PASSED")
+}

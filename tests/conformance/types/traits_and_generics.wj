@@ -1,0 +1,197 @@
+// Conformance Test: Traits and Generics
+//
+// SEMANTIC CONTRACT:
+// - Traits define shared behavior (method signatures)
+// - Impl blocks implement traits for specific types
+// - Generic functions work with any type satisfying bounds
+// - Trait methods dispatch to the correct implementation
+// - Multiple traits can be implemented for the same type
+// - Default implementations can be overridden
+//
+// EXPECTED OUTPUT:
+// [trait_basic] circle: Circle(r=5)
+// [trait_basic] square: Square(s=4)
+// [trait_area] circle area: 78
+// [trait_area] square area: 16
+// [trait_multi] Alice: age=30
+// [trait_multi] Bob: age=25
+// [trait_multi] compare: 5
+// [trait_default] dog says: Woof!
+// [trait_default] cat says: Meow!
+// [trait_default] dog is_loud: true
+// [trait_default] cat is_loud: false
+// [generic_identity] int: 42
+// [generic_identity] string: hello
+// [generic_pair] first=1, second=two
+// [generic_pair] first=true, second=42
+// [trait_all] PASSED
+
+// --- Basic trait implementation ---
+trait Describe {
+    fn describe(&self) -> string
+}
+
+struct Circle {
+    radius: int,
+}
+
+struct Square {
+    side: int,
+}
+
+impl Describe for Circle {
+    fn describe(&self) -> string {
+        "Circle(r=${self.radius})"
+    }
+}
+
+impl Describe for Square {
+    fn describe(&self) -> string {
+        "Square(s=${self.side})"
+    }
+}
+
+fn test_basic_trait() {
+    let c = Circle { radius: 5 }
+    let s = Square { side: 4 }
+    println("[trait_basic] circle: ${c.describe()}")
+    println("[trait_basic] square: ${s.describe()}")
+}
+
+// --- Trait with computation ---
+trait HasArea {
+    fn area(&self) -> int
+}
+
+impl HasArea for Circle {
+    fn area(&self) -> int {
+        3 * self.radius * self.radius
+    }
+}
+
+impl HasArea for Square {
+    fn area(&self) -> int {
+        self.side * self.side
+    }
+}
+
+fn test_trait_area() {
+    let c = Circle { radius: 5 }
+    let s = Square { side: 4 }
+    println("[trait_area] circle area: ${c.area()}")
+    println("[trait_area] square area: ${s.area()}")
+}
+
+// --- Multiple traits on one type ---
+trait Named {
+    fn name(&self) -> string
+}
+
+trait Aged {
+    fn age(&self) -> int
+}
+
+struct Person {
+    person_name: string,
+    person_age: int,
+}
+
+impl Named for Person {
+    fn name(&self) -> string {
+        self.person_name.clone()
+    }
+}
+
+impl Aged for Person {
+    fn age(&self) -> int {
+        self.person_age
+    }
+}
+
+fn test_multiple_traits() {
+    let alice = Person { person_name: "Alice", person_age: 30 }
+    let bob = Person { person_name: "Bob", person_age: 25 }
+    println("[trait_multi] ${alice.name()}: age=${alice.age()}")
+    println("[trait_multi] ${bob.name()}: age=${bob.age()}")
+    let diff = alice.age() - bob.age()
+    println("[trait_multi] compare: ${diff}")
+}
+
+// --- Default implementations ---
+trait Animal {
+    fn speak(&self) -> string
+
+    fn is_loud(&self) -> bool {
+        false
+    }
+}
+
+struct Dog {}
+struct Cat {}
+
+impl Animal for Dog {
+    fn speak(&self) -> string {
+        "Woof!"
+    }
+
+    fn is_loud(&self) -> bool {
+        true  // Override default
+    }
+}
+
+impl Animal for Cat {
+    fn speak(&self) -> string {
+        "Meow!"
+    }
+    // Uses default is_loud() -> false
+}
+
+fn test_default_impl() {
+    let dog = Dog {}
+    let cat = Cat {}
+    println("[trait_default] dog says: ${dog.speak()}")
+    println("[trait_default] cat says: ${cat.speak()}")
+    println("[trait_default] dog is_loud: ${dog.is_loud()}")
+    println("[trait_default] cat is_loud: ${cat.is_loud()}")
+}
+
+// --- Generic functions ---
+fn identity<T>(x: T) -> T {
+    x
+}
+
+fn test_generic_identity() {
+    let a = identity(42)
+    let b = identity("hello")
+    println("[generic_identity] int: ${a}")
+    println("[generic_identity] string: ${b}")
+}
+
+// --- Generic structs ---
+struct Pair<A, B> {
+    first: A,
+    second: B,
+}
+
+impl<A, B> Pair<A, B> {
+    fn new(first: A, second: B) -> Pair<A, B> {
+        Pair { first, second }
+    }
+}
+
+fn test_generic_pair() {
+    let p1 = Pair::new(1, "two")
+    let p2 = Pair::new(true, 42)
+    println("[generic_pair] first=${p1.first}, second=${p1.second}")
+    println("[generic_pair] first=${p2.first}, second=${p2.second}")
+}
+
+fn main() {
+    test_basic_trait()
+    test_trait_area()
+    test_multiple_traits()
+    test_default_impl()
+    test_generic_identity()
+    test_generic_pair()
+    println("[trait_all] PASSED")
+}
