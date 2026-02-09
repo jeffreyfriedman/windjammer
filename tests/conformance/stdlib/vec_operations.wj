@@ -65,7 +65,7 @@ fn test_vec_pop() {
 
 // --- Indexing ---
 fn test_vec_index() {
-    let v = vec![10, 20, 30]
+    let mut v = vec![10, 20, 30]
     println("[vec_index] v[0]=${v[0]}, v[1]=${v[1]}, v[2]=${v[2]}")
 }
 
@@ -89,7 +89,7 @@ fn test_vec_empty() {
 
 // --- Nested vecs ---
 fn test_vec_nested() {
-    let matrix = vec![
+    let mut matrix = vec![
         vec![1, 2, 3],
         vec![4, 5, 6],
         vec![7, 8, 9],

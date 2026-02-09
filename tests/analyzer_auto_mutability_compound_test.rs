@@ -5,10 +5,7 @@ use std::process::Command;
 
 #[test]
 fn test_auto_mut_on_compound_assignment() {
-    let wj_binary = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .join("target")
-        .join("release")
-        .join("wj");
+    let wj_binary = PathBuf::from(env!("CARGO_BIN_EXE_wj"));
 
     let test_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
         .join("target")
@@ -16,10 +13,11 @@ fn test_auto_mut_on_compound_assignment() {
 
     fs::create_dir_all(&test_dir).unwrap();
 
-    // Test that compound assignments trigger auto-mutability
+    // Test that `let mut` with compound assignment generates correct Rust code.
+    // Immutable-by-default: users must explicitly write `let mut` for mutable bindings.
     let test_content = r#"
 fn count_items(items: Vec<i32>) -> i32 {
-    let total = 0;
+    let mut total = 0;
     for item in items {
         total += item;
     }
@@ -37,6 +35,7 @@ fn main() {
     let output = Command::new(&wj_binary)
         .current_dir(&test_dir)
         .arg("build")
+        .arg("--no-cargo")
         .arg(&test_file)
         .output()
         .expect("Failed to execute wj build");
@@ -58,10 +57,10 @@ fn main() {
     let rust_code = fs::read_to_string(&rust_file).unwrap();
     println!("Generated Rust:\n{}", rust_code);
 
-    // The generated code should have `let mut total = 0;`
+    // The generated code should have `let mut total = 0;` because source uses `let mut`
     assert!(
         rust_code.contains("let mut total = 0;"),
-        "Expected auto-mutability to add 'mut' for compound assignment.\nGenerated code:\n{}",
+        "Expected `let mut` to generate `let mut` in Rust output.\nGenerated code:\n{}",
         rust_code
     );
 
