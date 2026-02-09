@@ -14,6 +14,7 @@ use std::fs;
 use std::process::Command;
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_method_call_bool_arg_not_borrowed() {
     let source = r#"
 struct Input {}

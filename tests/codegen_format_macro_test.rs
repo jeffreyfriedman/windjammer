@@ -6,6 +6,7 @@ use std::fs;
 use std::process::Command;
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_format_macro_simple() {
     let source = r#"
 fn test_format() -> String {
@@ -44,6 +45,7 @@ fn test_format() -> String {
 }
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_format_macro_in_function_call() {
     let source = r#"
 fn log_message(msg: String) {

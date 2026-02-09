@@ -7,6 +7,7 @@
 use std::process::Command;
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_qualified_struct_init_simple() {
     let code = r#"
         mod ffi {
@@ -89,6 +90,7 @@ fn test_qualified_struct_init_simple() {
 }
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_qualified_struct_init_in_loop() {
     let code = r#"
         mod types {
