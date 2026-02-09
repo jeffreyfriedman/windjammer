@@ -12,6 +12,7 @@ use std::fs;
 use std::process::Command;
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_method_call_with_multiple_f32_args_from_locals() {
     let source = r#"
 struct Particle {
@@ -69,6 +70,7 @@ fn main() {
 }
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_method_call_copy_type_no_borrow() {
     let source = r#"
 struct Test {
@@ -124,6 +126,7 @@ fn main() {
 }
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_method_call_borrow_consistency() {
     let source = r#"
 struct Physics {

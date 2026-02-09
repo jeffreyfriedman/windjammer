@@ -11,6 +11,7 @@ use std::fs;
 use std::process::Command;
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_multiple_bool_method_call_args() {
     let source = r#"
 enum Key {
