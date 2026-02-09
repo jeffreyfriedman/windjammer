@@ -16,6 +16,7 @@ use std::process::Command;
 use tempfile::TempDir;
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_nested_module_imports() {
     let temp_dir = TempDir::new().unwrap();
 
