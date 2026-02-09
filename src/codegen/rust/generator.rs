@@ -5604,32 +5604,49 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
                 // WINDJAMMER PHILOSOPHY: Auto-cast int/usize in comparisons
                 // When comparing int (i64) with usize, automatically cast to make it work.
                 //
-                // SMART CASTING STRATEGY:
-                // - If comparing .len() with int literal: cast literal to usize (keeps .len() clean)
-                // - If comparing .len() with int variable: cast .len() to i64 (int context)
+                // CORRECTNESS: Always cast the usize side to i64, NOT the int side to usize.
+                // Casting i64 → usize is UNSAFE for negative values (wraps to huge number).
+                // Casting usize → i64 is SAFE (vec lengths always fit in i64).
                 //
-                // Example: items.len() >= 10 → items.len() >= 10usize
-                // Example: index >= items.len() → index >= items.len() as i64
+                // For int literals compared to usize: cast literal to usize (always non-negative).
+                // For int variables compared to usize: cast usize to i64 (preserves negative semantics).
                 //
-                // IMPORTANT: Only cast when there's a MISMATCH (one is usize, one is not)
-                // If BOTH are usize, no cast needed!
+                // Example: items.len() >= 10 → items.len() >= 10usize (literal, always safe)
+                // Example: index >= items.len() → index >= (items.len() as i64) (safe cast)
+                //
+                // IMPORTANT: Wrap the cast operand in ((...) as i64) to handle compound
+                // expressions like `width * height` → ((width * height) as i64), not
+                // (width * (height as i64)) which would have wrong precedence.
                 if is_comparison && left_is_usize && !right_is_usize {
                     // Left is usize, right is NOT usize
-                    // Prefer casting the non-usize side to usize (safer for comparisons)
                     if right_is_int_literal {
+                        // Int literals are always non-negative, safe to cast to usize
                         right_str = format!("({} as usize)", right_str);
                     } else {
-                        // TDD FIX: Cast to usize instead of i64, and use double parens
-                        // to handle compound expressions correctly
-                        // e.g., `i < width * height` → `(i as usize) < width * height`
-                        // instead of `i < (width * height as i64)` (wrong precedence!)
-                        left_str = format!("({} as usize)", left_str);
+                        // Cast the usize side (LEFT) to i64 for safety
+                        // Use parens around compound expressions to prevent precedence issues
+                        let needs_inner_parens = matches!(left, Expression::Binary { .. });
+                        if needs_inner_parens {
+                            left_str = format!("(({}) as i64)", left_str);
+                        } else {
+                            left_str = format!("({} as i64)", left_str);
+                        }
                     }
                 } else if is_comparison && right_is_usize && !left_is_usize {
                     // Right is usize, left is NOT usize
-                    // Cast the non-usize side (LEFT) to usize
-                    // e.g., `self.index >= self.entities.len()` → `(self.index as usize) >= self.entities.len()`
+                    if left_is_int_literal {
+                        // Int literals are always non-negative, safe to cast to usize
                         left_str = format!("({} as usize)", left_str);
+                    } else {
+                        // Cast the usize side (RIGHT) to i64 for safety
+                        // Use parens around compound expressions to prevent precedence issues
+                        let needs_inner_parens = matches!(right, Expression::Binary { .. });
+                        if needs_inner_parens {
+                            right_str = format!("(({}) as i64)", right_str);
+                        } else {
+                            right_str = format!("({} as i64)", right_str);
+                        }
+                    }
                 }
                 // If both are usize: no cast (usize == usize is fine)
                 // If neither is usize: no cast (i64 == i64 is fine)
