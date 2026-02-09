@@ -122,14 +122,11 @@ pub fn statement_modifies_self(stmt: &Statement) -> bool {
                     .as_ref()
                     .is_some_and(|block| block.iter().any(|s| statement_modifies_self(s)))
         }
-        Statement::While { body, .. } => {
-            body.iter().any(|s| statement_modifies_self(s))
-        }
+        Statement::While { body, .. } => body.iter().any(|s| statement_modifies_self(s)),
         Statement::For { iterable, body, .. } => {
             // Check BOTH iterable and body for self mutations
             // e.g., `for x in self.field.values_mut()` requires &mut self
-            expression_modifies_self(iterable)
-                || body.iter().any(|s| statement_modifies_self(s))
+            expression_modifies_self(iterable) || body.iter().any(|s| statement_modifies_self(s))
         }
         Statement::Match { arms, .. } => arms.iter().any(|arm| {
             // Match arms have a body expression, check if it contains modifications
@@ -203,9 +200,7 @@ pub fn statement_mutates_fields(ctx: &AnalysisContext, stmt: &Statement) -> bool
                     .as_ref()
                     .is_some_and(|block| block.iter().any(|s| statement_mutates_fields(ctx, s)))
         }
-        Statement::While { body, .. } => {
-            body.iter().any(|s| statement_mutates_fields(ctx, s))
-        }
+        Statement::While { body, .. } => body.iter().any(|s| statement_mutates_fields(ctx, s)),
         Statement::For { iterable, body, .. } => {
             // Check iterable for field mutations too (e.g., self.field.values_mut())
             expression_mutates_fields(ctx, iterable)

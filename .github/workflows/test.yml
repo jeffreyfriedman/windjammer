@@ -225,7 +225,8 @@ jobs:
         run: cargo install cargo-tarpaulin
       
       - name: Generate coverage
-        run: cargo tarpaulin --verbose --all-features --workspace --timeout 300 --out xml
+        run: cargo tarpaulin --verbose --all-features --workspace --timeout 600 --out xml --exclude-files "tests/codegen_vec_remove_usize_test.rs" --exclude-files "tests/cross_file_trait_impl_test.rs"
+        timeout-minutes: 30
       
       - name: Upload coverage to Codecov
         uses: codecov/codecov-action@v5

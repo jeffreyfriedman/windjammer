@@ -874,8 +874,7 @@ impl Inventory {
 
     // Verify the closure wrapper pattern exists (any reasonable wrapping)
     // The pattern should be something like |__e| predicate(__e) or |e| predicate(e)
-    let has_filter_wrapper = generated.contains(".filter(|")
-        && generated.contains("predicate(");
+    let has_filter_wrapper = generated.contains(".filter(|") && generated.contains("predicate(");
     assert!(
         has_filter_wrapper,
         "COMPILER BUG: Expected .filter() to have a closure wrapper around 'predicate'.\n\
@@ -883,8 +882,8 @@ impl Inventory {
         generated
     );
 
-    let has_any_wrapper = generated.contains(".any(|")
-        && (generated.matches("predicate(").count() >= 2);  // at least filter + any
+    let has_any_wrapper =
+        generated.contains(".any(|") && (generated.matches("predicate(").count() >= 2); // at least filter + any
     assert!(
         has_any_wrapper,
         "COMPILER BUG: Expected .any() to have a closure wrapper around 'predicate'.\n\

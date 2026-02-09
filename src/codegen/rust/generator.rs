@@ -290,10 +290,8 @@ impl<'ast> CodeGenerator<'ast> {
                 let owner_type = self.infer_type_name(object);
                 if let Some(ref owner) = owner_type {
                     // TDD FIX: For generic types like "ComponentArray<T>", also try base name "ComponentArray"
-                    if let Some(field_types) = self
-                        .struct_field_types
-                        .get(owner.as_str())
-                        .or_else(|| {
+                    if let Some(field_types) =
+                        self.struct_field_types.get(owner.as_str()).or_else(|| {
                             owner
                                 .split('<')
                                 .next()
@@ -1301,7 +1299,7 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
                 if let Some(alias_name) = alias {
                     return format!("use std::{} as {};\n", module_name, alias_name);
                 } else {
-                return format!("use std::{};\n", module_name);
+                    return format!("use std::{};\n", module_name);
                 }
             }
 
@@ -1652,14 +1650,14 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
                     // Path starts with uppercase (e.g., Vec3, String) - likely a re-exported type
                     // Don't add ::*
                     format!("use {};\n", rust_path)
-            } else {
-                // Check if the last segment looks like a type (starts with uppercase)
-                let last_segment = rust_path.split("::").last().unwrap_or("");
-                if last_segment
-                    .chars()
-                    .next()
-                    .is_some_and(|c| c.is_uppercase())
-                {
+                } else {
+                    // Check if the last segment looks like a type (starts with uppercase)
+                    let last_segment = rust_path.split("::").last().unwrap_or("");
+                    if last_segment
+                        .chars()
+                        .next()
+                        .is_some_and(|c| c.is_uppercase())
+                    {
                         // TDD FIX: For bare module imports (math::Vec3), convert to crate:: prefix
                         // This ensures cross-module imports are absolute, not relative
                         // THE WINDJAMMER WAY: Default to absolute paths for clarity
@@ -1729,15 +1727,15 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
                                 format!("use crate::{};\n", rust_path)
                             } else {
                                 // External crate - keep as-is
-                    format!("use {};\n", rust_path)
+                                format!("use {};\n", rust_path)
                             }
                         } else {
                             // Single identifier (Vec3) - likely a type, keep as-is
-                    format!("use {};\n", rust_path)
+                            format!("use {};\n", rust_path)
                         }
-                } else {
-                    // Likely a module, add ::*
-                    format!("use {}::*;\n", rust_path)
+                    } else {
+                        // Likely a module, add ::*
+                        format!("use {}::*;\n", rust_path)
                     }
                 }
             }
@@ -1762,8 +1760,7 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
         for field in &s.fields {
             field_types.insert(field.name.clone(), field.field_type.clone());
         }
-        self.struct_field_types
-            .insert(s.name.clone(), field_types);
+        self.struct_field_types.insert(s.name.clone(), field_types);
 
         // Convert decorators to Rust attributes
         for decorator in &s.decorators {
@@ -3081,7 +3078,7 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
                     output.push('\n');
                 }
             } else {
-            output.push_str(&self.generate_statement(stmt));
+                output.push_str(&self.generate_statement(stmt));
             }
         }
 
@@ -3789,7 +3786,11 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
                     && !param.is_mutable
                     && matches!(type_str.as_str(), s if !s.starts_with("&"))
                     && self.variable_needs_mut(&param.name);
-                let mut_prefix = if param.is_mutable || auto_needs_mut { "mut " } else { "" };
+                let mut_prefix = if param.is_mutable || auto_needs_mut {
+                    "mut "
+                } else {
+                    ""
+                };
 
                 // Check if this is a pattern parameter
                 if let Some(pattern) = &param.pattern {
@@ -3978,10 +3979,7 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
                             } => Some(Type::Custom(struct_name.to_string())),
                             Expression::Call { function, .. } => {
                                 // Type::method() pattern (e.g., Foo::new())
-                                if let Expression::FieldAccess {
-                                    object, field, ..
-                                } = *function
-                                {
+                                if let Expression::FieldAccess { object, field, .. } = *function {
                                     if let Expression::Identifier {
                                         name: type_name, ..
                                     } = *object
@@ -4345,7 +4343,7 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
                 // This prevents semicolons in if-else branches when used as values
                 // e.g., `x = if cond { Some(42) } else { None }` (not `{ Some(42); }`)
                 if !self.in_expression_context {
-                output.push_str(";\n");
+                    output.push_str(";\n");
                 } else {
                     output.push('\n');
                 }
@@ -5164,9 +5162,7 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
             } => true,
 
             // match method_call() { Some(var) => ... } — check if return type contains &T
-            Expression::MethodCall {
-                method, object, ..
-            } => {
+            Expression::MethodCall { method, object, .. } => {
                 let type_name = self.infer_type_name(object);
                 let sig = if let Some(ref type_name) = type_name {
                     let qualified = format!("{}::{}", type_name, method);
@@ -6007,8 +6003,6 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
                         }
                     });
 
-
-
                 let args: Vec<String> = arguments
                     .iter()
                     .enumerate()
@@ -6285,11 +6279,27 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
                 } else {
                     // No type info available - only look up methods that are unlikely to
                     // conflict with stdlib methods (i.e., not "get", "remove", "contains_key" etc.)
-                    let is_common_stdlib_name = matches!(method.as_str(),
-                        "get" | "get_mut" | "remove" | "contains_key" | "contains"
-                        | "insert" | "push" | "pop" | "len" | "is_empty"
-                        | "iter" | "keys" | "values" | "first" | "last" | "clear"
-                        | "binary_search" | "starts_with" | "ends_with"
+                    let is_common_stdlib_name = matches!(
+                        method.as_str(),
+                        "get"
+                            | "get_mut"
+                            | "remove"
+                            | "contains_key"
+                            | "contains"
+                            | "insert"
+                            | "push"
+                            | "pop"
+                            | "len"
+                            | "is_empty"
+                            | "iter"
+                            | "keys"
+                            | "values"
+                            | "first"
+                            | "last"
+                            | "clear"
+                            | "binary_search"
+                            | "starts_with"
+                            | "ends_with"
                     );
                     if is_common_stdlib_name {
                         None // Use stdlib heuristics instead of potentially wrong signature
@@ -6798,7 +6808,7 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
                     format!("|{}| {}", params, body_str)
                 } else {
                     // Add `move` - closure can safely capture by value
-                format!("move |{}| {}", params, body_str)
+                    format!("move |{}| {}", params, body_str)
                 }
             }
             Expression::Index { object, index, .. } => {
@@ -7174,7 +7184,7 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
                                 if self.in_statement_match {
                                     output.push_str(";\n");
                                 } else {
-                                output.push('\n');
+                                    output.push('\n');
                                 }
                             }
                             Statement::Thread { body, .. } => {
@@ -7347,9 +7357,10 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
         // THE WINDJAMMER WAY: Auto-derive common traits, but be smart about it.
         // Structs containing trait objects (dyn Trait) can't derive Debug or Clone
         // because trait objects don't implement these traits by default.
-        let has_trait_object_field = struct_.fields.iter().any(|f| {
-            self.type_contains_trait_object(&f.field_type)
-        });
+        let has_trait_object_field = struct_
+            .fields
+            .iter()
+            .any(|f| self.type_contains_trait_object(&f.field_type));
 
         let mut traits = if has_trait_object_field {
             // Can't derive Debug or Clone for structs with dyn Trait fields
@@ -7391,7 +7402,9 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
     fn type_contains_trait_object(&self, type_: &Type) -> bool {
         match type_ {
             Type::TraitObject(_) => true,
-            Type::Vec(inner) | Type::Option(inner) | Type::Reference(inner)
+            Type::Vec(inner)
+            | Type::Option(inner)
+            | Type::Reference(inner)
             | Type::MutableReference(inner) => self.type_contains_trait_object(inner),
             Type::Parameterized(_, args) => args.iter().any(|a| self.type_contains_trait_object(a)),
             Type::Result(ok, err) => {
@@ -7667,9 +7680,22 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
                 if matches!(
                     name.as_str(),
                     "String"
-                        | "i8" | "i16" | "i32" | "i64" | "i128"
-                        | "u8" | "u16" | "u32" | "u64" | "u128"
-                        | "usize" | "isize" | "f32" | "f64" | "bool" | "char"
+                        | "i8"
+                        | "i16"
+                        | "i32"
+                        | "i64"
+                        | "i128"
+                        | "u8"
+                        | "u16"
+                        | "u32"
+                        | "u64"
+                        | "u128"
+                        | "usize"
+                        | "isize"
+                        | "f32"
+                        | "f64"
+                        | "bool"
+                        | "char"
                 ) =>
             {
                 true
@@ -7779,7 +7805,7 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
             // Direct variable that's a borrowed parameter (explicit or inferred)
             Expression::Identifier { name, .. } => {
                 self.current_function_params.iter().any(|p| {
-                &p.name == name && matches!(p.ownership, crate::parser::OwnershipHint::Ref)
+                    &p.name == name && matches!(p.ownership, crate::parser::OwnershipHint::Ref)
                 }) || self.inferred_borrowed_params.contains(name)
             }
             // Method calls that return iterators over references
@@ -7945,7 +7971,9 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
                         // THE WINDJAMMER WAY: The compiler knows which methods mutate - use that
                         // knowledge to auto-infer `mut` for parameter bindings.
                         // Look up the method's type by finding the parameter's type name.
-                        let type_name = self.current_function_params.iter()
+                        let type_name = self
+                            .current_function_params
+                            .iter()
                             .find(|p| p.name == var_name)
                             .and_then(|p| match &p.type_ {
                                 crate::parser::Type::Custom(name) => Some(name.clone()),
@@ -7955,10 +7983,14 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
 
                         if let Some(type_name) = type_name {
                             let qualified_name = format!("{}::{}", type_name, method);
-                            if let Some(sig) = self.signature_registry.get_signature(&qualified_name) {
+                            if let Some(sig) =
+                                self.signature_registry.get_signature(&qualified_name)
+                            {
                                 // Check if the method takes &mut self (first param is MutBorrowed)
                                 if sig.has_self_receiver {
-                                    if let Some(&crate::analyzer::OwnershipMode::MutBorrowed) = sig.param_ownership.first() {
+                                    if let Some(&crate::analyzer::OwnershipMode::MutBorrowed) =
+                                        sig.param_ownership.first()
+                                    {
                                         return true;
                                     }
                                 }
