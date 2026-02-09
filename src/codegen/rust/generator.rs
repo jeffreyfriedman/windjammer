@@ -3939,17 +3939,16 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
                     _ => None,
                 };
 
-                // TDD: Auto-mutability inference
-                // THE WINDJAMMER WAY: Compiler infers `mut` when fields are mutated
-                let needs_auto_mut = if let Some(name) = var_name {
-                    self.variable_needs_mut(name)
-                } else {
-                    false
-                };
-
+                // Immutable-by-default: `let` is immutable, `let mut` is mutable.
+                // The compiler no longer silently infers `mut` for local bindings.
+                // Users must explicitly write `let mut` when mutation is intended.
+                // This follows the modern language consensus (Rust, Swift, Kotlin, Zig).
+                //
+                // NOTE: Parameter ownership inference (& vs &mut vs owned) is unchanged --
+                // that's a mechanical detail the compiler still handles automatically.
                 if needs_mut_ref {
                     // Don't add mut keyword, but we'll add &mut to the value
-                } else if *mutable || needs_auto_mut {
+                } else if *mutable {
                     output.push_str("mut ");
                 }
 

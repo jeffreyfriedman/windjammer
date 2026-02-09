@@ -23,7 +23,8 @@ fn test_auto_mut_on_mutating_method_call() {
 
     fs::create_dir_all(&test_dir).unwrap();
 
-    // Windjammer code that calls a mutating method without explicit `mut`
+    // Windjammer code that calls a mutating method with explicit `let mut`
+    // Immutable-by-default: users must write `let mut` for mutable bindings.
     let test_content = r#"
 struct Inventory {
     items: Vec<i32>
@@ -40,7 +41,7 @@ impl Inventory {
 }
 
 fn main() {
-    let inv = Inventory::new()  // THE WINDJAMMER WAY: Compiler infers `mut` here!
+    let mut inv = Inventory::new()
     inv.add_item(42)
     inv.add_item(100)
     println!("Item count: {}", inv.items.len())
@@ -121,7 +122,7 @@ impl Counter {
 }
 
 fn main() {
-    let counter = Counter::new()
+    let mut counter = Counter::new()
     counter.increment()
     counter.add(5)
     counter.increment()
