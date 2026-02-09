@@ -92,8 +92,8 @@ fn update_player_input(world: World, input: Input, delta: f32) {
     let entities = world.query_with_player()
     
     for entity in entities {
-        let player = world.get_component_player(entity)
-        let velocity = world.get_component_velocity(entity)
+        let mut player = world.get_component_player(entity)
+        let mut velocity = world.get_component_velocity(entity)
         
         // Horizontal movement
         let mut vx = 0.0
@@ -118,8 +118,8 @@ fn update_physics(world: World, delta: f32) {
     let entities = world.query_with_velocity()
     
     for entity in entities {
-        let velocity = world.get_component_velocity(entity)
-        let position = world.get_component_position(entity)
+        let mut velocity = world.get_component_velocity(entity)
+        let mut position = world.get_component_position(entity)
         
         // Apply gravity
         velocity.y = velocity.y + gravity * delta
@@ -135,7 +135,7 @@ fn update_physics(world: World, delta: f32) {
             
             // Mark player as grounded
             if world.has_component_player(entity) {
-                let player = world.get_component_player(entity)
+                let mut player = world.get_component_player(entity)
                 player.grounded = true
             }
         }
@@ -148,7 +148,7 @@ fn update_enemy_ai(world: World, delta: f32) {
     for entity in entities {
         let enemy = world.get_component_enemy(entity)
         let position = world.get_component_position(entity)
-        let velocity = world.get_component_velocity(entity)
+        let mut velocity = world.get_component_velocity(entity)
         
         // Simple patrol behavior
         let distance = position.x - enemy.start_x
@@ -214,7 +214,7 @@ fn main() {
     let camera = Camera2D::new()
     
     // Create game state
-    let state = GameState {
+    let mut state = GameState {
         player_entity: 0,
         score: 0,
         game_over: false
@@ -237,7 +237,7 @@ fn main() {
     print("Avoid the red enemies!")
     
     // Game loop
-    let last_time = time.now()
+    let mut last_time = time.now()
     
     loop {
         let current_time = time.now()

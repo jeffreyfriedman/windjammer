@@ -1,12 +1,11 @@
-/// TDD Test: Auto-Mutability Inference
+/// TDD Test: Mutability Semantics
 ///
-/// Goal: Automatically infer `mut` when variables are mutated, following
-/// "The Windjammer Way" - the compiler does the work, not the developer.
+/// Windjammer uses immutable-by-default `let` semantics:
+/// - `let x = ...` is immutable
+/// - `let mut x = ...` is mutable
 ///
-/// The compiler should:
-/// 1. Detect when variables are mutated (assignment, +=, field mutation, method calls)
-/// 2. Automatically add `mut` to the generated Rust code
-/// 3. Compile successfully without requiring explicit `mut` in Windjammer source
+/// This follows the modern language consensus (Rust, Swift, Kotlin, Zig).
+/// The compiler no longer auto-infers `mut` for local bindings.
 use tempfile::TempDir;
 
 fn compile_wj(code: &str) -> Result<String, String> {
@@ -71,24 +70,26 @@ fn main() {
 }
 
 #[test]
-fn test_mut_auto_inferred_compound_assignment() {
+fn test_mut_explicit_compound_assignment() {
+    // Immutable-by-default: users must write `let mut` for mutable bindings
     let code = r#"
 fn main() {
-    let count = 0
-    count += 1  // Auto-infers: let mut count = 0
+    let mut count = 0
+    count += 1
 }
 "#;
 
     let result = compile_wj(code);
     assert!(
         result.is_ok(),
-        "Should compile successfully with auto-inferred mut, got error:\n{:?}",
+        "Should compile successfully with explicit let mut, got error:\n{:?}",
         result.err()
     );
 }
 
 #[test]
-fn test_mut_auto_inferred_field_mutation() {
+fn test_mut_explicit_field_mutation() {
+    // Immutable-by-default: users must write `let mut` for mutable bindings
     let code = r#"
 struct Point {
     pub x: i32,
@@ -96,25 +97,26 @@ struct Point {
 }
 
 fn main() {
-    let p = Point { x: 0, y: 0 }
-    p.x = 10  // Auto-infers: let mut p = Point { x: 0, y: 0 }
+    let mut p = Point { x: 0, y: 0 }
+    p.x = 10
 }
 "#;
 
     let result = compile_wj(code);
     assert!(
         result.is_ok(),
-        "Should compile successfully with auto-inferred mut, got error:\n{:?}",
+        "Should compile successfully with explicit let mut, got error:\n{:?}",
         result.err()
     );
 }
 
 #[test]
-fn test_mut_auto_inferred_method_call() {
+fn test_mut_explicit_method_call() {
+    // Immutable-by-default: users must write `let mut` for mutable bindings
     let code = r#"
 fn main() {
-    let items = Vec::new()
-    items.push(1)  // Auto-infers: let mut items = Vec::new()
+    let mut items = Vec::new()
+    items.push(1)
     items.push(2)
 }
 "#;
@@ -122,7 +124,7 @@ fn main() {
     let result = compile_wj(code);
     assert!(
         result.is_ok(),
-        "Should compile successfully with auto-inferred mut, got error:\n{:?}",
+        "Should compile successfully with explicit let mut, got error:\n{:?}",
         result.err()
     );
 }
