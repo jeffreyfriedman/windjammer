@@ -20,6 +20,7 @@ fn get_wj_compiler() -> PathBuf {
 }
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_lib_module_no_conflict() -> Result<()> {
     // Create temp directory with unique name
     let timestamp = std::time::SystemTime::now()
@@ -107,6 +108,7 @@ fn add(a: i32, b: i32) -> i32 {
 }
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_window_module_no_conflict() -> Result<()> {
     // Create temp directory with unique name
     let timestamp = std::time::SystemTime::now()
