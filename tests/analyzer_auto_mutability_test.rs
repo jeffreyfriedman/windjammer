@@ -26,7 +26,8 @@ fn test_auto_mut_on_field_mutation() {
 
     fs::create_dir_all(&test_dir).unwrap();
 
-    // Windjammer code that mutates a field without explicit `mut`
+    // Windjammer code that mutates a field with explicit `let mut`
+    // Immutable-by-default: users must write `let mut` for mutable bindings.
     let test_content = r#"
 struct Point {
     x: i32,
@@ -34,8 +35,8 @@ struct Point {
 }
 
 fn main() {
-    let point = Point { x: 0, y: 0 }
-    point.x = 10  // THE WINDJAMMER WAY: Compiler infers `mut` here!
+    let mut point = Point { x: 0, y: 0 }
+    point.x = 10
     point.y = 20
     println!("Point: ({}, {})", point.x, point.y)
 }

@@ -601,7 +601,7 @@ fn example_mock_object() {
 
 @test
 fn example_mock_with_returns() {
-    let mock = MockObject::new();
+    let mut mock = MockObject::new();
     
     // Configure return values
     mock.set_return("get_health", 100);
