@@ -7,6 +7,7 @@ use std::path::PathBuf;
 use std::process::Command;
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 #[ignore] // TODO: Fix type registry import generation
 fn test_type_registry_generates_correct_imports() {
     let wj_compiler = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("target/release/wj");

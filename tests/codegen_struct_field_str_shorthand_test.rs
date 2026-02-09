@@ -6,6 +6,7 @@
 use std::process::Command;
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_no_shorthand_when_type_conversion_needed() {
     let code = r#"
         struct User {

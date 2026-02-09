@@ -6,6 +6,7 @@
 use std::process::Command;
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_struct_init_with_array_fields() {
     let code = r#"
         struct GpuVertex {

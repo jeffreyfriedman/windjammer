@@ -167,12 +167,12 @@ fn test_cross_file_trait_impl_no_default() {
     println!("Generated Rust:\n{}", output);
 
     // No default implementation, so trait has no body to analyze.
-    // THE WINDJAMMER WAY: Explicit `string` type is honored as `String` (owned)
-    // The impl uses `self` (owned) to consume the DataProcessor (Copy type).
+    // THE WINDJAMMER WAY: The compiler infers ownership from usage.
+    // Since `self.multiplier` is only read (not mutated), the compiler correctly infers `&self`.
     // The impl uses `data: string` which becomes `data: String` (explicit type honored).
     assert!(
-        output.contains("fn process(self, data: String) -> i64"),
-        "Expected impl to match trait signature with owned self and String data, got:\n{}",
+        output.contains("fn process(&self, data: String) -> i64"),
+        "Expected compiler to infer &self (read-only access to self.multiplier), got:\n{}",
         output
     );
 }

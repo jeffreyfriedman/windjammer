@@ -6,6 +6,7 @@ use std::fs;
 use std::process::Command;
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_method_call_no_clone_in_struct_method() {
     let source = r#"
 enum Key {
