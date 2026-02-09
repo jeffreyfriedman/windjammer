@@ -9,6 +9,7 @@ use std::fs;
 use tempfile::TempDir;
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_build_system_converts_relative_paths_to_absolute() {
     // Create a temp directory structure simulating game-host-core
     let temp_dir = TempDir::new().unwrap();

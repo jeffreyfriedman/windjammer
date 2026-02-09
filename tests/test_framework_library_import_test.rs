@@ -14,6 +14,7 @@ use std::process::Command;
 use tempfile::TempDir;
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_library_compilation_creates_linkable_crate() {
     // Create a temporary project with a library
     let temp_dir = TempDir::new().unwrap();
@@ -21,12 +22,15 @@ fn test_library_compilation_creates_linkable_crate() {
 
     // TDD FIX: Use absolute path to windjammer-runtime from manifest dir
     // Relative paths don't work from temporary directories
+    // NOTE: Convert to forward slashes for TOML compatibility on Windows
+    // (backslashes are interpreted as escape sequences in TOML strings)
     let runtime_path = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
         .parent()
         .unwrap()
         .join("windjammer")
         .join("crates")
         .join("windjammer-runtime");
+    let runtime_path_str = runtime_path.to_string_lossy().replace('\\', "/");
 
     // Create wj.toml
     let wj_toml = format!(
@@ -38,7 +42,7 @@ version = "0.1.0"
 [dependencies]
 windjammer-runtime = {{ path = "{}" }}
 "#,
-        runtime_path.display()
+        runtime_path_str
     );
     fs::write(project_root.join("wj.toml"), &wj_toml).unwrap();
 
@@ -87,7 +91,7 @@ windjammer-runtime = {{ path = "{}" }}
 name = "test_lib"
 path = "lib.rs"
 "#,
-        runtime_path.display()
+        runtime_path_str
     );
     fs::write(lib_output.join("Cargo.toml"), cargo_toml).unwrap();
 
@@ -148,6 +152,7 @@ impl TestStruct {
 use test_lib::{hello, TestStruct};
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_library_import() {
     let msg = hello();
     assert_eq!(msg, "Hello from library!");
@@ -159,6 +164,8 @@ fn test_library_import() {
     fs::write(test_output.join("test.rs"), test_code).unwrap();
 
     // Create Cargo.toml for test
+    // NOTE: Convert to forward slashes for TOML compatibility on Windows
+    let lib_output_str = lib_output.to_string_lossy().replace('\\', "/");
     let test_cargo_toml = format!(
         r#"[package]
 name = "test-tests"
@@ -172,7 +179,7 @@ test-lib = {{ path = "{}" }}
 name = "test_tests"
 path = "test.rs"
 "#,
-        lib_output.display()
+        lib_output_str
     );
     fs::write(test_output.join("Cargo.toml"), test_cargo_toml).unwrap();
 
@@ -202,6 +209,7 @@ path = "test.rs"
 }
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_library_needs_lib_rs_entry_point() {
     // The key insight: build_project compiles Windjammer to Rust files,
     // but doesn't create a lib.rs entry point that:
