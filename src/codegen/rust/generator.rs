@@ -5152,6 +5152,7 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
     /// When matching on:
     ///   1. &expr (explicit reference) - pattern vars are references (e.g., match &self.field)
     ///   2. method() returning Option<&T> - pattern vars are references (e.g., match self.current_scene_id())
+    ///
     /// This prevents double-borrowing: HashMap.get(&var) where var is already &String would be &&String
     fn match_expression_binds_refs(&self, expr: &Expression) -> bool {
         match expr {

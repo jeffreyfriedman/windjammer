@@ -258,7 +258,7 @@ fn build_string_pool(frequency: HashMap<String, usize>) -> Vec<StringPoolEntry> 
     }
 
     // Sort by count (most frequent first) for better cache locality
-    pool.sort_by(|a, b| b.count.cmp(&a.count));
+    pool.sort_by_key(|b| std::cmp::Reverse(b.count));
 
     pool
 }
