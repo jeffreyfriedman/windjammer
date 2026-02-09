@@ -984,8 +984,7 @@ impl ModuleCompiler {
         let mut per_file_registry = self.global_signatures.clone();
         per_file_registry.merge(&signatures);
 
-        let mut generator =
-            codegen::CodeGenerator::new_for_module(per_file_registry, self.target);
+        let mut generator = codegen::CodeGenerator::new_for_module(per_file_registry, self.target);
         generator.set_analyzed_trait_methods(analyzed_trait_methods);
         let rust_code = generator.generate_program(&program, &analyzed);
 
