@@ -7,6 +7,7 @@
 use std::process::Command;
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_struct_init_in_for_loop() {
     let code = r#"
         struct GpuVertex {

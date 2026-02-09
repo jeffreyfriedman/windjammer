@@ -8,6 +8,7 @@ use std::fs;
 use std::process::Command;
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_trait_impl_method_call_bool_args() {
     let source = r#"
 enum Key {

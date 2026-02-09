@@ -5,6 +5,7 @@ use std::path::PathBuf;
 use std::process::Command;
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 #[ignore] // TODO: Implement inline module code generation (separate from extern fn)
 fn test_inline_mod_with_extern_fn_generates_correct_code() {
     let wj_compiler = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("target/release/wj");
