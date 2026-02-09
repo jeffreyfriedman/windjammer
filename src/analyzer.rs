@@ -3650,11 +3650,11 @@ impl<'ast> Analyzer<'ast> {
             // TDD FIX: Detect `&mut self.field` as a mutation of self
             // This is used in patterns like `for value in &mut self.data`
             // which requires &mut self
-            Expression::Unary { op, operand, .. }
-                if matches!(op, crate::parser::UnaryOp::MutRef) =>
-            {
-                self.expression_is_self_field_access(operand)
-            }
+            Expression::Unary {
+                op: crate::parser::UnaryOp::MutRef,
+                operand,
+                ..
+            } => self.expression_is_self_field_access(operand),
             _ => false,
         }
     }
