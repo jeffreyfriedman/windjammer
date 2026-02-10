@@ -906,9 +906,13 @@ impl<'ast> Analyzer<'ast> {
             // Auto-infer self ownership based on usage
             let modifies_fields = self.function_modifies_self_fields(func);
             let returns_self = self.function_returns_self(func);
+            let returns_non_copy_field = self.function_returns_non_copy_self_field(func);
 
             let self_ownership = if returns_self {
                 // Builder pattern: mut self (owned)
+                OwnershipMode::Owned
+            } else if returns_non_copy_field {
+                // Returns non-Copy field (e.g., self.content: String) → must own self to move field
                 OwnershipMode::Owned
             } else if modifies_fields {
                 // Mutating method: &mut self
@@ -934,6 +938,8 @@ impl<'ast> Analyzer<'ast> {
                         // Check if this method modifies any fields
                         let modifies_fields = self.function_modifies_self_fields(func);
                         let returns_self = self.function_returns_self(func);
+                        let returns_non_copy_field =
+                            self.function_returns_non_copy_self_field(func);
 
                         // CRITICAL FIX: Check returns_self FIRST!
                         // If a function returns Self, it's a builder pattern and should always consume self (Owned)
@@ -941,6 +947,9 @@ impl<'ast> Analyzer<'ast> {
                         if returns_self {
                             // Builder pattern: consumes self, returns Self (either `self` or a new struct literal)
                             // Use `mut self` (Owned), not `&self` (Borrowed)
+                            OwnershipMode::Owned
+                        } else if returns_non_copy_field {
+                            // Returns non-Copy field (e.g., self.content: String) → must own self to move field
                             OwnershipMode::Owned
                         } else if modifies_fields {
                             // Mutating method that doesn't return self: use `&mut self`
@@ -980,6 +989,8 @@ impl<'ast> Analyzer<'ast> {
                         // Infer ownership for self based on field access and return type
                         let modifies_fields = self.function_modifies_self_fields(func);
                         let returns_self = self.function_returns_self(func);
+                        let returns_non_copy_field =
+                            self.function_returns_non_copy_self_field(func);
 
                         // CRITICAL FIX: Check returns_self FIRST!
                         // If a function returns Self, it's a builder pattern and should always consume self (Owned)
@@ -987,6 +998,9 @@ impl<'ast> Analyzer<'ast> {
                         if returns_self {
                             // Builder pattern: consumes self, returns Self (either `self` or a new struct literal)
                             // Use `mut self` (Owned), not `&self` (Borrowed)
+                            OwnershipMode::Owned
+                        } else if returns_non_copy_field {
+                            // Returns non-Copy field (e.g., self.content: String) → must own self to move field
                             OwnershipMode::Owned
                         } else if modifies_fields {
                             // Mutating method that doesn't return self: use `&mut self`
@@ -3683,6 +3697,36 @@ impl<'ast> Analyzer<'ast> {
                     // Implicit return self or struct literal (last expression)
                     self.expression_returns_self_type(expr, return_type_name)
                 }
+                _ => false,
+            }
+        } else {
+            false
+        }
+    }
+
+    /// Check if a function returns a non-Copy field from self (e.g., `self.content` where content is String).
+    /// Moving a field out of `self` requires owned self, not `&self`.
+    fn function_returns_non_copy_self_field(&self, func: &FunctionDecl) -> bool {
+        use crate::parser::Statement;
+
+        // Only applies if return type is non-Copy
+        let return_type = match &func.return_type {
+            Some(t) => t,
+            None => return false,
+        };
+
+        // If the return type is Copy, &self is fine (field is copied, not moved)
+        if self.is_copy_type(return_type) {
+            return false;
+        }
+
+        // Check the last statement in the body for `self.field` returns
+        if let Some(last_stmt) = func.body.last() {
+            match last_stmt {
+                Statement::Return {
+                    value: Some(expr), ..
+                } => self.expression_is_self_field_access(expr),
+                Statement::Expression { expr, .. } => self.expression_is_self_field_access(expr),
                 _ => false,
             }
         } else {

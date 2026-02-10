@@ -44,6 +44,8 @@ use std::path::{Path, PathBuf};
 pub enum CompilationTarget {
     /// Native Rust binary
     Rust,
+    /// Go source code (experimental)
+    Go,
     /// WebAssembly
     Wasm,
     /// Node.js native modules (future)
@@ -976,6 +978,41 @@ impl ModuleCompiler {
             .analyze_program(&program)
             .map_err(|e| anyhow::anyhow!("Analysis error: {}", e))?;
 
+        // MUTABILITY CHECK: Enforce immutable-by-default `let` semantics
+        let mut mut_checker = errors::MutabilityChecker::new(file_path.clone());
+        let mut has_mut_errors = false;
+        for item in &program.items {
+            match item {
+                parser::Item::Function { decl, .. } => {
+                    let mut_errors = mut_checker.check_function(decl);
+                    if !mut_errors.is_empty() {
+                        has_mut_errors = true;
+                        for error in &mut_errors {
+                            eprintln!("{}", error.format_error());
+                        }
+                    }
+                }
+                parser::Item::Impl { block, .. } => {
+                    for func_decl in &block.functions {
+                        let mut_errors = mut_checker.check_function(func_decl);
+                        if !mut_errors.is_empty() {
+                            has_mut_errors = true;
+                            for error in &mut_errors {
+                                eprintln!("{}", error.format_error());
+                            }
+                        }
+                    }
+                }
+                _ => {}
+            }
+        }
+        if has_mut_errors {
+            anyhow::bail!(
+                "Compilation failed: mutability errors detected in module '{}'",
+                module_path
+            );
+        }
+
         // MODULE-SCOPED SIGNATURE RESOLUTION:
         // Create a per-file registry that starts with global signatures (for cross-module lookups)
         // then overlays per-file signatures (for local type priority).
@@ -1533,17 +1570,32 @@ fn compile_file_impl(
     }
 
     // MUTABILITY CHECK: Check for mut errors with great error messages
+    // Checks both top-level functions AND methods inside impl blocks
     let mut mut_checker = errors::MutabilityChecker::new(input_path.to_path_buf());
     let mut has_mut_errors = false;
     for item in &program.items {
-        if let parser::Item::Function { decl, .. } = item {
-            let mut_errors = mut_checker.check_function(decl);
-            if !mut_errors.is_empty() {
-                has_mut_errors = true;
-                for error in &mut_errors {
-                    eprintln!("{}", error.format_error());
+        match item {
+            parser::Item::Function { decl, .. } => {
+                let mut_errors = mut_checker.check_function(decl);
+                if !mut_errors.is_empty() {
+                    has_mut_errors = true;
+                    for error in &mut_errors {
+                        eprintln!("{}", error.format_error());
+                    }
                 }
             }
+            parser::Item::Impl { block, .. } => {
+                for func_decl in &block.functions {
+                    let mut_errors = mut_checker.check_function(func_decl);
+                    if !mut_errors.is_empty() {
+                        has_mut_errors = true;
+                        for error in &mut_errors {
+                            eprintln!("{}", error.format_error());
+                        }
+                    }
+                }
+            }
+            _ => {}
         }
     }
 
@@ -1607,7 +1659,30 @@ fn compile_file_impl(
     }
 
     // Generate code for main file
-    let rust_code = if target == CompilationTarget::Wasm {
+    let rust_code = if target == CompilationTarget::Go {
+        // Go backend: use the new Go codegen
+        use codegen::backend::{CodegenConfig, Target};
+        let config = CodegenConfig {
+            target: Target::Go,
+            output_dir: output_dir.to_path_buf(),
+            ..Default::default()
+        };
+
+        let output = codegen::generate(&program, Target::Go, Some(config))
+            .map_err(|e| anyhow::anyhow!("Go codegen error: {}", e))?;
+
+        // Write main.go
+        let output_file = output_dir.join("main.go");
+        std::fs::write(&output_file, &output.source)?;
+
+        // Write additional files (go.mod)
+        for (filename, content) in &output.additional_files {
+            let file_path = output_dir.join(filename);
+            std::fs::write(file_path, content)?;
+        }
+
+        return Ok((HashSet::new(), Vec::new()));
+    } else if target == CompilationTarget::Wasm {
         // Check if program has components
         use component_analyzer::ComponentAnalyzer;
         let mut comp_analyzer = ComponentAnalyzer::new();

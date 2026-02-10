@@ -1,0 +1,39 @@
+// Conformance Test: Functions
+//
+// SEMANTIC CONTRACT:
+// - Functions can take parameters and return values
+// - Last expression is implicit return
+// - Explicit return also works
+//
+// EXPECTED OUTPUT:
+// [add] 30
+// [greet] Hello Alice
+// [fib] 55
+// PASSED
+
+fn add(a: int, b: int) -> int {
+    a + b
+}
+
+fn greet(name: string) {
+    println("[greet] Hello {}", name)
+}
+
+fn fibonacci(n: int) -> int {
+    if n <= 1 {
+        return n
+    }
+    fibonacci(n - 1) + fibonacci(n - 2)
+}
+
+fn main() {
+    let result = add(10, 20)
+    println("[add] {}", result)
+
+    greet("Alice")
+
+    let fib = fibonacci(10)
+    println("[fib] {}", fib)
+
+    println("PASSED")
+}

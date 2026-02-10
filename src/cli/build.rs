@@ -61,10 +61,11 @@ pub fn execute(
             };
             return build_javascript(path, &config);
         }
+        "go" | "golang" => crate::CompilationTarget::Go,
         "wasm" | "webassembly" => crate::CompilationTarget::Wasm,
         _ => {
             anyhow::bail!(
-                "Unknown target: {}. Use 'rust', 'javascript', or 'wasm'",
+                "Unknown target: {}. Use 'rust', 'go', 'javascript', or 'wasm'",
                 target_str
             );
         }
