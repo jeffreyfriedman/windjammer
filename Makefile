@@ -1,11 +1,15 @@
 .PHONY: help test test-all test-stdlib test-ui test-game test-integration \
         test-quick test-verbose clippy fmt check build build-all \
         example-ui example-game example-http example-physics example-audio \
-        test-examples clean doc
+        test-examples clean doc setup-hooks check-versions
 
 # Default target
 help:
-	@echo "Windjammer v0.34.0 - Development Commands"
+	@echo "Windjammer - Development Commands"
+	@echo ""
+	@echo "Setup:"
+	@echo "  make setup-hooks       - Install git hooks (version checks)"
+	@echo "  make check-versions    - Check version consistency across crates"
 	@echo ""
 	@echo "Testing:"
 	@echo "  make test              - Run all tests"
@@ -418,3 +422,18 @@ branch:
 	@echo "Status:"
 	@git status -s
 
+# =============================================================================
+# Git Hooks & Version Management
+# =============================================================================
+
+# Install git hooks for version consistency checks
+setup-hooks:
+	@echo "🔧 Setting up git hooks..."
+	@git config core.hooksPath .githooks
+	@echo "✅ Git hooks installed (.githooks/)"
+	@echo "   pre-commit: checks version consistency in staged Cargo.toml files"
+	@echo "   pre-push:   validates tag versions match Cargo.toml before pushing"
+
+# Check version consistency across all workspace crates
+check-versions:
+	@./scripts/check-versions.sh

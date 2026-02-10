@@ -95,6 +95,9 @@ pub struct CodeGenerator<'ast> {
     // MATCH STATEMENT CONTEXT: Track if we're in a match used as a statement (not expression)
     // In statement-context matches, arm blocks should have semicolons on all statements
     in_statement_match: bool,
+    // FOR-LOOP AUTO-BORROW: Track local variables that need `&` in for-loops
+    // because they are used after the loop (pre-computed per function body)
+    for_loop_borrow_needed: std::collections::HashSet<String>,
     // BORROWED ITERATOR VARIABLES: Track variables that are iterating over borrowed collections
     // These variables are references, so accessing their fields requires .clone()
     borrowed_iterator_vars: std::collections::HashSet<String>,
@@ -199,6 +202,7 @@ impl<'ast> CodeGenerator<'ast> {
             current_function_body: Vec::new(),
             workspace_root: None,
             suppress_string_conversion: false,
+            for_loop_borrow_needed: std::collections::HashSet::new(),
             borrowed_iterator_vars: std::collections::HashSet::new(),
             owned_string_iterator_vars: std::collections::HashSet::new(),
             usize_variables: std::collections::HashSet::new(),
@@ -3374,6 +3378,11 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
 
         // Track function body for data flow analysis
         self.current_function_body = func.body.clone();
+
+        // FOR-LOOP AUTO-BORROW: Pre-scan function body to find local variables
+        // that are iterated in for-loops and also used after the loop.
+        // These need `&` auto-inserted to prevent consuming the collection.
+        self.precompute_for_loop_borrows(&func.body);
 
         // Track parameters inferred as borrowed for field access cloning
         self.inferred_borrowed_params.clear();
@@ -7760,6 +7769,137 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
 
     /// Check if we should add & for borrowed iteration in a for loop
     /// Returns true if iterating over a field of a borrowed parameter
+    /// Pre-scan a function body to find local variables that are iterated in for-loops
+    /// and also used after the loop. These need auto-borrow (`&`) in the for-loop.
+    fn precompute_for_loop_borrows(&mut self, body: &[&'ast Statement<'ast>]) {
+        self.for_loop_borrow_needed.clear();
+        for (i, stmt) in body.iter().enumerate() {
+            if let Statement::For {
+                iterable, pattern, ..
+            } = stmt
+            {
+                // Only handle simple identifier iterables (local variables)
+                if let Expression::Identifier { name, .. } = iterable {
+                    // Skip if this is a parameter (handled by existing ownership inference)
+                    let is_param = self.current_function_params.iter().any(|p| &p.name == name);
+                    if is_param {
+                        continue;
+                    }
+
+                    // Skip if the pattern itself shadows the variable name
+                    let pattern_name = pattern_analysis::extract_pattern_identifier(pattern);
+                    if pattern_name.as_deref() == Some(name.as_str()) {
+                        continue;
+                    }
+
+                    // Check if the variable is used in any subsequent statement
+                    let remaining = &body[i + 1..];
+                    if Self::variable_used_in_statements(remaining, name) {
+                        self.for_loop_borrow_needed.insert(name.clone());
+                    }
+                }
+            }
+        }
+    }
+
+    /// Check if a variable name appears in a list of statements (used for post-loop usage detection)
+    fn variable_used_in_statements(stmts: &[&Statement], var_name: &str) -> bool {
+        for stmt in stmts {
+            if Self::variable_used_in_statement(stmt, var_name) {
+                return true;
+            }
+        }
+        false
+    }
+
+    /// Check if a variable name appears in a single statement
+    fn variable_used_in_statement(stmt: &Statement, var_name: &str) -> bool {
+        match stmt {
+            Statement::Let { value, .. } => Self::variable_used_in_expression(value, var_name),
+            Statement::Assignment { target, value, .. } => {
+                Self::variable_used_in_expression(target, var_name)
+                    || Self::variable_used_in_expression(value, var_name)
+            }
+            Statement::Expression { expr, .. } => Self::variable_used_in_expression(expr, var_name),
+            Statement::Return {
+                value: Some(expr), ..
+            } => Self::variable_used_in_expression(expr, var_name),
+            Statement::If {
+                condition,
+                then_block,
+                else_block,
+                ..
+            } => {
+                Self::variable_used_in_expression(condition, var_name)
+                    || Self::variable_used_in_statements(then_block, var_name)
+                    || else_block
+                        .as_ref()
+                        .is_some_and(|b| Self::variable_used_in_statements(b, var_name))
+            }
+            Statement::While {
+                condition, body, ..
+            } => {
+                Self::variable_used_in_expression(condition, var_name)
+                    || Self::variable_used_in_statements(body, var_name)
+            }
+            Statement::For { iterable, body, .. } => {
+                Self::variable_used_in_expression(iterable, var_name)
+                    || Self::variable_used_in_statements(body, var_name)
+            }
+            Statement::Loop { body, .. } => Self::variable_used_in_statements(body, var_name),
+            Statement::Match { value, arms, .. } => {
+                Self::variable_used_in_expression(value, var_name)
+                    || arms
+                        .iter()
+                        .any(|arm| Self::variable_used_in_expression(arm.body, var_name))
+            }
+            _ => false,
+        }
+    }
+
+    /// Check if a variable name appears in an expression
+    fn variable_used_in_expression(expr: &Expression, var_name: &str) -> bool {
+        match expr {
+            Expression::Identifier { name, .. } => name == var_name,
+            Expression::FieldAccess { object, .. } => {
+                Self::variable_used_in_expression(object, var_name)
+            }
+            Expression::MethodCall {
+                object, arguments, ..
+            } => {
+                Self::variable_used_in_expression(object, var_name)
+                    || arguments
+                        .iter()
+                        .any(|(_, arg)| Self::variable_used_in_expression(arg, var_name))
+            }
+            Expression::Call {
+                function,
+                arguments,
+                ..
+            } => {
+                Self::variable_used_in_expression(function, var_name)
+                    || arguments
+                        .iter()
+                        .any(|(_, arg)| Self::variable_used_in_expression(arg, var_name))
+            }
+            Expression::Binary { left, right, .. } => {
+                Self::variable_used_in_expression(left, var_name)
+                    || Self::variable_used_in_expression(right, var_name)
+            }
+            Expression::Unary { operand, .. } => {
+                Self::variable_used_in_expression(operand, var_name)
+            }
+            Expression::Index { object, index, .. } => {
+                Self::variable_used_in_expression(object, var_name)
+                    || Self::variable_used_in_expression(index, var_name)
+            }
+            Expression::Block { statements, .. } => {
+                Self::variable_used_in_statements(statements, var_name)
+            }
+            _ => false,
+        }
+    }
+
     fn should_borrow_for_iteration(&self, iterable: &Expression) -> bool {
         match iterable {
             // Field access on a variable (e.g., game.walls)
@@ -7774,6 +7914,8 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
                 }
                 false
             }
+            // Local variable used after the loop → auto-borrow
+            Expression::Identifier { name, .. } => self.for_loop_borrow_needed.contains(name),
             _ => false,
         }
     }
