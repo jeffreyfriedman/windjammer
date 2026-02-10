@@ -1,0 +1,113 @@
+// Conformance Test: Mutation Semantics
+//
+// SEMANTIC CONTRACT:
+// - `let` bindings are immutable by default
+// - `let mut` bindings can be reassigned
+// - Functions that mutate parameters change the caller's value
+// - Functions that only read parameters leave the caller's value unchanged
+// - Compound assignment operators (+=, -=, *=) work correctly
+//
+// EXPECTED OUTPUT:
+// [mut_basic] before: x=10
+// [mut_basic] after: x=20
+// [mut_compound] x=10
+// [mut_compound] after +=5: x=15
+// [mut_compound] after -=3: x=12
+// [mut_compound] after *=2: x=24
+// [mut_fn_read] items before: len=3
+// [mut_fn_read] total=6
+// [mut_fn_read] items after: len=3
+// [mut_fn_push] items before: len=2
+// [mut_fn_push] items after: len=3
+// [mut_fn_push] last item: 30
+// [mut_struct] before: hp=100
+// [mut_struct] after damage: hp=70
+// [mut_struct] after heal: hp=90
+// [mut_all] PASSED
+
+// --- Test: Basic mutability ---
+fn test_mut_basic() {
+    let mut x = 10
+    println("[mut_basic] before: x=${x}")
+    x = 20
+    println("[mut_basic] after: x=${x}")
+}
+
+// --- Test: Compound assignment operators ---
+fn test_mut_compound() {
+    let mut x = 10
+    println("[mut_compound] x=${x}")
+    x += 5
+    println("[mut_compound] after +=5: x=${x}")
+    x -= 3
+    println("[mut_compound] after -=3: x=${x}")
+    x *= 2
+    println("[mut_compound] after *=2: x=${x}")
+}
+
+// --- Test: Function reads parameter without mutating ---
+fn sum_items(items: Vec<int>) -> int {
+    let mut total = 0
+    for item in items {
+        total += item
+    }
+    total
+}
+
+fn test_fn_read() {
+    let items = vec![1, 2, 3]
+    println("[mut_fn_read] items before: len=${items.len()}")
+    let total = sum_items(items)
+    println("[mut_fn_read] total=${total}")
+    println("[mut_fn_read] items after: len=${items.len()}")
+}
+
+// --- Test: Function mutates parameter ---
+fn add_item(items: Vec<int>, item: int) {
+    items.push(item)
+}
+
+fn test_fn_push() {
+    let mut items = vec![10, 20]
+    println("[mut_fn_push] items before: len=${items.len()}")
+    add_item(items, 30)
+    println("[mut_fn_push] items after: len=${items.len()}")
+    println("[mut_fn_push] last item: ${items[2]}")
+}
+
+// --- Test: Struct field mutation through methods ---
+struct Player {
+    hp: int,
+}
+
+impl Player {
+    fn new(hp: int) -> Player {
+        Player { hp }
+    }
+
+    fn damage(self, amount: int) {
+        self.hp -= amount
+    }
+
+    fn heal(self, amount: int) {
+        self.hp += amount
+    }
+}
+
+fn test_struct_mutation() {
+    let mut player = Player::new(100)
+    println("[mut_struct] before: hp=${player.hp}")
+    player.damage(30)
+    println("[mut_struct] after damage: hp=${player.hp}")
+    player.heal(20)
+    println("[mut_struct] after heal: hp=${player.hp}")
+}
+
+fn main() {
+    test_mut_basic()
+    test_mut_compound()
+    test_fn_read()
+    test_fn_push()
+    test_struct_mutation()
+    println("[mut_all] PASSED")
+}

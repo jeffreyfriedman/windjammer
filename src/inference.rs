@@ -498,6 +498,7 @@ mod tests {
                         }),
                     ],
                     delimiter: crate::parser::MacroDelimiter::Parens,
+                    is_repeat: false,
                     location: None,
                 }),
                 location: None,

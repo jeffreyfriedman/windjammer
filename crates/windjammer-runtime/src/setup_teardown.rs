@@ -24,6 +24,7 @@ use std::panic;
 ///     teardown,
 ///     |data| {
 ///         assert_eq!(data, "test_data");
+///         data // Return the data to satisfy the closure signature
 ///     }
 /// );
 /// ```

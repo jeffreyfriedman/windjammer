@@ -134,27 +134,28 @@ impl MutabilityChecker {
                 compound_op,
                 location,
             } => {
-                // Check if this is a mutation of an immutable variable
+                // TDD: Auto-mutability inference
+                // THE WINDJAMMER WAY: Compiler infers `mut` when mutations detected
                 if let Some(var_name) = self.get_variable_name(target) {
                     if let Some(&is_mutable) = self.declared_variables.get(&var_name) {
                         if !is_mutable {
-                            let error_type = if compound_op.is_some() {
-                                MutabilityErrorType::CompoundAssignment
-                            } else if self.is_field_access(target) {
-                                MutabilityErrorType::FieldMutation
+                            // Check if this is a field mutation (e.g., point.x = 10) or compound assignment (e.g., count += 1)
+                            if self.is_field_access(target) || compound_op.is_some() {
+                                // AUTO-MUTABILITY: Automatically mark as mutable!
+                                // No error - the compiler infers `mut` for us
+                                self.declared_variables.insert(var_name.clone(), true);
                             } else {
-                                MutabilityErrorType::Reassignment
-                            };
-
-                            self.errors.push(MutabilityError {
-                                variable: var_name.clone(),
-                                error_type,
-                                location: location.clone(),
-                                suggestion: format!(
-                                    "make this binding mutable: `mut {}`",
-                                    var_name
-                                ),
-                            });
+                                // Direct reassignment still errors (e.g., x = 5; x = 6;)
+                                self.errors.push(MutabilityError {
+                                    variable: var_name.clone(),
+                                    error_type: MutabilityErrorType::Reassignment,
+                                    location: location.clone(),
+                                    suggestion: format!(
+                                        "make this binding mutable: `mut {}`",
+                                        var_name
+                                    ),
+                                });
+                            }
                         }
                     }
                 }
@@ -214,23 +215,17 @@ impl MutabilityChecker {
                 object,
                 method,
                 arguments,
-                location,
                 ..
             } => {
-                // Check if this is a mutating method call on an immutable variable
+                // TDD: Auto-mutability for method calls
+                // THE WINDJAMMER WAY: Compiler infers `mut` when mutating methods are called
                 if self.is_mutating_method(method) {
                     if let Some(var_name) = self.get_variable_name(object) {
                         if let Some(&is_mutable) = self.declared_variables.get(&var_name) {
                             if !is_mutable {
-                                self.errors.push(MutabilityError {
-                                    variable: var_name.clone(),
-                                    error_type: MutabilityErrorType::MutatingMethodCall,
-                                    location: location.clone(),
-                                    suggestion: format!(
-                                        "make this binding mutable: `mut {}`",
-                                        var_name
-                                    ),
-                                });
+                                // AUTO-MUTABILITY: Automatically mark as mutable!
+                                // No error - the compiler infers `mut` for us
+                                self.declared_variables.insert(var_name.clone(), true);
                             }
                         }
                     }
@@ -280,8 +275,11 @@ impl MutabilityChecker {
     }
 
     fn is_mutating_method(&self, method: &str) -> bool {
-        // Common mutating methods
-        matches!(
+        // TDD: Extended list of common mutating methods
+        // THE WINDJAMMER WAY: Detect mutations by method name patterns
+
+        // Common mutating methods from stdlib collections
+        if matches!(
             method,
             "push"
                 | "pop"
@@ -299,6 +297,48 @@ impl MutabilityChecker {
                 | "sort"
                 | "reverse"
                 | "swap"
+                | "drain"
+                | "truncate"
+                | "resize"
+                | "reserve"
+                | "shrink_to_fit"
+        ) {
+            return true;
+        }
+
+        // Common user-defined mutating method patterns
+        // Methods starting with "add_", "remove_", "set_", "update_", etc.
+        if method.starts_with("add_")
+            || method.starts_with("remove_")
+            || method.starts_with("delete_")
+            || method.starts_with("set_")
+            || method.starts_with("update_")
+            || method.starts_with("reset_")
+            || method.starts_with("clear_")
+            || method.starts_with("insert_")
+            || method.starts_with("append_")
+        {
+            return true;
+        }
+
+        // Common mutating verbs without prefix
+        matches!(
+            method,
+            "increment"
+                | "decrement"
+                | "add"
+                | "subtract"
+                | "multiply"
+                | "divide"
+                | "apply"
+                | "modify"
+                | "mutate"
+                | "change"
+                | "toggle"
+                | "enable"
+                | "disable"
+                | "activate"
+                | "deactivate"
         )
     }
 }
