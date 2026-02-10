@@ -1,0 +1,64 @@
+// Conformance Test: Clone Semantics
+//
+// SEMANTIC CONTRACT:
+// - Cloning a value creates an independent copy
+// - Modifying the clone does not affect the original
+// - Cloning works for strings, vectors, and structs
+//
+// EXPECTED OUTPUT:
+// [clone_string] original=hello
+// [clone_string] cloned=hello
+// [clone_string] after modify clone: original=hello, cloned=hello world
+// [clone_vec] original len=3
+// [clone_vec] cloned len=3
+// [clone_vec] after push to clone: original len=3, cloned len=4
+// [clone_struct] original: name=Alice, score=100
+// [clone_struct] cloned: name=Alice, score=100
+// [clone_struct] after modify clone: original score=100, cloned score=200
+// [clone_all] PASSED
+
+// --- Test: String clone ---
+fn test_clone_string() {
+    let original = "hello"
+    let mut cloned = original.clone()
+    println("[clone_string] original=${original}")
+    println("[clone_string] cloned=${cloned}")
+
+    cloned = cloned + " world"
+    println("[clone_string] after modify clone: original=${original}, cloned=${cloned}")
+}
+
+// --- Test: Vec clone ---
+fn test_clone_vec() {
+    let original = vec![1, 2, 3]
+    let mut cloned = original.clone()
+    println("[clone_vec] original len=${original.len()}")
+    println("[clone_vec] cloned len=${cloned.len()}")
+
+    cloned.push(4)
+    println("[clone_vec] after push to clone: original len=${original.len()}, cloned len=${cloned.len()}")
+}
+
+// --- Test: Struct clone ---
+@auto(Clone)
+struct GameScore {
+    name: string,
+    score: int,
+}
+
+fn test_clone_struct() {
+    let original = GameScore { name: "Alice", score: 100 }
+    let mut cloned = original.clone()
+    println("[clone_struct] original: name=${original.name}, score=${original.score}")
+    println("[clone_struct] cloned: name=${cloned.name}, score=${cloned.score}")
+
+    cloned.score = 200
+    println("[clone_struct] after modify clone: original score=${original.score}, cloned score=${cloned.score}")
+}
+
+fn main() {
+    test_clone_string()
+    test_clone_vec()
+    test_clone_struct()
+    println("[clone_all] PASSED")
+}

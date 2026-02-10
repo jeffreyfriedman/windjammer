@@ -4,6 +4,7 @@ use std::fs;
 use tempfile::TempDir;
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_desktop_module_feature_gates() {
     // Create a temporary directory structure
     let temp_dir = TempDir::new().unwrap();
@@ -79,6 +80,7 @@ fn test_desktop_module_feature_gates() {
 }
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_no_feature_gates_for_regular_modules() {
     // Create a temporary directory with only non-desktop modules
     let temp_dir = TempDir::new().unwrap();

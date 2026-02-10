@@ -322,6 +322,7 @@ pub fn expr_macro<'ast>(
         name: name.into(),
         args,
         delimiter: MacroDelimiter::Parens,
+        is_repeat: false, // Builder creates regular macro calls
         location: None,
     }
 }

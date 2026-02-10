@@ -5,6 +5,7 @@ use std::fs;
 use tempfile::TempDir;
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_unused_struct_field_gets_allow_attribute() {
     let temp_dir = TempDir::new().unwrap();
     let input_file = temp_dir.path().join("input.wj");
@@ -73,6 +74,7 @@ pub fn use_struct(s: MyStruct) {
 }
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_all_fields_used_no_allow_needed() {
     // Baseline: when all fields are used, no #[allow(dead_code)] needed
     let temp_dir = TempDir::new().unwrap();

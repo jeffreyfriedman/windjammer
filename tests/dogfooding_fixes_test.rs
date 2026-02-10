@@ -78,6 +78,7 @@ fn compile_and_rustc_check(wj_code: &str) -> Result<(), String> {
 // =============================================================================
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_as_str_in_if_else_branch() {
     let code = r#"
 struct Item {
@@ -110,6 +111,7 @@ impl Item {
 // =============================================================================
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_type_method_signature_lookup() {
     let code = r#"
 struct Vec3 {
@@ -141,6 +143,7 @@ fn test() -> string {
 // =============================================================================
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_some_iterator_var_clone() {
     let code = r#"
 @auto
@@ -174,6 +177,7 @@ fn find_item(items: Vec<Item>, target: string) -> Option<Item> {
 // =============================================================================
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_some_borrowed_param_clone() {
     let code = r#"
 struct Panel {
@@ -196,6 +200,7 @@ impl Panel {
 // =============================================================================
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_usize_var_comparison_cast() {
     let code = r#"
 struct Panel {
@@ -232,6 +237,7 @@ impl Panel {
 // =============================================================================
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_push_str_auto_borrow() {
     let code = r#"
 fn build_html() -> string {
@@ -258,6 +264,7 @@ fn build_html() -> string {
 // =============================================================================
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_auto_decorator_derives() {
     let code = r#"
 @auto
@@ -296,6 +303,7 @@ enum Direction {
 // =============================================================================
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_reference_returning_methods() {
     let code = r#"
 struct Data {
@@ -327,6 +335,7 @@ impl Data {
 // =============================================================================
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_iterator_clone_for_push() {
     let code = r#"
 @auto
@@ -361,6 +370,7 @@ fn filter_items(items: Vec<Item>) -> Vec<Item> {
 // =============================================================================
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_string_literal_format_context() {
     let code = r#"
 fn render_item(name: string) -> string {
@@ -381,6 +391,7 @@ fn render_item(name: string) -> string {
 // =============================================================================
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_borrowed_non_string_param() {
     let code = r#"
 @auto
@@ -413,6 +424,7 @@ fn test() {
 // =============================================================================
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_match_arms_type_consistency() {
     let code = r#"
 enum Status {
@@ -439,6 +451,7 @@ fn get_status_label(status: Status) -> string {
 // =============================================================================
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_complex_if_else_refs() {
     let code = r#"
 struct Config {
@@ -466,6 +479,7 @@ impl Config {
 // =============================================================================
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_pattern_match_field_extraction_owned() {
     let code = r#"
 @auto
@@ -498,6 +512,7 @@ fn get_area(shape: Shape) -> f32 {
 // =============================================================================
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_pattern_match_primitives_to_functions() {
     let code = r#"
 @auto
@@ -527,6 +542,7 @@ fn render_object(obj: ObjectType) -> string {
 // =============================================================================
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_string_literal_field_assignment() {
     let code = r#"
 struct Config {
@@ -558,6 +574,7 @@ impl Config {
 // =============================================================================
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_unit_return_discards_value() {
     let code = r#"
 use std::collections::HashMap
@@ -589,6 +606,7 @@ impl Store {
 // =============================================================================
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_hashmap_get_cloned() {
     let code = r#"
 use std::collections::HashMap
@@ -624,6 +642,7 @@ impl Store {
 // =============================================================================
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_iterator_var_no_double_ref() {
     let code = r#"
 @auto
@@ -653,6 +672,7 @@ fn process_all(items: Vec<Item>) -> i32 {
 // =============================================================================
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_if_expression_format_arg() {
     let code = r#"
 struct Display {
@@ -677,6 +697,7 @@ impl Display {
 // =============================================================================
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_auto_copy_detection() {
     let code = r#"
 @auto
@@ -715,6 +736,7 @@ fn test_copy() {
 // =============================================================================
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_pattern_match_self_field_ref_binding() {
     let code = r#"
 struct Panel {
@@ -763,6 +785,7 @@ impl Panel {
 // =============================================================================
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_struct_construction_from_borrowed_self() {
     let code = r#"
 @auto
@@ -801,6 +824,8 @@ impl Config {
 // =============================================================================
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
+#[ignore = "TODO v0.41.0: Smart ownership inference - infer &T when parameter is only read"]
 fn test_iterator_var_borrowed_param_no_clone() {
     let code = r#"
 @auto

@@ -359,7 +359,7 @@ impl ShooterGame {
         // Check for power-up collection
         let mut i = 0
         while i < self.powerups.len() {
-            let powerup = self.powerups[i]
+            let mut powerup = self.powerups[i]
             
             if !powerup.active {
                 i += 1
@@ -400,7 +400,7 @@ impl ShooterGame {
     fn update_enemies(self, delta: f32) {
         let mut i = 0
         while i < self.enemies.len() {
-            let enemy = self.enemies[i]
+            let mut enemy = self.enemies[i]
             
             if enemy.state == 3 {
                 // Dead, remove
@@ -465,7 +465,7 @@ impl ShooterGame {
     fn update_bullets(self, delta: f32) {
         let mut i = 0
         while i < self.bullets.len() {
-            let bullet = self.bullets[i]
+            let mut bullet = self.bullets[i]
             
             // Update position
             bullet.pos.x += bullet.velocity.x * delta
@@ -499,7 +499,7 @@ impl ShooterGame {
             let mut hit_enemy = false
             let mut j = 0
             while j < self.enemies.len() {
-                let enemy = self.enemies[j]
+                let mut enemy = self.enemies[j]
                 let dx = bullet.pos.x - enemy.pos.x
                 let dy = bullet.pos.y - enemy.pos.y
                 let dz = bullet.pos.z - enemy.pos.z
