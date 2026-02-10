@@ -240,6 +240,14 @@ impl SignatureRegistry {
     pub fn get_signature(&self, name: &str) -> Option<&FunctionSignature> {
         self.signatures.get(name)
     }
+
+    /// BUG #8 FIX: Merge signatures from another registry
+    /// This enables cross-file signature sharing
+    pub fn merge(&mut self, other: &SignatureRegistry) {
+        for (name, sig) in &other.signatures {
+            self.signatures.insert(name.clone(), sig.clone());
+        }
+    }
 }
 
 pub struct Analyzer<'ast> {
@@ -503,19 +511,32 @@ impl<'ast> Analyzer<'ast> {
                         analyzed_func.cow_optimizations = self.detect_cow_opportunities(func);
 
                         let signature = self.build_signature(&analyzed_func);
+
+                        // BUG #8 FIX: Store method signatures with BOTH qualified and simple names
+                        // Qualified (Type::method) enables precise cross-module resolution
+                        // Simple (method) provides fallback when type inference fails
+                        let qualified_name = format!("{}::{}", impl_block.type_name, func.name);
+                        registry.add_function(qualified_name.clone(), signature.clone());
+                        // TDD FIX: For generic types like ComponentArray<T>, also register
+                        // with the base name (ComponentArray::method) so that type inference
+                        // from field types (which strips type params) can find the signature.
+                        if let Some(base_name) = impl_block.type_name.split('<').next() {
+                            if base_name != impl_block.type_name {
+                                let base_qualified = format!("{}::{}", base_name, func.name);
+                                registry.add_function(base_qualified, signature.clone());
+                            }
+                        }
                         registry.add_function(func.name.clone(), signature);
+
                         analyzed.push(analyzed_func);
                     }
                 }
                 Item::Trait { decl, .. } => {
-                    // Analyze trait methods with default implementations
+                    // THE WINDJAMMER WAY: Analyze ALL trait methods, not just default impls.
+                    // Abstract methods need ownership inference too - the compiler must set
+                    // the correct self convention (&self, &mut self) even without a body.
+                    // This is refined later by infer_trait_signatures_from_impls.
                     for method in &decl.methods {
-                        // Only analyze methods with bodies (default implementations)
-                        if method.body.is_none() {
-                            // Abstract method - no analysis needed (no body)
-                            continue;
-                        }
-
                         // Convert TraitMethod to FunctionDecl for analysis
                         let func = FunctionDecl {
                             name: method.name.clone(),
@@ -532,7 +553,7 @@ impl<'ast> Analyzer<'ast> {
                             doc_comment: method.doc_comment.clone(),
                         };
 
-                        // Trait methods with default implementations should use &self
+                        // Trait methods (both abstract and default) should use &self or &mut self
                         // to work with unsized types. The Windjammer way: make it work!
                         let mut analyzed_func = self.analyze_trait_method(&func)?;
 
@@ -1192,7 +1213,7 @@ impl<'ast> Analyzer<'ast> {
     fn infer_parameter_ownership(
         &self,
         param_name: &str,
-        param_type: &Type,
+        _param_type: &Type,
         body: &[&'ast Statement<'ast>],
         _return_type: &Option<Type>,
     ) -> Result<OwnershipMode, String> {
@@ -1242,27 +1263,27 @@ impl<'ast> Analyzer<'ast> {
             return Ok(OwnershipMode::Owned);
         }
 
-        // 6. Default ownership based on type
-        // THE WINDJAMMER WAY: Respect explicit type annotations
-        //
-        // - Copy types → Owned (passed by value)
-        // - Generic types → Owned (trait bounds are on T, not &T)
-        // - String type → Owned (user said String, not &str)
-        // - Other types → Borrowed (optimize by default)
-
-        if self.is_copy_type(param_type) {
-            Ok(OwnershipMode::Owned)
-        } else if Self::is_generic_type_param(param_type) {
-            // Keep generic types owned - trait bounds are on T, not &T
-            Ok(OwnershipMode::Owned)
-        } else if matches!(param_type, Type::String) {
-            // THE WINDJAMMER WAY: Explicit String type annotation means owned String
-            // User wrote `text: string` → they want `text: String`, not `text: &str`
-            Ok(OwnershipMode::Owned)
-        } else {
-            // Other non-Copy types can be borrowed by default
-            Ok(OwnershipMode::Borrowed)
+        // 6. TDD: Check if parameter is iterated over in a for loop
+        // When `for item in vec` is used (not `for item in &vec`), the vec is consumed
+        // and elements are moved out. The parameter must be owned, not borrowed.
+        if self.is_iterated_over(param_name, body) {
+            return Ok(OwnershipMode::Owned);
         }
+
+        // 7. Default ownership: Owned (THE WINDJAMMER WAY!)
+        //
+        // **PHILOSOPHY**: The compiler does the work, not the user.
+        // - Default to **Owned** (safer, simpler, what user expects)
+        // - Only borrow when we have clear evidence it's safe/beneficial
+        // - Borrowed parameters are an **optimization**, not the default
+        //
+        // This prevents type mismatches and makes Windjammer feel like a high-level language
+        // where you don't think about &/&mut constantly (unlike Rust).
+        //
+        // The checks above (is_mutated, is_stored, is_iterated_over, etc.) determine when
+        // we need specific ownership modes. If none of those apply, default to Owned.
+
+        Ok(OwnershipMode::Owned)
     }
 
     fn is_used_in_if_else_expression(
@@ -1634,16 +1655,18 @@ impl<'ast> Analyzer<'ast> {
                     value,
                     ..
                 } => {
-                    // CRITICAL FIX: Only consider it "stored" if the parameter is DIRECTLY assigned
-                    // to a field (self.field = param), not if it's just used in a calculation
-                    // (self.field = self.field * param).
+                    // TDD FIX: Check if the parameter is DIRECTLY assigned to ANY struct field
+                    // (not just self.field, but also local_var.field)
                     //
-                    // Direct assignment: self.field = param
-                    // Calculation: self.field = self.field * param (or any other expression)
+                    // Examples:
+                    // - self.field = param (method storing parameter)
+                    // - node.items = items (constructor storing parameter)
+                    // - config.data = data (factory function storing parameter)
                     //
                     // We check if the value is JUST the identifier, not part of a larger expression.
-                    if matches!(&**object, Expression::Identifier { name: id, .. } if id == "self")
-                    {
+                    // Direct assignment: obj.field = param
+                    // Calculation: obj.field = obj.field * param (not "stored")
+                    if matches!(&**object, Expression::Identifier { .. }) {
                         // Only return true if the value is EXACTLY the parameter identifier
                         if matches!(value, Expression::Identifier { name: id, .. } if id == name) {
                             return true;
@@ -1701,6 +1724,24 @@ impl<'ast> Analyzer<'ast> {
                                 }
                             }
                         }
+
+                        // TDD FIX: Also check for method calls on LOCAL struct fields: local_var.field.push(param)
+                        // e.g., choice.conditions.push(condition) where choice is a local variable
+                        if let Expression::FieldAccess {
+                            object: field_obj, ..
+                        } = &**object
+                        {
+                            // Check if it's a local variable (not self)
+                            if matches!(&**field_obj, Expression::Identifier { name: id, .. } if id != "self")
+                            {
+                                for (_label, arg) in arguments {
+                                    if matches!(arg, Expression::Identifier { name: id, .. } if id == name)
+                                    {
+                                        return true;
+                                    }
+                                }
+                            }
+                        }
                     }
 
                     // Also check for method calls on local variables: props.push(Property { name, ... })
@@ -1752,6 +1793,50 @@ impl<'ast> Analyzer<'ast> {
                 // Recursively check loop bodies
                 Statement::While { body, .. } | Statement::For { body, .. } => {
                     if self.is_stored(name, body) {
+                        return true;
+                    }
+                }
+                _ => {}
+            }
+        }
+        false
+    }
+
+    /// TDD: Check if a parameter is iterated over in a for loop (consumed by iteration)
+    /// e.g., `for item in items` (not `for item in &items`)
+    /// When you iterate over a Vec without `&`, the Vec is consumed and elements are moved.
+    fn is_iterated_over(&self, name: &str, statements: &[&'ast Statement<'ast>]) -> bool {
+        for stmt in statements {
+            match stmt {
+                Statement::For { iterable, body, .. } => {
+                    // Check if the iterable is exactly the parameter (direct iteration)
+                    if let Expression::Identifier { name: id, .. } = iterable {
+                        if id == name {
+                            return true;
+                        }
+                    }
+
+                    // Recursively check nested for loops
+                    if self.is_iterated_over(name, body) {
+                        return true;
+                    }
+                }
+                Statement::If {
+                    then_block,
+                    else_block,
+                    ..
+                } => {
+                    if self.is_iterated_over(name, then_block) {
+                        return true;
+                    }
+                    if let Some(else_stmts) = else_block {
+                        if self.is_iterated_over(name, else_stmts) {
+                            return true;
+                        }
+                    }
+                }
+                Statement::While { body, .. } | Statement::Loop { body, .. } => {
+                    if self.is_iterated_over(name, body) {
                         return true;
                     }
                 }
@@ -3211,6 +3296,15 @@ impl<'ast> Analyzer<'ast> {
 
     /// Check if a method mutates the object
     fn is_mutating_method(&self, method: &str) -> bool {
+        // THE WINDJAMMER WAY: Comprehensive mutation detection
+        // Methods ending in _mut (values_mut, iter_mut, get_mut, etc.) are always mutating
+        if method.ends_with("_mut") {
+            return true;
+        }
+        // Methods starting with set_ are almost always mutating (setters)
+        if method.starts_with("set_") {
+            return true;
+        }
         matches!(
             method,
             "push"
@@ -3220,12 +3314,28 @@ impl<'ast> Analyzer<'ast> {
                 | "remove"
                 | "insert"
                 | "append"
-                | "get_mut"
+                | "extend"
+                | "drain"
+                | "truncate"
+                | "resize"
+                | "swap_remove"
+                | "retain"
+                | "sort"
+                | "sort_by"
+                | "sort_by_key"
+                | "sort_unstable"
+                | "sort_unstable_by"
+                | "dedup"
+                | "reverse"
+                | "swap"
                 | "allocate"
                 | "free"
                 | "update"
                 | "play"
                 | "reset"
+                | "set"
+                | "fill"
+                | "normalize"
         )
     }
 
@@ -3316,9 +3426,16 @@ impl<'ast> Analyzer<'ast> {
                             .any(|s| self.statement_calls_mutating_self_methods(s))
                     })
             }
-            Statement::While { body, .. } | Statement::For { body, .. } => body
+            Statement::While { body, .. } => body
                 .iter()
                 .any(|s| self.statement_calls_mutating_self_methods(s)),
+            Statement::For { iterable, body, .. } => {
+                // Check iterable for mutating self method calls too
+                self.expression_calls_mutating_self_methods(iterable)
+                    || body
+                        .iter()
+                        .any(|s| self.statement_calls_mutating_self_methods(s))
+            }
             _ => false,
         }
     }
@@ -3326,7 +3443,12 @@ impl<'ast> Analyzer<'ast> {
     /// Check if expression calls methods on self that require &mut self
     fn expression_calls_mutating_self_methods(&self, expr: &Expression) -> bool {
         match expr {
-            Expression::MethodCall { object, method, .. } => {
+            Expression::MethodCall {
+                object,
+                method,
+                arguments,
+                ..
+            } => {
                 // Check if calling a method on self (not self.field, just self)
                 if let Expression::Identifier { name, .. } = &**object {
                     if name == "self" {
@@ -3348,11 +3470,63 @@ impl<'ast> Analyzer<'ast> {
                         }
                     }
                 }
+
+                // TDD FIX: Cross-type mutation propagation via self.field.method()
+                //
+                // When we see self.field.method(), and method is a known mutating method,
+                // then self needs &mut because mutating a field's data requires mutable
+                // access to self. Example:
+                //   self.heightmap.set(x, y, val)  ->  heightmap.set() mutates heightmap
+                //   -> self.heightmap needs &mut -> self needs &mut
+                //
+                // Also handles deeper chains like self.field.subfield.method()
+                if self.expression_is_self_field_mutating_method_call(object, method) {
+                    return true;
+                }
+
+                // Recurse into arguments to find nested mutation patterns
+                for (_, arg) in arguments {
+                    if self.expression_calls_mutating_self_methods(arg) {
+                        return true;
+                    }
+                }
+
                 false
             }
             Expression::Block { statements, .. } => statements
                 .iter()
                 .any(|s| self.statement_calls_mutating_self_methods(s)),
+            _ => false,
+        }
+    }
+
+    /// Check if object.method() is a self.field[.subfield...].method() pattern
+    /// where method is a known mutating method. This enables cross-type mutation
+    /// propagation: if self.field calls a mutating method, self needs &mut.
+    fn expression_is_self_field_mutating_method_call(
+        &self,
+        object: &Expression,
+        method: &str,
+    ) -> bool {
+        // Check if the object traces back to self through field accesses
+        if self.expression_traces_to_self(object) && self.is_mutating_method(method) {
+            return true;
+        }
+        false
+    }
+
+    /// Check if an expression traces back to `self` through a chain of field accesses.
+    /// Returns true for: self.field, self.field.subfield, etc.
+    fn expression_traces_to_self(&self, expr: &Expression) -> bool {
+        match expr {
+            Expression::FieldAccess { object, .. } => {
+                if let Expression::Identifier { name, .. } = &**object {
+                    name == "self"
+                } else {
+                    // Recurse: self.a.b.c → check self.a.b → check self.a → check self
+                    self.expression_traces_to_self(object)
+                }
+            }
             _ => false,
         }
     }
@@ -3385,8 +3559,14 @@ impl<'ast> Analyzer<'ast> {
                         block.iter().any(|s| self.statement_modifies_self_fields(s))
                     })
             }
-            Statement::While { body, .. } | Statement::For { body, .. } => {
+            Statement::While { body, .. } => {
                 body.iter().any(|s| self.statement_modifies_self_fields(s))
+            }
+            Statement::For { iterable, body, .. } => {
+                // THE WINDJAMMER WAY: Check BOTH the iterable AND the body!
+                // `for x in self.field.values_mut()` requires &mut self
+                self.expression_mutates_self_fields(iterable)
+                    || body.iter().any(|s| self.statement_modifies_self_fields(s))
             }
             Statement::Match { value, arms, .. } => {
                 // THE WINDJAMMER WAY: Check match value for mutations!
@@ -3467,6 +3647,14 @@ impl<'ast> Analyzer<'ast> {
                 }
                 false
             }
+            // TDD FIX: Detect `&mut self.field` as a mutation of self
+            // This is used in patterns like `for value in &mut self.data`
+            // which requires &mut self
+            Expression::Unary {
+                op: crate::parser::UnaryOp::MutRef,
+                operand,
+                ..
+            } => self.expression_is_self_field_access(operand),
             _ => false,
         }
     }

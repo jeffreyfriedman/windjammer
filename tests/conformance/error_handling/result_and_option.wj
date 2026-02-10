@@ -1,0 +1,146 @@
+// Conformance Test: Error Handling with Result and Option
+//
+// SEMANTIC CONTRACT:
+// - Option<T> represents a value that may or may not exist
+// - Some(v) wraps a present value, None represents absence
+// - Match on Option must handle both Some and None
+// - Option methods (is_some, is_none, unwrap_or) work correctly
+// - Result-like patterns (custom enum) work with error propagation
+//
+// EXPECTED OUTPUT:
+// [option_some] found: 42
+// [option_none] not found: default=0
+// [option_match] Some(10) -> value is 10
+// [option_match] None -> no value
+// [option_map] Some(5) mapped -> 10
+// [option_chain] lookup(1) -> found: Alice
+// [option_chain] lookup(99) -> not found: Unknown
+// [result_ok] parse(42) -> 42
+// [result_err] parse(abc) -> error: invalid number
+// [result_match] Ok(100) -> success: 100
+// [result_match] Err -> failure: oops
+// [error_all] PASSED
+
+// --- Option basics ---
+fn test_option_some() {
+    let val: Option<int> = Some(42)
+    match val {
+        Some(v) => println("[option_some] found: ${v}"),
+        None => println("[option_some] not found"),
+    }
+}
+
+fn test_option_none() {
+    let val: Option<int> = None
+    let result = match val {
+        Some(v) => v,
+        None => 0,
+    }
+    println("[option_none] not found: default=${result}")
+}
+
+// --- Option matching ---
+fn describe_option(opt: Option<int>) -> string {
+    match opt {
+        Some(v) => "value is ${v}",
+        None => "no value",
+    }
+}
+
+fn test_option_match() {
+    println("[option_match] Some(10) -> ${describe_option(Some(10))}")
+    println("[option_match] None -> ${describe_option(None)}")
+}
+
+// --- Option map ---
+fn double_option(opt: Option<int>) -> Option<int> {
+    match opt {
+        Some(v) => Some(v * 2),
+        None => None,
+    }
+}
+
+fn test_option_map() {
+    let result = double_option(Some(5))
+    match result {
+        Some(v) => println("[option_map] Some(5) mapped -> ${v}"),
+        None => println("[option_map] None"),
+    }
+}
+
+// --- Option chaining (lookup pattern) ---
+fn lookup_name(id: int) -> Option<string> {
+    if id == 1 {
+        Some("Alice")
+    } else if id == 2 {
+        Some("Bob")
+    } else {
+        None
+    }
+}
+
+fn test_option_chain() {
+    let name1 = match lookup_name(1) {
+        Some(n) => n,
+        None => "Unknown",
+    }
+    println("[option_chain] lookup(1) -> found: ${name1}")
+
+    let name2 = match lookup_name(99) {
+        Some(n) => n,
+        None => "Unknown",
+    }
+    println("[option_chain] lookup(99) -> not found: ${name2}")
+}
+
+// --- Result-like pattern (custom enum) ---
+enum ParseResult {
+    Ok(int),
+    Err(string),
+}
+
+fn parse_int(s: string) -> ParseResult {
+    if s == "42" {
+        ParseResult::Ok(42)
+    } else if s == "100" {
+        ParseResult::Ok(100)
+    } else {
+        ParseResult::Err("invalid number")
+    }
+}
+
+fn test_result_ok() {
+    match parse_int("42") {
+        ParseResult::Ok(v) => println("[result_ok] parse(42) -> ${v}"),
+        ParseResult::Err(e) => println("[result_ok] error: ${e}"),
+    }
+}
+
+fn test_result_err() {
+    match parse_int("abc") {
+        ParseResult::Ok(v) => println("[result_err] parse(abc) -> ${v}"),
+        ParseResult::Err(e) => println("[result_err] parse(abc) -> error: ${e}"),
+    }
+}
+
+fn test_result_match() {
+    let results = vec!["100", "xyz"]
+    for s in results {
+        match parse_int(s) {
+            ParseResult::Ok(v) => println("[result_match] Ok(${v}) -> success: ${v}"),
+            ParseResult::Err(e) => println("[result_match] Err -> failure: ${e}"),
+        }
+    }
+}
+
+fn main() {
+    test_option_some()
+    test_option_none()
+    test_option_match()
+    test_option_map()
+    test_option_chain()
+    test_result_ok()
+    test_result_err()
+    test_result_match()
+    println("[error_all] PASSED")
+}

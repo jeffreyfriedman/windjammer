@@ -470,6 +470,7 @@ fn try_optimize_vec_to_smallvec<'ast>(
                             name: "smallvec".to_string(),
                             args: args.clone(),
                             delimiter: MacroDelimiter::Brackets,
+                            is_repeat: false, // smallvec optimization doesn't use repeat syntax
                             location: None,
                         },
                     )
@@ -518,6 +519,7 @@ mod tests {
                                 }),
                             ],
                             delimiter: MacroDelimiter::Brackets,
+                            is_repeat: false,
                             location: None,
                         }),
                         else_block: None,
@@ -573,6 +575,7 @@ mod tests {
                                     location: None,
                                 })],
                                 delimiter: MacroDelimiter::Brackets,
+                                is_repeat: false,
                                 location: None,
                             }),
                             else_block: None,

@@ -1,0 +1,126 @@
+// Conformance Test: Vec Operations
+//
+// SEMANTIC CONTRACT:
+// - Vec is a dynamically-sized array
+// - vec![] creates a new vector (empty or with elements)
+// - push() adds to the end
+// - pop() removes from the end (returns Option)
+// - len() returns the count of elements
+// - Indexing with [] accesses elements
+// - Iteration with for-in visits each element
+// - is_empty() checks for zero length
+//
+// EXPECTED OUTPUT:
+// [vec_create] empty len=0
+// [vec_create] with elements len=3
+// [vec_create] elements: 10 20 30
+// [vec_push] after push: len=4
+// [vec_push] last: 40
+// [vec_pop] popped: 30
+// [vec_pop] after pop: len=2
+// [vec_index] v[0]=10, v[1]=20, v[2]=30
+// [vec_iterate] sum=60
+// [vec_empty] is_empty before: true
+// [vec_empty] is_empty after push: false
+// [vec_nested] matrix[0][0]=1, matrix[1][1]=5, matrix[2][2]=9
+// [vec_build] built: 0 1 4 9 16
+// [vec_all] PASSED
+
+// --- Creation ---
+fn test_vec_create() {
+    let empty: Vec<int> = vec![]
+    println("[vec_create] empty len=${empty.len()}")
+
+    let v = vec![10, 20, 30]
+    println("[vec_create] with elements len=${v.len()}")
+
+    let mut elems = ""
+    for item in v {
+        if elems.len() > 0 {
+            elems = elems + " "
+        }
+        elems = elems + "${item}"
+    }
+    println("[vec_create] elements: ${elems}")
+}
+
+// --- Push ---
+fn test_vec_push() {
+    let mut v = vec![10, 20, 30]
+    v.push(40)
+    println("[vec_push] after push: len=${v.len()}")
+    println("[vec_push] last: ${v[3]}")
+}
+
+// --- Pop ---
+fn test_vec_pop() {
+    let mut v = vec![10, 20, 30]
+    let popped = v.pop()
+    match popped {
+        Some(val) => println("[vec_pop] popped: ${val}"),
+        None => println("[vec_pop] empty!"),
+    }
+    println("[vec_pop] after pop: len=${v.len()}")
+}
+
+// --- Indexing ---
+fn test_vec_index() {
+    let mut v = vec![10, 20, 30]
+    println("[vec_index] v[0]=${v[0]}, v[1]=${v[1]}, v[2]=${v[2]}")
+}
+
+// --- Iteration ---
+fn test_vec_iterate() {
+    let v = vec![10, 20, 30]
+    let mut sum = 0
+    for item in v {
+        sum += item
+    }
+    println("[vec_iterate] sum=${sum}")
+}
+
+// --- Empty check ---
+fn test_vec_empty() {
+    let mut v: Vec<int> = vec![]
+    println("[vec_empty] is_empty before: ${v.is_empty()}")
+    v.push(1)
+    println("[vec_empty] is_empty after push: ${v.is_empty()}")
+}
+
+// --- Nested vecs ---
+fn test_vec_nested() {
+    let mut matrix = vec![
+        vec![1, 2, 3],
+        vec![4, 5, 6],
+        vec![7, 8, 9],
+    ]
+    println("[vec_nested] matrix[0][0]=${matrix[0][0]}, matrix[1][1]=${matrix[1][1]}, matrix[2][2]=${matrix[2][2]}")
+}
+
+// --- Building a vec in a loop ---
+fn test_vec_build() {
+    let mut squares: Vec<int> = vec![]
+    for i in 0..5 {
+        squares.push(i * i)
+    }
+    let mut result = ""
+    for s in squares {
+        if result.len() > 0 {
+            result = result + " "
+        }
+        result = result + "${s}"
+    }
+    println("[vec_build] built: ${result}")
+}
+
+fn main() {
+    test_vec_create()
+    test_vec_push()
+    test_vec_pop()
+    test_vec_index()
+    test_vec_iterate()
+    test_vec_empty()
+    test_vec_nested()
+    test_vec_build()
+    println("[vec_all] PASSED")
+}

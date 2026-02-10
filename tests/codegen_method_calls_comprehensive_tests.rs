@@ -8,12 +8,17 @@
 //! - Method chaining
 
 use std::fs;
+use std::path::PathBuf;
 use std::process::Command;
 use tempfile::TempDir;
 
 // ============================================================================
 // HELPER FUNCTIONS
 // ============================================================================
+
+fn get_wj_compiler() -> PathBuf {
+    PathBuf::from(env!("CARGO_BIN_EXE_wj"))
+}
 
 fn compile_and_get_rust(code: &str) -> Result<String, String> {
     let temp_dir = TempDir::new().expect("Failed to create temp dir");
@@ -23,18 +28,14 @@ fn compile_and_get_rust(code: &str) -> Result<String, String> {
     fs::write(&wj_path, code).expect("Failed to write test file");
     fs::create_dir_all(&out_dir).expect("Failed to create output dir");
 
-    let output = Command::new("cargo")
+    let output = Command::new(get_wj_compiler())
         .args([
-            "run",
-            "--release",
-            "--",
             "build",
             wj_path.to_str().unwrap(),
             "-o",
             out_dir.to_str().unwrap(),
             "--no-cargo",
         ])
-        .current_dir(env!("CARGO_MANIFEST_DIR"))
         .output()
         .expect("Failed to run compiler");
 

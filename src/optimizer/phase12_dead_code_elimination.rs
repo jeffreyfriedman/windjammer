@@ -791,6 +791,7 @@ fn eliminate_dead_code_in_expression<'a: 'ast, 'ast>(
             name,
             args,
             delimiter,
+            is_repeat,
             location,
         } => optimizer.alloc_expr(unsafe {
             std::mem::transmute::<Expression<'_>, Expression<'_>>(Expression::MacroInvocation {
@@ -800,6 +801,7 @@ fn eliminate_dead_code_in_expression<'a: 'ast, 'ast>(
                     .map(|a| eliminate_dead_code_in_expression(a, optimizer))
                     .collect(),
                 delimiter: *delimiter,
+                is_repeat: *is_repeat,
                 location: location.clone(),
             })
         }),
@@ -894,6 +896,7 @@ mod tests {
                                     location: None,
                                 })],
                                 delimiter: crate::parser::MacroDelimiter::Parens,
+                                is_repeat: false,
                                 location: None,
                             }),
                             location: None,

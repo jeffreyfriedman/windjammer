@@ -260,6 +260,7 @@ fn test_find_definition_priority() {
 }
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_references_performance() {
     let mut db = WindjammerDatabase::new();
 

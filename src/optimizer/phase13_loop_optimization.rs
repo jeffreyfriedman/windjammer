@@ -613,6 +613,7 @@ fn optimize_loops_in_expression<'a: 'ast, 'ast>(
             name,
             args,
             delimiter,
+            is_repeat,
             location,
         } => optimizer.alloc_expr(unsafe {
             std::mem::transmute::<Expression<'_>, Expression<'_>>(Expression::MacroInvocation {
@@ -622,6 +623,7 @@ fn optimize_loops_in_expression<'a: 'ast, 'ast>(
                     .map(|a| optimize_loops_in_expression(a, config, stats, optimizer))
                     .collect(),
                 delimiter: *delimiter,
+                is_repeat: *is_repeat,
                 location: location.clone(),
             })
         }),
@@ -995,6 +997,7 @@ mod tests {
                                     location: None,
                                 })],
                                 delimiter: crate::parser::MacroDelimiter::Parens,
+                                is_repeat: false,
                                 location: None,
                             }),
                             location: None,

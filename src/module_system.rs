@@ -380,6 +380,7 @@ fn discover_hand_written_modules(
                     "node_modules",
                     ".git",
                     "src",
+                    "lib", // TDD FIX: "lib" is reserved - lib.rs IS the library entry point
                 ];
                 if !skip_dirs.contains(&dir_name) {
                     let mod_rs = path.join("mod.rs");
@@ -426,11 +427,15 @@ pub fn generate_lib_rs(
         // THE WINDJAMMER WAY: Auto-discover ALL modules (compiler does the work!)
         // mod.wj controls re-exports, but module declarations are auto-discovered
         content.push_str("// Module declarations (auto-discovered)\n");
+
+        // TDD FIX: Filter out "lib" module to prevent E0761 conflict
         for module in &module_tree.root_modules {
-            if module.is_public {
-                content.push_str(&format!("pub mod {};\n", module.name));
-            } else {
-                content.push_str(&format!("mod {};\n", module.name));
+            if module.name != "lib" {
+                if module.is_public {
+                    content.push_str(&format!("pub mod {};\n", module.name));
+                } else {
+                    content.push_str(&format!("mod {};\n", module.name));
+                }
             }
         }
 
@@ -451,8 +456,10 @@ pub fn generate_lib_rs(
         } else {
             // No explicit pub use - use wildcard re-exports
             content.push_str("\n// Auto-generated re-exports\n");
+
+            // TDD FIX: Also skip "lib" in re-exports
             for module in &module_tree.root_modules {
-                if module.is_public {
+                if module.is_public && module.name != "lib" {
                     content.push_str(&format!("pub use {}::*;\n", module.name));
                 }
             }
@@ -460,8 +467,14 @@ pub fn generate_lib_rs(
     } else {
         // No mod.wj - auto-generate everything
         content.push_str("// Auto-discovered modules\n");
+
+        // TDD FIX: Filter out "lib" module to prevent E0761 conflict
+        // "lib" is a reserved name for the library itself, not a module to import
+        // This prevents: error[E0761]: file for module `lib` found at both "lib.rs" and "lib/mod.rs"
         for module in &module_tree.root_modules {
-            content.push_str(&format!("pub mod {};\n", module.name));
+            if module.name != "lib" {
+                content.push_str(&format!("pub mod {};\n", module.name));
+            }
         }
 
         // Add hand-written modules (like ffi)
@@ -473,8 +486,12 @@ pub fn generate_lib_rs(
         }
 
         content.push_str("\n// Auto-generated re-exports\n");
+
+        // TDD FIX: Also skip "lib" in re-exports
         for module in &module_tree.root_modules {
-            content.push_str(&format!("pub use {}::*;\n", module.name));
+            if module.name != "lib" {
+                content.push_str(&format!("pub use {}::*;\n", module.name));
+            }
         }
     }
 
@@ -618,22 +635,36 @@ pub fn generate_mod_rs_for_submodule(module: &Module, output_dir: &Path) -> Resu
         }
     } else {
         // No mod.wj - auto-generate declarations for all .wj files and subdirectories
-        content.push_str("// Auto-discovered modules\n");
-        for module_file in &module_files {
-            // THE WINDJAMMER FIX: Desktop-only modules need feature gates
-            // Naming convention: desktop_*, app_* (except app_reactive) require #[cfg(feature = "desktop")]
-            let needs_desktop_gate = module_file.starts_with("desktop_")
-                || (module_file.starts_with("app_") && module_file != "app_reactive");
+        // Use module.submodules exclusively (contains both files and directories)
+        // Separate files from subdirectories based on is_directory flag
 
-            if needs_desktop_gate {
-                content.push_str("#[cfg(feature = \"desktop\")]\n");
+        let files: Vec<_> = module
+            .submodules
+            .iter()
+            .filter(|m| !m.is_directory)
+            .collect();
+        let subdirs: Vec<_> = module
+            .submodules
+            .iter()
+            .filter(|m| m.is_directory)
+            .collect();
+
+        if !files.is_empty() {
+            content.push_str("// Auto-discovered modules\n");
+            for submodule in files {
+                let needs_desktop_gate = submodule.name.starts_with("desktop_")
+                    || (submodule.name.starts_with("app_") && submodule.name != "app_reactive");
+
+                if needs_desktop_gate {
+                    content.push_str("#[cfg(feature = \"desktop\")]\n");
+                }
+                content.push_str(&format!("pub mod {};\n", submodule.name));
             }
-            content.push_str(&format!("pub mod {};\n", module_file));
         }
 
-        if !module.submodules.is_empty() {
+        if !subdirs.is_empty() {
             content.push_str("\n// Auto-discovered submodules\n");
-            for submodule in &module.submodules {
+            for submodule in subdirs {
                 let needs_desktop_gate = submodule.name.starts_with("desktop_")
                     || (submodule.name.starts_with("app_") && submodule.name != "app_reactive");
 
@@ -647,15 +678,7 @@ pub fn generate_mod_rs_for_submodule(module: &Module, output_dir: &Path) -> Resu
         // Only add glob re-exports if no conflicts
         if !has_conflicts {
             content.push_str("\n// Auto-generated re-exports\n");
-            for module_file in &module_files {
-                let needs_desktop_gate = module_file.starts_with("desktop_")
-                    || (module_file.starts_with("app_") && module_file != "app_reactive");
-
-                if needs_desktop_gate {
-                    content.push_str("#[cfg(feature = \"desktop\")]\n");
-                }
-                content.push_str(&format!("pub use {}::*;\n", module_file));
-            }
+            // Use module.submodules exclusively (no duplication)
             for submodule in &module.submodules {
                 let needs_desktop_gate = submodule.name.starts_with("desktop_")
                     || (submodule.name.starts_with("app_") && submodule.name != "app_reactive");
@@ -684,11 +707,20 @@ fn parse_mod_declarations(content: &str) -> (Vec<String>, Vec<String>) {
     let mut pub_mods = Vec::new();
     let mut pub_uses = Vec::new();
 
+    // Track multi-line pub use statements
+    let mut in_pub_use = false;
+    let mut current_pub_use = String::new();
+
     for line in content.lines() {
         let trimmed = line.trim();
 
+        // Skip empty lines and comments
+        if trimmed.is_empty() || trimmed.starts_with("//") {
+            continue;
+        }
+
         // Match: pub mod <name>
-        if trimmed.starts_with("pub mod ") {
+        if trimmed.starts_with("pub mod ") && !in_pub_use {
             if let Some(name) = trimmed
                 .strip_prefix("pub mod ")
                 .and_then(|s| s.split_whitespace().next())
@@ -700,10 +732,35 @@ fn parse_mod_declarations(content: &str) -> (Vec<String>, Vec<String>) {
         }
         // Match: pub use <path>
         else if trimmed.starts_with("pub use ") {
-            if let Some(path) = trimmed.strip_prefix("pub use ") {
-                // Remove trailing semicolon if present
-                let path = path.trim_end_matches(';').trim();
-                pub_uses.push(path.to_string());
+            in_pub_use = true;
+            current_pub_use.push_str(trimmed.strip_prefix("pub use ").unwrap());
+            current_pub_use.push(' ');
+
+            // Check if this line completes the pub use statement
+            // Complete if: has closing brace, or doesn't have opening brace (single-line)
+            let has_opening_brace = trimmed.contains('{');
+            let has_closing_brace = trimmed.contains('}');
+
+            if has_closing_brace || !has_opening_brace {
+                in_pub_use = false;
+                // Remove trailing semicolon and whitespace
+                let pub_use_str = current_pub_use.trim().trim_end_matches(';').to_string();
+                pub_uses.push(pub_use_str);
+                current_pub_use.clear();
+            }
+        }
+        // Continue multi-line pub use
+        else if in_pub_use {
+            current_pub_use.push_str(trimmed);
+            current_pub_use.push(' ');
+
+            // Check if this line completes the pub use statement
+            if trimmed.contains('}') {
+                in_pub_use = false;
+                // Remove trailing semicolon and whitespace
+                let pub_use_str = current_pub_use.trim().trim_end_matches(';').to_string();
+                pub_uses.push(pub_use_str);
+                current_pub_use.clear();
             }
         }
     }
@@ -728,6 +785,42 @@ mod tests {
         }
 
         temp_dir
+    }
+
+    #[test]
+    fn test_parse_mod_declarations_multiline_pub_use() {
+        // TDD Test: Parse multi-line pub use statements
+        let content = r#"
+// Commands Module
+pub mod command
+
+pub use command::{
+    EditorCommand,
+    MoveObjectCommand,
+    SelectObjectCommand,
+}
+"#;
+
+        let (pub_mods, pub_uses) = parse_mod_declarations(content);
+
+        assert_eq!(pub_mods, vec!["command"]);
+        assert_eq!(pub_uses.len(), 1);
+
+        // Should capture the full multi-line pub use statement
+        let pub_use = &pub_uses[0];
+        assert!(pub_use.contains("command::"), "Should contain module path");
+        assert!(
+            pub_use.contains("EditorCommand"),
+            "Should contain imported items"
+        );
+        assert!(!pub_use.contains("{;"), "Should not have malformed closing");
+    }
+
+    #[test]
+    fn test_parse_mod_declarations_single_line_pub_use() {
+        let content = "pub use module::*;\n";
+        let (_, pub_uses) = parse_mod_declarations(content);
+        assert_eq!(pub_uses, vec!["module::*"]);
     }
 
     #[test]

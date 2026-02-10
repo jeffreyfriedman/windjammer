@@ -39,6 +39,7 @@ fn compile_and_get_generated(code: &str) -> (bool, String, String) {
 }
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_self_field_in_binary_op_should_borrow() {
     // Use a non-Copy type (has String field) to avoid Copy type special casing
     let code = r#"
