@@ -89,7 +89,7 @@ impl RoomManager {
             return room.clone()
         }
         
-        let room = Room::new(room_id.clone(), room_name)
+        let mut room = Room::new(room_id.clone(), room_name)
         rooms.insert(room_id, room.clone())
         room
     }

@@ -339,6 +339,7 @@ pub enum Expression<'ast> {
         name: String,
         args: Vec<&'ast Expression<'ast>>,
         delimiter: MacroDelimiter, // (), [], or {}
+        is_repeat: bool,           // true for vec![x; n], false for vec![x, y]
         location: SourceLocation,
     },
     TryOp {
