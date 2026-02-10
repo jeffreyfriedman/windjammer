@@ -9,6 +9,7 @@ use std::process::Command;
 use tempfile::TempDir;
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_if_let_in_return_position() {
     let code = r#"
 pub fn get_value(opt: Option<i32>) -> i32 {

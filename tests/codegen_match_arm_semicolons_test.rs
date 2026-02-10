@@ -12,6 +12,7 @@ use std::process::Command;
 use tempfile::TempDir;
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_match_arm_statement_semicolons() {
     let code = r#"
 pub fn apply_damage(damage_type: DamageType, amount: i32) {

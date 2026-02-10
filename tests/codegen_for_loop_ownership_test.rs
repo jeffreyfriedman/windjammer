@@ -10,6 +10,7 @@ use std::process::Command;
 use tempfile::TempDir;
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_vec_param_in_for_loop_stays_owned() {
     let code = r#"
 pub fn process_items(items: Vec<string>) {
@@ -86,6 +87,7 @@ pub fn process_items(items: Vec<string>) {
 }
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_vec_tuple_param_in_for_loop_stays_owned() {
     let code = r#"
 pub fn process_pairs(pairs: Vec<(string, string)>) {

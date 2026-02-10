@@ -9,6 +9,7 @@ use std::fs;
 use std::path::PathBuf;
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_test_cases_decorator_parses() {
     // Create a minimal test file with @test_cases decorator
     let test_dir = std::env::temp_dir().join(format!(
@@ -66,6 +67,7 @@ fn test_capacity(capacity: i32, expected: i32) {
 }
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_simple_test_decorator_works() {
     // Create a minimal test file with @test decorator (should work)
     let test_dir = std::env::temp_dir().join(format!(

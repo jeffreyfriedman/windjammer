@@ -12,6 +12,7 @@ fn get_wj_compiler() -> PathBuf {
 }
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_return_some_ref_no_clone() {
     let source = r#"
 struct Squad {
@@ -77,6 +78,7 @@ impl Manager {
 }
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_return_some_ref_mut_no_clone() {
     let source = r#"
 struct Squad {

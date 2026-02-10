@@ -27,6 +27,7 @@ use std::process::Command;
 use tempfile::TempDir;
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_i32_method_arg_no_ref() {
     let source = r#"
 struct Stack {
@@ -85,6 +86,7 @@ pub fn test() {
 }
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_i32_method_arg_if_let() {
     let source = r#"
 struct Stack {
@@ -146,6 +148,7 @@ pub fn test() {
 }
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_bool_method_arg_no_ref() {
     let source = r#"
 struct Config {
@@ -200,6 +203,7 @@ pub fn test() {
 }
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_f32_method_arg_no_ref() {
     let source = r#"
 struct Transform {

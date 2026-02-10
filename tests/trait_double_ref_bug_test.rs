@@ -7,6 +7,7 @@
 use std::process::Command;
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_trait_explicit_ref_not_doubled() {
     let temp_dir = tempfile::tempdir().expect("Failed to create temp dir");
     let output_dir = temp_dir.path();

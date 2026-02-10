@@ -14,6 +14,7 @@ use std::fs;
 use std::path::PathBuf;
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_requires_decorator_with_expression() {
     // Create a test file with @requires containing an expression
     let test_dir = std::env::temp_dir().join(format!(
@@ -73,6 +74,7 @@ fn main() {
 }
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_ensures_decorator_with_expression() {
     let test_dir = std::env::temp_dir().join(format!(
         "wj_ensures_{}_{}",

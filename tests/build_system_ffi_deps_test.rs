@@ -9,6 +9,7 @@ use std::fs;
 use tempfile::TempDir;
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_build_system_propagates_ffi_dependencies() {
     // Create a temp directory for our test project
     let temp_dir = TempDir::new().unwrap();
@@ -123,6 +124,7 @@ rapier3d = "0.17"
 }
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_build_system_without_ffi_still_works() {
     // Create a temp directory for a simple project WITHOUT FFI
     let temp_dir = TempDir::new().unwrap();
