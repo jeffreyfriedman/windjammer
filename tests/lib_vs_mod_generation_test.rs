@@ -5,6 +5,7 @@ use std::fs;
 use tempfile::TempDir;
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_generates_mod_rs_for_subdirectory_output() {
     // When generating into a subdirectory (like src/components/generated),
     // should generate mod.rs, not lib.rs
@@ -66,6 +67,7 @@ fn test_generates_mod_rs_for_subdirectory_output() {
 }
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_generates_lib_rs_for_crate_root() {
     // When generating into a crate root (top-level output),
     // should generate lib.rs
@@ -109,6 +111,7 @@ fn test_generates_lib_rs_for_crate_root() {
 }
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_detects_subdirectory_by_parent_src() {
     // When output path contains "src/", it's likely a subdirectory
     let temp_dir = TempDir::new().unwrap();

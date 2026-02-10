@@ -29,9 +29,12 @@ pub fn type_to_rust(type_: &Type) -> String {
             format!("{}::{}", base, assoc_name)
         }
         Type::TraitObject(trait_name) => {
-            // Trait object: dyn Trait -> Box<dyn Trait>
-            // Note: Windjammer automatically boxes trait objects for convenience
-            format!("Box<dyn {}>", trait_name)
+            // THE WINDJAMMER WAY: Trait objects generate just `dyn Trait`.
+            // When used inside Box<>, Vec<>, etc., the container handles the boxing.
+            // When used as a bare type (e.g., field type without Box), the user
+            // should use Box<dyn Trait> explicitly in Windjammer source.
+            // This prevents double-boxing: Box<dyn System> was becoming Box<Box<dyn System>>.
+            format!("dyn {}", trait_name)
         }
         Type::Parameterized(base, args) => {
             // Special case: Signal<T> -> windjammer_ui::reactivity::Signal<T>

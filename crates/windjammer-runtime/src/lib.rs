@@ -4,6 +4,9 @@
 //! When you write `use std::http` in Windjammer, the compiler generates code that calls
 //! functions from this crate.
 
+// Re-export rand for property testing
+pub use rand;
+
 // Platform-specific implementations
 pub mod platform;
 
