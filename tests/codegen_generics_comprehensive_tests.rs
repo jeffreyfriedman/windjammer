@@ -23,18 +23,17 @@ fn compile_and_get_rust(code: &str) -> Result<String, String> {
     fs::write(&wj_path, code).expect("Failed to write test file");
     fs::create_dir_all(&out_dir).expect("Failed to create output dir");
 
-    let output = Command::new("cargo")
+    // TDD FIX: Use pre-compiled binary instead of `cargo run` to avoid race conditions
+    // When tests run in parallel, `cargo run` causes multiple processes to compile
+    // the wj binary simultaneously, leading to flaky test failures.
+    let output = Command::new(env!("CARGO_BIN_EXE_wj"))
         .args([
-            "run",
-            "--release",
-            "--",
             "build",
             wj_path.to_str().unwrap(),
             "-o",
             out_dir.to_str().unwrap(),
             "--no-cargo",
         ])
-        .current_dir(env!("CARGO_MANIFEST_DIR"))
         .output()
         .expect("Failed to run compiler");
 

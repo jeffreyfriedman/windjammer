@@ -164,7 +164,7 @@ impl ErrorStatistics {
             .map(|stats| (stats, stats.count))
             .collect();
 
-        errors.sort_by(|a, b| b.1.cmp(&a.1));
+        errors.sort_by_key(|b| std::cmp::Reverse(b.1));
         errors.truncate(limit);
         errors
     }
@@ -172,7 +172,7 @@ impl ErrorStatistics {
     /// Get the most error-prone files
     pub fn get_top_files(&self, limit: usize) -> Vec<(&PathBuf, usize)> {
         let mut files: Vec<_> = self.errors_by_file.iter().map(|(k, v)| (k, *v)).collect();
-        files.sort_by(|a, b| b.1.cmp(&a.1));
+        files.sort_by_key(|b| std::cmp::Reverse(b.1));
         files.truncate(limit);
         files
     }

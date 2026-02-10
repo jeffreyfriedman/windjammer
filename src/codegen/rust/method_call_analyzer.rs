@@ -25,6 +25,7 @@ pub struct MethodCallAnalyzer;
 
 impl MethodCallAnalyzer {
     /// Determine if we should add & to this argument
+    #[allow(clippy::too_many_arguments)]
     pub fn should_add_ref(
         arg: &Expression,
         arg_str: &str,
@@ -33,6 +34,8 @@ impl MethodCallAnalyzer {
         method_signature: &Option<crate::analyzer::FunctionSignature>,
         usize_variables: &HashSet<String>,
         current_function_params: &[Parameter],
+        borrowed_iterator_vars: &HashSet<String>,
+        arg_count: usize,
     ) -> bool {
         // String literals are ALREADY &str - never add &
         let is_string_literal = matches!(
@@ -43,6 +46,44 @@ impl MethodCallAnalyzer {
             }
         );
         if is_string_literal {
+            return false;
+        }
+
+        // Integer literals are Copy types - never add &
+        // Example: vec.remove(0) should stay as-is, NOT become vec.remove(&0)
+        // Integer literals are passed by value, not by reference
+        let is_integer_literal = matches!(
+            arg,
+            Expression::Literal {
+                value: Literal::Int(_),
+                ..
+            }
+        );
+        if is_integer_literal {
+            return false;
+        }
+
+        // Float literals are also Copy types - never add &
+        let is_float_literal = matches!(
+            arg,
+            Expression::Literal {
+                value: Literal::Float(_),
+                ..
+            }
+        );
+        if is_float_literal {
+            return false;
+        }
+
+        // Boolean literals are Copy types - never add &
+        let is_bool_literal = matches!(
+            arg,
+            Expression::Literal {
+                value: Literal::Bool(_),
+                ..
+            }
+        );
+        if is_bool_literal {
             return false;
         }
 
@@ -60,6 +101,39 @@ impl MethodCallAnalyzer {
             }
         ) {
             return false;
+        }
+
+        // TDD FIX: METHOD CALL EXPRESSIONS SHOULD NEVER BE BORROWED (CHECKED FIRST!)
+        // Method calls like input.is_key_down(Key::W) return owned values (often Copy types)
+        // Don't add & to them, EVEN IF the method signature says the parameter should be borrowed.
+        // Example: paddle.update(delta, input.is_key_down(Key::W), input.is_key_down(Key::S))
+        // should NOT become paddle.update(delta, &input.is_key_down(Key::W), input.is_key_down(Key::S))
+        // This check MUST come before the signature check to prevent over-borrowing Copy types.
+        if matches!(arg, Expression::MethodCall { .. }) {
+            return false;
+        }
+
+        // BORROWED ITERATOR VARIABLES: Variables from borrowed iterators (.keys(), .values(), .iter())
+        // are already borrowed (e.g., &String from .keys()). Don't add another &.
+        // Example: for key in map.keys() { map.get(key) }  // key is already &String
+        if let Expression::Identifier { name, .. } = arg {
+            if borrowed_iterator_vars.contains(name) {
+                return false;
+            }
+        }
+
+        // TDD FIX: PARAMETERS THAT ARE ALREADY REFERENCE TYPES
+        // If a function parameter is declared as &T or &mut T, the identifier
+        // itself is already a reference. Don't add another &.
+        // Example: fn remove(&mut self, key: &str) { self.items.remove(key) }
+        // key is already &str, so we pass it directly, not &key (which would be &&str)
+        if let Expression::Identifier { name, .. } = arg {
+            if current_function_params.iter().any(|param| {
+                param.name == *name
+                    && matches!(&param.type_, Type::Reference(_) | Type::MutableReference(_))
+            }) {
+                return false;
+            }
         }
 
         // SPECIAL CASE: Dereference of Copy types should NOT get &
@@ -89,9 +163,42 @@ impl MethodCallAnalyzer {
             }
         }
 
-        // Check stdlib methods FIRST - these have well-known signatures that must be respected
-        // even if we have a different signature in the registry (might be a user-defined method
-        // with the same name)
+        // BUGFIX: Check method signature FIRST if available!
+        // User-defined methods with names like "remove" should use their actual signature,
+        // not stdlib HashMap assumptions.
+        // Example: ComponentArray<T>.remove(entity: Entity) takes Entity by value, not &Entity
+        if let Some(sig) = method_signature {
+            let sig_param_idx = if sig.has_self_receiver {
+                param_idx + 1
+            } else {
+                param_idx
+            };
+            if let Some(&ownership) = sig.param_ownership.get(sig_param_idx) {
+                if matches!(ownership, OwnershipMode::Borrowed) {
+                    // CRITICAL FIX: For Copy types, the codegen generates `param: Type`
+                    // (not `param: &Type`) even when ownership is Borrowed, because Copy
+                    // types are efficient to pass by value. We must NOT add & at the call
+                    // site, or we'd pass &i32 to a parameter expecting i32.
+                    // Example: fn matches(&self, current_state: i32) — analyzer says Borrowed
+                    // but codegen generates `current_state: i32`, not `current_state: &i32`
+                    //
+                    // TDD FIX: BUT Reference types (&str, &T) are NOT treated as Copy here.
+                    // If param type is &str, the generated code has `pattern: &str`,
+                    // and the caller passing String needs `&text` to auto-deref to &str.
+                    if let Some(param_type) = sig.param_types.get(sig_param_idx) {
+                        if !matches!(param_type, Type::Reference(_) | Type::MutableReference(_))
+                            && Self::is_copy_type_annotation(param_type)
+                        {
+                            return false; // Copy type — pass by value
+                        }
+                    }
+                    return true; // Non-Copy Borrowed type needs &
+                }
+                return false; // Owned or MutBorrowed — don't add &
+            }
+        }
+
+        // No signature available - fall back to stdlib heuristics
         let is_stdlib_method = matches!(
             method,
             "remove"
@@ -105,19 +212,14 @@ impl MethodCallAnalyzer {
         );
 
         if is_stdlib_method {
-            return Self::needs_stdlib_ref(method, arg, usize_variables, current_function_params);
-        }
-
-        // Check signature for non-stdlib methods
-        if let Some(sig) = method_signature {
-            let sig_param_idx = if sig.has_self_receiver {
-                param_idx + 1
-            } else {
-                param_idx
-            };
-            if let Some(&ownership) = sig.param_ownership.get(sig_param_idx) {
-                return matches!(ownership, OwnershipMode::Borrowed);
-            }
+            return Self::needs_stdlib_ref(
+                method,
+                arg,
+                usize_variables,
+                current_function_params,
+                borrowed_iterator_vars,
+                arg_count,
+            );
         }
 
         // Final fallback
@@ -135,12 +237,63 @@ impl MethodCallAnalyzer {
         borrowed_iterator_vars: &HashSet<String>,
         current_function_params: &[Parameter],
         inferred_borrowed_params: &HashSet<String>,
+        current_function_return_type: &Option<Type>,
     ) -> bool {
-        // Special case: push() on borrowed iterator variables
-        if method == "push" {
-            if let Expression::Identifier { name, .. } = arg {
-                if borrowed_iterator_vars.contains(name) && !arg_str.ends_with(".clone()") {
+        // TDD FIX: METHOD CALL EXPRESSIONS NEVER NEED .clone() (CHECKED FIRST!)
+        // Method calls like input.is_key_down(Key::W) return owned values (often Copy types)
+        // They never need .clone(), EVEN IF the method signature says the parameter should be owned.
+        // Example: paddle.update(delta, input.is_key_down(Key::W), input.is_key_down(Key::S))
+        // should NOT become paddle.update(delta, input.is_key_down(Key::W).clone(), ...)
+        // This check MUST come before any signature checks to prevent unnecessary clones.
+        if matches!(arg, Expression::MethodCall { .. }) {
+            return false;
+        }
+
+        // THE WINDJAMMER WAY: Auto-clone borrowed iterator vars when pushing to Vec<T>
+        //
+        // When we have:
+        //   for item in self.items { new_vec.push(item) }
+        //
+        // The compiler adds & automatically, making it:
+        //   for item in &self.items { ... }
+        //
+        // So `item` is &T, but Vec::push() expects T (owned).
+        // We need to automatically insert .clone() in this case.
+        //
+        // EXCEPTION: If the function returns Vec<&T>, don't clone!
+        // Example: fn get_quests(&self) -> Vec<&Quest>
+        // In this case, we want to push &Quest, not Quest.
+
+        // Check if arg is a borrowed iterator variable
+        if let Expression::Identifier { name, .. } = arg {
+            if borrowed_iterator_vars.contains(name) && !arg_str.ends_with(".clone()") {
+                // For push(), check if we're building a Vec<&T>
+                if method == "push" {
+                    // Check if the function returns Vec<&T>
+                    if let Some(Type::Vec(inner_type)) = current_function_return_type {
+                        // Check if the Vec's element type is a reference
+                        if matches!(**inner_type, Type::Reference(_) | Type::MutableReference(_)) {
+                            // Function returns Vec<&T>, so don't clone
+                            return false;
+                        }
+                    }
+
+                    // Not returning Vec<&T>, so clone is needed
                     return true;
+                }
+
+                // For other methods, check the signature
+                if let Some(sig) = method_signature {
+                    let sig_param_idx = if sig.has_self_receiver {
+                        param_idx + 1
+                    } else {
+                        param_idx
+                    };
+                    if let Some(&ownership) = sig.param_ownership.get(sig_param_idx) {
+                        if matches!(ownership, OwnershipMode::Owned) {
+                            return true;
+                        }
+                    }
                 }
             }
         }
@@ -229,6 +382,22 @@ impl MethodCallAnalyzer {
             }
         }
 
+        // TDD FIX: Heuristic fallback for methods without signatures
+        // Common patterns that typically expect owned String for string-like params
+        // - add_*: add_ingredient, add_item, add_member, add_choice, etc.
+        // - set_*: set_name, set_description, set_value, etc.
+        // - new: Constructor pattern often stores owned strings
+        // For first parameter (param_idx 0), these usually expect owned String
+        if param_idx == 0 {
+            if method.starts_with("add_")
+                || method.starts_with("set_")
+                || method == "new"
+                || method.ends_with("_new")
+            {
+                return true;
+            }
+        }
+
         // Final fallback
         false
     }
@@ -263,11 +432,32 @@ impl MethodCallAnalyzer {
                     return true;
                 }
 
-                // Check if it's a usize parameter
-                if current_function_params
-                    .iter()
-                    .any(|p| &p.name == name && matches!(&p.type_, Type::Custom(t) if t == "usize"))
-                {
+                // Check if parameter has a Copy type (integers, floats, bool, char)
+                if current_function_params.iter().any(|p| {
+                    if &p.name == name {
+                        if let Type::Custom(t) = &p.type_ {
+                            return matches!(
+                                t.as_str(),
+                                "i8" | "i16"
+                                    | "i32"
+                                    | "i64"
+                                    | "i128"
+                                    | "isize"
+                                    | "u8"
+                                    | "u16"
+                                    | "u32"
+                                    | "u64"
+                                    | "u128"
+                                    | "usize"
+                                    | "f32"
+                                    | "f64"
+                                    | "bool"
+                                    | "char"
+                            );
+                        }
+                    }
+                    false
+                }) {
                     return true;
                 }
 
@@ -301,6 +491,12 @@ impl MethodCallAnalyzer {
 
     /// Check if a Type annotation is a Copy type
     /// Copy types in Rust: integers, floats, bool, char, and some small tuples
+    /// Public wrapper for is_copy_type_annotation
+    /// Used by the Call expression handler in generator.rs
+    pub fn is_copy_type_annotation_pub(type_: &Type) -> bool {
+        Self::is_copy_type_annotation(type_)
+    }
+
     fn is_copy_type_annotation(type_: &Type) -> bool {
         match type_ {
             Type::Custom(name) => {
@@ -338,29 +534,104 @@ impl MethodCallAnalyzer {
         arg: &Expression,
         usize_variables: &HashSet<String>,
         current_function_params: &[Parameter],
+        borrowed_iterator_vars: &HashSet<String>,
+        arg_count: usize,
     ) -> bool {
-        // Check if argument is already a reference parameter
-        let arg_is_ref_param = if let Expression::Identifier { name, .. } = arg {
-            current_function_params.iter().any(|p| {
+        // Check if argument is already a reference (parameter or iterator variable)
+        let arg_is_already_borrowed = if let Expression::Identifier { name, .. } = arg {
+            // Check if it's a reference parameter
+            let is_ref_param = current_function_params.iter().any(|p| {
                 &p.name == name && matches!(p.ownership, OwnershipHint::Ref | OwnershipHint::Mut)
-            })
+            });
+            // Check if it's from a borrowed iterator (.keys(), .iter(), etc.)
+            let is_borrowed_iter_var = borrowed_iterator_vars.contains(name);
+
+            is_ref_param || is_borrowed_iter_var
         } else {
             false
         };
 
-        if arg_is_ref_param {
+        if arg_is_already_borrowed {
             return false;
         }
 
-        // Check if argument is a Copy type (shouldn't add &)
+        // TDD FIX: Multi-argument methods are NOT stdlib collection methods
+        // HashMap::get, HashMap::remove, Vec::remove, etc. all take exactly 1 argument.
+        // If a method named "get" or "remove" takes 2+ arguments, it's a user-defined method
+        // (e.g., Heightmap::get(x, z)) and we should NOT add & based on stdlib assumptions.
+        if arg_count > 1 && matches!(method, "get" | "get_mut" | "remove" | "contains_key") {
+            return false;
+        }
+
+        // TDD FIX: HashMap/BTreeMap methods that expect &K
+        // IMPORTANT: Check HashMap methods BEFORE the general Copy type check!
+        // HashMap methods like contains_key(&K), get(&K) ALWAYS need &, even for Copy types.
+        // Example: HashMap<i64, String>.contains_key(&user_id) where user_id: i64
+        // BUT: Vec.remove(index) takes usize by value, not &usize!
+        if matches!(method, "remove" | "get" | "contains_key" | "get_mut") {
+            // Special case: Vec.remove(index) where index is usize (Copy type)
+            // We need to distinguish between:
+            // - Vec<T>.remove(index: usize) -> takes by value
+            // - HashMap<K, V>.remove(&key) -> takes by reference
+            //
+            // HEURISTIC: Use parameter name to distinguish:
+            // - "index", "idx", "i" -> likely Vec index -> no borrow
+            // - "id", "key", "entity", "_id", "_key" -> likely HashMap key -> borrow
+            if method == "remove"
+                && Self::is_copy_type(arg, usize_variables, current_function_params)
+            {
+                // Check the argument name to determine if it's a Vec index or HashMap key
+                let arg_name = if let Expression::Identifier { name, .. } = arg {
+                    Some(name.as_str())
+                } else {
+                    None
+                };
+
+                let looks_like_vec_index = arg_name.is_some_and(|name| {
+                    name == "index"
+                        || name == "idx"
+                        || name == "i"
+                        || name.starts_with("index_")
+                        || name.ends_with("_index")
+                        || name.ends_with("_idx")
+                        || name.ends_with("_usize")  // TDD FIX: sparse_idx_usize is a Vec index
+                        || name.contains("_idx_")
+                });
+
+                let looks_like_hashmap_key = arg_name.is_some_and(|name| {
+                    name == "id"
+                        || name == "key"
+                        || name == "entity"
+                        || name.contains("_id")
+                        || name.contains("_key")
+                        || name == "entity_id"
+                        || name == "user_id"
+                        || name == "npc_id"
+                });
+
+                // If it looks like a Vec index, don't add &
+                if looks_like_vec_index {
+                    return false; // Vec.remove(index)
+                }
+
+                // If it looks like a HashMap key, add &
+                if looks_like_hashmap_key {
+                    return true; // HashMap.remove(&entity_id)
+                }
+
+                // Default for .remove() on Copy types: assume Vec index
+                // This is safer because Vec.remove is more common than HashMap.remove
+                return false;
+            }
+            // For all other cases (HashMap methods), add &
+            // This includes Copy types like i64, u32, etc.
+            return true; // Add & for HashMap.get(&key), HashMap.contains_key(&key)
+        }
+
+        // General Copy type check (for non-HashMap methods)
+        // Copy types generally don't need & (passed by value)
         if Self::is_copy_type(arg, usize_variables, current_function_params) {
             return false;
-        }
-
-        // Stdlib method patterns
-        // HashMap/BTreeMap methods that expect &K
-        if matches!(method, "remove" | "get" | "contains_key" | "get_mut") {
-            return true;
         }
 
         // Vec/slice methods that expect &T (not usize index)

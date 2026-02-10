@@ -40,6 +40,7 @@ fn compile_code(code: &str) -> Result<String, String> {
 }
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_println_simple_string() {
     // TDD: println("text") should generate println!("text")
     let code = r#"
@@ -59,6 +60,7 @@ fn test_println_simple_string() {
 }
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_println_with_format() {
     // TDD: println("format {}", var) should generate println!("format {}", var)
     let code = r#"
@@ -78,6 +80,7 @@ fn test_println_with_format() {
 }
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_println_multiple_args() {
     // TDD: println with multiple format arguments
     let code = r#"
@@ -97,6 +100,7 @@ fn test_println_multiple_args() {
 }
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_println_with_string_variable() {
     // TDD: println with String variable
     let code = r#"
@@ -116,6 +120,7 @@ fn test_println_with_string_variable() {
 }
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_println_in_if_statement() {
     // TDD: println inside conditional
     let code = r#"
@@ -145,6 +150,7 @@ fn test_println_in_if_statement() {
 }
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_println_with_expression() {
     // TDD: println with expression as argument
     let code = r#"
@@ -164,6 +170,7 @@ fn test_println_with_expression() {
 }
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_println_with_method_call() {
     // TDD: println with method call result
     let code = r#"
@@ -183,6 +190,7 @@ fn test_println_with_method_call() {
 }
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_println_keeps_existing_macro_syntax() {
     // TDD: println! with ! should stay as-is (backward compatibility)
     let code = r#"

@@ -11,6 +11,7 @@ use std::process::Command;
 use tempfile::TempDir;
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_explicit_string_parameter_stays_owned() {
     let temp_dir = TempDir::new().expect("Failed to create temp dir");
     let output_dir = temp_dir.path();

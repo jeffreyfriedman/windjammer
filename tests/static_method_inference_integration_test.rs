@@ -4,6 +4,7 @@
 use std::process::Command;
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_static_method_inference() {
     // Compile the Windjammer test file
     let output = Command::new(env!("CARGO_BIN_EXE_wj"))

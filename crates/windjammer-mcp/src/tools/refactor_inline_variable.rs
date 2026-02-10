@@ -237,6 +237,7 @@ mod tests {
             name: "println".to_string(),
             args: vec![],
             delimiter: windjammer::parser::MacroDelimiter::Parens,
+            is_repeat: false,
             location: None,
         }));
     }

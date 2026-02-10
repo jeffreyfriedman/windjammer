@@ -1,0 +1,189 @@
+// Conformance Test: Integrated Game Logic
+//
+// This test combines multiple language features in a realistic game scenario.
+// It exercises: structs, methods, enums, pattern matching, mutation, control flow,
+// vectors, string interpolation, and function composition.
+//
+// This is the kind of code a real Windjammer game developer would write.
+// It MUST produce identical output on every backend.
+//
+// EXPECTED OUTPUT:
+// [game] Created player: Hero (HP: 100, ATK: 10)
+// [game] Created 3 enemies
+// [game] --- Round 1 ---
+// [game] Hero attacks Goblin for 10 damage
+// [game] Goblin HP: 20
+// [game] Goblin attacks Hero for 5 damage
+// [game] Hero HP: 95
+// [game] --- Round 2 ---
+// [game] Hero attacks Goblin for 10 damage
+// [game] Goblin HP: 10
+// [game] Goblin attacks Hero for 5 damage
+// [game] Hero HP: 90
+// [game] --- Round 3 ---
+// [game] Hero attacks Goblin for 10 damage
+// [game] Goblin defeated!
+// [game] Hero gains 50 XP (total: 50)
+// [game] --- Round 4 ---
+// [game] Hero attacks Skeleton for 10 damage
+// [game] Skeleton HP: 30
+// [game] Skeleton attacks Hero for 8 damage
+// [game] Hero HP: 82
+// [game] --- Round 5 ---
+// [game] Hero attacks Skeleton for 10 damage
+// [game] Skeleton HP: 20
+// [game] Skeleton attacks Hero for 8 damage
+// [game] Hero HP: 74
+// [game] --- Battle Summary ---
+// [game] Hero: HP=74, XP=50
+// [game] Enemies remaining: 2
+// [game] PASSED
+
+// --- Entity types ---
+struct Stats {
+    hp: int,
+    max_hp: int,
+    attack: int,
+}
+
+impl Stats {
+    fn new(hp: int, attack: int) -> Stats {
+        Stats { hp, max_hp: hp, attack }
+    }
+
+    fn is_alive(&self) -> bool {
+        self.hp > 0
+    }
+
+    fn take_damage(&mut self, amount: int) {
+        self.hp -= amount
+        if self.hp < 0 {
+            self.hp = 0
+        }
+    }
+}
+
+struct Player {
+    name: string,
+    stats: Stats,
+    xp: int,
+}
+
+impl Player {
+    fn new(name: string, hp: int, attack: int) -> Player {
+        Player {
+            name,
+            stats: Stats::new(hp, attack),
+            xp: 0,
+        }
+    }
+
+    fn attack_enemy(&self, enemy: Enemy) -> int {
+        self.stats.attack
+    }
+
+    fn gain_xp(&mut self, amount: int) {
+        self.xp += amount
+    }
+}
+
+enum EnemyType {
+    Goblin,
+    Skeleton,
+    Dragon,
+}
+
+fn enemy_type_name(t: EnemyType) -> string {
+    match t {
+        EnemyType::Goblin => "Goblin",
+        EnemyType::Skeleton => "Skeleton",
+        EnemyType::Dragon => "Dragon",
+    }
+}
+
+fn enemy_xp_reward(t: EnemyType) -> int {
+    match t {
+        EnemyType::Goblin => 50,
+        EnemyType::Skeleton => 75,
+        EnemyType::Dragon => 200,
+    }
+}
+
+struct Enemy {
+    enemy_type: EnemyType,
+    stats: Stats,
+}
+
+impl Enemy {
+    fn new(enemy_type: EnemyType, hp: int, attack: int) -> Enemy {
+        Enemy {
+            enemy_type,
+            stats: Stats::new(hp, attack),
+        }
+    }
+
+    fn name(&self) -> string {
+        enemy_type_name(self.enemy_type)
+    }
+}
+
+// --- Combat system ---
+fn do_combat_round(player: Player, enemy: Enemy, round: int) -> bool {
+    println("[game] --- Round ${round} ---")
+
+    // Player attacks enemy
+    let damage = player.stats.attack
+    enemy.stats.take_damage(damage)
+    println("[game] ${player.name} attacks ${enemy.name()} for ${damage} damage")
+
+    if !enemy.stats.is_alive() {
+        println("[game] ${enemy.name()} defeated!")
+        let xp = enemy_xp_reward(enemy.enemy_type)
+        player.gain_xp(xp)
+        println("[game] ${player.name} gains ${xp} XP (total: ${player.xp})")
+        return true  // Enemy defeated
+    }
+
+    println("[game] ${enemy.name()} HP: ${enemy.stats.hp}")
+
+    // Enemy attacks player
+    let enemy_damage = enemy.stats.attack
+    player.stats.take_damage(enemy_damage)
+    println("[game] ${enemy.name()} attacks ${player.name} for ${enemy_damage} damage")
+    println("[game] ${player.name} HP: ${player.stats.hp}")
+
+    false  // Combat continues
+}
+
+fn main() {
+    // Create player
+    let mut player = Player::new("Hero", 100, 10)
+    println("[game] Created player: ${player.name} (HP: ${player.stats.hp}, ATK: ${player.stats.attack})")
+
+    // Create enemies
+    let mut enemies: Vec<Enemy> = vec![]
+    enemies.push(Enemy::new(EnemyType::Goblin, 30, 5))
+    enemies.push(Enemy::new(EnemyType::Skeleton, 40, 8))
+    enemies.push(Enemy::new(EnemyType::Dragon, 100, 15))
+    println("[game] Created ${enemies.len()} enemies")
+
+    // Battle loop: fight first enemy for 5 rounds max
+    let mut round = 1
+    let mut enemy_idx = 0
+    let max_rounds = 5
+
+    while round <= max_rounds && enemy_idx < enemies.len() {
+        let defeated = do_combat_round(player, enemies[enemy_idx], round)
+        if defeated {
+            enemy_idx += 1
+        }
+        round += 1
+    }
+
+    // Summary
+    println("[game] --- Battle Summary ---")
+    println("[game] Hero: HP=${player.stats.hp}, XP=${player.xp}")
+    let remaining = enemies.len() - enemy_idx
+    println("[game] Enemies remaining: ${remaining}")
+    println("[game] PASSED")
+}

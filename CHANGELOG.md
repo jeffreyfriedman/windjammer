@@ -1,3 +1,49 @@
+## [0.39.9] - 2026-01-08
+### Fixed
+- **Bug #22**: Multi-line `pub use` statement parsing
+  - Module system was incorrectly parsing multi-line `pub use` statements in mod.wj files
+  - Bug: `pub use module::{Item1, Item2}` was generating `pub use module::{;` (malformed syntax)
+  - Root cause: Line-by-line parser didn't accumulate multi-line statements
+  - Fix: Enhanced `parse_mod_declarations()` to track state across lines and properly handle:
+    - Multi-line `pub use` with braces: `pub use module::{...}`
+    - Single-line `pub use` with semicolons: `pub use module::*;`
+    - Single-line `pub use` without semicolons: `pub use module::Item`
+  - **TDD Tests Added**: 2 new tests for multi-line and single-line pub use parsing
+  - **Impact**: Fixes module re-exports in generated code, enables proper library compilation
+
+### Test Framework Improvements
+- **Generic library detection**: Test framework now auto-detects and compiles user libraries
+  - Reads `wj.toml` to find library name and source directory
+  - Compiles `src_wj/` as library dependency for tests
+  - Generates proper Cargo.toml with library dependency
+  - No hardcoded project names - fully generic and reusable
+- **Robust path resolution**: Enhanced `find_windjammer_runtime_path()` with:
+  - 10-level parent directory search
+  - Multiple pattern matching (nested/flat/sibling structures)
+  - Path canonicalization for absolute paths
+  - Handles monorepo and nested project layouts
+
+## [0.39.8] - 2026-01-07
+### Fixed
+- **Bug #21**: Vec.remove() integer literal auto-ref bug
+  - Transpiler was incorrectly adding `&` to integer literals in method arguments
+  - Bug: `vec.remove(0)` was generating `vec.remove(&0)` (type error: expected usize, found &{integer})
+  - Fix: Integer, float, and boolean literals are Copy types and should never get auto-ref'd
+  - Extended literal check to cover all Copy literal types (Int, Float, Bool)
+  - **TDD Tests Added**: `vec_remove_integer_literal_test.rs` (1 test passing)
+  - **Impact**: Fixes method calls with literal arguments for usize parameters
+
+## [0.39.7] - 2026-01-07
+### Fixed
+- **HashMap.get() double-reference bug**: Fixed transpiler adding `&` to already-borrowed iterator variables
+  - Bug: `for key in map.keys() { map.get(key) }` was generating `map.get(&key)` (double-ref)
+  - Fix: Detect borrowed iterator variables (.keys(), .values(), .iter()) and skip auto-ref
+  - Enhanced `is_iterating_over_borrowed()` to recognize iterator methods
+  - **TDD Tests Added**: `hashmap_get_double_ref_test.rs` (3 tests, 2 passing, 1 known issue)
+
+### Known Issues
+- Owned String parameters not getting `&` added for HashMap.get() (pre-existing bug, marked as TODO)
+
 ## [0.39.6] - 2026-01-04
 ### Fixed
 - **Bug #13**: Early return statement parsing

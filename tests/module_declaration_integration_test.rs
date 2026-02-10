@@ -60,6 +60,7 @@ fn compile_wj(source: &str) -> (String, bool) {
 }
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 #[ignore] // TODO: Implement module declaration code generation
 fn test_module_declarations() {
     let source = r#"
@@ -123,6 +124,7 @@ mod helpers;
 }
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 #[ignore] // TODO: Inline modules require recursive analysis - tracked in TODO_MODULE_DECLARATIONS.md
 fn test_inline_module() {
     let source = r#"
