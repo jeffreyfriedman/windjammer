@@ -12,6 +12,7 @@ fn get_wj_compiler() -> PathBuf {
 /// Bug: Passing "literal" to fn(String) requires .to_string(), but shouldn't
 /// Fix: Compiler should auto-convert &str literals to String when needed
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_string_literal_to_string_in_function_call() {
     let source = r#"
 struct Item {
@@ -63,6 +64,7 @@ fn main() {
 }
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_string_literal_in_method_call() {
     let source = r#"
 struct Manager {

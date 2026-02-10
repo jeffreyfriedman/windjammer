@@ -9,6 +9,7 @@ use std::process::Command;
 use tempfile::TempDir;
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_method_calls_use_dot_not_colon_colon() {
     // Create a temp directory
     let temp_dir = TempDir::new().unwrap();
@@ -104,6 +105,7 @@ fn test_other_variable() {
 }
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_method_calls_on_self_fields() {
     // Create a temp directory
     let temp_dir = TempDir::new().unwrap();

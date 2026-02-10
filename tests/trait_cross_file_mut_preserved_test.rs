@@ -9,6 +9,7 @@
 use std::process::Command;
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_cross_file_trait_preserves_explicit_mut() {
     let temp_dir = tempfile::tempdir().expect("Failed to create temp dir");
     let src_wj = temp_dir.path().join("src_wj");

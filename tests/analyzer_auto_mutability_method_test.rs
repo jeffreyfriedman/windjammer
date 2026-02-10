@@ -11,6 +11,7 @@ use std::fs;
 use std::path::PathBuf;
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_auto_mut_on_mutating_method_call() {
     let test_dir = std::env::temp_dir().join(format!(
         "wj_auto_mut_method_{}_{}",
@@ -85,6 +86,7 @@ fn main() {
 }
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_auto_mut_with_multiple_method_calls() {
     let test_dir = std::env::temp_dir().join(format!(
         "wj_auto_mut_methods_{}_{}",
@@ -167,6 +169,7 @@ fn main() {
 }
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_no_mut_when_only_immutable_methods() {
     let test_dir = std::env::temp_dir().join(format!(
         "wj_no_mut_immutable_{}_{}",

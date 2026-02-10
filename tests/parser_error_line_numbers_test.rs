@@ -9,6 +9,7 @@ use std::fs;
 use std::path::PathBuf;
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_parser_error_includes_line_number() {
     // Create a test file with a syntax error on a specific line
     let test_dir = std::env::temp_dir().join(format!(
@@ -73,6 +74,7 @@ fn main() {
 }
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_parser_error_for_assign_in_pattern_context() {
     // Reproduce the specific "Expected pattern, got Assign" error
     let test_dir = std::env::temp_dir().join(format!(

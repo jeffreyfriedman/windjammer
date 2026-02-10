@@ -39,6 +39,7 @@ fn compile_wj(code: &str) -> Result<String, String> {
 }
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_mut_error_message_reassignment() {
     let code = r#"
 fn main() {
@@ -70,6 +71,7 @@ fn main() {
 }
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_mut_explicit_compound_assignment() {
     // Immutable-by-default: users must write `let mut` for mutable bindings
     let code = r#"
@@ -88,6 +90,7 @@ fn main() {
 }
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_mut_explicit_field_mutation() {
     // Immutable-by-default: users must write `let mut` for mutable bindings
     let code = r#"
@@ -111,6 +114,7 @@ fn main() {
 }
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_mut_explicit_method_call() {
     // Immutable-by-default: users must write `let mut` for mutable bindings
     let code = r#"
@@ -130,6 +134,7 @@ fn main() {
 }
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_mut_works_when_declared() {
     let code = r#"
 fn main() {
@@ -149,6 +154,7 @@ fn main() {
 }
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_multiple_mut_errors() {
     let code = r#"
 fn main() {
@@ -175,6 +181,7 @@ fn main() {
 }
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_mut_error_with_source_location() {
     let code = r#"
 fn main() {

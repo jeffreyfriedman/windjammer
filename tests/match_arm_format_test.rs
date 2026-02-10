@@ -40,6 +40,7 @@ fn compile_and_get_generated(code: &str) -> (bool, String, String) {
 }
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_match_with_format_and_literal() {
     let code = r#"
 fn render_label(value: Option<f32>) -> string {

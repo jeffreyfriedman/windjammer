@@ -5,6 +5,7 @@ use std::fs;
 use tempfile::TempDir;
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_module_file_skips_missing_modules() {
     // Create a directory with some .wj files
     let temp_dir = TempDir::new().unwrap();
@@ -62,6 +63,7 @@ fn test_module_file_skips_missing_modules() {
 }
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_generated_rust_files_excluded_from_module_list() {
     // When compiling a directory, generated .rs files should NOT be included in mod.rs
     let temp_dir = TempDir::new().unwrap();
@@ -115,6 +117,7 @@ fn test_generated_rust_files_excluded_from_module_list() {
 }
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_nested_modules_only_declare_existing_files() {
     // Test nested directory structure
     let temp_dir = TempDir::new().unwrap();
@@ -179,6 +182,7 @@ fn test_nested_modules_only_declare_existing_files() {
 }
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_empty_directory_generates_empty_mod_file() {
     // Edge case: directory with no .wj files
     let temp_dir = TempDir::new().unwrap();
@@ -226,6 +230,7 @@ fn test_empty_directory_generates_empty_mod_file() {
 }
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_cargo_toml_excluded_from_module_list() {
     // Ensure Cargo.toml and other non-Rust files aren't declared as modules
     let temp_dir = TempDir::new().unwrap();

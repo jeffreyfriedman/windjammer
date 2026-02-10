@@ -9,6 +9,7 @@ use std::process::Command;
 use tempfile::TempDir;
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_vec_param_assigned_to_field_stays_owned() {
     let code = r#"
 pub struct Node {
@@ -68,6 +69,7 @@ impl Node {
 }
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_owned_param_in_struct_literal_stays_owned() {
     let code = r#"
 pub struct Config {
