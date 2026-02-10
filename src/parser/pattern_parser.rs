@@ -358,7 +358,20 @@ impl Parser {
                     Ok(Pattern::Identifier(qualified_path))
                 }
             }
-            _ => Err(format!("Expected pattern, got {:?}", self.current_token())),
+            _ => {
+                // TDD: Add line number to parser errors for better debugging
+                if let Some(loc) = self.current_location() {
+                    Err(format!(
+                        "Expected pattern, got {:?} at {}:{}:{}",
+                        self.current_token(),
+                        loc.file.display(),
+                        loc.line,
+                        loc.column
+                    ))
+                } else {
+                    Err(format!("Expected pattern, got {:?}", self.current_token()))
+                }
+            }
         }
     }
 

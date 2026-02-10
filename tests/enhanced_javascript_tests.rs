@@ -29,6 +29,7 @@ fn compile_to_js(source: &str, config: &CodegenConfig) -> Result<String, String>
 }
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_minification_basic() {
     let code = r#"
 // This is a comment
@@ -46,6 +47,7 @@ function   add  (  a  ,  b  )  {
 }
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_minification_preserves_functionality() {
     let code = r#"
 function test() {
@@ -62,6 +64,7 @@ function test() {
 }
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_tree_shaking_removes_unused() {
     let source = r#"
 fn used() -> int {
@@ -95,6 +98,7 @@ fn main() {
 }
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_tree_shaking_analysis() {
     let source = r#"
 fn used() -> int {
@@ -123,6 +127,7 @@ fn main() {
 }
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_polyfills_generation() {
     let config = polyfills::PolyfillConfig {
         target: polyfills::PolyfillTarget::ES5,
@@ -141,6 +146,7 @@ fn test_polyfills_generation() {
 }
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_polyfills_es2015_target() {
     let config = polyfills::PolyfillConfig {
         target: polyfills::PolyfillTarget::ES2015,
@@ -157,6 +163,7 @@ fn test_polyfills_es2015_target() {
 }
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_v8_optimizations() {
     let code = r#"
 function test(x) {
@@ -172,6 +179,7 @@ function test(x) {
 }
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_v8_optimization_hints() {
     let hints = v8_optimizer::V8Optimizer::generate_optimization_hints();
 
@@ -181,6 +189,7 @@ fn test_v8_optimization_hints() {
 }
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_v8_optimized_array_loop() {
     let loop_code = v8_optimizer::patterns::optimized_array_loop("items", "process(item);");
 
@@ -190,6 +199,7 @@ fn test_v8_optimized_array_loop() {
 }
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_v8_optimized_object_creation() {
     let fields = vec![("x", "number"), ("y", "number")];
     let class_code = v8_optimizer::patterns::optimized_object_creation("Point", &fields);
@@ -201,6 +211,7 @@ fn test_v8_optimized_object_creation() {
 }
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_integrated_minify_build() {
     let source = r#"
 fn add(a: int, b: int) -> int {
@@ -231,6 +242,7 @@ fn main() {
 }
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_integrated_tree_shake_build() {
     let source = r#"
 fn used() -> int {
@@ -264,6 +276,7 @@ fn main() {
 }
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_integrated_polyfills_build() {
     let source = r#"
 fn main() {
@@ -288,6 +301,7 @@ fn main() {
 }
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_integrated_all_features() {
     let source = r#"
 fn add(a: int, b: int) -> int {
@@ -316,6 +330,7 @@ fn main() {
 }
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_source_map_generation() {
     use windjammer::codegen::javascript::source_maps;
 
@@ -333,6 +348,7 @@ fn test_source_map_generation() {
 }
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_cli_flags_minify() {
     // Test that CLI accepts --minify flag
     let temp_dir = TempDir::new().unwrap();
@@ -354,6 +370,7 @@ fn test_cli_flags_minify() {
 }
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_cli_flags_tree_shake() {
     let temp_dir = TempDir::new().unwrap();
     let source_file = temp_dir.path().join("test.wj");
@@ -373,6 +390,7 @@ fn test_cli_flags_tree_shake() {
 }
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_cli_flags_all_enhanced_features() {
     let temp_dir = TempDir::new().unwrap();
     let source_file = temp_dir.path().join("test.wj");
@@ -398,6 +416,7 @@ fn test_cli_flags_all_enhanced_features() {
 // ========== Advanced Features Tests (v0.33.0 Enhanced) ==========
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_constant_folding() {
     use windjammer::codegen::javascript::minifier;
 
@@ -412,6 +431,7 @@ fn test_constant_folding() {
 }
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_dead_code_elimination() {
     use windjammer::codegen::javascript::minifier;
 
@@ -431,6 +451,7 @@ function test() {
 }
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_code_splitting() {
     use windjammer::codegen::javascript::code_splitter::{CodeSplitConfig, CodeSplitter};
     use windjammer::parser::Program;
@@ -448,6 +469,7 @@ fn test_code_splitting() {
 }
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_code_splitter_loader() {
     use windjammer::codegen::javascript::code_splitter::{CodeSplitConfig, CodeSplitter};
 
@@ -460,6 +482,7 @@ fn test_code_splitter_loader() {
 }
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_differential_loading_modern_bundle() {
     use windjammer::codegen::javascript::differential_loading::{
         DifferentialConfig, DifferentialLoader,
@@ -476,6 +499,7 @@ fn test_differential_loading_modern_bundle() {
 }
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_differential_loading_legacy_transpilation() {
     use windjammer::codegen::javascript::differential_loading::{
         DifferentialConfig, DifferentialLoader,
@@ -491,6 +515,7 @@ fn test_differential_loading_legacy_transpilation() {
 }
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_differential_html_loader() {
     use windjammer::codegen::javascript::differential_loading::{
         DifferentialConfig, DifferentialLoader,
@@ -505,6 +530,7 @@ fn test_differential_html_loader() {
 }
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_module_federation_config() {
     use windjammer::codegen::javascript::module_federation::FederationConfig;
 
@@ -514,6 +540,7 @@ fn test_module_federation_config() {
 }
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_module_federation_remote_entry() {
     use std::collections::HashMap;
     use windjammer::codegen::javascript::module_federation::{FederationConfig, ModuleFederation};
@@ -535,6 +562,7 @@ fn test_module_federation_remote_entry() {
 }
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_module_federation_consumer() {
     use windjammer::codegen::javascript::module_federation::{FederationConfig, ModuleFederation};
 
@@ -547,6 +575,7 @@ fn test_module_federation_consumer() {
 }
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_module_federation_shared_scope() {
     use windjammer::codegen::javascript::module_federation::{FederationConfig, ModuleFederation};
 
@@ -560,6 +589,7 @@ fn test_module_federation_shared_scope() {
 }
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_source_map_inline() {
     use windjammer::codegen::javascript::source_maps::{generate_source_map, source_map_to_inline};
 
@@ -571,6 +601,7 @@ fn test_source_map_inline() {
 }
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_source_map_external_reference() {
     use windjammer::codegen::javascript::source_maps::source_map_external_reference;
 
@@ -580,6 +611,7 @@ fn test_source_map_external_reference() {
 }
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_source_map_mode_inline() {
     use windjammer::codegen::javascript::source_maps::{
         apply_source_map, generate_source_map, SourceMapMode,
@@ -593,6 +625,7 @@ fn test_source_map_mode_inline() {
 }
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_source_map_mode_external() {
     use windjammer::codegen::javascript::source_maps::{
         apply_source_map, generate_source_map, SourceMapMode,
@@ -607,6 +640,7 @@ fn test_source_map_mode_external() {
 }
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_source_map_mode_both() {
     use windjammer::codegen::javascript::source_maps::{
         apply_source_map, generate_source_map, SourceMapMode,

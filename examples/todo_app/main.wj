@@ -154,7 +154,7 @@ fn render_header() -> Text {
 
 fn render_input(state: TodoState) -> Flex {
     let state_input = state.clone()
-    let state_add = state.clone()
+    let mut state_add = state.clone()
     
     Flex::new()
         .direction(FlexDirection::Row)
@@ -217,7 +217,7 @@ fn render_todo_list(state: TodoState) -> Flex {
 
 fn render_todo_item(state: TodoState, todo: Todo) -> Flex {
     let state_toggle = state.clone()
-    let state_delete = state.clone()
+    let mut state_delete = state.clone()
     let todo_id = todo.id
     let todo_id_delete = todo.id
     

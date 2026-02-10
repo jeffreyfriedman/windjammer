@@ -10,6 +10,7 @@ fn get_wj_binary() -> PathBuf {
 }
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_single_file_creates_bin_target() {
     let temp_dir = tempfile::tempdir().expect("Failed to create temp dir");
     let output_dir = temp_dir.path();

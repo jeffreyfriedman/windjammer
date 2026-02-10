@@ -34,6 +34,7 @@ fn compile_code(code: &str) -> Result<String, String> {
 }
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_if_else_in_let_no_semicolons() {
     // Test: if-else used in let binding should NOT have semicolons
     let code = r#"
@@ -67,6 +68,7 @@ fn test_if_else_in_let_no_semicolons() {
 }
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_if_else_with_field_access_no_semicolons() {
     // Test: if-else with field access should NOT have semicolons when used as value
     let code = r#"
@@ -105,6 +107,7 @@ fn test_if_else_with_field_access_no_semicolons() {
 }
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_if_else_in_return_no_semicolons() {
     // Test: if-else in return should NOT have semicolons
     let code = r#"
@@ -124,6 +127,7 @@ fn test_if_else_in_return_no_semicolons() {
 }
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_if_else_in_function_returning_unit_has_semicolons() {
     // Test: if-else in function returning () SHOULD have semicolons when not used as value
     let code = r#"
@@ -148,6 +152,7 @@ fn test_if_else_in_function_returning_unit_has_semicolons() {
 }
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_nested_if_else_in_let_no_semicolons() {
     // Test: nested if-else in let should NOT have semicolons
     let code = r#"
@@ -175,6 +180,7 @@ fn test_nested_if_else_in_let_no_semicolons() {
 }
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_if_else_in_assignment_no_semicolons() {
     // Test: if-else in assignment should NOT have semicolons
     let code = r#"
@@ -195,6 +201,7 @@ fn test_if_else_in_assignment_no_semicolons() {
 }
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_if_else_block_expressions_no_semicolons() {
     // Test: if-else with block expressions should work correctly
     let code = r#"

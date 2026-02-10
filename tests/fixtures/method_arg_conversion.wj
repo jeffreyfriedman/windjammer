@@ -42,7 +42,7 @@ fn is_rust_file(filename: string) -> bool {
 }
 
 fn main() {
-    let list = ItemList::new()
+    let mut list = ItemList::new()
     list.add_item("test")
     list.add_hello()
     

@@ -258,7 +258,7 @@ fn build_string_pool(frequency: HashMap<String, usize>) -> Vec<StringPoolEntry> 
     }
 
     // Sort by count (most frequent first) for better cache locality
-    pool.sort_by(|a, b| b.count.cmp(&a.count));
+    pool.sort_by_key(|b| std::cmp::Reverse(b.count));
 
     pool
 }
@@ -447,6 +447,7 @@ fn replace_strings_in_expression<'a: 'ast, 'ast>(
             name,
             args,
             delimiter,
+            is_repeat,
             location,
         } => optimizer.alloc_expr(unsafe {
             std::mem::transmute::<Expression<'_>, Expression<'_>>(Expression::MacroInvocation {
@@ -456,6 +457,7 @@ fn replace_strings_in_expression<'a: 'ast, 'ast>(
                     .map(|arg| replace_strings_in_expression(arg, pool_map, optimizer))
                     .collect(),
                 delimiter: *delimiter,
+                is_repeat: *is_repeat,
                 location: location.clone(),
             })
         }),

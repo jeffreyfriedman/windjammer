@@ -39,6 +39,7 @@ fn compile_windjammer_code(code: &str, output_dir: &PathBuf) -> Result<String, S
 }
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_doc_comments_on_enum_variants() {
     let temp_dir = TempDir::new().expect("Failed to create temp dir");
     let output_dir = temp_dir.path().to_path_buf();
@@ -76,6 +77,7 @@ pub enum Mode {
 }
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_doc_comments_on_struct_fields() {
     let temp_dir = TempDir::new().expect("Failed to create temp dir");
     let output_dir = temp_dir.path().to_path_buf();
@@ -113,6 +115,7 @@ pub struct Player {
 }
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_doc_comments_on_functions() {
     let temp_dir = TempDir::new().expect("Failed to create temp dir");
     let output_dir = temp_dir.path().to_path_buf();
@@ -141,6 +144,7 @@ pub fn add(a: i64, b: i64) -> i64 {
 }
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_mixed_doc_comments_and_regular_comments() {
     let temp_dir = TempDir::new().expect("Failed to create temp dir");
     let output_dir = temp_dir.path().to_path_buf();

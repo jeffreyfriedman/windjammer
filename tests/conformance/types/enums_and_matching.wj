@@ -1,0 +1,170 @@
+// Conformance Test: Enums and Pattern Matching
+//
+// SEMANTIC CONTRACT:
+// - Enums define a closed set of variants
+// - Variants can be unit, tuple-style, or struct-style
+// - Match expressions must be exhaustive
+// - Pattern bindings extract values from variants
+// - Wildcard (_) catches unmatched cases
+// - Or-patterns (|) match multiple variants
+// - Nested patterns work inside match arms
+//
+// EXPECTED OUTPUT:
+// [enum_unit] Red -> red
+// [enum_unit] Green -> green
+// [enum_unit] Blue -> blue
+// [enum_data] Circle area: 78
+// [enum_data] Square area: 16
+// [enum_data] Point area: 0
+// [enum_option] found: 42
+// [enum_option] not found: 0
+// [enum_or] 1 -> small
+// [enum_or] 3 -> small
+// [enum_or] 5 -> medium
+// [enum_or] 99 -> other
+// [enum_nested] Ok(Some(42)) -> 42
+// [enum_nested] Ok(None) -> 0
+// [enum_nested] Err -> -1
+// [enum_method] Circle: area=314
+// [enum_method] Square: area=25
+// [enum_match_expr] positive
+// [enum_match_expr] zero
+// [enum_match_expr] negative
+// [enum_all] PASSED
+
+// --- Unit variants ---
+enum Color {
+    Red,
+    Green,
+    Blue,
+}
+
+fn color_name(c: Color) -> string {
+    match c {
+        Color::Red => "red",
+        Color::Green => "green",
+        Color::Blue => "blue",
+    }
+}
+
+fn test_unit_enum() {
+    println("[enum_unit] Red -> ${color_name(Color::Red)}")
+    println("[enum_unit] Green -> ${color_name(Color::Green)}")
+    println("[enum_unit] Blue -> ${color_name(Color::Blue)}")
+}
+
+// --- Variants with data ---
+enum Shape {
+    Circle(int),
+    Square(int),
+    Point,
+}
+
+fn shape_area(s: Shape) -> int {
+    match s {
+        Shape::Circle(r) => 3 * r * r,
+        Shape::Square(side) => side * side,
+        Shape::Point => 0,
+    }
+}
+
+fn test_data_enum() {
+    println("[enum_data] Circle area: ${shape_area(Shape::Circle(5))}")
+    println("[enum_data] Square area: ${shape_area(Shape::Square(4))}")
+    println("[enum_data] Point area: ${shape_area(Shape::Point)}")
+}
+
+// --- Option-like pattern ---
+enum Maybe<T> {
+    Some(T),
+    None,
+}
+
+fn unwrap_or(m: Maybe<int>, default: int) -> int {
+    match m {
+        Maybe::Some(v) => v,
+        Maybe::None => default,
+    }
+}
+
+fn test_option_enum() {
+    println("[enum_option] found: ${unwrap_or(Maybe::Some(42), 0)}")
+    println("[enum_option] not found: ${unwrap_or(Maybe::None, 0)}")
+}
+
+// --- Or-patterns ---
+fn categorize(x: int) -> string {
+    match x {
+        1 | 2 | 3 => "small",
+        4 | 5 | 6 => "medium",
+        _ => "other",
+    }
+}
+
+fn test_or_patterns() {
+    println("[enum_or] 1 -> ${categorize(1)}")
+    println("[enum_or] 3 -> ${categorize(3)}")
+    println("[enum_or] 5 -> ${categorize(5)}")
+    println("[enum_or] 99 -> ${categorize(99)}")
+}
+
+// --- Nested patterns ---
+enum Result<T, E> {
+    Ok(T),
+    Err(E),
+}
+
+fn extract_nested(r: Result<Maybe<int>, string>) -> int {
+    match r {
+        Result::Ok(Maybe::Some(v)) => v,
+        Result::Ok(Maybe::None) => 0,
+        Result::Err(_) => -1,
+    }
+}
+
+fn test_nested_patterns() {
+    println("[enum_nested] Ok(Some(42)) -> ${extract_nested(Result::Ok(Maybe::Some(42)))}")
+    println("[enum_nested] Ok(None) -> ${extract_nested(Result::Ok(Maybe::None))}")
+    println("[enum_nested] Err -> ${extract_nested(Result::Err("error"))}")
+}
+
+// --- Methods on enums ---
+impl Shape {
+    fn precise_area(self) -> int {
+        match self {
+            Shape::Circle(r) => 314 * r * r / 100,
+            Shape::Square(side) => side * side,
+            Shape::Point => 0,
+        }
+    }
+}
+
+fn test_enum_methods() {
+    let c = Shape::Circle(10)
+    let s = Shape::Square(5)
+    println("[enum_method] Circle: area=${c.precise_area()}")
+    println("[enum_method] Square: area=${s.precise_area()}")
+}
+
+// --- Match as expression ---
+fn test_match_expression() {
+    for x in vec![5, 0, -3] {
+        let label = match x {
+            n if n > 0 => "positive",
+            0 => "zero",
+            _ => "negative",
+        }
+        println("[enum_match_expr] ${label}")
+    }
+}
+
+fn main() {
+    test_unit_enum()
+    test_data_enum()
+    test_option_enum()
+    test_or_patterns()
+    test_nested_patterns()
+    test_enum_methods()
+    test_match_expression()
+    println("[enum_all] PASSED")
+}

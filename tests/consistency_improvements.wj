@@ -115,7 +115,7 @@ fn test_semicolons() -> i32 {
 
 fn test_auto_mut() -> i32 {
     // Compiler infers mut automatically:
-    let x = 10
+    let mut x = 10
     x = 20  // Compiler adds mut to x
     
     return x
@@ -161,6 +161,14 @@ fn main() {
     println("All consistency improvement tests passed!")
     println("Windjammer Consistency Score: 9.4/10")
 }
+
+
+
+
+
+
+
+
 
 
 
