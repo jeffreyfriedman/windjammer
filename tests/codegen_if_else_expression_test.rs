@@ -13,6 +13,7 @@ fn get_wj_compiler() -> PathBuf {
 }
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_if_else_expression_no_semicolons() {
     let source = r#"
 pub fn get_last_selected(is_empty: bool, value: i64) -> Option<i64> {

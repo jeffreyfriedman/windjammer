@@ -12,6 +12,7 @@ use std::process::Command;
 use tempfile::TempDir;
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_cast_followed_by_method() {
     let wj_code = r#"
 pub fn test_cast_method() {
@@ -59,6 +60,7 @@ fn main() {
 }
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_cast_followed_by_comparison() {
     let wj_code = r#"
 pub fn test_cast_comparison(i: i64, len: i64) -> bool {

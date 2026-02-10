@@ -10,6 +10,7 @@ use std::process::Command;
 use tempfile::TempDir;
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_match_arm_in_expression_context() {
     let code = r#"
 pub fn get_value(x: i32) -> i32 {
@@ -70,6 +71,7 @@ fn main() {
 }
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_match_arm_in_statement_context() {
     let code = r#"
 pub fn process(x: i32) {

@@ -4,6 +4,7 @@ use std::path::PathBuf;
 use std::process::Command;
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_match_arm_block_comma_optional() {
     let wj_binary = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
         .join("target")

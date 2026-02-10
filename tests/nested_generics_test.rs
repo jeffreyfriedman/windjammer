@@ -42,6 +42,7 @@ fn compile_wj_to_rust(code: &str) -> Result<String, String> {
 }
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_nested_generics_hashmap_vec() {
     let code = r#"
 use std::collections::HashMap
@@ -80,6 +81,7 @@ fn main() {
 }
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_nested_generics_option_vec() {
     let code = r#"
 pub struct Test {
@@ -110,6 +112,7 @@ fn main() {
 }
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_triple_nested_generics() {
     let code = r#"
 use std::collections::HashMap

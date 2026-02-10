@@ -9,6 +9,7 @@ use std::fs;
 use std::path::PathBuf;
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_decorator_with_keyword_args_parses() {
     // Create a minimal test file with keyword decorator arguments
     let test_dir = std::env::temp_dir().join(format!(

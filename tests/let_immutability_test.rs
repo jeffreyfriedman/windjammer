@@ -42,6 +42,7 @@ fn compile_wj(source: &str) -> (String, String) {
 // A bare `let` binding that is never mutated should generate plain `let` in Rust.
 // ============================================================================
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_let_generates_immutable_binding() {
     let source = r#"
 fn main() {
@@ -72,6 +73,7 @@ fn main() {
 // An explicit `let mut` binding should generate `let mut` in Rust.
 // ============================================================================
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_let_mut_generates_mutable_binding() {
     let source = r#"
 fn main() {
@@ -101,6 +103,7 @@ fn main() {
 // This is the KEY BEHAVIORAL CHANGE.
 // ============================================================================
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_let_does_not_auto_infer_mut() {
     let source = r#"
 fn main() {
@@ -126,6 +129,7 @@ fn main() {
 // When the user explicitly writes `let mut`, everything works as before.
 // ============================================================================
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_let_mut_with_vec_push() {
     let source = r#"
 fn main() {
@@ -150,6 +154,7 @@ fn main() {
 // TEST 5: `let` with compound assignment does NOT auto-infer mut
 // ============================================================================
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_let_compound_assignment_no_auto_mut() {
     let source = r#"
 fn main() {
@@ -172,6 +177,7 @@ fn main() {
 // TEST 6: `let mut` with compound assignment works
 // ============================================================================
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_let_mut_compound_assignment() {
     let source = r#"
 fn main() {
@@ -194,6 +200,7 @@ fn main() {
 // TEST 7: `let` and `let mut` coexist in same function
 // ============================================================================
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_let_and_let_mut_coexist() {
     let source = r#"
 fn main() {
@@ -228,6 +235,7 @@ fn main() {
 // Only local `let` bindings lose auto-mut.
 // ============================================================================
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_parameter_mut_inference_unchanged() {
     let source = r#"
 struct Counter {

@@ -79,6 +79,7 @@ fn compile_wj_project(source_dir: &Path, output_dir: &Path) -> Result<(), String
 }
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 #[ignore = "Bug #11 deferred: Windjammer lexer doesn't support # character yet. Feature not needed for current use cases (windjammer-ui works without it). Can be enabled when/if needed."]
 fn test_wasm_specific_module_declaration() {
     // This test verifies that when .rs files have #![cfg(...)] attributes,
@@ -158,6 +159,7 @@ pub fn run_wasm_example() {
 }
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 #[ignore = "Bug #11 deferred: Windjammer lexer doesn't support # character yet. Feature not needed for current use cases (windjammer-ui works without it). Can be enabled when/if needed."]
 fn test_desktop_specific_module_declaration() {
     // Test #[cfg(feature = "desktop")] case

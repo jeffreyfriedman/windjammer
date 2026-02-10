@@ -4,6 +4,7 @@ use std::path::PathBuf;
 use std::process::Command;
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_vec3_copy_method_no_ref() {
     let wj_binary = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
         .join("target")

@@ -8,6 +8,7 @@
 use std::process::Command;
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_trait_regen_does_not_leak_modules() {
     let temp_dir = tempfile::tempdir().expect("Failed to create temp dir");
     let project_root = temp_dir.path();

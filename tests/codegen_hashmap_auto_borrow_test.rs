@@ -4,6 +4,7 @@ use std::path::PathBuf;
 use std::process::Command;
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_hashmap_contains_key_auto_borrow() {
     let wj_binary = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
         .join("target")
@@ -80,6 +81,7 @@ fn main() {
 }
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_hashmap_get_auto_borrow() {
     let wj_binary = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
         .join("target")

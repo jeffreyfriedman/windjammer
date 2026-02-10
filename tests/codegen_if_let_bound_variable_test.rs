@@ -9,6 +9,7 @@ use std::process::Command;
 use tempfile::TempDir;
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_if_let_uses_bound_variable() {
     let code = r#"
 pub struct State {

@@ -31,6 +31,7 @@ fn get_wj_compiler() -> PathBuf {
 }
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_sibling_module_import() -> Result<()> {
     // Create temp directory with unique name
     let timestamp = std::time::SystemTime::now()

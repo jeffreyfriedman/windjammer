@@ -9,6 +9,7 @@ use std::process::Command;
 use tempfile::TempDir;
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_param_passed_to_owned_function_stays_owned() {
     let code = r#"
 pub fn process(items: Vec<string>) {

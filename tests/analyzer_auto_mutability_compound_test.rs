@@ -4,6 +4,7 @@ use std::path::PathBuf;
 use std::process::Command;
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_auto_mut_on_compound_assignment() {
     let wj_binary = PathBuf::from(env!("CARGO_BIN_EXE_wj"));
 

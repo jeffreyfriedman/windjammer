@@ -51,6 +51,7 @@ fn compile_wj(source: &str) -> (String, String) {
 // ============================================================================
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_factory_pattern_string_passthrough() {
     let source = r#"
 pub struct Quest {
@@ -113,6 +114,7 @@ impl Quest {
 // ============================================================================
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_factory_pattern_format_arg() {
     let source = r#"
 pub struct Quest {
@@ -165,6 +167,7 @@ pub fn create_fetch_quest(id: string, title: string, item_id: string, quantity: 
 // ============================================================================
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_copy_type_in_match_bound_method_call() {
     let source = r#"
 pub struct ItemStack {
@@ -227,6 +230,7 @@ pub fn remove_items(slots: &mut Vec<Option<ItemStack>>, quantity: u32) -> u32 {
 // ============================================================================
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_self_field_copy_type_passed_to_method() {
     let source = r#"
 pub struct Transition {
@@ -278,6 +282,7 @@ impl StateMachine {
 // ============================================================================
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_vec_remove_usize_variable() {
     let source = r#"
 pub struct SparseSet {
@@ -333,6 +338,7 @@ impl SparseSet {
 // ============================================================================
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_cross_type_mutation_via_field_method() {
     let source = r#"
 pub struct HeightMap {
@@ -484,6 +490,7 @@ impl Terrain {
 // ============================================================================
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_borrow_conflict_match_self_method_with_arm_mutation() {
     let source = r#"
 pub struct SceneManager {
@@ -566,6 +573,7 @@ impl SceneManager {
 // ============================================================================
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_trait_abstract_method_self_inference() {
     let source = r#"
 pub trait System {
@@ -710,6 +718,7 @@ impl System for RenderSystem {
 // ============================================================================
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_default_trait_method_return_no_trailing_semicolon() {
     let source = r#"
 pub trait Configurable {
@@ -792,6 +801,7 @@ pub trait Configurable {
 // ============================================================================
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_auto_wrap_function_pointer_in_iterator_adapter() {
     let source = r#"
 pub struct Item {
@@ -919,6 +929,7 @@ impl Inventory {
 // ============================================================================
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_auto_infer_mut_for_parameter_with_mutating_method_calls() {
     let source = r#"
 pub struct ResourcePool {
