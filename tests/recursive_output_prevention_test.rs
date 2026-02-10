@@ -5,6 +5,7 @@ use std::fs;
 use tempfile::TempDir;
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_no_recursive_output_directory() {
     // Setup: output directory is a subdirectory of the project
     let temp_dir = TempDir::new().unwrap();

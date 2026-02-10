@@ -4,19 +4,28 @@
 use std::path::PathBuf;
 use std::process::Command;
 
+fn get_wj_compiler() -> PathBuf {
+    PathBuf::from(env!("CARGO_BIN_EXE_wj"))
+}
+
 #[test]
 #[cfg_attr(tarpaulin, ignore)]
 fn test_string_borrow_inference() {
-    let test_file = PathBuf::from("tests/string_borrow_inference_test.wj");
-    let output_dir = PathBuf::from("target/test_output/string_borrow_inference");
+    let test_file = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("tests")
+        .join("string_borrow_inference_test.wj");
+    let output_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("target")
+        .join("test_output")
+        .join("string_borrow_inference");
 
     // Clean output directory
     let _ = std::fs::remove_dir_all(&output_dir);
     std::fs::create_dir_all(&output_dir).unwrap();
 
     // Compile the test file
-    let output = Command::new("cargo")
-        .args(["run", "--release", "--", "build"])
+    let output = Command::new(get_wj_compiler())
+        .args(["build"])
         .arg(&test_file)
         .arg("--output")
         .arg(&output_dir)

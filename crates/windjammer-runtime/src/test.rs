@@ -96,6 +96,34 @@ pub fn assert_approx_f32(actual: f32, expected: f32, epsilon: f32) {
     }
 }
 
+// ============================================================================
+// DESIGN BY CONTRACT - @requires, @ensures, @invariant
+// ============================================================================
+
+/// Check a precondition (used by @requires decorator)
+/// Asserts that a condition is true before a function executes
+pub fn requires(condition: bool, description: &str) {
+    if !condition {
+        panic!("Precondition violation (@requires): {}", description);
+    }
+}
+
+/// Check a postcondition (used by @ensures decorator)
+/// Asserts that a condition is true after a function executes
+pub fn ensures(condition: bool, description: &str) {
+    if !condition {
+        panic!("Postcondition violation (@ensures): {}", description);
+    }
+}
+
+/// Check an invariant (used by @invariant decorator)
+/// Asserts that a condition remains true throughout execution
+pub fn invariant(condition: bool, description: &str) {
+    if !condition {
+        panic!("Invariant violation (@invariant): {}", description);
+    }
+}
+
 /// Assert that a collection contains an item
 pub fn assert_contains<T: PartialEq + std::fmt::Debug>(collection: &[T], item: &T) {
     if !collection.contains(item) {
@@ -238,8 +266,8 @@ pub fn assert_panics<F: FnOnce() + std::panic::UnwindSafe>(f: F) {
 /// ```
 /// use windjammer_runtime::test::assert_panics_with;
 ///
-/// assert_panics_with("division by zero", || {
-///     let _ = 1 / 0;
+/// assert_panics_with("error", || {
+///     panic!("error");
 /// });
 /// ```
 pub fn assert_panics_with<F: FnOnce() + std::panic::UnwindSafe>(expected_msg: &str, f: F) {

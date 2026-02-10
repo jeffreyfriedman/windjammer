@@ -7,6 +7,7 @@
 use std::process::Command;
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_same_name_module_regeneration_not_empty() {
     let temp_dir = tempfile::tempdir().expect("Failed to create temp dir");
     let src_wj = temp_dir.path().join("src_wj");

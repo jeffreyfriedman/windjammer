@@ -6,11 +6,10 @@ use std::path::PathBuf;
 use std::process::Command;
 
 fn get_wj_compiler() -> PathBuf {
-    // Use the release build of the compiler
-    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .join("target")
-        .join("release")
-        .join("wj")
+    // TDD FIX: Use pre-compiled test binary to avoid race conditions
+    // The env!("CARGO_BIN_EXE_wj") macro provides the path to the binary
+    // built for tests, which avoids parallel compilation issues.
+    PathBuf::from(env!("CARGO_BIN_EXE_wj"))
 }
 
 fn compile_wj_code(code: &str) -> Result<String, String> {

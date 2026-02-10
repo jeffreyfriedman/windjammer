@@ -122,8 +122,11 @@ pub fn statement_modifies_self(stmt: &Statement) -> bool {
                     .as_ref()
                     .is_some_and(|block| block.iter().any(|s| statement_modifies_self(s)))
         }
-        Statement::While { body, .. } | Statement::For { body, .. } => {
-            body.iter().any(|s| statement_modifies_self(s))
+        Statement::While { body, .. } => body.iter().any(|s| statement_modifies_self(s)),
+        Statement::For { iterable, body, .. } => {
+            // Check BOTH iterable and body for self mutations
+            // e.g., `for x in self.field.values_mut()` requires &mut self
+            expression_modifies_self(iterable) || body.iter().any(|s| statement_modifies_self(s))
         }
         Statement::Match { arms, .. } => arms.iter().any(|arm| {
             // Match arms have a body expression, check if it contains modifications
@@ -197,8 +200,11 @@ pub fn statement_mutates_fields(ctx: &AnalysisContext, stmt: &Statement) -> bool
                     .as_ref()
                     .is_some_and(|block| block.iter().any(|s| statement_mutates_fields(ctx, s)))
         }
-        Statement::While { body, .. } | Statement::For { body, .. } => {
-            body.iter().any(|s| statement_mutates_fields(ctx, s))
+        Statement::While { body, .. } => body.iter().any(|s| statement_mutates_fields(ctx, s)),
+        Statement::For { iterable, body, .. } => {
+            // Check iterable for field mutations too (e.g., self.field.values_mut())
+            expression_mutates_fields(ctx, iterable)
+                || body.iter().any(|s| statement_mutates_fields(ctx, s))
         }
         Statement::Match { arms, .. } => {
             arms.iter().any(|arm| {
@@ -261,21 +267,33 @@ pub fn expression_modifies_self(expr: &Expression) -> bool {
         Expression::MethodCall { object, method, .. } => {
             // Check if this is a mutating method call on self.field
             // Common mutating methods: push, pop, remove, insert, clear, etc.
-            let is_mutating_method = matches!(
-                method.as_str(),
-                "push"
-                    | "pop"
-                    | "remove"
-                    | "insert"
-                    | "clear"
-                    | "append"
-                    | "extend"
-                    | "drain"
-                    | "truncate"
-                    | "resize"
-                    | "swap_remove"
-                    | "retain"
-            );
+            // THE WINDJAMMER WAY: Comprehensive mutation detection
+            // Methods ending in _mut are always mutating (values_mut, iter_mut, etc.)
+            let is_mutating_method = method.ends_with("_mut")
+                || matches!(
+                    method.as_str(),
+                    "push"
+                        | "pop"
+                        | "remove"
+                        | "insert"
+                        | "clear"
+                        | "append"
+                        | "extend"
+                        | "drain"
+                        | "truncate"
+                        | "resize"
+                        | "swap_remove"
+                        | "retain"
+                        | "sort"
+                        | "sort_by"
+                        | "sort_by_key"
+                        | "sort_unstable"
+                        | "sort_unstable_by"
+                        | "dedup"
+                        | "reverse"
+                        | "swap"
+                        | "update"
+                );
 
             if is_mutating_method {
                 // Check if the object is self.field
@@ -390,28 +408,34 @@ pub fn expression_mutates_fields(ctx: &AnalysisContext, expr: &Expression) -> bo
         Expression::MethodCall { object, method, .. } => {
             // Check if this is a mutating method call on a field: self.field.push(...)
             if expression_is_field_access(ctx, object) {
-                // Common mutating methods
-                matches!(
-                    method.as_str(),
-                    "push"
-                        | "pop"
-                        | "insert"
-                        | "remove"
-                        | "clear"
-                        | "append"
-                        | "extend"
-                        | "push_str"
-                        | "truncate"
-                        | "drain"
-                        | "retain"
-                        | "sort"
-                        | "reverse"
-                        | "dedup"
-                        | "swap"
-                        | "fill"
-                        | "rotate_left"
-                        | "rotate_right"
-                )
+                // Methods ending in _mut are always mutating (values_mut, iter_mut, etc.)
+                method.ends_with("_mut")
+                    || matches!(
+                        method.as_str(),
+                        "push"
+                            | "pop"
+                            | "insert"
+                            | "remove"
+                            | "clear"
+                            | "append"
+                            | "extend"
+                            | "push_str"
+                            | "truncate"
+                            | "drain"
+                            | "retain"
+                            | "sort"
+                            | "sort_by"
+                            | "sort_by_key"
+                            | "sort_unstable"
+                            | "sort_unstable_by"
+                            | "reverse"
+                            | "dedup"
+                            | "swap"
+                            | "fill"
+                            | "rotate_left"
+                            | "rotate_right"
+                            | "update"
+                    )
             } else {
                 false
             }

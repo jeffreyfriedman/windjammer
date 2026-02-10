@@ -57,6 +57,7 @@ fn compile_rust(code: &str) -> (bool, String) {
 }
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_trait_impl_matches_trait_signature_f32() {
     let code = r#"
 pub trait GameLoop {
@@ -121,6 +122,7 @@ impl GameLoop for MyGame {
 }
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_trait_impl_matches_trait_signature_struct() {
     let code = r#"
 pub struct Input { pub key: int }

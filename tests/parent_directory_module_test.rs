@@ -5,6 +5,7 @@ use std::fs;
 use tempfile::TempDir;
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_no_parent_directory_module_declaration() {
     let temp_dir = TempDir::new().unwrap();
     let project = temp_dir.path();

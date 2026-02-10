@@ -7,6 +7,7 @@ use std::process::Command;
 use tempfile::TempDir;
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_source_maps_use_relative_paths() {
     // Create a temporary workspace
     let temp_dir = TempDir::new().expect("Failed to create temp dir");
@@ -113,6 +114,7 @@ fn main() {
 }
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_source_map_resolves_across_machines() {
     // This test verifies that a source map created on one machine
     // can be loaded and used on another machine with a different filesystem layout

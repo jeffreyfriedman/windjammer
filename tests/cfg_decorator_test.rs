@@ -5,6 +5,7 @@ use std::fs;
 use tempfile::TempDir;
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_cfg_decorator_on_struct() {
     let temp_dir = TempDir::new().unwrap();
     let input_file = temp_dir.path().join("input.wj");
@@ -67,6 +68,7 @@ pub struct Button {
 }
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_cfg_decorator_on_function() {
     let temp_dir = TempDir::new().unwrap();
     let input_file = temp_dir.path().join("input.wj");
@@ -115,6 +117,7 @@ pub fn regular_function() {
 }
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_cfg_decorator_on_impl() {
     let temp_dir = TempDir::new().unwrap();
     let input_file = temp_dir.path().join("input.wj");
@@ -157,6 +160,7 @@ impl MyStruct {
 }
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_multiple_cfg_attributes() {
     let temp_dir = TempDir::new().unwrap();
     let input_file = temp_dir.path().join("input.wj");
@@ -203,6 +207,7 @@ pub struct WindowsOnly {}
 }
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_module_file_with_cfg_decorators() {
     // Test that --module-file respects @cfg decorators
     let temp_dir = TempDir::new().unwrap();
