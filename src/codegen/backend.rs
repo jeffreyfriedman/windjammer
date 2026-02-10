@@ -18,6 +18,8 @@ use std::path::PathBuf;
 pub enum Target {
     /// Rust source code (default)
     Rust,
+    /// Go source code (experimental)
+    Go,
     /// JavaScript (ES2020+)
     JavaScript,
     /// WebAssembly
@@ -30,6 +32,7 @@ impl std::str::FromStr for Target {
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         match s.to_lowercase().as_str() {
             "rust" | "rs" => Ok(Target::Rust),
+            "go" | "golang" => Ok(Target::Go),
             "javascript" | "js" => Ok(Target::JavaScript),
             "wasm" | "webassembly" => Ok(Target::WebAssembly),
             _ => Err(format!("Unknown target: {}", s)),
@@ -41,6 +44,7 @@ impl Target {
     pub fn as_str(&self) -> &'static str {
         match self {
             Target::Rust => "rust",
+            Target::Go => "go",
             Target::JavaScript => "javascript",
             Target::WebAssembly => "webassembly",
         }
@@ -49,6 +53,7 @@ impl Target {
     pub fn file_extension(&self) -> &'static str {
         match self {
             Target::Rust => "rs",
+            Target::Go => "go",
             Target::JavaScript => "js",
             Target::WebAssembly => "wasm",
         }
@@ -227,6 +232,7 @@ pub trait CodegenBackend: Send + Sync {
 pub fn create_backend(target: Target) -> Box<dyn CodegenBackend> {
     match target {
         Target::Rust => Box::new(crate::codegen::rust::RustBackend::new()),
+        Target::Go => Box::new(crate::codegen::go::GoBackend::new()),
         Target::JavaScript => Box::new(crate::codegen::javascript::JavaScriptBackend::new()),
         Target::WebAssembly => Box::new(crate::codegen::wasm::WasmBackend::new()),
     }
@@ -244,6 +250,9 @@ mod tests {
         assert_eq!(Target::from_str("Rust"), Ok(Target::Rust));
         assert_eq!(Target::from_str("RS"), Ok(Target::Rust));
 
+        assert_eq!(Target::from_str("go"), Ok(Target::Go));
+        assert_eq!(Target::from_str("golang"), Ok(Target::Go));
+
         assert_eq!(Target::from_str("javascript"), Ok(Target::JavaScript));
         assert_eq!(Target::from_str("JS"), Ok(Target::JavaScript));
 
@@ -256,6 +265,7 @@ mod tests {
     #[test]
     fn test_target_extensions() {
         assert_eq!(Target::Rust.file_extension(), "rs");
+        assert_eq!(Target::Go.file_extension(), "go");
         assert_eq!(Target::JavaScript.file_extension(), "js");
         assert_eq!(Target::WebAssembly.file_extension(), "wasm");
     }

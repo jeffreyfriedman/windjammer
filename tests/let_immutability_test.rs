@@ -94,13 +94,13 @@ fn main() {
 }
 
 // ============================================================================
-// TEST 3: `let` without `mut` does NOT auto-infer mut
+// TEST 3: `let` without `mut` is REJECTED when mutated
 //
 // Previously, the compiler would silently add `mut` if the variable was mutated.
-// After this change, `let x = Vec::new()` should generate `let x = Vec::new()`,
-// NOT `let mut x = Vec::new()`.
+// Now, the compiler emits a Windjammer-native error before Rust codegen.
 //
-// This is the KEY BEHAVIORAL CHANGE.
+// This is the KEY BEHAVIORAL CHANGE: immutability is enforced at the
+// Windjammer compiler level, not deferred to rustc.
 // ============================================================================
 #[test]
 #[cfg_attr(tarpaulin, ignore)]
@@ -112,14 +112,34 @@ fn main() {
 }
 "#;
 
-    let (generated, _stderr) = compile_wj(source);
+    let temp_dir = TempDir::new().unwrap();
+    let test_file = temp_dir.path().join("test.wj");
+    fs::write(&test_file, source).unwrap();
 
-    // The compiler should NOT auto-add `mut` anymore
-    // It should generate `let items` (immutable), even though items.push() is called
+    let wj_output = Command::new(env!("CARGO_BIN_EXE_wj"))
+        .arg("build")
+        .arg("--no-cargo")
+        .arg(&test_file)
+        .current_dir(temp_dir.path())
+        .output()
+        .expect("Failed to execute wj compiler");
+
+    let stderr = String::from_utf8_lossy(&wj_output.stderr).to_string();
+
+    // Compiler should REJECT this code with a mutability error
     assert!(
-        !generated.contains("let mut items"),
-        "Compiler should NOT auto-infer `mut` for bare `let`. Got:\n{}",
-        generated
+        !wj_output.status.success(),
+        "Compiler should reject mutation of immutable `let` binding"
+    );
+    assert!(
+        stderr.contains("not declared as mutable") || stderr.contains("immutable"),
+        "Error should mention immutability. Got:\n{}",
+        stderr
+    );
+    assert!(
+        stderr.contains("let mut"),
+        "Error should suggest `let mut`. Got:\n{}",
+        stderr
     );
 }
 
@@ -151,7 +171,7 @@ fn main() {
 }
 
 // ============================================================================
-// TEST 5: `let` with compound assignment does NOT auto-infer mut
+// TEST 5: `let` with compound assignment is REJECTED
 // ============================================================================
 #[test]
 #[cfg_attr(tarpaulin, ignore)]
@@ -163,13 +183,34 @@ fn main() {
 }
 "#;
 
-    let (generated, _stderr) = compile_wj(source);
+    let temp_dir = TempDir::new().unwrap();
+    let test_file = temp_dir.path().join("test.wj");
+    fs::write(&test_file, source).unwrap();
 
-    // Should NOT auto-add mut
+    let wj_output = Command::new(env!("CARGO_BIN_EXE_wj"))
+        .arg("build")
+        .arg("--no-cargo")
+        .arg(&test_file)
+        .current_dir(temp_dir.path())
+        .output()
+        .expect("Failed to execute wj compiler");
+
+    let stderr = String::from_utf8_lossy(&wj_output.stderr).to_string();
+
+    // Compiler should REJECT compound assignment on immutable binding
     assert!(
-        !generated.contains("let mut count"),
-        "Compiler should NOT auto-infer `mut` for compound assignment. Got:\n{}",
-        generated
+        !wj_output.status.success(),
+        "Compiler should reject compound assignment on immutable `let` binding"
+    );
+    assert!(
+        stderr.contains("compound assignment") || stderr.contains("immutable"),
+        "Error should mention compound assignment on immutable binding. Got:\n{}",
+        stderr
+    );
+    assert!(
+        stderr.contains("let mut"),
+        "Error should suggest `let mut`. Got:\n{}",
+        stderr
     );
 }
 

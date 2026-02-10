@@ -1,0 +1,52 @@
+// Conformance Test: Structs and Methods
+//
+// SEMANTIC CONTRACT:
+// - Structs hold named fields
+// - Methods can read and mutate struct fields
+// - Ownership inference works for self parameter
+//
+// EXPECTED OUTPUT:
+// [point] x=3, y=4
+// [counter] 0
+// [counter] 1
+// [counter] 2
+// PASSED
+
+struct Point {
+    x: int,
+    y: int
+}
+
+impl Point {
+    fn describe(self) {
+        println("[point] x={}, y={}", self.x, self.y)
+    }
+}
+
+struct Counter {
+    value: int
+}
+
+impl Counter {
+    fn get(self) -> int {
+        self.value
+    }
+
+    fn increment(self) {
+        self.value += 1
+    }
+}
+
+fn main() {
+    let p = Point { x: 3, y: 4 }
+    p.describe()
+
+    let mut c = Counter { value: 0 }
+    println("[counter] {}", c.get())
+    c.increment()
+    println("[counter] {}", c.get())
+    c.increment()
+    println("[counter] {}", c.get())
+
+    println("PASSED")
+}
