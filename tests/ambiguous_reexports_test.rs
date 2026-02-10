@@ -5,6 +5,7 @@ use std::fs;
 use tempfile::TempDir;
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_detect_duplicate_struct_exports() {
     // Two modules exporting structs with the same name
     let temp_dir = TempDir::new().unwrap();
@@ -83,6 +84,7 @@ pub struct Config {
 }
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_unique_exports_no_ambiguity() {
     // Modules with unique exports should use glob re-exports
     let temp_dir = TempDir::new().unwrap();
@@ -117,6 +119,7 @@ fn test_unique_exports_no_ambiguity() {
 }
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_explicit_reexports_for_conflicts() {
     // When conflicts exist, should generate explicit re-exports
     let temp_dir = TempDir::new().unwrap();
@@ -194,6 +197,7 @@ pub struct Error {
 }
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_nested_module_reexports_unique() {
     // Test that nested modules handle re-exports correctly when no conflicts
     let temp_dir = TempDir::new().unwrap();
@@ -234,6 +238,7 @@ fn test_nested_module_reexports_unique() {
 }
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_nested_module_conflicts() {
     // Test that nested modules also detect and handle conflicts
     let temp_dir = TempDir::new().unwrap();
@@ -299,6 +304,7 @@ pub struct State {
 }
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_warning_for_potential_conflicts() {
     // Compiler should at least warn about potential conflicts
     let temp_dir = TempDir::new().unwrap();

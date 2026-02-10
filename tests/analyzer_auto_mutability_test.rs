@@ -13,6 +13,7 @@ use std::fs;
 use std::path::PathBuf;
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_auto_mut_on_field_mutation() {
     // Create a test file where a struct field is mutated
     let test_dir = std::env::temp_dir().join(format!(
@@ -82,6 +83,7 @@ fn main() {
 }
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_no_mut_when_not_mutated() {
     // Create a test file where no mutation occurs
     let test_dir = std::env::temp_dir().join(format!(

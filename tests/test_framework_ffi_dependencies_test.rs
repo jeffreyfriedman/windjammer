@@ -15,6 +15,7 @@ fn get_wj_compiler() -> PathBuf {
 }
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_ffi_dependencies_copied_to_test_library() -> Result<()> {
     let timestamp = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)

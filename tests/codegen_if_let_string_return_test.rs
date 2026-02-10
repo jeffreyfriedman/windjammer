@@ -9,6 +9,7 @@ use std::process::Command;
 use tempfile::TempDir;
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_if_let_string_return() {
     let code = r#"
 pub fn get_name(opt: Option<string>) -> string {

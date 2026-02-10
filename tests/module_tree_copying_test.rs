@@ -5,6 +5,7 @@ use std::fs;
 use tempfile::TempDir;
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_module_parent_file_with_submodules_not_copied() {
     // Case 1: events.rs + events/ directory in src/
     // Expected: Neither should be copied to generated/
@@ -82,6 +83,7 @@ fn test_module_parent_file_with_submodules_not_copied() {
 }
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_simple_rs_file_without_subdirectory_is_copied() {
     // Case 2: utils.rs (no utils/ directory)
     // Expected: Should be copied to generated/
@@ -139,6 +141,7 @@ fn test_simple_rs_file_without_subdirectory_is_copied() {
 }
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_directory_with_mod_rs_not_copied() {
     // Case 3: ffi/ directory with ffi/mod.rs
     // Expected: Should be copied (FFI module)
@@ -198,6 +201,7 @@ fn test_directory_with_mod_rs_not_copied() {
 }
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_edge_case_both_file_and_directory() {
     // Case 4: What if someone has BOTH config.rs AND config/ directory?
     // This is VALID Rust (config.rs can declare submodules)

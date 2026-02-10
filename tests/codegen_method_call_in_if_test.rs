@@ -7,6 +7,7 @@ use std::process::Command;
 use tempfile::TempDir;
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_method_calls_in_if_blocks() {
     let temp_dir = TempDir::new().unwrap();
     let test_file = temp_dir.path().join("test.wj");

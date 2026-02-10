@@ -10,6 +10,7 @@ fn get_wj_compiler() -> PathBuf {
 }
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_property_test_imports_property_functions() {
     let source = r#"
 @test
@@ -70,6 +71,7 @@ fn test_addition_commutative(a: i32) {
 }
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_property_test_with_multiple_params_imports_correct_function() {
     let source = r#"
 @test

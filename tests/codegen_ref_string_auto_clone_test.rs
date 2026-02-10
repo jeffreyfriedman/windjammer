@@ -4,6 +4,7 @@ use std::path::PathBuf;
 use std::process::Command;
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_ref_string_param_auto_clone_to_owned() {
     let wj_binary = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
         .join("target")

@@ -30,6 +30,7 @@ fn get_wj_compiler() -> PathBuf {
 }
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 #[ignore = "TODO v0.41.0: Fix module path resolution to use super:: instead of crate:: for parent imports"]
 fn test_parent_module_reexport_import() -> Result<()> {
     let timestamp = std::time::SystemTime::now()

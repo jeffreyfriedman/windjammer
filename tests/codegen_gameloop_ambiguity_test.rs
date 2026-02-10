@@ -11,6 +11,7 @@ fn get_wj_compiler() -> PathBuf {
 }
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_gameloop_no_ambiguity() {
     let code = r#"
         // Simulate the game_loop module (trait)

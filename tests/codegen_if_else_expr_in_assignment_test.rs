@@ -9,6 +9,7 @@ use std::process::Command;
 use tempfile::TempDir;
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_if_else_expression_in_assignment() {
     let wj_code = r#"
 struct State {
@@ -113,6 +114,7 @@ impl State {
 }
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_if_else_expression_in_let_binding() {
     let wj_code = r#"
 pub fn get_value(cond: bool) -> Option<i64> {

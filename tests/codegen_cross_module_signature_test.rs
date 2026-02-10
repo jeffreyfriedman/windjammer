@@ -30,6 +30,7 @@ use std::process::Command;
 use tempfile::TempDir;
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_cross_module_copy_type_arg() {
     let temp_dir = TempDir::new().unwrap();
 
@@ -124,6 +125,7 @@ path = "src/inventory.wj"
 }
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_cross_module_multiple_files() {
     let temp_dir = TempDir::new().unwrap();
 
@@ -245,6 +247,7 @@ version = "0.1.0"
 }
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_cross_module_nested_if_let() {
     let temp_dir = TempDir::new().unwrap();
 

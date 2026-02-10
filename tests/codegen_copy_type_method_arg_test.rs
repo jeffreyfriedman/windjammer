@@ -12,6 +12,7 @@ fn get_wj_compiler() -> PathBuf {
 }
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_copy_type_passed_by_value_to_methods() {
     let source = r#"
 @derive(Copy, Clone, Debug, PartialEq, Eq, Hash)

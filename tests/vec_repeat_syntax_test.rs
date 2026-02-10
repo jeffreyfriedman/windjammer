@@ -21,6 +21,7 @@ use std::process::Command;
 use tempfile::TempDir;
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_vec_repeat_simple() {
     let source = r#"
 pub fn test_repeat() {
@@ -63,6 +64,7 @@ pub fn test_repeat() {
 }
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_vec_repeat_option() {
     let source = r#"
 pub enum MyEnum {
@@ -104,6 +106,7 @@ pub fn test_option_repeat() {
 }
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_vec_repeat_nested() {
     let source = r#"
 pub fn test_2d_vec() {
@@ -147,6 +150,7 @@ pub fn test_2d_vec() {
 }
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_vec_repeat_complex_value() {
     let source = r#"
 pub struct Point {

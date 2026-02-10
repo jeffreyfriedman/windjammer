@@ -12,6 +12,7 @@ fn get_wj_compiler() -> PathBuf {
 /// Bug: Parameters are moved in function body, then accessed in @ensures, causing E0382
 /// Fix: Clone parameters before function body when @ensures references them
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_ensures_can_access_moved_parameters() {
     let source = r#"
 struct User {
@@ -103,6 +104,7 @@ fn test_create_user() {
 }
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_ensures_with_multiple_moved_parameters() {
     let source = r#"
 struct Point {

@@ -20,6 +20,7 @@ fn get_wj_compiler() -> PathBuf {
 }
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_test_cases_with_string_literals_auto_converts_to_string() {
     let source = r#"
 @test_cases([
@@ -95,6 +96,7 @@ fn test_user(id: string, name: string, age: i32) {
 }
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_function_call_with_string_literal_auto_converts() {
     let source = r#"
 fn greet(name: string) -> string {

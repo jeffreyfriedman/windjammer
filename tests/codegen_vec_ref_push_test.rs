@@ -13,6 +13,7 @@ fn get_wj_compiler() -> PathBuf {
 }
 
 #[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_push_borrowed_iter_var_to_vec_ref() {
     let source = r#"
 struct Quest {
