@@ -5693,6 +5693,8 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
                 // Special case: convert test assertion functions to macros
                 // THE WINDJAMMER WAY: assert_eq(a, b) -> assert_eq!(a, b)
                 // NOTE: assert_gt, assert_gte, assert_is_some, assert_is_none, etc. are runtime functions, not macros
+                // Print functions need special handling (format! unwrapping, interpolation)
+                // so they are NOT in the simple macro list — handled separately below.
                 let test_macros = [
                     "assert",
                     "assert_eq",
@@ -5701,10 +5703,6 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
                     "assert_err",
                     "panic",
                     "vec",
-                    "println",
-                    "eprintln",
-                    "print",
-                    "eprint",
                     "format",
                     "write",
                     "writeln",
@@ -5777,12 +5775,13 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
                     // Check if the first argument is a format! macro (from string interpolation)
                     if let Some((_, first_arg)) = arguments.first() {
                         // Check for MacroInvocation (explicit format! calls)
+                        // first_arg is &&Expression (ref to ref from Vec element), deref both
                         if let Expression::MacroInvocation {
                             is_repeat: _,
-                            name,
-                            args: macro_args,
+                            ref name,
+                            args: ref macro_args,
                             ..
-                        } = first_arg
+                        } = **first_arg
                         {
                             if name == "format" && !macro_args.is_empty() {
                                 // Unwrap the format! call and put its arguments directly into println!
@@ -5809,7 +5808,7 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
                             op: BinaryOp::Add,
                             right,
                             ..
-                        } = first_arg
+                        } = **first_arg
                         {
                             // Check if this is string concatenation
                             let has_string_literal =
@@ -5852,9 +5851,9 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
 
                         // Check if the first argument is a string literal with ${} (old-style, shouldn't happen but keep for safety)
                         if let Expression::Literal {
-                            value: Literal::String(s),
+                            value: Literal::String(ref s),
                             ..
-                        } = first_arg
+                        } = **first_arg
                         {
                             if s.contains("${") {
                                 // Handle string interpolation directly in println!

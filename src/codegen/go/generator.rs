@@ -4,8 +4,8 @@
 
 use crate::codegen::backend::{CodegenBackend, CodegenConfig, CodegenOutput, Target};
 use crate::parser::{
-    BinaryOp, CompoundOp, Expression, FunctionDecl, Item, Literal, Program, Statement, Type,
-    UnaryOp,
+    BinaryOp, CompoundOp, EnumVariantData, Expression, FunctionDecl, Item, Literal, MatchArm,
+    Pattern, Program, Statement, Type, UnaryOp,
 };
 use anyhow::Result;
 
@@ -57,6 +57,8 @@ struct GoGenerator {
     needs_math_import: bool,
     /// Track structs that have been declared (for method generation)
     declared_structs: Vec<String>,
+    /// Track variables declared in current scope (for shadowing detection)
+    declared_vars: Vec<std::collections::HashSet<String>>,
 }
 
 impl GoGenerator {
@@ -66,6 +68,61 @@ impl GoGenerator {
             needs_fmt_import: false,
             needs_math_import: false,
             declared_structs: Vec::new(),
+            declared_vars: vec![std::collections::HashSet::new()],
+        }
+    }
+
+    /// Get operator precedence (higher = tighter binding)
+    fn op_precedence(op: &BinaryOp) -> i32 {
+        match op {
+            BinaryOp::Or => 1,
+            BinaryOp::And => 2,
+            BinaryOp::BitOr => 3,
+            BinaryOp::BitXor => 4,
+            BinaryOp::BitAnd => 5,
+            BinaryOp::Eq | BinaryOp::Ne => 6,
+            BinaryOp::Lt | BinaryOp::Le | BinaryOp::Gt | BinaryOp::Ge => 7,
+            BinaryOp::Shl | BinaryOp::Shr => 8,
+            BinaryOp::Add | BinaryOp::Sub => 9,
+            BinaryOp::Mul | BinaryOp::Div | BinaryOp::Mod => 10,
+        }
+    }
+
+    fn push_scope(&mut self) {
+        self.declared_vars.push(std::collections::HashSet::new());
+    }
+
+    fn pop_scope(&mut self) {
+        self.declared_vars.pop();
+    }
+
+    /// Check if a variable name is already declared in the current scope stack
+    fn is_var_declared(&self, name: &str) -> bool {
+        self.declared_vars.iter().any(|scope| scope.contains(name))
+    }
+
+    /// Mark a variable as declared in the current scope
+    fn declare_var(&mut self, name: &str) {
+        if let Some(scope) = self.declared_vars.last_mut() {
+            scope.insert(name.to_string());
+        }
+    }
+
+    /// Capitalize first letter of a string (for Go exported names)
+    fn capitalize(s: &str) -> String {
+        let mut c = s.chars();
+        match c.next() {
+            None => String::new(),
+            Some(f) => f.to_uppercase().collect::<String>() + c.as_str(),
+        }
+    }
+
+    /// Convert "Color::Red" → "ColorRed" for Go type names
+    fn enum_variant_to_go_type(&self, variant_name: &str) -> String {
+        if let Some((type_name, variant)) = variant_name.split_once("::") {
+            format!("{}{}", Self::capitalize(type_name), Self::capitalize(variant))
+        } else {
+            variant_name.to_string()
         }
     }
 
@@ -92,6 +149,9 @@ impl GoGenerator {
                         self.scan_for_imports(method);
                     }
                 }
+                Item::Enum { decl, .. } => {
+                    self.declared_structs.push(decl.name.clone());
+                }
                 _ => {}
             }
         }
@@ -107,9 +167,26 @@ impl GoGenerator {
                 Item::Struct { decl, .. } => {
                     items_code.push(self.generate_struct(decl));
                 }
+                Item::Enum { decl, .. } => {
+                    items_code.push(self.generate_enum(decl));
+                }
+                Item::Trait { decl, .. } => {
+                    items_code.push(self.generate_trait(decl));
+                }
                 Item::Impl { block, .. } => {
                     for method in &block.functions {
                         items_code.push(self.generate_method(&block.type_name, method));
+                    }
+                }
+                Item::Const {
+                    name, value, type_, ..
+                } => {
+                    let type_str = self.type_to_go(type_);
+                    let val_str = self.generate_expression(value);
+                    if type_str.is_empty() {
+                        items_code.push(format!("const {} = {}\n", name, val_str));
+                    } else {
+                        items_code.push(format!("const {} {} = {}\n", name, type_str, val_str));
                     }
                 }
                 _ => {
@@ -256,6 +333,81 @@ impl GoGenerator {
     }
 
     // =====================================================
+    // Enum Generation (tagged unions → interface + variant structs)
+    // =====================================================
+
+    fn generate_enum(&mut self, e: &crate::parser::EnumDecl) -> String {
+        let mut output = String::new();
+
+        // Generate interface type for the enum
+        output.push_str(&format!("type {} interface {{\n", e.name));
+        output.push_str(&format!("\tIs{}()\n", e.name));
+        output.push_str("}\n\n");
+
+        // Generate variant structs
+        for variant in &e.variants {
+            let variant_type = format!("{}{}", e.name, variant.name);
+            match &variant.data {
+                EnumVariantData::Unit => {
+                    output.push_str(&format!("type {} struct{{}}\n", variant_type));
+                }
+                EnumVariantData::Tuple(types) => {
+                    output.push_str(&format!("type {} struct {{\n", variant_type));
+                    for (i, t) in types.iter().enumerate() {
+                        output.push_str(&format!("\tField{} {}\n", i, self.type_to_go(t)));
+                    }
+                    output.push_str("}\n");
+                }
+                EnumVariantData::Struct(fields) => {
+                    output.push_str(&format!("type {} struct {{\n", variant_type));
+                    for (name, t) in fields {
+                        output.push_str(&format!("\t{} {}\n", capitalize_first(name), self.type_to_go(t)));
+                    }
+                    output.push_str("}\n");
+                }
+            }
+            // Implement the interface marker method
+            output.push_str(&format!(
+                "func ({} {}) Is{}() {{}}\n\n",
+                variant_type.chars().next().unwrap().to_lowercase(),
+                variant_type,
+                e.name
+            ));
+        }
+
+        output
+    }
+
+    // =====================================================
+    // Trait Generation (traits → interfaces)
+    // =====================================================
+
+    fn generate_trait(&mut self, t: &crate::parser::TraitDecl) -> String {
+        let mut output = String::new();
+        output.push_str(&format!("type {} interface {{\n", t.name));
+        for method in &t.methods {
+            let params: Vec<String> = method
+                .parameters
+                .iter()
+                .filter(|p| p.name != "self")
+                .map(|p| format!("{} {}", p.name, self.type_to_go(&p.type_)))
+                .collect();
+            let ret = match &method.return_type {
+                Some(t) => format!(" {}", self.type_to_go(t)),
+                None => String::new(),
+            };
+            output.push_str(&format!(
+                "\t{}({}){}\n",
+                capitalize_first(&method.name),
+                params.join(", "),
+                ret
+            ));
+        }
+        output.push_str("}\n");
+        output
+    }
+
+    // =====================================================
     // Function Generation
     // =====================================================
 
@@ -286,6 +438,14 @@ impl GoGenerator {
             return_type
         ));
 
+        self.push_scope();
+        // Register parameters as declared variables
+        for p in &func.parameters {
+            if p.name != "self" {
+                self.declare_var(&p.name);
+            }
+        }
+
         self.indent_level += 1;
         let has_return_type = func.return_type.is_some();
         let body_len = func.body.len();
@@ -294,21 +454,113 @@ impl GoGenerator {
             // In Go, the last expression must be an explicit return
             if is_last && has_return_type {
                 if let Statement::Expression { expr, .. } = stmt {
-                    let indent = self.indent();
-                    let expr_str = self.generate_expression(expr);
-                    output.push_str(&format!("{}return {}\n", indent, expr_str));
+                    output.push_str(&self.generate_expression_as_return(expr));
+                    continue;
+                }
+                // Match as last statement in a returning function
+                if let Statement::Match { value, arms, .. } = stmt {
+                    output.push_str(&self.generate_match_with_returns(value, arms));
                     continue;
                 }
             }
             output.push_str(&self.generate_statement(stmt));
         }
         self.indent_level -= 1;
+        self.pop_scope();
 
         output.push_str("}\n");
         output
     }
 
+    /// Generate an expression as a return statement.
+    /// If the expression is a match/block, handle it specially since Go can't return a switch.
+    fn generate_expression_as_return(&mut self, expr: &Expression) -> String {
+        // For match expressions used as return values, we need to generate
+        // a switch where each arm has its own `return`
+        if let Expression::Block { statements, .. } = expr {
+            // If the block's last statement is a match, handle it
+            let mut output = String::new();
+            let len = statements.len();
+            for (i, stmt) in statements.iter().enumerate() {
+                if i == len - 1 {
+                    if let Statement::Match { value, arms, .. } = stmt {
+                        output.push_str(&self.generate_match_with_returns(value, arms));
+                        return output;
+                    }
+                    if let Statement::Expression { expr, .. } = stmt {
+                        return format!("{}{}\n", output, self.generate_expression_as_return(expr));
+                    }
+                }
+                output.push_str(&self.generate_statement(stmt));
+            }
+            return output;
+        }
+
+        let indent = self.indent();
+        let expr_str = self.generate_expression(expr);
+        format!("{}return {}\n", indent, expr_str)
+    }
+
+    /// Generate a static/associated function as a Go package-level function.
+    /// `Type::new(x, y)` → `func NewType(x, y) Type { ... }`
+    fn generate_static_method(&mut self, type_name: &str, func: &FunctionDecl) -> String {
+        let mut output = String::new();
+
+        let params: Vec<String> = func
+            .parameters
+            .iter()
+            .map(|p| format!("{} {}", &p.name, self.type_to_go(&p.type_)))
+            .collect();
+
+        let return_type = match &func.return_type {
+            Some(t) => format!(" {}", self.type_to_go(t)),
+            None => String::new(),
+        };
+
+        // Go convention: NewType for constructors, TypeMethod for other statics
+        let go_name = if func.name == "new" {
+            format!("New{}", Self::capitalize(type_name))
+        } else {
+            format!("{}{}", Self::capitalize(type_name), Self::capitalize(&func.name))
+        };
+
+        output.push_str(&format!(
+            "func {}({}){} {{\n",
+            go_name,
+            params.join(", "),
+            return_type
+        ));
+
+        self.push_scope();
+        for p in &func.parameters {
+            self.declare_var(&p.name);
+        }
+        self.indent_level += 1;
+
+        let body_len = func.body.len();
+        for (i, stmt) in func.body.iter().enumerate() {
+            if i == body_len - 1 && func.return_type.is_some() {
+                if let Statement::Expression { expr, .. } = stmt {
+                    output.push_str(&self.generate_expression_as_return(expr));
+                    continue;
+                }
+            }
+            output.push_str(&self.generate_statement(stmt));
+        }
+
+        self.indent_level -= 1;
+        self.pop_scope();
+        output.push_str("}\n");
+        output
+    }
+
     fn generate_method(&mut self, type_name: &str, func: &FunctionDecl) -> String {
+        // Check if this is a static method (no self parameter)
+        let has_self = func.parameters.iter().any(|p| p.name == "self");
+        if !has_self {
+            return self.generate_static_method(type_name, func);
+        }
+
         let mut output = String::new();
 
         // Receiver: use pointer receiver for methods that mutate
@@ -340,6 +592,12 @@ impl GoGenerator {
             return_type
         ));
 
+        self.push_scope();
+        for p in &func.parameters {
+            if p.name != "self" {
+                self.declare_var(&p.name);
+            }
+        }
         self.indent_level += 1;
 
         // Generate body, replacing `self.` with receiver
@@ -350,10 +608,15 @@ impl GoGenerator {
             // In Go, the last expression must be an explicit return
             if is_last && has_return_type {
                 if let Statement::Expression { expr, .. } = stmt {
-                    let indent = self.indent();
-                    let expr_str = self.generate_expression(expr);
-                    let expr_str = expr_str.replace("self.", &format!("{}.", receiver_name));
-                    output.push_str(&format!("{}return {}\n", indent, expr_str));
+                    let code = self.generate_expression_as_return(expr);
+                    let code = code.replace("self.", &format!("{}.", receiver_name));
+                    output.push_str(&code);
+                    continue;
+                }
+                if let Statement::Match { value, arms, .. } = stmt {
+                    let code = self.generate_match_with_returns(value, arms);
+                    let code = code.replace("self.", &format!("{}.", receiver_name));
+                    output.push_str(&code);
                     continue;
                 }
             }
@@ -363,6 +626,7 @@ impl GoGenerator {
         }
 
         self.indent_level -= 1;
+        self.pop_scope();
         output.push_str("}\n");
         output
     }
@@ -384,15 +648,22 @@ impl GoGenerator {
                 let var_name = self.pattern_to_go(pattern);
                 let value_str = self.generate_expression(value);
 
-                if *mutable {
-                    // Go uses `var` for mutable variables (or just :=)
+                // Go doesn't allow re-declaration of a variable in the same scope.
+                // For shadowing, we use a temporary variable + assignment pattern.
+                let result = if self.is_var_declared(&var_name) {
+                    // Variable shadowing: reassign using =
+                    // Go allows assignment to an existing variable
+                    let _ = type_;
+                    format!("{}{} = {}\n", indent, var_name, value_str)
+                } else if *mutable {
+                    self.declare_var(&var_name);
                     format!("{}var {} = {}\n", indent, var_name, value_str)
                 } else {
-                    // Immutable: still use := in Go (Go doesn't have const for runtime values)
-                    // We could use `const` for compile-time constants but that's limited
-                    let _ = type_; // type annotation ignored; Go infers
+                    let _ = type_;
+                    self.declare_var(&var_name);
                     format!("{}{} := {}\n", indent, var_name, value_str)
-                }
+                };
+                result
             }
 
             Statement::Assignment {
@@ -426,6 +697,14 @@ impl GoGenerator {
 
             Statement::Expression { expr, .. } => {
                 let indent = self.indent();
+                // Special case: v.push(x) → v = append(v, x) in Go
+                if let Expression::MethodCall { object, method, arguments, .. } = expr {
+                    if method == "push" && arguments.len() == 1 {
+                        let obj_str = self.generate_expression(object);
+                        let arg_str = self.generate_expression(&arguments[0].1);
+                        return format!("{}{} = append({}, {})\n", indent, obj_str, obj_str, arg_str);
+                    }
+                }
                 let expr_str = self.generate_expression(expr);
                 format!("{}{}\n", indent, expr_str)
             }
@@ -547,6 +826,10 @@ impl GoGenerator {
                 output
             }
 
+            Statement::Match { value, arms, .. } => {
+                self.generate_match_statement(value, arms)
+            }
+
             Statement::Break { .. } => {
                 format!("{}break\n", self.indent())
             }
@@ -558,6 +841,405 @@ impl GoGenerator {
             _ => {
                 format!("{}// TODO: unsupported statement\n", self.indent())
             }
+        }
+    }
+
+    // =====================================================
+    // Match Generation
+    // =====================================================
+
+    fn generate_match_statement(
+        &mut self,
+        value: &Expression,
+        arms: &[MatchArm],
+    ) -> String {
+        let indent = self.indent();
+        let val_str = self.generate_expression(value);
+        let mut output = String::new();
+
+        // Check if this is matching on enum variants (type switch)
+        // Unit enum variants are parsed as Identifier("Type::Variant"), not EnumVariant
+        let is_type_switch = arms.iter().any(|arm| {
+            matches!(&arm.pattern, Pattern::EnumVariant(..))
+                || matches!(&arm.pattern, Pattern::Identifier(name) if name.contains("::"))
+        });
+
+        // Check if any arm has a guard — need if/else chain instead of switch
+        let has_guards = arms.iter().any(|arm| arm.guard.is_some());
+
+        if is_type_switch {
+            // Go type switch
+            output.push_str(&format!(
+                "{}switch _v := {}.(type) {{\n",
+                indent, val_str
+            ));
+            self.indent_level += 1;
+            for arm in arms {
+                output.push_str(&self.generate_match_arm_type_switch(arm));
+            }
+            self.indent_level -= 1;
+            output.push_str(&format!("{}}}\n", indent));
+        } else if has_guards {
+            // Guards require an if-else chain since Go switch can't have guards
+            // and binding patterns would create multiple default: branches
+            output.push_str(&format!("{}{{\n", indent));
+            self.indent_level += 1;
+            output.push_str(&format!("{}__match_val := {}\n", self.indent(), val_str));
+            for (i, arm) in arms.iter().enumerate() {
+                let body_str = self.generate_expression(arm.body);
+                let condition = match &arm.pattern {
+                    Pattern::Wildcard => "true".to_string(),
+                    Pattern::Literal(lit) => {
+                        let lit_str = match lit {
+                            Literal::Int(n) => n.to_string(),
+                            Literal::Float(f) => f.to_string(),
+                            Literal::Bool(b) => b.to_string(),
+                            Literal::String(s) => format!("\"{}\"", s),
+                            Literal::Char(c) => format!("'{}'", c),
+                        };
+                        format!("__match_val == {}", lit_str)
+                    }
+                    Pattern::Identifier(_) => {
+                        // Binding pattern: always matches, assign the variable
+                        "true".to_string()
+                    }
+                    _ => "true".to_string(),
+                };
+
+                let full_condition = if let Some(guard) = arm.guard {
+                    let guard_str = self.generate_expression(guard);
+                    // For binding patterns with guards, bind the variable first
+                    if let Pattern::Identifier(name) = &arm.pattern {
+                        format!("func() bool {{ {} := __match_val; return {} }}()", name, guard_str)
+                    } else {
+                        format!("{} && {}", condition, guard_str)
+                    }
+                } else {
+                    condition
+                };
+
+                if i == 0 {
+                    output.push_str(&format!("{}if {} {{\n", self.indent(), full_condition));
+                } else if full_condition == "true" {
+                    output.push_str(&format!("{}}} else {{\n", self.indent()));
+                } else {
+                    output.push_str(&format!("{}}} else if {} {{\n", self.indent(), full_condition));
+                }
+                self.indent_level += 1;
+                // For binding patterns, declare the variable in scope
+                if let Pattern::Identifier(name) = &arm.pattern {
+                    output.push_str(&format!("{}{} := __match_val\n", self.indent(), name));
+                    output.push_str(&format!("{}_ = {}\n", self.indent(), name));
+                }
+                output.push_str(&format!("{}{}\n", self.indent(), body_str));
+                self.indent_level -= 1;
+
+                // Close if this is the last arm with "true" condition
+                if i == arms.len() - 1 {
+                    output.push_str(&format!("{}}}\n", self.indent()));
+                }
+            }
+            self.indent_level -= 1;
+            output.push_str(&format!("{}}}\n", indent));
+        } else {
+            // Value-based switch
+            output.push_str(&format!("{}switch {} {{\n", indent, val_str));
+            self.indent_level += 1;
+            for arm in arms {
+                output.push_str(&self.generate_match_arm(arm));
+            }
+            self.indent_level -= 1;
+            output.push_str(&format!("{}}}\n", indent));
+        }
+
+        output
+    }
+
+    fn generate_match_arm(&mut self, arm: &MatchArm) -> String {
+        let indent = self.indent();
+        let body_str = self.generate_expression(arm.body);
+
+        match &arm.pattern {
+            Pattern::Wildcard => {
+                let mut out = format!("{}default:\n", indent);
+                self.indent_level += 1;
+                out.push_str(&format!("{}{}\n", self.indent(), body_str));
+                self.indent_level -= 1;
+                out
+            }
+            Pattern::Literal(lit) => {
+                let pat_str = match lit {
+                    Literal::Int(n) => n.to_string(),
+                    Literal::Float(f) => f.to_string(),
+                    Literal::Bool(b) => b.to_string(),
+                    Literal::String(s) => format!("\"{}\"", s),
+                    Literal::Char(c) => format!("'{}'", c),
+                };
+                let mut out = format!("{}case {}:\n", indent, pat_str);
+                self.indent_level += 1;
+                out.push_str(&format!("{}{}\n", self.indent(), body_str));
+                self.indent_level -= 1;
+                out
+            }
+            Pattern::Identifier(name) => {
+                // Binding pattern — acts like default with a variable binding
+                let mut out = format!("{}default:\n", indent);
+                self.indent_level += 1;
+                out.push_str(&format!("{}{} := {}\n", self.indent(), name, "/* matched value */"));
+                out.push_str(&format!("{}{}\n", self.indent(), body_str));
+                self.indent_level -= 1;
+                out
+            }
+            Pattern::Or(patterns) => {
+                let cases: Vec<String> = patterns
+                    .iter()
+                    .map(|p| self.pattern_to_case_label(p))
+                    .collect();
+                let mut out = format!("{}case {}:\n", indent, cases.join(", "));
+                self.indent_level += 1;
+                out.push_str(&format!("{}{}\n", self.indent(), body_str));
+                self.indent_level -= 1;
+                out
+            }
+            _ => {
+                let mut out = format!("{}// TODO: unsupported match pattern\n", indent);
+                out.push_str(&format!("{}default:\n", indent));
+                self.indent_level += 1;
+                out.push_str(&format!("{}{}\n", self.indent(), body_str));
+                self.indent_level -= 1;
+                out
+            }
+        }
+    }
+
+    fn generate_match_arm_type_switch(&mut self, arm: &MatchArm) -> String {
+        let indent = self.indent();
+        let body_str = self.generate_expression(arm.body);
+
+        match &arm.pattern {
+            Pattern::EnumVariant(variant_name, _binding) => {
+                // Convert Color::Red → ColorRed for Go type switch
+                let go_type = self.enum_variant_to_go_type(variant_name);
+                let mut out = format!("{}case {}:\n", indent, go_type);
+                self.indent_level += 1;
+                out.push_str(&format!("{}_ = _v\n", self.indent()));
+                out.push_str(&format!("{}{}\n", self.indent(), body_str));
+                self.indent_level -= 1;
+                out
+            }
+            Pattern::Identifier(name) if name.contains("::") => {
+                // Unit enum variant parsed as Identifier (e.g., "Color::Red")
+                let go_type = self.enum_variant_to_go_type(name);
+                let mut out = format!("{}case {}:\n", indent, go_type);
+                self.indent_level += 1;
+                out.push_str(&format!("{}_ = _v\n", self.indent()));
+                out.push_str(&format!("{}{}\n", self.indent(), body_str));
+                self.indent_level -= 1;
+                out
+            }
+            Pattern::Wildcard => {
+                let mut out = format!("{}default:\n", indent);
+                self.indent_level += 1;
+                out.push_str(&format!("{}{}\n", self.indent(), body_str));
+                self.indent_level -= 1;
+                out
+            }
+            _ => {
+                let mut out = format!("{}default:\n", indent);
+                self.indent_level += 1;
+                out.push_str(&format!("{}{}\n", self.indent(), body_str));
+                self.indent_level -= 1;
+                out
+            }
+        }
+    }
+
+    /// Generate a match where each arm body is wrapped in `return`
+    /// Used when match is the last expression in a function with a return type
+    fn generate_match_with_returns(
+        &mut self,
+        value: &Expression,
+        arms: &[MatchArm],
+    ) -> String {
+        let indent = self.indent();
+        let val_str = self.generate_expression(value);
+        let mut output = String::new();
+
+        // Unit enum variants are parsed as Identifier("Type::Variant"), not EnumVariant
+        let is_type_switch = arms.iter().any(|arm| {
+            matches!(&arm.pattern, Pattern::EnumVariant(..))
+                || matches!(&arm.pattern, Pattern::Identifier(name) if name.contains("::"))
+        });
+
+        // Check if there's a wildcard/default arm (Go requires explicit return after switch)
+        let has_default = arms.iter().any(|arm| matches!(&arm.pattern, Pattern::Wildcard));
+        // Match guards require an if-else chain since Go switch can't have guard conditions
+        let has_guards = arms.iter().any(|arm| arm.guard.is_some());
+
+        if is_type_switch {
+            output.push_str(&format!(
+                "{}switch _v := {}.(type) {{\n",
+                indent, val_str
+            ));
+            self.indent_level += 1;
+            for arm in arms {
+                output.push_str(&self.generate_match_arm_with_return_type_switch(arm));
+            }
+            self.indent_level -= 1;
+            output.push_str(&format!("{}}}\n", indent));
+        } else if has_guards {
+            // Use if-else chain for matches with guards
+            output.push_str(&format!("{}{{\n", indent));
+            self.indent_level += 1;
+            output.push_str(&format!("{}__match_val := {}\n", self.indent(), val_str));
+
+            for (i, arm) in arms.iter().enumerate() {
+                let body_str = self.generate_expression(arm.body);
+                let condition = match &arm.pattern {
+                    Pattern::Wildcard => "true".to_string(),
+                    Pattern::Literal(lit) => {
+                        let lit_str = match lit {
+                            Literal::Int(n) => n.to_string(),
+                            Literal::Float(f) => f.to_string(),
+                            Literal::Bool(b) => b.to_string(),
+                            Literal::String(s) => format!("\"{}\"", s),
+                            Literal::Char(c) => format!("'{}'", c),
+                        };
+                        format!("__match_val == {}", lit_str)
+                    }
+                    Pattern::Identifier(_) => {
+                        // Binding pattern: always matches, used with guards
+                        "true".to_string()
+                    }
+                    _ => "true".to_string(),
+                };
+
+                // Add guard condition if present
+                let full_condition = if let Some(guard) = &arm.guard {
+                    // For identifier patterns, bind the variable first
+                    if let Pattern::Identifier(name) = &arm.pattern {
+                        let guard_str = self.generate_expression(guard);
+                        format!(
+                            "func() bool {{ {} := __match_val; return {} }}()",
+                            name, guard_str
+                        )
+                    } else {
+                        let guard_str = self.generate_expression(guard);
+                        format!("{} && {}", condition, guard_str)
+                    }
+                } else {
+                    condition
+                };
+
+                let is_last = i == arms.len() - 1;
+                let is_catchall = matches!(&arm.pattern, Pattern::Wildcard)
+                    || (matches!(&arm.pattern, Pattern::Identifier(_)) && arm.guard.is_none());
+
+                if is_last && is_catchall {
+                    // Last catch-all arm: use `else` so Go sees guaranteed return
+                    let keyword = if i == 0 { "if true" } else { "} else" };
+                    output.push_str(&format!("{}{} {{\n", self.indent(), keyword));
+                } else {
+                    let keyword = if i == 0 { "if" } else { "} else if" };
+                    output.push_str(&format!("{}{} {} {{\n", self.indent(), keyword, full_condition));
+                }
+                self.indent_level += 1;
+                output.push_str(&format!("{}return {}\n", self.indent(), body_str));
+                self.indent_level -= 1;
+            }
+
+            output.push_str(&format!("{}}}\n", self.indent()));
+            self.indent_level -= 1;
+            output.push_str(&format!("{}}}\n", indent));
+        } else {
+            output.push_str(&format!("{}switch {} {{\n", indent, val_str));
+            self.indent_level += 1;
+            for arm in arms {
+                output.push_str(&self.generate_match_arm_with_return(arm));
+            }
+            self.indent_level -= 1;
+            output.push_str(&format!("{}}}\n", indent));
+        }
+
+        // Go requires a return after a switch even if all cases return.
+        // Add a panic for exhaustive matches without a default/wildcard arm.
+        if !has_default && !has_guards {
+            output.push_str(&format!(
+                "{}panic(\"unreachable match\")\n",
+                indent
+            ));
+        }
+
+        output
+    }
+
+    fn generate_match_arm_with_return(&mut self, arm: &MatchArm) -> String {
+        let indent = self.indent();
+        let body_str = self.generate_expression(arm.body);
+
+        let case_label = match &arm.pattern {
+            Pattern::Wildcard => "default".to_string(),
+            Pattern::Literal(lit) => {
+                let val = match lit {
+                    Literal::Int(n) => n.to_string(),
+                    Literal::Float(f) => f.to_string(),
+                    Literal::Bool(b) => b.to_string(),
+                    Literal::String(s) => format!("\"{}\"", s),
+                    Literal::Char(c) => format!("'{}'", c),
+                };
+                format!("case {}", val)
+            }
+            Pattern::Or(patterns) => {
+                let cases: Vec<String> = patterns
+                    .iter()
+                    .map(|p| self.pattern_to_case_label(p))
+                    .collect();
+                format!("case {}", cases.join(", "))
+            }
+            _ => "default".to_string(),
+        };
+
+        let mut out = format!("{}{}:\n", indent, case_label);
+        self.indent_level += 1;
+        out.push_str(&format!("{}return {}\n", self.indent(), body_str));
+        self.indent_level -= 1;
+        out
+    }
+
+    fn generate_match_arm_with_return_type_switch(&mut self, arm: &MatchArm) -> String {
+        let indent = self.indent();
+        let body_str = self.generate_expression(arm.body);
+
+        let case_label = match &arm.pattern {
+            Pattern::EnumVariant(variant_name, _) => {
+                format!("case {}", self.enum_variant_to_go_type(variant_name))
+            }
+            Pattern::Identifier(name) if name.contains("::") => {
+                format!("case {}", self.enum_variant_to_go_type(name))
+            }
+            Pattern::Wildcard => "default".to_string(),
+            _ => "default".to_string(),
+        };
+
+        let mut out = format!("{}{}:\n", indent, case_label);
+        self.indent_level += 1;
+        out.push_str(&format!("{}_ = _v\n", self.indent()));
+        out.push_str(&format!("{}return {}\n", self.indent(), body_str));
+        self.indent_level -= 1;
+        out
+    }
+
+    fn pattern_to_case_label(&self, pattern: &Pattern) -> String {
+        match pattern {
+            Pattern::Literal(lit) => match lit {
+                Literal::Int(n) => n.to_string(),
+                Literal::Float(f) => f.to_string(),
+                Literal::Bool(b) => b.to_string(),
+                Literal::String(s) => format!("\"{}\"", s),
+                Literal::Char(c) => format!("'{}'", c),
+            },
+            Pattern::Identifier(name) => name.clone(),
+            _ => "/* unsupported pattern */".to_string(),
         }
     }
 
@@ -582,13 +1264,47 @@ impl GoGenerator {
                 Literal::Char(c) => format!("'{}'", c),
             },
 
-            Expression::Identifier { name, .. } => name.clone(),
+            Expression::Identifier { name, .. } => {
+                // Convert Rust-style paths to Go-idiomatic names:
+                //   Color::Red → ColorRed{} (enum variant instantiation)
+                //   Type::new  → NewType (Go constructor convention)
+                if let Some((type_name, rest)) = name.split_once("::") {
+                    if rest == "new" {
+                        format!("New{}", Self::capitalize(type_name))
+                    } else {
+                        // Enum variant: Color::Red → ColorRed{}
+                        // In Go, unit enum variants are empty structs, so instantiate with {}
+                        format!("{}{}{{}}",
+                            Self::capitalize(type_name),
+                            Self::capitalize(rest))
+                    }
+                } else {
+                    name.clone()
+                }
+            }
 
             Expression::Binary {
                 left, op, right, ..
             } => {
-                let left_str = self.generate_expression(left);
-                let right_str = self.generate_expression(right);
+                // Wrap child binary expressions in parens if they have lower precedence
+                let left_str = if let Expression::Binary { op: ref left_op, .. } = **left {
+                    if Self::op_precedence(left_op) < Self::op_precedence(op) {
+                        format!("({})", self.generate_expression(left))
+                    } else {
+                        self.generate_expression(left)
+                    }
+                } else {
+                    self.generate_expression(left)
+                };
+                let right_str = if let Expression::Binary { op: ref right_op, .. } = **right {
+                    if Self::op_precedence(right_op) <= Self::op_precedence(op) {
+                        format!("({})", self.generate_expression(right))
+                    } else {
+                        self.generate_expression(right)
+                    }
+                } else {
+                    self.generate_expression(right)
+                };
                 let op_str = match op {
                     BinaryOp::Add => "+",
                     BinaryOp::Sub => "-",
@@ -616,7 +1332,14 @@ impl GoGenerator {
                 let operand_str = self.generate_expression(operand);
                 match op {
                     UnaryOp::Neg => format!("-{}", operand_str),
-                    UnaryOp::Not => format!("!{}", operand_str),
+                    UnaryOp::Not => {
+                        // Binary expressions need parens: !(a || b) not !a || b
+                        if matches!(**operand, Expression::Binary { .. }) {
+                            format!("!({})", operand_str)
+                        } else {
+                            format!("!{}", operand_str)
+                        }
+                    }
                     _ => operand_str,
                 }
             }
@@ -653,12 +1376,28 @@ impl GoGenerator {
                 ..
             } => {
                 let obj_str = self.generate_expression(object);
-                let method_name = capitalize_first(method);
                 let args: Vec<String> = arguments
                     .iter()
                     .map(|(_, arg)| self.generate_expression(arg))
                     .collect();
-                format!("{}.{}({})", obj_str, method_name, args.join(", "))
+                // Map Windjammer/Rust methods to Go equivalents
+                match method.as_str() {
+                    "len" => format!("int64(len({}))", obj_str), // .len() → len() in Go, cast to int64
+                    "is_empty" => format!("len({}) == 0", obj_str),
+                    "push" if args.len() == 1 => {
+                        // .push(x) → append(v, x) — note: caller needs to assign result
+                        format!("append({}, {})", obj_str, args[0])
+                    }
+                    "contains" if args.len() == 1 => {
+                        // strings.Contains or manual search — use a simple helper
+                        format!("/* contains */ false /* TODO */")
+                    }
+                    "to_string" => format!("fmt.Sprintf(\"%v\", {})", obj_str),
+                    _ => {
+                        let method_name = capitalize_first(method);
+                        format!("{}.{}({})", obj_str, method_name, args.join(", "))
+                    }
+                }
             }
 
             Expression::FieldAccess { object, field, .. } => {
@@ -690,6 +1429,110 @@ impl GoGenerator {
                 let start_str = self.generate_expression(start);
                 let end_str = self.generate_expression(end);
                 format!("/* range {}..{} */", start_str, end_str)
+            }
+
+            Expression::Closure {
+                parameters, body, ..
+            } => {
+                let params: Vec<String> = parameters
+                    .iter()
+                    .map(|p| format!("{} interface{{}}", p))
+                    .collect();
+                let body_str = self.generate_expression(body);
+                format!("func({}) interface{{}} {{\n{}return {}\n{}}}", params.join(", "), self.indent(), body_str, self.indent())
+            }
+
+            Expression::Cast { expr, type_, .. } => {
+                let expr_str = self.generate_expression(expr);
+                let type_str = self.type_to_go(type_);
+                format!("{}({})", type_str, expr_str)
+            }
+
+            Expression::Array { elements, .. } => {
+                let elems: Vec<String> = elements
+                    .iter()
+                    .map(|e| self.generate_expression(e))
+                    .collect();
+                format!("[]{{{}}}", elems.join(", "))
+            }
+
+            Expression::Tuple { elements, .. } => {
+                // Go doesn't have tuples; generate as a struct literal or just use first element
+                let elems: Vec<String> = elements
+                    .iter()
+                    .map(|e| self.generate_expression(e))
+                    .collect();
+                if elems.is_empty() {
+                    "struct{}{}".to_string()
+                } else {
+                    // For now, generate as a comment + array
+                    format!("/* tuple */ []{{{}}}", elems.join(", "))
+                }
+            }
+
+            Expression::MacroInvocation {
+                name, args: macro_args, ..
+            } => {
+                match name.as_str() {
+                    "println" | "print" => {
+                        self.needs_fmt_import = true;
+                        let args: Vec<String> = macro_args
+                            .iter()
+                            .map(|a| self.generate_expression(a))
+                            .collect();
+                        if name == "println" {
+                            format!("fmt.Println({})", args.join(", "))
+                        } else {
+                            format!("fmt.Print({})", args.join(", "))
+                        }
+                    }
+                    "vec" => {
+                        let args: Vec<String> = macro_args
+                            .iter()
+                            .map(|a| self.generate_expression(a))
+                            .collect();
+                        // Infer element type from first element; default to int64
+                        let elem_type = if let Some(first) = macro_args.first() {
+                            match first {
+                                Expression::Literal { value: Literal::Float(_), .. } => "float64",
+                                Expression::Literal { value: Literal::String(_), .. } => "string",
+                                Expression::Literal { value: Literal::Bool(_), .. } => "bool",
+                                _ => "int64",
+                            }
+                        } else {
+                            "int64"
+                        };
+                        format!("[]{}{{{}}}", elem_type, args.join(", "))
+                    }
+                    "format" => {
+                        self.needs_fmt_import = true;
+                        let args: Vec<String> = macro_args
+                            .iter()
+                            .map(|a| self.generate_expression(a))
+                            .collect();
+                        if args.is_empty() {
+                            "\"\"".to_string()
+                        } else {
+                            let fmt_str = args[0].replace("{}", "%v");
+                            if args.len() == 1 {
+                                format!("fmt.Sprintf({})", fmt_str)
+                            } else {
+                                format!(
+                                    "fmt.Sprintf({}, {})",
+                                    fmt_str,
+                                    args[1..].join(", ")
+                                )
+                            }
+                        }
+                    }
+                    _ => {
+                        let args: Vec<String> = macro_args
+                            .iter()
+                            .map(|a| self.generate_expression(a))
+                            .collect();
+                        format!("{}({})", name, args.join(", "))
+                    }
+                }
             }
 
             Expression::Block { statements, .. } => {
