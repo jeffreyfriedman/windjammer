@@ -1,3 +1,71 @@
+## [0.41.0] - 2026-02-10
+### Added — Cross-Backend Conformance
+- **29 cross-backend conformance tests** verifying byte-identical output across Rust, Go, JavaScript, and Interpreter backends
+- New test harness (`assert_backends_agree`) compiles and runs the same `.wj` source through all 4 backends, asserting matching output
+- Features now verified across all backends: hello world, arithmetic, control flow, functions, structs + methods, loop/break, match on values, recursion, struct mutation, continue (while/for), function composition, boolean logic, nested loops, multi-method structs, early return, string interpolation, static constructors, Vec push/len, nested function calls, unit enums, match guards, variable shadowing
+
+### Fixed — Rust Backend (1 fix)
+- **String interpolation in println**: `println("Hello, ${name}!")` was generating `println!(format!("Hello, {}!", name))` (nested macro) instead of `println!("Hello, {}!", name)` — root cause: `println` was in the early-return `test_macros` list, bypassing the format-unwrapping logic
+
+### Fixed — Go Backend (7 fixes)
+- **Static constructors**: Implemented `generate_static_method` — `Point::new(x, y)` now generates `func NewPoint(x, y int64) Point { ... }` (Go convention)
+- **Unit enum variants in match**: `Pattern::Identifier("Color::Red")` was not recognized as an enum type switch — added detection in both `generate_match_statement` and `generate_match_with_returns`
+- **Enum variant instantiation**: `Color::Red` in expressions now generates `ColorRed{}` (struct literal) instead of `ColorRed` (type name, not a value)
+- **Match case labels**: `generate_match_arm_with_return_type_switch` now converts `Color::Red` to `ColorRed` in `case` labels
+- **Match guards with returns**: Added if-else chain with `return` to `generate_match_with_returns` for matches containing guard expressions
+- **Missing return after exhaustive switch**: Go requires a reachable return — added `panic("unreachable match")` after exhaustive switches without a default arm
+- **Operator precedence**: Precedence-aware parenthesization for binary expressions (e.g., `2 * (r.W + r.H)` instead of `2 * r.W + r.H`)
+
+### Fixed — JavaScript Backend (4 fixes)
+- **Variable shadowing**: Implemented variable rename pass (`x` -> `x$1` -> `x$2`) instead of re-declaring `let x` in the same scope (illegal in JS)
+- **format! macro to template literals**: `format!("Hello, {}!", name)` now generates `` `Hello, ${name}!` `` instead of broken concatenation
+- **Match guard variable deduplication**: Multiple match arms binding the same variable name (e.g., `x if x > 0`, `x if x > 100`) now declare `let x;` only once
+- **println + format unwrapping**: `println` with an interpolated string now correctly passes the template literal to `console.log()`
+
+### Testing
+- **101 backend-specific tests**: Go (29), JS (16), Interpreter (20), Conformance (29), plus 7 more
+- Zero regressions across full test suite (200+ tests)
+
+---
+
+## [0.40.0] - 2026-02-01
+### Added — Multi-Backend Architecture
+- **Go backend** (`--target go`): Transpiles Windjammer to idiomatic Go — interfaces for traits, type switches for enums, pointer receivers for methods, `NewType` constructors
+- **JavaScript backend** (`--target js`): Transpiles Windjammer to ES2020+ — classes for structs, arrow functions for closures, `console.log` for print, `.mjs` output
+- **Windjammerscript Interpreter** (`--target interpret`): Tree-walking interpreter using the same AST as the compiler — fast iteration, no compilation step
+- **Cross-backend conformance test runner**: Utility to compile the same `.wj` source through all backends and assert identical output
+- **WASM backend** (`--target wasm`): Wrapper around Rust codegen for WebAssembly output
+
+### Go Backend Features
+- Structs with methods (pointer receivers for mutation)
+- Enums as Go interfaces with variant structs
+- Pattern matching via type switch and value switch
+- Vec operations: `len()` -> `len()`, `push()` -> `append()`, `is_empty()` -> `len() == 0`
+- `println("{}", x)` -> `fmt.Printf("%v\n", x)` with format string conversion
+- Static methods: `Type::new()` -> `NewType()`
+- Match guards via if-else chain fallback
+
+### JavaScript Backend Features
+- Structs as ES6 classes with constructor
+- Enums as frozen objects with tagged variants
+- Pattern matching via if-else chain
+- Vec operations: `len()` -> `.length`, `contains()` -> `.includes()`, `push()` -> `.push()`
+- `println` -> `console.log` with format string conversion
+- String interpolation via template literals
+
+### Interpreter Features
+- Full expression evaluation (arithmetic, boolean, comparison, unary)
+- Variable binding with scoping
+- Control flow (if/else, while, for-range, loop, break, continue)
+- Functions with parameters and return values
+- Structs with field access and methods
+- Enums with pattern matching
+- Vec and basic collection operations
+- String interpolation
+- Match expressions with guards
+
+---
+
 ## [0.39.9] - 2026-01-08
 ### Fixed
 - **Bug #22**: Multi-line `pub use` statement parsing

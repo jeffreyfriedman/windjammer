@@ -23,6 +23,7 @@ pub mod error_statistics; // Error statistics tracking and analysis
 pub mod error_tui; // Interactive TUI for error navigation
 pub mod fuzzy_matcher; // Fuzzy string matching for typo suggestions
 pub mod inference;
+pub mod interpreter; // Windjammerscript: tree-walking interpreter for fast iteration
 pub mod lexer;
 pub mod optimizer;
 pub mod parser; // Parser module (refactored structure)
@@ -178,7 +179,7 @@ enum Commands {
         #[arg(long)]
         no_cargo_toml: bool,
     },
-    /// Run a Windjammer file (build + cargo run)
+    /// Run a Windjammer file (build + cargo run, or --interpret for instant execution)
     Run {
         /// Input file to run
         #[arg(value_name = "FILE")]
@@ -188,10 +189,17 @@ enum Commands {
         #[arg(short, long, value_enum, default_value = "rust")]
         target: CompilationTarget,
 
+        /// Interpret directly (Windjammerscript mode) — no compilation, instant execution.
+        /// Same .wj source can later be compiled with `wj build` for production.
+        #[arg(long)]
+        interpret: bool,
+
         /// Arguments to pass to the program
         #[arg(last = true)]
         args: Vec<String>,
     },
+    /// Start the Windjammerscript REPL (interactive interpreter)
+    Repl {},
     /// Run tests (discovers and runs all test functions)
     Test {
         /// Directory or file containing tests (defaults to current directory)
@@ -288,8 +296,20 @@ fn main() -> Result<()> {
         } => {
             eject_project(&path, &output, target, format, comments, !no_cargo_toml)?;
         }
-        Commands::Run { file, target, args } => {
-            run_file(&file, target, &args)?;
+        Commands::Run {
+            file,
+            target,
+            interpret,
+            args,
+        } => {
+            if interpret {
+                interpret_file(&file)?;
+            } else {
+                run_file(&file, target, &args)?;
+            }
+        }
+        Commands::Repl {} => {
+            run_repl()?;
         }
         Commands::Test {
             path,
@@ -3336,6 +3356,157 @@ pub fn run_tests(
         fs::remove_dir_all(&temp_dir)?;
     }
 
+    Ok(())
+}
+
+/// Interpret a .wj file directly using the Windjammerscript tree-walking interpreter.
+/// Same source can also be compiled with `wj build` for production.
+fn interpret_file(file: &Path) -> Result<()> {
+    use colored::*;
+
+    if !file.exists() {
+        anyhow::bail!("File not found: {:?}", file);
+    }
+    if file.extension().is_none_or(|ext| ext != "wj") {
+        anyhow::bail!("File must have .wj extension: {:?}", file);
+    }
+
+    println!(
+        "{} {:?} (Windjammerscript interpreter)",
+        "Interpreting".green().bold(),
+        file
+    );
+
+    let source = std::fs::read_to_string(file)?;
+    let mut lex = lexer::Lexer::new(&source);
+    let tokens = lex.tokenize_with_locations();
+    let mut parse = parser::Parser::new_with_source(
+        tokens,
+        file.to_string_lossy().to_string(),
+        source.clone(),
+    );
+    let program = parse
+        .parse()
+        .map_err(|e| anyhow::anyhow!("Parse error: {}", e))?;
+
+    let mut interp = interpreter::Interpreter::new();
+    match interp.run(&program) {
+        Ok(_) => Ok(()),
+        Err(e) => {
+            eprintln!("{} {}", "Runtime error:".red().bold(), e);
+            std::process::exit(1);
+        }
+    }
+}
+
+/// Run the Windjammerscript REPL (Read-Eval-Print Loop)
+fn run_repl() -> Result<()> {
+    use colored::*;
+    use std::io::{self, BufRead, Write};
+
+    println!(
+        "{} {} {}",
+        "Windjammerscript".cyan().bold(),
+        "REPL".white().bold(),
+        "(type 'exit' or Ctrl-D to quit)".dimmed()
+    );
+    println!(
+        "{}",
+        "Tip: Any code you write here can be compiled with `wj build` for production."
+            .dimmed()
+    );
+    println!();
+
+    let stdin = io::stdin();
+    let mut accumulated_source = String::new();
+    let mut line_buffer = String::new();
+    let mut in_block = false;
+    let mut brace_depth: i32 = 0;
+
+    loop {
+        // Print prompt
+        if in_block {
+            print!("{} ", "...".dimmed());
+        } else {
+            print!("{} ", "wj>".green().bold());
+        }
+        io::stdout().flush()?;
+
+        line_buffer.clear();
+        let bytes_read = stdin.lock().read_line(&mut line_buffer)?;
+        if bytes_read == 0 {
+            // EOF (Ctrl-D)
+            println!();
+            break;
+        }
+
+        let line = line_buffer.trim_end();
+
+        if line == "exit" || line == "quit" {
+            break;
+        }
+
+        // Track brace depth for multi-line input
+        for ch in line.chars() {
+            match ch {
+                '{' => brace_depth += 1,
+                '}' => brace_depth -= 1,
+                _ => {}
+            }
+        }
+
+        accumulated_source.push_str(line);
+        accumulated_source.push('\n');
+
+        if brace_depth > 0 {
+            in_block = true;
+            continue;
+        }
+
+        in_block = false;
+        brace_depth = 0;
+
+        // Wrap in main() if it's a simple expression/statement
+        let source = if accumulated_source.contains("fn main()") {
+            accumulated_source.clone()
+        } else {
+            format!("fn main() {{\n{}\n}}", accumulated_source)
+        };
+
+        // Parse and interpret
+        let mut lex = lexer::Lexer::new(&source);
+        let tokens = lex.tokenize_with_locations();
+        let mut parse = parser::Parser::new_with_source(
+            tokens,
+            "repl".to_string(),
+            source.clone(),
+        );
+
+        match parse.parse() {
+            Ok(program) => {
+                let mut interp = interpreter::Interpreter::new();
+                match interp.run(&program) {
+                    Ok(val) => {
+                        // Print non-unit return values
+                        let display = val.to_display_string();
+                        if display != "()" {
+                            println!("{}", display);
+                        }
+                    }
+                    Err(e) => {
+                        eprintln!("{} {}", "Error:".red().bold(), e);
+                    }
+                }
+            }
+            Err(e) => {
+                eprintln!("{} {}", "Parse error:".red().bold(), e);
+            }
+        }
+
+        accumulated_source.clear();
+    }
+
+    println!("{}", "Goodbye!".dimmed());
     Ok(())
 }
 
