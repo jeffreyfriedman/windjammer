@@ -3641,6 +3641,19 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
             }
         }
 
+        // TDD FIX: Pre-compute which parameters are actually used in the function body.
+        // Unused parameters get prefixed with `_` to suppress "unused variable" warnings.
+        // THE WINDJAMMER WAY: The compiler handles this automatically — developers don't
+        // need to manually prefix unused parameters with `_`.
+        let body_refs: Vec<&Statement> = func.body.to_vec();
+        let unused_params: std::collections::HashSet<String> = func
+            .parameters
+            .iter()
+            .filter(|p| p.name != "self")
+            .filter(|p| !Self::variable_used_in_statements(&body_refs, &p.name))
+            .map(|p| p.name.clone())
+            .collect();
+
         let additional_params: Vec<String> = func
             .parameters
             .iter()
@@ -3815,6 +3828,13 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
                     ""
                 };
 
+                // TDD FIX: Prefix unused parameter names with `_` to suppress warnings
+                let display_name = if unused_params.contains(&param.name) {
+                    format!("_{}", param.name)
+                } else {
+                    param.name.clone()
+                };
+
                 // Check if this is a pattern parameter
                 if let Some(pattern) = &param.pattern {
                     // Generate pattern: type syntax
@@ -3826,7 +3846,7 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
                     )
                 } else {
                     // Simple name: type syntax
-                    format!("{}{}: {}", mut_prefix, param.name, type_str)
+                    format!("{}{}: {}", mut_prefix, display_name, type_str)
                 }
             })
             .collect();
@@ -7972,10 +7992,13 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
         false
     }
 
-    /// Check if a variable name appears in a single statement
+    /// Check if a variable name appears in a single statement.
+    /// Must be comprehensive to correctly detect unused parameters for `_` prefixing.
     fn variable_used_in_statement(stmt: &Statement, var_name: &str) -> bool {
         match stmt {
-            Statement::Let { value, .. } => Self::variable_used_in_expression(value, var_name),
+            Statement::Let { value, .. } | Statement::Const { value, .. } => {
+                Self::variable_used_in_expression(value, var_name)
+            }
             Statement::Assignment { target, value, .. } => {
                 Self::variable_used_in_expression(target, var_name)
                     || Self::variable_used_in_expression(value, var_name)
@@ -8009,17 +8032,23 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
             Statement::Loop { body, .. } => Self::variable_used_in_statements(body, var_name),
             Statement::Match { value, arms, .. } => {
                 Self::variable_used_in_expression(value, var_name)
-                    || arms
-                        .iter()
-                        .any(|arm| Self::variable_used_in_expression(arm.body, var_name))
+                    || arms.iter().any(|arm| {
+                        Self::variable_used_in_expression(arm.body, var_name)
+                            || arm
+                                .guard
+                                .as_ref()
+                                .is_some_and(|g| Self::variable_used_in_expression(g, var_name))
+                    })
             }
             _ => false,
         }
     }
 
-    /// Check if a variable name appears in an expression
+    /// Check if a variable name appears in an expression.
+    /// Must be exhaustive to correctly detect unused parameters for `_` prefixing.
     fn variable_used_in_expression(expr: &Expression, var_name: &str) -> bool {
         match expr {
+            Expression::Literal { .. } => false,
             Expression::Identifier { name, .. } => name == var_name,
             Expression::FieldAccess { object, .. } => {
                 Self::variable_used_in_expression(object, var_name)
@@ -8056,7 +8085,35 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
             Expression::Block { statements, .. } => {
                 Self::variable_used_in_statements(statements, var_name)
             }
-            _ => false,
+            Expression::StructLiteral { fields, .. } => fields
+                .iter()
+                .any(|(_, val)| Self::variable_used_in_expression(val, var_name)),
+            Expression::MapLiteral { pairs, .. } => pairs.iter().any(|(k, v)| {
+                Self::variable_used_in_expression(k, var_name)
+                    || Self::variable_used_in_expression(v, var_name)
+            }),
+            Expression::Range { start, end, .. } => {
+                Self::variable_used_in_expression(start, var_name)
+                    || Self::variable_used_in_expression(end, var_name)
+            }
+            Expression::Closure { body, .. } => Self::variable_used_in_expression(body, var_name),
+            Expression::Cast { expr, .. } => Self::variable_used_in_expression(expr, var_name),
+            Expression::Tuple { elements, .. } | Expression::Array { elements, .. } => elements
+                .iter()
+                .any(|e| Self::variable_used_in_expression(e, var_name)),
+            Expression::MacroInvocation { args, .. } => args
+                .iter()
+                .any(|a| Self::variable_used_in_expression(a, var_name)),
+            Expression::TryOp { expr, .. } | Expression::Await { expr, .. } => {
+                Self::variable_used_in_expression(expr, var_name)
+            }
+            Expression::ChannelSend { channel, value, .. } => {
+                Self::variable_used_in_expression(channel, var_name)
+                    || Self::variable_used_in_expression(value, var_name)
+            }
+            Expression::ChannelRecv { channel, .. } => {
+                Self::variable_used_in_expression(channel, var_name)
+            }
         }
     }
 
