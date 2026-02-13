@@ -4654,16 +4654,32 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
                     .as_ref()
                     .is_some_and(|var| self.loop_body_modifies_variable(body, var));
 
-                if needs_mut {
-                    output.push_str("mut ");
-                }
-                output.push_str(&pattern_str);
-                output.push_str(" in ");
-
                 // Check if we need to add & for borrowed iteration
                 // This handles the common case of iterating over fields of borrowed structs
                 let needs_borrow = self.should_borrow_for_iteration(iterable);
                 let needs_mut_borrow = needs_mut && needs_borrow;
+
+                // TDD FIX: Only add `mut` to the loop variable when it's reassigned directly,
+                // NOT when iterating with `&mut`. When iterating with `&mut`, the loop variable
+                // is already a `&mut T` reference, so field modifications work without `mut` on
+                // the binding. Adding `mut` generates: `for mut member in &mut collection`
+                // which triggers "variable does not need to be mutable" warning.
+                //
+                // Check two cases:
+                // 1. We infer `&mut` iteration (needs_mut_borrow) - don't add `mut`
+                // 2. Source already has `&mut` on the iterable (Expression::Unary MutRef) - don't add `mut`
+                let iterable_already_mut_ref = matches!(
+                    iterable,
+                    Expression::Unary {
+                        op: UnaryOp::MutRef,
+                        ..
+                    }
+                );
+                if needs_mut && !needs_mut_borrow && !iterable_already_mut_ref {
+                    output.push_str("mut ");
+                }
+                output.push_str(&pattern_str);
+                output.push_str(" in ");
 
                 // BORROWED ITERATOR: Track if iterator variable is from borrowed collection
                 // So we can auto-clone when pushing to new collections
@@ -5564,10 +5580,16 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
             Expression::Range { .. }
             | Expression::Binary { .. }
             | Expression::Closure { .. }
-            | Expression::Unary { .. } => {
+            | Expression::Unary { .. }
+            | Expression::Cast { .. } => {
                 // Unary expressions like (*entity).field need parens for correct precedence
                 // Without parens: *entity.field means *(entity.field) - WRONG
                 // With parens: (*entity).field means dereference then access field - CORRECT
+                //
+                // Cast expressions like (x as usize).method() need parens because `as` has
+                // lower precedence than `.` in Rust:
+                // Without parens: x as usize.method() means x as (usize.method()) - WRONG
+                // With parens: (x as usize).method() - CORRECT
                 format!("({})", self.generate_expression(expr))
             }
             _ => self.generate_expression(expr),
@@ -5742,30 +5764,32 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
                     // Left is usize, right is NOT usize
                     if right_is_int_literal {
                         // Int literals are always non-negative, safe to cast to usize
-                        right_str = format!("({} as usize)", right_str);
+                        right_str = format!("{} as usize", right_str);
                     } else {
                         // Cast the usize side (LEFT) to i64 for safety
                         // Use parens around compound expressions to prevent precedence issues
+                        // because `as` has higher precedence than arithmetic:
+                        // `a + b as i64` → `a + (b as i64)` (wrong), need `(a + b) as i64`
                         let needs_inner_parens = matches!(left, Expression::Binary { .. });
                         if needs_inner_parens {
-                            left_str = format!("(({}) as i64)", left_str);
+                            left_str = format!("({}) as i64", left_str);
                         } else {
-                            left_str = format!("({} as i64)", left_str);
+                            left_str = format!("{} as i64", left_str);
                         }
                     }
                 } else if is_comparison && right_is_usize && !left_is_usize {
                     // Right is usize, left is NOT usize
                     if left_is_int_literal {
                         // Int literals are always non-negative, safe to cast to usize
-                        left_str = format!("({} as usize)", left_str);
+                        left_str = format!("{} as usize", left_str);
                     } else {
                         // Cast the usize side (RIGHT) to i64 for safety
                         // Use parens around compound expressions to prevent precedence issues
                         let needs_inner_parens = matches!(right, Expression::Binary { .. });
                         if needs_inner_parens {
-                            right_str = format!("(({}) as i64)", right_str);
+                            right_str = format!("({}) as i64", right_str);
                         } else {
-                            right_str = format!("({} as i64)", right_str);
+                            right_str = format!("{} as i64", right_str);
                         }
                     }
                 }
@@ -5775,12 +5799,29 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
                 // AUTO-CAST: When doing arithmetic between usize and int literal, cast literal to usize
                 // E.g., items.len() - 1 -> items.len() - 1usize
                 if is_arithmetic && left_is_usize && right_is_int_literal && !right_is_usize {
-                    right_str = format!("({} as usize)", right_str);
+                    right_str = format!("{} as usize", right_str);
                 } else if is_arithmetic && right_is_usize && left_is_int_literal && !left_is_usize {
-                    left_str = format!("({} as usize)", left_str);
+                    left_str = format!("{} as usize", left_str);
                 }
 
                 let op_str = operators::binary_op_to_rust(op);
+
+                // TDD FIX: Rust parses `expr as usize < y` as `expr as usize<y>` (generics).
+                // When the left operand is a cast (or ends with `as TYPE`) and the operator
+                // is `<`, we must wrap the left side in parentheses to disambiguate.
+                // Other comparison operators (>=, <=, ==, !=, >) don't have this ambiguity.
+                let left_needs_cast_parens = op_str == "<"
+                    && (matches!(left, Expression::Cast { .. }) || left_str.contains(" as "));
+                let right_needs_cast_parens = op_str == ">"
+                    && (matches!(right, Expression::Cast { .. }) || right_str.contains(" as "));
+
+                if left_needs_cast_parens {
+                    left_str = format!("({})", left_str);
+                }
+                if right_needs_cast_parens {
+                    right_str = format!("({})", right_str);
+                }
+
                 format!("{} {} {}", left_str, op_str, right_str)
             }
             Expression::Unary { op, operand, .. } => {
@@ -7135,6 +7176,8 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
             }
             Expression::Cast { expr, type_, .. } => {
                 // Add parentheses around binary expressions for correct precedence
+                // because `as` has higher precedence than arithmetic in Rust:
+                // `a + b as usize` is parsed as `a + (b as usize)`, not `(a + b) as usize`
                 let expr_str = match &**expr {
                     Expression::Binary { .. } => {
                         format!("({})", self.generate_expression(expr))
@@ -7142,10 +7185,12 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
                     _ => self.generate_expression(expr),
                 };
                 let type_str = self.type_to_rust(type_);
-                // TDD FIX: Wrap entire cast in parentheses to avoid precedence issues
-                // Rust parses `x as T.method()` as `x as (T.method())` not `(x as T).method()`
-                // Also `i as usize < len` is parsed as generics, not comparison
-                format!("({} as {})", expr_str, type_str)
+                // TDD FIX: Do NOT wrap cast in outer parentheses.
+                // `as` has higher precedence than comparison/arithmetic operators in Rust,
+                // so `x as usize >= y` correctly parses as `(x as usize) >= y`.
+                // Outer parens are ONLY needed when the cast is followed by `.method()`
+                // or `.field` (handled at the MethodCall/FieldAccess generation sites).
+                format!("{} as {}", expr_str, type_str)
             }
             Expression::Block {
                 statements: stmts, ..
