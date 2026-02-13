@@ -119,7 +119,11 @@ impl Value {
             Value::Int(n) => n.to_string(),
             Value::Float(f) => {
                 let s = f.to_string();
-                if s.contains('.') { s } else { format!("{}.0", s) }
+                if s.contains('.') {
+                    s
+                } else {
+                    format!("{}.0", s)
+                }
             }
             Value::Bool(b) => b.to_string(),
             Value::String(s) => s.clone(),

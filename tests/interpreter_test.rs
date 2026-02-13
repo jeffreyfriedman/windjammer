@@ -4,10 +4,8 @@
 /// Same .wj source → interpreted output == compiled output.
 /// This is the key guarantee: quick iteration with interpreter,
 /// then export to Rust for production.
-
 // We use the parser directly + interpreter, without going through the CLI.
 // This tests the interpreter engine in isolation.
-
 use std::fs;
 use std::process::Command;
 use tempfile::TempDir;
@@ -51,7 +49,11 @@ fn compile_and_run_rust(source: &str) -> String {
         .output()
         .expect("Failed to execute wj");
 
-    assert!(wj.status.success(), "wj failed: {}", String::from_utf8_lossy(&wj.stderr));
+    assert!(
+        wj.status.success(),
+        "wj failed: {}",
+        String::from_utf8_lossy(&wj.stderr)
+    );
 
     let rs_file = output_dir.join("test.rs");
     let bin_path = temp_dir.path().join("test_bin");
@@ -64,7 +66,11 @@ fn compile_and_run_rust(source: &str) -> String {
         .output()
         .expect("Failed to execute rustc");
 
-    assert!(rustc.status.success(), "rustc failed: {}", String::from_utf8_lossy(&rustc.stderr));
+    assert!(
+        rustc.status.success(),
+        "rustc failed: {}",
+        String::from_utf8_lossy(&rustc.stderr)
+    );
 
     let run = Command::new(&bin_path).output().expect("Failed to run");
     String::from_utf8(run.stdout).unwrap()
@@ -72,7 +78,8 @@ fn compile_and_run_rust(source: &str) -> String {
 
 /// Assert interpreter output matches compiled Rust output
 fn assert_interpreter_matches_compiled(test_name: &str, source: &str) {
-    let interp_output = interpret(source).unwrap_or_else(|e| panic!("[{}] Interpreter error: {}", test_name, e));
+    let interp_output =
+        interpret(source).unwrap_or_else(|e| panic!("[{}] Interpreter error: {}", test_name, e));
     let compiled_output = compile_and_run_rust(source);
 
     assert_eq!(
@@ -350,7 +357,8 @@ fn main() {
     }
 }
 "#,
-    ).unwrap();
+    )
+    .unwrap();
     assert!(output.contains("correct"));
     assert!(output.contains("or works"));
 }
@@ -364,7 +372,8 @@ fn main() {
     println("Hello, {}!", name)
 }
 "#,
-    ).unwrap();
+    )
+    .unwrap();
     assert_eq!(output.trim(), "Hello, World!");
 }
 
@@ -380,6 +389,7 @@ fn main() {
     println("{}", sum)
 }
 "#,
-    ).unwrap();
+    )
+    .unwrap();
     assert_eq!(output.trim(), "10");
 }

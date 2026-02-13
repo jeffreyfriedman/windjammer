@@ -67,6 +67,9 @@ pub struct CodeGenerator<'ast> {
     in_impl_block: bool,                 // true if currently generating code for an impl block
     // USIZE DETECTION: Track which struct fields have type usize (for auto-casting)
     usize_struct_fields: std::collections::HashMap<String, std::collections::HashSet<String>>, // Struct name -> usize field names
+    // METHOD RETURN TYPES: Track which methods return usize (for auto-casting in comparisons)
+    // Maps method name -> return type. Used by infer_expression_type for MethodCall.
+    method_return_types: std::collections::HashMap<String, Type>,
     // FUNCTION CONTEXT: Track current function parameters for compound assignment optimization
     current_function_params: Vec<crate::parser::Parameter<'ast>>, // Parameters of the current function
     // FUNCTION CONTEXT: Track current function return type for string literal conversion
@@ -197,6 +200,7 @@ impl<'ast> CodeGenerator<'ast> {
             current_struct_name: None,
             in_impl_block: false,
             usize_struct_fields: std::collections::HashMap::new(),
+            method_return_types: std::collections::HashMap::new(),
             current_function_params: Vec::new(),
             current_function_return_type: None,
             current_function_body: Vec::new(),
@@ -3376,6 +3380,16 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
         // Track function return type for string literal conversion
         self.current_function_return_type = func.return_type.clone();
 
+        // Track method return types for usize inference in comparisons
+        // When in an impl block, record the return type so expression_produces_usize
+        // can resolve method calls like animation.frame_count() → usize
+        if self.in_impl_block {
+            if let Some(ref ret_type) = func.return_type {
+                self.method_return_types
+                    .insert(func.name.to_string(), ret_type.clone());
+            }
+        }
+
         // Track function body for data flow analysis
         self.current_function_body = func.body.clone();
 
@@ -5098,7 +5112,8 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
                 }
                 None
             }
-            // self.field → look up field type from struct_field_types
+            // obj.field → look up field type from struct_field_types
+            // Supports: self.field, var.field, and nested: self.config.max_size
             Expression::FieldAccess { object, field, .. } => {
                 // Resolve the object's type first
                 if let Expression::Identifier { name, .. } = &**object {
@@ -5136,6 +5151,35 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
                             }
                         }
                     }
+                } else {
+                    // Nested field access: self.config.max_size, obj.inner.field, etc.
+                    // Recursively resolve the object's type, then look up the field
+                    if let Some(obj_type) = self.infer_expression_type(object) {
+                        let type_name = match &obj_type {
+                            Type::Custom(n) => n.as_str(),
+                            // Handle references: &Config → Config
+                            Type::Reference(inner) | Type::MutableReference(inner) => {
+                                match inner.as_ref() {
+                                    Type::Custom(n) => n.as_str(),
+                                    _ => "",
+                                }
+                            }
+                            _ => "",
+                        };
+                        if !type_name.is_empty() {
+                            // Also try stripping generic params: "Config<T>" → "Config"
+                            let base_name = type_name.split('<').next().unwrap_or(type_name);
+                            if let Some(fields) = self
+                                .struct_field_types
+                                .get(type_name)
+                                .or_else(|| self.struct_field_types.get(base_name))
+                            {
+                                if let Some(field_type) = fields.get(field.as_str()) {
+                                    return Some(field_type.clone());
+                                }
+                            }
+                        }
+                    }
                 }
                 None
             }
@@ -5154,6 +5198,52 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
             } => self
                 .infer_expression_type(operand)
                 .map(|t| Type::MutableReference(Box::new(t))),
+            // Method calls: look up return type from method_return_types registry
+            // and signature registry (for cross-file method resolution)
+            Expression::MethodCall { object, method, .. } => {
+                // Check well-known methods first
+                if method == "len" || method == "count" || method == "capacity" {
+                    return Some(Type::Custom("usize".to_string()));
+                }
+                // Look up from the method return type registry (populated during impl generation)
+                if let Some(t) = self.method_return_types.get(method.as_str()) {
+                    return Some(t.clone());
+                }
+                // TDD FIX: Cross-file method resolution via signature registry.
+                // When the method is on a different type (e.g., animation.frame_count()),
+                // method_return_types won't have it. Resolve the object's type, then
+                // look up Type::method in the signature registry.
+                if let Some(obj_type) = self.infer_expression_type(object) {
+                    let type_name = match &obj_type {
+                        Type::Custom(n) => n.clone(),
+                        Type::Reference(inner) | Type::MutableReference(inner) => {
+                            match inner.as_ref() {
+                                Type::Custom(n) => n.clone(),
+                                _ => String::new(),
+                            }
+                        }
+                        _ => String::new(),
+                    };
+                    if !type_name.is_empty() {
+                        let qualified = format!("{}::{}", type_name, method);
+                        if let Some(sig) = self.signature_registry.get_signature(&qualified) {
+                            return sig.return_type.clone();
+                        }
+                        // Also try base name for generic types
+                        let base_name = type_name.split('<').next().unwrap_or(&type_name);
+                        if base_name != type_name {
+                            let qualified = format!("{}::{}", base_name, method);
+                            if let Some(sig) = self.signature_registry.get_signature(&qualified) {
+                                return sig.return_type.clone();
+                            }
+                        }
+                    }
+                }
+                // Final fallback: try simple method name
+                self.signature_registry
+                    .get_signature(method)
+                    .and_then(|sig| sig.return_type.clone())
+            }
             _ => None,
         }
     }
@@ -5329,9 +5419,11 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
                 // Check if it's self.field
                 if matches!(&**object, Expression::Identifier { name, .. } if name == "self") {
                     // Use the tracked struct name and usize_struct_fields to infer type
+                    // Strip generic parameters: "Pool<T>" → "Pool"
                     if let Some(struct_name) = &self.current_struct_name {
+                        let base_name = struct_name.split('<').next().unwrap_or(struct_name);
                         // Check if this field is tracked as usize
-                        if let Some(usize_fields) = self.usize_struct_fields.get(struct_name) {
+                        if let Some(usize_fields) = self.usize_struct_fields.get(base_name) {
                             if usize_fields.contains(field) {
                                 return Some("usize".to_string());
                             }
@@ -5361,7 +5453,11 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
         match expr {
             // .len() returns usize
             Expression::MethodCall { method, .. } => {
-                method == "len" || method == "count" || method == "capacity"
+                if method == "len" || method == "count" || method == "capacity" {
+                    return true;
+                }
+                // Fallback: check via type inference
+                self.infer_expression_type_is_usize(expr)
             }
             // Binary ops with len: len() - 1, len() + offset, etc.
             Expression::Binary { left, right, .. } => {
@@ -5371,7 +5467,7 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
             Expression::Cast { type_, .. } => {
                 matches!(type_, Type::Custom(name) if name == "usize")
             }
-            // Variables assigned from .len()
+            // Variables assigned from .len() or typed as usize
             Expression::Identifier { name, .. } => {
                 if self.usize_variables.contains(name) {
                     return true;
@@ -5380,32 +5476,52 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
                 // Check if this is a struct field with usize type (in impl block)
                 if self.in_impl_block && self.current_struct_fields.contains(name) {
                     // Look up the struct to see if this field is usize
+                    // Strip generic parameters: "Pool<T>" → "Pool"
                     if let Some(struct_name) = &self.current_struct_name {
-                        if let Some(usize_fields) = self.usize_struct_fields.get(struct_name) {
-                            return usize_fields.contains(name);
-                        }
-                    }
-                }
-
-                false
-            }
-            // Field access: self.field_name or obj.field_name
-            Expression::FieldAccess { object, field, .. } => {
-                // Check if accessing a usize field on self
-                if let Expression::Identifier { name: obj_name, .. } = &**object {
-                    if obj_name == "self" && self.in_impl_block {
-                        // Look up struct to see if this field is usize
-                        if let Some(struct_name) = &self.current_struct_name {
-                            if let Some(usize_fields) = self.usize_struct_fields.get(struct_name) {
-                                return usize_fields.contains(field);
+                        let base_name = struct_name.split('<').next().unwrap_or(struct_name);
+                        if let Some(usize_fields) = self.usize_struct_fields.get(base_name) {
+                            if usize_fields.contains(name) {
+                                return true;
                             }
                         }
                     }
                 }
-                false
+
+                // Fallback: check parameters and local variable types via type inference
+                self.infer_expression_type_is_usize(expr)
+            }
+            // Field access: self.field_name or obj.field_name (including nested)
+            Expression::FieldAccess { object, field, .. } => {
+                // Check if accessing a usize field on self (fast path)
+                if let Expression::Identifier { name: obj_name, .. } = &**object {
+                    if obj_name == "self" && self.in_impl_block {
+                        // Look up struct to see if this field is usize
+                        if let Some(struct_name) = &self.current_struct_name {
+                            // Strip generic parameters: "Pool<T>" → "Pool"
+                            let base_name = struct_name.split('<').next().unwrap_or(struct_name);
+                            if let Some(usize_fields) = self.usize_struct_fields.get(base_name) {
+                                if usize_fields.contains(field) {
+                                    return true;
+                                }
+                            }
+                        }
+                    }
+                }
+                // Fallback: use type inference for obj.field, self.config.field, etc.
+                self.infer_expression_type_is_usize(expr)
             }
             _ => false,
         }
+    }
+
+    /// Check if an expression's inferred type is usize.
+    /// Uses infer_expression_type() for comprehensive type resolution including
+    /// parameters, local variables, nested field access, and method return types.
+    fn infer_expression_type_is_usize(&self, expr: &Expression) -> bool {
+        if let Some(t) = self.infer_expression_type(expr) {
+            return matches!(t, Type::Custom(ref name) if name == "usize");
+        }
+        false
     }
 
     /// Check if the function returns Option<T> where T is owned (not a reference)
@@ -8081,6 +8197,14 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
             Statement::For { body, .. } => body
                 .iter()
                 .any(|s| self.statement_mutates_variable_field(s, var_name)),
+            // TDD FIX: Check let bindings where the value is a mutating method call
+            // e.g., let tilemap = loader.load(...) where load takes &mut self
+            Statement::Let { value, .. } | Statement::Const { value, .. } => {
+                self.expression_mutates_variable_field(value, var_name)
+            }
+            Statement::Return {
+                value: Some(expr), ..
+            } => self.expression_mutates_variable_field(expr, var_name),
             _ => false,
         }
     }
@@ -8158,6 +8282,15 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
                 statements
                     .iter()
                     .any(|stmt| self.statement_mutates_variable_field(stmt, var_name))
+            }
+            // TDD FIX: The ? operator wraps expressions in TryOp. Must recurse through it
+            // to detect method calls like `loader.load(...)?` where load takes &mut self.
+            Expression::TryOp { expr, .. } | Expression::Await { expr, .. } => {
+                self.expression_mutates_variable_field(expr, var_name)
+            }
+            // Recurse through unary expressions (e.g., !expr, -expr, &expr, &mut expr)
+            Expression::Unary { operand, .. } => {
+                self.expression_mutates_variable_field(operand, var_name)
             }
             _ => false,
         }

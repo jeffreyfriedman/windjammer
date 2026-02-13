@@ -171,8 +171,8 @@ fn main() {
 #[test]
 #[cfg_attr(tarpaulin, ignore)]
 fn test_js_impl_generates_methods() {
-    /// Impl blocks should add methods to the corresponding class.
-    /// Currently they are dropped entirely — this test should FAIL (RED phase).
+    // Impl blocks should add methods to the corresponding class.
+    // Currently they are dropped entirely — this test should FAIL (RED phase).
     let code = compile_to_js(
         r#"
 struct Point {
@@ -201,7 +201,7 @@ fn main() {
 #[test]
 #[cfg_attr(tarpaulin, ignore)]
 fn test_js_impl_methods_callable() {
-    /// Methods should be callable on instances
+    // Methods should be callable on instances
     let output = compile_and_run_js(
         r#"
 struct Point {
@@ -227,7 +227,7 @@ fn main() {
 #[test]
 #[cfg_attr(tarpaulin, ignore)]
 fn test_js_impl_multiple_methods() {
-    /// Multiple methods in an impl block should all be generated
+    // Multiple methods in an impl block should all be generated
     let code = compile_to_js(
         r#"
 struct Rect {
@@ -269,7 +269,7 @@ fn main() {
 #[test]
 #[cfg_attr(tarpaulin, ignore)]
 fn test_js_match_as_expression() {
-    /// Match used as an expression should work in JS
+    // Match used as an expression should work in JS
     let output = compile_and_run_js(
         r#"
 fn describe(x: int) -> string {
@@ -387,7 +387,7 @@ fn main() {
 #[test]
 #[cfg_attr(tarpaulin, ignore)]
 fn test_js_enum_generation() {
-    /// Enums should generate Object.freeze or similar construct
+    // Enums should generate Object.freeze or similar construct
     let code = compile_to_js(
         r#"
 enum Direction {

@@ -233,7 +233,11 @@ if (import.meta.url === `file://${process.argv[1]}`) {
         }
 
         // Method name — use 'create' instead of 'new' since 'new' is reserved in JS
-        let method_name = if func.name == "new" { "create" } else { &func.name };
+        let method_name = if func.name == "new" {
+            "create"
+        } else {
+            &func.name
+        };
         output.push_str(method_name);
         output.push('(');
         let params: Vec<String> = func
@@ -882,7 +886,7 @@ if (import.meta.url === `file://${process.argv[1]}`) {
                     "is_empty" => format!("{}.length === 0", obj),
                     "contains" if args.len() == 1 => format!("{}.includes({})", obj, args[0]),
                     "to_string" => format!("String({})", obj),
-                    _ => format!("{}.{}({})", obj, method, args.join(", "))
+                    _ => format!("{}.{}({})", obj, method, args.join(", ")),
                 }
             }
 
@@ -979,7 +983,10 @@ if (import.meta.url === `file://${process.argv[1]}`) {
                         let args_str: Vec<String> =
                             args.iter().map(|e| self.generate_expression(e)).collect();
                         if args_str.len() <= 1 {
-                            args_str.first().cloned().unwrap_or_else(|| "''".to_string())
+                            args_str
+                                .first()
+                                .cloned()
+                                .unwrap_or_else(|| "''".to_string())
                         } else {
                             // First arg is the format string (quoted), rest are values
                             let fmt = &args_str[0];
@@ -1139,7 +1146,8 @@ if (import.meta.url === `file://${process.argv[1]}`) {
                         )
                     }
                     EnumPatternBinding::Tuple(patterns) => {
-                        let mut conditions = vec![format!("{}.type === '{}'", match_value, js_name)];
+                        let mut conditions =
+                            vec![format!("{}.type === '{}'", match_value, js_name)];
                         for (i, pat) in patterns.iter().enumerate() {
                             if let Pattern::Identifier(bind) = pat {
                                 conditions.push(format!(
