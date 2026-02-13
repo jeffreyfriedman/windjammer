@@ -444,12 +444,14 @@ impl<'ast> Analyzer<'ast> {
                             })
                     });
 
-                    // Also check for @auto decorator - if all fields are Copy, struct gets Copy
-                    let has_auto_derive = decl.decorators.iter().any(|d| d.name == "auto");
-                    let all_fields_copy =
-                        decl.fields.iter().all(|f| self.is_copy_type(&f.field_type));
+                    // WINDJAMMER PHILOSOPHY: Auto-detect Copy structs when all fields are Copy
+                    // This matches what codegen does (auto-derive Copy for simple structs).
+                    // Without this, the analyzer doesn't know a return type is Copy,
+                    // causing it to infer owned `self` instead of `&self` for getter methods.
+                    let all_fields_copy = !decl.fields.is_empty()
+                        && decl.fields.iter().all(|f| self.is_copy_type(&f.field_type));
 
-                    if has_copy_derive || (has_auto_derive && all_fields_copy) {
+                    if has_copy_derive || all_fields_copy {
                         self.copy_structs.insert(decl.name.clone());
                     }
                 }

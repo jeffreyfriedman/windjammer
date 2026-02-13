@@ -574,8 +574,7 @@ fn run_repl() -> anyhow::Result<()> {
     );
     println!(
         "{}",
-        "Tip: Any code here can be compiled with `wj build` for production."
-            .dimmed()
+        "Tip: Any code here can be compiled with `wj build` for production.".dimmed()
     );
     println!();
 
@@ -633,11 +632,8 @@ fn run_repl() -> anyhow::Result<()> {
 
         let mut lex = windjammer::lexer::Lexer::new(&source);
         let tokens = lex.tokenize_with_locations();
-        let mut parse = windjammer::parser::Parser::new_with_source(
-            tokens,
-            "repl".to_string(),
-            source.clone(),
-        );
+        let mut parse =
+            windjammer::parser::Parser::new_with_source(tokens, "repl".to_string(), source.clone());
 
         match parse.parse() {
             Ok(program) => {

@@ -1,5 +1,6 @@
-/// Interpreter bug-fix and coverage-gap tests — discovered by conformance dogfooding.
+//! Interpreter bug-fix and coverage-gap tests — discovered by conformance dogfooding.
 
+/// Parse source and run through the interpreter, capturing output.
 fn interpret(source: &str) -> Result<String, String> {
     let mut lexer = windjammer::lexer::Lexer::new(source);
     let tokens = lexer.tokenize_with_locations();

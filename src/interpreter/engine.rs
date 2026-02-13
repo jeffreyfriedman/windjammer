@@ -44,11 +44,18 @@ struct EnumVariantInfo {
 #[derive(Debug, Clone)]
 enum EnumVariantKind {
     Unit,
-    Tuple(usize), // number of fields
-    Struct(Vec<String>), // field names
+    Tuple {
+        #[allow(dead_code)]
+        count: usize,
+    },
+    Struct {
+        #[allow(dead_code)]
+        field_names: Vec<String>,
+    },
 }
 
 /// The Windjammerscript interpreter
+#[derive(Default)]
 pub struct Interpreter<'a> {
     env: Environment,
     /// All function/method definitions indexed by name
@@ -65,14 +72,7 @@ pub struct Interpreter<'a> {
 
 impl<'a> Interpreter<'a> {
     pub fn new() -> Self {
-        Self {
-            env: Environment::new(),
-            functions: HashMap::new(),
-            struct_defs: HashMap::new(),
-            enum_variants: HashMap::new(),
-            output: Vec::new(),
-            capture_output: false,
-        }
+        Self::default()
     }
 
     /// Create an interpreter that captures output (for testing)
@@ -111,13 +111,10 @@ impl<'a> Interpreter<'a> {
             match item {
                 Item::Function { decl, .. } => {
                     let name = decl.name.clone();
-                    self.functions
-                        .entry(name)
-                        .or_default()
-                        .push(FunctionDef {
-                            decl,
-                            receiver_type: None,
-                        });
+                    self.functions.entry(name).or_default().push(FunctionDef {
+                        decl,
+                        receiver_type: None,
+                    });
                 }
                 Item::Struct { decl, .. } => {
                     let field_names: Vec<String> =
@@ -143,12 +140,15 @@ impl<'a> Interpreter<'a> {
                         let data_kind = match &variant.data {
                             crate::parser::EnumVariantData::Unit => EnumVariantKind::Unit,
                             crate::parser::EnumVariantData::Tuple(types) => {
-                                EnumVariantKind::Tuple(types.len())
+                                EnumVariantKind::Tuple { count: types.len() }
                             }
                             crate::parser::EnumVariantData::Struct(fields) => {
-                                EnumVariantKind::Struct(
-                                    fields.iter().map(|(name, _)| name.clone()).collect(),
-                                )
+                                EnumVariantKind::Struct {
+                                    field_names: fields
+                                        .iter()
+                                        .map(|(name, _)| name.clone())
+                                        .collect(),
+                                }
                             }
                         };
                         self.enum_variants.insert(
@@ -191,10 +191,7 @@ impl<'a> Interpreter<'a> {
         self.env.push_scope();
 
         // Bind parameters
-        let param_iter = decl
-            .parameters
-            .iter()
-            .filter(|p| p.name != "self");
+        let param_iter = decl.parameters.iter().filter(|p| p.name != "self");
 
         for (param, arg) in param_iter.zip(args.iter()) {
             self.env.define(&param.name, arg.clone());
@@ -280,11 +277,7 @@ impl<'a> Interpreter<'a> {
 
     fn exec_statement(&mut self, stmt: &'a Statement<'a>, is_last: bool) -> ControlFlow {
         match stmt {
-            Statement::Let {
-                pattern,
-                value,
-                ..
-            } => {
+            Statement::Let { pattern, value, .. } => {
                 let val = self.eval_expression(value);
                 self.bind_pattern(pattern, val);
                 ControlFlow::Continue
@@ -425,6 +418,7 @@ impl<'a> Interpreter<'a> {
     // Assignment
     // ================================================================
 
+    #[allow(clippy::collapsible_match)]
     fn exec_assignment(
         &mut self,
         target: &'a Expression<'a>,
@@ -462,10 +456,8 @@ impl<'a> Interpreter<'a> {
                     } else {
                         new_val
                     };
-                    if let Some(obj) = self.env.get_mut(&var_name) {
-                        if let Value::Struct { fields, .. } = obj {
-                            fields.insert(field_name, final_val);
-                        }
+                    if let Some(Value::Struct { fields, .. }) = self.env.get_mut(&var_name) {
+                        fields.insert(field_name, final_val);
                     }
                 }
             }
@@ -491,11 +483,9 @@ impl<'a> Interpreter<'a> {
                         } else {
                             new_val
                         };
-                        if let Some(obj) = self.env.get_mut(&var_name) {
-                            if let Value::Vec(items) = obj {
-                                if i < items.len() {
-                                    items[i] = final_val;
-                                }
+                        if let Some(Value::Vec(items)) = self.env.get_mut(&var_name) {
+                            if i < items.len() {
+                                items[i] = final_val;
                             }
                         }
                     }
@@ -582,7 +572,7 @@ impl<'a> Interpreter<'a> {
                         || full_path
                             .rsplit("::")
                             .next()
-                            .map_or(false, |pat_variant| pat_variant == variant);
+                            .is_some_and(|pat_variant| pat_variant == variant);
 
                     if !variant_matches {
                         return false;
@@ -590,10 +580,7 @@ impl<'a> Interpreter<'a> {
 
                     // Also check nested patterns inside the binding
                     match (binding, data) {
-                        (
-                            crate::parser::EnumPatternBinding::Tuple(pats),
-                            EnumData::Tuple(vals),
-                        ) => {
+                        (crate::parser::EnumPatternBinding::Tuple(pats), EnumData::Tuple(vals)) => {
                             // All inner patterns must also match
                             pats.iter()
                                 .zip(vals.iter())
@@ -634,10 +621,7 @@ impl<'a> Interpreter<'a> {
                 // Bind enum variant data if needed
                 if let Value::Enum { data, .. } = value {
                     match (binding, data) {
-                        (
-                            crate::parser::EnumPatternBinding::Tuple(pats),
-                            EnumData::Tuple(vals),
-                        ) => {
+                        (crate::parser::EnumPatternBinding::Tuple(pats), EnumData::Tuple(vals)) => {
                             for (name_pat, val) in pats.iter().zip(vals.iter()) {
                                 self.bind_pattern(name_pat, val.clone());
                             }
@@ -750,7 +734,7 @@ impl<'a> Interpreter<'a> {
 
                     // Check if this is an enum tuple variant constructor (e.g., "Shape::Circle")
                     if let Some(info) = self.enum_variants.get(name.as_str()).cloned() {
-                        if let EnumVariantKind::Tuple(_) = &info.data_kind {
+                        if let EnumVariantKind::Tuple { .. } = &info.data_kind {
                             return Value::Enum {
                                 type_name: info.enum_name.clone(),
                                 variant: info.variant_name.clone(),
@@ -760,9 +744,7 @@ impl<'a> Interpreter<'a> {
                     }
 
                     // Regular function call (includes static methods like Player::new)
-                    return self
-                        .call_function(name, &args)
-                        .unwrap_or(Value::Nil);
+                    return self.call_function(name, &args).unwrap_or(Value::Nil);
                 }
 
                 // General call (function value)
@@ -804,11 +786,8 @@ impl<'a> Interpreter<'a> {
                 }
 
                 // Call the method, capturing any mutations to self
-                let result = self
-                    .call_method_with_self_mutation(object, &obj_val, &type_name, method, &args)
-                    .unwrap_or(Value::Nil);
-
-                result
+                self.call_method_with_self_mutation(object, &obj_val, &type_name, method, &args)
+                    .unwrap_or(Value::Nil)
             }
 
             Expression::FieldAccess { object, field, .. } => {
@@ -849,18 +828,12 @@ impl<'a> Interpreter<'a> {
             }
 
             Expression::Array { elements, .. } => {
-                let items: Vec<Value> = elements
-                    .iter()
-                    .map(|e| self.eval_expression(e))
-                    .collect();
+                let items: Vec<Value> = elements.iter().map(|e| self.eval_expression(e)).collect();
                 Value::Vec(items)
             }
 
             Expression::Tuple { elements, .. } => {
-                let items: Vec<Value> = elements
-                    .iter()
-                    .map(|e| self.eval_expression(e))
-                    .collect();
+                let items: Vec<Value> = elements.iter().map(|e| self.eval_expression(e)).collect();
                 if items.is_empty() {
                     Value::Unit
                 } else {
@@ -879,7 +852,9 @@ impl<'a> Interpreter<'a> {
             }
 
             Expression::Closure {
-                parameters, body: _, ..
+                parameters,
+                body: _,
+                ..
             } => {
                 // For now, store as a named function reference
                 // This is a simplification — real closures need captured state
@@ -923,10 +898,8 @@ impl<'a> Interpreter<'a> {
             }
 
             Expression::MacroInvocation { name, args, .. } => {
-                let evaluated_args: Vec<Value> = args
-                    .iter()
-                    .map(|a| self.eval_expression(a))
-                    .collect();
+                let evaluated_args: Vec<Value> =
+                    args.iter().map(|a| self.eval_expression(a)).collect();
 
                 match name.as_str() {
                     "println" => {
@@ -965,8 +938,7 @@ impl<'a> Interpreter<'a> {
         // Integer operations
         if let (Some(a), Some(b)) = (left.as_int(), right.as_int()) {
             // Check if either side is explicitly float
-            let either_float =
-                matches!(left, Value::Float(_)) || matches!(right, Value::Float(_));
+            let either_float = matches!(left, Value::Float(_)) || matches!(right, Value::Float(_));
             if !either_float {
                 return match op {
                     BinaryOp::Add => Value::Int(a + b),
@@ -1081,12 +1053,7 @@ impl<'a> Interpreter<'a> {
                 for arg in &args[1..] {
                     if let Some(pos) = result.find("{}") {
                         let replacement = arg.to_display_string();
-                        result = format!(
-                            "{}{}{}",
-                            &result[..pos],
-                            replacement,
-                            &result[pos + 2..]
-                        );
+                        result = format!("{}{}{}", &result[..pos], replacement, &result[pos + 2..]);
                     }
                 }
                 return result;
@@ -1128,11 +1095,9 @@ impl<'a> Interpreter<'a> {
 
     fn handle_push_method(&mut self, object: &Expression, args: &[Value]) {
         if let Expression::Identifier { name, .. } = object {
-            if let Some(val) = self.env.get_mut(name) {
-                if let Value::Vec(items) = val {
-                    if let Some(arg) = args.first() {
-                        items.push(arg.clone());
-                    }
+            if let Some(Value::Vec(items)) = self.env.get_mut(name) {
+                if let Some(arg) = args.first() {
+                    items.push(arg.clone());
                 }
             }
         }
@@ -1170,10 +1135,7 @@ impl<'a> Interpreter<'a> {
         self.env.define("self", receiver_val.clone());
 
         // Bind other parameters
-        let param_iter = decl
-            .parameters
-            .iter()
-            .filter(|p| p.name != "self");
+        let param_iter = decl.parameters.iter().filter(|p| p.name != "self");
 
         for (param, arg) in param_iter.zip(args.iter()) {
             self.env.define(&param.name, arg.clone());

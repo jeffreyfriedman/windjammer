@@ -13,6 +13,7 @@ use std::process::Command;
 use tempfile::TempDir;
 
 /// Result of compiling and running a .wj file on a specific backend
+#[allow(dead_code)]
 struct BackendResult {
     backend: String,
     stdout: String,
@@ -278,7 +279,9 @@ fn assert_rust_and_interpreter_agree(test_name: &str, source: &str, expected_con
     assert!(
         rust_result.stdout.contains(expected_contains),
         "[{}] Rust output missing '{}'. Got:\n{}",
-        test_name, expected_contains, rust_result.stdout
+        test_name,
+        expected_contains,
+        rust_result.stdout
     );
 
     assert_eq!(
@@ -321,7 +324,9 @@ fn assert_backends_agree(test_name: &str, source: &str, expected_contains: &str)
     assert!(
         rust_result.stdout.contains(expected_contains),
         "[{}] Rust output missing '{}'. Got:\n{}",
-        test_name, expected_contains, rust_result.stdout
+        test_name,
+        expected_contains,
+        rust_result.stdout
     );
 
     // All four must produce identical output
