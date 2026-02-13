@@ -109,7 +109,21 @@ fn compile_and_run_rust(source: &str) -> BackendResult {
     }
 }
 
-fn compile_and_run_go(source: &str) -> BackendResult {
+/// Check whether the Go toolchain is available on this machine.
+fn go_is_available() -> bool {
+    Command::new("go")
+        .arg("version")
+        .output()
+        .map(|o| o.status.success())
+        .unwrap_or(false)
+}
+
+fn compile_and_run_go(source: &str) -> Option<BackendResult> {
+    // Gracefully skip when Go isn't installed (e.g. CI runners without Go)
+    if !go_is_available() {
+        return None;
+    }
+
     let temp_dir = TempDir::new().unwrap();
     let test_file = temp_dir.path().join("test.wj");
     fs::write(&test_file, source).unwrap();
@@ -128,7 +142,7 @@ fn compile_and_run_go(source: &str) -> BackendResult {
         .expect("Failed to execute wj");
 
     if !wj.status.success() {
-        return BackendResult {
+        return Some(BackendResult {
             backend: "go".into(),
             stdout: String::new(),
             success: false,
@@ -136,7 +150,7 @@ fn compile_and_run_go(source: &str) -> BackendResult {
                 "wj compilation failed: {}",
                 String::from_utf8_lossy(&wj.stderr)
             ),
-        };
+        });
     }
 
     let go_file = output_dir.join("main.go");
@@ -147,12 +161,12 @@ fn compile_and_run_go(source: &str) -> BackendResult {
         .output()
         .expect("Failed to execute go run");
 
-    BackendResult {
+    Some(BackendResult {
         backend: "go".into(),
         stdout: String::from_utf8(run.stdout).unwrap_or_default(),
         success: run.status.success(),
         error: String::from_utf8(run.stderr).unwrap_or_default(),
-    }
+    })
 }
 
 fn compile_and_run_js(source: &str) -> BackendResult {
@@ -198,14 +212,26 @@ fn compile_and_run_js(source: &str) -> BackendResult {
 
     let js_code = fs::read_to_string(&js_file).unwrap();
     let runner = output_dir.join("_run.mjs");
-    let runner_code = format!(
-        "{}\nif (typeof main === 'function') main();\n",
-        js_code
-            .replace("export function", "function")
-            .replace("export class", "class")
-            .replace("export const", "const")
-            .replace("export let", "let")
-    );
+
+    // Strip `export` keywords so the code runs in plain Node.js context,
+    // and remove the auto-run block that the JS codegen emits (it would
+    // cause main() to execute twice — once via the auto-run guard and
+    // once via our explicit call below).
+    let stripped = js_code
+        .replace("export function", "function")
+        .replace("export class", "class")
+        .replace("export const", "const")
+        .replace("export let", "let");
+
+    // Remove the auto-run block:
+    //   if (import.meta.url === `file://${process.argv[1]}`) { main(); }
+    let stripped = if let Some(idx) = stripped.find("// Auto-run main") {
+        stripped[..idx].to_string()
+    } else {
+        stripped
+    };
+
+    let runner_code = format!("{}\nif (typeof main === 'function') main();\n", stripped);
     fs::write(&runner, &runner_code).unwrap();
 
     let run = Command::new("node")
@@ -291,7 +317,8 @@ fn assert_rust_and_interpreter_agree(test_name: &str, source: &str, expected_con
     );
 }
 
-/// Assert ALL backends (Rust, Go, JS, Interpreter) produce identical output
+/// Assert ALL available backends (Rust, Go, JS, Interpreter) produce identical output.
+/// Go is skipped gracefully when the Go toolchain is not installed.
 fn assert_backends_agree(test_name: &str, source: &str, expected_contains: &str) {
     let rust_result = compile_and_run_rust(source);
     let go_result = compile_and_run_go(source);
@@ -304,11 +331,13 @@ fn assert_backends_agree(test_name: &str, source: &str, expected_contains: &str)
         "[{}] Rust backend failed: {}",
         test_name, rust_result.error
     );
-    assert!(
-        go_result.success,
-        "[{}] Go backend failed: {}",
-        test_name, go_result.error
-    );
+    if let Some(ref go) = go_result {
+        assert!(
+            go.success,
+            "[{}] Go backend failed: {}",
+            test_name, go.error
+        );
+    }
     assert!(
         js_result.success,
         "[{}] JS backend failed: {}",
@@ -329,12 +358,14 @@ fn assert_backends_agree(test_name: &str, source: &str, expected_contains: &str)
         rust_result.stdout
     );
 
-    // All four must produce identical output
-    assert_eq!(
-        rust_result.stdout, go_result.stdout,
-        "[{}] Rust vs Go output mismatch!\nRust:\n{}\nGo:\n{}",
-        test_name, rust_result.stdout, go_result.stdout
-    );
+    // Compare all available backends against Rust (the reference)
+    if let Some(ref go) = go_result {
+        assert_eq!(
+            rust_result.stdout, go.stdout,
+            "[{}] Rust vs Go output mismatch!\nRust:\n{}\nGo:\n{}",
+            test_name, rust_result.stdout, go.stdout
+        );
+    }
 
     assert_eq!(
         rust_result.stdout, js_result.stdout,
