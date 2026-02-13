@@ -109,6 +109,10 @@ pub struct CodeGenerator<'ast> {
     owned_string_iterator_vars: std::collections::HashSet<String>,
     // USIZE VARIABLES: Track variables assigned from .len() for auto-casting
     usize_variables: std::collections::HashSet<String>,
+    // UNUSED LET BINDINGS: Track let bindings whose variable is never used after declaration.
+    // Keyed by (line, column) of the let statement's source location.
+    // These will be prefixed with `_` in the generated Rust to suppress "unused variable" warnings.
+    unused_let_bindings: std::collections::HashSet<(usize, usize)>,
     // INFERRED BORROWED PARAMS: Parameters inferred to be borrowed (for field access cloning)
     inferred_borrowed_params: std::collections::HashSet<String>,
     // ASSIGNMENT TARGET: Flag to suppress auto-clone when generating assignment targets
@@ -210,6 +214,7 @@ impl<'ast> CodeGenerator<'ast> {
             borrowed_iterator_vars: std::collections::HashSet::new(),
             owned_string_iterator_vars: std::collections::HashSet::new(),
             usize_variables: std::collections::HashSet::new(),
+            unused_let_bindings: std::collections::HashSet::new(),
             inferred_borrowed_params: std::collections::HashSet::new(),
             generating_assignment_target: false,
             partial_eq_types: std::collections::HashSet::new(),
@@ -3654,6 +3659,11 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
             .map(|p| p.name.clone())
             .collect();
 
+        // TDD FIX: Pre-compute unused let bindings and for-loop variables.
+        // Like unused params, these get prefixed with `_` in the generated Rust.
+        self.unused_let_bindings.clear();
+        Self::find_unused_bindings(&func.body, &mut self.unused_let_bindings);
+
         let additional_params: Vec<String> = func
             .parameters
             .iter()
@@ -3968,6 +3978,7 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
                 mutable,
                 type_,
                 value,
+                location,
                 ..
             } => {
                 let mut output = self.indent();
@@ -3996,8 +4007,20 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
                     output.push_str("mut ");
                 }
 
+                // TDD FIX: Prefix unused let bindings with `_` to suppress warnings
+                let is_unused_binding = location
+                    .as_ref()
+                    .is_some_and(|loc| self.unused_let_bindings.contains(&(loc.line, loc.column)));
+
                 // Generate pattern (could be simple name or tuple)
-                let pattern_str = self.generate_pattern(pattern);
+                let pattern_str = if is_unused_binding {
+                    match pattern {
+                        Pattern::Identifier(name) => format!("_{}", name),
+                        other => self.generate_pattern(other),
+                    }
+                } else {
+                    self.generate_pattern(pattern)
+                };
                 output.push_str(&pattern_str);
 
                 // LOCAL VARIABLE TRACKING: Add this variable to the current scope
@@ -4662,6 +4685,7 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
                 pattern,
                 iterable,
                 body,
+                location,
                 ..
             } => {
                 let mut output = self.indent();
@@ -4698,7 +4722,17 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
                 if needs_mut && !needs_mut_borrow && !iterable_already_mut_ref {
                     output.push_str("mut ");
                 }
-                output.push_str(&pattern_str);
+
+                // TDD FIX: Prefix unused for-loop variables with `_`
+                let is_unused_loop_var = location
+                    .as_ref()
+                    .is_some_and(|loc| self.unused_let_bindings.contains(&(loc.line, loc.column)));
+                let display_pattern = if is_unused_loop_var {
+                    format!("_{}", pattern_str)
+                } else {
+                    pattern_str
+                };
+                output.push_str(&display_pattern);
                 output.push_str(" in ");
 
                 // BORROWED ITERATOR: Track if iterator variable is from borrowed collection
@@ -7978,6 +8012,81 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
                         self.for_loop_borrow_needed.insert(name.clone());
                     }
                 }
+            }
+        }
+    }
+
+    /// Recursively find unused let bindings and for-loop variables in a block of statements.
+    /// For each `let name = ...` at position i, checks if `name` is used in stmts[i+1..].
+    /// For each `for name in expr { body }`, checks if `name` is used in `body`.
+    /// Results are stored as (line, column) pairs in `out`.
+    fn find_unused_bindings(
+        stmts: &[&Statement],
+        out: &mut std::collections::HashSet<(usize, usize)>,
+    ) {
+        for (i, stmt) in stmts.iter().enumerate() {
+            // Extract (variable_name, location) from let/const bindings
+            let binding_info: Option<(&str, &SourceLocation)> = match stmt {
+                Statement::Let {
+                    pattern: Pattern::Identifier(name),
+                    location,
+                    ..
+                } => Some((name.as_str(), location)),
+                Statement::Const { name, location, .. } => Some((name.as_str(), location)),
+                _ => None,
+            };
+
+            if let Some((name, location)) = binding_info {
+                let remaining = &stmts[i + 1..];
+                if !Self::variable_used_in_statements(remaining, name) {
+                    if let Some(loc) = location {
+                        out.insert((loc.line, loc.column));
+                    }
+                }
+            }
+
+            match stmt {
+                // Check for-loop variables
+                Statement::For {
+                    pattern,
+                    body,
+                    location,
+                    ..
+                } => {
+                    if let Pattern::Identifier(var_name) = pattern {
+                        if !Self::variable_used_in_statements(body, var_name) {
+                            if let Some(loc) = location {
+                                out.insert((loc.line, loc.column));
+                            }
+                        }
+                    }
+                    // Recurse into loop body
+                    Self::find_unused_bindings(body, out);
+                }
+                // Recurse into nested blocks
+                Statement::If {
+                    then_block,
+                    else_block,
+                    ..
+                } => {
+                    Self::find_unused_bindings(then_block, out);
+                    if let Some(else_stmts) = else_block {
+                        Self::find_unused_bindings(else_stmts, out);
+                    }
+                }
+                Statement::While { body, .. } | Statement::Loop { body, .. } => {
+                    Self::find_unused_bindings(body, out);
+                }
+                Statement::Match { arms, .. } => {
+                    for arm in arms {
+                        // Match arm bodies are expressions, not statement blocks
+                        // If the arm body is a block expression, recurse into its statements
+                        if let Expression::Block { statements, .. } = arm.body {
+                            Self::find_unused_bindings(statements, out);
+                        }
+                    }
+                }
+                _ => {}
             }
         }
     }
