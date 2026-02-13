@@ -331,6 +331,54 @@ fn main() -> Result<()> {
     Ok(())
 }
 
+/// Quick Copy type check for PASS 0 (no full analyzer available).
+/// Checks if a type is Copy based on primitives and already-known Copy structs/enums.
+fn is_type_copy_quick(
+    ty: &parser::Type,
+    copy_structs: &HashSet<String>,
+    copy_enums: &HashSet<String>,
+) -> bool {
+    use parser::Type;
+    match ty {
+        Type::Int | Type::Int32 | Type::Uint | Type::Float | Type::Bool => true,
+        Type::Reference(_) => true,
+        Type::MutableReference(_) => false,
+        Type::Tuple(types) => types
+            .iter()
+            .all(|t| is_type_copy_quick(t, copy_structs, copy_enums)),
+        Type::Option(inner) => is_type_copy_quick(inner, copy_structs, copy_enums),
+        Type::Result(ok, err) => {
+            is_type_copy_quick(ok, copy_structs, copy_enums)
+                && is_type_copy_quick(err, copy_structs, copy_enums)
+        }
+        Type::Array(inner, _) => is_type_copy_quick(inner, copy_structs, copy_enums),
+        Type::Vec(_) | Type::String => false,
+        Type::Custom(name) => {
+            copy_structs.contains(name)
+                || copy_enums.contains(name)
+                || matches!(
+                    name.as_str(),
+                    "i8" | "i16"
+                        | "i32"
+                        | "i64"
+                        | "i128"
+                        | "isize"
+                        | "u8"
+                        | "u16"
+                        | "u32"
+                        | "u64"
+                        | "u128"
+                        | "usize"
+                        | "f32"
+                        | "f64"
+                        | "bool"
+                        | "char"
+                )
+        }
+        _ => false,
+    }
+}
+
 pub fn build_project(path: &Path, output: &Path, target: CompilationTarget) -> Result<()> {
     use colored::*;
 
@@ -357,7 +405,6 @@ pub fn build_project(path: &Path, output: &Path, target: CompilationTarget) -> R
     let mut has_errors = false;
     let mut all_stdlib_modules = HashSet::new();
     let mut all_external_crates = Vec::new();
-    let mut is_component_project = false;
 
     // Create a single ModuleCompiler for all files to share trait registry
     let mut module_compiler = ModuleCompiler::new(target);
@@ -421,8 +468,20 @@ pub fn build_project(path: &Path, output: &Path, target: CompilationTarget) -> R
     module_compiler.add_source_root(project_source_dir);
 
     // PASS 0: Quick parse all files to register Copy structs
-    // This ensures Copy type detection works across all files
+    // This ensures Copy type detection works across all files.
+    // WINDJAMMER PHILOSOPHY: Auto-detect Copy structs when all fields are primitive/Copy.
+    // We do multiple iterations to handle structs that reference other Copy structs.
     let mut global_copy_structs = HashSet::new();
+
+    // Collect all struct declarations for iterative Copy detection
+    struct StructInfo {
+        name: String,
+        field_types: Vec<parser::Type>,
+    }
+    let mut all_structs: Vec<StructInfo> = Vec::new();
+    // Also collect fieldless enums (always Copy)
+    let mut copy_enums: HashSet<String> = HashSet::new();
+
     for file in &wj_files {
         let source = match std::fs::read_to_string(file) {
             Ok(s) => s,
@@ -435,23 +494,65 @@ pub fn build_project(path: &Path, output: &Path, target: CompilationTarget) -> R
 
         if let Ok(program) = parser.parse() {
             for item in &program.items {
-                if let parser::Item::Struct { decl, .. } = item {
-                    // Check if struct has @derive(Copy)
-                    let has_copy = decl.decorators.iter().any(|d| {
-                        d.name == "derive"
-                            && d.arguments.iter().any(|(_, arg)| {
-                                if let parser::Expression::Identifier { name, .. } = arg {
-                                    name == "Copy"
-                                } else {
-                                    false
-                                }
-                            })
-                    });
-                    if has_copy {
-                        global_copy_structs.insert(decl.name.clone());
+                match item {
+                    parser::Item::Struct { decl, .. } => {
+                        let has_copy = decl.decorators.iter().any(|d| {
+                            d.name == "derive"
+                                && d.arguments.iter().any(|(_, arg)| {
+                                    if let parser::Expression::Identifier { name, .. } = arg {
+                                        name == "Copy"
+                                    } else {
+                                        false
+                                    }
+                                })
+                        });
+                        let field_types: Vec<parser::Type> =
+                            decl.fields.iter().map(|f| f.field_type.clone()).collect();
+                        all_structs.push(StructInfo {
+                            name: decl.name.clone(),
+                            field_types,
+                        });
+                        if has_copy {
+                            global_copy_structs.insert(decl.name.clone());
+                        }
                     }
+                    parser::Item::Enum { decl, .. } => {
+                        use crate::parser::ast::EnumVariantData;
+                        let is_unit_only = decl
+                            .variants
+                            .iter()
+                            .all(|v| matches!(v.data, EnumVariantData::Unit));
+                        if is_unit_only {
+                            copy_enums.insert(decl.name.clone());
+                        }
+                    }
+                    _ => {}
                 }
             }
+        }
+    }
+
+    // Fixed-point iteration: keep discovering Copy structs until stable
+    loop {
+        let mut changed = false;
+        for s in &all_structs {
+            if global_copy_structs.contains(&s.name) {
+                continue; // Already known Copy
+            }
+            if s.field_types.is_empty() {
+                continue; // Skip unit structs (no fields = nothing to copy from)
+            }
+            let all_copy = s
+                .field_types
+                .iter()
+                .all(|ty| is_type_copy_quick(ty, &global_copy_structs, &copy_enums));
+            if all_copy {
+                global_copy_structs.insert(s.name.clone());
+                changed = true;
+            }
+        }
+        if !changed {
+            break;
         }
     }
 
@@ -523,13 +624,6 @@ pub fn build_project(path: &Path, output: &Path, target: CompilationTarget) -> R
         ) {
             Ok((stdlib_modules, external_crates)) => {
                 println!("{}", "✓".green());
-                // If both are empty, this might be a component (which handles its own Cargo.toml)
-                if stdlib_modules.is_empty() && external_crates.is_empty() {
-                    // Check if Cargo.toml already exists (component generated it)
-                    if output.join("Cargo.toml").exists() {
-                        is_component_project = true;
-                    }
-                }
                 all_stdlib_modules.extend(stdlib_modules);
                 all_external_crates.extend(external_crates);
             }
@@ -617,6 +711,18 @@ pub fn build_project(path: &Path, output: &Path, target: CompilationTarget) -> R
             // Example: If lighting/ directory exists with mod.rs, remove lighting.rs (stale FFI file)
             cleanup_stale_module_files(output)?;
         }
+
+        // THE WINDJAMMER WAY: Detect component projects AFTER processing ALL files.
+        // A component project is one where ALL files have no stdlib/external imports AND
+        // a Cargo.toml already exists (it was generated by another mechanism).
+        // Previously this check was inside the per-file loop, which meant the FIRST file
+        // with empty imports would set the flag, preventing Cargo.toml regeneration for
+        // the entire project - even if other files had imports. This caused stale Cargo.toml
+        // files from previous builds to persist with incorrect targets.
+        let is_component_project = all_stdlib_modules.is_empty()
+            && all_external_crates.is_empty()
+            && output.join("Cargo.toml").exists()
+            && !output.join("lib.rs").exists(); // If lib.rs exists, always regenerate
 
         // Create Cargo.toml with stdlib and external dependencies (unless it's a component project)
         if !is_component_project {
@@ -3380,11 +3486,8 @@ fn interpret_file(file: &Path) -> Result<()> {
     let source = std::fs::read_to_string(file)?;
     let mut lex = lexer::Lexer::new(&source);
     let tokens = lex.tokenize_with_locations();
-    let mut parse = parser::Parser::new_with_source(
-        tokens,
-        file.to_string_lossy().to_string(),
-        source.clone(),
-    );
+    let mut parse =
+        parser::Parser::new_with_source(tokens, file.to_string_lossy().to_string(), source.clone());
     let program = parse
         .parse()
         .map_err(|e| anyhow::anyhow!("Parse error: {}", e))?;
@@ -3412,8 +3515,7 @@ fn run_repl() -> Result<()> {
     );
     println!(
         "{}",
-        "Tip: Any code you write here can be compiled with `wj build` for production."
-            .dimmed()
+        "Tip: Any code you write here can be compiled with `wj build` for production.".dimmed()
     );
     println!();
 
@@ -3476,11 +3578,7 @@ fn run_repl() -> Result<()> {
         // Parse and interpret
         let mut lex = lexer::Lexer::new(&source);
         let tokens = lex.tokenize_with_locations();
-        let mut parse = parser::Parser::new_with_source(
-            tokens,
-            "repl".to_string(),
-            source.clone(),
-        );
+        let mut parse = parser::Parser::new_with_source(tokens, "repl".to_string(), source.clone());
 
         match parse.parse() {
             Ok(program) => {

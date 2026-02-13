@@ -120,7 +120,11 @@ impl GoGenerator {
     /// Convert "Color::Red" → "ColorRed" for Go type names
     fn enum_variant_to_go_type(&self, variant_name: &str) -> String {
         if let Some((type_name, variant)) = variant_name.split_once("::") {
-            format!("{}{}", Self::capitalize(type_name), Self::capitalize(variant))
+            format!(
+                "{}{}",
+                Self::capitalize(type_name),
+                Self::capitalize(variant)
+            )
         } else {
             variant_name.to_string()
         }
@@ -361,7 +365,11 @@ impl GoGenerator {
                 EnumVariantData::Struct(fields) => {
                     output.push_str(&format!("type {} struct {{\n", variant_type));
                     for (name, t) in fields {
-                        output.push_str(&format!("\t{} {}\n", capitalize_first(name), self.type_to_go(t)));
+                        output.push_str(&format!(
+                            "\t{} {}\n",
+                            capitalize_first(name),
+                            self.type_to_go(t)
+                        ));
                     }
                     output.push_str("}\n");
                 }
@@ -521,7 +529,11 @@ impl GoGenerator {
         let go_name = if func.name == "new" {
             format!("New{}", Self::capitalize(type_name))
         } else {
-            format!("{}{}", Self::capitalize(type_name), Self::capitalize(&func.name))
+            format!(
+                "{}{}",
+                Self::capitalize(type_name),
+                Self::capitalize(&func.name)
+            )
         };
 
         output.push_str(&format!(
@@ -698,11 +710,20 @@ impl GoGenerator {
             Statement::Expression { expr, .. } => {
                 let indent = self.indent();
                 // Special case: v.push(x) → v = append(v, x) in Go
-                if let Expression::MethodCall { object, method, arguments, .. } = expr {
+                if let Expression::MethodCall {
+                    object,
+                    method,
+                    arguments,
+                    ..
+                } = expr
+                {
                     if method == "push" && arguments.len() == 1 {
                         let obj_str = self.generate_expression(object);
-                        let arg_str = self.generate_expression(&arguments[0].1);
-                        return format!("{}{} = append({}, {})\n", indent, obj_str, obj_str, arg_str);
+                        let arg_str = self.generate_expression(arguments[0].1);
+                        return format!(
+                            "{}{} = append({}, {})\n",
+                            indent, obj_str, obj_str, arg_str
+                        );
                     }
                 }
                 let expr_str = self.generate_expression(expr);
@@ -826,9 +847,7 @@ impl GoGenerator {
                 output
             }
 
-            Statement::Match { value, arms, .. } => {
-                self.generate_match_statement(value, arms)
-            }
+            Statement::Match { value, arms, .. } => self.generate_match_statement(value, arms),
 
             Statement::Break { .. } => {
                 format!("{}break\n", self.indent())
@@ -848,11 +867,7 @@ impl GoGenerator {
     // Match Generation
     // =====================================================
 
-    fn generate_match_statement(
-        &mut self,
-        value: &Expression,
-        arms: &[MatchArm],
-    ) -> String {
+    fn generate_match_statement(&mut self, value: &Expression, arms: &[MatchArm]) -> String {
         let indent = self.indent();
         let val_str = self.generate_expression(value);
         let mut output = String::new();
@@ -869,10 +884,7 @@ impl GoGenerator {
 
         if is_type_switch {
             // Go type switch
-            output.push_str(&format!(
-                "{}switch _v := {}.(type) {{\n",
-                indent, val_str
-            ));
+            output.push_str(&format!("{}switch _v := {}.(type) {{\n", indent, val_str));
             self.indent_level += 1;
             for arm in arms {
                 output.push_str(&self.generate_match_arm_type_switch(arm));
@@ -910,7 +922,10 @@ impl GoGenerator {
                     let guard_str = self.generate_expression(guard);
                     // For binding patterns with guards, bind the variable first
                     if let Pattern::Identifier(name) = &arm.pattern {
-                        format!("func() bool {{ {} := __match_val; return {} }}()", name, guard_str)
+                        format!(
+                            "func() bool {{ {} := __match_val; return {} }}()",
+                            name, guard_str
+                        )
                     } else {
                         format!("{} && {}", condition, guard_str)
                     }
@@ -923,7 +938,11 @@ impl GoGenerator {
                 } else if full_condition == "true" {
                     output.push_str(&format!("{}}} else {{\n", self.indent()));
                 } else {
-                    output.push_str(&format!("{}}} else if {} {{\n", self.indent(), full_condition));
+                    output.push_str(&format!(
+                        "{}}} else if {} {{\n",
+                        self.indent(),
+                        full_condition
+                    ));
                 }
                 self.indent_level += 1;
                 // For binding patterns, declare the variable in scope
@@ -985,7 +1004,12 @@ impl GoGenerator {
                 // Binding pattern — acts like default with a variable binding
                 let mut out = format!("{}default:\n", indent);
                 self.indent_level += 1;
-                out.push_str(&format!("{}{} := {}\n", self.indent(), name, "/* matched value */"));
+                out.push_str(&format!(
+                    "{}{} := {}\n",
+                    self.indent(),
+                    name,
+                    "/* matched value */"
+                ));
                 out.push_str(&format!("{}{}\n", self.indent(), body_str));
                 self.indent_level -= 1;
                 out
@@ -1056,11 +1080,7 @@ impl GoGenerator {
 
     /// Generate a match where each arm body is wrapped in `return`
     /// Used when match is the last expression in a function with a return type
-    fn generate_match_with_returns(
-        &mut self,
-        value: &Expression,
-        arms: &[MatchArm],
-    ) -> String {
+    fn generate_match_with_returns(&mut self, value: &Expression, arms: &[MatchArm]) -> String {
         let indent = self.indent();
         let val_str = self.generate_expression(value);
         let mut output = String::new();
@@ -1072,15 +1092,14 @@ impl GoGenerator {
         });
 
         // Check if there's a wildcard/default arm (Go requires explicit return after switch)
-        let has_default = arms.iter().any(|arm| matches!(&arm.pattern, Pattern::Wildcard));
+        let has_default = arms
+            .iter()
+            .any(|arm| matches!(&arm.pattern, Pattern::Wildcard));
         // Match guards require an if-else chain since Go switch can't have guard conditions
         let has_guards = arms.iter().any(|arm| arm.guard.is_some());
 
         if is_type_switch {
-            output.push_str(&format!(
-                "{}switch _v := {}.(type) {{\n",
-                indent, val_str
-            ));
+            output.push_str(&format!("{}switch _v := {}.(type) {{\n", indent, val_str));
             self.indent_level += 1;
             for arm in arms {
                 output.push_str(&self.generate_match_arm_with_return_type_switch(arm));
@@ -1141,7 +1160,12 @@ impl GoGenerator {
                     output.push_str(&format!("{}{} {{\n", self.indent(), keyword));
                 } else {
                     let keyword = if i == 0 { "if" } else { "} else if" };
-                    output.push_str(&format!("{}{} {} {{\n", self.indent(), keyword, full_condition));
+                    output.push_str(&format!(
+                        "{}{} {} {{\n",
+                        self.indent(),
+                        keyword,
+                        full_condition
+                    ));
                 }
                 self.indent_level += 1;
                 output.push_str(&format!("{}return {}\n", self.indent(), body_str));
@@ -1164,10 +1188,7 @@ impl GoGenerator {
         // Go requires a return after a switch even if all cases return.
         // Add a panic for exhaustive matches without a default/wildcard arm.
         if !has_default && !has_guards {
-            output.push_str(&format!(
-                "{}panic(\"unreachable match\")\n",
-                indent
-            ));
+            output.push_str(&format!("{}panic(\"unreachable match\")\n", indent));
         }
 
         output
@@ -1274,9 +1295,11 @@ impl GoGenerator {
                     } else {
                         // Enum variant: Color::Red → ColorRed{}
                         // In Go, unit enum variants are empty structs, so instantiate with {}
-                        format!("{}{}{{}}",
+                        format!(
+                            "{}{}{{}}",
                             Self::capitalize(type_name),
-                            Self::capitalize(rest))
+                            Self::capitalize(rest)
+                        )
                     }
                 } else {
                     name.clone()
@@ -1287,7 +1310,10 @@ impl GoGenerator {
                 left, op, right, ..
             } => {
                 // Wrap child binary expressions in parens if they have lower precedence
-                let left_str = if let Expression::Binary { op: ref left_op, .. } = **left {
+                let left_str = if let Expression::Binary {
+                    op: ref left_op, ..
+                } = **left
+                {
                     if Self::op_precedence(left_op) < Self::op_precedence(op) {
                         format!("({})", self.generate_expression(left))
                     } else {
@@ -1296,7 +1322,10 @@ impl GoGenerator {
                 } else {
                     self.generate_expression(left)
                 };
-                let right_str = if let Expression::Binary { op: ref right_op, .. } = **right {
+                let right_str = if let Expression::Binary {
+                    op: ref right_op, ..
+                } = **right
+                {
                     if Self::op_precedence(right_op) <= Self::op_precedence(op) {
                         format!("({})", self.generate_expression(right))
                     } else {
@@ -1390,7 +1419,7 @@ impl GoGenerator {
                     }
                     "contains" if args.len() == 1 => {
                         // strings.Contains or manual search — use a simple helper
-                        format!("/* contains */ false /* TODO */")
+                        "/* contains */ false /* TODO */".to_string()
                     }
                     "to_string" => format!("fmt.Sprintf(\"%v\", {})", obj_str),
                     _ => {
@@ -1439,7 +1468,13 @@ impl GoGenerator {
                     .map(|p| format!("{} interface{{}}", p))
                     .collect();
                 let body_str = self.generate_expression(body);
-                format!("func({}) interface{{}} {{\n{}return {}\n{}}}", params.join(", "), self.indent(), body_str, self.indent())
+                format!(
+                    "func({}) interface{{}} {{\n{}return {}\n{}}}",
+                    params.join(", "),
+                    self.indent(),
+                    body_str,
+                    self.indent()
+                )
             }
 
             Expression::Cast { expr, type_, .. } => {
@@ -1471,7 +1506,9 @@ impl GoGenerator {
             }
 
             Expression::MacroInvocation {
-                name, args: macro_args, ..
+                name,
+                args: macro_args,
+                ..
             } => {
                 match name.as_str() {
                     "println" | "print" => {
@@ -1494,9 +1531,18 @@ impl GoGenerator {
                         // Infer element type from first element; default to int64
                         let elem_type = if let Some(first) = macro_args.first() {
                             match first {
-                                Expression::Literal { value: Literal::Float(_), .. } => "float64",
-                                Expression::Literal { value: Literal::String(_), .. } => "string",
-                                Expression::Literal { value: Literal::Bool(_), .. } => "bool",
+                                Expression::Literal {
+                                    value: Literal::Float(_),
+                                    ..
+                                } => "float64",
+                                Expression::Literal {
+                                    value: Literal::String(_),
+                                    ..
+                                } => "string",
+                                Expression::Literal {
+                                    value: Literal::Bool(_),
+                                    ..
+                                } => "bool",
                                 _ => "int64",
                             }
                         } else {
@@ -1517,11 +1563,7 @@ impl GoGenerator {
                             if args.len() == 1 {
                                 format!("fmt.Sprintf({})", fmt_str)
                             } else {
-                                format!(
-                                    "fmt.Sprintf({}, {})",
-                                    fmt_str,
-                                    args[1..].join(", ")
-                                )
+                                format!("fmt.Sprintf({}, {})", fmt_str, args[1..].join(", "))
                             }
                         }
                     }

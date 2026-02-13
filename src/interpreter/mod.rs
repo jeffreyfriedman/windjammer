@@ -10,10 +10,10 @@
 //! The interpreter uses reference semantics internally (no ownership tracking)
 //! because safety is the compiler's job, not the interpreter's.
 
-pub mod value;
-pub mod environment;
 pub mod engine;
+pub mod environment;
+pub mod value;
 
 pub use engine::Interpreter;
-pub use value::Value;
 pub use environment::Environment;
+pub use value::Value;

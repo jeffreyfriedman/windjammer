@@ -1,7 +1,7 @@
-/// Windjammerscript Interpreter Advanced Tests (TDD)
-///
-/// Tests for features discovered missing by running conformance .wj files
-/// through the interpreter. Each test targets a specific bug.
+//! Windjammerscript Interpreter Advanced Tests (TDD)
+//!
+//! Tests for features discovered missing by running conformance .wj files
+//! through the interpreter. Each test targets a specific bug.
 
 /// Parse source and run through the interpreter, capturing output
 fn interpret(source: &str) -> Result<String, String> {
@@ -67,7 +67,11 @@ fn main() {
     )
     .unwrap();
     assert!(output.contains("red"), "Expected 'red', got:\n{}", output);
-    assert!(output.contains("green"), "Expected 'green', got:\n{}", output);
+    assert!(
+        output.contains("green"),
+        "Expected 'green', got:\n{}",
+        output
+    );
 }
 
 #[test]
