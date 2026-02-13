@@ -96,7 +96,7 @@ fn compile_and_run_go(source: &str) -> String {
 #[test]
 #[cfg_attr(tarpaulin, ignore)]
 fn test_go_enum_unit_variants() {
-    /// Enums with unit variants should become an interface + empty structs
+    // Enums with unit variants should become an interface + empty structs
     let code = compile_to_go(
         r#"
 enum Color {
@@ -142,7 +142,7 @@ fn main() {
 #[test]
 #[cfg_attr(tarpaulin, ignore)]
 fn test_go_enum_tuple_variants() {
-    /// Enums with tuple data should become structs with Field0, Field1, etc.
+    // Enums with tuple data should become structs with Field0, Field1, etc.
     let code = compile_to_go(
         r#"
 enum Shape {
@@ -184,7 +184,7 @@ fn main() {
 #[test]
 #[cfg_attr(tarpaulin, ignore)]
 fn test_go_match_integer_values() {
-    /// Match on integer values should become a Go switch statement
+    // Match on integer values should become a Go switch statement
     let output = compile_and_run_go(
         r#"
 fn describe(x: int) -> string {
@@ -208,7 +208,7 @@ fn main() {
 #[test]
 #[cfg_attr(tarpaulin, ignore)]
 fn test_go_match_generates_switch() {
-    /// Verify the generated Go code uses switch
+    // Verify the generated Go code uses switch
     let code = compile_to_go(
         r#"
 fn check(x: int) -> int {
@@ -248,7 +248,7 @@ fn main() {
 #[test]
 #[cfg_attr(tarpaulin, ignore)]
 fn test_go_trait_generates_interface() {
-    /// Traits should become Go interfaces
+    // Traits should become Go interfaces
     let code = compile_to_go(
         r#"
 trait Drawable {
@@ -281,7 +281,7 @@ fn main() {
 #[test]
 #[cfg_attr(tarpaulin, ignore)]
 fn test_go_trait_with_params() {
-    /// Trait methods with parameters should have typed params in the interface
+    // Trait methods with parameters should have typed params in the interface
     let code = compile_to_go(
         r#"
 trait Resizable {
@@ -317,7 +317,7 @@ fn main() {
 #[test]
 #[cfg_attr(tarpaulin, ignore)]
 fn test_go_closure_generates_func_literal() {
-    /// Closures should become Go function literals
+    // Closures should become Go function literals
     let code = compile_to_go(
         r#"
 fn main() {
@@ -340,7 +340,7 @@ fn main() {
 #[test]
 #[cfg_attr(tarpaulin, ignore)]
 fn test_go_variable_shadowing() {
-    /// Variable shadowing should use `var` for re-declaration
+    // Variable shadowing should use `var` for re-declaration
     let output = compile_and_run_go(
         r#"
 fn main() {
@@ -357,8 +357,8 @@ fn main() {
 #[test]
 #[cfg_attr(tarpaulin, ignore)]
 fn test_go_shadowing_generates_reassignment() {
-    /// Second declaration of same variable should use `=` (assignment) to avoid Go's
-    /// "no new variables on left side of :=" error
+    // Second declaration of same variable should use `=` (assignment) to avoid Go's
+    // "no new variables on left side of :=" error
     let code = compile_to_go(
         r#"
 fn main() {
@@ -396,7 +396,7 @@ fn main() {
 #[test]
 #[cfg_attr(tarpaulin, ignore)]
 fn test_go_constant() {
-    /// Windjammer constants should become Go const declarations
+    // Windjammer constants should become Go const declarations
     let code = compile_to_go(
         r#"
 const MAX_SIZE: int = 100
@@ -420,7 +420,7 @@ fn main() {
 #[test]
 #[cfg_attr(tarpaulin, ignore)]
 fn test_go_method_with_mutation() {
-    /// Methods that mutate should use pointer receiver
+    // Methods that mutate should use pointer receiver
     let output = compile_and_run_go(
         r#"
 struct Counter {
@@ -455,7 +455,7 @@ fn main() {
 #[test]
 #[cfg_attr(tarpaulin, ignore)]
 fn test_go_loop_break() {
-    /// Loop with break should generate infinite for loop with break
+    // Loop with break should generate infinite for loop with break
     let output = compile_and_run_go(
         r#"
 fn main() {

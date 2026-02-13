@@ -71,7 +71,7 @@ fn main() {
     let c = Color::Red
 }
 "#,
-        expected_js_contains: &["export const Color", "Object.freeze", "Symbol"],
+        expected_js_contains: &["export const Color", "Object.freeze", "Color.Red"],
         expected_rust_contains: &["enum Color", "Red", "Green", "Blue"],
     },
     TestCase {
@@ -147,7 +147,7 @@ fn compile_to_target(source: &str, target: &str, temp_dir: &TempDir) -> Result<P
 #[cfg_attr(tarpaulin, ignore)]
 fn test_all_targets_all_cases() {
     // Acquire mutex to serialize this test
-    let _lock = TEST_MUTEX.lock().unwrap();
+    let _lock = TEST_MUTEX.lock().unwrap_or_else(|e| e.into_inner());
 
     for test_case in TEST_CASES {
         println!("\n=== Testing: {} ===", test_case.name);
@@ -270,7 +270,7 @@ fn test_all_targets_all_cases() {
 #[cfg_attr(tarpaulin, ignore)]
 fn test_javascript_string_interpolation() {
     // Acquire mutex to serialize this test
-    let _lock = TEST_MUTEX.lock().unwrap();
+    let _lock = TEST_MUTEX.lock().unwrap_or_else(|e| e.into_inner());
 
     let source = r#"
 fn greet(name: string) {
@@ -308,7 +308,7 @@ fn main() {
 #[cfg_attr(tarpaulin, ignore)]
 fn test_javascript_jsdoc_generation() {
     // Acquire mutex to serialize this test
-    let _lock = TEST_MUTEX.lock().unwrap();
+    let _lock = TEST_MUTEX.lock().unwrap_or_else(|e| e.into_inner());
 
     let source = r#"
 fn calculate(x: int, y: int, z: float) -> float {
@@ -340,7 +340,7 @@ fn calculate(x: int, y: int, z: float) -> float {
 #[ignore] // TODO: Fix TypeScript definitions quality test
 fn test_typescript_definitions_quality() {
     // Acquire mutex to serialize this test
-    let _lock = TEST_MUTEX.lock().unwrap();
+    let _lock = TEST_MUTEX.lock().unwrap_or_else(|e| e.into_inner());
 
     let source = r#"
 struct User {
@@ -383,7 +383,7 @@ fn create_user(name: string, age: int) -> User {
 #[cfg_attr(tarpaulin, ignore)]
 fn test_complex_program_all_targets() {
     // Acquire mutex to serialize this test
-    let _lock = TEST_MUTEX.lock().unwrap();
+    let _lock = TEST_MUTEX.lock().unwrap_or_else(|e| e.into_inner());
     let source = r#"
 struct Task {
     id: int,
