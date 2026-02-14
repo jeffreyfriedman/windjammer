@@ -7,7 +7,6 @@
 /// Root cause: Codegen always emits `field: binding` even when field == binding.
 ///
 /// Fix: When field name equals binding name, use shorthand syntax.
-
 use std::env;
 use std::fs;
 use std::path::PathBuf;
