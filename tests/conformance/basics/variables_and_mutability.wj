@@ -1,0 +1,34 @@
+// Conformance Test: Variables and Mutability
+//
+// SEMANTIC CONTRACT:
+// - `let` bindings are immutable
+// - `let mut` bindings can be reassigned
+// - Shadowing creates new independent bindings
+//
+// EXPECTED OUTPUT:
+// [let] 42
+// [mut] 10
+// [mut] 20
+// [shadow] 5
+// [shadow] 15
+// PASSED
+
+fn main() {
+    // Immutable binding
+    let x = 42
+    println("[let] {}", x)
+
+    // Mutable binding with reassignment
+    let mut y = 10
+    println("[mut] {}", y)
+    y = 20
+    println("[mut] {}", y)
+
+    // Shadowing
+    let z = 5
+    println("[shadow] {}", z)
+    let z = z + 10
+    println("[shadow] {}", z)
+
+    println("PASSED")
+}

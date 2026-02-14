@@ -8,6 +8,13 @@ use std::collections::HashMap;
 pub struct JavaScriptGenerator {
     indent_level: usize,
     async_functions: HashMap<String, bool>,
+    /// Impl methods collected per type name, to inject into class bodies
+    impl_methods: HashMap<String, Vec<(String, Vec<String>)>>,
+    /// Track variable declarations per scope for shadowing → renaming.
+    /// Maps original name → current JS name (e.g., "x" → "x$2")
+    var_scopes: Vec<HashMap<String, String>>,
+    /// Counter for generating unique shadowed variable names
+    shadow_counter: HashMap<String, usize>,
 }
 
 impl JavaScriptGenerator {
@@ -15,7 +22,50 @@ impl JavaScriptGenerator {
         Self {
             indent_level: 0,
             async_functions: HashMap::new(),
+            impl_methods: HashMap::new(),
+            var_scopes: vec![HashMap::new()],
+            shadow_counter: HashMap::new(),
         }
+    }
+
+    /// Push a new variable scope (function body, block, etc.)
+    fn push_var_scope(&mut self) {
+        self.var_scopes.push(HashMap::new());
+    }
+
+    /// Pop the current variable scope
+    fn pop_var_scope(&mut self) {
+        self.var_scopes.pop();
+    }
+
+    /// Declare a variable, generating a renamed version if it shadows an existing one.
+    /// Returns the JS name to use.
+    fn declare_var(&mut self, name: &str) -> String {
+        // Check if this name is already declared in any scope
+        let already_exists = self.var_scopes.iter().any(|s| s.contains_key(name));
+        let js_name = if already_exists {
+            let counter = self.shadow_counter.entry(name.to_string()).or_insert(0);
+            *counter += 1;
+            format!("{}${}", name, counter)
+        } else {
+            name.to_string()
+        };
+        // Register in current scope
+        if let Some(scope) = self.var_scopes.last_mut() {
+            scope.insert(name.to_string(), js_name.clone());
+        }
+        js_name
+    }
+
+    /// Resolve a variable reference to its current JS name
+    fn resolve_var(&self, name: &str) -> String {
+        // Search scopes from innermost to outermost
+        for scope in self.var_scopes.iter().rev() {
+            if let Some(js_name) = scope.get(name) {
+                return js_name.clone();
+            }
+        }
+        name.to_string()
     }
 
     pub fn generate(&mut self, program: &Program) -> String {
@@ -27,6 +77,9 @@ impl JavaScriptGenerator {
 
         // First pass: Detect async functions
         self.detect_async_functions(program);
+
+        // Second pass: Collect impl methods per type
+        self.collect_impl_methods(program);
 
         // Generate each item
         for item in &program.items {
@@ -136,6 +189,94 @@ if (import.meta.url === `file://${process.argv[1]}`) {
         }
     }
 
+    /// Collect impl methods per type name for injection into classes
+    fn collect_impl_methods(&mut self, program: &Program) {
+        for item in &program.items {
+            if let Item::Impl { block, .. } = item {
+                let type_name = block.type_name.clone();
+                let methods: Vec<(String, Vec<String>)> = block
+                    .functions
+                    .iter()
+                    .map(|func| {
+                        let method_code = self.generate_class_method(func);
+                        (func.name.clone(), vec![method_code])
+                    })
+                    .collect();
+                self.impl_methods
+                    .entry(type_name)
+                    .or_default()
+                    .extend(methods);
+            }
+        }
+    }
+
+    /// Generate a method for inclusion in a class body
+    fn generate_class_method(&mut self, func: &FunctionDecl) -> String {
+        let mut output = String::new();
+        let indent = self.indent();
+
+        let is_async = self
+            .async_functions
+            .get(&func.name)
+            .copied()
+            .unwrap_or(false);
+
+        // Check if this is a static method (no self parameter)
+        let is_static = !func.parameters.iter().any(|p| p.name == "self");
+
+        output.push_str(&indent);
+        if is_static {
+            output.push_str("static ");
+        }
+        if is_async {
+            output.push_str("async ");
+        }
+
+        // Method name — use 'create' instead of 'new' since 'new' is reserved in JS
+        let method_name = if func.name == "new" {
+            "create"
+        } else {
+            &func.name
+        };
+        output.push_str(method_name);
+        output.push('(');
+        let params: Vec<String> = func
+            .parameters
+            .iter()
+            .filter(|p| p.name != "self")
+            .map(|p| p.name.clone())
+            .collect();
+        output.push_str(&params.join(", "));
+        output.push_str(") {\n");
+
+        self.indent_level += 1;
+        let body_len = func.body.len();
+        let has_return_type = func.return_type.is_some();
+        for (i, stmt) in func.body.iter().enumerate() {
+            let is_last = i == body_len - 1;
+            if is_last && has_return_type {
+                if let Statement::Expression { expr, .. } = stmt {
+                    let indent_inner = self.indent();
+                    let expr_str = self.generate_expression(expr);
+                    // Replace self. with this.
+                    let expr_str = expr_str.replace("self.", "this.");
+                    output.push_str(&format!("{}return {};\n", indent_inner, expr_str));
+                    continue;
+                }
+            }
+            let stmt_code = self.generate_statement(stmt);
+            // Replace self. with this.
+            let stmt_code = stmt_code.replace("self.", "this.");
+            output.push_str(&stmt_code);
+        }
+        self.indent_level -= 1;
+
+        output.push_str(&self.indent());
+        output.push_str("}\n");
+
+        output
+    }
+
     fn generate_item(&mut self, item: &Item) -> String {
         match item {
             Item::Function { decl: func, .. } => self.generate_function(func),
@@ -210,11 +351,29 @@ if (import.meta.url === `file://${process.argv[1]}`) {
         output.push_str(") {\n");
 
         // Body
+        self.push_var_scope();
+        // Declare parameters in scope
+        for p in &func.parameters {
+            self.declare_var(&p.name);
+        }
         self.indent_level += 1;
-        for stmt in &func.body {
+        let body_len = func.body.len();
+        let has_return_type = func.return_type.is_some();
+        for (i, stmt) in func.body.iter().enumerate() {
+            let is_last = i == body_len - 1;
+            // Auto-insert return for last expression in functions with return type
+            if is_last && has_return_type {
+                if let Statement::Expression { expr, .. } = stmt {
+                    let indent = self.indent();
+                    let expr_str = self.generate_expression(expr);
+                    output.push_str(&format!("{}return {};\n", indent, expr_str));
+                    continue;
+                }
+            }
             output.push_str(&self.generate_statement(stmt));
         }
         self.indent_level -= 1;
+        self.pop_var_scope();
 
         output.push('}');
         output
@@ -243,6 +402,16 @@ if (import.meta.url === `file://${process.argv[1]}`) {
         output.push_str(&self.indent());
         output.push_str("}\n");
 
+        // Inject impl methods if any exist for this type
+        if let Some(methods) = self.impl_methods.get(&struct_decl.name).cloned() {
+            for (_method_name, code_parts) in &methods {
+                output.push('\n');
+                for code in code_parts {
+                    output.push_str(code);
+                }
+            }
+        }
+
         self.indent_level -= 1;
         output.push('}');
         output
@@ -251,7 +420,9 @@ if (import.meta.url === `file://${process.argv[1]}`) {
     fn generate_enum(&mut self, enum_decl: &EnumDecl) -> String {
         let mut output = String::new();
 
-        // Generate as frozen object with symbol values
+        // Generate enum as a frozen object.
+        // - Unit variants → unique string tags (comparable with ===)
+        // - Tuple/struct variants → factory functions returning tagged objects
         output.push_str(&format!(
             "export const {} = Object.freeze({{\n",
             enum_decl.name
@@ -260,7 +431,35 @@ if (import.meta.url === `file://${process.argv[1]}`) {
         self.indent_level += 1;
         for (i, variant) in enum_decl.variants.iter().enumerate() {
             output.push_str(&self.indent());
-            output.push_str(&format!("{}: Symbol('{}')", variant.name, variant.name));
+            let tag = format!("{}.{}", enum_decl.name, variant.name);
+            match &variant.data {
+                EnumVariantData::Unit => {
+                    // Unit variant: Color.Red === 'Color.Red'
+                    output.push_str(&format!("{}: '{}'", variant.name, tag));
+                }
+                EnumVariantData::Tuple(types) => {
+                    // Tuple variant: Shape.Circle(5) → { type: 'Shape.Circle', value: [5] }
+                    let params: Vec<String> = (0..types.len()).map(|i| format!("v{}", i)).collect();
+                    output.push_str(&format!(
+                        "{}: ({}) => ({{ type: '{}', value: [{}] }})",
+                        variant.name,
+                        params.join(", "),
+                        tag,
+                        params.join(", ")
+                    ));
+                }
+                EnumVariantData::Struct(fields) => {
+                    // Struct variant: Event.Click { x, y } → { type: 'Event.Click', value: { x, y } }
+                    let params: Vec<String> = fields.iter().map(|(n, _)| n.clone()).collect();
+                    output.push_str(&format!(
+                        "{}: ({}) => ({{ type: '{}', value: {{ {} }} }})",
+                        variant.name,
+                        params.join(", "),
+                        tag,
+                        params.join(", ")
+                    ));
+                }
+            }
             if i < enum_decl.variants.len() - 1 {
                 output.push(',');
             }
@@ -313,18 +512,23 @@ if (import.meta.url === `file://${process.argv[1]}`) {
             Statement::Let {
                 pattern,
                 value,
-                mutable,
+                mutable: _,
                 ..
             } => {
+                // Always use `let` in JS: Windjammer enforces immutability at compile time.
+                // Handle shadowing by renaming variables (JS can't re-declare let in same scope).
+                let val_str = self.generate_expression(value);
                 output.push_str(&self.indent());
-                if *mutable {
-                    output.push_str("let ");
+                output.push_str("let ");
+                // For simple identifier patterns, use the shadow-safe name
+                if let Pattern::Identifier(name) = pattern {
+                    let js_name = self.declare_var(name);
+                    output.push_str(&js_name);
                 } else {
-                    output.push_str("const ");
+                    output.push_str(&self.generate_pattern(pattern));
                 }
-                output.push_str(&self.generate_pattern(pattern));
                 output.push_str(" = ");
-                output.push_str(&self.generate_expression(value));
+                output.push_str(&val_str);
                 output.push_str(";\n");
             }
 
@@ -337,11 +541,30 @@ if (import.meta.url === `file://${process.argv[1]}`) {
                 ));
             }
 
-            Statement::Assignment { target, value, .. } => {
+            Statement::Assignment {
+                target,
+                value,
+                compound_op,
+                ..
+            } => {
                 output.push_str(&self.indent());
+                let op_str = match compound_op {
+                    Some(CompoundOp::Add) => "+=",
+                    Some(CompoundOp::Sub) => "-=",
+                    Some(CompoundOp::Mul) => "*=",
+                    Some(CompoundOp::Div) => "/=",
+                    Some(CompoundOp::Mod) => "%=",
+                    Some(CompoundOp::BitAnd) => "&=",
+                    Some(CompoundOp::BitOr) => "|=",
+                    Some(CompoundOp::BitXor) => "^=",
+                    Some(CompoundOp::Shl) => "<<=",
+                    Some(CompoundOp::Shr) => ">>=",
+                    None => "=",
+                };
                 output.push_str(&format!(
-                    "{} = {};\n",
+                    "{} {} {};\n",
                     self.generate_expression(target),
+                    op_str,
                     self.generate_expression(value)
                 ));
             }
@@ -451,21 +674,31 @@ if (import.meta.url === `file://${process.argv[1]}`) {
             }
 
             Statement::Match { value, arms, .. } => {
-                // Translate match to if-else chain (simplified)
-                output.push_str(&self.indent());
-                output.push_str(&format!(
-                    "// Match on {}\n",
-                    self.generate_expression(value)
-                ));
+                // Translate match to if-else chain
                 output.push_str(&self.indent());
                 output.push_str("{\n");
 
                 self.indent_level += 1;
                 output.push_str(&self.indent());
                 output.push_str(&format!(
-                    "const __match_value = {};\n",
+                    "let __match_value = {};\n",
                     self.generate_expression(value)
                 ));
+
+                // Pre-declare any variables used in guard patterns (e.g., `x if x > 0`)
+                // so they're in scope for both the binding and the guard expression.
+                // Deduplicate: multiple arms may bind the same variable name.
+                {
+                    let mut declared = std::collections::HashSet::new();
+                    for arm in arms.iter() {
+                        if let Pattern::Identifier(id) = &arm.pattern {
+                            if id != "_" && declared.insert(id.clone()) {
+                                output.push_str(&self.indent());
+                                output.push_str(&format!("let {};\n", id));
+                            }
+                        }
+                    }
+                }
 
                 for (i, arm) in arms.iter().enumerate() {
                     output.push_str(&self.indent());
@@ -567,7 +800,15 @@ if (import.meta.url === `file://${process.argv[1]}`) {
         match expr {
             Expression::Literal { value: lit, .. } => self.generate_literal(lit),
 
-            Expression::Identifier { name: id, .. } => id.clone(),
+            Expression::Identifier { name: id, .. } => {
+                // Convert Rust-style path syntax (Type::Variant) to JS dot notation (Type.Variant)
+                if id.contains("::") {
+                    id.replace("::", ".")
+                } else {
+                    // Resolve shadowed variable names
+                    self.resolve_var(id)
+                }
+            }
 
             Expression::Binary {
                 left, op, right, ..
@@ -596,13 +837,30 @@ if (import.meta.url === `file://${process.argv[1]}`) {
                 let func_expr = self.generate_expression(function);
 
                 // Handle special functions
-                if func_expr == "println!" {
-                    let args: Vec<String> = arguments
-                        .iter()
-                        .map(|(_, arg)| self.generate_expression(arg))
-                        .collect();
-                    return format!("console.log({})", args.join(", "));
+                match func_expr.as_str() {
+                    "println!" | "println" => {
+                        let args: Vec<String> = arguments
+                            .iter()
+                            .map(|(_, arg)| self.generate_expression(arg))
+                            .collect();
+                        return self.generate_js_println(&args);
+                    }
+                    "print!" | "print" => {
+                        let args: Vec<String> = arguments
+                            .iter()
+                            .map(|(_, arg)| self.generate_expression(arg))
+                            .collect();
+                        return self.generate_js_print(&args);
+                    }
+                    _ => {}
                 }
+
+                // Handle Type.new(...) → Type.create(...) since 'new' is reserved
+                let func_expr = if func_expr.ends_with(".new") {
+                    format!("{}.create", &func_expr[..func_expr.len() - 4])
+                } else {
+                    func_expr
+                };
 
                 let args: Vec<String> = arguments
                     .iter()
@@ -622,7 +880,14 @@ if (import.meta.url === `file://${process.argv[1]}`) {
                     .iter()
                     .map(|(_, arg)| self.generate_expression(arg))
                     .collect();
-                format!("{}.{}({})", obj, method, args.join(", "))
+                // Map Windjammer/Rust methods to JS equivalents
+                match method.as_str() {
+                    "len" => format!("{}.length", obj), // .len() → .length (property, not method)
+                    "is_empty" => format!("{}.length === 0", obj),
+                    "contains" if args.len() == 1 => format!("{}.includes({})", obj, args[0]),
+                    "to_string" => format!("String({})", obj),
+                    _ => format!("{}.{}({})", obj, method, args.join(", ")),
+                }
             }
 
             Expression::FieldAccess { object, field, .. } => {
@@ -714,13 +979,43 @@ if (import.meta.url === `file://${process.argv[1]}`) {
                         format!("console.log({})", args_str.join(", "))
                     }
                     "format" => {
-                        // String formatting - just use template literal
+                        // Convert format!("Hello, {}!", name) → `Hello, ${name}!`
                         let args_str: Vec<String> =
                             args.iter().map(|e| self.generate_expression(e)).collect();
-                        if args_str.len() == 1 {
-                            args_str[0].clone()
+                        if args_str.len() <= 1 {
+                            args_str
+                                .first()
+                                .cloned()
+                                .unwrap_or_else(|| "''".to_string())
                         } else {
-                            format!("`{}`", args_str.join(" "))
+                            // First arg is the format string (quoted), rest are values
+                            let fmt = &args_str[0];
+                            // Strip quotes from format string
+                            let inner = if (fmt.starts_with('\'') && fmt.ends_with('\''))
+                                || (fmt.starts_with('"') && fmt.ends_with('"'))
+                            {
+                                &fmt[1..fmt.len() - 1]
+                            } else {
+                                fmt.as_str()
+                            };
+                            // Replace {} placeholders with ${arg} expressions
+                            let mut result = String::new();
+                            let mut arg_idx = 0;
+                            let mut chars = inner.chars().peekable();
+                            while let Some(ch) = chars.next() {
+                                if ch == '{' && chars.peek() == Some(&'}') {
+                                    chars.next(); // consume }
+                                    if arg_idx + 1 < args_str.len() {
+                                        result.push_str(&format!("${{{}}}", args_str[arg_idx + 1]));
+                                        arg_idx += 1;
+                                    } else {
+                                        result.push_str("{}");
+                                    }
+                                } else {
+                                    result.push(ch);
+                                }
+                            }
+                            format!("`{}`", result)
                         }
                     }
                     _ => format!("/* macro: {}! */", name),
@@ -824,7 +1119,12 @@ if (import.meta.url === `file://${process.argv[1]}`) {
     fn generate_pattern_match(&self, pattern: &Pattern, match_value: &str) -> String {
         match pattern {
             Pattern::Wildcard => "true".to_string(),
-            Pattern::Identifier(id) => format!("(({} = {}) || true)", id, match_value),
+            Pattern::Identifier(id) => {
+                // Bind the variable: `((id = __match_value) !== undefined || true)` ensures
+                // the variable is assigned AND the condition is always true (catch-all binding).
+                // We use `var` here since `let` cannot be used inside an expression.
+                format!("((({} = {}) !== undefined) || true)", id, match_value)
+            }
             Pattern::Reference(inner) => {
                 // JavaScript doesn't have references, just match the inner pattern
                 self.generate_pattern_match(inner, match_value)
@@ -832,14 +1132,33 @@ if (import.meta.url === `file://${process.argv[1]}`) {
             Pattern::Literal(lit) => format!("{} === {}", match_value, self.generate_literal(lit)),
             Pattern::EnumVariant(name, binding) => {
                 use crate::parser::EnumPatternBinding;
+                // Convert :: to . for JS: Color::Red → Color.Red
+                let js_name = name.replace("::", ".");
                 match binding {
-                    EnumPatternBinding::Single(var) => {
-                        format!("{} === {}.{}", match_value, name, var)
-                    }
                     EnumPatternBinding::Wildcard | EnumPatternBinding::None => {
-                        format!("{} === {}", match_value, name)
+                        format!("{} === {}", match_value, js_name)
                     }
-                    _ => format!("{} === {}", match_value, name), // Tuple and Struct patterns
+                    EnumPatternBinding::Single(var) => {
+                        // Enum with data: extract the inner value
+                        format!(
+                            "({}.type === '{}' && (({} = {}.value) !== undefined || true))",
+                            match_value, js_name, var, match_value
+                        )
+                    }
+                    EnumPatternBinding::Tuple(patterns) => {
+                        let mut conditions =
+                            vec![format!("{}.type === '{}'", match_value, js_name)];
+                        for (i, pat) in patterns.iter().enumerate() {
+                            if let Pattern::Identifier(bind) = pat {
+                                conditions.push(format!(
+                                    "(({} = {}.value[{}]) !== undefined || true)",
+                                    bind, match_value, i
+                                ));
+                            }
+                        }
+                        format!("({})", conditions.join(" && "))
+                    }
+                    _ => format!("{} === {}", match_value, js_name),
                 }
             }
             Pattern::Or(patterns) => {
@@ -898,6 +1217,46 @@ if (import.meta.url === `file://${process.argv[1]}`) {
             Type::Option(inner) => format!("{}|null", Self::type_to_jsdoc(inner)),
             _ => "any".to_string(),
         }
+    }
+
+    /// Generate console.log with format string support: println("{}", x) → console.log(`${x}`)
+    fn generate_js_println(&self, args: &[String]) -> String {
+        if args.is_empty() {
+            return "console.log()".to_string();
+        }
+        // Check if first arg is a format string (quoted)
+        let first = &args[0];
+        if first.starts_with('\'') || first.starts_with('"') {
+            let unquoted = &first[1..first.len() - 1];
+            if unquoted.contains("{}") && args.len() > 1 {
+                // Convert {} placeholders to template literal ${} syntax
+                let mut template = unquoted.to_string();
+                for arg in &args[1..] {
+                    template = template.replacen("{}", &format!("${{{}}}", arg), 1);
+                }
+                return format!("console.log(`{}`)", template);
+            }
+        }
+        format!("console.log({})", args.join(", "))
+    }
+
+    /// Generate console.log without newline (JS doesn't have print without newline easily)
+    fn generate_js_print(&self, args: &[String]) -> String {
+        if args.is_empty() {
+            return "process.stdout.write('')".to_string();
+        }
+        let first = &args[0];
+        if first.starts_with('\'') || first.starts_with('"') {
+            let unquoted = &first[1..first.len() - 1];
+            if unquoted.contains("{}") && args.len() > 1 {
+                let mut template = unquoted.to_string();
+                for arg in &args[1..] {
+                    template = template.replacen("{}", &format!("${{{}}}", arg), 1);
+                }
+                return format!("process.stdout.write(`{}`)", template);
+            }
+        }
+        format!("process.stdout.write(String({}))", args.join(" + "))
     }
 
     fn indent(&self) -> String {
