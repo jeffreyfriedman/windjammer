@@ -39,6 +39,7 @@ impl Parser {
             }
             Type::Associated(base, name) => format!("{}::{}", base, name),
             Type::TraitObject(trait_name) => format!("dyn {}", trait_name),
+            Type::ImplTrait(trait_name) => format!("trait {}", trait_name),
             Type::Infer => "_".to_string(),
             Type::FunctionPointer {
                 params,
@@ -196,6 +197,17 @@ impl Parser {
                     Type::TraitObject(name)
                 } else {
                     return Err("Expected trait name after 'dyn'".to_string());
+                }
+            }
+            Token::Trait => {
+                // Parse: trait TraitName (Windjammer syntax - compiler infers dispatch)
+                self.advance();
+                if let Token::Ident(trait_name) = self.current_token() {
+                    let name = trait_name.clone();
+                    self.advance();
+                    Type::ImplTrait(name)
+                } else {
+                    return Err("Expected trait name after 'trait'".to_string());
                 }
             }
             Token::Int => {
