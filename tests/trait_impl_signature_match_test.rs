@@ -171,14 +171,17 @@ impl GameLoop for MyGame {
         .collect::<Vec<_>>()
         .join("\n");
 
+    // Note: unused params get _ prefix from the compiler's unused-param detection
     assert!(
-        impl_section.contains("fn update(&mut self, input: Input"),
-        "Impl should match trait with 'input: Input'. Impl:\n{}",
+        impl_section.contains("fn update(&mut self, input: Input")
+            || impl_section.contains("fn update(&mut self, _input: Input"),
+        "Impl should match trait with 'input: Input' (or '_input' if unused). Impl:\n{}",
         impl_section
     );
     assert!(
-        impl_section.contains("fn render(&self, ctx: RenderContext"),
-        "Impl should match trait with 'ctx: RenderContext'. Impl:\n{}",
+        impl_section.contains("fn render(&self, ctx: RenderContext")
+            || impl_section.contains("fn render(&self, _ctx: RenderContext"),
+        "Impl should match trait with 'ctx: RenderContext' (or '_ctx' if unused). Impl:\n{}",
         impl_section
     );
 

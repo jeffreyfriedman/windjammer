@@ -25,13 +25,22 @@ jobs:
           echo "version=$VERSION" >> $GITHUB_OUTPUT
           echo "Tagged version: $VERSION"
           
-          # Verify it matches Cargo.toml
-          CARGO_VERSION=$(grep '^version = ' Cargo.toml | head -1 | sed 's/version = "\(.*\)"/\1/')
-          if [ "$VERSION" != "$CARGO_VERSION" ]; then
-            echo "ERROR: Tag version ($VERSION) doesn't match Cargo.toml version ($CARGO_VERSION)"
+          # Verify it matches Cargo.toml workspace version
+          # The workspace version is under [workspace.package] — grep for the first 'version = "X.Y.Z"' line
+          CARGO_VERSION=$(grep '^version = "' Cargo.toml | head -1 | sed 's/version = "\(.*\)"/\1/')
+          if [ -z "$CARGO_VERSION" ]; then
+            echo "ERROR: Could not find version in Cargo.toml"
             exit 1
           fi
-          echo "✓ Tag matches Cargo.toml version"
+          if [ "$VERSION" != "$CARGO_VERSION" ]; then
+            echo "ERROR: Tag version ($VERSION) doesn't match Cargo.toml version ($CARGO_VERSION)"
+            echo "Fix: Update 'version = \"$VERSION\"' in Cargo.toml [workspace.package] before tagging"
+            exit 1
+          fi
+          
+          # Also check internal dependency version references
+          ./scripts/check-versions.sh "v$VERSION"
+          echo "✓ Tag matches Cargo.toml version and all crate versions are consistent"
 
       - name: Check if version is published
         id: version_check

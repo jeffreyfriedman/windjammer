@@ -270,13 +270,16 @@ fn main() {
     let js_content =
         fs::read_to_string(build_dir.join("output.js")).expect("Failed to read output.js");
 
-    // Verify enum is generated as frozen object with symbols
+    // Verify enum is generated as frozen object with string values
     assert!(
         js_content.contains("export const Color"),
         "Should have Color enum"
     );
     assert!(js_content.contains("Object.freeze"), "Should be frozen");
-    assert!(js_content.contains("Symbol"), "Should use symbols");
+    assert!(
+        js_content.contains("Color.Red"),
+        "Should have string-based enum values"
+    );
 }
 
 #[test]

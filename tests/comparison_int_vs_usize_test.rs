@@ -55,9 +55,10 @@ fn test_int_var_compared_with_len_should_cast_len() {
     let generated = compile_code(code).expect("Compilation failed");
 
     // Should cast .len() to i64 for comparison with int field
+    // Accept both `self.items.len() as i64` and `(self.items.len() as i64)` since
+    // `as` binds tighter than `<` so parens are optional
     assert!(
-        generated.contains("self.index < (self.items.len() as i64)")
-            || generated.contains("(self.items.len() as i64)"),
+        generated.contains("self.items.len() as i64"),
         "Should cast .len() to i64 when comparing with int field, got:\n{}",
         generated
     );

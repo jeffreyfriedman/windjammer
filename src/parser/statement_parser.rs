@@ -199,9 +199,16 @@ impl Parser {
     fn parse_for(&mut self) -> Result<&'static Statement<'static>, String> {
         self.expect(Token::For)?;
 
-        // Parse pattern: identifier, reference pattern (&x), or tuple pattern like (idx, item)
+        // Parse for-loop pattern: use the general pattern parser which handles all cases:
+        // - Identifier: for x in ...
+        // - Wildcard: for _ in ...
+        // - Tuple: for (i, item) in ...
+        // - Reference: for &x in ...
+        // TDD FIX: Previously only handled Ident, LParen, and Ampersand explicitly,
+        // missing Token::Underscore (wildcard patterns like `for _ in 0..3`).
         let pattern = if self.current_token() == &Token::Ampersand {
-            // Reference pattern: &x
+            // Reference pattern: &x — handle separately because parse_pattern
+            // doesn't know about reference patterns in for-loops
             self.advance(); // consume &
             if let Token::Ident(name) = self.current_token() {
                 let name = name.clone();
@@ -210,18 +217,9 @@ impl Parser {
             } else {
                 return Err("Expected identifier after & in for loop pattern".to_string());
             }
-        } else if self.current_token() == &Token::LParen {
-            // Tuple pattern - use general pattern parser for full support
-            self.parse_pattern()?
-        } else if let Token::Ident(name) = self.current_token() {
-            let name = name.clone();
-            self.advance();
-            Pattern::Identifier(name)
         } else {
-            return Err(
-                "Expected variable name, reference pattern, or tuple pattern in for loop"
-                    .to_string(),
-            );
+            // Use general pattern parser for all other cases (identifier, wildcard, tuple, etc.)
+            self.parse_pattern()?
         };
 
         self.expect(Token::In)?;

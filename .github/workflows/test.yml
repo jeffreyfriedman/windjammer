@@ -84,6 +84,23 @@ jobs:
             fi
           done
           
+          # Check internal dependency version references
+          for crate_toml in crates/*/Cargo.toml; do
+            CRATE_NAME=$(grep '^name = ' "$crate_toml" | head -1 | sed 's/.*name = "\(.*\)"/\1/')
+            
+            # Find lines with path = AND version = (internal workspace deps)
+            while IFS= read -r line; do
+              if echo "$line" | grep -q 'path ='; then
+                DEP_VERSION=$(echo "$line" | sed -n 's/.*version = "\([^"]*\)".*/\1/p')
+                DEP_NAME=$(echo "$line" | sed -n 's/\([a-z_-]*\) = {.*/\1/p')
+                if [ -n "$DEP_VERSION" ] && [ "$DEP_VERSION" != "$WORKSPACE_VERSION" ]; then
+                  echo "❌ $CRATE_NAME: dependency '$DEP_NAME' has version $DEP_VERSION (expected: $WORKSPACE_VERSION)"
+                  MISMATCHES=$((MISMATCHES + 1))
+                fi
+              fi
+            done < <(grep 'version = "' "$crate_toml" | grep 'path =' || true)
+          done
+          
           echo ""
           if [ $MISMATCHES -gt 0 ]; then
             echo "❌ ERROR: $MISMATCHES crate(s) have mismatched versions!"
@@ -91,6 +108,7 @@ jobs:
             echo "To fix:"
             echo "  1. Update version in each crate's Cargo.toml to match workspace version"
             echo "  2. Or use 'version.workspace = true' to inherit from workspace"
+            echo "  3. Update internal dependency references: windjammer = { path = \"../..\", version = \"$WORKSPACE_VERSION\" }"
             exit 1
           fi
           

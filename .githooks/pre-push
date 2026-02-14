@@ -1,0 +1,46 @@
+#!/usr/bin/env bash
+# pre-push hook: Validate tag versions match Cargo.toml before pushing tags
+#
+# Setup: git config core.hooksPath .githooks
+# Or:    make setup-hooks
+
+set -euo pipefail
+
+ROOT_DIR="$(git rev-parse --show-toplevel)"
+
+# Read stdin for refs being pushed
+while read -r local_ref local_sha remote_ref remote_sha; do
+    # Check if we're pushing a version tag
+    if echo "$remote_ref" | grep -qE '^refs/tags/v[0-9]+\.[0-9]+\.[0-9]+'; then
+        TAG_VERSION="${remote_ref#refs/tags/v}"
+        
+        echo "Pushing tag v$TAG_VERSION — checking Cargo.toml version..."
+        
+        # Get workspace version from the commit being tagged
+        WORKSPACE_VERSION=$(git show "$local_sha:Cargo.toml" 2>/dev/null | grep '^version = ' | head -1 | sed 's/version = "\(.*\)"/\1/')
+        
+        if [ -z "$WORKSPACE_VERSION" ]; then
+            echo "WARNING: Could not determine workspace version from tagged commit"
+            continue
+        fi
+        
+        if [ "$TAG_VERSION" != "$WORKSPACE_VERSION" ]; then
+            echo ""
+            echo "ERROR: Tag version (v$TAG_VERSION) doesn't match Cargo.toml version ($WORKSPACE_VERSION)"
+            echo ""
+            echo "To fix:"
+            echo "  1. Delete the local tag:  git tag -d v$TAG_VERSION"
+            echo "  2. Update Cargo.toml:     sed -i '' 's/version = \"$WORKSPACE_VERSION\"/version = \"$TAG_VERSION\"/' Cargo.toml"
+            echo "  3. Commit the change:     git add Cargo.toml && git commit -m 'bump version to $TAG_VERSION'"
+            echo "  4. Re-tag:                git tag -a v$TAG_VERSION -m 'v$TAG_VERSION'"
+            echo "  5. Push:                  git push origin v$TAG_VERSION"
+            echo ""
+            exit 1
+        fi
+        
+        # Also check workspace dependency versions
+        "$ROOT_DIR/scripts/check-versions.sh" "v$TAG_VERSION" || exit 1
+        
+        echo "Tag v$TAG_VERSION matches Cargo.toml version — OK"
+    fi
+done

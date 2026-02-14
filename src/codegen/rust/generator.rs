@@ -67,6 +67,9 @@ pub struct CodeGenerator<'ast> {
     in_impl_block: bool,                 // true if currently generating code for an impl block
     // USIZE DETECTION: Track which struct fields have type usize (for auto-casting)
     usize_struct_fields: std::collections::HashMap<String, std::collections::HashSet<String>>, // Struct name -> usize field names
+    // METHOD RETURN TYPES: Track which methods return usize (for auto-casting in comparisons)
+    // Maps method name -> return type. Used by infer_expression_type for MethodCall.
+    method_return_types: std::collections::HashMap<String, Type>,
     // FUNCTION CONTEXT: Track current function parameters for compound assignment optimization
     current_function_params: Vec<crate::parser::Parameter<'ast>>, // Parameters of the current function
     // FUNCTION CONTEXT: Track current function return type for string literal conversion
@@ -95,6 +98,9 @@ pub struct CodeGenerator<'ast> {
     // MATCH STATEMENT CONTEXT: Track if we're in a match used as a statement (not expression)
     // In statement-context matches, arm blocks should have semicolons on all statements
     in_statement_match: bool,
+    // FOR-LOOP AUTO-BORROW: Track local variables that need `&` in for-loops
+    // because they are used after the loop (pre-computed per function body)
+    for_loop_borrow_needed: std::collections::HashSet<String>,
     // BORROWED ITERATOR VARIABLES: Track variables that are iterating over borrowed collections
     // These variables are references, so accessing their fields requires .clone()
     borrowed_iterator_vars: std::collections::HashSet<String>,
@@ -103,6 +109,10 @@ pub struct CodeGenerator<'ast> {
     owned_string_iterator_vars: std::collections::HashSet<String>,
     // USIZE VARIABLES: Track variables assigned from .len() for auto-casting
     usize_variables: std::collections::HashSet<String>,
+    // UNUSED LET BINDINGS: Track let bindings whose variable is never used after declaration.
+    // Keyed by (line, column) of the let statement's source location.
+    // These will be prefixed with `_` in the generated Rust to suppress "unused variable" warnings.
+    unused_let_bindings: std::collections::HashSet<(usize, usize)>,
     // INFERRED BORROWED PARAMS: Parameters inferred to be borrowed (for field access cloning)
     inferred_borrowed_params: std::collections::HashSet<String>,
     // ASSIGNMENT TARGET: Flag to suppress auto-clone when generating assignment targets
@@ -194,14 +204,17 @@ impl<'ast> CodeGenerator<'ast> {
             current_struct_name: None,
             in_impl_block: false,
             usize_struct_fields: std::collections::HashMap::new(),
+            method_return_types: std::collections::HashMap::new(),
             current_function_params: Vec::new(),
             current_function_return_type: None,
             current_function_body: Vec::new(),
             workspace_root: None,
             suppress_string_conversion: false,
+            for_loop_borrow_needed: std::collections::HashSet::new(),
             borrowed_iterator_vars: std::collections::HashSet::new(),
             owned_string_iterator_vars: std::collections::HashSet::new(),
             usize_variables: std::collections::HashSet::new(),
+            unused_let_bindings: std::collections::HashSet::new(),
             inferred_borrowed_params: std::collections::HashSet::new(),
             generating_assignment_target: false,
             partial_eq_types: std::collections::HashSet::new(),
@@ -740,14 +753,15 @@ impl<'ast> CodeGenerator<'ast> {
         }
 
         // THE WINDJAMMER WAY: Auto-detect usage of common stdlib types and traits
-        // Scan the program for HashMap/HashSet references and operator trait impls
-        // This prevents the developer from needing to write boilerplate imports
+        // Walk the AST properly to find HashMap/HashSet usage in types and expressions
+        // (NOT debug text, which includes comments and causes false positives)
         {
-            let program_text = format!("{:?}", program);
-            if !self.needs_hashmap_import && program_text.contains("HashMap") {
+            if !self.needs_hashmap_import && Self::program_references_collection(program, "HashMap")
+            {
                 self.needs_hashmap_import = true;
             }
-            if !self.needs_hashset_import && program_text.contains("HashSet") {
+            if !self.needs_hashset_import && Self::program_references_collection(program, "HashSet")
+            {
                 self.needs_hashset_import = true;
             }
         }
@@ -3372,8 +3386,23 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
         // Track function return type for string literal conversion
         self.current_function_return_type = func.return_type.clone();
 
+        // Track method return types for usize inference in comparisons
+        // When in an impl block, record the return type so expression_produces_usize
+        // can resolve method calls like animation.frame_count() → usize
+        if self.in_impl_block {
+            if let Some(ref ret_type) = func.return_type {
+                self.method_return_types
+                    .insert(func.name.to_string(), ret_type.clone());
+            }
+        }
+
         // Track function body for data flow analysis
         self.current_function_body = func.body.clone();
+
+        // FOR-LOOP AUTO-BORROW: Pre-scan function body to find local variables
+        // that are iterated in for-loops and also used after the loop.
+        // These need `&` auto-inserted to prevent consuming the collection.
+        self.precompute_for_loop_borrows(&func.body);
 
         // Track parameters inferred as borrowed for field access cloning
         self.inferred_borrowed_params.clear();
@@ -3618,6 +3647,24 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
             }
         }
 
+        // TDD FIX: Pre-compute which parameters are actually used in the function body.
+        // Unused parameters get prefixed with `_` to suppress "unused variable" warnings.
+        // THE WINDJAMMER WAY: The compiler handles this automatically — developers don't
+        // need to manually prefix unused parameters with `_`.
+        let body_refs: Vec<&Statement> = func.body.to_vec();
+        let unused_params: std::collections::HashSet<String> = func
+            .parameters
+            .iter()
+            .filter(|p| p.name != "self")
+            .filter(|p| !Self::variable_used_in_statements(&body_refs, &p.name))
+            .map(|p| p.name.clone())
+            .collect();
+
+        // TDD FIX: Pre-compute unused let bindings and for-loop variables.
+        // Like unused params, these get prefixed with `_` in the generated Rust.
+        self.unused_let_bindings.clear();
+        Self::find_unused_bindings(&func.body, &mut self.unused_let_bindings);
+
         let additional_params: Vec<String> = func
             .parameters
             .iter()
@@ -3792,6 +3839,13 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
                     ""
                 };
 
+                // TDD FIX: Prefix unused parameter names with `_` to suppress warnings
+                let display_name = if unused_params.contains(&param.name) {
+                    format!("_{}", param.name)
+                } else {
+                    param.name.clone()
+                };
+
                 // Check if this is a pattern parameter
                 if let Some(pattern) = &param.pattern {
                     // Generate pattern: type syntax
@@ -3803,7 +3857,7 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
                     )
                 } else {
                     // Simple name: type syntax
-                    format!("{}{}: {}", mut_prefix, param.name, type_str)
+                    format!("{}{}: {}", mut_prefix, display_name, type_str)
                 }
             })
             .collect();
@@ -3925,6 +3979,7 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
                 mutable,
                 type_,
                 value,
+                location,
                 ..
             } => {
                 let mut output = self.indent();
@@ -3953,8 +4008,20 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
                     output.push_str("mut ");
                 }
 
+                // TDD FIX: Prefix unused let bindings with `_` to suppress warnings
+                let is_unused_binding = location
+                    .as_ref()
+                    .is_some_and(|loc| self.unused_let_bindings.contains(&(loc.line, loc.column)));
+
                 // Generate pattern (could be simple name or tuple)
-                let pattern_str = self.generate_pattern(pattern);
+                let pattern_str = if is_unused_binding {
+                    match pattern {
+                        Pattern::Identifier(name) => format!("_{}", name),
+                        other => self.generate_pattern(other),
+                    }
+                } else {
+                    self.generate_pattern(pattern)
+                };
                 output.push_str(&pattern_str);
 
                 // LOCAL VARIABLE TRACKING: Add this variable to the current scope
@@ -4619,6 +4686,7 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
                 pattern,
                 iterable,
                 body,
+                location,
                 ..
             } => {
                 let mut output = self.indent();
@@ -4631,16 +4699,42 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
                     .as_ref()
                     .is_some_and(|var| self.loop_body_modifies_variable(body, var));
 
-                if needs_mut {
-                    output.push_str("mut ");
-                }
-                output.push_str(&pattern_str);
-                output.push_str(" in ");
-
                 // Check if we need to add & for borrowed iteration
                 // This handles the common case of iterating over fields of borrowed structs
                 let needs_borrow = self.should_borrow_for_iteration(iterable);
                 let needs_mut_borrow = needs_mut && needs_borrow;
+
+                // TDD FIX: Only add `mut` to the loop variable when it's reassigned directly,
+                // NOT when iterating with `&mut`. When iterating with `&mut`, the loop variable
+                // is already a `&mut T` reference, so field modifications work without `mut` on
+                // the binding. Adding `mut` generates: `for mut member in &mut collection`
+                // which triggers "variable does not need to be mutable" warning.
+                //
+                // Check two cases:
+                // 1. We infer `&mut` iteration (needs_mut_borrow) - don't add `mut`
+                // 2. Source already has `&mut` on the iterable (Expression::Unary MutRef) - don't add `mut`
+                let iterable_already_mut_ref = matches!(
+                    iterable,
+                    Expression::Unary {
+                        op: UnaryOp::MutRef,
+                        ..
+                    }
+                );
+                if needs_mut && !needs_mut_borrow && !iterable_already_mut_ref {
+                    output.push_str("mut ");
+                }
+
+                // TDD FIX: Prefix unused for-loop variables with `_`
+                let is_unused_loop_var = location
+                    .as_ref()
+                    .is_some_and(|loc| self.unused_let_bindings.contains(&(loc.line, loc.column)));
+                let display_pattern = if is_unused_loop_var {
+                    format!("_{}", pattern_str)
+                } else {
+                    pattern_str
+                };
+                output.push_str(&display_pattern);
+                output.push_str(" in ");
 
                 // BORROWED ITERATOR: Track if iterator variable is from borrowed collection
                 // So we can auto-clone when pushing to new collections
@@ -4951,7 +5045,17 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
                         } else {
                             let field_strs: Vec<String> = fields
                                 .iter()
-                                .map(|(n, pat)| format!("{}: {}", n, self.generate_pattern(pat)))
+                                .map(|(n, pat)| {
+                                    // THE WINDJAMMER WAY: Use shorthand field pattern when
+                                    // binding name matches field name (e.g., `{ base, height }`
+                                    // instead of `{ base: base, height: height }`)
+                                    if let Pattern::Identifier(binding) = pat {
+                                        if binding == n {
+                                            return n.clone();
+                                        }
+                                    }
+                                    format!("{}: {}", n, self.generate_pattern(pat))
+                                })
                                 .collect();
                             if *has_wildcard {
                                 // Partial match: { field1, field2, .. }
@@ -5089,7 +5193,8 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
                 }
                 None
             }
-            // self.field → look up field type from struct_field_types
+            // obj.field → look up field type from struct_field_types
+            // Supports: self.field, var.field, and nested: self.config.max_size
             Expression::FieldAccess { object, field, .. } => {
                 // Resolve the object's type first
                 if let Expression::Identifier { name, .. } = &**object {
@@ -5127,6 +5232,35 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
                             }
                         }
                     }
+                } else {
+                    // Nested field access: self.config.max_size, obj.inner.field, etc.
+                    // Recursively resolve the object's type, then look up the field
+                    if let Some(obj_type) = self.infer_expression_type(object) {
+                        let type_name = match &obj_type {
+                            Type::Custom(n) => n.as_str(),
+                            // Handle references: &Config → Config
+                            Type::Reference(inner) | Type::MutableReference(inner) => {
+                                match inner.as_ref() {
+                                    Type::Custom(n) => n.as_str(),
+                                    _ => "",
+                                }
+                            }
+                            _ => "",
+                        };
+                        if !type_name.is_empty() {
+                            // Also try stripping generic params: "Config<T>" → "Config"
+                            let base_name = type_name.split('<').next().unwrap_or(type_name);
+                            if let Some(fields) = self
+                                .struct_field_types
+                                .get(type_name)
+                                .or_else(|| self.struct_field_types.get(base_name))
+                            {
+                                if let Some(field_type) = fields.get(field.as_str()) {
+                                    return Some(field_type.clone());
+                                }
+                            }
+                        }
+                    }
                 }
                 None
             }
@@ -5145,6 +5279,52 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
             } => self
                 .infer_expression_type(operand)
                 .map(|t| Type::MutableReference(Box::new(t))),
+            // Method calls: look up return type from method_return_types registry
+            // and signature registry (for cross-file method resolution)
+            Expression::MethodCall { object, method, .. } => {
+                // Check well-known methods first
+                if method == "len" || method == "count" || method == "capacity" {
+                    return Some(Type::Custom("usize".to_string()));
+                }
+                // Look up from the method return type registry (populated during impl generation)
+                if let Some(t) = self.method_return_types.get(method.as_str()) {
+                    return Some(t.clone());
+                }
+                // TDD FIX: Cross-file method resolution via signature registry.
+                // When the method is on a different type (e.g., animation.frame_count()),
+                // method_return_types won't have it. Resolve the object's type, then
+                // look up Type::method in the signature registry.
+                if let Some(obj_type) = self.infer_expression_type(object) {
+                    let type_name = match &obj_type {
+                        Type::Custom(n) => n.clone(),
+                        Type::Reference(inner) | Type::MutableReference(inner) => {
+                            match inner.as_ref() {
+                                Type::Custom(n) => n.clone(),
+                                _ => String::new(),
+                            }
+                        }
+                        _ => String::new(),
+                    };
+                    if !type_name.is_empty() {
+                        let qualified = format!("{}::{}", type_name, method);
+                        if let Some(sig) = self.signature_registry.get_signature(&qualified) {
+                            return sig.return_type.clone();
+                        }
+                        // Also try base name for generic types
+                        let base_name = type_name.split('<').next().unwrap_or(&type_name);
+                        if base_name != type_name {
+                            let qualified = format!("{}::{}", base_name, method);
+                            if let Some(sig) = self.signature_registry.get_signature(&qualified) {
+                                return sig.return_type.clone();
+                            }
+                        }
+                    }
+                }
+                // Final fallback: try simple method name
+                self.signature_registry
+                    .get_signature(method)
+                    .and_then(|sig| sig.return_type.clone())
+            }
             _ => None,
         }
     }
@@ -5320,9 +5500,11 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
                 // Check if it's self.field
                 if matches!(&**object, Expression::Identifier { name, .. } if name == "self") {
                     // Use the tracked struct name and usize_struct_fields to infer type
+                    // Strip generic parameters: "Pool<T>" → "Pool"
                     if let Some(struct_name) = &self.current_struct_name {
+                        let base_name = struct_name.split('<').next().unwrap_or(struct_name);
                         // Check if this field is tracked as usize
-                        if let Some(usize_fields) = self.usize_struct_fields.get(struct_name) {
+                        if let Some(usize_fields) = self.usize_struct_fields.get(base_name) {
                             if usize_fields.contains(field) {
                                 return Some("usize".to_string());
                             }
@@ -5352,7 +5534,11 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
         match expr {
             // .len() returns usize
             Expression::MethodCall { method, .. } => {
-                method == "len" || method == "count" || method == "capacity"
+                if method == "len" || method == "count" || method == "capacity" {
+                    return true;
+                }
+                // Fallback: check via type inference
+                self.infer_expression_type_is_usize(expr)
             }
             // Binary ops with len: len() - 1, len() + offset, etc.
             Expression::Binary { left, right, .. } => {
@@ -5362,7 +5548,7 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
             Expression::Cast { type_, .. } => {
                 matches!(type_, Type::Custom(name) if name == "usize")
             }
-            // Variables assigned from .len()
+            // Variables assigned from .len() or typed as usize
             Expression::Identifier { name, .. } => {
                 if self.usize_variables.contains(name) {
                     return true;
@@ -5371,32 +5557,52 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
                 // Check if this is a struct field with usize type (in impl block)
                 if self.in_impl_block && self.current_struct_fields.contains(name) {
                     // Look up the struct to see if this field is usize
+                    // Strip generic parameters: "Pool<T>" → "Pool"
                     if let Some(struct_name) = &self.current_struct_name {
-                        if let Some(usize_fields) = self.usize_struct_fields.get(struct_name) {
-                            return usize_fields.contains(name);
-                        }
-                    }
-                }
-
-                false
-            }
-            // Field access: self.field_name or obj.field_name
-            Expression::FieldAccess { object, field, .. } => {
-                // Check if accessing a usize field on self
-                if let Expression::Identifier { name: obj_name, .. } = &**object {
-                    if obj_name == "self" && self.in_impl_block {
-                        // Look up struct to see if this field is usize
-                        if let Some(struct_name) = &self.current_struct_name {
-                            if let Some(usize_fields) = self.usize_struct_fields.get(struct_name) {
-                                return usize_fields.contains(field);
+                        let base_name = struct_name.split('<').next().unwrap_or(struct_name);
+                        if let Some(usize_fields) = self.usize_struct_fields.get(base_name) {
+                            if usize_fields.contains(name) {
+                                return true;
                             }
                         }
                     }
                 }
-                false
+
+                // Fallback: check parameters and local variable types via type inference
+                self.infer_expression_type_is_usize(expr)
+            }
+            // Field access: self.field_name or obj.field_name (including nested)
+            Expression::FieldAccess { object, field, .. } => {
+                // Check if accessing a usize field on self (fast path)
+                if let Expression::Identifier { name: obj_name, .. } = &**object {
+                    if obj_name == "self" && self.in_impl_block {
+                        // Look up struct to see if this field is usize
+                        if let Some(struct_name) = &self.current_struct_name {
+                            // Strip generic parameters: "Pool<T>" → "Pool"
+                            let base_name = struct_name.split('<').next().unwrap_or(struct_name);
+                            if let Some(usize_fields) = self.usize_struct_fields.get(base_name) {
+                                if usize_fields.contains(field) {
+                                    return true;
+                                }
+                            }
+                        }
+                    }
+                }
+                // Fallback: use type inference for obj.field, self.config.field, etc.
+                self.infer_expression_type_is_usize(expr)
             }
             _ => false,
         }
+    }
+
+    /// Check if an expression's inferred type is usize.
+    /// Uses infer_expression_type() for comprehensive type resolution including
+    /// parameters, local variables, nested field access, and method return types.
+    fn infer_expression_type_is_usize(&self, expr: &Expression) -> bool {
+        if let Some(t) = self.infer_expression_type(expr) {
+            return matches!(t, Type::Custom(ref name) if name == "usize");
+        }
+        false
     }
 
     /// Check if the function returns Option<T> where T is owned (not a reference)
@@ -5439,10 +5645,16 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
             Expression::Range { .. }
             | Expression::Binary { .. }
             | Expression::Closure { .. }
-            | Expression::Unary { .. } => {
+            | Expression::Unary { .. }
+            | Expression::Cast { .. } => {
                 // Unary expressions like (*entity).field need parens for correct precedence
                 // Without parens: *entity.field means *(entity.field) - WRONG
                 // With parens: (*entity).field means dereference then access field - CORRECT
+                //
+                // Cast expressions like (x as usize).method() need parens because `as` has
+                // lower precedence than `.` in Rust:
+                // Without parens: x as usize.method() means x as (usize.method()) - WRONG
+                // With parens: (x as usize).method() - CORRECT
                 format!("({})", self.generate_expression(expr))
             }
             _ => self.generate_expression(expr),
@@ -5617,30 +5829,32 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
                     // Left is usize, right is NOT usize
                     if right_is_int_literal {
                         // Int literals are always non-negative, safe to cast to usize
-                        right_str = format!("({} as usize)", right_str);
+                        right_str = format!("{} as usize", right_str);
                     } else {
                         // Cast the usize side (LEFT) to i64 for safety
                         // Use parens around compound expressions to prevent precedence issues
+                        // because `as` has higher precedence than arithmetic:
+                        // `a + b as i64` → `a + (b as i64)` (wrong), need `(a + b) as i64`
                         let needs_inner_parens = matches!(left, Expression::Binary { .. });
                         if needs_inner_parens {
-                            left_str = format!("(({}) as i64)", left_str);
+                            left_str = format!("({}) as i64", left_str);
                         } else {
-                            left_str = format!("({} as i64)", left_str);
+                            left_str = format!("{} as i64", left_str);
                         }
                     }
                 } else if is_comparison && right_is_usize && !left_is_usize {
                     // Right is usize, left is NOT usize
                     if left_is_int_literal {
                         // Int literals are always non-negative, safe to cast to usize
-                        left_str = format!("({} as usize)", left_str);
+                        left_str = format!("{} as usize", left_str);
                     } else {
                         // Cast the usize side (RIGHT) to i64 for safety
                         // Use parens around compound expressions to prevent precedence issues
                         let needs_inner_parens = matches!(right, Expression::Binary { .. });
                         if needs_inner_parens {
-                            right_str = format!("(({}) as i64)", right_str);
+                            right_str = format!("({}) as i64", right_str);
                         } else {
-                            right_str = format!("({} as i64)", right_str);
+                            right_str = format!("{} as i64", right_str);
                         }
                     }
                 }
@@ -5650,12 +5864,29 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
                 // AUTO-CAST: When doing arithmetic between usize and int literal, cast literal to usize
                 // E.g., items.len() - 1 -> items.len() - 1usize
                 if is_arithmetic && left_is_usize && right_is_int_literal && !right_is_usize {
-                    right_str = format!("({} as usize)", right_str);
+                    right_str = format!("{} as usize", right_str);
                 } else if is_arithmetic && right_is_usize && left_is_int_literal && !left_is_usize {
-                    left_str = format!("({} as usize)", left_str);
+                    left_str = format!("{} as usize", left_str);
                 }
 
                 let op_str = operators::binary_op_to_rust(op);
+
+                // TDD FIX: Rust parses `expr as usize < y` as `expr as usize<y>` (generics).
+                // When the left operand is a cast (or ends with `as TYPE`) and the operator
+                // is `<`, we must wrap the left side in parentheses to disambiguate.
+                // Other comparison operators (>=, <=, ==, !=, >) don't have this ambiguity.
+                let left_needs_cast_parens = op_str == "<"
+                    && (matches!(left, Expression::Cast { .. }) || left_str.contains(" as "));
+                let right_needs_cast_parens = op_str == ">"
+                    && (matches!(right, Expression::Cast { .. }) || right_str.contains(" as "));
+
+                if left_needs_cast_parens {
+                    left_str = format!("({})", left_str);
+                }
+                if right_needs_cast_parens {
+                    right_str = format!("({})", right_str);
+                }
+
                 format!("{} {} {}", left_str, op_str, right_str)
             }
             Expression::Unary { op, operand, .. } => {
@@ -5684,6 +5915,8 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
                 // Special case: convert test assertion functions to macros
                 // THE WINDJAMMER WAY: assert_eq(a, b) -> assert_eq!(a, b)
                 // NOTE: assert_gt, assert_gte, assert_is_some, assert_is_none, etc. are runtime functions, not macros
+                // Print functions need special handling (format! unwrapping, interpolation)
+                // so they are NOT in the simple macro list — handled separately below.
                 let test_macros = [
                     "assert",
                     "assert_eq",
@@ -5692,10 +5925,6 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
                     "assert_err",
                     "panic",
                     "vec",
-                    "println",
-                    "eprintln",
-                    "print",
-                    "eprint",
                     "format",
                     "write",
                     "writeln",
@@ -5768,12 +5997,13 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
                     // Check if the first argument is a format! macro (from string interpolation)
                     if let Some((_, first_arg)) = arguments.first() {
                         // Check for MacroInvocation (explicit format! calls)
+                        // first_arg is &&Expression (ref to ref from Vec element), deref both
                         if let Expression::MacroInvocation {
                             is_repeat: _,
-                            name,
-                            args: macro_args,
+                            ref name,
+                            args: ref macro_args,
                             ..
-                        } = first_arg
+                        } = **first_arg
                         {
                             if name == "format" && !macro_args.is_empty() {
                                 // Unwrap the format! call and put its arguments directly into println!
@@ -5800,7 +6030,7 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
                             op: BinaryOp::Add,
                             right,
                             ..
-                        } = first_arg
+                        } = **first_arg
                         {
                             // Check if this is string concatenation
                             let has_string_literal =
@@ -5843,9 +6073,9 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
 
                         // Check if the first argument is a string literal with ${} (old-style, shouldn't happen but keep for safety)
                         if let Expression::Literal {
-                            value: Literal::String(s),
+                            value: Literal::String(ref s),
                             ..
-                        } = first_arg
+                        } = **first_arg
                         {
                             if s.contains("${") {
                                 // Handle string interpolation directly in println!
@@ -7011,6 +7241,8 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
             }
             Expression::Cast { expr, type_, .. } => {
                 // Add parentheses around binary expressions for correct precedence
+                // because `as` has higher precedence than arithmetic in Rust:
+                // `a + b as usize` is parsed as `a + (b as usize)`, not `(a + b) as usize`
                 let expr_str = match &**expr {
                     Expression::Binary { .. } => {
                         format!("({})", self.generate_expression(expr))
@@ -7018,10 +7250,12 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
                     _ => self.generate_expression(expr),
                 };
                 let type_str = self.type_to_rust(type_);
-                // TDD FIX: Wrap entire cast in parentheses to avoid precedence issues
-                // Rust parses `x as T.method()` as `x as (T.method())` not `(x as T).method()`
-                // Also `i as usize < len` is parsed as generics, not comparison
-                format!("({} as {})", expr_str, type_str)
+                // TDD FIX: Do NOT wrap cast in outer parentheses.
+                // `as` has higher precedence than comparison/arithmetic operators in Rust,
+                // so `x as usize >= y` correctly parses as `(x as usize) >= y`.
+                // Outer parens are ONLY needed when the cast is followed by `.method()`
+                // or `.field` (handled at the MethodCall/FieldAccess generation sites).
+                format!("{} as {}", expr_str, type_str)
             }
             Expression::Block {
                 statements: stmts, ..
@@ -7760,6 +7994,249 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
 
     /// Check if we should add & for borrowed iteration in a for loop
     /// Returns true if iterating over a field of a borrowed parameter
+    /// Pre-scan a function body to find local variables that are iterated in for-loops
+    /// and also used after the loop. These need auto-borrow (`&`) in the for-loop.
+    fn precompute_for_loop_borrows(&mut self, body: &[&'ast Statement<'ast>]) {
+        self.for_loop_borrow_needed.clear();
+        for (i, stmt) in body.iter().enumerate() {
+            if let Statement::For {
+                iterable, pattern, ..
+            } = stmt
+            {
+                // Only handle simple identifier iterables (local variables)
+                if let Expression::Identifier { name, .. } = iterable {
+                    // Skip if this is a parameter (handled by existing ownership inference)
+                    let is_param = self.current_function_params.iter().any(|p| &p.name == name);
+                    if is_param {
+                        continue;
+                    }
+
+                    // Skip if the pattern itself shadows the variable name
+                    let pattern_name = pattern_analysis::extract_pattern_identifier(pattern);
+                    if pattern_name.as_deref() == Some(name.as_str()) {
+                        continue;
+                    }
+
+                    // Check if the variable is used in any subsequent statement
+                    let remaining = &body[i + 1..];
+                    if Self::variable_used_in_statements(remaining, name) {
+                        self.for_loop_borrow_needed.insert(name.clone());
+                    }
+                }
+            }
+        }
+    }
+
+    /// Recursively find unused let bindings and for-loop variables in a block of statements.
+    /// For each `let name = ...` at position i, checks if `name` is used in stmts[i+1..].
+    /// For each `for name in expr { body }`, checks if `name` is used in `body`.
+    /// Results are stored as (line, column) pairs in `out`.
+    fn find_unused_bindings(
+        stmts: &[&Statement],
+        out: &mut std::collections::HashSet<(usize, usize)>,
+    ) {
+        for (i, stmt) in stmts.iter().enumerate() {
+            // Extract (variable_name, location) from let/const bindings
+            let binding_info: Option<(&str, &SourceLocation)> = match stmt {
+                Statement::Let {
+                    pattern: Pattern::Identifier(name),
+                    location,
+                    ..
+                } => Some((name.as_str(), location)),
+                Statement::Const { name, location, .. } => Some((name.as_str(), location)),
+                _ => None,
+            };
+
+            if let Some((name, location)) = binding_info {
+                let remaining = &stmts[i + 1..];
+                if !Self::variable_used_in_statements(remaining, name) {
+                    if let Some(loc) = location {
+                        out.insert((loc.line, loc.column));
+                    }
+                }
+            }
+
+            match stmt {
+                // Check for-loop variables
+                Statement::For {
+                    pattern,
+                    body,
+                    location,
+                    ..
+                } => {
+                    if let Pattern::Identifier(var_name) = pattern {
+                        if !Self::variable_used_in_statements(body, var_name) {
+                            if let Some(loc) = location {
+                                out.insert((loc.line, loc.column));
+                            }
+                        }
+                    }
+                    // Recurse into loop body
+                    Self::find_unused_bindings(body, out);
+                }
+                // Recurse into nested blocks
+                Statement::If {
+                    then_block,
+                    else_block,
+                    ..
+                } => {
+                    Self::find_unused_bindings(then_block, out);
+                    if let Some(else_stmts) = else_block {
+                        Self::find_unused_bindings(else_stmts, out);
+                    }
+                }
+                Statement::While { body, .. } | Statement::Loop { body, .. } => {
+                    Self::find_unused_bindings(body, out);
+                }
+                Statement::Match { arms, .. } => {
+                    for arm in arms {
+                        // Match arm bodies are expressions, not statement blocks
+                        // If the arm body is a block expression, recurse into its statements
+                        if let Expression::Block { statements, .. } = arm.body {
+                            Self::find_unused_bindings(statements, out);
+                        }
+                    }
+                }
+                _ => {}
+            }
+        }
+    }
+
+    /// Check if a variable name appears in a list of statements (used for post-loop usage detection)
+    fn variable_used_in_statements(stmts: &[&Statement], var_name: &str) -> bool {
+        for stmt in stmts {
+            if Self::variable_used_in_statement(stmt, var_name) {
+                return true;
+            }
+        }
+        false
+    }
+
+    /// Check if a variable name appears in a single statement.
+    /// Must be comprehensive to correctly detect unused parameters for `_` prefixing.
+    fn variable_used_in_statement(stmt: &Statement, var_name: &str) -> bool {
+        match stmt {
+            Statement::Let { value, .. } | Statement::Const { value, .. } => {
+                Self::variable_used_in_expression(value, var_name)
+            }
+            Statement::Assignment { target, value, .. } => {
+                Self::variable_used_in_expression(target, var_name)
+                    || Self::variable_used_in_expression(value, var_name)
+            }
+            Statement::Expression { expr, .. } => Self::variable_used_in_expression(expr, var_name),
+            Statement::Return {
+                value: Some(expr), ..
+            } => Self::variable_used_in_expression(expr, var_name),
+            Statement::If {
+                condition,
+                then_block,
+                else_block,
+                ..
+            } => {
+                Self::variable_used_in_expression(condition, var_name)
+                    || Self::variable_used_in_statements(then_block, var_name)
+                    || else_block
+                        .as_ref()
+                        .is_some_and(|b| Self::variable_used_in_statements(b, var_name))
+            }
+            Statement::While {
+                condition, body, ..
+            } => {
+                Self::variable_used_in_expression(condition, var_name)
+                    || Self::variable_used_in_statements(body, var_name)
+            }
+            Statement::For { iterable, body, .. } => {
+                Self::variable_used_in_expression(iterable, var_name)
+                    || Self::variable_used_in_statements(body, var_name)
+            }
+            Statement::Loop { body, .. } => Self::variable_used_in_statements(body, var_name),
+            Statement::Match { value, arms, .. } => {
+                Self::variable_used_in_expression(value, var_name)
+                    || arms.iter().any(|arm| {
+                        Self::variable_used_in_expression(arm.body, var_name)
+                            || arm
+                                .guard
+                                .as_ref()
+                                .is_some_and(|g| Self::variable_used_in_expression(g, var_name))
+                    })
+            }
+            _ => false,
+        }
+    }
+
+    /// Check if a variable name appears in an expression.
+    /// Must be exhaustive to correctly detect unused parameters for `_` prefixing.
+    fn variable_used_in_expression(expr: &Expression, var_name: &str) -> bool {
+        match expr {
+            Expression::Literal { .. } => false,
+            Expression::Identifier { name, .. } => name == var_name,
+            Expression::FieldAccess { object, .. } => {
+                Self::variable_used_in_expression(object, var_name)
+            }
+            Expression::MethodCall {
+                object, arguments, ..
+            } => {
+                Self::variable_used_in_expression(object, var_name)
+                    || arguments
+                        .iter()
+                        .any(|(_, arg)| Self::variable_used_in_expression(arg, var_name))
+            }
+            Expression::Call {
+                function,
+                arguments,
+                ..
+            } => {
+                Self::variable_used_in_expression(function, var_name)
+                    || arguments
+                        .iter()
+                        .any(|(_, arg)| Self::variable_used_in_expression(arg, var_name))
+            }
+            Expression::Binary { left, right, .. } => {
+                Self::variable_used_in_expression(left, var_name)
+                    || Self::variable_used_in_expression(right, var_name)
+            }
+            Expression::Unary { operand, .. } => {
+                Self::variable_used_in_expression(operand, var_name)
+            }
+            Expression::Index { object, index, .. } => {
+                Self::variable_used_in_expression(object, var_name)
+                    || Self::variable_used_in_expression(index, var_name)
+            }
+            Expression::Block { statements, .. } => {
+                Self::variable_used_in_statements(statements, var_name)
+            }
+            Expression::StructLiteral { fields, .. } => fields
+                .iter()
+                .any(|(_, val)| Self::variable_used_in_expression(val, var_name)),
+            Expression::MapLiteral { pairs, .. } => pairs.iter().any(|(k, v)| {
+                Self::variable_used_in_expression(k, var_name)
+                    || Self::variable_used_in_expression(v, var_name)
+            }),
+            Expression::Range { start, end, .. } => {
+                Self::variable_used_in_expression(start, var_name)
+                    || Self::variable_used_in_expression(end, var_name)
+            }
+            Expression::Closure { body, .. } => Self::variable_used_in_expression(body, var_name),
+            Expression::Cast { expr, .. } => Self::variable_used_in_expression(expr, var_name),
+            Expression::Tuple { elements, .. } | Expression::Array { elements, .. } => elements
+                .iter()
+                .any(|e| Self::variable_used_in_expression(e, var_name)),
+            Expression::MacroInvocation { args, .. } => args
+                .iter()
+                .any(|a| Self::variable_used_in_expression(a, var_name)),
+            Expression::TryOp { expr, .. } | Expression::Await { expr, .. } => {
+                Self::variable_used_in_expression(expr, var_name)
+            }
+            Expression::ChannelSend { channel, value, .. } => {
+                Self::variable_used_in_expression(channel, var_name)
+                    || Self::variable_used_in_expression(value, var_name)
+            }
+            Expression::ChannelRecv { channel, .. } => {
+                Self::variable_used_in_expression(channel, var_name)
+            }
+        }
+    }
+
     fn should_borrow_for_iteration(&self, iterable: &Expression) -> bool {
         match iterable {
             // Field access on a variable (e.g., game.walls)
@@ -7774,6 +8251,8 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
                 }
                 false
             }
+            // Local variable used after the loop → auto-borrow
+            Expression::Identifier { name, .. } => self.for_loop_borrow_needed.contains(name),
             _ => false,
         }
     }
@@ -7940,6 +8419,14 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
             Statement::For { body, .. } => body
                 .iter()
                 .any(|s| self.statement_mutates_variable_field(s, var_name)),
+            // TDD FIX: Check let bindings where the value is a mutating method call
+            // e.g., let tilemap = loader.load(...) where load takes &mut self
+            Statement::Let { value, .. } | Statement::Const { value, .. } => {
+                self.expression_mutates_variable_field(value, var_name)
+            }
+            Statement::Return {
+                value: Some(expr), ..
+            } => self.expression_mutates_variable_field(expr, var_name),
             _ => false,
         }
     }
@@ -8017,6 +8504,15 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
                 statements
                     .iter()
                     .any(|stmt| self.statement_mutates_variable_field(stmt, var_name))
+            }
+            // TDD FIX: The ? operator wraps expressions in TryOp. Must recurse through it
+            // to detect method calls like `loader.load(...)?` where load takes &mut self.
+            Expression::TryOp { expr, .. } | Expression::Await { expr, .. } => {
+                self.expression_mutates_variable_field(expr, var_name)
+            }
+            // Recurse through unary expressions (e.g., !expr, -expr, &expr, &mut expr)
+            Expression::Unary { operand, .. } => {
+                self.expression_mutates_variable_field(operand, var_name)
             }
             _ => false,
         }
@@ -8417,6 +8913,280 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
         ));
 
         output
+    }
+
+    // ========================================================================
+    // COLLECTION TYPE DETECTION (HashMap/HashSet)
+    // ========================================================================
+
+    /// Check if a program references a collection type (HashMap or HashSet)
+    /// by walking the AST properly -- not by searching debug text which
+    /// includes comments and causes false positives.
+    fn program_references_collection(program: &Program, type_name: &str) -> bool {
+        for item in &program.items {
+            if Self::item_references_collection(item, type_name) {
+                return true;
+            }
+        }
+        false
+    }
+
+    /// Check if an AST item references the given collection type name
+    fn item_references_collection(item: &Item, type_name: &str) -> bool {
+        match item {
+            Item::Struct { decl, .. } => decl
+                .fields
+                .iter()
+                .any(|f| Self::type_references_name(&f.field_type, type_name)),
+            Item::Function { decl, .. } => {
+                Self::function_decl_references_collection(decl, type_name)
+            }
+            Item::Enum { decl, .. } => decl.variants.iter().any(|v| match &v.data {
+                EnumVariantData::Tuple(types) => types
+                    .iter()
+                    .any(|t| Self::type_references_name(t, type_name)),
+                EnumVariantData::Struct(fields) => fields
+                    .iter()
+                    .any(|(_, t)| Self::type_references_name(t, type_name)),
+                EnumVariantData::Unit => false,
+            }),
+            Item::Trait { decl, .. } => decl.methods.iter().any(|m| {
+                // TraitMethod has parameters + return_type but different structure than FunctionDecl
+                m.parameters
+                    .iter()
+                    .any(|p| Self::type_references_name(&p.type_, type_name))
+                    || m.return_type
+                        .as_ref()
+                        .is_some_and(|rt| Self::type_references_name(rt, type_name))
+                    || m.body.as_ref().is_some_and(|stmts| {
+                        stmts
+                            .iter()
+                            .any(|s| Self::stmt_references_collection(s, type_name))
+                    })
+            }),
+            Item::Impl { block, .. } => block
+                .functions
+                .iter()
+                .any(|m| Self::function_decl_references_collection(m, type_name)),
+            Item::Const { type_, value, .. } | Item::Static { type_, value, .. } => {
+                Self::type_references_name(type_, type_name)
+                    || Self::expr_references_collection(value, type_name)
+            }
+            Item::Mod { items, .. } => items
+                .iter()
+                .any(|i| Self::item_references_collection(i, type_name)),
+            Item::Use { .. } | Item::BoundAlias { .. } => false,
+        }
+    }
+
+    /// Check if a function declaration references the collection type
+    fn function_decl_references_collection(decl: &FunctionDecl, type_name: &str) -> bool {
+        // Check parameter types
+        if decl
+            .parameters
+            .iter()
+            .any(|p| Self::type_references_name(&p.type_, type_name))
+        {
+            return true;
+        }
+        // Check return type
+        if let Some(ref rt) = decl.return_type {
+            if Self::type_references_name(rt, type_name) {
+                return true;
+            }
+        }
+        // Check body statements for type usage in expressions
+        decl.body
+            .iter()
+            .any(|s| Self::stmt_references_collection(s, type_name))
+    }
+
+    /// Recursively check if a Type references the given name
+    fn type_references_name(ty: &Type, name: &str) -> bool {
+        match ty {
+            Type::Custom(n) => n == name,
+            Type::Parameterized(n, args) => {
+                n == name || args.iter().any(|a| Self::type_references_name(a, name))
+            }
+            Type::Vec(inner)
+            | Type::Option(inner)
+            | Type::Reference(inner)
+            | Type::MutableReference(inner)
+            | Type::Array(inner, _) => Self::type_references_name(inner, name),
+            Type::Result(a, b) => {
+                Self::type_references_name(a, name) || Self::type_references_name(b, name)
+            }
+            Type::Tuple(types) => types.iter().any(|t| Self::type_references_name(t, name)),
+            Type::FunctionPointer {
+                params,
+                return_type,
+            } => {
+                params.iter().any(|p| Self::type_references_name(p, name))
+                    || return_type
+                        .as_ref()
+                        .is_some_and(|rt| Self::type_references_name(rt, name))
+            }
+            _ => false, // Primitives, Generic, Associated, TraitObject, Infer
+        }
+    }
+
+    /// Check if a statement references the collection type (in let types, expressions, etc.)
+    fn stmt_references_collection(stmt: &Statement, type_name: &str) -> bool {
+        match stmt {
+            Statement::Let { type_, value, .. } => {
+                type_
+                    .as_ref()
+                    .is_some_and(|t| Self::type_references_name(t, type_name))
+                    || Self::expr_references_collection(value, type_name)
+            }
+            Statement::Const { type_, value, .. } | Statement::Static { type_, value, .. } => {
+                Self::type_references_name(type_, type_name)
+                    || Self::expr_references_collection(value, type_name)
+            }
+            Statement::Assignment { target, value, .. } => {
+                Self::expr_references_collection(target, type_name)
+                    || Self::expr_references_collection(value, type_name)
+            }
+            Statement::Return { value, .. } => value
+                .as_ref()
+                .is_some_and(|v| Self::expr_references_collection(v, type_name)),
+            Statement::Expression { expr, .. } => Self::expr_references_collection(expr, type_name),
+            Statement::If {
+                condition,
+                then_block,
+                else_block,
+                ..
+            } => {
+                Self::expr_references_collection(condition, type_name)
+                    || then_block
+                        .iter()
+                        .any(|s| Self::stmt_references_collection(s, type_name))
+                    || else_block.as_ref().is_some_and(|eb| {
+                        eb.iter()
+                            .any(|s| Self::stmt_references_collection(s, type_name))
+                    })
+            }
+            Statement::Match { value, arms, .. } => {
+                Self::expr_references_collection(value, type_name)
+                    || arms.iter().any(|arm| {
+                        Self::expr_references_collection(arm.body, type_name)
+                            || arm
+                                .guard
+                                .is_some_and(|g| Self::expr_references_collection(g, type_name))
+                    })
+            }
+            Statement::For { iterable, body, .. } => {
+                Self::expr_references_collection(iterable, type_name)
+                    || body
+                        .iter()
+                        .any(|s| Self::stmt_references_collection(s, type_name))
+            }
+            Statement::While {
+                condition, body, ..
+            } => {
+                Self::expr_references_collection(condition, type_name)
+                    || body
+                        .iter()
+                        .any(|s| Self::stmt_references_collection(s, type_name))
+            }
+            Statement::Loop { body, .. }
+            | Statement::Thread { body, .. }
+            | Statement::Async { body, .. } => body
+                .iter()
+                .any(|s| Self::stmt_references_collection(s, type_name)),
+            Statement::Defer { statement, .. } => {
+                Self::stmt_references_collection(statement, type_name)
+            }
+            Statement::Break { .. } | Statement::Continue { .. } | Statement::Use { .. } => false,
+        }
+    }
+
+    /// Check if an expression references the collection type (identifiers, struct literals, etc.)
+    fn expr_references_collection(expr: &Expression, type_name: &str) -> bool {
+        match expr {
+            // HashMap::new() or HashSet::new() - the identifier itself
+            Expression::Identifier { name, .. } => name == type_name,
+            // Struct literal: HashMap { ... }
+            Expression::StructLiteral { name, fields, .. } => {
+                name == type_name
+                    || fields
+                        .iter()
+                        .any(|(_, e)| Self::expr_references_collection(e, type_name))
+            }
+            // Function/method calls
+            Expression::Call {
+                function,
+                arguments,
+                ..
+            } => {
+                Self::expr_references_collection(function, type_name)
+                    || arguments
+                        .iter()
+                        .any(|(_, e)| Self::expr_references_collection(e, type_name))
+            }
+            Expression::MethodCall {
+                object,
+                type_args,
+                arguments,
+                ..
+            } => {
+                Self::expr_references_collection(object, type_name)
+                    || type_args.as_ref().is_some_and(|args| {
+                        args.iter()
+                            .any(|t| Self::type_references_name(t, type_name))
+                    })
+                    || arguments
+                        .iter()
+                        .any(|(_, e)| Self::expr_references_collection(e, type_name))
+            }
+            Expression::FieldAccess { object, .. } => {
+                Self::expr_references_collection(object, type_name)
+            }
+            Expression::Binary { left, right, .. } => {
+                Self::expr_references_collection(left, type_name)
+                    || Self::expr_references_collection(right, type_name)
+            }
+            Expression::Unary { operand, .. } => {
+                Self::expr_references_collection(operand, type_name)
+            }
+            Expression::Index { object, index, .. } => {
+                Self::expr_references_collection(object, type_name)
+                    || Self::expr_references_collection(index, type_name)
+            }
+            Expression::Cast { expr, type_, .. } => {
+                Self::expr_references_collection(expr, type_name)
+                    || Self::type_references_name(type_, type_name)
+            }
+            Expression::Array { elements, .. } | Expression::Tuple { elements, .. } => elements
+                .iter()
+                .any(|e| Self::expr_references_collection(e, type_name)),
+            Expression::MapLiteral { pairs, .. } => pairs.iter().any(|(k, v)| {
+                Self::expr_references_collection(k, type_name)
+                    || Self::expr_references_collection(v, type_name)
+            }),
+            Expression::Range { start, end, .. } => {
+                Self::expr_references_collection(start, type_name)
+                    || Self::expr_references_collection(end, type_name)
+            }
+            Expression::Closure { body, .. } => Self::expr_references_collection(body, type_name),
+            Expression::Block { statements, .. } => statements
+                .iter()
+                .any(|s| Self::stmt_references_collection(s, type_name)),
+            Expression::TryOp { expr, .. } | Expression::Await { expr, .. } => {
+                Self::expr_references_collection(expr, type_name)
+            }
+            Expression::ChannelSend { channel, value, .. } => {
+                Self::expr_references_collection(channel, type_name)
+                    || Self::expr_references_collection(value, type_name)
+            }
+            Expression::ChannelRecv { channel, .. } => {
+                Self::expr_references_collection(channel, type_name)
+            }
+            Expression::MacroInvocation { args, .. } => args
+                .iter()
+                .any(|e| Self::expr_references_collection(e, type_name)),
+            Expression::Literal { .. } => false,
+        }
     }
 
     /// Generate automatic trait implementation for @game decorator
