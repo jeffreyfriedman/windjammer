@@ -6,6 +6,15 @@ use std::fs;
 use std::process::Command;
 use tempfile::TempDir;
 
+/// Returns true if Go is available on this machine.
+fn go_is_available() -> bool {
+    Command::new("go")
+        .arg("version")
+        .output()
+        .map(|o| o.status.success())
+        .unwrap_or(false)
+}
+
 /// Compile .wj source to Go and return the generated Go code
 fn compile_to_go(source: &str) -> String {
     let temp_dir = TempDir::new().unwrap();
@@ -42,8 +51,13 @@ fn compile_to_go(source: &str) -> String {
 }
 
 /// Compile .wj to Go, build with `go build`, and run the binary.
-/// Returns stdout output.
-fn compile_and_run_go(source: &str) -> String {
+/// Returns `Some(stdout)` on success, or `None` if `go` is not installed.
+fn compile_and_run_go(source: &str) -> Option<String> {
+    if !go_is_available() {
+        eprintln!("Skipping: `go` not found in PATH");
+        return None;
+    }
+
     let temp_dir = TempDir::new().unwrap();
     let test_file = temp_dir.path().join("test.wj");
     fs::write(&test_file, source).unwrap();
@@ -86,7 +100,7 @@ fn compile_and_run_go(source: &str) -> String {
         );
     }
 
-    String::from_utf8(go_output.stdout).unwrap()
+    Some(String::from_utf8(go_output.stdout).unwrap())
 }
 
 // ==========================================
@@ -96,20 +110,20 @@ fn compile_and_run_go(source: &str) -> String {
 #[test]
 #[cfg_attr(tarpaulin, ignore)]
 fn test_go_hello_world() {
-    let output = compile_and_run_go(
+    let Some(output) = compile_and_run_go(
         r#"
 fn main() {
     println("Hello, world!")
 }
 "#,
-    );
+    ) else { return; };
     assert_eq!(output.trim(), "Hello, world!");
 }
 
 #[test]
 #[cfg_attr(tarpaulin, ignore)]
 fn test_go_arithmetic() {
-    let output = compile_and_run_go(
+    let Some(output) = compile_and_run_go(
         r#"
 fn main() {
     let a = 1 + 2
@@ -120,14 +134,14 @@ fn main() {
     println("{}", c)
 }
 "#,
-    );
+    ) else { return; };
     assert_eq!(output.trim(), "3\n7\n42");
 }
 
 #[test]
 #[cfg_attr(tarpaulin, ignore)]
 fn test_go_control_flow() {
-    let output = compile_and_run_go(
+    let Some(output) = compile_and_run_go(
         r#"
 fn main() {
     let x = 5
@@ -144,14 +158,14 @@ fn main() {
     }
 }
 "#,
-    );
+    ) else { return; };
     assert_eq!(output.trim(), "big\n0\n1\n2");
 }
 
 #[test]
 #[cfg_attr(tarpaulin, ignore)]
 fn test_go_functions() {
-    let output = compile_and_run_go(
+    let Some(output) = compile_and_run_go(
         r#"
 fn add(a: int, b: int) -> int {
     a + b
@@ -162,14 +176,14 @@ fn main() {
     println("{}", result)
 }
 "#,
-    );
+    ) else { return; };
     assert_eq!(output.trim(), "30");
 }
 
 #[test]
 #[cfg_attr(tarpaulin, ignore)]
 fn test_go_for_range() {
-    let output = compile_and_run_go(
+    let Some(output) = compile_and_run_go(
         r#"
 fn main() {
     for i in 0..3 {
@@ -177,14 +191,14 @@ fn main() {
     }
 }
 "#,
-    );
+    ) else { return; };
     assert_eq!(output.trim(), "0\n1\n2");
 }
 
 #[test]
 #[cfg_attr(tarpaulin, ignore)]
 fn test_go_struct() {
-    let output = compile_and_run_go(
+    let Some(output) = compile_and_run_go(
         r#"
 struct Point {
     x: int,
@@ -202,7 +216,7 @@ fn main() {
     println("{}", p.sum())
 }
 "#,
-    );
+    ) else { return; };
     assert_eq!(output.trim(), "7");
 }
 
