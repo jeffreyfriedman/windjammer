@@ -6,6 +6,16 @@ use std::fs;
 use std::process::Command;
 use tempfile::TempDir;
 
+/// Returns true if Go is available. Tests that require `go run` should
+/// call this and return early (skip) when it returns false.
+fn go_is_available() -> bool {
+    Command::new("go")
+        .arg("version")
+        .output()
+        .map(|o| o.status.success())
+        .unwrap_or(false)
+}
+
 /// Compile .wj source to Go and return the generated Go code
 fn compile_to_go(source: &str) -> String {
     let temp_dir = TempDir::new().unwrap();
@@ -42,8 +52,13 @@ fn compile_to_go(source: &str) -> String {
 }
 
 /// Compile .wj to Go, build with `go build`, and run the binary.
-/// Returns stdout output.
-fn compile_and_run_go(source: &str) -> String {
+/// Returns `Some(stdout)` on success, or `None` if `go` is not installed.
+fn compile_and_run_go(source: &str) -> Option<String> {
+    if !go_is_available() {
+        eprintln!("Skipping: `go` not found in PATH");
+        return None;
+    }
+
     let temp_dir = TempDir::new().unwrap();
     let test_file = temp_dir.path().join("test.wj");
     fs::write(&test_file, source).unwrap();
@@ -86,7 +101,7 @@ fn compile_and_run_go(source: &str) -> String {
         );
     }
 
-    String::from_utf8(go_output.stdout).unwrap()
+    Some(String::from_utf8(go_output.stdout).unwrap())
 }
 
 // ==========================================
@@ -185,7 +200,7 @@ fn main() {
 #[cfg_attr(tarpaulin, ignore)]
 fn test_go_match_integer_values() {
     // Match on integer values should become a Go switch statement
-    let output = compile_and_run_go(
+    let Some(output) = compile_and_run_go(
         r#"
 fn describe(x: int) -> string {
     match x {
@@ -201,7 +216,9 @@ fn main() {
     println("{}", describe(99))
 }
 "#,
-    );
+    ) else {
+        return;
+    };
     assert_eq!(output.trim(), "one\ntwo\nother");
 }
 
@@ -341,7 +358,7 @@ fn main() {
 #[cfg_attr(tarpaulin, ignore)]
 fn test_go_variable_shadowing() {
     // Variable shadowing should use `var` for re-declaration
-    let output = compile_and_run_go(
+    let Some(output) = compile_and_run_go(
         r#"
 fn main() {
     let x = 10
@@ -350,7 +367,9 @@ fn main() {
     println("{}", x)
 }
 "#,
-    );
+    ) else {
+        return;
+    };
     assert_eq!(output.trim(), "10\n20");
 }
 
@@ -421,7 +440,7 @@ fn main() {
 #[cfg_attr(tarpaulin, ignore)]
 fn test_go_method_with_mutation() {
     // Methods that mutate should use pointer receiver
-    let output = compile_and_run_go(
+    let Some(output) = compile_and_run_go(
         r#"
 struct Counter {
     value: int
@@ -444,7 +463,9 @@ fn main() {
     println("{}", c.get())
 }
 "#,
-    );
+    ) else {
+        return;
+    };
     assert_eq!(output.trim(), "2");
 }
 
@@ -456,7 +477,7 @@ fn main() {
 #[cfg_attr(tarpaulin, ignore)]
 fn test_go_loop_break() {
     // Loop with break should generate infinite for loop with break
-    let output = compile_and_run_go(
+    let Some(output) = compile_and_run_go(
         r#"
 fn main() {
     let mut i = 0
@@ -469,7 +490,9 @@ fn main() {
     }
 }
 "#,
-    );
+    ) else {
+        return;
+    };
     assert_eq!(output.trim(), "0\n1\n2");
 }
 
@@ -480,7 +503,7 @@ fn main() {
 #[test]
 #[cfg_attr(tarpaulin, ignore)]
 fn test_go_continue() {
-    let output = compile_and_run_go(
+    let Some(output) = compile_and_run_go(
         r#"
 fn main() {
     let mut i = 0
@@ -493,7 +516,9 @@ fn main() {
     }
 }
 "#,
-    );
+    ) else {
+        return;
+    };
     assert_eq!(output.trim(), "1\n3\n5");
 }
 
@@ -504,7 +529,7 @@ fn main() {
 #[test]
 #[cfg_attr(tarpaulin, ignore)]
 fn test_go_recursion() {
-    let output = compile_and_run_go(
+    let Some(output) = compile_and_run_go(
         r#"
 fn fibonacci(n: int) -> int {
     if n <= 1 {
@@ -517,7 +542,9 @@ fn main() {
     println("{}", fibonacci(10))
 }
 "#,
-    );
+    ) else {
+        return;
+    };
     assert_eq!(output.trim(), "55");
 }
 
@@ -528,7 +555,7 @@ fn main() {
 #[test]
 #[cfg_attr(tarpaulin, ignore)]
 fn test_go_for_range_sum() {
-    let output = compile_and_run_go(
+    let Some(output) = compile_and_run_go(
         r#"
 fn main() {
     let mut sum = 0
@@ -538,6 +565,8 @@ fn main() {
     println("{}", sum)
 }
 "#,
-    );
+    ) else {
+        return;
+    };
     assert_eq!(output.trim(), "10");
 }
