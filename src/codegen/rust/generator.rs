@@ -756,13 +756,11 @@ impl<'ast> CodeGenerator<'ast> {
         // Walk the AST properly to find HashMap/HashSet usage in types and expressions
         // (NOT debug text, which includes comments and causes false positives)
         {
-            if !self.needs_hashmap_import
-                && Self::program_references_collection(program, "HashMap")
+            if !self.needs_hashmap_import && Self::program_references_collection(program, "HashMap")
             {
                 self.needs_hashmap_import = true;
             }
-            if !self.needs_hashset_import
-                && Self::program_references_collection(program, "HashSet")
+            if !self.needs_hashset_import && Self::program_references_collection(program, "HashSet")
             {
                 self.needs_hashset_import = true;
             }
@@ -8936,18 +8934,17 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
     /// Check if an AST item references the given collection type name
     fn item_references_collection(item: &Item, type_name: &str) -> bool {
         match item {
-            Item::Struct { decl, .. } => {
-                decl.fields
-                    .iter()
-                    .any(|f| Self::type_references_name(&f.field_type, type_name))
-            }
+            Item::Struct { decl, .. } => decl
+                .fields
+                .iter()
+                .any(|f| Self::type_references_name(&f.field_type, type_name)),
             Item::Function { decl, .. } => {
                 Self::function_decl_references_collection(decl, type_name)
             }
             Item::Enum { decl, .. } => decl.variants.iter().any(|v| match &v.data {
-                EnumVariantData::Tuple(types) => {
-                    types.iter().any(|t| Self::type_references_name(t, type_name))
-                }
+                EnumVariantData::Tuple(types) => types
+                    .iter()
+                    .any(|t| Self::type_references_name(t, type_name)),
                 EnumVariantData::Struct(fields) => fields
                     .iter()
                     .any(|(_, t)| Self::type_references_name(t, type_name)),
@@ -8967,9 +8964,10 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
                             .any(|s| Self::stmt_references_collection(s, type_name))
                     })
             }),
-            Item::Impl { block, .. } => block.functions.iter().any(|m| {
-                Self::function_decl_references_collection(m, type_name)
-            }),
+            Item::Impl { block, .. } => block
+                .functions
+                .iter()
+                .any(|m| Self::function_decl_references_collection(m, type_name)),
             Item::Const { type_, value, .. } | Item::Static { type_, value, .. } => {
                 Self::type_references_name(type_, type_name)
                     || Self::expr_references_collection(value, type_name)
@@ -9016,19 +9014,14 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
             | Type::MutableReference(inner)
             | Type::Array(inner, _) => Self::type_references_name(inner, name),
             Type::Result(a, b) => {
-                Self::type_references_name(a, name)
-                    || Self::type_references_name(b, name)
+                Self::type_references_name(a, name) || Self::type_references_name(b, name)
             }
-            Type::Tuple(types) => {
-                types.iter().any(|t| Self::type_references_name(t, name))
-            }
+            Type::Tuple(types) => types.iter().any(|t| Self::type_references_name(t, name)),
             Type::FunctionPointer {
                 params,
                 return_type,
             } => {
-                params
-                    .iter()
-                    .any(|p| Self::type_references_name(p, name))
+                params.iter().any(|p| Self::type_references_name(p, name))
                     || return_type
                         .as_ref()
                         .map_or(false, |rt| Self::type_references_name(rt, name))
@@ -9040,9 +9033,7 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
     /// Check if a statement references the collection type (in let types, expressions, etc.)
     fn stmt_references_collection(stmt: &Statement, type_name: &str) -> bool {
         match stmt {
-            Statement::Let {
-                type_, value, ..
-            } => {
+            Statement::Let { type_, value, .. } => {
                 type_
                     .as_ref()
                     .map_or(false, |t| Self::type_references_name(t, type_name))
@@ -9059,9 +9050,7 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
             Statement::Return { value, .. } => value
                 .as_ref()
                 .map_or(false, |v| Self::expr_references_collection(v, type_name)),
-            Statement::Expression { expr, .. } => {
-                Self::expr_references_collection(expr, type_name)
-            }
+            Statement::Expression { expr, .. } => Self::expr_references_collection(expr, type_name),
             Statement::If {
                 condition,
                 then_block,
@@ -9086,9 +9075,7 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
                                 .map_or(false, |g| Self::expr_references_collection(g, type_name))
                     })
             }
-            Statement::For {
-                iterable, body, ..
-            } => {
+            Statement::For { iterable, body, .. } => {
                 Self::expr_references_collection(iterable, type_name)
                     || body
                         .iter()
@@ -9110,9 +9097,7 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
             Statement::Defer { statement, .. } => {
                 Self::stmt_references_collection(statement, type_name)
             }
-            Statement::Break { .. }
-            | Statement::Continue { .. }
-            | Statement::Use { .. } => false,
+            Statement::Break { .. } | Statement::Continue { .. } | Statement::Use { .. } => false,
         }
     }
 
@@ -9183,18 +9168,14 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
                 Self::expr_references_collection(start, type_name)
                     || Self::expr_references_collection(end, type_name)
             }
-            Expression::Closure { body, .. } => {
-                Self::expr_references_collection(body, type_name)
-            }
+            Expression::Closure { body, .. } => Self::expr_references_collection(body, type_name),
             Expression::Block { statements, .. } => statements
                 .iter()
                 .any(|s| Self::stmt_references_collection(s, type_name)),
             Expression::TryOp { expr, .. } | Expression::Await { expr, .. } => {
                 Self::expr_references_collection(expr, type_name)
             }
-            Expression::ChannelSend {
-                channel, value, ..
-            } => {
+            Expression::ChannelSend { channel, value, .. } => {
                 Self::expr_references_collection(channel, type_name)
                     || Self::expr_references_collection(value, type_name)
             }

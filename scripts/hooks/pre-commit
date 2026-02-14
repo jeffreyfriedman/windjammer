@@ -9,14 +9,17 @@ set -e
 echo "🔍 Running pre-commit checks..."
 echo ""
 
-# 1. Run formatter
-echo "📝 Running cargo fmt..."
-if ! cargo fmt --all -- --check; then
-    echo "❌ Formatting check failed!"
-    echo "   Run 'cargo fmt --all' to fix formatting issues."
-    exit 1
+# 1. Auto-format code and stage formatting changes
+echo "📝 Running cargo fmt (auto-fix)..."
+cargo fmt --all
+# Stage any formatting changes so they're included in the commit
+FORMATTED_FILES=$(git diff --name-only -- '*.rs')
+if [ -n "$FORMATTED_FILES" ]; then
+    echo "$FORMATTED_FILES" | xargs git add
+    echo "✅ Auto-formatted and staged changes"
+else
+    echo "✅ Code already formatted"
 fi
-echo "✅ Formatting check passed"
 echo ""
 
 # 2. Run linter
