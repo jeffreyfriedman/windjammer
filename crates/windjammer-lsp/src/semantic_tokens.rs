@@ -193,6 +193,7 @@ impl SemanticTokensProvider {
                 return;
             }
             WJType::TraitObject(name) => name.as_str(),
+            WJType::ImplTrait(name) => name.as_str(),
             WJType::Associated(base, _assoc) => base.as_str(),
             // Primitive types and infer - don't need highlighting
             WJType::Int
