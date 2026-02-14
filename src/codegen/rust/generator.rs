@@ -8957,8 +8957,8 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
                     .any(|p| Self::type_references_name(&p.type_, type_name))
                     || m.return_type
                         .as_ref()
-                        .map_or(false, |rt| Self::type_references_name(rt, type_name))
-                    || m.body.as_ref().map_or(false, |stmts| {
+                        .is_some_and(|rt| Self::type_references_name(rt, type_name))
+                    || m.body.as_ref().is_some_and(|stmts| {
                         stmts
                             .iter()
                             .any(|s| Self::stmt_references_collection(s, type_name))
@@ -9024,7 +9024,7 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
                 params.iter().any(|p| Self::type_references_name(p, name))
                     || return_type
                         .as_ref()
-                        .map_or(false, |rt| Self::type_references_name(rt, name))
+                        .is_some_and(|rt| Self::type_references_name(rt, name))
             }
             _ => false, // Primitives, Generic, Associated, TraitObject, Infer
         }
@@ -9036,7 +9036,7 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
             Statement::Let { type_, value, .. } => {
                 type_
                     .as_ref()
-                    .map_or(false, |t| Self::type_references_name(t, type_name))
+                    .is_some_and(|t| Self::type_references_name(t, type_name))
                     || Self::expr_references_collection(value, type_name)
             }
             Statement::Const { type_, value, .. } | Statement::Static { type_, value, .. } => {
@@ -9049,7 +9049,7 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
             }
             Statement::Return { value, .. } => value
                 .as_ref()
-                .map_or(false, |v| Self::expr_references_collection(v, type_name)),
+                .is_some_and(|v| Self::expr_references_collection(v, type_name)),
             Statement::Expression { expr, .. } => Self::expr_references_collection(expr, type_name),
             Statement::If {
                 condition,
@@ -9061,7 +9061,7 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
                     || then_block
                         .iter()
                         .any(|s| Self::stmt_references_collection(s, type_name))
-                    || else_block.as_ref().map_or(false, |eb| {
+                    || else_block.as_ref().is_some_and(|eb| {
                         eb.iter()
                             .any(|s| Self::stmt_references_collection(s, type_name))
                     })
@@ -9072,7 +9072,7 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
                         Self::expr_references_collection(arm.body, type_name)
                             || arm
                                 .guard
-                                .map_or(false, |g| Self::expr_references_collection(g, type_name))
+                                .is_some_and(|g| Self::expr_references_collection(g, type_name))
                     })
             }
             Statement::For { iterable, body, .. } => {
@@ -9131,7 +9131,7 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
                 ..
             } => {
                 Self::expr_references_collection(object, type_name)
-                    || type_args.as_ref().map_or(false, |args| {
+                    || type_args.as_ref().is_some_and(|args| {
                         args.iter()
                             .any(|t| Self::type_references_name(t, type_name))
                     })
