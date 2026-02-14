@@ -116,7 +116,9 @@ fn main() {
     println("Hello, world!")
 }
 "#,
-    ) else { return; };
+    ) else {
+        return;
+    };
     assert_eq!(output.trim(), "Hello, world!");
 }
 
@@ -134,7 +136,9 @@ fn main() {
     println("{}", c)
 }
 "#,
-    ) else { return; };
+    ) else {
+        return;
+    };
     assert_eq!(output.trim(), "3\n7\n42");
 }
 
@@ -158,7 +162,9 @@ fn main() {
     }
 }
 "#,
-    ) else { return; };
+    ) else {
+        return;
+    };
     assert_eq!(output.trim(), "big\n0\n1\n2");
 }
 
@@ -176,7 +182,9 @@ fn main() {
     println("{}", result)
 }
 "#,
-    ) else { return; };
+    ) else {
+        return;
+    };
     assert_eq!(output.trim(), "30");
 }
 
@@ -191,7 +199,9 @@ fn main() {
     }
 }
 "#,
-    ) else { return; };
+    ) else {
+        return;
+    };
     assert_eq!(output.trim(), "0\n1\n2");
 }
 
@@ -216,7 +226,9 @@ fn main() {
     println("{}", p.sum())
 }
 "#,
-    ) else { return; };
+    ) else {
+        return;
+    };
     assert_eq!(output.trim(), "7");
 }
 
