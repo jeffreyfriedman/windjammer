@@ -66,8 +66,8 @@ fn test_user(id: string, name: string, age: i32) {
     // Check that test_user_impl receives String arguments
     // The impl function should take String parameters
     assert!(
-        rust_code.contains("fn test_user_impl(id: String, name: String, age: i32)"),
-        "Should generate impl function with String parameters"
+        rust_code.contains("fn test_user_impl(id: String, name: String, _age: i32)"),
+        "Should generate impl function with String parameters (unused params get _ prefix)"
     );
 
     // CRITICAL: The test case calls MUST convert &str to String
