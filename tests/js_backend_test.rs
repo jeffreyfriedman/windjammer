@@ -102,16 +102,25 @@ fn compile_and_run_js(source: &str) -> String {
             );
         });
 
-    // The output directory has a package.json with "type": "module"
-    // but `import.meta.url` doesn't match when running via `node output.js`,
-    // so we need to append a direct main() call for testing.
+    // The generated JS has an auto-run guard (`import.meta.url` check) that may
+    // or may not fire depending on the Node.js version and how the file is invoked.
+    // To avoid double-execution, we strip the auto-run block and add our own call.
     let js_code = fs::read_to_string(&js_file).unwrap();
-    // Write a .mjs file with the code + unconditional main() call
+    // Remove `export` keyword so it works as a standalone script
+    let mut cleaned = js_code
+        .replace("export function", "function")
+        .replace("export class", "class")
+        .replace("export const", "const")
+        .replace("export let", "let");
+    // Remove the auto-run block to prevent double main() calls
+    if let Some(pos) = cleaned.find("// Auto-run main") {
+        cleaned.truncate(pos);
+    }
+    // Write a .mjs file with the code + single unconditional main() call
     let test_js = output_dir.join("_test.mjs");
     let test_code = format!(
         "{}\n\n// Test runner: unconditional main() call\nif (typeof main === 'function') main();\n",
-        // Remove `export` keyword so it works as a standalone script
-        js_code.replace("export function", "function").replace("export class", "class").replace("export const", "const").replace("export let", "let")
+        cleaned.trim()
     );
     fs::write(&test_js, &test_code).unwrap();
 
