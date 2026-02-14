@@ -95,6 +95,7 @@ pub fn format_type(ty: &Type) -> String {
         }
         Type::Associated(base, assoc) => format!("{}::{}", base, assoc),
         Type::TraitObject(name) => format!("dyn {}", name),
+        Type::ImplTrait(name) => format!("trait {}", name),
         Type::Option(inner) => format!("Option<{}>", format_type(inner)),
         Type::Result(ok, err) => format!("Result<{}, {}>", format_type(ok), format_type(err)),
         Type::Vec(inner) => format!("Vec<{}>", format_type(inner)),

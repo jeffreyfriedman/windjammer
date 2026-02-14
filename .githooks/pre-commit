@@ -1,0 +1,52 @@
+#!/usr/bin/env bash
+# pre-commit hook: Check version consistency across workspace crates
+#
+# Setup: git config core.hooksPath .githooks
+# Or:    make setup-hooks
+
+set -euo pipefail
+
+# Only run if Cargo.toml files are staged
+if git diff --cached --name-only | grep -q 'Cargo.toml'; then
+    echo "Checking workspace version consistency..."
+    
+    ROOT_DIR="$(git rev-parse --show-toplevel)"
+    
+    # Get workspace version
+    WORKSPACE_VERSION=$(grep '^version = ' "$ROOT_DIR/Cargo.toml" | head -1 | sed 's/version = "\(.*\)"/\1/')
+    
+    if [ -z "$WORKSPACE_VERSION" ]; then
+        echo "WARNING: Could not determine workspace version"
+        exit 0
+    fi
+    
+    errors=0
+    
+    # Check all staged Cargo.toml files for version mismatches
+    for cargo_toml in $(git diff --cached --name-only | grep 'Cargo.toml'); do
+        # Skip non-workspace members
+        case "$cargo_toml" in
+            examples/*|fuzz/*|tools/*) continue ;;
+        esac
+        
+        # Check dependency references to workspace crates
+        while IFS= read -r line; do
+            if echo "$line" | grep -q 'path =.*windjammer'; then
+                dep_version=$(echo "$line" | grep -oP 'version = "\K[^"]+' 2>/dev/null || echo "$line" | sed -n 's/.*version = "\([^"]*\)".*/\1/p')
+                if [ -n "$dep_version" ] && [ "$dep_version" != "$WORKSPACE_VERSION" ]; then
+                    echo "ERROR: $cargo_toml has dependency version $dep_version (workspace is $WORKSPACE_VERSION)"
+                    errors=$((errors + 1))
+                fi
+            fi
+        done < <(git show ":$cargo_toml" 2>/dev/null | grep 'version = "' || true)
+    done
+    
+    if [ $errors -gt 0 ]; then
+        echo ""
+        echo "Version mismatch detected! All workspace crate dependencies must use version $WORKSPACE_VERSION"
+        echo "Fix the versions and re-stage the files."
+        exit 1
+    fi
+    
+    echo "Version check passed ($WORKSPACE_VERSION)"
+fi
