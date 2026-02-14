@@ -1755,6 +1755,7 @@ impl GoGenerator {
                 }
             }
             Type::TraitObject(name) => format!("{} /* interface */", name),
+            Type::ImplTrait(name) => name.clone(), // Go interfaces are structurally typed
             Type::Associated(base, assoc) => format!("/* {}.{} */ interface{{}}", base, assoc),
             Type::Infer => "interface{}".to_string(),
             Type::FunctionPointer {

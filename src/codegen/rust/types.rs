@@ -36,6 +36,13 @@ pub fn type_to_rust(type_: &Type) -> String {
             // This prevents double-boxing: Box<dyn System> was becoming Box<Box<dyn System>>.
             format!("dyn {}", trait_name)
         }
+        Type::ImplTrait(trait_name) => {
+            // THE WINDJAMMER WAY: `trait TraitName` in type position.
+            // As a bare type (param or return), use static dispatch: `impl Trait`.
+            // Context-dependent dynamic dispatch is handled by the surrounding type
+            // (Reference, Vec, Box, Option) which check for ImplTrait in their arms.
+            format!("impl {}", trait_name)
+        }
         Type::Parameterized(base, args) => {
             // Special case: Signal<T> -> windjammer_ui::reactivity::Signal<T>
             if base == "Signal" {
@@ -44,6 +51,13 @@ pub fn type_to_rust(type_: &Type) -> String {
                     "windjammer_ui::reactivity::Signal<{}>",
                     rust_args.join(", ")
                 )
+            // Dynamic dispatch: Box<trait Foo> -> Box<dyn Foo>
+            } else if base == "Box" && args.len() == 1 {
+                if let Type::ImplTrait(trait_name) = &args[0] {
+                    format!("Box<dyn {}>", trait_name)
+                } else {
+                    format!("Box<{}>", type_to_rust(&args[0]))
+                }
             } else {
                 // Generic type: Vec<T> -> Vec<T>, HashMap<K, V> -> HashMap<K, V>
                 format!(
@@ -53,7 +67,14 @@ pub fn type_to_rust(type_: &Type) -> String {
                 )
             }
         }
-        Type::Option(inner) => format!("Option<{}>", type_to_rust(inner)),
+        Type::Option(inner) => {
+            // Dynamic dispatch: Option<trait Foo> -> Option<Box<dyn Foo>>
+            if let Type::ImplTrait(trait_name) = &**inner {
+                format!("Option<Box<dyn {}>>", trait_name)
+            } else {
+                format!("Option<{}>", type_to_rust(inner))
+            }
+        }
         Type::Result(ok, err) => {
             // Special case: Result<T, string> -> Result<T, String>
             // In Windjammer, `string` is the type, but Rust uses `String` for owned strings
@@ -61,7 +82,14 @@ pub fn type_to_rust(type_: &Type) -> String {
             let err_rust = type_to_rust(err);
             format!("Result<{}, {}>", ok_rust, err_rust)
         }
-        Type::Vec(inner) => format!("Vec<{}>", type_to_rust(inner)),
+        Type::Vec(inner) => {
+            // Dynamic dispatch: Vec<trait Foo> -> Vec<Box<dyn Foo>> (heterogeneous collection)
+            if let Type::ImplTrait(trait_name) = &**inner {
+                format!("Vec<Box<dyn {}>>", trait_name)
+            } else {
+                format!("Vec<{}>", type_to_rust(inner))
+            }
+        }
         Type::Array(inner, size) => format!("[{}; {}]", type_to_rust(inner), size),
         Type::Reference(inner) => {
             // Special case: &[T] (slice) vs &Vec<T>
@@ -76,6 +104,9 @@ pub fn type_to_rust(type_: &Type) -> String {
             // Special case: &dyn Trait (don't box when already a reference)
             } else if let Type::TraitObject(trait_name) = &**inner {
                 format!("&dyn {}", trait_name)
+            // Dynamic dispatch: &trait Foo -> &dyn Foo
+            } else if let Type::ImplTrait(trait_name) = &**inner {
+                format!("&dyn {}", trait_name)
             } else {
                 format!("&{}", type_to_rust(inner))
             }
@@ -83,6 +114,9 @@ pub fn type_to_rust(type_: &Type) -> String {
         Type::MutableReference(inner) => {
             // Special case: &mut dyn Trait (don't box when already a reference)
             if let Type::TraitObject(trait_name) = &**inner {
+                format!("&mut dyn {}", trait_name)
+            // Dynamic dispatch: &mut trait Foo -> &mut dyn Foo
+            } else if let Type::ImplTrait(trait_name) = &**inner {
                 format!("&mut dyn {}", trait_name)
             } else {
                 // FIXED: Don't convert &mut Vec<T> to &mut [T] - slices can't push/pop!
@@ -135,6 +169,75 @@ mod tests {
         assert_eq!(
             type_to_rust(&Type::Option(Box::new(Type::String))),
             "Option<String>"
+        );
+    }
+
+    // =========================================================================
+    // ImplTrait dispatch inference tests
+    // =========================================================================
+
+    #[test]
+    fn test_impl_trait_bare_generates_static_dispatch() {
+        // trait Foo in bare position -> impl Foo (static dispatch)
+        assert_eq!(
+            type_to_rust(&Type::ImplTrait("Describable".to_string())),
+            "impl Describable"
+        );
+    }
+
+    #[test]
+    fn test_impl_trait_in_reference_generates_dyn() {
+        // &trait Foo -> &dyn Foo (dynamic dispatch)
+        assert_eq!(
+            type_to_rust(&Type::Reference(Box::new(Type::ImplTrait(
+                "Describable".to_string()
+            )))),
+            "&dyn Describable"
+        );
+    }
+
+    #[test]
+    fn test_impl_trait_in_mut_reference_generates_dyn() {
+        // &mut trait Foo -> &mut dyn Foo
+        assert_eq!(
+            type_to_rust(&Type::MutableReference(Box::new(Type::ImplTrait(
+                "Resettable".to_string()
+            )))),
+            "&mut dyn Resettable"
+        );
+    }
+
+    #[test]
+    fn test_impl_trait_in_vec_generates_boxed_dyn() {
+        // Vec<trait Foo> -> Vec<Box<dyn Foo>>
+        assert_eq!(
+            type_to_rust(&Type::Vec(Box::new(Type::ImplTrait(
+                "Describable".to_string()
+            )))),
+            "Vec<Box<dyn Describable>>"
+        );
+    }
+
+    #[test]
+    fn test_impl_trait_in_option_generates_boxed_dyn() {
+        // Option<trait Foo> -> Option<Box<dyn Foo>>
+        assert_eq!(
+            type_to_rust(&Type::Option(Box::new(Type::ImplTrait(
+                "Handler".to_string()
+            )))),
+            "Option<Box<dyn Handler>>"
+        );
+    }
+
+    #[test]
+    fn test_impl_trait_in_box_generates_dyn() {
+        // Box<trait Foo> -> Box<dyn Foo>
+        assert_eq!(
+            type_to_rust(&Type::Parameterized(
+                "Box".to_string(),
+                vec![Type::ImplTrait("System".to_string())]
+            )),
+            "Box<dyn System>"
         );
     }
 }
