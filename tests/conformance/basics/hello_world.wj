@@ -1,0 +1,11 @@
+// Conformance Test: Hello World
+//
+// SEMANTIC CONTRACT:
+// The simplest possible program. println outputs text to stdout.
+//
+// EXPECTED OUTPUT:
+// Hello, world!
+
+fn main() {
+    println("Hello, world!")
+}

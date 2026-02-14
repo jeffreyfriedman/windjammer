@@ -1,0 +1,44 @@
+// Conformance Test: Basic Arithmetic
+//
+// SEMANTIC CONTRACT:
+// Integer and boolean arithmetic must produce consistent results.
+// All backends must agree on these outputs.
+//
+// EXPECTED OUTPUT:
+// [add] 3
+// [sub] 7
+// [mul] 42
+// [div] 5
+// [mod] 1
+// [neg] -10
+// [bool] true
+// [bool] false
+// PASSED
+
+fn main() {
+    let a = 1 + 2
+    println("[add] {}", a)
+
+    let b = 10 - 3
+    println("[sub] {}", b)
+
+    let c = 6 * 7
+    println("[mul] {}", c)
+
+    let d = 10 / 2
+    println("[div] {}", d)
+
+    let e = 7 % 2
+    println("[mod] {}", e)
+
+    let f = -10
+    println("[neg] {}", f)
+
+    let t = true
+    println("[bool] {}", t)
+
+    let u = !true
+    println("[bool] {}", u)
+
+    println("PASSED")
+}

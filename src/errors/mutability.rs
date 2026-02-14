@@ -134,24 +134,41 @@ impl MutabilityChecker {
                 compound_op,
                 location,
             } => {
-                // TDD: Auto-mutability inference
-                // THE WINDJAMMER WAY: Compiler infers `mut` when mutations detected
+                // IMMUTABLE-BY-DEFAULT: All mutations of `let` bindings are errors.
+                // Users must explicitly write `let mut` when mutation is intended.
                 if let Some(var_name) = self.get_variable_name(target) {
                     if let Some(&is_mutable) = self.declared_variables.get(&var_name) {
                         if !is_mutable {
-                            // Check if this is a field mutation (e.g., point.x = 10) or compound assignment (e.g., count += 1)
-                            if self.is_field_access(target) || compound_op.is_some() {
-                                // AUTO-MUTABILITY: Automatically mark as mutable!
-                                // No error - the compiler infers `mut` for us
-                                self.declared_variables.insert(var_name.clone(), true);
+                            if self.is_field_access(target) {
+                                // Field mutation: point.x = 10
+                                self.errors.push(MutabilityError {
+                                    variable: var_name.clone(),
+                                    error_type: MutabilityErrorType::FieldMutation,
+                                    location: location.clone(),
+                                    suggestion: format!(
+                                        "consider changing this to be mutable: `let mut {}`",
+                                        var_name
+                                    ),
+                                });
+                            } else if compound_op.is_some() {
+                                // Compound assignment: count += 1
+                                self.errors.push(MutabilityError {
+                                    variable: var_name.clone(),
+                                    error_type: MutabilityErrorType::CompoundAssignment,
+                                    location: location.clone(),
+                                    suggestion: format!(
+                                        "consider changing this to be mutable: `let mut {}`",
+                                        var_name
+                                    ),
+                                });
                             } else {
-                                // Direct reassignment still errors (e.g., x = 5; x = 6;)
+                                // Direct reassignment: x = 5; x = 6;
                                 self.errors.push(MutabilityError {
                                     variable: var_name.clone(),
                                     error_type: MutabilityErrorType::Reassignment,
                                     location: location.clone(),
                                     suggestion: format!(
-                                        "make this binding mutable: `mut {}`",
+                                        "consider changing this to be mutable: `let mut {}`",
                                         var_name
                                     ),
                                 });
@@ -215,17 +232,23 @@ impl MutabilityChecker {
                 object,
                 method,
                 arguments,
+                location,
                 ..
             } => {
-                // TDD: Auto-mutability for method calls
-                // THE WINDJAMMER WAY: Compiler infers `mut` when mutating methods are called
+                // IMMUTABLE-BY-DEFAULT: Mutating method calls on `let` bindings are errors.
                 if self.is_mutating_method(method) {
                     if let Some(var_name) = self.get_variable_name(object) {
                         if let Some(&is_mutable) = self.declared_variables.get(&var_name) {
                             if !is_mutable {
-                                // AUTO-MUTABILITY: Automatically mark as mutable!
-                                // No error - the compiler infers `mut` for us
-                                self.declared_variables.insert(var_name.clone(), true);
+                                self.errors.push(MutabilityError {
+                                    variable: var_name.clone(),
+                                    error_type: MutabilityErrorType::MutatingMethodCall,
+                                    location: location.clone(),
+                                    suggestion: format!(
+                                        "consider changing this to be mutable: `let mut {}`",
+                                        var_name
+                                    ),
+                                });
                             }
                         }
                     }

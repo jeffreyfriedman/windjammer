@@ -249,6 +249,7 @@ impl WindjammerLanguageServer {
             }
             Type::Associated(base, assoc) => format!("{}::{}", base, assoc),
             Type::TraitObject(name) => format!("dyn {}", name),
+            Type::ImplTrait(name) => format!("trait {}", name),
             Type::Option(inner) => format!("Option<{}>", self.type_to_string(inner)),
             Type::Result(ok, err) => {
                 format!(

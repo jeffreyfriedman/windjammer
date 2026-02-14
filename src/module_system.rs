@@ -408,7 +408,10 @@ pub fn generate_lib_rs(
     output_dir: &Path,
 ) -> Result<String> {
     let mut content = String::from("// Auto-generated lib.rs by Windjammer\n");
-    content.push_str("// This file declares all modules in your Windjammer project\n\n");
+    content.push_str("// This file declares all modules in your Windjammer project\n");
+    content.push_str(
+        "#![allow(unused_imports, unused_mut, unused_assignments, non_camel_case_types)]\n\n",
+    );
 
     // THE WINDJAMMER WAY: Discover hand-written Rust modules (like ffi.rs)
     // These live in the project root alongside src_wj/ and are automatically integrated
