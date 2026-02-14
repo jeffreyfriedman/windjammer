@@ -392,7 +392,8 @@ fn test() {
     let z = x + y
 }
 "#;
-    compile_and_check(source, &["let x = 5", "let y = 10", "let z = x + y"]);
+    // Note: z gets _ prefix because it's unused in the function body
+    compile_and_check(source, &["let x = 5", "let y = 10", "let _z = x + y"]);
 }
 
 #[test]
