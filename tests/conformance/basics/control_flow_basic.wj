@@ -1,0 +1,62 @@
+// Conformance Test: Basic Control Flow
+//
+// SEMANTIC CONTRACT:
+// - if/else produces correct branch
+// - while loops iterate correctly
+// - for-range loops iterate correctly
+//
+// EXPECTED OUTPUT:
+// [if] positive
+// [if] zero
+// [if] negative
+// [while] 0
+// [while] 1
+// [while] 2
+// [for] 0
+// [for] 1
+// [for] 2
+// [for] 3
+// [for] 4
+// PASSED
+
+fn main() {
+    // If/else
+    let a = 5
+    if a > 0 {
+        println("[if] positive")
+    } else {
+        println("[if] non-positive")
+    }
+
+    let b = 0
+    if b > 0 {
+        println("[if] positive")
+    } else if b == 0 {
+        println("[if] zero")
+    } else {
+        println("[if] negative")
+    }
+
+    let c = -3
+    if c > 0 {
+        println("[if] positive")
+    } else if c == 0 {
+        println("[if] zero")
+    } else {
+        println("[if] negative")
+    }
+
+    // While loop
+    let mut i = 0
+    while i < 3 {
+        println("[while] {}", i)
+        i += 1
+    }
+
+    // For range loop
+    for j in 0..5 {
+        println("[for] {}", j)
+    }
+
+    println("PASSED")
+}

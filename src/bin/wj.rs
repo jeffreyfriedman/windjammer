@@ -138,6 +138,11 @@ enum Commands {
         #[arg(short, long, value_name = "TARGET", default_value = "rust")]
         target: String,
 
+        /// Interpret directly (Windjammerscript mode) — no compilation, instant execution.
+        /// Same .wj source can later be compiled with `wj build` for production.
+        #[arg(long)]
+        interpret: bool,
+
         /// Defer drop optimization mode (auto, always, never)
         #[arg(long, value_name = "MODE", default_value = "auto")]
         defer_drop: String,
@@ -146,6 +151,9 @@ enum Commands {
         #[arg(long, value_name = "BYTES")]
         defer_drop_threshold: Option<usize>,
     },
+
+    /// Start the Windjammerscript REPL (interactive interpreter)
+    Repl {},
 
     /// Run tests
     Test {
@@ -325,13 +333,21 @@ fn main() -> anyhow::Result<()> {
             path,
             args,
             target,
+            interpret,
             defer_drop,
             defer_drop_threshold,
         } => {
             // TODO: Pass defer_drop config to compiler
             // For now, just ignore these flags - defer drop is always auto
             let _ = (defer_drop, defer_drop_threshold);
-            windjammer::cli::run::execute(&path, &args, &target)?;
+            if interpret {
+                interpret_file(&path)?;
+            } else {
+                windjammer::cli::run::execute(&path, &args, &target)?;
+            }
+        }
+        Commands::Repl {} => {
+            run_repl()?;
         }
         Commands::Test {
             path,
@@ -503,5 +519,145 @@ fn main() -> anyhow::Result<()> {
         }
     }
 
+    Ok(())
+}
+
+/// Interpret a .wj file directly using the Windjammerscript tree-walking interpreter.
+fn interpret_file(file: &std::path::Path) -> anyhow::Result<()> {
+    use colored::*;
+
+    if !file.exists() {
+        anyhow::bail!("File not found: {:?}", file);
+    }
+    if file.extension().is_none_or(|ext| ext != "wj") {
+        anyhow::bail!("File must have .wj extension: {:?}", file);
+    }
+
+    println!(
+        "{} {:?} (Windjammerscript interpreter)",
+        "Interpreting".green().bold(),
+        file
+    );
+
+    let source = std::fs::read_to_string(file)?;
+    let mut lex = windjammer::lexer::Lexer::new(&source);
+    let tokens = lex.tokenize_with_locations();
+    let mut parse = windjammer::parser::Parser::new_with_source(
+        tokens,
+        file.to_string_lossy().to_string(),
+        source.clone(),
+    );
+    let program = parse
+        .parse()
+        .map_err(|e| anyhow::anyhow!("Parse error: {}", e))?;
+
+    let mut interp = windjammer::interpreter::Interpreter::new();
+    match interp.run(&program) {
+        Ok(_) => Ok(()),
+        Err(e) => {
+            eprintln!("{} {}", "Runtime error:".red().bold(), e);
+            std::process::exit(1);
+        }
+    }
+}
+
+/// Run the Windjammerscript REPL
+fn run_repl() -> anyhow::Result<()> {
+    use colored::*;
+    use std::io::{BufRead, Write};
+
+    println!(
+        "{} {} {}",
+        "Windjammerscript".cyan().bold(),
+        "REPL".white().bold(),
+        "(type 'exit' or Ctrl-D to quit)".dimmed()
+    );
+    println!(
+        "{}",
+        "Tip: Any code here can be compiled with `wj build` for production.".dimmed()
+    );
+    println!();
+
+    let stdin = std::io::stdin();
+    let mut accumulated_source = String::new();
+    let mut line_buffer = String::new();
+    let mut in_block = false;
+    let mut brace_depth: i32 = 0;
+
+    loop {
+        if in_block {
+            print!("{} ", "...".dimmed());
+        } else {
+            print!("{} ", "wj>".green().bold());
+        }
+        std::io::stdout().flush()?;
+
+        line_buffer.clear();
+        let bytes_read = stdin.lock().read_line(&mut line_buffer)?;
+        if bytes_read == 0 {
+            println!();
+            break;
+        }
+
+        let line = line_buffer.trim_end();
+
+        if line == "exit" || line == "quit" {
+            break;
+        }
+
+        for ch in line.chars() {
+            match ch {
+                '{' => brace_depth += 1,
+                '}' => brace_depth -= 1,
+                _ => {}
+            }
+        }
+
+        accumulated_source.push_str(line);
+        accumulated_source.push('\n');
+
+        if brace_depth > 0 {
+            in_block = true;
+            continue;
+        }
+
+        in_block = false;
+        brace_depth = 0;
+
+        let source = if accumulated_source.contains("fn main()") {
+            accumulated_source.clone()
+        } else {
+            format!("fn main() {{\n{}\n}}", accumulated_source)
+        };
+
+        let mut lex = windjammer::lexer::Lexer::new(&source);
+        let tokens = lex.tokenize_with_locations();
+        let mut parse =
+            windjammer::parser::Parser::new_with_source(tokens, "repl".to_string(), source.clone());
+
+        match parse.parse() {
+            Ok(program) => {
+                let mut interp = windjammer::interpreter::Interpreter::new();
+                match interp.run(&program) {
+                    Ok(val) => {
+                        let display = val.to_display_string();
+                        if display != "()" {
+                            println!("{}", display);
+                        }
+                    }
+                    Err(e) => {
+                        eprintln!("{} {}", "Error:".red().bold(), e);
+                    }
+                }
+            }
+            Err(e) => {
+                eprintln!("{} {}", "Parse error:".red().bold(), e);
+            }
+        }
+
+        accumulated_source.clear();
+    }
+
+    println!("{}", "Goodbye!".dimmed());
     Ok(())
 }

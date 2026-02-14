@@ -19,6 +19,7 @@
 
 // New modular backends
 pub mod backend;
+pub mod go;
 pub mod javascript;
 pub mod rust;
 pub mod wasm;
@@ -74,6 +75,11 @@ pub fn generate(
 pub fn generate_rust(program: &Program) -> Result<String> {
     let output = generate(program, Target::Rust, None)?;
     Ok(output.source)
+}
+
+/// Generate Go code
+pub fn generate_go(program: &Program) -> Result<CodegenOutput> {
+    generate(program, Target::Go, None)
 }
 
 /// Generate JavaScript code
