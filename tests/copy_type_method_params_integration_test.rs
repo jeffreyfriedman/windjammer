@@ -51,11 +51,13 @@ fn test_copy_type_method_params() {
     // This is the correct Rust convention - don't consume self unless needed
     // Note: unused params (x, y, radius) get _ prefix from the compiler's unused-param detection
     assert!(
-        generated.contains("pub fn draw_circle(&self, _x: f32, _y: f32, _radius: f32, color: Color)"),
+        generated
+            .contains("pub fn draw_circle(&self, _x: f32, _y: f32, _radius: f32, color: Color)"),
         "draw_circle should be &self (borrowed) with unused params prefixed"
     );
     assert!(
-        generated.contains("pub fn draw_rect(&self, _x: f32, _y: f32, w: f32, h: f32, color: Color)"),
+        generated
+            .contains("pub fn draw_rect(&self, _x: f32, _y: f32, w: f32, h: f32, color: Color)"),
         "draw_rect should be &self (borrowed) with unused params prefixed"
     );
 
