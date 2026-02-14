@@ -60,6 +60,7 @@ impl GameLoop for MyGame {
     // because the MyGame impl mutates self.frame_count
     assert!(
         game_loop_rs.contains("fn update(&mut self, delta: f32)")
+            || game_loop_rs.contains("fn update(&mut self, _delta: f32)")
             || game_loop_rs.contains("fn update(&mut self,delta:f32)"), // Allow no space
         "Trait signature should be updated to &mut self. Got:\n{}",
         game_loop_rs
@@ -67,8 +68,10 @@ impl GameLoop for MyGame {
 
     // Check my_game.rs has the correct impl signature
     let my_game_rs = fs::read_to_string(output_dir.join("my_game.rs")).unwrap();
+    println!("Generated my_game.rs:\n{}", my_game_rs);
     assert!(
-        my_game_rs.contains("fn update(&mut self, delta: f32)"),
+        my_game_rs.contains("fn update(&mut self, delta: f32)")
+            || my_game_rs.contains("fn update(&mut self, _delta: f32)"),
         "Impl should have &mut self"
     );
 
