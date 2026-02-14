@@ -643,3 +643,126 @@ pub fn clone_item<T: Clone>(item: T) -> T {
     // Should work with T: Clone bound
     assert!(success, "Error: {}", err);
 }
+
+// ============================================================================
+// BUG: Auto-Copy struct inference gap (E0382 in dogfooding)
+// ============================================================================
+
+#[test]
+#[cfg_attr(tarpaulin, ignore)]
+fn test_auto_copy_struct_self_borrow_inference() {
+    // Bug: When a struct has only Copy fields and no @derive decorator,
+    // the codegen correctly auto-derives Copy on the struct, but the analyzer
+    // doesn't know the return type is Copy, so it infers owned `self` instead
+    // of `&self` for getter methods that return the struct type.
+    //
+    // This causes E0382 "use of moved value" when calling .id() and then
+    // using the original value again:
+    //   let id = thing.id();  // moves `thing`
+    //   map.insert(id, thing); // ERROR: thing already moved
+    let code = r#"
+struct ThingId {
+    value: u32
+}
+
+impl ThingId {
+    pub fn new(value: u32) -> ThingId {
+        ThingId { value: value }
+    }
+}
+
+struct Thing {
+    id: ThingId,
+    name: String
+}
+
+impl Thing {
+    pub fn new(id: u32, name: &str) -> Thing {
+        Thing { id: ThingId::new(id), name: name.to_string() }
+    }
+
+    pub fn id(self) -> ThingId {
+        self.id
+    }
+
+    pub fn name(self) -> &str {
+        &self.name
+    }
+}
+
+fn main() {
+    let thing = Thing::new(1, "test")
+    let id = thing.id()
+    println("{}", thing.name())
+}
+"#;
+    let result = compile_and_get_rust(code);
+    assert!(result.is_ok(), "Codegen failed: {:?}", result.err());
+    let generated = result.unwrap();
+
+    // The ThingId struct should auto-derive Copy (all fields are Copy)
+    // Therefore Thing::id() should get &self (since it returns a Copy type)
+    assert!(
+        generated.contains("fn id(&self)"),
+        "id() should infer &self since ThingId is auto-Copy. Got:\n{}",
+        generated
+    );
+
+    // Verify the full program compiles (no E0382 "use of moved value")
+    let (success, _generated, err) = compile_and_verify(code);
+    assert!(success, "Should compile without E0382. Error: {}", err);
+}
+
+#[test]
+#[cfg_attr(tarpaulin, ignore)]
+fn test_usize_field_comparison_no_cast_mismatch() {
+    // Bug: When a generic struct has usize fields and a method compares .len() with
+    // a usize field, the codegen casts .len() to i64 but leaves the field as usize.
+    // Both sides are usize so NO cast should be applied.
+    //
+    // Example: `self.available.len() == self.capacity` should NOT become
+    // `(self.available.len() as i64) == self.capacity` (mismatched types)
+    let code = r#"
+struct Pool<T> {
+    items: Vec<T>,
+    capacity: usize,
+    count: usize
+}
+
+impl<T> Pool<T> {
+    pub fn new(cap: usize) -> Pool<T> {
+        Pool { items: Vec::new(), capacity: cap, count: 0 }
+    }
+
+    pub fn is_full(self) -> bool {
+        self.items.len() == self.capacity
+    }
+
+    pub fn has_space(self) -> bool {
+        self.items.len() < self.capacity
+    }
+}
+
+fn main() {
+    let pool: Pool<int> = Pool::new(10)
+    println("{}", pool.is_full())
+    println("{}", pool.has_space())
+}
+"#;
+    let result = compile_and_get_rust(code);
+    assert!(result.is_ok(), "Codegen failed: {:?}", result.err());
+    let generated = result.unwrap();
+
+    // Both .len() and self.capacity are usize - no cast should be applied
+    // Bad: (self.items.len() as i64) == self.capacity
+    // Good: self.items.len() == self.capacity
+    assert!(
+        !generated.contains("as i64) == self.capacity"),
+        "Should NOT cast .len() to i64 when comparing with usize field. Got:\n{}",
+        generated
+    );
+
+    // Verify the full program compiles (no E0308 "mismatched types")
+    let (success, _generated, err) = compile_and_verify(code);
+    assert!(success, "Should compile without E0308. Error: {}", err);
+}
