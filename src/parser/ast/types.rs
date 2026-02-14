@@ -30,6 +30,7 @@ pub enum Type {
     Parameterized(String, Vec<Type>), // Generic type: Vec<T>, HashMap<K, V>
     Associated(String, String),       // Associated type: Self::Item, T::Output (base, assoc_name)
     TraitObject(String),              // Trait object: dyn Trait
+    ImplTrait(String),                // trait Describable -> compiler decides impl vs dyn
     Option(Box<Type>),
     Result(Box<Type>, Box<Type>),
     Vec(Box<Type>),          // Dynamic array: Vec<T>

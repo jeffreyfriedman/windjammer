@@ -63,9 +63,10 @@ pub fn execute(path: &Path, args: &[String], target_str: &str) -> Result<()> {
     // Build to temp directory (build_project handles both files and directories)
     let target = match target_str.to_lowercase().as_str() {
         "rust" => crate::CompilationTarget::Rust,
+        "go" | "golang" => crate::CompilationTarget::Go,
         "wasm" | "webassembly" => crate::CompilationTarget::Wasm,
         _ => bail!(
-            "Unknown target: {}. Use 'rust', 'javascript', or 'wasm'",
+            "Unknown target: {}. Use 'rust', 'go', 'javascript', or 'wasm'",
             target_str
         ),
     };
