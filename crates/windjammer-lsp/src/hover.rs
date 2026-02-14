@@ -183,6 +183,9 @@ impl HoverProvider {
             Type::TraitObject(trait_name) => {
                 format!("dyn {}", trait_name)
             }
+            Type::ImplTrait(trait_name) => {
+                format!("trait {}", trait_name)
+            }
             Type::Option(inner) => {
                 format!("Option<{}>", self.format_type(inner))
             }
