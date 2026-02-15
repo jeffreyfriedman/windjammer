@@ -316,7 +316,23 @@ impl MethodCallAnalyzer {
                             if (is_explicitly_borrowed || is_inferred_borrowed)
                                 && !arg_str.ends_with(".clone()")
                             {
-                                return true;
+                                // WINDJAMMER PHILOSOPHY: Don't clone Copy types.
+                                // Even when moving out of a borrow, Copy types are implicitly copied.
+                                // Checking `is_copy_type` prevents noise like self.mouse_x.clone()
+                                if !Self::is_copy_type(
+                                    arg,
+                                    &HashSet::new(), // no usize_variables in this context
+                                    current_function_params,
+                                ) {
+                                    // Also check if the method parameter type itself is Copy
+                                    // (f32, i32, bool etc. don't need cloning regardless of source)
+                                    let param_is_copy = sig.param_types.get(sig_param_idx).is_some_and(|t| {
+                                        crate::codegen::rust::type_analysis::is_copy_type(t)
+                                    });
+                                    if !param_is_copy {
+                                        return true;
+                                    }
+                                }
                             }
                         }
                     }
