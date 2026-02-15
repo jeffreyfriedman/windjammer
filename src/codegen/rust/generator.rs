@@ -5728,22 +5728,25 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
                 };
 
                 // AUTO-CLONE: Check if this variable needs to be cloned at this point
-                if let Some(ref analysis) = self.auto_clone_analysis {
-                    if analysis
-                        .needs_clone(name, self.current_statement_idx)
-                        .is_some()
-                    {
-                        // Skip .clone() for Copy types — they are implicitly copied,
-                        // so .clone() is unnecessary noise.
-                        let is_copy_type = analysis.string_literal_vars.contains(name)
-                            || self.usize_variables.contains(name)
-                            || self.infer_expression_type(expr_to_generate)
-                                .as_ref()
-                                .is_some_and(|t| crate::codegen::rust::type_analysis::is_copy_type(t));
+                // CRITICAL: Never clone assignment targets (left side of `=`)
+                if !self.generating_assignment_target {
+                    if let Some(ref analysis) = self.auto_clone_analysis {
+                        if analysis
+                            .needs_clone(name, self.current_statement_idx)
+                            .is_some()
+                        {
+                            // Skip .clone() for Copy types — they are implicitly copied,
+                            // so .clone() is unnecessary noise.
+                            let is_copy_type = analysis.string_literal_vars.contains(name)
+                                || self.usize_variables.contains(name)
+                                || self.infer_expression_type(expr_to_generate)
+                                    .as_ref()
+                                    .is_some_and(|t| crate::codegen::rust::type_analysis::is_copy_type(t));
 
-                        if !is_copy_type {
-                            // Automatically insert .clone() - this is the magic!
-                            return format!("{}.clone()", base_name);
+                            if !is_copy_type {
+                                // Automatically insert .clone() - this is the magic!
+                                return format!("{}.clone()", base_name);
+                            }
                         }
                     }
                 }
@@ -6872,47 +6875,57 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
 
                 // AUTO-CLONE: Check if this field access needs to be cloned
                 // Extract the full path (e.g., "config.paths")
-                if let Some(path) = ast_utilities::extract_field_access_path(expr_to_generate) {
-                    if let Some(ref analysis) = self.auto_clone_analysis {
-                        if analysis
-                            .needs_clone(&path, self.current_statement_idx)
-                            .is_some()
-                        {
-                            // Skip .clone() for Copy types (f32, i32, bool, etc.)
-                            // They are implicitly copied — .clone() is unnecessary noise.
-                            let is_copy = self.infer_expression_type(expr_to_generate)
-                                .as_ref()
-                                .is_some_and(|t| crate::codegen::rust::type_analysis::is_copy_type(t));
-                            if !is_copy {
-                                return format!("{}.clone()", base_expr);
+                // CRITICAL: Never clone assignment targets (left side of `=`)
+                // e.g., `emitter.lifetime = 1.0` must NOT become `emitter.clone().lifetime = 1.0`
+                if !self.generating_assignment_target {
+                    if let Some(path) = ast_utilities::extract_field_access_path(expr_to_generate) {
+                        if let Some(ref analysis) = self.auto_clone_analysis {
+                            if analysis
+                                .needs_clone(&path, self.current_statement_idx)
+                                .is_some()
+                            {
+                                // Skip .clone() for Copy types (f32, i32, bool, etc.)
+                                // They are implicitly copied — .clone() is unnecessary noise.
+                                let is_copy = self.infer_expression_type(expr_to_generate)
+                                    .as_ref()
+                                    .is_some_and(|t| crate::codegen::rust::type_analysis::is_copy_type(t));
+                                if !is_copy {
+                                    return format!("{}.clone()", base_expr);
+                                }
                             }
                         }
                     }
                 }
 
                 // BORROWED ITERATOR: If accessing fields through a borrowed iterator variable,
-                // we need to clone String fields since we can't move out of a reference
+                // we need to clone non-Copy fields since we can't move out of a reference
                 // BUT: Don't clone for assignment targets (left side of =)
+                // WINDJAMMER PHILOSOPHY: Use type inference first, fall back to name heuristics
                 if !self.generating_assignment_target {
                     if let Expression::Identifier { name: var_name, .. } = &**object {
                         if self.borrowed_iterator_vars.contains(var_name) {
-                            // Clone non-Copy fields (String-like names)
-                            // Exclude obvious Copy fields
-                            // ALSO exclude method names that look like fields (as_str, to_string, etc.)
-                            let needs_clone = !matches!(
-                                field.as_str(),
-                                "len" | "count" | "size" | "index" | "idx" | "i" | "j" | "k" |
-                                "x" | "y" | "z" | "w" | "width" | "height" | "depth" |
-                                "r" | "g" | "b" | "a" | "left" | "right" | "top" | "bottom" |
-                                "min" | "max" | "start" | "end" | "offset" | "scale" |
-                                "speed" | "time" | "delta" | "angle" | "radius" | "distance" |
-                                "visible" | "enabled" | "active" | "selected" | "focused" |
-                                "id" | "type" | "kind" | "priority" | "level" |
-                                // Method-like names that should NOT be cloned (they're method calls, not fields)
-                                "as_str" | "to_string" | "clone" | "iter" | "iter_mut" | "is_empty"
-                            );
-                            if needs_clone && !base_expr.ends_with(".clone()") {
-                                return format!("{}.clone()", base_expr);
+                            // First: use type inference to check if the field type is Copy
+                            let is_copy = self.infer_expression_type(expr_to_generate)
+                                .as_ref()
+                                .is_some_and(|t| crate::codegen::rust::type_analysis::is_copy_type(t));
+
+                            if !is_copy {
+                                // Fall back to name-based heuristics for fields we KNOW are Copy
+                                let is_likely_copy_field = matches!(
+                                    field.as_str(),
+                                    "len" | "count" | "size" | "index" | "idx" | "i" | "j" | "k" |
+                                    "x" | "y" | "z" | "w" | "width" | "height" | "depth" |
+                                    "r" | "g" | "b" | "a" | "left" | "right" | "top" | "bottom" |
+                                    "min" | "max" | "start" | "end" | "offset" | "scale" |
+                                    "speed" | "time" | "delta" | "angle" | "radius" | "distance" |
+                                    "visible" | "enabled" | "active" | "selected" | "focused" |
+                                    "id" | "type" | "kind" | "priority" | "level" |
+                                    // Method-like names that should NOT be cloned
+                                    "as_str" | "to_string" | "clone" | "iter" | "iter_mut" | "is_empty"
+                                );
+                                if !is_likely_copy_field && !base_expr.ends_with(".clone()") {
+                                    return format!("{}.clone()", base_expr);
+                                }
                             }
                         }
                     }
