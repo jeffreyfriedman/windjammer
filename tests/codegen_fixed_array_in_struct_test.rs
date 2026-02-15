@@ -100,6 +100,44 @@ fn main() {
 }
 
 #[test]
+fn test_function_returning_fixed_array_uses_fixed_syntax() {
+    // Functions with return type [f32; N] should generate [...] not vec![...]
+    let code = compile_to_rust(
+        r#"
+struct Vec3 {
+    x: f32,
+    y: f32,
+    z: f32,
+}
+
+impl Vec3 {
+    pub fn to_array(self) -> [f32; 3] {
+        [self.x, self.y, self.z]
+    }
+}
+
+fn main() {
+    let v = Vec3 { x: 1.0, y: 2.0, z: 3.0 }
+}
+"#,
+    );
+
+    // Should contain fixed-size array syntax in the return
+    assert!(
+        code.contains("[self.x, self.y, self.z]"),
+        "Return value of fn -> [f32; 3] should use [...] not vec![...]. Generated:\n{}",
+        code
+    );
+
+    // Should NOT contain vec![] in the to_array method
+    assert!(
+        !code.contains("vec![self.x, self.y, self.z]"),
+        "Return value should NOT use vec![...] for fixed-size array return. Generated:\n{}",
+        code
+    );
+}
+
+#[test]
 fn test_empty_array_in_struct_uses_fixed_syntax() {
     // Empty array in struct field should generate [] not vec![]
     let code = compile_to_rust(
