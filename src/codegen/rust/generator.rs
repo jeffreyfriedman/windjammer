@@ -5919,8 +5919,8 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
                 if is_comparison && left_is_usize && !right_is_usize {
                     // Left is usize, right is NOT usize
                     if right_is_int_literal {
-                        // Int literals are always non-negative, safe to cast to usize
-                        right_str = format!("{} as usize", right_str);
+                        // Int literals in comparisons with usize don't need explicit cast —
+                        // Rust infers the literal type from context. `vec.len() > 0` is fine.
                     } else {
                         // Cast the usize side (LEFT) to i64 for safety
                         // Use parens around compound expressions to prevent precedence issues
@@ -5936,8 +5936,8 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
                 } else if is_comparison && right_is_usize && !left_is_usize {
                     // Right is usize, left is NOT usize
                     if left_is_int_literal {
-                        // Int literals are always non-negative, safe to cast to usize
-                        left_str = format!("{} as usize", left_str);
+                        // Int literals in comparisons with usize don't need explicit cast —
+                        // Rust infers the literal type from context.
                     } else {
                         // Cast the usize side (RIGHT) to i64 for safety
                         // Use parens around compound expressions to prevent precedence issues
