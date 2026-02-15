@@ -4088,7 +4088,11 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
                                     None
                                 }
                             }
-                            _ => None,
+                            _ => {
+                                // Fall back to general expression type inference
+                                // Handles if/else, binary ops, method calls, etc.
+                                self.infer_expression_type(value)
+                            },
                         }
                     };
                     if let Some(t) = inferred_type {
@@ -5214,6 +5218,17 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
                         return Some(param.type_.clone());
                     }
                 }
+                // In impl blocks, identifiers may refer to struct fields (implicit self)
+                // e.g., `mouse_x` in `impl Game` → `self.mouse_x` → type is Game.mouse_x's type
+                if self.in_impl_block && self.current_struct_fields.contains(name) {
+                    if let Some(struct_name) = &self.current_struct_name {
+                        if let Some(fields) = self.struct_field_types.get(struct_name.as_str()) {
+                            if let Some(field_type) = fields.get(name.as_str()) {
+                                return Some(field_type.clone());
+                            }
+                        }
+                    }
+                }
                 None
             }
             // obj.field → look up field type from struct_field_types
@@ -5348,6 +5363,42 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
                     .get_signature(method)
                     .and_then(|sig| sig.return_type.clone())
             }
+            // Block expression: infer from the last statement's expression
+            // Handles: let x = { if cond { 64.0 } else { 32.0 } }
+            Expression::Block { statements, .. } => {
+                if let Some(last_stmt) = statements.last() {
+                    match last_stmt {
+                        Statement::Expression { expr, .. } => self.infer_expression_type(expr),
+                        Statement::If { then_block, .. } => {
+                            // Infer from the then branch's last expression
+                            if let Some(last) = then_block.last() {
+                                if let Statement::Expression { expr, .. } = last {
+                                    return self.infer_expression_type(expr);
+                                }
+                            }
+                            None
+                        }
+                        _ => None,
+                    }
+                } else {
+                    None
+                }
+            }
+            // Literal expressions: directly known types
+            Expression::Literal { value, .. } => match value {
+                crate::parser::Literal::Int(_) => Some(Type::Int),
+                crate::parser::Literal::Float(_) => Some(Type::Float),
+                crate::parser::Literal::Bool(_) => Some(Type::Bool),
+                crate::parser::Literal::String(_) => Some(Type::String),
+                _ => None,
+            },
+            // Binary operations: infer from operands (result usually matches operand type)
+            Expression::Binary { left, right, .. } => {
+                self.infer_expression_type(left)
+                    .or_else(|| self.infer_expression_type(right))
+            }
+            // Cast expressions: the target type is explicit
+            Expression::Cast { type_, .. } => Some(type_.clone()),
             _ => None,
         }
     }

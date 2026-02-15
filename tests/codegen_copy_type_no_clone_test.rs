@@ -640,3 +640,102 @@ fn main() {
         code
     );
 }
+
+/// TDD Test: self.field used multiple times in method args should not clone if Copy
+///
+/// Bug: `self.button1.update_hover(self.mouse_x.clone(), self.mouse_y.clone())`
+/// mouse_x and mouse_y are f32 — Copy types — no clone needed.
+///
+/// Discovered via dogfooding: ui_demo.wj has self.mouse_x used 4 times in
+/// update_buttons(&self), so auto-clone analysis flags it. But f32 is Copy.
+#[test]
+fn test_self_copy_field_used_multiple_times_no_clone() {
+    let code = compile_to_rust(
+        r#"
+struct Button {
+    x: f32,
+    y: f32,
+}
+
+impl Button {
+    fn update_hover(mx: f32, my: f32) {
+        // stub
+    }
+}
+
+struct Game {
+    mouse_x: f32,
+    mouse_y: f32,
+    btn1: Button,
+    btn2: Button,
+    btn3: Button,
+}
+
+impl Game {
+    fn update_buttons() {
+        self.btn1.update_hover(self.mouse_x, self.mouse_y)
+        self.btn2.update_hover(self.mouse_x, self.mouse_y)
+        self.btn3.update_hover(self.mouse_x, self.mouse_y)
+    }
+}
+
+fn main() {
+    let g = Game { mouse_x: 0.0, mouse_y: 0.0, btn1: Button { x: 0.0, y: 0.0 }, btn2: Button { x: 0.0, y: 0.0 }, btn3: Button { x: 0.0, y: 0.0 } }
+}
+"#,
+    );
+
+    assert!(
+        !code.contains("self.mouse_x.clone()"),
+        "f32 field self.mouse_x should not need .clone(). Generated:\n{}",
+        code
+    );
+    assert!(
+        !code.contains("self.mouse_y.clone()"),
+        "f32 field self.mouse_y should not need .clone(). Generated:\n{}",
+        code
+    );
+}
+
+/// TDD Test: Local f32 variable from if-else expression used multiple times should NOT clone
+///
+/// Bug: `draw_rect(x - size.clone() / 2.0, y - size.clone() / 2.0, size.clone(), size.clone(), ...)`
+/// `size` is assigned from an if-else expression but evaluates to f32.
+///
+/// Discovered via dogfooding: animation_demo.wj has `let size = if cond { 64.0 + ... } else { 64.0 }`
+/// The type inference doesn't recognize the if-else as returning f32.
+#[test]
+fn test_local_copy_var_from_if_else_no_clone() {
+    let code = compile_to_rust(
+        r#"
+extern fn draw_rect(x: f32, y: f32, w: f32, h: f32, r: f32, g: f32, b: f32, a: f32)
+
+struct Character {
+    x: f32,
+    y: f32,
+    anim: i32,
+}
+
+impl Character {
+    fn render() {
+        let size = if self.anim == 1 {
+            64.0 + 8.0
+        } else {
+            64.0
+        }
+        draw_rect(self.x - size / 2.0, self.y - size / 2.0, size, size, 1.0, 0.0, 0.0, 1.0)
+    }
+}
+
+fn main() {
+    let c = Character { x: 0.0, y: 0.0, anim: 0 }
+}
+"#,
+    );
+
+    assert!(
+        !code.contains("size.clone()"),
+        "Local f32 variable 'size' from if-else should not need .clone(). Generated:\n{}",
+        code
+    );
+}
