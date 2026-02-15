@@ -6914,8 +6914,17 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
                 }
                 // enumerate() → iter().enumerate()
                 // Rust Vec doesn't have .enumerate() — only iterators do.
+                // But if the object already ends with .iter(), .iter_mut(), or
+                // .into_iter(), don't add a redundant .iter() prefix.
                 if method == "enumerate" && processed_args.is_empty() {
-                    return format!("{}.iter().enumerate()", obj_str);
+                    let already_iterator = obj_str.ends_with(".iter()")
+                        || obj_str.ends_with(".iter_mut()")
+                        || obj_str.ends_with(".into_iter()");
+                    if already_iterator {
+                        return format!("{}.enumerate()", obj_str);
+                    } else {
+                        return format!("{}.iter().enumerate()", obj_str);
+                    }
                 }
 
                 let base_expr = format!(
