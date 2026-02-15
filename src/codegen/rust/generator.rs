@@ -6893,9 +6893,15 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
 
                 // WINDJAMMER STDLIB → RUST TRANSLATION
                 // Some Windjammer methods don't exist in Rust and need translation.
-                // reversed() → into_iter().rev().collect::<Vec<_>>() (reverse iteration)
+                //
+                // reversed() → into_iter().rev().collect::<Vec<_>>()
                 if method == "reversed" && processed_args.is_empty() {
                     return format!("{}.into_iter().rev().collect::<Vec<_>>()", obj_str);
+                }
+                // enumerate() → iter().enumerate()
+                // Rust Vec doesn't have .enumerate() — only iterators do.
+                if method == "enumerate" && processed_args.is_empty() {
+                    return format!("{}.iter().enumerate()", obj_str);
                 }
 
                 let base_expr = format!(
