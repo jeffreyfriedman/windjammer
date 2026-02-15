@@ -6890,7 +6890,23 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
                                     .as_ref()
                                     .is_some_and(|t| crate::codegen::rust::type_analysis::is_copy_type(t));
                                 if !is_copy {
-                                    return format!("{}.clone()", base_expr);
+                                    // Type inference failed — fall back to name heuristic
+                                    // Fields like x, y, z, width, height are almost always Copy
+                                    let is_likely_copy_field = matches!(
+                                        field.as_str(),
+                                        "x" | "y" | "z" | "w" | "width" | "height" | "depth" |
+                                        "r" | "g" | "b" | "a" | "left" | "right" | "top" | "bottom" |
+                                        "min" | "max" | "start" | "end" | "offset" | "scale" |
+                                        "speed" | "time" | "delta" | "angle" | "radius" | "distance" |
+                                        "visible" | "enabled" | "active" | "selected" | "focused" |
+                                        "id" | "type" | "kind" | "priority" | "level" |
+                                        "len" | "count" | "size" | "index" | "idx" |
+                                        "vx" | "vy" | "vz" | "dx" | "dy" | "dz" |
+                                        "health" | "damage" | "score" | "lives" | "frame"
+                                    );
+                                    if !is_likely_copy_field {
+                                        return format!("{}.clone()", base_expr);
+                                    }
                                 }
                             }
                         }
