@@ -6891,6 +6891,13 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
                 // TODO: Re-enable with proper type checking when VNode type bindings are implemented
                 let processed_args = args;
 
+                // WINDJAMMER STDLIB → RUST TRANSLATION
+                // Some Windjammer methods don't exist in Rust and need translation.
+                // reversed() → into_iter().rev().collect::<Vec<_>>() (reverse iteration)
+                if method == "reversed" && processed_args.is_empty() {
+                    return format!("{}.into_iter().rev().collect::<Vec<_>>()", obj_str);
+                }
+
                 let base_expr = format!(
                     "{}{}{}{}({})",
                     obj_str,
