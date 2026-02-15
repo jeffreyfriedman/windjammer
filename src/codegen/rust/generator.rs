@@ -121,6 +121,10 @@ pub struct CodeGenerator<'ast> {
     // suppress borrowed-iterator cloning on the intermediate object.
     // e.g., enemy.velocity.y → no need to clone velocity just to read .y
     suppress_borrowed_clone: bool,
+    // VEC INDEX CONTEXT: When generating the object of a FieldAccess, suppress Vec index
+    // auto-clone since Rust allows field access on &T returned by Vec indexing.
+    // e.g., players[i].score → no clone needed, just accesses the field through the ref.
+    in_field_access_object: bool,
     // RECURSION GUARD: Track traits currently being generated to prevent infinite recursion
     generating_traits: std::collections::HashSet<String>,
     // RECURSION DEPTH: Track recursion depth to prevent stack overflow
@@ -137,6 +141,9 @@ pub struct CodeGenerator<'ast> {
     // array literals should use fixed-size [...] syntax instead of vec![...],
     // since struct fields have explicit type annotations (e.g., [f32; 3]).
     in_struct_literal_field: bool,
+    // ENUM VARIANT TYPE TRACKING: Map "EnumName::VariantName" to field types
+    // Enables string literal to String coercion in enum variant constructors
+    enum_variant_types: std::collections::HashMap<String, Vec<Type>>,
 }
 
 // RECURSION GUARD MACRO: Check depth before entering recursive functions
@@ -226,6 +233,7 @@ impl<'ast> CodeGenerator<'ast> {
             inferred_borrowed_params: std::collections::HashSet::new(),
             generating_assignment_target: false,
             suppress_borrowed_clone: false,
+            in_field_access_object: false,
             partial_eq_types: std::collections::HashSet::new(),
             in_match_arm_needing_string: false,
             in_statement_match: false,
@@ -237,6 +245,7 @@ impl<'ast> CodeGenerator<'ast> {
             local_var_types: std::collections::HashMap::new(),
             struct_field_types: std::collections::HashMap::new(),
             in_struct_literal_field: false,
+            enum_variant_types: std::collections::HashMap::new(),
         }
     }
 
@@ -5451,6 +5460,18 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
                 .or_else(|| self.infer_expression_type(right)),
             // Cast expressions: the target type is explicit
             Expression::Cast { type_, .. } => Some(type_.clone()),
+            // Index expressions: vec[i] → element type of the collection
+            Expression::Index { object, .. } => {
+                if let Some(obj_type) = self.infer_expression_type(object) {
+                    match obj_type {
+                        Type::Vec(inner) => Some(*inner),
+                        Type::Array(inner, _) => Some(*inner),
+                        _ => None,
+                    }
+                } else {
+                    None
+                }
+            }
             _ => None,
         }
     }
@@ -6420,10 +6441,15 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
                                     func_name == "new" || func_name.ends_with("::new")
                                 }
                             } else {
-                                // No signature found
-                                // THE WINDJAMMER WAY: Heuristic for constructors
-                                // Functions named 'new' (or Type::new) taking string params likely expect String
-                                func_name == "new" || func_name.ends_with("::new")
+                                // No signature found — check enum variant registry
+                                // WINDJAMMER FIX: Enum variant constructors like GameEvent::ItemPickup("text")
+                                // need .to_string() when the variant field is String type
+                                if let Some(variant_types) = self.enum_variant_types.get(&func_name) {
+                                    variant_types.get(i).map_or(false, |ty| matches!(ty, Type::String))
+                                } else {
+                                    // Fallback heuristic for constructors
+                                    func_name == "new" || func_name.ends_with("::new")
+                                }
                             };
 
                             if should_convert {
@@ -7070,10 +7096,15 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
                     .is_some_and(|t| crate::codegen::rust::type_analysis::is_copy_type(t));
 
                 let prev_suppress = self.suppress_borrowed_clone;
+                let prev_field_access = self.in_field_access_object;
                 if field_is_likely_copy || field_is_copy_by_type {
                     self.suppress_borrowed_clone = true;
                 }
+                // Suppress Vec index clone when we're just accessing a field
+                // e.g., players[i].score → no need to clone the whole Player
+                self.in_field_access_object = true;
                 let obj_str = self.generate_expression_with_precedence(object);
+                self.in_field_access_object = prev_field_access;
                 self.suppress_borrowed_clone = prev_suppress;
 
                 // Determine if this is a module/type path (::) or field access (.)
@@ -7470,26 +7501,18 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
 
                 let base_expr = format!("{}[{}]", obj_str, final_idx);
 
-                // TODO: Vec indexing of non-Copy types causes E0507
-                // Need to implement context-aware borrowing:
-                // - If used for field access: &vec[idx]
-                // - If returned/stored: vec[idx].clone()
-                // - If Copy type: vec[idx] (no change)
+                // WINDJAMMER PHILOSOPHY: Auto-clone Vec indexing for non-Copy types.
+                // Rust doesn't allow moving out of a Vec index (E0507).
+                // For Copy types: vec[idx] works directly (value is copied).
+                // For non-Copy types: vec[idx].clone() is needed.
                 //
-                // For now, this generates vec[idx] which works for Copy types
-                // but fails for non-Copy types. The proper fix requires:
-                // 1. Type inference to detect non-Copy types
-                // 2. Usage analysis to determine if borrow or clone is needed
-                // 3. Context-aware code generation
-                //
-                // AUTO-CLONE: Check if this index expression needs to be cloned
+                // First check auto_clone_analysis (path-based analysis)
                 if let Some(path) = ast_utilities::extract_field_access_path(expr_to_generate) {
                     if let Some(ref analysis) = self.auto_clone_analysis {
                         if analysis
                             .needs_clone(&path, self.current_statement_idx)
                             .is_some()
                         {
-                            // Skip .clone() for Copy types
                             let is_copy = self
                                 .infer_expression_type(expr_to_generate)
                                 .as_ref()
@@ -7502,6 +7525,27 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
                         }
                     }
                 }
+
+                // Fallback: Type-based auto-clone for Vec<NonCopy>[idx]
+                // If we can infer the collection's element type and it's not Copy, clone.
+                // This handles the common case: vec[i] passed to a function taking ownership.
+                // SKIP when in a field access context (players[i].score doesn't need clone,
+                // Rust allows field access on &T returned by Vec indexing).
+                if !self.in_field_access_object {
+                    if let Some(obj_type) = self.infer_expression_type(object) {
+                        let element_type = match &obj_type {
+                            Type::Vec(inner) => Some(inner.as_ref()),
+                            Type::Array(inner, _) => Some(inner.as_ref()),
+                            _ => None,
+                        };
+                        if let Some(elem_type) = element_type {
+                            if !type_analysis::is_copy_type(elem_type) {
+                                return format!("{}.clone()", base_expr);
+                            }
+                        }
+                    }
+                }
+
                 base_expr
             }
             Expression::Tuple {
@@ -7636,7 +7680,28 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
                 // Use semicolon for repeat, comma for regular args
                 let separator = if *is_repeat { "; " } else { ", " };
 
-                format!("{}!{}{}{}", name, open, arg_strs.join(separator), close)
+                // WINDJAMMER FIX: String literal coercion in vec![]
+                // In Windjammer, `string` maps to Rust `String`, so vec!["a", "b"] must
+                // become vec!["a".to_string(), "b".to_string()] for Vec<String>.
+                // Only apply when: macro is vec, brackets delimiter, has string literal args.
+                let final_arg_strs: Vec<String> = if name == "vec" && matches!(delimiter, MacroDelimiter::Brackets) && !*is_repeat {
+                    arg_strs.iter().enumerate().map(|(idx, s)| {
+                        // Check if the original arg is a string literal
+                        if idx < args.len() {
+                            if let Expression::Literal { value: Literal::String(_), .. } = &args[idx] {
+                                // Add .to_string() if not already present
+                                if !s.ends_with(".to_string()") {
+                                    return format!("{}.to_string()", s);
+                                }
+                            }
+                        }
+                        s.clone()
+                    }).collect()
+                } else {
+                    arg_strs
+                };
+
+                format!("{}!{}{}{}", name, open, final_arg_strs.join(separator), close)
             }
             Expression::Cast { expr, type_, .. } => {
                 // Add parentheses around binary expressions for correct precedence
@@ -8193,8 +8258,32 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
                     if self.all_enum_variants_are_partial_eq_recursive(&e.variants) {
                         self.partial_eq_types.insert(e.name.clone());
                     }
+                    // ENUM VARIANT TYPES: Collect field types for each variant
+                    // Enables string literal → String coercion in enum variant constructors
+                    self.collect_enum_variant_types(e);
                 }
                 _ => {}
+            }
+        }
+    }
+
+    /// Collect field types for each enum variant into the enum_variant_types registry.
+    /// Maps "EnumName::VariantName" → Vec<Type> for tuple variants.
+    fn collect_enum_variant_types(&mut self, e: &crate::parser::EnumDecl) {
+        use crate::parser::EnumVariantData;
+        for variant in &e.variants {
+            let key = format!("{}::{}", e.name, variant.name);
+            match &variant.data {
+                EnumVariantData::Unit => {
+                    self.enum_variant_types.insert(key, vec![]);
+                }
+                EnumVariantData::Tuple(types) => {
+                    self.enum_variant_types.insert(key, types.clone());
+                }
+                EnumVariantData::Struct(fields) => {
+                    let types: Vec<Type> = fields.iter().map(|(_, ty)| ty.clone()).collect();
+                    self.enum_variant_types.insert(key, types);
+                }
             }
         }
     }
