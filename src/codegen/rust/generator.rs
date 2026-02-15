@@ -6003,72 +6003,86 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
                 // Extract function name for signature lookup
                 let func_name = ast_utilities::extract_function_name(function);
 
-                // Special case: convert test assertion functions to macros
-                // THE WINDJAMMER WAY: assert_eq(a, b) -> assert_eq!(a, b)
-                // NOTE: assert_gt, assert_gte, assert_is_some, assert_is_none, etc. are runtime functions, not macros
-                // Print functions need special handling (format! unwrapping, interpolation)
-                // so they are NOT in the simple macro list — handled separately below.
-                let test_macros = [
-                    "assert",
-                    "assert_eq",
-                    "assert_ne",
-                    "assert_ok",
-                    "assert_err",
-                    "panic",
-                    "vec",
-                    "format",
-                    "write",
-                    "writeln",
-                    "dbg",
-                    "todo",
-                    "unimplemented",
-                    "unreachable",
-                ];
+                // THE WINDJAMMER WAY: User-defined functions always take priority
+                // over built-in name mappings. If the user defines a function with
+                // the same name as a test macro or runtime function (e.g., their own
+                // `assert_approx`), their definition wins. We check the signature
+                // registry: if the function exists and is NOT extern, it's user-defined.
+                let is_user_defined = self
+                    .signature_registry
+                    .get_signature(&func_name)
+                    .map(|sig| !sig.is_extern)
+                    .unwrap_or(false);
 
-                if test_macros.contains(&func_name.as_str()) {
-                    let args: Vec<String> = arguments
-                        .iter()
-                        .map(|(_label, arg)| self.generate_expression(arg))
-                        .collect();
-                    return format!("{}!({})", func_name, args.join(", "));
-                }
+                if !is_user_defined {
+                    // Special case: convert test assertion functions to macros
+                    // THE WINDJAMMER WAY: assert_eq(a, b) -> assert_eq!(a, b)
+                    // NOTE: assert_gt, assert_gte, assert_is_some, assert_is_none, etc. are runtime functions, not macros
+                    // Print functions need special handling (format! unwrapping, interpolation)
+                    // so they are NOT in the simple macro list — handled separately below.
+                    let test_macros = [
+                        "assert",
+                        "assert_eq",
+                        "assert_ne",
+                        "assert_ok",
+                        "assert_err",
+                        "panic",
+                        "vec",
+                        "format",
+                        "write",
+                        "writeln",
+                        "dbg",
+                        "todo",
+                        "unimplemented",
+                        "unreachable",
+                    ];
 
-                // Special case: qualify test assertion runtime functions
-                // THE WINDJAMMER WAY: These are functions, not macros, so they need proper paths
-                let test_functions = [
-                    "assert_gt",
-                    "assert_lt",
-                    "assert_gte",
-                    "assert_lte",
-                    "assert_approx",
-                    "assert_not_empty",
-                    "assert_empty",
-                    "assert_contains",
-                    "assert_is_some",
-                    "assert_is_none",
-                ];
+                    if test_macros.contains(&func_name.as_str()) {
+                        let args: Vec<String> = arguments
+                            .iter()
+                            .map(|(_label, arg)| self.generate_expression(arg))
+                            .collect();
+                        return format!("{}!({})", func_name, args.join(", "));
+                    }
 
-                if test_functions.contains(&func_name.as_str()) {
-                    let args: Vec<String> = arguments
-                        .iter()
-                        .enumerate()
-                        .map(|(idx, (_label, arg))| {
-                            let generated = self.generate_expression(arg);
-                            // assert_is_some and assert_is_none expect &Option, so add & for first arg
-                            if (func_name == "assert_is_some" || func_name == "assert_is_none")
-                                && idx == 0
-                            {
-                                format!("&{}", generated)
-                            } else {
-                                generated
-                            }
-                        })
-                        .collect();
-                    return format!(
-                        "windjammer_runtime::test::{}({})",
-                        func_name,
-                        args.join(", ")
-                    );
+                    // Special case: qualify test assertion runtime functions
+                    // THE WINDJAMMER WAY: These are functions, not macros, so they need proper paths
+                    let test_functions = [
+                        "assert_gt",
+                        "assert_lt",
+                        "assert_gte",
+                        "assert_lte",
+                        "assert_approx",
+                        "assert_not_empty",
+                        "assert_empty",
+                        "assert_contains",
+                        "assert_is_some",
+                        "assert_is_none",
+                    ];
+
+                    if test_functions.contains(&func_name.as_str()) {
+                        let args: Vec<String> = arguments
+                            .iter()
+                            .enumerate()
+                            .map(|(idx, (_label, arg))| {
+                                let generated = self.generate_expression(arg);
+                                // assert_is_some and assert_is_none expect &Option, so add & for first arg
+                                if (func_name == "assert_is_some"
+                                    || func_name == "assert_is_none")
+                                    && idx == 0
+                                {
+                                    format!("&{}", generated)
+                                } else {
+                                    generated
+                                }
+                            })
+                            .collect();
+                        return format!(
+                            "windjammer_runtime::test::{}({})",
+                            func_name,
+                            args.join(", ")
+                        );
+                    }
                 }
 
                 // Special case: convert print/println/eprintln/eprint() to macros
