@@ -851,3 +851,40 @@ fn main() {
         code
     );
 }
+
+/// TDD Test: .enumerate() on a collection should add .iter() or .into_iter() first
+///
+/// Bug: `for (i, item) in items.enumerate()` generates `items.enumerate()`
+/// which is not valid Rust. Vec doesn't have .enumerate() — only iterators do.
+/// Should generate `items.iter().enumerate()`.
+///
+/// Discovered via dogfooding: shooter_game.wj lines 107, 112
+#[test]
+fn test_enumerate_adds_iter() {
+    let code = compile_to_rust(
+        r#"
+struct Item {
+    name: String,
+    value: i32,
+}
+
+fn main() {
+    let items: Vec<Item> = Vec::new()
+    for (i, item) in items.enumerate() {
+        println!("{}: {}", i, item.name)
+    }
+}
+"#,
+    );
+
+    assert!(
+        !code.contains("items.enumerate()"),
+        ".enumerate() directly on Vec is not valid Rust. Generated:\n{}",
+        code
+    );
+    assert!(
+        code.contains(".iter().enumerate()") || code.contains(".into_iter().enumerate()"),
+        "Should contain .iter().enumerate() or .into_iter().enumerate(). Generated:\n{}",
+        code
+    );
+}
