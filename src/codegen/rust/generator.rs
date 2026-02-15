@@ -117,6 +117,10 @@ pub struct CodeGenerator<'ast> {
     inferred_borrowed_params: std::collections::HashSet<String>,
     // ASSIGNMENT TARGET: Flag to suppress auto-clone when generating assignment targets
     generating_assignment_target: bool,
+    // FIELD CHAIN OPTIMIZATION: When accessing a Copy sub-field (e.g., .y on Vec2),
+    // suppress borrowed-iterator cloning on the intermediate object.
+    // e.g., enemy.velocity.y → no need to clone velocity just to read .y
+    suppress_borrowed_clone: bool,
     // RECURSION GUARD: Track traits currently being generated to prevent infinite recursion
     generating_traits: std::collections::HashSet<String>,
     // RECURSION DEPTH: Track recursion depth to prevent stack overflow
@@ -217,6 +221,7 @@ impl<'ast> CodeGenerator<'ast> {
             unused_let_bindings: std::collections::HashSet::new(),
             inferred_borrowed_params: std::collections::HashSet::new(),
             generating_assignment_target: false,
+            suppress_borrowed_clone: false,
             partial_eq_types: std::collections::HashSet::new(),
             in_match_arm_needing_string: false,
             in_statement_match: false,
@@ -6909,7 +6914,77 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
                 base_expr
             }
             Expression::FieldAccess { object, field, .. } => {
+                // FIELD CHAIN OPTIMIZATION: If we're accessing a likely-Copy sub-field
+                // (e.g., .x, .y, .width, .speed), suppress borrowed-iterator cloning
+                // on the intermediate object. In Rust, (&enemy).velocity.y works fine
+                // through auto-deref — no need to clone the intermediate Vec2.
+                let field_is_likely_copy = matches!(
+                    field.as_str(),
+                    "x" | "y"
+                        | "z"
+                        | "w"
+                        | "width"
+                        | "height"
+                        | "depth"
+                        | "r"
+                        | "g"
+                        | "b"
+                        | "a"
+                        | "left"
+                        | "right"
+                        | "top"
+                        | "bottom"
+                        | "min"
+                        | "max"
+                        | "start"
+                        | "end"
+                        | "offset"
+                        | "scale"
+                        | "speed"
+                        | "time"
+                        | "delta"
+                        | "angle"
+                        | "radius"
+                        | "distance"
+                        | "visible"
+                        | "enabled"
+                        | "active"
+                        | "selected"
+                        | "focused"
+                        | "id"
+                        | "type"
+                        | "kind"
+                        | "priority"
+                        | "level"
+                        | "len"
+                        | "count"
+                        | "size"
+                        | "index"
+                        | "idx"
+                        | "vx"
+                        | "vy"
+                        | "vz"
+                        | "dx"
+                        | "dy"
+                        | "dz"
+                        | "health"
+                        | "damage"
+                        | "score"
+                        | "lives"
+                        | "frame"
+                );
+                // Also check via type inference if the outer expression (self.obj.field) is Copy
+                let field_is_copy_by_type = self
+                    .infer_expression_type(expr_to_generate)
+                    .as_ref()
+                    .is_some_and(|t| crate::codegen::rust::type_analysis::is_copy_type(t));
+
+                let prev_suppress = self.suppress_borrowed_clone;
+                if field_is_likely_copy || field_is_copy_by_type {
+                    self.suppress_borrowed_clone = true;
+                }
                 let obj_str = self.generate_expression_with_precedence(object);
+                self.suppress_borrowed_clone = prev_suppress;
 
                 // Determine if this is a module/type path (::) or field access (.)
                 // Check the object to decide:
@@ -7024,8 +7099,10 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
                 // BORROWED ITERATOR: If accessing fields through a borrowed iterator variable,
                 // we need to clone non-Copy fields since we can't move out of a reference
                 // BUT: Don't clone for assignment targets (left side of =)
+                // AND: Don't clone when a parent FieldAccess is reading a Copy sub-field
+                //      (e.g., bullet.velocity.y → .y is Copy, so no need to clone velocity)
                 // WINDJAMMER PHILOSOPHY: Use type inference first, fall back to name heuristics
-                if !self.generating_assignment_target {
+                if !self.generating_assignment_target && !self.suppress_borrowed_clone {
                     if let Expression::Identifier { name: var_name, .. } = &**object {
                         if self.borrowed_iterator_vars.contains(var_name) {
                             // First: use type inference to check if the field type is Copy
