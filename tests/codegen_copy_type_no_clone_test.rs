@@ -570,3 +570,73 @@ fn main() {
         code
     );
 }
+
+/// TDD Test: Assignment targets must NEVER get .clone()
+///
+/// Bug: `emitter.lifetime = 1.0` generates `emitter.clone().lifetime = 1.0`
+/// This is a SEMANTIC BUG — the mutation applies to the clone, not the original!
+///
+/// Discovered via dogfooding: particle_demo.wj creates a local `emitter` variable,
+/// sets several fields, then the auto-clone analysis marks `emitter` for cloning
+/// at later uses. But assignment targets are WRITES, not READS — they must never
+/// be cloned.
+#[test]
+fn test_assignment_target_never_cloned() {
+    let code = compile_to_rust(
+        r#"
+struct Emitter {
+    x: f32,
+    y: f32,
+    r: f32,
+    g: f32,
+    b: f32,
+    lifetime: f32,
+    velocity_range: f32,
+    particles: Vec<f32>,
+}
+
+impl Emitter {
+    fn new(x: f32, y: f32) -> Emitter {
+        Emitter { x: x, y: y, r: 1.0, g: 1.0, b: 1.0, lifetime: 1.0, velocity_range: 100.0, particles: Vec::new() }
+    }
+
+    fn burst(count: i32) {
+        // stub
+    }
+}
+
+fn main() {
+    let mut emitter = Emitter::new(100.0, 200.0)
+    emitter.r = 1.0
+    emitter.g = 0.5
+    emitter.b = 0.0
+    emitter.velocity_range = 200.0
+    emitter.lifetime = 1.0
+    emitter.burst(50)
+}
+"#,
+    );
+
+    // Assignment targets must NEVER be cloned
+    assert!(
+        !code.contains("emitter.clone().lifetime"),
+        "Assignment target must not be cloned — mutation would be lost! Generated:\n{}",
+        code
+    );
+    assert!(
+        !code.contains("emitter.clone().velocity_range"),
+        "Assignment target must not be cloned — mutation would be lost! Generated:\n{}",
+        code
+    );
+    assert!(
+        !code.contains("emitter.clone().r"),
+        "Assignment target must not be cloned — mutation would be lost! Generated:\n{}",
+        code
+    );
+    // Verify correct pattern: direct field assignment
+    assert!(
+        code.contains("emitter.lifetime = 1.0"),
+        "Should assign directly to emitter.lifetime. Generated:\n{}",
+        code
+    );
+}
