@@ -788,3 +788,35 @@ fn main() {
         code
     );
 }
+
+/// TDD Test: Comparing .len() with integer literal should not cast to usize
+///
+/// Bug: `items.len() > (0 as usize)` — Rust infers 0 as usize already.
+/// The cast is unnecessary noise.
+///
+/// Discovered via dogfooding: dialogue_demo.wj, particle_demo.wj, shooter_game.wj
+#[test]
+fn test_len_comparison_no_redundant_usize_cast() {
+    let code = compile_to_rust(
+        r#"
+fn main() {
+    let items: Vec<i32> = Vec::new()
+    if items.len() > 0 {
+        println!("not empty")
+    }
+}
+"#,
+    );
+
+    assert!(
+        !code.contains("(0 as usize)"),
+        "Integer literal 0 in comparison with .len() should not need (0 as usize). Generated:\n{}",
+        code
+    );
+    // Verify it still compares correctly (just `> 0` or `> 0_usize`)
+    assert!(
+        code.contains("> 0"),
+        "Should still compare with 0. Generated:\n{}",
+        code
+    );
+}
