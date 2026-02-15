@@ -13,11 +13,11 @@ pub struct Renderer {
 
 impl Renderer {
 #[inline]
-pub fn draw_circle(&self, x: f32, y: f32, radius: f32, color: Color) {
+pub fn draw_circle(&self, _x: f32, _y: f32, _radius: f32, color: Color) {
         let _ = color.r + color.g + color.b + color.a;
 }
 #[inline]
-pub fn draw_rect(&self, x: f32, y: f32, w: f32, h: f32, color: Color) {
+pub fn draw_rect(&self, _x: f32, _y: f32, w: f32, h: f32, color: Color) {
         let _ = color.r * w * h;
 }
 }

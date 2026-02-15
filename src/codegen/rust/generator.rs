@@ -599,6 +599,7 @@ impl<'ast> CodeGenerator<'ast> {
                                 expr_str = format!("{}.to_string()", expr_str);
                             }
                             // self.field needs .clone() when self is borrowed
+                            // BUT: Skip .clone() for Copy types (f32, i32, bool, etc.)
                             else if let Expression::FieldAccess { object, .. } = expr {
                                 if let Expression::Identifier { name: obj_name, .. } = &**object {
                                     if obj_name == "self" && !expr_str.ends_with(".clone()") {
@@ -611,7 +612,12 @@ impl<'ast> CodeGenerator<'ast> {
                                                     )
                                             });
                                         if self_is_borrowed {
-                                            expr_str = format!("{}.clone()", expr_str);
+                                            let is_copy = self.infer_expression_type(expr)
+                                                .as_ref()
+                                                .is_some_and(|t| crate::codegen::rust::type_analysis::is_copy_type(t));
+                                            if !is_copy {
+                                                expr_str = format!("{}.clone()", expr_str);
+                                            }
                                         }
                                     }
                                 }
@@ -4044,6 +4050,17 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
                             Expression::StructLiteral {
                                 name: struct_name, ..
                             } => Some(Type::Custom(struct_name.to_string())),
+                            // Literal types: let x = 25 → i32, let y = 3.14 → f32, let b = true → bool
+                            Expression::Literal { value: crate::parser::Literal::Int(_), .. } => Some(Type::Int),
+                            Expression::Literal { value: crate::parser::Literal::Float(_), .. } => {
+                                Some(Type::Float)
+                            }
+                            Expression::Literal { value: crate::parser::Literal::Bool(_), .. } => {
+                                Some(Type::Bool)
+                            }
+                            Expression::Literal { value: crate::parser::Literal::String(_), .. } => {
+                                Some(Type::String)
+                            }
                             Expression::Call { function, .. } => {
                                 // Type::method() pattern (e.g., Foo::new())
                                 if let Expression::FieldAccess { object, field, .. } = *function {
@@ -4352,6 +4369,7 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
                             return_str = format!("{}.to_string()", return_str);
                         }
                         // self.field needs .clone() when self is borrowed
+                        // BUT: Skip .clone() for Copy types (f32, i32, bool, etc.)
                         else if let Expression::FieldAccess { object, .. } = e {
                             if let Expression::Identifier { name: obj_name, .. } = &**object {
                                 if obj_name == "self" && !return_str.ends_with(".clone()") {
@@ -4364,7 +4382,12 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
                                                 )
                                         });
                                     if self_is_borrowed {
-                                        return_str = format!("{}.clone()", return_str);
+                                        let is_copy = self.infer_expression_type(e)
+                                            .as_ref()
+                                            .is_some_and(|t| crate::codegen::rust::type_analysis::is_copy_type(t));
+                                        if !is_copy {
+                                            return_str = format!("{}.clone()", return_str);
+                                        }
                                     }
                                 }
                             }
@@ -5710,15 +5733,13 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
                         .needs_clone(name, self.current_statement_idx)
                         .is_some()
                     {
-                        // Skip .clone() for Copy types
-                        // - String literal variables (they're &str, clone is a no-op)
-                        // - usize variables (Copy type, no need to clone)
-                        // - Variables with names suggesting Copy types
+                        // Skip .clone() for Copy types — they are implicitly copied,
+                        // so .clone() is unnecessary noise.
                         let is_copy_type = analysis.string_literal_vars.contains(name)
                             || self.usize_variables.contains(name)
-                            || name.contains("usize")  // sparse_idx_usize, etc.
-                            || name.contains("index")  // index, idx, etc.
-                            || matches!(name.as_str(), "i" | "j" | "k" | "idx" | "pos");
+                            || self.infer_expression_type(expr_to_generate)
+                                .as_ref()
+                                .is_some_and(|t| crate::codegen::rust::type_analysis::is_copy_type(t));
 
                         if !is_copy_type {
                             // Automatically insert .clone() - this is the magic!
@@ -6408,6 +6429,7 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
 
                                         // AUTO-CLONE: When passing a field from a borrowed parameter
                                         // to a function that expects an owned value, clone it
+                                        // BUT: Skip .clone() for Copy types (f32, i32, bool, etc.)
                                         if let Expression::FieldAccess {
                                             object: field_obj, ..
                                         } = arg
@@ -6429,7 +6451,13 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
                                                 if (is_explicitly_borrowed || is_inferred_borrowed)
                                                     && !arg_str.ends_with(".clone()")
                                                 {
-                                                    arg_str = format!("{}.clone()", arg_str);
+                                                    // Skip .clone() for Copy types — they are implicitly copied
+                                                    let is_copy = self.infer_expression_type(arg)
+                                                        .as_ref()
+                                                        .is_some_and(|t| crate::codegen::rust::type_analysis::is_copy_type(t));
+                                                    if !is_copy {
+                                                        arg_str = format!("{}.clone()", arg_str);
+                                                    }
                                                 }
                                             }
                                         }
@@ -6457,7 +6485,13 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
                                     if (is_explicitly_borrowed || is_inferred_borrowed)
                                         && !arg_str.ends_with(".clone()")
                                     {
-                                        arg_str = format!("{}.clone()", arg_str);
+                                        // Skip .clone() for Copy types — they are implicitly copied
+                                        let is_copy = self.infer_expression_type(arg)
+                                            .as_ref()
+                                            .is_some_and(|t| crate::codegen::rust::type_analysis::is_copy_type(t));
+                                        if !is_copy {
+                                            arg_str = format!("{}.clone()", arg_str);
+                                        }
                                     }
                                 }
                             }
@@ -6796,18 +6830,17 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
                     processed_args.join(", ")
                 );
 
-                // AUTO-CLONE: Check if this method call needs to be cloned
-                if let Some(path) = ast_utilities::extract_field_access_path(expr_to_generate) {
-                    if let Some(ref analysis) = self.auto_clone_analysis {
-                        if analysis
-                            .needs_clone(&path, self.current_statement_idx)
-                            .is_some()
-                        {
-                            // Automatically insert .clone() for method call result!
-                            return format!("{}.clone()", base_expr);
-                        }
-                    }
-                }
+                // AUTO-CLONE: Method call results are ALWAYS owned values.
+                // Unlike field accesses (self.field borrows from self) or identifiers
+                // (which may be borrowed), calling a method produces a fresh value.
+                // The auto-clone analysis may flag the *object* for cloning, but that
+                // doesn't mean the *result of the method call* needs cloning.
+                //
+                // Exception: methods that return references (get, first, last) are
+                // handled separately by should_add_cloned().
+                //
+                // WINDJAMMER PHILOSOPHY: Only clone when semantically necessary.
+                // Method call results are never borrowed — cloning them is pure noise.
                 base_expr
             }
             Expression::FieldAccess { object, field, .. } => {
@@ -6845,8 +6878,14 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
                             .needs_clone(&path, self.current_statement_idx)
                             .is_some()
                         {
-                            // Automatically insert .clone() for field access!
-                            return format!("{}.clone()", base_expr);
+                            // Skip .clone() for Copy types (f32, i32, bool, etc.)
+                            // They are implicitly copied — .clone() is unnecessary noise.
+                            let is_copy = self.infer_expression_type(expr_to_generate)
+                                .as_ref()
+                                .is_some_and(|t| crate::codegen::rust::type_analysis::is_copy_type(t));
+                            if !is_copy {
+                                return format!("{}.clone()", base_expr);
+                            }
                         }
                     }
                 }
@@ -7096,8 +7135,17 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
                         }
                 ) && !idx_str.contains(" as ")
                 {
-                    // Simple identifier or integer literal - add usize cast
-                    format!("{} as usize", idx_str)
+                    // Skip cast if identifier is already usize (e.g. assigned from `expr as usize`)
+                    if let Expression::Identifier { name, .. } = &**index {
+                        if self.usize_variables.contains(name) || self.expression_produces_usize(index) {
+                            idx_str // Already usize — no cast needed
+                        } else {
+                            format!("{} as usize", idx_str)
+                        }
+                    } else {
+                        // Integer literal — needs cast
+                        format!("{} as usize", idx_str)
+                    }
                 } else {
                     idx_str
                 };
@@ -7123,8 +7171,13 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
                             .needs_clone(&path, self.current_statement_idx)
                             .is_some()
                         {
-                            // Automatically insert .clone() for index expression!
-                            return format!("{}.clone()", base_expr);
+                            // Skip .clone() for Copy types
+                            let is_copy = self.infer_expression_type(expr_to_generate)
+                                .as_ref()
+                                .is_some_and(|t| crate::codegen::rust::type_analysis::is_copy_type(t));
+                            if !is_copy {
+                                return format!("{}.clone()", base_expr);
+                            }
                         }
                     }
                 }
