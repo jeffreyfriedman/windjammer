@@ -7415,12 +7415,18 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
             Expression::Array {
                 elements: exprs, ..
             } => {
-                let expr_strs: Vec<String> =
-                    exprs.iter().map(|e| self.generate_expression(e)).collect();
-                // FIXED: Generate array literal [...] instead of vec![...]
-                // Array literals create stack-allocated arrays: [1, 2, 3]
-                // vec! macro creates heap-allocated vectors: vec![1, 2, 3]
-                format!("[{}]", expr_strs.join(", "))
+                if exprs.is_empty() {
+                    // Empty array [] → vec![] (Vec::new())
+                    // In Windjammer, [] creates a dynamically-sized collection (Vec).
+                    // Rust's [] is a fixed-size array and can't infer type from later usage.
+                    "vec![]".to_string()
+                } else {
+                    let expr_strs: Vec<String> =
+                        exprs.iter().map(|e| self.generate_expression(e)).collect();
+                    // Non-empty arrays: generate vec![...] for dynamic arrays
+                    // In Windjammer, [1, 2, 3] is a Vec, not a fixed-size array.
+                    format!("vec![{}]", expr_strs.join(", "))
+                }
             }
             Expression::MacroInvocation {
                 is_repeat,
