@@ -820,3 +820,34 @@ fn main() {
         code
     );
 }
+
+/// TDD Test: .reversed() should translate to .into_iter().rev() in Rust
+///
+/// Bug: `for idx in items.reversed()` generates `items.reversed()` which
+/// is not valid Rust. Should generate `items.into_iter().rev()`.
+///
+/// Discovered via dogfooding: shooter_game.wj lines 132, 137
+#[test]
+fn test_reversed_translates_to_rev() {
+    let code = compile_to_rust(
+        r#"
+fn main() {
+    let items = [3, 1, 2]
+    for item in items.reversed() {
+        println!("{}", item)
+    }
+}
+"#,
+    );
+
+    assert!(
+        !code.contains(".reversed()"),
+        ".reversed() should be translated to Rust equivalent. Generated:\n{}",
+        code
+    );
+    assert!(
+        code.contains(".rev()") || code.contains(".into_iter().rev()"),
+        "Should contain .rev() or .into_iter().rev(). Generated:\n{}",
+        code
+    );
+}
