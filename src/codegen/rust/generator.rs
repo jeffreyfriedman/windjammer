@@ -7468,10 +7468,19 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
                 let expr_strs: Vec<String> =
                     exprs.iter().map(|e| self.generate_expression(e)).collect();
 
-                if self.in_struct_literal_field {
-                    // STRUCT FIELD CONTEXT: Use fixed-size array syntax [...].
-                    // Struct fields have explicit type annotations (e.g., [f32; 3]),
-                    // so Rust's type checker will validate the size.
+                // Determine if we need fixed-size array syntax [...] or vec![...]
+                // Use fixed-size [...] when:
+                // 1. Inside a struct literal field (fields have explicit type annotations)
+                // 2. Current function returns a fixed-size array [T; N]
+                let needs_fixed_array = self.in_struct_literal_field
+                    || matches!(
+                        &self.current_function_return_type,
+                        Some(Type::Array(_, _))
+                    );
+
+                if needs_fixed_array {
+                    // FIXED-SIZE CONTEXT: Use array syntax [...].
+                    // Rust's type checker will validate the size against the expected type.
                     if exprs.is_empty() {
                         "[]".to_string()
                     } else {
