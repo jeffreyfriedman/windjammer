@@ -739,3 +739,52 @@ fn main() {
         code
     );
 }
+
+/// TDD Test: Chained field access through self-borrowed iterator should not clone
+/// when the final field is Copy
+///
+/// Bug: `enemy.velocity.clone().y * delta` in shooter_game.wj
+/// `enemy` is from `for enemy in self.enemies` (borrowed from self).
+/// `velocity` is a Vec2 (non-Copy), but `velocity.y` is f32 (Copy).
+/// Rust auto-deref handles this: (&enemy).velocity.y works fine.
+/// Cloning the intermediate struct is wasteful.
+///
+/// Discovered via dogfooding: shooter_game.wj lines 95, 100
+#[test]
+fn test_chained_field_access_copy_subfield_no_clone() {
+    let code = compile_to_rust(
+        r#"
+struct Vec2 {
+    x: f32,
+    y: f32,
+}
+
+struct Bullet {
+    position: Vec2,
+    velocity: Vec2,
+}
+
+struct Game {
+    bullets: Vec<Bullet>,
+}
+
+impl Game {
+    fn update(delta: f32) {
+        for bullet in self.bullets {
+            bullet.position.y += bullet.velocity.y * delta
+        }
+    }
+}
+
+fn main() {
+    let g = Game { bullets: Vec::<Bullet>::new() }
+}
+"#,
+    );
+
+    assert!(
+        !code.contains("velocity.clone()"),
+        "Chained field access should not clone intermediate struct when final field is Copy. Generated:\n{}",
+        code
+    );
+}
