@@ -133,6 +133,10 @@ pub struct CodeGenerator<'ast> {
     // STRUCT FIELD TYPE TRACKING: Map struct names to their field types
     // Enables type inference for field accesses (e.g., self.transforms → ComponentArray<T>)
     struct_field_types: std::collections::HashMap<String, std::collections::HashMap<String, Type>>,
+    // STRUCT LITERAL CONTEXT: When generating values for struct literal fields,
+    // array literals should use fixed-size [...] syntax instead of vec![...],
+    // since struct fields have explicit type annotations (e.g., [f32; 3]).
+    in_struct_literal_field: bool,
 }
 
 // RECURSION GUARD MACRO: Check depth before entering recursive functions
@@ -232,6 +236,7 @@ impl<'ast> CodeGenerator<'ast> {
             recursion_depth: 0,
             local_var_types: std::collections::HashMap::new(),
             struct_field_types: std::collections::HashMap::new(),
+            in_struct_literal_field: false,
         }
     }
 
@@ -7185,10 +7190,19 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
                 let field_str: Vec<String> = fields
                     .iter()
                     .map(|(field_name, expr)| {
+                        // STRUCT LITERAL CONTEXT: Array literals in struct fields should use
+                        // fixed-size [...] syntax, not vec![...], because struct fields have
+                        // explicit type annotations (e.g., position: [f32; 3]).
+                        let prev_in_struct_field = self.in_struct_literal_field;
+                        self.in_struct_literal_field = true;
+
                         // WINDJAMMER PHILOSOPHY: Auto-convert string literals to String
                         // In Windjammer, `string` type is always owned (maps to Rust String)
                         // So string literals in struct fields should be converted automatically
                         let mut expr_str = self.generate_expression(expr);
+
+                        // Restore previous context
+                        self.in_struct_literal_field = prev_in_struct_field;
 
                         // Auto-convert string literals to String for struct fields
                         if matches!(
@@ -7451,14 +7465,24 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
             Expression::Array {
                 elements: exprs, ..
             } => {
-                if exprs.is_empty() {
+                let expr_strs: Vec<String> =
+                    exprs.iter().map(|e| self.generate_expression(e)).collect();
+
+                if self.in_struct_literal_field {
+                    // STRUCT FIELD CONTEXT: Use fixed-size array syntax [...].
+                    // Struct fields have explicit type annotations (e.g., [f32; 3]),
+                    // so Rust's type checker will validate the size.
+                    if exprs.is_empty() {
+                        "[]".to_string()
+                    } else {
+                        format!("[{}]", expr_strs.join(", "))
+                    }
+                } else if exprs.is_empty() {
                     // Empty array [] → vec![] (Vec::new())
                     // In Windjammer, [] creates a dynamically-sized collection (Vec).
                     // Rust's [] is a fixed-size array and can't infer type from later usage.
                     "vec![]".to_string()
                 } else {
-                    let expr_strs: Vec<String> =
-                        exprs.iter().map(|e| self.generate_expression(e)).collect();
                     // Non-empty arrays: generate vec![...] for dynamic arrays
                     // In Windjammer, [1, 2, 3] is a Vec, not a fixed-size array.
                     format!("vec![{}]", expr_strs.join(", "))
