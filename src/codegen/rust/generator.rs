@@ -2005,11 +2005,12 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
             traits.push("PartialEq".to_string());
         }
 
-        let all_unit = e
-            .variants
-            .iter()
-            .all(|v| matches!(v.data, crate::parser::EnumVariantData::Unit));
-        if all_unit {
+        // WINDJAMMER PHILOSOPHY: Auto-derive Copy for enums when ALL variant fields are Copy types.
+        // This includes unit-only enums (trivially Copy) and data-carrying enums where
+        // every field in every variant is a Copy type (i32, f32, bool, etc.).
+        // Enums with String, Vec, or other non-Copy fields should NOT get Copy.
+        let all_variants_copy = self.all_enum_variants_are_copy(&e.variants);
+        if all_variants_copy {
             traits.push("Copy".to_string());
         }
         output.push_str(&format!("#[derive({})]\n", traits.join(", ")));
@@ -3569,6 +3570,14 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
         output.push_str("fn ");
         output.push_str(&func.name);
 
+        // WINDJAMMER LIFETIME INFERENCE: Determine if explicit lifetime annotations are needed.
+        // Rust's lifetime elision rules handle most cases automatically:
+        //   1. Single input reference → output gets that lifetime
+        //   2. &self/&mut self → output gets self's lifetime
+        //   3. Multiple input references with no self → MUST be explicit
+        // We only add 'a when case 3 applies AND the return type contains references.
+        let needs_lifetime = self.function_needs_lifetime_annotations(func, analyzed);
+
         // Add type parameters with bounds: fn foo<T: Display, U: Debug>(...)
         // Merge inferred bounds with explicit bounds
         let type_params = if let Some(inferred) = self.inferred_bounds.get(&func.name) {
@@ -3590,9 +3599,16 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
             func.type_params.clone()
         };
 
-        if !type_params.is_empty() {
+        if needs_lifetime || !type_params.is_empty() {
             output.push('<');
-            output.push_str(&self.format_type_params(&type_params));
+            let mut parts = Vec::new();
+            if needs_lifetime {
+                parts.push("'a".to_string());
+            }
+            if !type_params.is_empty() {
+                parts.push(self.format_type_params(&type_params));
+            }
+            output.push_str(&parts.join(", "));
             output.push('>');
         }
 
@@ -3841,6 +3857,20 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
                     }
                 };
 
+                // WINDJAMMER LIFETIME INFERENCE: Add 'a lifetime to reference parameters
+                // when the function needs explicit lifetime annotations.
+                let type_str = if needs_lifetime && param.name != "self" {
+                    if type_str.starts_with("&mut ") {
+                        format!("&'a mut {}", &type_str[5..])
+                    } else if type_str.starts_with("&") {
+                        format!("&'a {}", &type_str[1..])
+                    } else {
+                        type_str
+                    }
+                } else {
+                    type_str
+                };
+
                 // TDD FIX: Auto-infer `mut` for owned parameters
                 // THE WINDJAMMER WAY: Users don't track mutability - the compiler does.
                 // If a parameter has mutating method calls or field mutations,
@@ -3885,7 +3915,11 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
 
         if let Some(return_type) = &func.return_type {
             output.push_str(" -> ");
-            output.push_str(&self.type_to_rust(return_type));
+            if needs_lifetime {
+                output.push_str(&crate::codegen::rust::types::type_to_rust_with_lifetime(return_type));
+            } else {
+                output.push_str(&self.type_to_rust(return_type));
+            }
         }
 
         // Add where clause if present
@@ -6258,6 +6292,21 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
                     return format!("assert!({})", args.join(", "));
                 }
 
+                // WINDJAMMER FIX: Call(FieldAccess) → method call
+                // When the parser produces Call { function: FieldAccess { object, field }, args }
+                // instead of MethodCall { object, method, args }, we need to handle it as
+                // a method call to avoid the FieldAccess auto-clone inserting .clone()
+                // between the method name and the call parentheses.
+                // e.g., e.get_tag() should NOT become e.get_tag.clone()()
+                if let Expression::FieldAccess { object: call_obj, field: call_method, .. } = &**function {
+                    let obj_str = self.generate_expression(call_obj);
+                    let args: Vec<String> = arguments
+                        .iter()
+                        .map(|(_label, arg)| self.generate_expression(arg))
+                        .collect();
+                    return format!("{}.{}({})", obj_str, call_method, args.join(", "));
+                }
+
                 let func_str = self.generate_expression(function);
 
                 // WINDJAMMER PHILOSOPHY: Some/Ok/Err with string literals need .to_string()
@@ -8011,6 +8060,100 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
         fields
             .iter()
             .all(|field| self.is_partial_eq_type(&field.field_type))
+    }
+
+    /// Check if all enum variants have only Copy fields.
+    /// Unit variants are trivially Copy. Tuple/Struct variants check each field type.
+    fn all_enum_variants_are_copy(&self, variants: &[crate::parser::EnumVariant]) -> bool {
+        use crate::parser::EnumVariantData;
+        variants.iter().all(|variant| match &variant.data {
+            EnumVariantData::Unit => true, // Unit variants are always Copy
+            EnumVariantData::Tuple(types) => {
+                types.iter().all(|ty| type_analysis::is_copy_type(ty))
+            }
+            EnumVariantData::Struct(fields) => fields
+                .iter()
+                .all(|(_, field_type)| type_analysis::is_copy_type(field_type)),
+        })
+    }
+
+    /// WINDJAMMER LIFETIME INFERENCE: Determine if a function needs explicit lifetime annotations.
+    ///
+    /// Rust's lifetime elision rules handle most cases:
+    ///   1. Single input reference → output gets that lifetime
+    ///   2. &self/&mut self → output gets self's lifetime
+    ///   3. Multiple input references with no self → MUST be explicit
+    ///
+    /// We only add 'a when case 3 applies AND the return type contains references.
+    fn function_needs_lifetime_annotations(
+        &self,
+        func: &FunctionDecl<'ast>,
+        analyzed: &AnalyzedFunction<'ast>,
+    ) -> bool {
+        use crate::codegen::rust::types::type_contains_reference;
+
+        // First check: does the return type contain any references?
+        let return_has_ref = match &func.return_type {
+            Some(ret_type) => type_contains_reference(ret_type),
+            None => false,
+        };
+
+        if !return_has_ref {
+            return false;
+        }
+
+        // Check if there's a self parameter (explicit or inferred)
+        let has_self = func.parameters.iter().any(|p| p.name == "self")
+            || analyzed.inferred_ownership.contains_key("self");
+
+        if has_self {
+            // &self/&mut self methods: Rust elision rule 2 handles this
+            return false;
+        }
+
+        // Count the number of reference parameters (explicit refs + analyzer-inferred refs)
+        let ref_param_count = func
+            .parameters
+            .iter()
+            .enumerate()
+            .filter(|(param_idx, param)| {
+                if param.name == "self" {
+                    return false;
+                }
+
+                // Check if the parameter type is already a reference
+                let inferred_type = analyzed
+                    .inferred_param_types
+                    .get(*param_idx)
+                    .unwrap_or(&param.type_);
+
+                if matches!(inferred_type, Type::Reference(_) | Type::MutableReference(_)) {
+                    return true;
+                }
+
+                // Check explicit ownership hints
+                if matches!(
+                    param.ownership,
+                    crate::parser::OwnershipHint::Ref | crate::parser::OwnershipHint::Mut
+                ) {
+                    return true;
+                }
+
+                // Check analyzer-inferred ownership
+                if let Some(ownership) = analyzed.inferred_ownership.get(&param.name) {
+                    matches!(
+                        ownership,
+                        crate::analyzer::OwnershipMode::Borrowed
+                            | crate::analyzer::OwnershipMode::MutBorrowed
+                    )
+                } else {
+                    false
+                }
+            })
+            .count();
+
+        // Need explicit lifetime when 2+ reference params and reference return
+        ref_param_count >= 2
     }
 
     fn all_enum_variants_are_partial_eq(&self, variants: &[crate::parser::EnumVariant]) -> bool {
