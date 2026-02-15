@@ -4051,16 +4051,22 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
                                 name: struct_name, ..
                             } => Some(Type::Custom(struct_name.to_string())),
                             // Literal types: let x = 25 → i32, let y = 3.14 → f32, let b = true → bool
-                            Expression::Literal { value: crate::parser::Literal::Int(_), .. } => Some(Type::Int),
-                            Expression::Literal { value: crate::parser::Literal::Float(_), .. } => {
-                                Some(Type::Float)
-                            }
-                            Expression::Literal { value: crate::parser::Literal::Bool(_), .. } => {
-                                Some(Type::Bool)
-                            }
-                            Expression::Literal { value: crate::parser::Literal::String(_), .. } => {
-                                Some(Type::String)
-                            }
+                            Expression::Literal {
+                                value: crate::parser::Literal::Int(_),
+                                ..
+                            } => Some(Type::Int),
+                            Expression::Literal {
+                                value: crate::parser::Literal::Float(_),
+                                ..
+                            } => Some(Type::Float),
+                            Expression::Literal {
+                                value: crate::parser::Literal::Bool(_),
+                                ..
+                            } => Some(Type::Bool),
+                            Expression::Literal {
+                                value: crate::parser::Literal::String(_),
+                                ..
+                            } => Some(Type::String),
                             Expression::Call { function, .. } => {
                                 // Type::method() pattern (e.g., Foo::new())
                                 if let Expression::FieldAccess { object, field, .. } = *function {
@@ -4092,7 +4098,7 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
                                 // Fall back to general expression type inference
                                 // Handles if/else, binary ops, method calls, etc.
                                 self.infer_expression_type(value)
-                            },
+                            }
                         }
                     };
                     if let Some(t) = inferred_type {
@@ -4386,9 +4392,12 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
                                                 )
                                         });
                                     if self_is_borrowed {
-                                        let is_copy = self.infer_expression_type(e)
+                                        let is_copy = self
+                                            .infer_expression_type(e)
                                             .as_ref()
-                                            .is_some_and(|t| crate::codegen::rust::type_analysis::is_copy_type(t));
+                                            .is_some_and(|t| {
+                                                crate::codegen::rust::type_analysis::is_copy_type(t)
+                                            });
                                         if !is_copy {
                                             return_str = format!("{}.clone()", return_str);
                                         }
@@ -5393,10 +5402,9 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
                 _ => None,
             },
             // Binary operations: infer from operands (result usually matches operand type)
-            Expression::Binary { left, right, .. } => {
-                self.infer_expression_type(left)
-                    .or_else(|| self.infer_expression_type(right))
-            }
+            Expression::Binary { left, right, .. } => self
+                .infer_expression_type(left)
+                .or_else(|| self.infer_expression_type(right)),
             // Cast expressions: the target type is explicit
             Expression::Cast { type_, .. } => Some(type_.clone()),
             _ => None,
@@ -5790,9 +5798,12 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
                             // so .clone() is unnecessary noise.
                             let is_copy_type = analysis.string_literal_vars.contains(name)
                                 || self.usize_variables.contains(name)
-                                || self.infer_expression_type(expr_to_generate)
+                                || self
+                                    .infer_expression_type(expr_to_generate)
                                     .as_ref()
-                                    .is_some_and(|t| crate::codegen::rust::type_analysis::is_copy_type(t));
+                                    .is_some_and(|t| {
+                                        crate::codegen::rust::type_analysis::is_copy_type(t)
+                                    });
 
                             if !is_copy_type {
                                 // Automatically insert .clone() - this is the magic!
@@ -6937,23 +6948,69 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
                             {
                                 // Skip .clone() for Copy types (f32, i32, bool, etc.)
                                 // They are implicitly copied — .clone() is unnecessary noise.
-                                let is_copy = self.infer_expression_type(expr_to_generate)
+                                let is_copy = self
+                                    .infer_expression_type(expr_to_generate)
                                     .as_ref()
-                                    .is_some_and(|t| crate::codegen::rust::type_analysis::is_copy_type(t));
+                                    .is_some_and(|t| {
+                                        crate::codegen::rust::type_analysis::is_copy_type(t)
+                                    });
                                 if !is_copy {
                                     // Type inference failed — fall back to name heuristic
                                     // Fields like x, y, z, width, height are almost always Copy
                                     let is_likely_copy_field = matches!(
                                         field.as_str(),
-                                        "x" | "y" | "z" | "w" | "width" | "height" | "depth" |
-                                        "r" | "g" | "b" | "a" | "left" | "right" | "top" | "bottom" |
-                                        "min" | "max" | "start" | "end" | "offset" | "scale" |
-                                        "speed" | "time" | "delta" | "angle" | "radius" | "distance" |
-                                        "visible" | "enabled" | "active" | "selected" | "focused" |
-                                        "id" | "type" | "kind" | "priority" | "level" |
-                                        "len" | "count" | "size" | "index" | "idx" |
-                                        "vx" | "vy" | "vz" | "dx" | "dy" | "dz" |
-                                        "health" | "damage" | "score" | "lives" | "frame"
+                                        "x" | "y"
+                                            | "z"
+                                            | "w"
+                                            | "width"
+                                            | "height"
+                                            | "depth"
+                                            | "r"
+                                            | "g"
+                                            | "b"
+                                            | "a"
+                                            | "left"
+                                            | "right"
+                                            | "top"
+                                            | "bottom"
+                                            | "min"
+                                            | "max"
+                                            | "start"
+                                            | "end"
+                                            | "offset"
+                                            | "scale"
+                                            | "speed"
+                                            | "time"
+                                            | "delta"
+                                            | "angle"
+                                            | "radius"
+                                            | "distance"
+                                            | "visible"
+                                            | "enabled"
+                                            | "active"
+                                            | "selected"
+                                            | "focused"
+                                            | "id"
+                                            | "type"
+                                            | "kind"
+                                            | "priority"
+                                            | "level"
+                                            | "len"
+                                            | "count"
+                                            | "size"
+                                            | "index"
+                                            | "idx"
+                                            | "vx"
+                                            | "vy"
+                                            | "vz"
+                                            | "dx"
+                                            | "dy"
+                                            | "dz"
+                                            | "health"
+                                            | "damage"
+                                            | "score"
+                                            | "lives"
+                                            | "frame"
                                     );
                                     if !is_likely_copy_field {
                                         return format!("{}.clone()", base_expr);
@@ -6972,9 +7029,12 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
                     if let Expression::Identifier { name: var_name, .. } = &**object {
                         if self.borrowed_iterator_vars.contains(var_name) {
                             // First: use type inference to check if the field type is Copy
-                            let is_copy = self.infer_expression_type(expr_to_generate)
+                            let is_copy = self
+                                .infer_expression_type(expr_to_generate)
                                 .as_ref()
-                                .is_some_and(|t| crate::codegen::rust::type_analysis::is_copy_type(t));
+                                .is_some_and(|t| {
+                                    crate::codegen::rust::type_analysis::is_copy_type(t)
+                                });
 
                             if !is_copy {
                                 // Fall back to name-based heuristics for fields we KNOW are Copy
@@ -7217,7 +7277,9 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
                 {
                     // Skip cast if identifier is already usize (e.g. assigned from `expr as usize`)
                     if let Expression::Identifier { name, .. } = &**index {
-                        if self.usize_variables.contains(name) || self.expression_produces_usize(index) {
+                        if self.usize_variables.contains(name)
+                            || self.expression_produces_usize(index)
+                        {
                             idx_str // Already usize — no cast needed
                         } else {
                             format!("{} as usize", idx_str)
@@ -7252,9 +7314,12 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
                             .is_some()
                         {
                             // Skip .clone() for Copy types
-                            let is_copy = self.infer_expression_type(expr_to_generate)
+                            let is_copy = self
+                                .infer_expression_type(expr_to_generate)
                                 .as_ref()
-                                .is_some_and(|t| crate::codegen::rust::type_analysis::is_copy_type(t));
+                                .is_some_and(|t| {
+                                    crate::codegen::rust::type_analysis::is_copy_type(t)
+                                });
                             if !is_copy {
                                 return format!("{}.clone()", base_expr);
                             }
