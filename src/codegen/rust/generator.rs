@@ -125,6 +125,10 @@ pub struct CodeGenerator<'ast> {
     // auto-clone since Rust allows field access on &T returned by Vec indexing.
     // e.g., players[i].score → no clone needed, just accesses the field through the ref.
     in_field_access_object: bool,
+    // BORROW CONTEXT: When generating the operand of & or &mut, suppress Vec index
+    // auto-clone since we want a reference to the original, not a reference to a clone.
+    // e.g., &self.items[i] → reference to element, NOT &self.items[i].clone()
+    in_borrow_context: bool,
     // RECURSION GUARD: Track traits currently being generated to prevent infinite recursion
     generating_traits: std::collections::HashSet<String>,
     // RECURSION DEPTH: Track recursion depth to prevent stack overflow
@@ -234,6 +238,7 @@ impl<'ast> CodeGenerator<'ast> {
             generating_assignment_target: false,
             suppress_borrowed_clone: false,
             in_field_access_object: false,
+            in_borrow_context: false,
             partial_eq_types: std::collections::HashSet::new(),
             in_match_arm_needing_string: false,
             in_statement_match: false,
@@ -6041,8 +6046,22 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
                 format!("{} {} {}", left_str, op_str, right_str)
             }
             Expression::Unary { op, operand, .. } => {
-                let operand_str = self.generate_expression(operand);
                 let op_str = operators::unary_op_to_rust(op);
+
+                // BORROW CONTEXT: When generating &expr or &mut expr, suppress Vec index
+                // auto-clone in the operand. We want a reference to the original element.
+                // e.g., &self.items[i] → NOT &self.items[i].clone()
+                //        &mut self.items[i] → NOT &mut self.items[i].clone()
+                let is_borrow = matches!(
+                    op,
+                    crate::parser::UnaryOp::Ref | crate::parser::UnaryOp::MutRef
+                );
+                let prev_borrow = self.in_borrow_context;
+                if is_borrow {
+                    self.in_borrow_context = true;
+                }
+                let operand_str = self.generate_expression(operand);
+                self.in_borrow_context = prev_borrow;
 
                 // CRITICAL: Preserve parentheses for binary expressions in unary context
                 // !(a || b) should generate !(a || b), not !a || b
@@ -6689,7 +6708,14 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
                 arguments,
                 ..
             } => {
+                // METHOD CALL CONTEXT: Suppress Vec index auto-clone when generating the
+                // object of a method call. Methods take &self or &mut self, so Rust allows
+                // calling methods on &T returned by Vec indexing without cloning.
+                // e.g., self.lights[i].is_enabled() → no need to clone the whole Light2D
+                let prev_field_access = self.in_field_access_object;
+                self.in_field_access_object = true;
                 let obj_str = self.generate_expression_with_precedence(object);
+                self.in_field_access_object = prev_field_access;
 
                 // BUG #8 FIX: Look up method signature with qualified name (Type::method)
                 // First try to infer the type from the object expression
@@ -7506,32 +7532,40 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
                 // For Copy types: vec[idx] works directly (value is copied).
                 // For non-Copy types: vec[idx].clone() is needed.
                 //
-                // First check auto_clone_analysis (path-based analysis)
-                if let Some(path) = ast_utilities::extract_field_access_path(expr_to_generate) {
-                    if let Some(ref analysis) = self.auto_clone_analysis {
-                        if analysis
-                            .needs_clone(&path, self.current_statement_idx)
-                            .is_some()
-                        {
-                            let is_copy = self
-                                .infer_expression_type(expr_to_generate)
-                                .as_ref()
-                                .is_some_and(|t| {
-                                    crate::codegen::rust::type_analysis::is_copy_type(t)
-                                });
-                            if !is_copy {
-                                return format!("{}.clone()", base_expr);
+                // CRITICAL: NEVER auto-clone in these contexts:
+                // 1. Assignment target: vec[i] = value (can't assign to .clone())
+                // 2. Borrow context: &vec[i] (want reference to original, not to clone)
+                // 3. Field access: vec[i].field (Rust allows field access through ref)
+                let suppress_clone = self.generating_assignment_target
+                    || self.in_borrow_context
+                    || self.in_field_access_object;
+
+                if !suppress_clone {
+                    // First check auto_clone_analysis (path-based analysis)
+                    if let Some(path) =
+                        ast_utilities::extract_field_access_path(expr_to_generate)
+                    {
+                        if let Some(ref analysis) = self.auto_clone_analysis {
+                            if analysis
+                                .needs_clone(&path, self.current_statement_idx)
+                                .is_some()
+                            {
+                                let is_copy = self
+                                    .infer_expression_type(expr_to_generate)
+                                    .as_ref()
+                                    .is_some_and(|t| {
+                                        crate::codegen::rust::type_analysis::is_copy_type(t)
+                                    });
+                                if !is_copy {
+                                    return format!("{}.clone()", base_expr);
+                                }
                             }
                         }
                     }
-                }
 
-                // Fallback: Type-based auto-clone for Vec<NonCopy>[idx]
-                // If we can infer the collection's element type and it's not Copy, clone.
-                // This handles the common case: vec[i] passed to a function taking ownership.
-                // SKIP when in a field access context (players[i].score doesn't need clone,
-                // Rust allows field access on &T returned by Vec indexing).
-                if !self.in_field_access_object {
+                    // Fallback: Type-based auto-clone for Vec<NonCopy>[idx]
+                    // If we can infer the collection's element type and it's not Copy, clone.
+                    // This handles the common case: vec[i] passed to a function taking ownership.
                     if let Some(obj_type) = self.infer_expression_type(object) {
                         let element_type = match &obj_type {
                             Type::Vec(inner) => Some(inner.as_ref()),
