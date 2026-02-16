@@ -605,11 +605,8 @@ impl MethodCallAnalyzer {
                     name == "id"
                         || name == "key"
                         || name == "entity"
-                        || name.contains("_id")
-                        || name.contains("_key")
-                        || name == "entity_id"
-                        || name == "user_id"
-                        || name == "npc_id"
+                        || name.ends_with("_id")
+                        || name.ends_with("_key")
                 });
 
                 // If it explicitly looks like a HashMap key, add &

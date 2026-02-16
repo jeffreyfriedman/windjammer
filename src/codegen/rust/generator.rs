@@ -4143,13 +4143,18 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
                                         {
                                             Some(Type::Custom(type_name.to_string()))
                                         } else {
-                                            None
+                                            // Not a constructor — look up return type from signature registry
+                                            // e.g., MathHelper::fade(x) → return type is f32
+                                            let qualified = format!("{}::{}", type_name, field);
+                                            self.signature_registry.get_signature(&qualified)
+                                                .and_then(|sig| sig.return_type.clone())
                                         }
                                     } else {
                                         None
                                     }
                                 } else {
-                                    None
+                                    // Simple function call: look up in signature registry
+                                    self.infer_expression_type(value)
                                 }
                             }
                             _ => {
@@ -5465,6 +5470,27 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
                 .or_else(|| self.infer_expression_type(right)),
             // Cast expressions: the target type is explicit
             Expression::Cast { type_, .. } => Some(type_.clone()),
+            // Call expressions: Type::method(args) → look up return type from signature registry
+            // This is critical for Copy-type inference: let u = MathHelper::fade(x) → u is f32
+            Expression::Call { function, .. } => {
+                // Extract function name for signature lookup
+                // Pattern: Type::method() → "Type::method"
+                if let Expression::FieldAccess { object, field, .. } = function {
+                    if let Expression::Identifier { name: type_name, .. } = object {
+                        let qualified = format!("{}::{}", type_name, field);
+                        if let Some(sig) = self.signature_registry.get_signature(&qualified) {
+                            return sig.return_type.clone();
+                        }
+                    }
+                }
+                // Pattern: simple function call → "function_name"
+                if let Expression::Identifier { name, .. } = function {
+                    if let Some(sig) = self.signature_registry.get_signature(name.as_str()) {
+                        return sig.return_type.clone();
+                    }
+                }
+                None
+            }
             // Index expressions: vec[i] → element type of the collection
             Expression::Index { object, .. } => {
                 if let Some(obj_type) = self.infer_expression_type(object) {
