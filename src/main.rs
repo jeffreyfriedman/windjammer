@@ -566,8 +566,13 @@ pub fn build_project(path: &Path, output: &Path, target: CompilationTarget) -> R
         }
     }
 
-    // Transfer Copy structs to ModuleCompiler's registry
+    // Transfer Copy structs AND enums to ModuleCompiler's registry
+    // Both user-defined Copy structs and unit-only enums (always Copy) must be included
+    // so the CodeGenerator can suppress unnecessary .clone() on these types.
     module_compiler.copy_structs_registry = global_copy_structs;
+    module_compiler
+        .copy_structs_registry
+        .extend(copy_enums);
 
     // PASS 1: Quick parse all files to register trait definitions
     // This ensures all traits are available before any file compilation
@@ -1166,6 +1171,8 @@ impl ModuleCompiler {
         generator.set_analyzed_trait_methods(analyzed_trait_methods);
         // CROSS-MODULE STRUCT FIELD TYPES: Pre-populate for type inference on imported structs
         generator.set_global_struct_field_types(self.global_struct_field_types.clone());
+        // USER-DEFINED COPY TYPES: Enable Copy detection for @derive(Copy) structs/enums
+        generator.set_copy_types_registry(self.copy_structs_registry.clone());
         let rust_code = generator.generate_program(&program, &analyzed);
 
         // THEN merge into global for future files' cross-module lookups
@@ -1884,6 +1891,8 @@ fn compile_file_impl(
             generator.set_analyzed_trait_methods(analyzed_trait_methods);
             // CROSS-MODULE STRUCT FIELD TYPES: Pre-populate for type inference on imported structs
             generator.set_global_struct_field_types(module_compiler.global_struct_field_types.clone());
+            // USER-DEFINED COPY TYPES: Enable Copy detection for @derive(Copy) structs/enums
+            generator.set_copy_types_registry(module_compiler.copy_structs_registry.clone());
 
             // Set source file for error mapping
             generator.set_source_file(input_path);
@@ -1927,6 +1936,8 @@ fn compile_file_impl(
         generator.set_analyzed_trait_methods(analyzed_trait_methods);
         // CROSS-MODULE STRUCT FIELD TYPES: Pre-populate for type inference on imported structs
         generator.set_global_struct_field_types(module_compiler.global_struct_field_types.clone());
+        // USER-DEFINED COPY TYPES: Enable Copy detection for @derive(Copy) structs/enums
+        generator.set_copy_types_registry(module_compiler.copy_structs_registry.clone());
 
         // Set source file for error mapping
         generator.set_source_file(input_path);

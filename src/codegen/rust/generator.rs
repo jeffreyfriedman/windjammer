@@ -144,6 +144,9 @@ pub struct CodeGenerator<'ast> {
     // STRUCT FIELD TYPE TRACKING: Map struct names to their field types
     // Enables type inference for field accesses (e.g., self.transforms → ComponentArray<T>)
     struct_field_types: std::collections::HashMap<String, std::collections::HashMap<String, Type>>,
+    // USER-DEFINED COPY TYPES: Registry of structs/enums with @derive(Copy)
+    // Enables is_copy_type to recognize types like VoxelType as Copy, preventing unnecessary .clone()
+    copy_types_registry: std::collections::HashSet<String>,
     // STRUCT LITERAL CONTEXT: When generating values for struct literal fields,
     // array literals should use fixed-size [...] syntax instead of vec![...],
     // since struct fields have explicit type annotations (e.g., [f32; 3]).
@@ -253,6 +256,7 @@ impl<'ast> CodeGenerator<'ast> {
             recursion_depth: 0,
             local_var_types: std::collections::HashMap::new(),
             struct_field_types: std::collections::HashMap::new(),
+            copy_types_registry: std::collections::HashSet::new(),
             in_struct_literal_field: false,
             enum_variant_types: std::collections::HashMap::new(),
         }
@@ -275,6 +279,13 @@ impl<'ast> CodeGenerator<'ast> {
                 .or_default()
                 .extend(fields);
         }
+    }
+
+    /// Set Copy types registry from the global compiler state.
+    /// This enables is_copy_type to recognize user-defined types with @derive(Copy)
+    /// (e.g., VoxelType, FaceDirection) in addition to primitive Copy types.
+    pub fn set_copy_types_registry(&mut self, registry: std::collections::HashSet<String>) {
+        self.copy_types_registry = registry;
     }
 
     /// Set analyzed trait methods (used for trait signature inference from impls)
@@ -661,7 +672,7 @@ impl<'ast> CodeGenerator<'ast> {
                                         if self_is_borrowed {
                                             let is_copy = self.infer_expression_type(expr)
                                                 .as_ref()
-                                                .is_some_and(|t| crate::codegen::rust::type_analysis::is_copy_type(t));
+                                                .is_some_and(|t| self.is_type_copy(t));
                                             if !is_copy {
                                                 expr_str = format!("{}.clone()", expr_str);
                                             }
@@ -4481,9 +4492,7 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
                                         let is_copy = self
                                             .infer_expression_type(e)
                                             .as_ref()
-                                            .is_some_and(|t| {
-                                                crate::codegen::rust::type_analysis::is_copy_type(t)
-                                            });
+                                            .is_some_and(|t| self.is_type_copy(t));
                                         if !is_copy {
                                             return_str = format!("{}.clone()", return_str);
                                         }
@@ -5264,6 +5273,16 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
     }
 
     /// TDD FIX: Detect if a match expression produces references for pattern-bound variables
+    /// Check if a type is Copy, considering both primitive types (i32, f32, bool, etc.)
+    /// and user-defined types with @derive(Copy) (e.g., VoxelType, FaceDirection).
+    fn is_type_copy(&self, ty: &Type) -> bool {
+        crate::codegen::rust::type_analysis::is_copy_type(ty)
+            || match ty {
+                Type::Custom(name) => self.copy_types_registry.contains(name.as_str()),
+                _ => false,
+            }
+    }
+
     /// Infer the types of variables bound in match arm patterns.
     /// When matching `Some(x)` on `opt: Option<Stack>`, returns [("x", Type::Custom("Stack"))].
     /// This enables qualified method signature lookup for match-bound variables.
@@ -5356,6 +5375,13 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
                         if let Some(var_type) = self.local_var_types.get(name.as_str()) {
                             let type_name = match var_type {
                                 Type::Custom(n) => n.as_str(),
+                                // Handle references: &Recipe → Recipe, &mut Recipe → Recipe
+                                Type::Reference(inner) | Type::MutableReference(inner) => {
+                                    match inner.as_ref() {
+                                        Type::Custom(n) => n.as_str(),
+                                        _ => "",
+                                    }
+                                }
                                 _ => "",
                             };
                             if let Some(fields) = self.struct_field_types.get(type_name) {
@@ -5418,6 +5444,12 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
                 // Check well-known methods first
                 if method == "len" || method == "count" || method == "capacity" {
                     return Some(Type::Custom("usize".to_string()));
+                }
+                // .clone() returns the same type as the object
+                // This enables type inference through cloned iterables:
+                //   for x in &collection.clone() → x has same element type as collection
+                if method == "clone" {
+                    return self.infer_expression_type(object);
                 }
                 // Iterator methods: return the collection type so
                 // extract_iterator_element_type can extract the element type.
@@ -5930,9 +5962,7 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
                                 || self
                                     .infer_expression_type(expr_to_generate)
                                     .as_ref()
-                                    .is_some_and(|t| {
-                                        crate::codegen::rust::type_analysis::is_copy_type(t)
-                                    });
+                                    .is_some_and(|t| self.is_type_copy(t));
 
                             if !is_copy_type {
                                 // Automatically insert .clone() - this is the magic!
@@ -6707,7 +6737,7 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
                                                     // Skip .clone() for Copy types — they are implicitly copied
                                                     let is_copy = self.infer_expression_type(arg)
                                                         .as_ref()
-                                                        .is_some_and(|t| crate::codegen::rust::type_analysis::is_copy_type(t));
+                                                        .is_some_and(|t| self.is_type_copy(t));
                                                     if !is_copy {
                                                         arg_str = format!("{}.clone()", arg_str);
                                                     }
@@ -6741,7 +6771,7 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
                                         // Skip .clone() for Copy types — they are implicitly copied
                                         let is_copy = self.infer_expression_type(arg)
                                             .as_ref()
-                                            .is_some_and(|t| crate::codegen::rust::type_analysis::is_copy_type(t));
+                                            .is_some_and(|t| self.is_type_copy(t));
                                         if !is_copy {
                                             arg_str = format!("{}.clone()", arg_str);
                                         }
@@ -7203,7 +7233,7 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
                 let field_is_copy_by_type = self
                     .infer_expression_type(expr_to_generate)
                     .as_ref()
-                    .is_some_and(|t| crate::codegen::rust::type_analysis::is_copy_type(t));
+                    .is_some_and(|t| self.is_type_copy(t));
 
                 let prev_suppress = self.suppress_borrowed_clone;
                 let prev_field_access = self.in_field_access_object;
@@ -7259,9 +7289,7 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
                                 let is_copy = self
                                     .infer_expression_type(expr_to_generate)
                                     .as_ref()
-                                    .is_some_and(|t| {
-                                        crate::codegen::rust::type_analysis::is_copy_type(t)
-                                    });
+                                    .is_some_and(|t| self.is_type_copy(t));
                                 if !is_copy {
                                     // Type inference failed — fall back to name heuristic
                                     // Fields like x, y, z, width, height are almost always Copy
@@ -7335,17 +7363,17 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
                 // AND: Don't clone when a parent FieldAccess is reading a Copy sub-field
                 //      (e.g., bullet.velocity.y → .y is Copy, so no need to clone velocity)
                 // AND: Don't clone when inside an explicit .clone() call (prevents double clone)
+                // AND: Don't clone when this is an intermediate object in a field access chain
+                //      (e.g., stack.item.stats.armor → don't clone item, Rust auto-derefs through &)
                 // WINDJAMMER PHILOSOPHY: Use type inference first, fall back to name heuristics
-                if !self.generating_assignment_target && !self.suppress_borrowed_clone && !self.in_explicit_clone_call {
+                if !self.generating_assignment_target && !self.suppress_borrowed_clone && !self.in_explicit_clone_call && !self.in_field_access_object {
                     if let Expression::Identifier { name: var_name, .. } = &**object {
                         if self.borrowed_iterator_vars.contains(var_name) {
                             // First: use type inference to check if the field type is Copy
                             let is_copy = self
                                 .infer_expression_type(expr_to_generate)
                                 .as_ref()
-                                .is_some_and(|t| {
-                                    crate::codegen::rust::type_analysis::is_copy_type(t)
-                                });
+                                .is_some_and(|t| self.is_type_copy(t));
 
                             if !is_copy {
                                 // Fall back to name-based heuristics for fields we KNOW are Copy
@@ -7640,9 +7668,7 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
                                 let is_copy = self
                                     .infer_expression_type(expr_to_generate)
                                     .as_ref()
-                                    .is_some_and(|t| {
-                                        crate::codegen::rust::type_analysis::is_copy_type(t)
-                                    });
+                                    .is_some_and(|t| self.is_type_copy(t));
                                 if !is_copy {
                                     return format!("{}.clone()", base_expr);
                                 }
