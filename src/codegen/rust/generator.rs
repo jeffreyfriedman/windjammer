@@ -117,6 +117,9 @@ pub struct CodeGenerator<'ast> {
     inferred_borrowed_params: std::collections::HashSet<String>,
     // ASSIGNMENT TARGET: Flag to suppress auto-clone when generating assignment targets
     generating_assignment_target: bool,
+    // EXPLICIT CLONE SUPPRESSION: When the source has `.clone()` (MethodCall with method "clone"),
+    // suppress auto-clone on the object expression to prevent double .clone().clone()
+    in_explicit_clone_call: bool,
     // FIELD CHAIN OPTIMIZATION: When accessing a Copy sub-field (e.g., .y on Vec2),
     // suppress borrowed-iterator cloning on the intermediate object.
     // e.g., enemy.velocity.y → no need to clone velocity just to read .y
@@ -236,6 +239,7 @@ impl<'ast> CodeGenerator<'ast> {
             unused_let_bindings: std::collections::HashSet::new(),
             inferred_borrowed_params: std::collections::HashSet::new(),
             generating_assignment_target: false,
+            in_explicit_clone_call: false,
             suppress_borrowed_clone: false,
             in_field_access_object: false,
             in_borrow_context: false,
@@ -251,6 +255,25 @@ impl<'ast> CodeGenerator<'ast> {
             struct_field_types: std::collections::HashMap::new(),
             in_struct_literal_field: false,
             enum_variant_types: std::collections::HashMap::new(),
+        }
+    }
+
+    /// Pre-populate struct field types from cross-module definitions.
+    /// This enables type inference for fields on imported structs,
+    /// preventing unnecessary .clone() on Copy-type fields.
+    pub fn set_global_struct_field_types(
+        &mut self,
+        field_types: std::collections::HashMap<
+            String,
+            std::collections::HashMap<String, crate::parser::Type>,
+        >,
+    ) {
+        // Merge global types into local (local takes priority if there's overlap)
+        for (struct_name, fields) in field_types {
+            self.struct_field_types
+                .entry(struct_name)
+                .or_default()
+                .extend(fields);
         }
     }
 
@@ -5893,7 +5916,8 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
 
                 // AUTO-CLONE: Check if this variable needs to be cloned at this point
                 // CRITICAL: Never clone assignment targets (left side of `=`)
-                if !self.generating_assignment_target {
+                // DOUBLE-CLONE FIX: Skip auto-clone when inside an explicit .clone() call
+                if !self.generating_assignment_target && !self.in_explicit_clone_call {
                     if let Some(ref analysis) = self.auto_clone_analysis {
                         if analysis
                             .needs_clone(name, self.current_statement_idx)
@@ -6374,7 +6398,18 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
                 // between the method name and the call parentheses.
                 // e.g., e.get_tag() should NOT become e.get_tag.clone()()
                 if let Expression::FieldAccess { object: call_obj, field: call_method, .. } = &**function {
-                    let obj_str = self.generate_expression(call_obj);
+                    // DOUBLE-CLONE FIX: When the method is .clone(), suppress auto-clone on
+                    // the object to prevent .clone().clone(). Same as MethodCall handler.
+                    let prev_explicit_clone = self.in_explicit_clone_call;
+                    if call_method == "clone" {
+                        self.in_explicit_clone_call = true;
+                    }
+                    let mut obj_str = self.generate_expression(call_obj);
+                    self.in_explicit_clone_call = prev_explicit_clone;
+                    // DOUBLE-CLONE SAFETY NET: Strip redundant auto-clone from object
+                    if call_method == "clone" && obj_str.ends_with(".clone()") {
+                        obj_str = obj_str[..obj_str.len() - 8].to_string();
+                    }
                     let args: Vec<String> = arguments
                         .iter()
                         .map(|(_label, arg)| self.generate_expression(arg))
@@ -6749,9 +6784,23 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
                 // e.g., self.lights[i].is_enabled() → no need to clone the whole Light2D
                 let prev_field_access = self.in_field_access_object;
                 self.in_field_access_object = true;
-                let obj_str = self.generate_expression_with_precedence(object);
+                // DOUBLE-CLONE FIX: When the source has explicit .clone(), suppress auto-clone
+                // on the object to prevent .clone().clone(). The explicit clone IS the clone.
+                let prev_explicit_clone = self.in_explicit_clone_call;
+                if method == "clone" {
+                    self.in_explicit_clone_call = true;
+                }
+                let mut obj_str = self.generate_expression_with_precedence(object);
                 self.in_field_access_object = prev_field_access;
+                self.in_explicit_clone_call = prev_explicit_clone;
 
+                // DOUBLE-CLONE SAFETY NET: If the object was auto-cloned by the FieldAccess
+                // handler and this IS a .clone() call, strip the redundant auto-clone.
+                // e.g., "stack.item.clone()" from auto-clone + ".clone()" from source
+                //     → should be "stack.item.clone()", not "stack.item.clone().clone()"
+                if method == "clone" && obj_str.ends_with(".clone()") {
+                    obj_str = obj_str[..obj_str.len() - 8].to_string();
+                }
                 // BUG #8 FIX: Look up method signature with qualified name (Type::method)
                 // First try to infer the type from the object expression
                 let type_name = self.infer_type_name(object);
@@ -7196,7 +7245,9 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
                 // Extract the full path (e.g., "config.paths")
                 // CRITICAL: Never clone assignment targets (left side of `=`)
                 // e.g., `emitter.lifetime = 1.0` must NOT become `emitter.clone().lifetime = 1.0`
-                if !self.generating_assignment_target {
+                // DOUBLE-CLONE FIX: Skip auto-clone when we're inside an explicit .clone() call
+                // The source already has .clone(), so we must not add another one.
+                if !self.generating_assignment_target && !self.in_explicit_clone_call {
                     if let Some(path) = ast_utilities::extract_field_access_path(expr_to_generate) {
                         if let Some(ref analysis) = self.auto_clone_analysis {
                             if analysis
@@ -7283,8 +7334,9 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
                 // BUT: Don't clone for assignment targets (left side of =)
                 // AND: Don't clone when a parent FieldAccess is reading a Copy sub-field
                 //      (e.g., bullet.velocity.y → .y is Copy, so no need to clone velocity)
+                // AND: Don't clone when inside an explicit .clone() call (prevents double clone)
                 // WINDJAMMER PHILOSOPHY: Use type inference first, fall back to name heuristics
-                if !self.generating_assignment_target && !self.suppress_borrowed_clone {
+                if !self.generating_assignment_target && !self.suppress_borrowed_clone && !self.in_explicit_clone_call {
                     if let Expression::Identifier { name: var_name, .. } = &**object {
                         if self.borrowed_iterator_vars.contains(var_name) {
                             // First: use type inference to check if the field type is Copy
