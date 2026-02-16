@@ -5396,6 +5396,15 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
                 if method == "len" || method == "count" || method == "capacity" {
                     return Some(Type::Custom("usize".to_string()));
                 }
+                // Iterator methods: return the collection type so
+                // extract_iterator_element_type can extract the element type.
+                // This enables type inference for loop variables:
+                //   for brick in self.bricks.iter_mut() → brick: Brick
+                if method == "iter" || method == "iter_mut" || method == "into_iter" {
+                    if let Some(obj_type) = self.infer_expression_type(object) {
+                        return Some(obj_type);
+                    }
+                }
                 // Look up from the method return type registry (populated during impl generation)
                 if let Some(t) = self.method_return_types.get(method.as_str()) {
                     return Some(t.clone());
