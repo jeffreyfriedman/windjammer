@@ -6032,6 +6032,15 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
                     }
                 );
 
+                // COMPARISON CLONE SUPPRESSION: For comparison operators (==, !=, <, >, etc.),
+                // suppress borrowed-iterator cloning on operands. Comparisons work on references
+                // in Rust (&String == &String, &T == &T via PartialEq), so cloning is unnecessary.
+                // e.g., `recipe.name.clone() == target` → `recipe.name == target`
+                let prev_suppress = self.suppress_borrowed_clone;
+                if is_comparison {
+                    self.suppress_borrowed_clone = true;
+                }
+
                 // Wrap operands in parens if they have lower precedence
                 let mut left_str = match left {
                     Expression::Binary { op: left_op, .. } => {
@@ -6053,6 +6062,9 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
                     }
                     _ => self.generate_expression(right),
                 };
+
+                // Restore previous suppress state
+                self.suppress_borrowed_clone = prev_suppress;
 
                 // WINDJAMMER PHILOSOPHY: Auto-cast int/usize in comparisons
                 // When comparing int (i64) with usize, automatically cast to make it work.
@@ -7570,7 +7582,14 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
                 }
             }
             Expression::Index { object, index, .. } => {
+                // INDEX CHAIN OPTIMIZATION: When generating the object of an Index expression,
+                // suppress auto-clone. In `a[i][j]`, Rust auto-derefs `a[i]` (returns &Vec<T>)
+                // to access [j]. Cloning the intermediate Vec is wasteful and wrong.
+                // Same logic as in_field_access_object for FieldAccess chains.
+                let prev_field_access = self.in_field_access_object;
+                self.in_field_access_object = true;
                 let obj_str = self.generate_expression(object);
+                self.in_field_access_object = prev_field_access;
 
                 // Special case: if index is a Range, this is slice syntax
                 // FIXED: Don't add & - Rust will auto-coerce to &[T] when needed
@@ -7651,9 +7670,11 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
                 // 1. Assignment target: vec[i] = value (can't assign to .clone())
                 // 2. Borrow context: &vec[i] (want reference to original, not to clone)
                 // 3. Field access: vec[i].field (Rust allows field access through ref)
+                // 4. Comparison context: vec[i] == val (comparisons work on &T)
                 let suppress_clone = self.generating_assignment_target
                     || self.in_borrow_context
-                    || self.in_field_access_object;
+                    || self.in_field_access_object
+                    || self.suppress_borrowed_clone;
 
                 if !suppress_clone {
                     // First check auto_clone_analysis (path-based analysis)
@@ -7686,7 +7707,7 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
                             _ => None,
                         };
                         if let Some(elem_type) = element_type {
-                            if !type_analysis::is_copy_type(elem_type) {
+                            if !self.is_type_copy(elem_type) {
                                 return format!("{}.clone()", base_expr);
                             }
                         }
