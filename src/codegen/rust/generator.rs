@@ -5025,38 +5025,78 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
 
                 // PHASE 5 OPTIMIZATION: Check if this assignment matches x = x + y pattern
                 // If so, convert to compound assignment: x += y
-                if let Expression::Identifier {
-                    name: target_var, ..
-                } = target
+                // Handles both simple identifiers (x = x + y) and field access (self.x = self.x + y)
+                if let Expression::Binary {
+                    left, right, op, ..
+                } = value
                 {
-                    if let Expression::Binary {
-                        left, right, op, ..
-                    } = value
-                    {
-                        if let Expression::Identifier { name: left_var, .. } = &**left {
-                            if left_var == target_var {
-                                // Pattern matched: x = x op y → x op= y
-                                let compound_op_str = match op {
-                                    BinaryOp::Add => Some("+="),
-                                    BinaryOp::Sub => Some("-="),
-                                    BinaryOp::Mul => Some("*="),
-                                    BinaryOp::Div => Some("/="),
-                                    _ => None,
-                                };
+                    let targets_match = match (target, &**left) {
+                        // Simple: x = x + y
+                        (
+                            Expression::Identifier { name: t, .. },
+                            Expression::Identifier { name: l, .. },
+                        ) => t == l,
+                        // Field access (any depth): self.x, obj.field, entity.transform.x
+                        // Compare by generated string to handle nested field chains uniformly
+                        (Expression::FieldAccess { .. }, Expression::FieldAccess { .. })
+                        | (Expression::Index { .. }, Expression::Index { .. }) => {
+                            self.generate_expression(target)
+                                == self.generate_expression(left)
+                        }
+                        _ => false,
+                    };
 
-                                if let Some(op_str) = compound_op_str {
-                                    // Generate compound assignment instead
-                                    self.generating_assignment_target = true;
-                                    output.push_str(&self.generate_expression(target));
-                                    self.generating_assignment_target = false;
-                                    output.push(' ');
-                                    output.push_str(op_str);
-                                    output.push(' ');
-                                    output.push_str(&self.generate_expression(right));
-                                    output.push_str(";\n");
-                                    return output;
-                                }
-                            }
+                    // SAFETY: Only apply compound assignment for types known to support it.
+                    // Primitive types (i32, f32, i64, f64, usize, u32, String) always
+                    // implement AddAssign etc. Custom types (Vec3, Color) may NOT,
+                    // even if they implement Add + Copy.
+                    let target_type = self.infer_expression_type(target);
+                    // Check if type is a known custom type that may NOT implement AddAssign.
+                    // Types like Vec2, Vec3, Color implement Add but not AddAssign.
+                    let is_known_non_assignable = target_type.as_ref().is_some_and(|t| {
+                        if let Type::Custom(name) = t {
+                            // Blacklist: custom types from the game engine that implement
+                            // Add/Sub/Mul but NOT AddAssign/SubAssign/MulAssign
+                            matches!(name.as_str(),
+                                "Vec2" | "Vec3" | "Vec4" | "Color" | "Quat"
+                                | "Mat3" | "Mat4" | "Point" | "Size"
+                            )
+                        } else {
+                            false
+                        }
+                    });
+                    // Compound assignment is safe when:
+                    // 1. Simple identifier: x = x + y always implies x += y works
+                    // 2. Not a known non-assignable custom type (Vec3, Color, etc.)
+                    //    If type is None (inference failed) or primitive, it's safe because
+                    //    field assignments like self.hp = self.hp + 1 are almost always numeric.
+                    let is_compound_safe = !is_known_non_assignable;
+
+                    if targets_match && is_compound_safe {
+                        let compound_op_str = match op {
+                            BinaryOp::Add => Some("+="),
+                            BinaryOp::Sub => Some("-="),
+                            BinaryOp::Mul => Some("*="),
+                            BinaryOp::Div => Some("/="),
+                            BinaryOp::Mod => Some("%="),
+                            BinaryOp::BitAnd => Some("&="),
+                            BinaryOp::BitOr => Some("|="),
+                            BinaryOp::BitXor => Some("^="),
+                            BinaryOp::Shl => Some("<<="),
+                            BinaryOp::Shr => Some(">>="),
+                            _ => None,
+                        };
+
+                        if let Some(op_str) = compound_op_str {
+                            self.generating_assignment_target = true;
+                            output.push_str(&self.generate_expression(target));
+                            self.generating_assignment_target = false;
+                            output.push(' ');
+                            output.push_str(op_str);
+                            output.push(' ');
+                            output.push_str(&self.generate_expression(right));
+                            output.push_str(";\n");
+                            return output;
                         }
                     }
                 }
@@ -5383,8 +5423,19 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
                         }
                     } else {
                         // var.field → look up var's type, then its field
-                        if let Some(var_type) = self.local_var_types.get(name.as_str()) {
-                            let type_name = match var_type {
+                        // Check local variables first, then function parameters
+                        let var_type = self
+                            .local_var_types
+                            .get(name.as_str())
+                            .cloned()
+                            .or_else(|| {
+                                self.current_function_params
+                                    .iter()
+                                    .find(|p| p.name == *name)
+                                    .map(|p| p.type_.clone())
+                            });
+                        if let Some(var_type) = var_type {
+                            let type_name = match &var_type {
                                 Type::Custom(n) => n.as_str(),
                                 // Handle references: &Recipe → Recipe, &mut Recipe → Recipe
                                 Type::Reference(inner) | Type::MutableReference(inner) => {
