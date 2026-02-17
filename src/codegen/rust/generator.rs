@@ -4901,6 +4901,17 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
                     }
                 }
 
+                // TDD FIX: Track range iteration variables as usize
+                // When iterating `for i in 0..items.len()`, the loop variable `i` is usize.
+                // This prevents redundant `i as usize` casts in the loop body.
+                if let Some(var) = &loop_var {
+                    if let Expression::Range { end, .. } = iterable {
+                        if self.expression_produces_usize(end) {
+                            self.usize_variables.insert(var.clone());
+                        }
+                    }
+                }
+
                 // TDD FIX: Track for-loop variable types for method signature lookup
                 // When iterating `for slot in slots` where `slots: Vec<Option<T>>`,
                 // `slot` has type `Option<T>`. This enables match-bound type inference:
@@ -6118,12 +6129,19 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
                 // If both are usize: no cast (usize == usize is fine)
                 // If neither is usize: no cast (i64 == i64 is fine)
 
-                // AUTO-CAST: When doing arithmetic between usize and int literal, cast literal to usize
-                // E.g., items.len() - 1 -> items.len() - 1usize
+                // AUTO-CAST: When doing arithmetic between usize and int literal, Rust infers
+                // the literal type from context. So `items.len() - 1` works without casting.
+                // Only cast if the literal is negative (usize can't represent negative values).
                 if is_arithmetic && left_is_usize && right_is_int_literal && !right_is_usize {
-                    right_str = format!("{} as usize", right_str);
+                    let is_negative = matches!(right, Expression::Literal { value: Literal::Int(n), .. } if *n < 0);
+                    if is_negative {
+                        right_str = format!("{} as usize", right_str);
+                    }
                 } else if is_arithmetic && right_is_usize && left_is_int_literal && !left_is_usize {
-                    left_str = format!("{} as usize", left_str);
+                    let is_negative = matches!(left, Expression::Literal { value: Literal::Int(n), .. } if *n < 0);
+                    if is_negative {
+                        left_str = format!("{} as usize", left_str);
+                    }
                 }
 
                 let op_str = operators::binary_op_to_rust(op);
@@ -6549,7 +6567,15 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
                     .iter()
                     .enumerate()
                     .map(|(i, (_label, arg))| {
+                        // CRITICAL: Reset in_field_access_object for argument generation.
+                        // Arguments are independent expressions, NOT part of a field/method/index chain.
+                        // Without this, `process_property(prop.name, prop.value).as_str()` would
+                        // leak in_field_access_object from the MethodCall handler into prop.name/prop.value,
+                        // suppressing necessary .clone() calls.
+                        let prev_field_access_obj = self.in_field_access_object;
+                        self.in_field_access_object = false;
                         let mut arg_str = self.generate_expression(arg);
+                        self.in_field_access_object = prev_field_access_obj;
 
                         // Auto-convert string literals to String for functions expecting owned String
                         // THE WINDJAMMER WAY: Smart inference based on available information!
@@ -6893,7 +6919,13 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
                     .iter()
                     .enumerate()
                     .map(|(i, (_label, arg))| {
+                        // CRITICAL: Reset in_field_access_object for method argument generation.
+                        // Same rationale as function call arguments — method arguments are
+                        // independent expressions, not part of a field/method/index chain.
+                        let prev_field_access_obj = self.in_field_access_object;
+                        self.in_field_access_object = false;
                         let mut arg_str = self.generate_expression(arg);
+                        self.in_field_access_object = prev_field_access_obj;
 
                         // TDD FIX: AUTO-WRAP function pointers in iterator adapter methods.
                         // Rust's .filter()/.any()/.find() on iter() yield &&T, expecting FnMut(&&T) -> bool,
@@ -7377,8 +7409,9 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
                 // AND: Don't clone when inside an explicit .clone() call (prevents double clone)
                 // AND: Don't clone when this is an intermediate object in a field access chain
                 //      (e.g., stack.item.stats.armor → don't clone item, Rust auto-derefs through &)
+                // AND: Don't clone in borrow context (&recipe.ingredients → reference is sufficient)
                 // WINDJAMMER PHILOSOPHY: Use type inference first, fall back to name heuristics
-                if !self.generating_assignment_target && !self.suppress_borrowed_clone && !self.in_explicit_clone_call && !self.in_field_access_object {
+                if !self.generating_assignment_target && !self.suppress_borrowed_clone && !self.in_explicit_clone_call && !self.in_field_access_object && !self.in_borrow_context {
                     if let Expression::Identifier { name: var_name, .. } = &**object {
                         if self.borrowed_iterator_vars.contains(var_name) {
                             // First: use type inference to check if the field type is Copy
@@ -7651,8 +7684,16 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
                         } else {
                             format!("{} as usize", idx_str)
                         }
+                    } else if let Expression::Literal { value: Literal::Int(n), .. } = &**index {
+                        // Integer literal: Rust infers type from context in index position,
+                        // so `arr[0]` works without `as usize`. Only cast if negative
+                        // (which would be a logic error, but preserve the cast for clarity).
+                        if *n < 0 {
+                            format!("{} as usize", idx_str)
+                        } else {
+                            idx_str
+                        }
                     } else {
-                        // Integer literal — needs cast
                         format!("{} as usize", idx_str)
                     }
                 } else {
@@ -9025,9 +9066,15 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
                                 && matches!(p.ownership, crate::parser::OwnershipHint::Ref)
                         });
                     }
-                    // Check if it's a borrowed parameter
+                    // Check if it's a borrowed parameter (ownership hint OR reference type)
                     return self.current_function_params.iter().any(|p| {
-                        &p.name == name && matches!(p.ownership, crate::parser::OwnershipHint::Ref)
+                        &p.name == name
+                            && (matches!(p.ownership, crate::parser::OwnershipHint::Ref)
+                                || matches!(
+                                    &p.type_,
+                                    crate::parser::Type::Reference(_)
+                                        | crate::parser::Type::MutableReference(_)
+                                ))
                     });
                 }
                 false
@@ -9035,7 +9082,13 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
             // Direct variable that's a borrowed parameter (explicit or inferred)
             Expression::Identifier { name, .. } => {
                 self.current_function_params.iter().any(|p| {
-                    &p.name == name && matches!(p.ownership, crate::parser::OwnershipHint::Ref)
+                    &p.name == name
+                        && (matches!(p.ownership, crate::parser::OwnershipHint::Ref)
+                            || matches!(
+                                &p.type_,
+                                crate::parser::Type::Reference(_)
+                                    | crate::parser::Type::MutableReference(_)
+                            ))
                 }) || self.inferred_borrowed_params.contains(name)
             }
             // Method calls that return iterators over references
