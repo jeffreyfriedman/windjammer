@@ -1468,6 +1468,7 @@ impl<'ast> Analyzer<'ast> {
                     || self.expr_mentions_identifier(name, right)
             }
             Expression::Unary { operand, .. } => self.expr_mentions_identifier(name, operand),
+            Expression::TryOp { expr, .. } => self.expr_mentions_identifier(name, expr),
             _ => false,
         }
     }
@@ -1568,6 +1569,7 @@ impl<'ast> Analyzer<'ast> {
                 }
                 false
             }
+            Expression::TryOp { expr, .. } => self.has_mutable_method_call(name, expr),
             _ => false,
         }
     }
@@ -1772,6 +1774,12 @@ impl<'ast> Analyzer<'ast> {
             }
             Expression::FieldAccess { object, .. } => {
                 self.expr_has_potentially_mutating_method_call(name, object)
+            }
+            // TDD FIX: TryOp wraps expressions with `?` (error propagation).
+            // e.g., `loader.load("tilemap")?` produces TryOp { expr: MethodCall { ... } }
+            // We must recurse into the inner expression to detect method calls.
+            Expression::TryOp { expr, .. } => {
+                self.expr_has_potentially_mutating_method_call(name, expr)
             }
             _ => false,
         }
@@ -2235,6 +2243,10 @@ impl<'ast> Analyzer<'ast> {
                     .any(|e| self.expr_passes_as_argument(name, e))
             }
             Expression::Closure { body, .. } => self.expr_passes_as_argument(name, body),
+            // TDD FIX: TryOp wraps expressions with `?` (error propagation).
+            // e.g., `process(data)?` produces TryOp { expr: Call { args: [data] } }
+            // We must recurse into the inner expression to detect argument passing.
+            Expression::TryOp { expr, .. } => self.expr_passes_as_argument(name, expr),
             // Note: We do NOT check Expression::Identifier here because bare identifiers
             // outside of Call/MethodCall arguments are not consuming (e.g., `data.len()`)
             _ => false,
@@ -2338,6 +2350,7 @@ impl<'ast> Analyzer<'ast> {
             Expression::Array { elements, .. } => elements
                 .iter()
                 .any(|elem| self.expr_uses_in_binary_op(name, elem)),
+            Expression::TryOp { expr, .. } => self.expr_uses_in_binary_op(name, expr),
             _ => false,
         }
     }
@@ -4219,6 +4232,7 @@ impl<'ast> Analyzer<'ast> {
                 self.expression_uses_identifier(name, start)
                     || self.expression_uses_identifier(name, end)
             }
+            Expression::TryOp { expr, .. } => self.expression_uses_identifier(name, expr),
             _ => false,
         }
     }
