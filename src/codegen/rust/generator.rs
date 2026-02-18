@@ -1164,8 +1164,20 @@ impl<'ast> CodeGenerator<'ast> {
         // Example: quest/manager.rs gets `use super::*;` which imports QuestId, Quest, etc.
         // from quest/mod.rs's re-exports.
         // For root-level modules, `super` refers to the crate root (lib.rs), which is harmless.
+        //
+        // IMPORTANT: When the file has explicit glob imports (use crate::X::*), we must NOT
+        // add `use super::*` because two glob imports bringing the same name into scope causes
+        // Rust error E0659 ("ambiguous name"). For example, if mod.rs re-exports GizmoMode
+        // from scene_view, and the file also has `use crate::gizmos::*` which exports its own
+        // GizmoMode, both globs would bring GizmoMode into scope, making it ambiguous.
         if self.is_module {
-            implicit_imports.push_str("#[allow(unused_imports)]\nuse super::*;\n");
+            let has_explicit_glob_imports = imports.lines().any(|line| {
+                let trimmed = line.trim();
+                trimmed.ends_with("::*;") && !trimmed.starts_with("//")
+            });
+            if !has_explicit_glob_imports {
+                implicit_imports.push_str("#[allow(unused_imports)]\nuse super::*;\n");
+            }
         }
 
         // Add property testing imports if needed
