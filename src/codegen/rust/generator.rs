@@ -4745,10 +4745,13 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
                 // THE WINDJAMMER WAY: The compiler handles this automatically by extracting
                 // the scrutinee into an owned temporary, breaking the borrow chain:
                 //   let __match_borrow_break = self.method().map(|v| v.to_owned());
-                //   match __match_borrow_break.as_deref() { ... }
+                //   match __match_borrow_break.as_ref() { ... }
                 //
-                // This preserves the bound variable type (&str) while the owned data lives
-                // in the local temporary, freeing self for mutation in the arm body.
+                // We use .as_ref() (not .as_deref()) because .as_deref() requires the
+                // inner type to implement Deref, which fails for custom types like
+                // DialogueNode. .as_ref() works universally for all types:
+                //   Option<String>.as_ref() → Option<&String> (auto-coerces to &str)
+                //   Option<Custom>.as_ref() → Option<&Custom> (works for any type)
                 let match_binds_refs_early = self.match_expression_binds_refs(value);
                 let needs_borrow_break = match_binds_refs_early
                     && self.match_scrutinee_is_self_method_call(value)
@@ -4763,7 +4766,7 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
                         value_str
                     ));
                     output.push_str(&self.indent());
-                    output.push_str("match __match_borrow_break.as_deref()");
+                    output.push_str("match __match_borrow_break.as_ref()");
                 } else {
                     output.push_str("match ");
                     if has_string_literal && !is_tuple_match {
