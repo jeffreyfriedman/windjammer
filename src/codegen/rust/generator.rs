@@ -744,7 +744,19 @@ impl<'ast> CodeGenerator<'ast> {
                     }
                     _ => unreachable!(),
                 }
+            } else if !is_last {
+                // TDD FIX: Non-last statements in a block ALWAYS need semicolons,
+                // even when the block is used in an expression context (e.g., match arm body
+                // inside `let _ = match ... { Arm => { expr1; expr2 } }`).
+                // Temporarily clear in_expression_context so intermediate expression
+                // statements get their semicolons.
+                let old_expr_ctx = self.in_expression_context;
+                self.in_expression_context = false;
+                output.push_str(&self.generate_statement(stmt));
+                self.in_expression_context = old_expr_ctx;
             } else {
+                // Last statement of a non-Expression type (e.g., Statement::If used as block value):
+                // Preserve in_expression_context so inner branches retain correct semicolon behavior
                 output.push_str(&self.generate_statement(stmt));
             }
         }
@@ -7106,9 +7118,38 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
                         // CRITICAL: Reset in_field_access_object for method argument generation.
                         // Same rationale as function call arguments — method arguments are
                         // independent expressions, not part of a field/method/index chain.
+                        // TDD FIX: STRIP explicit &ref when parameter expects owned value.
+                        // WINDJAMMER PHILOSOPHY: The developer shouldn't need to think about &.
+                        // If the user writes `&object.transform` but the method takes `Transform` (owned),
+                        // the compiler strips the & and passes by value (Copy types) or moves.
+                        // Example: self.render_transform(&object.transform) → self.render_transform(object.transform)
+                        let arg_to_generate = if let Expression::Unary {
+                            op: crate::parser::UnaryOp::Ref,
+                            operand,
+                            ..
+                        } = arg
+                        {
+                            if let Some(ref sig) = method_signature {
+                                let sig_param_idx = if sig.has_self_receiver { i + 1 } else { i };
+                                let param_is_owned = sig
+                                    .param_ownership
+                                    .get(sig_param_idx)
+                                    .is_some_and(|&o| matches!(o, crate::analyzer::OwnershipMode::Owned));
+                                if param_is_owned {
+                                    operand // Strip & — generate the inner expression
+                                } else {
+                                    arg // Keep the & — parameter expects a reference
+                                }
+                            } else {
+                                arg // No signature info — keep as-is
+                            }
+                        } else {
+                            arg // Not a & expression — keep as-is
+                        };
+
                         let prev_field_access_obj = self.in_field_access_object;
                         self.in_field_access_object = false;
-                        let mut arg_str = self.generate_expression(arg);
+                        let mut arg_str = self.generate_expression(arg_to_generate);
                         self.in_field_access_object = prev_field_access_obj;
 
                         // TDD FIX: AUTO-WRAP function pointers in iterator adapter methods.
@@ -7954,33 +7995,23 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
                 let expr_strs: Vec<String> =
                     exprs.iter().map(|e| self.generate_expression(e)).collect();
 
-                // Determine if we need fixed-size array syntax [...] or vec![...]
-                // Use fixed-size [...] when:
-                // 1. Inside a struct literal field (fields have explicit type annotations)
-                // 2. Current function returns a fixed-size array [T; N]
-                let needs_fixed_array = self.in_struct_literal_field
-                    || matches!(
-                        &self.current_function_return_type,
-                        Some(Type::Array(_, _))
-                    );
-
-                if needs_fixed_array {
-                    // FIXED-SIZE CONTEXT: Use array syntax [...].
-                    // Rust's type checker will validate the size against the expected type.
-                    if exprs.is_empty() {
-                        "[]".to_string()
-                    } else {
-                        format!("[{}]", expr_strs.join(", "))
-                    }
-                } else if exprs.is_empty() {
+                // WINDJAMMER PHILOSOPHY: Array literal syntax determines Rust output.
+                //
+                // In WJ, `[a, b, c]` is a fixed-size array literal → generates `[a, b, c]` in Rust.
+                // In WJ, `vec![a, b, c]` is an explicit Vec constructor → generates `vec![a, b, c]`.
+                //
+                // Empty arrays `[]` remain `vec![]` because Rust's empty `[]` can't infer its type.
+                //
+                // This distinction is critical: `painter.line_segment([p1, p2], stroke)` expects
+                // `[Pos2; 2]`, not `Vec<Pos2>`. The developer chose `[...]` syntax intentionally.
+                if exprs.is_empty() {
                     // Empty array [] → vec![] (Vec::new())
-                    // In Windjammer, [] creates a dynamically-sized collection (Vec).
                     // Rust's [] is a fixed-size array and can't infer type from later usage.
                     "vec![]".to_string()
                 } else {
-                    // Non-empty arrays: generate vec![...] for dynamic arrays
-                    // In Windjammer, [1, 2, 3] is a Vec, not a fixed-size array.
-                    format!("vec![{}]", expr_strs.join(", "))
+                    // Non-empty array literals: generate fixed-size array [a, b, c]
+                    // The developer uses `vec![...]` macro syntax when Vec is needed.
+                    format!("[{}]", expr_strs.join(", "))
                 }
             }
             Expression::MacroInvocation {
@@ -8326,7 +8357,17 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
                             }
                             _ => unreachable!(),
                         }
+                    } else if !is_last {
+                        // TDD FIX: Non-last statements in a block expression ALWAYS need
+                        // semicolons, even in expression context (e.g., match arm body
+                        // inside `let _ = match ... { Arm => { expr1; expr2 } }`).
+                        let old_expr_ctx = self.in_expression_context;
+                        self.in_expression_context = false;
+                        output.push_str(&self.generate_statement(stmt));
+                        self.in_expression_context = old_expr_ctx;
                     } else {
+                        // Last statement of a non-Expression type (e.g., Statement::If used as block value):
+                        // Preserve in_expression_context so inner branches retain correct semicolon behavior
                         output.push_str(&self.generate_statement(stmt));
                     }
                 }
