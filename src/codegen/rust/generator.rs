@@ -4591,6 +4591,124 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
                 output
             }
             Statement::Match { value, arms, .. } => {
+                // TDD FIX: Detect `if let` pattern and generate `if let` instead of `match`
+                //
+                // The parser converts `if let Pattern = expr { body }` into:
+                //   Statement::Match { arms: [MatchArm(Pattern, body), MatchArm(Wildcard, empty_block)] }
+                //
+                // We detect this pattern (2 arms, last is Wildcard) and generate proper
+                // `if let` syntax, eliminating clippy's "single pattern match" warnings.
+                //
+                // THE WINDJAMMER WAY: The compiler generates idiomatic Rust, not just correct Rust.
+                if arms.len() == 2
+                    && matches!(arms[1].pattern, Pattern::Wildcard)
+                    && arms[1].guard.is_none()
+                {
+                    let wildcard_body_is_empty =
+                        if let Expression::Block { statements, .. } = arms[1].body {
+                            statements.is_empty()
+                        } else {
+                            false
+                        };
+
+                    let wildcard_body_stmts: Option<&[&Statement]> =
+                        if let Expression::Block { statements, .. } = arms[1].body {
+                            if statements.is_empty() {
+                                None
+                            } else {
+                                Some(statements)
+                            }
+                        } else {
+                            None
+                        };
+
+                    // Only convert to if-let when the wildcard arm is empty or has an else body
+                    // Skip when borrow-break is needed (rare edge case, keep as match)
+                    let match_binds_refs_early_check = self.match_expression_binds_refs(value);
+                    let needs_borrow_break_check = match_binds_refs_early_check
+                        && self.match_scrutinee_is_self_method_call(value)
+                        && self.match_arms_mutate_self(arms);
+
+                    if !needs_borrow_break_check && (wildcard_body_is_empty || wildcard_body_stmts.is_some()) {
+                        let value_str = self.generate_expression(value);
+                        let main_arm = &arms[0];
+
+                        // Track pattern-bound variables (same as regular match)
+                        let match_binds_refs = self.match_expression_binds_refs(value);
+                        let mut bound_vars = std::collections::HashSet::new();
+                        self.extract_pattern_bindings(&main_arm.pattern, &mut bound_vars);
+
+                        let added_borrowed: Vec<String> = if match_binds_refs {
+                            bound_vars.iter().cloned().collect()
+                        } else {
+                            Vec::new()
+                        };
+                        for var in &added_borrowed {
+                            self.borrowed_iterator_vars.insert(var.clone());
+                        }
+
+                        self.local_variable_scopes.push(bound_vars);
+
+                        let match_bound_type_entries: Vec<(String, Type)> =
+                            self.infer_match_bound_types(value, &main_arm.pattern);
+                        for (var_name, var_type) in &match_bound_type_entries {
+                            self.local_var_types
+                                .insert(var_name.clone(), var_type.clone());
+                        }
+
+                        // Generate: if let Pattern = value {
+                        let mut output = self.indent();
+                        output.push_str("if let ");
+                        output.push_str(&self.generate_pattern(&main_arm.pattern));
+
+                        if let Some(guard) = &main_arm.guard {
+                            output.push_str(" if ");
+                            output.push_str(&self.generate_expression(guard));
+                        }
+
+                        output.push_str(" = ");
+                        output.push_str(&value_str);
+                        output.push_str(" {\n");
+
+                        // Generate the then-block body
+                        self.indent_level += 1;
+                        if let Expression::Block { statements, .. } = main_arm.body {
+                            output.push_str(&self.generate_block(statements));
+                        } else {
+                            output.push_str(&self.indent());
+                            output.push_str(&self.generate_expression(main_arm.body));
+                            output.push_str(";\n");
+                        }
+                        self.indent_level -= 1;
+
+                        output.push_str(&self.indent());
+                        output.push('}');
+
+                        // Generate else block if wildcard arm has a non-empty body
+                        if let Some(else_stmts) = wildcard_body_stmts {
+                            output.push_str(" else {\n");
+                            self.indent_level += 1;
+                            output.push_str(&self.generate_block(else_stmts));
+                            self.indent_level -= 1;
+                            output.push_str(&self.indent());
+                            output.push('}');
+                        }
+
+                        output.push('\n');
+
+                        // Clean up scopes
+                        self.local_variable_scopes.pop();
+                        for (var_name, _) in &match_bound_type_entries {
+                            self.local_var_types.remove(var_name);
+                        }
+                        for var in &added_borrowed {
+                            self.borrowed_iterator_vars.remove(var);
+                        }
+
+                        return output;
+                    }
+                }
+
                 // Check if any arm has a string literal pattern
                 // If so, add .as_str() to the match value for String types
                 // BUT: Don't add .as_str() if the match value is a tuple (tuple patterns handle their own string matching)
@@ -7985,8 +8103,29 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
                 statements: stmts, ..
             } => {
                 // Special case: if the block contains only a match statement, generate it as a match expression
+                // BUT: Skip this optimization when the match is an if-let pattern (2 arms, last is wildcard with empty body)
+                // In that case, fall through to normal block generation which will generate `if let` via Statement::Match handler
                 if stmts.len() == 1 {
                     if let Statement::Match { value, arms, .. } = &stmts[0] {
+                        // Check if this is an if-let pattern that should be generated as `if let`
+                        let is_if_let_pattern = arms.len() == 2
+                            && matches!(arms[1].pattern, Pattern::Wildcard)
+                            && arms[1].guard.is_none()
+                            && matches!(arms[1].body, Expression::Block { statements, .. } if statements.is_empty());
+
+                        if is_if_let_pattern {
+                            // Fall through to normal block generation — generate_statement will emit `if let`
+                            let mut output = String::from("{\n");
+                            self.indent_level += 1;
+                            for stmt in stmts {
+                                output.push_str(&self.generate_statement(stmt));
+                            }
+                            self.indent_level -= 1;
+                            output.push_str(&self.indent());
+                            output.push('}');
+                            return output;
+                        }
+
                         let mut output = String::from("match ");
 
                         // Check if any arm has a string literal pattern
