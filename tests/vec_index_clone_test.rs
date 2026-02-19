@@ -16,10 +16,7 @@ static TEST_COUNTER: AtomicU64 = AtomicU64::new(0);
 fn unique_dir(prefix: &str) -> std::path::PathBuf {
     let id = TEST_COUNTER.fetch_add(1, Ordering::SeqCst);
     let pid = std::process::id();
-    std::path::PathBuf::from(format!(
-        "/tmp/wj-test-vec-idx-{}-{}-{}",
-        prefix, pid, id
-    ))
+    std::path::PathBuf::from(format!("/tmp/wj-test-vec-idx-{}-{}-{}", prefix, pid, id))
 }
 
 fn compile_wj_to_rust(wj_source: &str, test_name: &str) -> (String, bool) {
@@ -30,11 +27,15 @@ fn compile_wj_to_rust(wj_source: &str, test_name: &str) -> (String, bool) {
     let wj_file = input_dir.join("test.wj");
     std::fs::write(&wj_file, wj_source).unwrap();
 
-    let wj_binary = Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("target/release/wj");
+    let wj_binary = Path::new(env!("CARGO_MANIFEST_DIR")).join("target/release/wj");
 
     let _output = Command::new(&wj_binary)
-        .args(["build", wj_file.to_str().unwrap(), "--output", output_dir.to_str().unwrap()])
+        .args([
+            "build",
+            wj_file.to_str().unwrap(),
+            "--output",
+            output_dir.to_str().unwrap(),
+        ])
         .output()
         .expect("Failed to run wj compiler");
 
@@ -44,11 +45,22 @@ fn compile_wj_to_rust(wj_source: &str, test_name: &str) -> (String, bool) {
     let compiles = if !rust_code.is_empty() {
         let bin_output = output_dir.join("test_bin");
         let rustc_output = Command::new("rustc")
-            .args(["--edition", "2021", "--crate-type", "bin", rs_file.to_str().unwrap(), "-o", bin_output.to_str().unwrap()])
+            .args([
+                "--edition",
+                "2021",
+                "--crate-type",
+                "bin",
+                rs_file.to_str().unwrap(),
+                "-o",
+                bin_output.to_str().unwrap(),
+            ])
             .output()
             .expect("Failed to run rustc");
         if !rustc_output.status.success() {
-            eprintln!("rustc stderr: {}", String::from_utf8_lossy(&rustc_output.stderr));
+            eprintln!(
+                "rustc stderr: {}",
+                String::from_utf8_lossy(&rustc_output.stderr)
+            );
         }
         rustc_output.status.success()
     } else {
@@ -133,5 +145,8 @@ fn main() {
 
     // Copy types (i32) should NOT get .clone() when indexed
     // (nums[i] is fine because i32 is Copy)
-    assert!(compiles, "Copy type Vec indexing should compile without .clone()");
+    assert!(
+        compiles,
+        "Copy type Vec indexing should compile without .clone()"
+    );
 }

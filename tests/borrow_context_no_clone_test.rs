@@ -9,7 +9,6 @@
 /// but the FieldAccess handler didn't check this flag.
 ///
 /// Fix: Added `!self.in_borrow_context` to the borrowed iterator clone condition.
-
 use std::io::Write;
 use std::process::Command;
 

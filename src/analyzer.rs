@@ -1714,9 +1714,9 @@ impl<'ast> Analyzer<'ast> {
             }
             Statement::Match { value, arms, .. } => {
                 self.expr_has_potentially_mutating_method_call(name, value)
-                    || arms.iter().any(|arm| {
-                        self.expr_has_potentially_mutating_method_call(name, arm.body)
-                    })
+                    || arms
+                        .iter()
+                        .any(|arm| self.expr_has_potentially_mutating_method_call(name, arm.body))
             }
             _ => false,
         }
@@ -2237,11 +2237,9 @@ impl<'ast> Analyzer<'ast> {
                     || self.expr_passes_as_argument(name, index)
             }
             Expression::FieldAccess { object, .. } => self.expr_passes_as_argument(name, object),
-            Expression::Tuple { elements, .. } | Expression::Array { elements, .. } => {
-                elements
-                    .iter()
-                    .any(|e| self.expr_passes_as_argument(name, e))
-            }
+            Expression::Tuple { elements, .. } | Expression::Array { elements, .. } => elements
+                .iter()
+                .any(|e| self.expr_passes_as_argument(name, e)),
             Expression::Closure { body, .. } => self.expr_passes_as_argument(name, body),
             // TDD FIX: TryOp wraps expressions with `?` (error propagation).
             // e.g., `process(data)?` produces TryOp { expr: Call { args: [data] } }
@@ -2552,8 +2550,7 @@ impl<'ast> Analyzer<'ast> {
                 // Generic type parameters are uppercase letters, possibly followed by numbers
                 // Examples: T, G, S, T1, T2, KEY, VALUE
                 name.chars().next().is_some_and(|c| c.is_uppercase())
-                    && (name.len() == 1
-                        || name.chars().all(|c| c.is_uppercase() || c.is_numeric()))
+                    && (name.len() == 1 || name.chars().all(|c| c.is_uppercase() || c.is_numeric()))
             }
             // impl Trait parameters (e.g., `item: impl Describable`) should always be Owned.
             // Borrowing would change from `impl Trait` to `&impl Trait`, breaking trait dispatch.

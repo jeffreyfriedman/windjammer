@@ -9,7 +9,6 @@
 ///
 /// Fix: Set `in_field_access_object = true` before generating the object of an Index,
 /// same as we do for FieldAccess objects.
-
 use std::io::Write;
 use std::process::Command;
 

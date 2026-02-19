@@ -24,7 +24,6 @@ use anyhow::Result;
 /// ```rust
 /// let result = self.render_transform(&object.transform);  // ❌ E0308!
 /// ```
-
 use std::fs;
 use std::path::PathBuf;
 use std::process::Command;
@@ -103,13 +102,12 @@ version = "0.1.0"
     let stdout = String::from_utf8_lossy(&output.stdout);
 
     // Read the generated Rust file
-    let generated = fs::read_to_string(output_dir.join("main.rs"))
-        .unwrap_or_else(|_| {
-            panic!(
-                "Failed to read generated main.rs\nstdout: {}\nstderr: {}",
-                stdout, stderr
-            )
-        });
+    let generated = fs::read_to_string(output_dir.join("main.rs")).unwrap_or_else(|_| {
+        panic!(
+            "Failed to read generated main.rs\nstdout: {}\nstderr: {}",
+            stdout, stderr
+        )
+    });
 
     // ASSERTION: The & should be stripped in the render_transform call
     // The generated code should have `self.render_transform(object)` NOT `self.render_transform(&object)`
@@ -207,7 +205,8 @@ version = "0.1.0"
     assert!(
         output.status.success(),
         "Build should succeed when & is stripped for owned param.\nstdout: {}\nstderr: {}",
-        stdout, stderr
+        stdout,
+        stderr
     );
 
     // Cleanup

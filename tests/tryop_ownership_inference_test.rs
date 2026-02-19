@@ -106,7 +106,8 @@ fn load_game(loader: AssetLoader) -> Result<String, String> {
     );
 
     // It should be either owned or mut borrowed
-    let has_owned = rust_code.contains("loader: AssetLoader") || rust_code.contains("mut loader: AssetLoader");
+    let has_owned =
+        rust_code.contains("loader: AssetLoader") || rust_code.contains("mut loader: AssetLoader");
     let has_mut_ref = rust_code.contains("loader: &mut AssetLoader");
     assert!(
         has_owned || has_mut_ref,

@@ -11,7 +11,6 @@
 /// Fix: Added `copy_types_registry` to CodeGenerator, populated from the global
 /// `copy_structs_registry` in ModuleCompiler. The new `is_type_copy()` helper checks
 /// both primitive types AND the registry.
-
 use std::io::Write;
 use std::process::Command;
 

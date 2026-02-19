@@ -14,7 +14,6 @@ use anyhow::Result;
 /// FIX: Only clear in_expression_context for truly non-last statements. The last statement
 /// (even if not an Expression type, e.g., Statement::If) should preserve expression context
 /// so inner branches retain correct semicolon behavior.
-
 use std::fs;
 use std::path::PathBuf;
 use std::process::Command;
@@ -106,7 +105,8 @@ version = "0.1.0"
     assert!(
         output.status.success(),
         "Build with intermediate statements in match arms should succeed.\nstdout: {}\nstderr: {}",
-        stdout, stderr
+        stdout,
+        stderr
     );
 
     // Cleanup

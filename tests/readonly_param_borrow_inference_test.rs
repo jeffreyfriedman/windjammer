@@ -14,7 +14,6 @@
 ///
 /// Discovered via dogfooding: windjammer-game-editor has 6+ E0308 errors from this pattern.
 /// Files affected: panels/profiler.rs, panels/hierarchy.rs, panels/inspector.rs
-
 use std::fs;
 use std::process::Command;
 use tempfile::TempDir;

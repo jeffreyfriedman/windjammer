@@ -10,7 +10,6 @@
 /// Fix: Detect this pattern in Statement::Match codegen and emit `if let`
 /// instead of `match`. When the wildcard arm has a non-empty body, emit
 /// `if let ... { } else { }`.
-
 use std::io::Write;
 use std::process::Command;
 

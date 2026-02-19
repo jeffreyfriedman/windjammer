@@ -20,23 +20,32 @@ static TEST_COUNTER: AtomicU64 = AtomicU64::new(0);
 
 fn compile_wj(source: &str) -> String {
     let id = TEST_COUNTER.fetch_add(1, Ordering::SeqCst);
-    let tmp_dir = std::env::temp_dir().join(format!("wj_lifetime_test_{}_{}", std::process::id(), id));
+    let tmp_dir =
+        std::env::temp_dir().join(format!("wj_lifetime_test_{}_{}", std::process::id(), id));
     let _ = std::fs::remove_dir_all(&tmp_dir);
     std::fs::create_dir_all(&tmp_dir).unwrap();
-    
+
     let source_path = tmp_dir.join("test.wj");
     std::fs::write(&source_path, source).unwrap();
-    
+
     let output_dir = tmp_dir.join("output");
     let _output = Command::new(env!("CARGO_BIN_EXE_wj"))
-        .args(["build", source_path.to_str().unwrap(), "--target", "rust", "--output", output_dir.to_str().unwrap(), "--no-cargo"])
+        .args([
+            "build",
+            source_path.to_str().unwrap(),
+            "--target",
+            "rust",
+            "--output",
+            output_dir.to_str().unwrap(),
+            "--no-cargo",
+        ])
         .output()
         .expect("failed to run wj");
-    
+
     let rs_path = output_dir.join("test.rs");
     let generated = std::fs::read_to_string(&rs_path)
         .unwrap_or_else(|_| panic!("Failed to read generated Rust at {:?}", rs_path));
-    
+
     let _ = std::fs::remove_dir_all(&tmp_dir);
     generated
 }
@@ -62,14 +71,20 @@ fn main() {
 }
 "#;
     let generated = compile_wj(source);
-    
+
     // Should have lifetime parameter <'a>
-    assert!(generated.contains("<'a>"), 
-        "Expected lifetime parameter <'a> in function signature.\nGenerated:\n{}", generated);
-    
+    assert!(
+        generated.contains("<'a>"),
+        "Expected lifetime parameter <'a> in function signature.\nGenerated:\n{}",
+        generated
+    );
+
     // Should have lifetime on return type
-    assert!(generated.contains("-> &'a") || generated.contains("-> &'a str"),
-        "Expected lifetime annotation on return type.\nGenerated:\n{}", generated);
+    assert!(
+        generated.contains("-> &'a") || generated.contains("-> &'a str"),
+        "Expected lifetime annotation on return type.\nGenerated:\n{}",
+        generated
+    );
 }
 
 #[test]
@@ -87,11 +102,14 @@ fn main() {
 }
 "#;
     let generated = compile_wj(source);
-    
+
     // Should NOT have explicit lifetime (Rust elision handles it)
     // Note: it's OK if it does have a lifetime, but it shouldn't be required
     // Let's just verify it compiles - the main test is the two-param case
-    assert!(generated.contains("fn first_char"), "Function should exist in generated code");
+    assert!(
+        generated.contains("fn first_char"),
+        "Function should exist in generated code"
+    );
 }
 
 #[test]
@@ -122,9 +140,12 @@ fn main() {
 }
 "#;
     let generated = compile_wj(source);
-    
+
     // Self method: Rust elision should handle it, no explicit lifetime needed
-    assert!(generated.contains("fn first"), "Method should exist in generated code");
+    assert!(
+        generated.contains("fn first"),
+        "Method should exist in generated code"
+    );
 }
 
 #[test]
@@ -149,7 +170,7 @@ fn main() {
 }
 "#;
     let generated = compile_wj(source);
-    
+
     // Should have lifetime because of two ref params + ref in return type
     assert!(generated.contains("<'a>"),
         "Expected lifetime parameter <'a> for Option<&T> return with two ref params.\nGenerated:\n{}", generated);
@@ -170,8 +191,11 @@ fn main() {
 }
 "#;
     let generated = compile_wj(source);
-    
+
     // No reference return: no lifetime needed
-    assert!(!generated.contains("<'a>"),
-        "Should NOT have lifetime parameter when return type has no references.\nGenerated:\n{}", generated);
+    assert!(
+        !generated.contains("<'a>"),
+        "Should NOT have lifetime parameter when return type has no references.\nGenerated:\n{}",
+        generated
+    );
 }

@@ -9,7 +9,6 @@
 /// Expected behavior: The compiler should auto-generate `pub use submodule::*;`
 /// re-exports in mod.rs when mod.wj has no explicit pub use declarations,
 /// just like it does when there's no mod.wj at all.
-
 use std::fs;
 use std::process::Command;
 
@@ -62,7 +61,11 @@ fn compile_project(files: &[(&str, &str)]) -> std::collections::HashMap<String, 
                 if path.is_dir() {
                     read_dir_recursive(&path, base, result);
                 } else if path.extension().map(|e| e == "rs").unwrap_or(false) {
-                    let rel = path.strip_prefix(base).unwrap().to_string_lossy().to_string();
+                    let rel = path
+                        .strip_prefix(base)
+                        .unwrap()
+                        .to_string_lossy()
+                        .to_string();
                     let content = fs::read_to_string(&path).unwrap();
                     result.insert(rel, content);
                 }
