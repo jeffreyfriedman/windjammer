@@ -619,14 +619,15 @@ impl<'ast> CodeGenerator<'ast> {
             // TDD FIX: Only optimize return statements in function body (not nested blocks)
             let should_optimize_return =
                 self.in_function_body && matches!(stmt, Statement::Return { .. });
+            // Simplified: (is_last && A) || (is_last && B) = is_last && (A || B)
             if is_last
-                && matches!(
-                    stmt,
-                    Statement::Expression { .. }
-                        | Statement::Thread { .. }
-                        | Statement::Async { .. }
-                )
-                || (is_last && should_optimize_return)
+                && (should_optimize_return
+                    || matches!(
+                        stmt,
+                        Statement::Expression { .. }
+                            | Statement::Thread { .. }
+                            | Statement::Async { .. }
+                    ))
             {
                 // Last statement is an expression, thread/async block, or return - generate as implicit return
                 match stmt {
@@ -4004,10 +4005,10 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
                 // WINDJAMMER LIFETIME INFERENCE: Add 'a lifetime to reference parameters
                 // when the function needs explicit lifetime annotations.
                 let type_str = if needs_lifetime && param.name != "self" {
-                    if type_str.starts_with("&mut ") {
-                        format!("&'a mut {}", &type_str[5..])
-                    } else if type_str.starts_with("&") {
-                        format!("&'a {}", &type_str[1..])
+                    if let Some(stripped) = type_str.strip_prefix("&mut ") {
+                        format!("&'a mut {}", stripped)
+                    } else if let Some(stripped) = type_str.strip_prefix("&") {
+                        format!("&'a {}", stripped)
                     } else {
                         type_str
                     }
@@ -6993,7 +6994,7 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
                                 // WINDJAMMER FIX: Enum variant constructors like GameEvent::ItemPickup("text")
                                 // need .to_string() when the variant field is String type
                                 if let Some(variant_types) = self.enum_variant_types.get(&func_name) {
-                                    variant_types.get(i).map_or(false, |ty| matches!(ty, Type::String))
+                                    variant_types.get(i).is_some_and(|ty| matches!(ty, Type::String))
                                 } else {
                                     // Fallback heuristic for constructors
                                     func_name == "new" || func_name.ends_with("::new")
@@ -8807,7 +8808,7 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
         use crate::parser::EnumVariantData;
         variants.iter().all(|variant| match &variant.data {
             EnumVariantData::Unit => true, // Unit variants are always Copy
-            EnumVariantData::Tuple(types) => types.iter().all(|ty| type_analysis::is_copy_type(ty)),
+            EnumVariantData::Tuple(types) => types.iter().all(type_analysis::is_copy_type),
             EnumVariantData::Struct(fields) => fields
                 .iter()
                 .all(|(_, field_type)| type_analysis::is_copy_type(field_type)),
