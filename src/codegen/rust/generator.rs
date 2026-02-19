@@ -761,7 +761,63 @@ impl<'ast> CodeGenerator<'ast> {
                         // Avoids Clippy warning: "unneeded `return` statement"
                         if let Some(expr) = value {
                             output.push_str(&self.indent());
-                            output.push_str(&self.generate_expression(expr));
+                            let mut expr_str = self.generate_expression(expr);
+
+                            // WINDJAMMER PHILOSOPHY: Auto-convert implicit returns when function returns String
+                            // Same logic as Statement::Expression implicit returns
+                            let returns_string = match &self.current_function_return_type {
+                                Some(Type::String) => true,
+                                Some(Type::Custom(name)) if name == "String" => true,
+                                _ => false,
+                            };
+
+                            let in_match_needing_string = self.in_match_arm_needing_string;
+                            let expr_uses_as_str = expr_str.contains(".as_str()");
+                            let should_suppress = self.suppress_string_conversion;
+
+                            if (returns_string || in_match_needing_string)
+                                && !expr_uses_as_str
+                                && !should_suppress
+                            {
+                                // String literal needs .to_string()
+                                if matches!(
+                                    expr,
+                                    Expression::Literal {
+                                        value: Literal::String(_),
+                                        ..
+                                    }
+                                ) && !expr_str.ends_with(".to_string()")
+                                {
+                                    expr_str = format!("{}.to_string()", expr_str);
+                                }
+                                // self.field needs .clone() when self is borrowed
+                                // BUT: Skip .clone() for Copy types (f32, i32, bool, etc.)
+                                else if let Expression::FieldAccess { object, .. } = expr {
+                                    if let Expression::Identifier { name: obj_name, .. } = &**object {
+                                        if obj_name == "self" && !expr_str.ends_with(".clone()") {
+                                            let self_is_borrowed =
+                                                self.current_function_params.iter().any(|p| {
+                                                    p.name == "self"
+                                                        && matches!(
+                                                            p.ownership,
+                                                            crate::parser::OwnershipHint::Ref
+                                                        )
+                                                });
+                                            if self_is_borrowed {
+                                                let is_copy = self
+                                                    .infer_expression_type(expr)
+                                                    .as_ref()
+                                                    .is_some_and(|t| self.is_type_copy(t));
+                                                if !is_copy {
+                                                    expr_str = format!("{}.clone()", expr_str);
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+
+                            output.push_str(&expr_str);
                             output.push('\n');
                         }
                         // Void return as last statement is omitted (block returns () implicitly)
