@@ -793,7 +793,8 @@ impl<'ast> CodeGenerator<'ast> {
                                 // self.field needs .clone() when self is borrowed
                                 // BUT: Skip .clone() for Copy types (f32, i32, bool, etc.)
                                 else if let Expression::FieldAccess { object, .. } = expr {
-                                    if let Expression::Identifier { name: obj_name, .. } = &**object {
+                                    if let Expression::Identifier { name: obj_name, .. } = &**object
+                                    {
                                         if obj_name == "self" && !expr_str.ends_with(".clone()") {
                                             let self_is_borrowed =
                                                 self.current_function_params.iter().any(|p| {
