@@ -14,7 +14,6 @@
 ///
 /// Fix: Check if a function is user-defined (in signature_registry, not extern)
 /// before applying any special-case redirects.
-
 fn compile_to_rust(source: &str) -> String {
     let temp_dir = tempfile::TempDir::new().unwrap();
     let test_file = temp_dir.path().join("test.wj");

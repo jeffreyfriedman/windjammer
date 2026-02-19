@@ -13,10 +13,6 @@
 /// Discovered via dogfooding: ecs/components.wj (ComponentArray<T>)
 use std::process::Command;
 
-fn compile_wj_source(source: &str) -> String {
-    compile_wj_source_named(source, "default")
-}
-
 fn compile_wj_source_named(source: &str, name: &str) -> String {
     let dir = std::env::temp_dir().join(format!("wj_vec_index_ctx_{}", name));
     let _ = std::fs::remove_dir_all(&dir);
@@ -25,8 +21,8 @@ fn compile_wj_source_named(source: &str, name: &str) -> String {
     let wj_file = dir.join("test.wj");
     std::fs::write(&wj_file, source).unwrap();
 
-    let output = Command::new(env!("CARGO_BIN_EXE_wj"))
-        .args(&[
+    let _output = Command::new(env!("CARGO_BIN_EXE_wj"))
+        .args([
             "build",
             wj_file.to_str().unwrap(),
             "--output",
@@ -42,13 +38,12 @@ fn compile_wj_source_named(source: &str, name: &str) -> String {
     for entry in std::fs::read_dir(&dir)
         .unwrap()
         .chain(std::fs::read_dir(dir.join("src")).into_iter().flatten())
+        .flatten()
     {
-        if let Ok(entry) = entry {
-            if entry.path().extension().map_or(false, |e| e == "rs") {
-                if let Ok(content) = std::fs::read_to_string(entry.path()) {
-                    rs_content.push_str(&content);
-                    rs_content.push('\n');
-                }
+        if entry.path().extension().is_some_and(|e| e == "rs") {
+            if let Ok(content) = std::fs::read_to_string(entry.path()) {
+                rs_content.push_str(&content);
+                rs_content.push('\n');
             }
         }
     }
@@ -64,8 +59,8 @@ fn compile_wj_to_rust_and_check(source: &str) -> (String, bool) {
     let wj_file = dir.join("test.wj");
     std::fs::write(&wj_file, source).unwrap();
 
-    let output = Command::new(env!("CARGO_BIN_EXE_wj"))
-        .args(&[
+    let _output = Command::new(env!("CARGO_BIN_EXE_wj"))
+        .args([
             "build",
             wj_file.to_str().unwrap(),
             "--output",
@@ -88,7 +83,7 @@ fn compile_wj_to_rust_and_check(source: &str) -> (String, bool) {
     // Try to compile the generated Rust
     let bin_output = dir.join("test_bin");
     let rustc = Command::new("rustc")
-        .args(&["--edition", "2021", "-o", bin_output.to_str().unwrap()])
+        .args(["--edition", "2021", "-o", bin_output.to_str().unwrap()])
         .arg(&main_rs)
         .output()
         .expect("Failed to run rustc");
@@ -103,8 +98,8 @@ fn compile_wj_to_rust_and_check(source: &str) -> (String, bool) {
 
 #[test]
 fn test_vec_index_no_clone_on_assignment_target() {
-    /// Bug: `self.items[i] = value` generates `self.items[i as usize].clone() = value`
-    /// The .clone() on the LEFT side of assignment is always wrong.
+    // Bug: `self.items[i] = value` generates `self.items[i as usize].clone() = value`
+    // The .clone() on the LEFT side of assignment is always wrong.
     let source = r#"
 struct Item {
     name: string,
@@ -153,8 +148,8 @@ fn main() {
 
 #[test]
 fn test_vec_index_no_clone_on_borrow() {
-    /// Bug: `&self.items[i]` generates `&self.items[i as usize].clone()`
-    /// Taking a reference to a clone is pointless and wrong (reference to temporary).
+    // Bug: `&self.items[i]` generates `&self.items[i as usize].clone()`
+    // Taking a reference to a clone is pointless and wrong (reference to temporary).
     let source = r#"
 struct Item {
     name: string,
@@ -195,8 +190,8 @@ fn main() {
 
 #[test]
 fn test_vec_index_no_clone_on_mut_borrow() {
-    /// Bug: `&mut self.items[i]` generates `&mut self.items[i as usize].clone()`
-    /// Can't take &mut of a temporary.
+    // Bug: `&mut self.items[i]` generates `&mut self.items[i as usize].clone()`
+    // Can't take &mut of a temporary.
     let source = r#"
 struct Item {
     name: string,

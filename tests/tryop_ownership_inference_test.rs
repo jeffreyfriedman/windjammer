@@ -21,7 +21,6 @@ use anyhow::Result;
 ///
 /// FIX: Add TryOp handling to all walking functions in the analyzer so that
 /// expressions wrapped in `?` are still analyzed for ownership inference.
-
 fn compile_wj_to_rust(source: &str) -> Result<String> {
     use std::fs;
     use std::path::PathBuf;
