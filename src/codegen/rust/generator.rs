@@ -818,6 +818,30 @@ impl<'ast> CodeGenerator<'ast> {
                                 }
                             }
 
+                            // FIXED: Auto-cast usize to i64 for implicit returns
+                            // Same logic as Statement::Expression implicit returns
+                            let returns_int = match &self.current_function_return_type {
+                                Some(Type::Int) => true,
+                                Some(Type::Custom(name)) if name == "i64" || name == "int" => true,
+                                _ => false,
+                            };
+
+                            if returns_int && self.expression_produces_usize(expr) {
+                                // Implicit return of .len() - auto-cast!
+                                expr_str = format!("{} as i64", expr_str);
+                            }
+
+                            // WINDJAMMER PHILOSOPHY: Auto-add .cloned() for HashMap.get() and similar methods
+                            // When returning Option<T> but method returns Option<&T>, add .cloned()
+                            let returns_option_owned = self.returns_option_owned_type();
+                            if returns_option_owned
+                                && self.is_method_returning_option_ref(expr)
+                                && !expr_str.ends_with(".cloned()")
+                                && !expr_str.ends_with(".clone()")
+                            {
+                                expr_str = format!("{}.cloned()", expr_str);
+                            }
+
                             output.push_str(&expr_str);
                             output.push('\n');
                         }
