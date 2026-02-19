@@ -45,7 +45,7 @@ fn compile_and_check_rust(source: &str) -> (String, bool) {
         .args([
             "--edition",
             "2021",
-            &rs_path.to_str().unwrap(),
+            rs_path.to_str().unwrap(),
             "--crate-type",
             "lib",
             "-o",

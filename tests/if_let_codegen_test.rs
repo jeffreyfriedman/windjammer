@@ -3,9 +3,10 @@
 /// Bug: The parser converts `if let` to a `Statement::Match` with 2 arms:
 ///   - Arm 0: the destructuring pattern (e.g., `Some(x)`) with body
 ///   - Arm 1: `Pattern::Wildcard` with an empty block body
-/// The codegen then emits a full `match` statement with `_ => {}`, triggering
-/// clippy's "you seem to be trying to use `match` for destructuring a single
-/// pattern" warning (84 instances in windjammer-game).
+///
+///     The codegen then emits a full `match` statement with `_ => {}`, triggering
+///     clippy's "you seem to be trying to use `match` for destructuring a single
+///     pattern" warning (84 instances in windjammer-game).
 ///
 /// Fix: Detect this pattern in Statement::Match codegen and emit `if let`
 /// instead of `match`. When the wildcard arm has a non-empty body, emit
