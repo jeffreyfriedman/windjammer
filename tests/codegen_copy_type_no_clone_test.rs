@@ -789,14 +789,15 @@ fn main() {
     );
 }
 
-/// TDD Test: Comparing .len() with integer literal should not cast to usize
+/// TDD Test: Comparing .len() with 0 should optimize to .is_empty()
 ///
-/// Bug: `items.len() > (0 as usize)` — Rust infers 0 as usize already.
-/// The cast is unnecessary noise.
+/// UPDATED: Previously tested that `items.len() > 0` doesn't add unnecessary
+/// `(0 as usize)` cast. Now we optimize further to `.is_empty()` which is
+/// the idiomatic Rust way (eliminates Clippy warnings).
 ///
 /// Discovered via dogfooding: dialogue_demo.wj, particle_demo.wj, shooter_game.wj
 #[test]
-fn test_len_comparison_no_redundant_usize_cast() {
+fn test_len_comparison_optimized_to_is_empty() {
     let code = compile_to_rust(
         r#"
 fn main() {
@@ -808,15 +809,24 @@ fn main() {
 "#,
     );
 
+    // Should NOT have usize cast (original bug)
     assert!(
         !code.contains("(0 as usize)"),
         "Integer literal 0 in comparison with .len() should not need (0 as usize). Generated:\n{}",
         code
     );
-    // Verify it still compares correctly (just `> 0` or `> 0_usize`)
+    
+    // NEW: Should optimize .len() > 0 to .is_empty()
     assert!(
-        code.contains("> 0"),
-        "Should still compare with 0. Generated:\n{}",
+        code.contains(".is_empty()"),
+        ".len() > 0 should be optimized to !.is_empty(). Generated:\n{}",
+        code
+    );
+    
+    // Should NOT have .len() > 0 (now optimized away)
+    assert!(
+        !code.contains(".len() > 0"),
+        ".len() > 0 should be optimized to .is_empty(). Generated:\n{}",
         code
     );
 }
