@@ -91,6 +91,10 @@ pub struct CodeGenerator<'ast> {
     // EXPRESSION CONTEXT: Track if we're generating code whose value will be used
     // Prevents adding semicolons to final expressions in if-else/match when used as values
     in_expression_context: bool,
+    // TDD: Track if we're generating the top-level function body (enables return optimization)
+    in_function_body: bool,
+    // TDD: Track if the current statement being generated is the last in its block
+    current_is_last_statement: bool,
     // TRAIT TRACKING: Track which custom types support PartialEq
     partial_eq_types: std::collections::HashSet<String>,
     // MATCH ARM CONTEXT: Force string conversion in match arm blocks
@@ -251,6 +255,8 @@ impl<'ast> CodeGenerator<'ast> {
             in_statement_match: false,
             local_variable_scopes: Vec::new(),
             in_expression_context: false,
+            in_function_body: false,
+            current_is_last_statement: false,
             analyzed_trait_methods: std::collections::HashMap::new(),
             generating_traits: std::collections::HashSet::new(),
             recursion_depth: 0,
@@ -608,6 +614,10 @@ impl<'ast> CodeGenerator<'ast> {
             self.current_statement_idx = i;
 
             let is_last = i == len - 1;
+            // TDD: Track if this is the last statement (used by If handler)
+            self.current_is_last_statement = is_last;
+            // TDD FIX: Only optimize return statements in function body (not nested blocks)
+            let should_optimize_return = self.in_function_body && matches!(stmt, Statement::Return { .. });
             if is_last
                 && matches!(
                     stmt,
@@ -615,8 +625,9 @@ impl<'ast> CodeGenerator<'ast> {
                         | Statement::Thread { .. }
                         | Statement::Async { .. }
                 )
+                || (is_last && should_optimize_return)
             {
-                // Last statement is an expression or thread/async block - generate without discard (it's the return value)
+                // Last statement is an expression, thread/async block, or return - generate as implicit return
                 match stmt {
                     Statement::Expression { expr, .. } => {
                         output.push_str(&self.indent());
@@ -741,6 +752,16 @@ impl<'ast> CodeGenerator<'ast> {
                         self.indent_level -= 1;
                         output.push_str(&self.indent());
                         output.push_str("})\n");
+                    }
+                    Statement::Return { value, .. } => {
+                        // TDD FIX: Convert explicit return to implicit return when last statement
+                        // Avoids Clippy warning: "unneeded `return` statement"
+                        if let Some(expr) = value {
+                            output.push_str(&self.indent());
+                            output.push_str(&self.generate_expression(expr));
+                            output.push('\n');
+                        }
+                        // Void return as last statement is omitted (block returns () implicitly)
                     }
                     _ => unreachable!(),
                 }
@@ -3167,20 +3188,48 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
             self.indent_level += 1;
         }
 
+        eprintln!("DEBUG: About to generate function body for {}", func.name);
+        
         // Generate function body
         // THE WINDJAMMER WAY: Treat last expression specially (no semicolon for return value)
+        // TDD FIX: Also convert explicit `return expr` to implicit return when last statement
         let body_len = func.body.len();
+        eprintln!("DEBUG generate_function: func={}, body_len={}", func.name, body_len);
         for (i, stmt) in func.body.iter().enumerate() {
             let is_last = i == body_len - 1;
+            let stmt_name = match stmt {
+                Statement::Return { .. } => "Return",
+                Statement::Expression { .. } => "Expression",
+                _ => "Other",
+            };
+            eprintln!("DEBUG generate_function: i={}, is_last={}, stmt_type={}", i, is_last, stmt_name);
+            let cond_matches = matches!(stmt, Statement::Expression { .. } | Statement::Return { .. });
+            eprintln!("DEBUG: is_last={}, cond_matches={}, both={}", is_last, cond_matches, is_last && cond_matches);
 
-            // If this is the last statement and it's an expression, generate it without semicolon
-            if is_last && matches!(stmt, Statement::Expression { .. }) {
-                if let Statement::Expression { expr, .. } = stmt {
-                    output.push_str(&self.indent());
-                    output.push_str(&self.generate_expression(expr));
-                    output.push('\n');
+            // If this is the last statement, use implicit return (suppress `return` keyword)
+            if is_last && matches!(stmt, Statement::Expression { .. } | Statement::Return { .. }) {
+                eprintln!("DEBUG: **** ENTERING implicit return handler ****");
+
+                match stmt {
+                    Statement::Expression { expr, .. } => {
+                        output.push_str(&self.indent());
+                        output.push_str(&self.generate_expression(expr));
+                        output.push('\n');
+                    }
+                    Statement::Return { value: Some(expr), .. } => {
+                        // TDD FIX: Convert explicit `return expr` to implicit return
+                        // Generates idiomatic Rust without Clippy warnings
+                        output.push_str(&self.indent());
+                        output.push_str(&self.generate_expression(expr));
+                        output.push('\n');
+                    }
+                    Statement::Return { value: None, .. } => {
+                        // Void return as last statement — omit entirely (function returns () implicitly)
+                    }
+                    _ => unreachable!(),
                 }
             } else {
+                // Not last statement — generate normally (early returns keep `return` keyword)
                 output.push_str(&self.generate_statement(stmt));
             }
         }
@@ -4000,7 +4049,12 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
         output.push_str(" {\n");
         self.indent_level += 1;
 
+        // TDD: Generate function body with return optimization
+        // Set flag to enable implicit return for last statement
+        let old_in_function_body = self.in_function_body;
+        self.in_function_body = true;
         let mut body_code = self.generate_block(&func.body);
+        self.in_function_body = old_in_function_body;
 
         // PHASE 6 OPTIMIZATION: Add defer drop logic before function returns
         // This defers heavy deallocations to a background thread for 10,000x speedup
@@ -4594,6 +4648,13 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
                 output.push_str(&self.generate_expression(condition));
                 output.push_str(" {\n");
 
+                // TDD: Only clear in_function_body for if-statements that are NOT the last statement
+                // If this is the last statement, keep the flag so branch returns get optimized
+                let old_in_func_body = self.in_function_body;
+                if !self.current_is_last_statement {
+                    self.in_function_body = false;
+                }
+                
                 self.indent_level += 1;
                 output.push_str(&self.generate_block(then_block));
                 self.indent_level -= 1;
@@ -4609,6 +4670,8 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
                     output.push_str(&self.indent());
                     output.push('}');
                 }
+                
+                self.in_function_body = old_in_func_body;
 
                 self.suppress_string_conversion = old_suppress;
                 output.push('\n');
@@ -8291,19 +8354,19 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
                 self.indent_level += 1;
 
                 let len = stmts.len();
-                for (i, stmt) in stmts.iter().enumerate() {
-                    let is_last = i == len - 1;
-                    if is_last
-                        && matches!(
-                            stmt,
-                            Statement::Expression { .. }
-                                | Statement::Thread { .. }
-                                | Statement::Async { .. }
-                        )
-                    {
-                        // Last statement is an expression or thread/async block - generate without discard (it's the return value)
-                        match stmt {
-                            Statement::Expression { expr, .. } => {
+        for (i, stmt) in stmts.iter().enumerate() {
+            let is_last = i == len - 1;
+            if is_last
+                && matches!(
+                    stmt,
+                    Statement::Expression { .. }
+                        | Statement::Thread { .. }
+                        | Statement::Async { .. }
+                )
+            {
+                // Last statement is an expression, thread/async block - generate as implicit return
+                match stmt {
+                    Statement::Expression { expr, .. } => {
                                 output.push_str(&self.indent());
                                 let mut expr_str = self.generate_expression(expr);
 
