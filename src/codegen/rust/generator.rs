@@ -6247,6 +6247,41 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
             Expression::Binary {
                 left, op, right, ..
             } => {
+                // TDD FIX: Optimize .len() comparisons to .is_empty()
+                // Clippy warns about .len() == 0, .len() != 0, .len() > 0
+                // Transform to .is_empty() or !.is_empty()
+                if let Expression::MethodCall {
+                    object,
+                    method,
+                    arguments,
+                    ..
+                } = left
+                {
+                    if method == "len" && arguments.is_empty() {
+                        // Check if comparing to 0
+                        if let Expression::Literal {
+                            value: Literal::Int(0),
+                            ..
+                        } = right
+                        {
+                            match op {
+                                BinaryOp::Eq => {
+                                    // .len() == 0 → .is_empty()
+                                    let obj_str = self.generate_expression(object);
+                                    return format!("{}.is_empty()", obj_str);
+                                }
+                                BinaryOp::Ne | BinaryOp::Gt => {
+                                    // .len() != 0 → !.is_empty()
+                                    // .len() > 0 → !.is_empty()
+                                    let obj_str = self.generate_expression(object);
+                                    return format!("!{}.is_empty()", obj_str);
+                                }
+                                _ => {}
+                            }
+                        }
+                    }
+                }
+
                 // Special handling for string concatenation
                 if matches!(op, BinaryOp::Add) {
                     // Only treat as string concat if at least one operand is definitely a string literal
