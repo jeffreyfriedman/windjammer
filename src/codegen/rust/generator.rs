@@ -617,7 +617,8 @@ impl<'ast> CodeGenerator<'ast> {
             // TDD: Track if this is the last statement (used by If handler)
             self.current_is_last_statement = is_last;
             // TDD FIX: Only optimize return statements in function body (not nested blocks)
-            let should_optimize_return = self.in_function_body && matches!(stmt, Statement::Return { .. });
+            let should_optimize_return =
+                self.in_function_body && matches!(stmt, Statement::Return { .. });
             if is_last
                 && matches!(
                     stmt,
@@ -681,7 +682,8 @@ impl<'ast> CodeGenerator<'ast> {
                                                     )
                                             });
                                         if self_is_borrowed {
-                                            let is_copy = self.infer_expression_type(expr)
+                                            let is_copy = self
+                                                .infer_expression_type(expr)
                                                 .as_ref()
                                                 .is_some_and(|t| self.is_type_copy(t));
                                             if !is_copy {
@@ -3189,12 +3191,15 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
         }
 
         eprintln!("DEBUG: About to generate function body for {}", func.name);
-        
+
         // Generate function body
         // THE WINDJAMMER WAY: Treat last expression specially (no semicolon for return value)
         // TDD FIX: Also convert explicit `return expr` to implicit return when last statement
         let body_len = func.body.len();
-        eprintln!("DEBUG generate_function: func={}, body_len={}", func.name, body_len);
+        eprintln!(
+            "DEBUG generate_function: func={}, body_len={}",
+            func.name, body_len
+        );
         for (i, stmt) in func.body.iter().enumerate() {
             let is_last = i == body_len - 1;
             let stmt_name = match stmt {
@@ -3202,12 +3207,28 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
                 Statement::Expression { .. } => "Expression",
                 _ => "Other",
             };
-            eprintln!("DEBUG generate_function: i={}, is_last={}, stmt_type={}", i, is_last, stmt_name);
-            let cond_matches = matches!(stmt, Statement::Expression { .. } | Statement::Return { .. });
-            eprintln!("DEBUG: is_last={}, cond_matches={}, both={}", is_last, cond_matches, is_last && cond_matches);
+            eprintln!(
+                "DEBUG generate_function: i={}, is_last={}, stmt_type={}",
+                i, is_last, stmt_name
+            );
+            let cond_matches = matches!(
+                stmt,
+                Statement::Expression { .. } | Statement::Return { .. }
+            );
+            eprintln!(
+                "DEBUG: is_last={}, cond_matches={}, both={}",
+                is_last,
+                cond_matches,
+                is_last && cond_matches
+            );
 
             // If this is the last statement, use implicit return (suppress `return` keyword)
-            if is_last && matches!(stmt, Statement::Expression { .. } | Statement::Return { .. }) {
+            if is_last
+                && matches!(
+                    stmt,
+                    Statement::Expression { .. } | Statement::Return { .. }
+                )
+            {
                 eprintln!("DEBUG: **** ENTERING implicit return handler ****");
 
                 match stmt {
@@ -3216,7 +3237,9 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
                         output.push_str(&self.generate_expression(expr));
                         output.push('\n');
                     }
-                    Statement::Return { value: Some(expr), .. } => {
+                    Statement::Return {
+                        value: Some(expr), ..
+                    } => {
                         // TDD FIX: Convert explicit `return expr` to implicit return
                         // Generates idiomatic Rust without Clippy warnings
                         output.push_str(&self.indent());
@@ -4037,7 +4060,9 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
         if let Some(return_type) = &func.return_type {
             output.push_str(" -> ");
             if needs_lifetime {
-                output.push_str(&crate::codegen::rust::types::type_to_rust_with_lifetime(return_type));
+                output.push_str(&crate::codegen::rust::types::type_to_rust_with_lifetime(
+                    return_type,
+                ));
             } else {
                 output.push_str(&self.type_to_rust(return_type));
             }
@@ -4258,7 +4283,8 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
                                             // Not a constructor — look up return type from signature registry
                                             // e.g., MathHelper::fade(x) → return type is f32
                                             let qualified = format!("{}::{}", type_name, field);
-                                            self.signature_registry.get_signature(&qualified)
+                                            self.signature_registry
+                                                .get_signature(&qualified)
                                                 .and_then(|sig| sig.return_type.clone())
                                         }
                                     } else {
@@ -4654,7 +4680,7 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
                 if !self.current_is_last_statement {
                     self.in_function_body = false;
                 }
-                
+
                 self.indent_level += 1;
                 output.push_str(&self.generate_block(then_block));
                 self.indent_level -= 1;
@@ -4670,7 +4696,7 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
                     output.push_str(&self.indent());
                     output.push('}');
                 }
-                
+
                 self.in_function_body = old_in_func_body;
 
                 self.suppress_string_conversion = old_suppress;
@@ -4771,7 +4797,9 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
                         && self.match_scrutinee_is_self_method_call(value)
                         && self.match_arms_mutate_self(arms);
 
-                    if !needs_borrow_break_check && (wildcard_body_is_empty || wildcard_body_stmts.is_some()) {
+                    if !needs_borrow_break_check
+                        && (wildcard_body_is_empty || wildcard_body_stmts.is_some())
+                    {
                         let value_str = self.generate_expression(value);
                         let main_arm = &arms[0];
 
@@ -5303,8 +5331,7 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
                         // Compare by generated string to handle nested field chains uniformly
                         (Expression::FieldAccess { .. }, Expression::FieldAccess { .. })
                         | (Expression::Index { .. }, Expression::Index { .. }) => {
-                            self.generate_expression(target)
-                                == self.generate_expression(left)
+                            self.generate_expression(target) == self.generate_expression(left)
                         }
                         _ => false,
                     };
@@ -5320,9 +5347,17 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
                         if let Type::Custom(name) = t {
                             // Blacklist: custom types from the game engine that implement
                             // Add/Sub/Mul but NOT AddAssign/SubAssign/MulAssign
-                            matches!(name.as_str(),
-                                "Vec2" | "Vec3" | "Vec4" | "Color" | "Quat"
-                                | "Mat3" | "Mat4" | "Point" | "Size"
+                            matches!(
+                                name.as_str(),
+                                "Vec2"
+                                    | "Vec3"
+                                    | "Vec4"
+                                    | "Color"
+                                    | "Quat"
+                                    | "Mat3"
+                                    | "Mat4"
+                                    | "Point"
+                                    | "Size"
                             )
                         } else {
                             false
@@ -5687,16 +5722,16 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
                     } else {
                         // var.field → look up var's type, then its field
                         // Check local variables first, then function parameters
-                        let var_type = self
-                            .local_var_types
-                            .get(name.as_str())
-                            .cloned()
-                            .or_else(|| {
-                                self.current_function_params
-                                    .iter()
-                                    .find(|p| p.name == *name)
-                                    .map(|p| p.type_.clone())
-                            });
+                        let var_type =
+                            self.local_var_types
+                                .get(name.as_str())
+                                .cloned()
+                                .or_else(|| {
+                                    self.current_function_params
+                                        .iter()
+                                        .find(|p| p.name == *name)
+                                        .map(|p| p.type_.clone())
+                                });
                         if let Some(var_type) = var_type {
                             let type_name = match &var_type {
                                 Type::Custom(n) => n.as_str(),
@@ -5865,7 +5900,10 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
                 // Extract function name for signature lookup
                 // Pattern: Type::method() → "Type::method"
                 if let Expression::FieldAccess { object, field, .. } = function {
-                    if let Expression::Identifier { name: type_name, .. } = object {
+                    if let Expression::Identifier {
+                        name: type_name, ..
+                    } = object
+                    {
                         let qualified = format!("{}::{}", type_name, field);
                         if let Some(sig) = self.signature_registry.get_signature(&qualified) {
                             return sig.return_type.clone();
@@ -6614,8 +6652,7 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
                             .map(|(idx, (_label, arg))| {
                                 let generated = self.generate_expression(arg);
                                 // assert_is_some and assert_is_none expect &Option, so add & for first arg
-                                if (func_name == "assert_is_some"
-                                    || func_name == "assert_is_none")
+                                if (func_name == "assert_is_some" || func_name == "assert_is_none")
                                     && idx == 0
                                 {
                                     format!("&{}", generated)
@@ -6806,7 +6843,12 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
                 // a method call to avoid the FieldAccess auto-clone inserting .clone()
                 // between the method name and the call parentheses.
                 // e.g., e.get_tag() should NOT become e.get_tag.clone()()
-                if let Expression::FieldAccess { object: call_obj, field: call_method, .. } = &**function {
+                if let Expression::FieldAccess {
+                    object: call_obj,
+                    field: call_method,
+                    ..
+                } = &**function
+                {
                     // DOUBLE-CLONE FIX: When the method is .clone(), suppress auto-clone on
                     // the object to prevent .clone().clone(). Same as MethodCall handler.
                     let prev_explicit_clone = self.in_explicit_clone_call;
@@ -7789,7 +7831,12 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
                 //      (e.g., stack.item.stats.armor → don't clone item, Rust auto-derefs through &)
                 // AND: Don't clone in borrow context (&recipe.ingredients → reference is sufficient)
                 // WINDJAMMER PHILOSOPHY: Use type inference first, fall back to name heuristics
-                if !self.generating_assignment_target && !self.suppress_borrowed_clone && !self.in_explicit_clone_call && !self.in_field_access_object && !self.in_borrow_context {
+                if !self.generating_assignment_target
+                    && !self.suppress_borrowed_clone
+                    && !self.in_explicit_clone_call
+                    && !self.in_field_access_object
+                    && !self.in_borrow_context
+                {
                     if let Expression::Identifier { name: var_name, .. } = &**object {
                         if self.borrowed_iterator_vars.contains(var_name) {
                             // First: use type inference to check if the field type is Copy
@@ -8062,7 +8109,11 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
                         } else {
                             format!("{} as usize", idx_str)
                         }
-                    } else if let Expression::Literal { value: Literal::Int(n), .. } = &**index {
+                    } else if let Expression::Literal {
+                        value: Literal::Int(n),
+                        ..
+                    } = &**index
+                    {
                         // Integer literal: Rust infers type from context in index position,
                         // so `arr[0]` works without `as usize`. Only cast if negative
                         // (which would be a logic error, but preserve the cast for clarity).
@@ -8097,9 +8148,7 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
 
                 if !suppress_clone {
                     // First check auto_clone_analysis (path-based analysis)
-                    if let Some(path) =
-                        ast_utilities::extract_field_access_path(expr_to_generate)
-                    {
+                    if let Some(path) = ast_utilities::extract_field_access_path(expr_to_generate) {
                         if let Some(ref analysis) = self.auto_clone_analysis {
                             if analysis
                                 .needs_clone(&path, self.current_statement_idx)
@@ -8261,24 +8310,41 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
                 // In Windjammer, `string` maps to Rust `String`, so vec!["a", "b"] must
                 // become vec!["a".to_string(), "b".to_string()] for Vec<String>.
                 // Only apply when: macro is vec, brackets delimiter, has string literal args.
-                let final_arg_strs: Vec<String> = if name == "vec" && matches!(delimiter, MacroDelimiter::Brackets) && !*is_repeat {
-                    arg_strs.iter().enumerate().map(|(idx, s)| {
-                        // Check if the original arg is a string literal
-                        if idx < args.len() {
-                            if let Expression::Literal { value: Literal::String(_), .. } = &args[idx] {
-                                // Add .to_string() if not already present
-                                if !s.ends_with(".to_string()") {
-                                    return format!("{}.to_string()", s);
+                let final_arg_strs: Vec<String> = if name == "vec"
+                    && matches!(delimiter, MacroDelimiter::Brackets)
+                    && !*is_repeat
+                {
+                    arg_strs
+                        .iter()
+                        .enumerate()
+                        .map(|(idx, s)| {
+                            // Check if the original arg is a string literal
+                            if idx < args.len() {
+                                if let Expression::Literal {
+                                    value: Literal::String(_),
+                                    ..
+                                } = &args[idx]
+                                {
+                                    // Add .to_string() if not already present
+                                    if !s.ends_with(".to_string()") {
+                                        return format!("{}.to_string()", s);
+                                    }
                                 }
                             }
-                        }
-                        s.clone()
-                    }).collect()
+                            s.clone()
+                        })
+                        .collect()
                 } else {
                     arg_strs
                 };
 
-                format!("{}!{}{}{}", name, open, final_arg_strs.join(separator), close)
+                format!(
+                    "{}!{}{}{}",
+                    name,
+                    open,
+                    final_arg_strs.join(separator),
+                    close
+                )
             }
             Expression::Cast { expr, type_, .. } => {
                 // Add parentheses around binary expressions for correct precedence
@@ -8444,19 +8510,19 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
                 self.indent_level += 1;
 
                 let len = stmts.len();
-        for (i, stmt) in stmts.iter().enumerate() {
-            let is_last = i == len - 1;
-            if is_last
-                && matches!(
-                    stmt,
-                    Statement::Expression { .. }
-                        | Statement::Thread { .. }
-                        | Statement::Async { .. }
-                )
-            {
-                // Last statement is an expression, thread/async block - generate as implicit return
-                match stmt {
-                    Statement::Expression { expr, .. } => {
+                for (i, stmt) in stmts.iter().enumerate() {
+                    let is_last = i == len - 1;
+                    if is_last
+                        && matches!(
+                            stmt,
+                            Statement::Expression { .. }
+                                | Statement::Thread { .. }
+                                | Statement::Async { .. }
+                        )
+                    {
+                        // Last statement is an expression, thread/async block - generate as implicit return
+                        match stmt {
+                            Statement::Expression { expr, .. } => {
                                 output.push_str(&self.indent());
                                 let mut expr_str = self.generate_expression(expr);
 
@@ -8741,9 +8807,7 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
         use crate::parser::EnumVariantData;
         variants.iter().all(|variant| match &variant.data {
             EnumVariantData::Unit => true, // Unit variants are always Copy
-            EnumVariantData::Tuple(types) => {
-                types.iter().all(|ty| type_analysis::is_copy_type(ty))
-            }
+            EnumVariantData::Tuple(types) => types.iter().all(|ty| type_analysis::is_copy_type(ty)),
             EnumVariantData::Struct(fields) => fields
                 .iter()
                 .all(|(_, field_type)| type_analysis::is_copy_type(field_type)),
@@ -8800,7 +8864,10 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
                     .get(*param_idx)
                     .unwrap_or(&param.type_);
 
-                if matches!(inferred_type, Type::Reference(_) | Type::MutableReference(_)) {
+                if matches!(
+                    inferred_type,
+                    Type::Reference(_) | Type::MutableReference(_)
+                ) {
                     return true;
                 }
 

@@ -165,7 +165,7 @@ fn main() {
         "Empty array currently generates vec![] due to type inference. Generated:\n{}",
         code
     );
-    
+
     // Verify it compiles (rustc will convert vec![] to the target type)
     assert!(
         code.contains("values: [i32; 0]"),
