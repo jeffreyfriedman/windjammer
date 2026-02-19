@@ -17,7 +17,7 @@ static TEST_COUNTER: AtomicU64 = AtomicU64::new(0);
 fn unique_dir(prefix: &str) -> std::path::PathBuf {
     let id = TEST_COUNTER.fetch_add(1, Ordering::SeqCst);
     let pid = std::process::id();
-    std::path::PathBuf::from(format!("/tmp/wj-test-enum-str-{}-{}-{}", prefix, pid, id))
+    std::env::temp_dir().join(format!("wj-test-enum-str-{}-{}-{}", prefix, pid, id))
 }
 
 fn compile_wj_to_rust(wj_source: &str, test_name: &str) -> (String, bool) {
