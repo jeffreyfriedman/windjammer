@@ -19,7 +19,7 @@ fn compile_wj_source_named(source: &str, name: &str) -> String {
     std::fs::write(&wj_file, source).unwrap();
 
     let _output = Command::new(env!("CARGO_BIN_EXE_wj"))
-        .args(&[
+        .args([
             "build",
             wj_file.to_str().unwrap(),
             "--output",
@@ -35,13 +35,12 @@ fn compile_wj_source_named(source: &str, name: &str) -> String {
     for entry in std::fs::read_dir(&dir)
         .unwrap()
         .chain(std::fs::read_dir(dir.join("src")).into_iter().flatten())
+        .flatten()
     {
-        if let Ok(entry) = entry {
-            if entry.path().extension().map_or(false, |e| e == "rs") {
-                if let Ok(content) = std::fs::read_to_string(entry.path()) {
-                    rs_content.push_str(&content);
-                    rs_content.push('\n');
-                }
+        if entry.path().extension().is_some_and(|e| e == "rs") {
+            if let Ok(content) = std::fs::read_to_string(entry.path()) {
+                rs_content.push_str(&content);
+                rs_content.push('\n');
             }
         }
     }

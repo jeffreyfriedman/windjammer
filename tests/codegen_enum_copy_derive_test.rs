@@ -26,7 +26,7 @@ fn compile_wj(source: &str) -> String {
     let wj_file = dir.join("test.wj");
     std::fs::write(&wj_file, source).unwrap();
 
-    let output = Command::new(env!("CARGO_BIN_EXE_wj"))
+    let _output = Command::new(env!("CARGO_BIN_EXE_wj"))
         .args([
             "build",
             "--target",

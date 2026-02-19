@@ -30,7 +30,7 @@ fn compile_wj_to_rust(wj_source: &str, test_name: &str) -> (String, bool) {
 
     let wj_binary = Path::new(env!("CARGO_MANIFEST_DIR")).join("target/release/wj");
 
-    let output = Command::new(&wj_binary)
+    let _output = Command::new(&wj_binary)
         .args([
             "build",
             wj_file.to_str().unwrap(),

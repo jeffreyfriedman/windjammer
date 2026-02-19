@@ -13,7 +13,6 @@ use anyhow::Result;
 /// FIX: Use `.as_ref()` instead of `.as_deref()`. This works for ALL types:
 ///   Option<String>.as_ref() → Option<&String>   (String auto-coerces to &str where needed)
 ///   Option<Custom>.as_ref() → Option<&Custom>   (works for any type)
-
 fn compile_wj_to_rust(source: &str) -> Result<String> {
     use std::fs;
     use std::path::PathBuf;

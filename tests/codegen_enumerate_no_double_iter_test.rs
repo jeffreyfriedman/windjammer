@@ -9,7 +9,6 @@
 /// `.into_iter()`, skip adding the extra `.iter()` prefix.
 ///
 /// Discovered via: codegen_loops_comprehensive_tests::test_enumerate_basic
-
 fn compile_to_rust(source: &str) -> String {
     let temp_dir = tempfile::TempDir::new().unwrap();
     let test_file = temp_dir.path().join("test.wj");
