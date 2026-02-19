@@ -4678,6 +4678,61 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
                 output
             }
             Statement::Match { value, arms, .. } => {
+                // TDD FIX: Optimize boolean match expressions to matches! macro
+                // Clippy warns about match expressions that just return true/false
+                // Example: match x { Some(_) => true, None => false } → matches!(x, Some(_))
+                if arms.len() == 2 && arms[0].guard.is_none() && arms[1].guard.is_none() {
+                    // Check if both arms have simple literal bodies (true/false)
+                    let arm0_is_true = matches!(
+                        arms[0].body,
+                        Expression::Literal {
+                            value: Literal::Bool(true),
+                            ..
+                        }
+                    );
+                    let arm0_is_false = matches!(
+                        arms[0].body,
+                        Expression::Literal {
+                            value: Literal::Bool(false),
+                            ..
+                        }
+                    );
+                    let arm1_is_true = matches!(
+                        arms[1].body,
+                        Expression::Literal {
+                            value: Literal::Bool(true),
+                            ..
+                        }
+                    );
+                    let arm1_is_false = matches!(
+                        arms[1].body,
+                        Expression::Literal {
+                            value: Literal::Bool(false),
+                            ..
+                        }
+                    );
+
+                    // Pattern 1: first arm true, second arm false
+                    // match x { Pattern => true, _ => false } → matches!(x, Pattern)
+                    if arm0_is_true && arm1_is_false {
+                        let value_str = self.generate_expression(value);
+                        let pattern_str = self.generate_pattern(&arms[0].pattern);
+                        let mut output = self.indent();
+                        output.push_str(&format!("matches!({}, {})\n", value_str, pattern_str));
+                        return output;
+                    }
+
+                    // Pattern 2: first arm false, second arm true
+                    // match x { Pattern => false, _ => true } → !matches!(x, Pattern)
+                    if arm0_is_false && arm1_is_true {
+                        let value_str = self.generate_expression(value);
+                        let pattern_str = self.generate_pattern(&arms[0].pattern);
+                        let mut output = self.indent();
+                        output.push_str(&format!("!matches!({}, {})\n", value_str, pattern_str));
+                        return output;
+                    }
+                }
+
                 // TDD FIX: Detect `if let` pattern and generate `if let` instead of `match`
                 //
                 // The parser converts `if let Pattern = expr { body }` into:
