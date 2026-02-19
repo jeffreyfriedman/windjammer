@@ -65,7 +65,7 @@ fn compile_project(files: &[(&str, &str)]) -> std::collections::HashMap<String, 
                         .strip_prefix(base)
                         .unwrap()
                         .to_string_lossy()
-                        .to_string();
+                        .replace('\\', "/"); // Normalize to Unix-style paths for cross-platform tests
                     let content = fs::read_to_string(&path).unwrap();
                     result.insert(rel, content);
                 }
