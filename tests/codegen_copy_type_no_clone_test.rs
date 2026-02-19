@@ -815,14 +815,14 @@ fn main() {
         "Integer literal 0 in comparison with .len() should not need (0 as usize). Generated:\n{}",
         code
     );
-    
+
     // NEW: Should optimize .len() > 0 to .is_empty()
     assert!(
         code.contains(".is_empty()"),
         ".len() > 0 should be optimized to !.is_empty(). Generated:\n{}",
         code
     );
-    
+
     // Should NOT have .len() > 0 (now optimized away)
     assert!(
         !code.contains(".len() > 0"),

@@ -27,7 +27,6 @@ use anyhow::Result;
 ///     return 42;  // ⚠️  Clippy: unneeded `return` statement
 /// }
 /// ```
-
 use std::fs;
 use std::path::PathBuf;
 use std::process::Command;
@@ -102,13 +101,12 @@ version = "0.1.0"
     let stdout = String::from_utf8_lossy(&output.stdout);
 
     // Read the generated Rust file
-    let generated = fs::read_to_string(output_dir.join("main.rs"))
-        .unwrap_or_else(|_| {
-            panic!(
-                "Failed to read generated main.rs\nstdout: {}\nstderr: {}",
-                stdout, stderr
-            )
-        });
+    let generated = fs::read_to_string(output_dir.join("main.rs")).unwrap_or_else(|_| {
+        panic!(
+            "Failed to read generated main.rs\nstdout: {}\nstderr: {}",
+            stdout, stderr
+        )
+    });
 
     // ASSERTION 1: Last statement return should be omitted (implicit return)
     // The function should end with just `42` not `return 42;`
@@ -197,13 +195,12 @@ version = "0.1.0"
     let stderr = String::from_utf8_lossy(&output.stderr);
     let stdout = String::from_utf8_lossy(&output.stdout);
 
-    let generated = fs::read_to_string(output_dir.join("main.rs"))
-        .unwrap_or_else(|_| {
-            panic!(
-                "Failed to read generated main.rs\nstdout: {}\nstderr: {}",
-                stdout, stderr
-            )
-        });
+    let generated = fs::read_to_string(output_dir.join("main.rs")).unwrap_or_else(|_| {
+        panic!(
+            "Failed to read generated main.rs\nstdout: {}\nstderr: {}",
+            stdout, stderr
+        )
+    });
 
     // ASSERTION: Early returns SHOULD be kept (they're not the last statement)
     assert!(
@@ -273,13 +270,12 @@ version = "0.1.0"
     let stderr = String::from_utf8_lossy(&output.stderr);
     let stdout = String::from_utf8_lossy(&output.stdout);
 
-    let generated = fs::read_to_string(output_dir.join("main.rs"))
-        .unwrap_or_else(|_| {
-            panic!(
-                "Failed to read generated main.rs\nstdout: {}\nstderr: {}",
-                stdout, stderr
-            )
-        });
+    let generated = fs::read_to_string(output_dir.join("main.rs")).unwrap_or_else(|_| {
+        panic!(
+            "Failed to read generated main.rs\nstdout: {}\nstderr: {}",
+            stdout, stderr
+        )
+    });
 
     // ASSERTION: Void return (return; with no value) in if branches is an early exit
     // so it should be kept. But if it's the last statement of the function body, it can be omitted.

@@ -191,7 +191,11 @@ pub fn type_to_rust_with_lifetime(type_: &Type) -> String {
         }
         // For container types, recurse to add lifetime to nested references
         Type::Option(inner) => format!("Option<{}>", type_to_rust_with_lifetime(inner)),
-        Type::Result(ok, err) => format!("Result<{}, {}>", type_to_rust_with_lifetime(ok), type_to_rust_with_lifetime(err)),
+        Type::Result(ok, err) => format!(
+            "Result<{}, {}>",
+            type_to_rust_with_lifetime(ok),
+            type_to_rust_with_lifetime(err)
+        ),
         Type::Tuple(types) => {
             let rust_types: Vec<String> = types.iter().map(type_to_rust_with_lifetime).collect();
             format!("({})", rust_types.join(", "))

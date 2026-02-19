@@ -14,7 +14,6 @@
 ///       Message { text: String },
 ///   }
 ///   // Should NOT derive Copy because String is not Copy
-
 use std::process::Command;
 
 fn compile_wj(source: &str) -> String {

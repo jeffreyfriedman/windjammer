@@ -26,7 +26,6 @@ use anyhow::Result;
 ///     None => false,
 /// }
 /// ```
-
 use std::fs;
 use std::path::PathBuf;
 use std::process::Command;
@@ -91,13 +90,12 @@ version = "0.1.0"
     let stdout = String::from_utf8_lossy(&output.stdout);
 
     // Read the generated Rust file
-    let generated = fs::read_to_string(output_dir.join("main.rs"))
-        .unwrap_or_else(|_| {
-            panic!(
-                "Failed to read generated main.rs\nstdout: {}\nstderr: {}",
-                stdout, stderr
-            )
-        });
+    let generated = fs::read_to_string(output_dir.join("main.rs")).unwrap_or_else(|_| {
+        panic!(
+            "Failed to read generated main.rs\nstdout: {}\nstderr: {}",
+            stdout, stderr
+        )
+    });
 
     // ASSERTION 1: Should use matches! macro
     assert!(
@@ -184,13 +182,12 @@ version = "0.1.0"
     let stderr = String::from_utf8_lossy(&output.stderr);
     let stdout = String::from_utf8_lossy(&output.stdout);
 
-    let generated = fs::read_to_string(output_dir.join("main.rs"))
-        .unwrap_or_else(|_| {
-            panic!(
-                "Failed to read generated main.rs\nstdout: {}\nstderr: {}",
-                stdout, stderr
-            )
-        });
+    let generated = fs::read_to_string(output_dir.join("main.rs")).unwrap_or_else(|_| {
+        panic!(
+            "Failed to read generated main.rs\nstdout: {}\nstderr: {}",
+            stdout, stderr
+        )
+    });
 
     // ASSERTION: Should use !matches! for inverted pattern
     assert!(
@@ -261,13 +258,12 @@ version = "0.1.0"
     let stderr = String::from_utf8_lossy(&output.stderr);
     let stdout = String::from_utf8_lossy(&output.stdout);
 
-    let generated = fs::read_to_string(output_dir.join("main.rs"))
-        .unwrap_or_else(|_| {
-            panic!(
-                "Failed to read generated main.rs\nstdout: {}\nstderr: {}",
-                stdout, stderr
-            )
-        });
+    let generated = fs::read_to_string(output_dir.join("main.rs")).unwrap_or_else(|_| {
+        panic!(
+            "Failed to read generated main.rs\nstdout: {}\nstderr: {}",
+            stdout, stderr
+        )
+    });
 
     // ASSERTION: Complex match should NOT use matches! (returns different values)
     assert!(
