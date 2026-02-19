@@ -5,7 +5,6 @@
 /// not field access patterns (self.x = self.x + y) or index patterns (arr[i] = arr[i] + 1).
 ///
 /// Fix: Extended the pattern matcher to detect FieldAccess and Index targets.
-
 use std::io::Write;
 use std::process::Command;
 

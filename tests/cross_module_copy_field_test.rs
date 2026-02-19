@@ -13,7 +13,6 @@
 ///
 /// Expected: Copy-type fields (i32, f32, bool, usize) should NOT have .clone()
 /// even in multi-file builds where the struct is defined in another module.
-
 use std::io::Write;
 use std::process::Command;
 
@@ -70,7 +69,11 @@ fn compile_wj_project(files: &[(&str, &str)]) -> std::collections::HashMap<Strin
                 if path.is_dir() {
                     collect_rs_files(&path, base, results);
                 } else if path.extension().is_some_and(|e| e == "rs") {
-                    let relative = path.strip_prefix(base).unwrap().to_string_lossy().to_string();
+                    let relative = path
+                        .strip_prefix(base)
+                        .unwrap()
+                        .to_string_lossy()
+                        .to_string();
                     if let Ok(content) = std::fs::read_to_string(&path) {
                         results.insert(relative, content);
                     }

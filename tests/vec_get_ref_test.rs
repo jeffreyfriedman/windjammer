@@ -8,7 +8,6 @@
 /// as HashMap::get(&K), but Vec::get(usize) takes index by value.
 ///
 /// Discovered via dogfooding: windjammer-ui/curve_editor.wj
-
 use std::process::Command;
 
 fn compile_wj_source_named(source: &str, name: &str) -> String {

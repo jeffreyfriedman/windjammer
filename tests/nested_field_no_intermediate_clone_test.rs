@@ -12,7 +12,6 @@
 /// through references for nested field access.
 ///
 /// Expected: `stack.item.stats.armor` (no .clone() on intermediate object)
-
 use std::io::Write;
 use std::process::Command;
 

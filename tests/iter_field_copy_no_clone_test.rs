@@ -1,3 +1,4 @@
+use std::io::Write;
 /// TDD Test: No .clone() on Copy fields accessed through iterator loop vars
 ///
 /// Bug: When iterating over a Vec<Struct> and accessing a Copy-type field like
@@ -10,9 +11,7 @@
 /// type lookup fails.
 ///
 /// Expected: Copy-type fields should NOT have .clone().
-
 use std::process::Command;
-use std::io::Write;
 
 fn compile_wj(source: &str) -> String {
     let dir = tempfile::tempdir().expect("Failed to create temp dir");

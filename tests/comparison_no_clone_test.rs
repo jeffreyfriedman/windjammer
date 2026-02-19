@@ -9,7 +9,6 @@
 ///
 /// Fix: Set `suppress_borrowed_clone = true` when generating operands of comparison
 /// operators (==, !=, <, >, <=, >=).
-
 use std::io::Write;
 use std::process::Command;
 

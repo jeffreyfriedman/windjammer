@@ -1,3 +1,4 @@
+use std::io::Write;
 /// TDD Test: No double .clone().clone() when source already has explicit .clone()
 ///
 /// Bug: When Windjammer source has `stack.item.clone()` (explicit clone because
@@ -8,9 +9,7 @@
 /// and then the explicit .clone() MethodCall from the source generates a second one.
 ///
 /// Expected: Only one .clone() should appear.
-
 use std::process::Command;
-use std::io::Write;
 
 fn compile_wj(source: &str) -> String {
     let dir = tempfile::tempdir().expect("Failed to create temp dir");

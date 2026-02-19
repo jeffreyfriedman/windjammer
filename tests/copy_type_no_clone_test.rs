@@ -1,3 +1,4 @@
+use std::io::Write;
 /// TDD Test: Compiler should NOT emit .clone() on Copy types
 ///
 /// Bug: When a variable is assigned from a static method call that returns f32/i32,
@@ -10,9 +11,7 @@
 ///   let b = MyMath::lerp(u, x3, x4)   // u is Copy (f32), just copy it
 ///
 /// Expected: generated Rust should use `u` directly, not `u.clone()`
-
 use std::process::Command;
-use std::io::Write;
 
 fn compile_wj(source: &str) -> String {
     let dir = tempfile::tempdir().expect("Failed to create temp dir");
@@ -24,7 +23,16 @@ fn compile_wj(source: &str) -> String {
     file.write_all(source.as_bytes()).unwrap();
 
     let output = Command::new("cargo")
-        .args(["run", "--release", "--", "build", wj_path.to_str().unwrap(), "--no-cargo", "-o", out_dir.to_str().unwrap()])
+        .args([
+            "run",
+            "--release",
+            "--",
+            "build",
+            wj_path.to_str().unwrap(),
+            "--no-cargo",
+            "-o",
+            out_dir.to_str().unwrap(),
+        ])
         .current_dir(env!("CARGO_MANIFEST_DIR"))
         .output()
         .expect("Failed to run wj");
@@ -35,7 +43,10 @@ fn compile_wj(source: &str) -> String {
     } else {
         let stderr = String::from_utf8_lossy(&output.stderr);
         let stdout = String::from_utf8_lossy(&output.stdout);
-        panic!("No output file generated.\nstdout: {}\nstderr: {}", stdout, stderr);
+        panic!(
+            "No output file generated.\nstdout: {}\nstderr: {}",
+            stdout, stderr
+        );
     }
 }
 

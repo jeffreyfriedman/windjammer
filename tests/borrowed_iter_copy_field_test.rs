@@ -12,7 +12,6 @@
 ///
 /// Expected: Copy-type fields (i32, f32, bool, usize) should NOT have .clone()
 /// even when accessed through borrowed iterator variables.
-
 use std::io::Write;
 use std::process::Command;
 

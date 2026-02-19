@@ -26,7 +26,6 @@ use anyhow::Result;
 /// ```rust
 /// painter.line_segment(vec![center, pos], stroke);  // ❌ E0308!
 /// ```
-
 use std::fs;
 use std::path::PathBuf;
 use std::process::Command;
@@ -89,13 +88,12 @@ version = "0.1.0"
     let stdout = String::from_utf8_lossy(&output.stdout);
 
     // Read the generated Rust file
-    let generated = fs::read_to_string(output_dir.join("main.rs"))
-        .unwrap_or_else(|_| {
-            panic!(
-                "Failed to read generated main.rs\nstdout: {}\nstderr: {}",
-                stdout, stderr
-            )
-        });
+    let generated = fs::read_to_string(output_dir.join("main.rs")).unwrap_or_else(|_| {
+        panic!(
+            "Failed to read generated main.rs\nstdout: {}\nstderr: {}",
+            stdout, stderr
+        )
+    });
 
     // ASSERTION 1: [a, b] should generate fixed-size array [a, b], NOT vec![a, b]
     assert!(
@@ -181,13 +179,12 @@ version = "0.1.0"
     let stdout = String::from_utf8_lossy(&output.stdout);
 
     // Read the generated Rust file
-    let generated = fs::read_to_string(output_dir.join("main.rs"))
-        .unwrap_or_else(|_| {
-            panic!(
-                "Failed to read generated main.rs\nstdout: {}\nstderr: {}",
-                stdout, stderr
-            )
-        });
+    let generated = fs::read_to_string(output_dir.join("main.rs")).unwrap_or_else(|_| {
+        panic!(
+            "Failed to read generated main.rs\nstdout: {}\nstderr: {}",
+            stdout, stderr
+        )
+    });
 
     // ASSERTION: vec![1, 2, 3] should still generate vec![1, 2, 3]
     assert!(
