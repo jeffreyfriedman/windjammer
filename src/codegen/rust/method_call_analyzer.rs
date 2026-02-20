@@ -316,7 +316,24 @@ impl MethodCallAnalyzer {
                             if (is_explicitly_borrowed || is_inferred_borrowed)
                                 && !arg_str.ends_with(".clone()")
                             {
-                                return true;
+                                // WINDJAMMER PHILOSOPHY: Don't clone Copy types.
+                                // Even when moving out of a borrow, Copy types are implicitly copied.
+                                // Checking `is_copy_type` prevents noise like self.mouse_x.clone()
+                                if !Self::is_copy_type(
+                                    arg,
+                                    &HashSet::new(), // no usize_variables in this context
+                                    current_function_params,
+                                ) {
+                                    // Also check if the method parameter type itself is Copy
+                                    // (f32, i32, bool etc. don't need cloning regardless of source)
+                                    let param_is_copy =
+                                        sig.param_types.get(sig_param_idx).is_some_and(|t| {
+                                            crate::codegen::rust::type_analysis::is_copy_type(t)
+                                        });
+                                    if !param_is_copy {
+                                        return true;
+                                    }
+                                }
                             }
                         }
                     }
@@ -569,62 +586,51 @@ impl MethodCallAnalyzer {
         // Example: HashMap<i64, String>.contains_key(&user_id) where user_id: i64
         // BUT: Vec.remove(index) takes usize by value, not &usize!
         if matches!(method, "remove" | "get" | "contains_key" | "get_mut") {
-            // Special case: Vec.remove(index) where index is usize (Copy type)
-            // We need to distinguish between:
-            // - Vec<T>.remove(index: usize) -> takes by value
-            // - HashMap<K, V>.remove(&key) -> takes by reference
+            // Vec vs HashMap disambiguation for methods with the same name:
+            // - Vec<T>.remove(index: usize), Vec<T>.get(index: usize) -> takes by value
+            // - HashMap<K, V>.remove(&key), HashMap<K, V>.get(&key) -> takes by reference
             //
-            // HEURISTIC: Use parameter name to distinguish:
-            // - "index", "idx", "i" -> likely Vec index -> no borrow
-            // - "id", "key", "entity", "_id", "_key" -> likely HashMap key -> borrow
-            if method == "remove"
+            // HEURISTIC: If the argument is a Copy type (numeric), check if it looks
+            // like a Vec index or a HashMap key based on variable name patterns.
+            if matches!(method, "remove" | "get" | "get_mut")
                 && Self::is_copy_type(arg, usize_variables, current_function_params)
             {
-                // Check the argument name to determine if it's a Vec index or HashMap key
                 let arg_name = if let Expression::Identifier { name, .. } = arg {
                     Some(name.as_str())
                 } else {
                     None
                 };
 
-                let looks_like_vec_index = arg_name.is_some_and(|name| {
-                    name == "index"
-                        || name == "idx"
-                        || name == "i"
-                        || name.starts_with("index_")
-                        || name.ends_with("_index")
-                        || name.ends_with("_idx")
-                        || name.ends_with("_usize")  // TDD FIX: sparse_idx_usize is a Vec index
-                        || name.contains("_idx_")
-                });
-
                 let looks_like_hashmap_key = arg_name.is_some_and(|name| {
                     name == "id"
                         || name == "key"
                         || name == "entity"
-                        || name.contains("_id")
-                        || name.contains("_key")
-                        || name == "entity_id"
-                        || name == "user_id"
-                        || name == "npc_id"
+                        || name.ends_with("_id")
+                        || name.ends_with("_key")
                 });
 
-                // If it looks like a Vec index, don't add &
-                if looks_like_vec_index {
-                    return false; // Vec.remove(index)
-                }
-
-                // If it looks like a HashMap key, add &
+                // If it explicitly looks like a HashMap key, add &
                 if looks_like_hashmap_key {
-                    return true; // HashMap.remove(&entity_id)
+                    return true; // HashMap.get(&entity_id)
                 }
 
-                // Default for .remove() on Copy types: assume Vec index
-                // This is safer because Vec.remove is more common than HashMap.remove
+                // For Copy types that don't look like HashMap keys, assume Vec index.
+                // Vec.get(usize), Vec.get_mut(usize), Vec.remove(usize) all take by value.
+                // This covers: i, j, k, index, idx, loop variables, cast expressions, etc.
                 return false;
             }
-            // For all other cases (HashMap methods), add &
-            // This includes Copy types like i64, u32, etc.
+
+            // Also check for cast expressions like `index as usize` — these are always
+            // numeric indices for Vec, not HashMap keys.
+            if matches!(method, "get" | "get_mut" | "remove") {
+                if let Expression::Cast { type_, .. } = arg {
+                    if Self::is_copy_type_annotation(type_) {
+                        return false; // e.g., .get(index as usize) — Vec index, no &
+                    }
+                }
+            }
+
+            // For all other cases (non-Copy keys for HashMap methods), add &
             return true; // Add & for HashMap.get(&key), HashMap.contains_key(&key)
         }
 

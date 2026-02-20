@@ -1229,10 +1229,29 @@ impl<'ast> Analyzer<'ast> {
     fn infer_parameter_ownership(
         &self,
         param_name: &str,
-        _param_type: &Type,
+        param_type: &Type,
         body: &[&'ast Statement<'ast>],
         _return_type: &Option<Type>,
     ) -> Result<OwnershipMode, String> {
+        // 0a. Generic type parameters and impl Trait always stay Owned.
+        // Adding & would change trait bounds: `impl Foo` -> `&impl Foo` breaks dispatch.
+        // Generic types like T, G, S should always be passed by value.
+        if Self::is_generic_type_param(param_type) {
+            return Ok(OwnershipMode::Owned);
+        }
+
+        // 0b. String parameters stay Owned to avoid &String vs &str mismatches.
+        // In Rust, &String doesn't accept &str literals ("hello"), and &str doesn't
+        // accept &String without .as_str(). Keeping String parameters owned avoids
+        // these cross-type issues at call sites.
+        // Note: WJ `string` parses as Type::String, but `String` parses as Type::Custom("String").
+        // Future: could generate &str for borrowed String params (more idiomatic Rust).
+        if matches!(param_type, Type::String)
+            || matches!(param_type, Type::Custom(name) if name == "String")
+        {
+            return Ok(OwnershipMode::Owned);
+        }
+
         // Simple heuristic-based inference
 
         // 1. Check if parameter is mutated
@@ -1286,20 +1305,48 @@ impl<'ast> Analyzer<'ast> {
             return Ok(OwnershipMode::Owned);
         }
 
-        // 7. Default ownership: Owned (THE WINDJAMMER WAY!)
+        // 7. TDD: Check if parameter is passed as a direct (non-&) argument to a
+        // function or method call. This could consume the parameter (the callee
+        // may take ownership). Without knowing the callee's signature at analysis
+        // time, we conservatively keep it Owned.
+        //
+        // Example: Quest::new(id, title, description) — id/title/description are consumed
+        // Counter-example: data.len() — data is the receiver, not an argument
+        // Counter-example: process(&data) — & prevents consumption
+        if self.is_passed_as_argument(param_name, body) {
+            return Ok(OwnershipMode::Owned);
+        }
+
+        // 7.5. TDD: Check if parameter is the receiver of potentially-mutating method calls.
+        // If the parameter has user-defined methods called on it (not just known read-only
+        // methods like .len(), .is_empty(), .clone(), etc.), the method could require &mut self.
+        // Without knowing the method's signature, we conservatively keep it Owned.
+        //
+        // Example: loader.load("tilemap") — .load() could mutate loader
+        // Counter-example: data.len() — .len() is known read-only
+        // Counter-example: object.name — field access, not a method call
+        if self.has_potentially_mutating_method_call(param_name, body) {
+            return Ok(OwnershipMode::Owned);
+        }
+
+        // 8. Default ownership: Borrowed (THE WINDJAMMER WAY!)
         //
         // **PHILOSOPHY**: The compiler does the work, not the user.
-        // - Default to **Owned** (safer, simpler, what user expects)
-        // - Only borrow when we have clear evidence it's safe/beneficial
-        // - Borrowed parameters are an **optimization**, not the default
+        // - Default to **Borrowed** for read-only parameters
+        // - The checks above handle all consuming cases (mutated, returned,
+        //   stored, iterated, used in binary ops, pattern matched)
+        // - If none of those apply, the parameter is truly read-only
+        // - Read-only non-Copy parameters should be &T in generated Rust
+        // - Copy types are overridden to Owned in build_signature
         //
-        // This prevents type mismatches and makes Windjammer feel like a high-level language
-        // where you don't think about &/&mut constantly (unlike Rust).
+        // This matches the Windjammer philosophy: users write `data: Vec<f32>`
+        // and the compiler infers `&Vec<f32>` when data is only read.
+        // Call sites naturally pass `&self.data` which matches `&Vec<f32>`.
         //
-        // The checks above (is_mutated, is_stored, is_iterated_over, etc.) determine when
-        // we need specific ownership modes. If none of those apply, default to Owned.
+        // Dogfooding evidence: 6+ E0308 errors in windjammer-game-editor
+        // from read-only params generating owned types while call sites pass &T.
 
-        Ok(OwnershipMode::Owned)
+        Ok(OwnershipMode::Borrowed)
     }
 
     fn is_used_in_if_else_expression(
@@ -1421,6 +1468,7 @@ impl<'ast> Analyzer<'ast> {
                     || self.expr_mentions_identifier(name, right)
             }
             Expression::Unary { operand, .. } => self.expr_mentions_identifier(name, operand),
+            Expression::TryOp { expr, .. } => self.expr_mentions_identifier(name, expr),
             _ => false,
         }
     }
@@ -1520,6 +1568,218 @@ impl<'ast> Analyzer<'ast> {
                     }
                 }
                 false
+            }
+            Expression::TryOp { expr, .. } => self.has_mutable_method_call(name, expr),
+            _ => false,
+        }
+    }
+
+    /// Known read-only methods that always take &self (not &mut self).
+    /// If a method call on a parameter is NOT in this list, it could potentially mutate.
+    fn is_known_readonly_method(method: &str) -> bool {
+        matches!(
+            method,
+            // Collection inspection
+            "len"
+                | "is_empty"
+                | "contains"
+                | "contains_key"
+                | "get"
+                | "first"
+                | "last"
+                | "capacity"
+                | "keys"
+                | "values"
+                // Iterators (take &self)
+                | "iter"
+                | "windows"
+                | "chunks"
+                | "enumerate"
+                // Cloning/conversion (take &self)
+                | "clone"
+                | "to_string"
+                | "to_owned"
+                | "as_str"
+                | "as_ref"
+                | "as_slice"
+                | "as_bytes"
+                | "as_deref"
+                // String inspection
+                | "trim"
+                | "starts_with"
+                | "ends_with"
+                | "chars"
+                | "bytes"
+                | "split"
+                | "lines"
+                | "to_lowercase"
+                | "to_uppercase"
+                | "is_ascii"
+                // Numeric (Copy types, but include for completeness)
+                | "abs"
+                | "ceil"
+                | "floor"
+                | "round"
+                | "sqrt"
+                | "powi"
+                | "powf"
+                | "sin"
+                | "cos"
+                | "tan"
+                | "log"
+                | "exp"
+                | "min"
+                | "max"
+                | "clamp"
+                // Display/formatting
+                | "display"
+                | "fmt"
+                // Comparison
+                | "cmp"
+                | "partial_cmp"
+                | "eq"
+                | "ne"
+                // Type checking
+                | "is_some"
+                | "is_none"
+                | "is_ok"
+                | "is_err"
+                | "unwrap"
+                | "unwrap_or"
+                | "unwrap_or_else"
+                | "unwrap_or_default"
+                | "expect"
+                | "map"
+                | "and_then"
+                | "or_else"
+                | "ok_or"
+                | "ok_or_else"
+        )
+    }
+
+    /// Check if the parameter is the receiver of method calls that could potentially mutate.
+    /// Returns true if there are method calls on the parameter that aren't known to be read-only.
+    /// This catches patterns like `loader.load(...)` where .load() could require &mut self.
+    fn has_potentially_mutating_method_call(
+        &self,
+        name: &str,
+        statements: &[&'ast Statement<'ast>],
+    ) -> bool {
+        for stmt in statements {
+            if self.stmt_has_potentially_mutating_method_call(name, stmt) {
+                return true;
+            }
+        }
+        false
+    }
+
+    fn stmt_has_potentially_mutating_method_call(
+        &self,
+        name: &str,
+        stmt: &Statement<'ast>,
+    ) -> bool {
+        match stmt {
+            Statement::Expression { expr, .. } => {
+                self.expr_has_potentially_mutating_method_call(name, expr)
+            }
+            Statement::Let { value, .. } => {
+                self.expr_has_potentially_mutating_method_call(name, value)
+            }
+            Statement::Return { value: Some(v), .. } => {
+                self.expr_has_potentially_mutating_method_call(name, v)
+            }
+            Statement::Assignment { value, .. } => {
+                self.expr_has_potentially_mutating_method_call(name, value)
+            }
+            Statement::If {
+                condition,
+                then_block,
+                else_block,
+                ..
+            } => {
+                self.expr_has_potentially_mutating_method_call(name, condition)
+                    || self.has_potentially_mutating_method_call(name, then_block)
+                    || else_block
+                        .as_ref()
+                        .is_some_and(|b| self.has_potentially_mutating_method_call(name, b))
+            }
+            Statement::While {
+                condition, body, ..
+            } => {
+                self.expr_has_potentially_mutating_method_call(name, condition)
+                    || self.has_potentially_mutating_method_call(name, body)
+            }
+            Statement::Loop { body, .. } | Statement::For { body, .. } => {
+                self.has_potentially_mutating_method_call(name, body)
+            }
+            Statement::Match { value, arms, .. } => {
+                self.expr_has_potentially_mutating_method_call(name, value)
+                    || arms
+                        .iter()
+                        .any(|arm| self.expr_has_potentially_mutating_method_call(name, arm.body))
+            }
+            _ => false,
+        }
+    }
+
+    fn expr_has_potentially_mutating_method_call(
+        &self,
+        name: &str,
+        expr: &Expression<'ast>,
+    ) -> bool {
+        match expr {
+            Expression::MethodCall {
+                object,
+                method,
+                arguments,
+                ..
+            } => {
+                // Check if the parameter is the receiver of this method call
+                if let Expression::Identifier { name: id, .. } = &**object {
+                    if id == name && !Self::is_known_readonly_method(method) {
+                        return true;
+                    }
+                }
+                // Also check if the parameter is the receiver via field chain
+                // e.g., param.field.method() — param is still the root receiver
+                if let Expression::FieldAccess { object: inner, .. } = &**object {
+                    if let Expression::Identifier { name: id, .. } = &**inner {
+                        if id == name && !Self::is_known_readonly_method(method) {
+                            return true;
+                        }
+                    }
+                }
+                // Recurse into sub-expressions
+                self.expr_has_potentially_mutating_method_call(name, object)
+                    || arguments
+                        .iter()
+                        .any(|(_, arg)| self.expr_has_potentially_mutating_method_call(name, arg))
+            }
+            Expression::Call { arguments, .. } => arguments
+                .iter()
+                .any(|(_, arg)| self.expr_has_potentially_mutating_method_call(name, arg)),
+            Expression::Binary { left, right, .. } => {
+                self.expr_has_potentially_mutating_method_call(name, left)
+                    || self.expr_has_potentially_mutating_method_call(name, right)
+            }
+            Expression::Unary { operand, .. } => {
+                self.expr_has_potentially_mutating_method_call(name, operand)
+            }
+            Expression::Block { statements, .. } => {
+                self.has_potentially_mutating_method_call(name, statements)
+            }
+            Expression::Index { object, index, .. } => {
+                self.expr_has_potentially_mutating_method_call(name, object)
+                    || self.expr_has_potentially_mutating_method_call(name, index)
+            }
+            Expression::FieldAccess { object, .. } => {
+                self.expr_has_potentially_mutating_method_call(name, object)
+            }
+            // TDD FIX: TryOp wraps expressions with `?` (error propagation).
+            // e.g., `loader.load("tilemap")?` produces TryOp { expr: MethodCall { ... } }
+            // We must recurse into the inner expression to detect method calls.
+            Expression::TryOp { expr, .. } => {
+                self.expr_has_potentially_mutating_method_call(name, expr)
             }
             _ => false,
         }
@@ -1687,6 +1947,17 @@ impl<'ast> Analyzer<'ast> {
                         if matches!(value, Expression::Identifier { name: id, .. } if id == name) {
                             return true;
                         }
+                    }
+                }
+                // TDD FIX: Check if parameter is stored via index assignment
+                // e.g., self.items[index] = item (stores item in a Vec/array)
+                Statement::Assignment {
+                    target: Expression::Index { .. },
+                    value,
+                    ..
+                } => {
+                    if matches!(value, Expression::Identifier { name: id, .. } if id == name) {
+                        return true;
                     }
                 }
                 Statement::Expression {
@@ -1862,6 +2133,124 @@ impl<'ast> Analyzer<'ast> {
         false
     }
 
+    /// Check if a parameter is passed as a direct (non-&) argument to a function or method call.
+    /// When a parameter is passed directly (not via &) to another function, it could be consumed
+    /// (the callee may take ownership). Without knowing the callee's signature, we conservatively
+    /// assume consumption and keep the parameter Owned.
+    ///
+    /// Examples that trigger Owned:
+    /// - `Quest::new(id, title, description)` — id is a direct argument
+    /// - `process(data)` — data is a direct argument
+    ///
+    /// Examples that do NOT trigger Owned:
+    /// - `data.len()` — data is the receiver, not an argument
+    /// - `process(&data)` — & wraps the argument, so it's borrowed
+    /// - `format!("{}", data)` — macro call, not a function call in the AST
+    fn is_passed_as_argument(&self, name: &str, statements: &[&'ast Statement<'ast>]) -> bool {
+        for stmt in statements {
+            if self.stmt_passes_as_argument(name, stmt) {
+                return true;
+            }
+        }
+        false
+    }
+
+    fn stmt_passes_as_argument(&self, name: &str, stmt: &Statement<'ast>) -> bool {
+        match stmt {
+            Statement::Let { value, .. } => self.expr_passes_as_argument(name, value),
+            Statement::Expression { expr, .. } => self.expr_passes_as_argument(name, expr),
+            Statement::Return { value: Some(v), .. } => self.expr_passes_as_argument(name, v),
+            Statement::Assignment { value, .. } => self.expr_passes_as_argument(name, value),
+            Statement::If {
+                condition,
+                then_block,
+                else_block,
+                ..
+            } => {
+                self.expr_passes_as_argument(name, condition)
+                    || self.is_passed_as_argument(name, then_block)
+                    || else_block
+                        .as_ref()
+                        .is_some_and(|b| self.is_passed_as_argument(name, b))
+            }
+            Statement::While {
+                condition, body, ..
+            } => {
+                self.expr_passes_as_argument(name, condition)
+                    || self.is_passed_as_argument(name, body)
+            }
+            Statement::Loop { body, .. } => self.is_passed_as_argument(name, body),
+            Statement::For { body, .. } => self.is_passed_as_argument(name, body),
+            Statement::Match { value, arms, .. } => {
+                self.expr_passes_as_argument(name, value)
+                    || arms
+                        .iter()
+                        .any(|arm| self.expr_passes_as_argument(name, arm.body))
+            }
+            _ => false,
+        }
+    }
+
+    fn expr_passes_as_argument(&self, name: &str, expr: &Expression<'ast>) -> bool {
+        match expr {
+            // Function call: check if parameter is a bare argument (not wrapped in &)
+            Expression::Call { arguments, .. } => {
+                for (_label, arg) in arguments {
+                    // Direct identifier: `f(param)` → consuming
+                    if matches!(arg, Expression::Identifier { name: id, .. } if id == name) {
+                        return true;
+                    }
+                    // Recursively check sub-expressions for nested calls
+                    if self.expr_passes_as_argument(name, arg) {
+                        return true;
+                    }
+                }
+                false
+            }
+            // Method call: check arguments (NOT the receiver)
+            Expression::MethodCall {
+                object, arguments, ..
+            } => {
+                for (_label, arg) in arguments {
+                    // Direct identifier: `obj.method(param)` → consuming
+                    if matches!(arg, Expression::Identifier { name: id, .. } if id == name) {
+                        return true;
+                    }
+                    // Recursively check sub-expressions
+                    if self.expr_passes_as_argument(name, arg) {
+                        return true;
+                    }
+                }
+                // Also check the receiver for nested calls (but NOT as a direct argument)
+                self.expr_passes_as_argument(name, object)
+            }
+            // Block expression: check all statements
+            Expression::Block { statements, .. } => self.is_passed_as_argument(name, statements),
+            // Binary, unary, index, etc.: recurse into sub-expressions
+            Expression::Binary { left, right, .. } => {
+                self.expr_passes_as_argument(name, left)
+                    || self.expr_passes_as_argument(name, right)
+            }
+            Expression::Unary { operand, .. } => self.expr_passes_as_argument(name, operand),
+            Expression::Index { object, index, .. } => {
+                self.expr_passes_as_argument(name, object)
+                    || self.expr_passes_as_argument(name, index)
+            }
+            Expression::FieldAccess { object, .. } => self.expr_passes_as_argument(name, object),
+            Expression::Tuple { elements, .. } | Expression::Array { elements, .. } => elements
+                .iter()
+                .any(|e| self.expr_passes_as_argument(name, e)),
+            Expression::Closure { body, .. } => self.expr_passes_as_argument(name, body),
+            // TDD FIX: TryOp wraps expressions with `?` (error propagation).
+            // e.g., `process(data)?` produces TryOp { expr: Call { args: [data] } }
+            // We must recurse into the inner expression to detect argument passing.
+            Expression::TryOp { expr, .. } => self.expr_passes_as_argument(name, expr),
+            // Note: We do NOT check Expression::Identifier here because bare identifiers
+            // outside of Call/MethodCall arguments are not consuming (e.g., `data.len()`)
+            _ => false,
+        }
+    }
+
     fn is_used_in_binary_op(&self, name: &str, statements: &[&'ast Statement<'ast>]) -> bool {
         for stmt in statements {
             match stmt {
@@ -1959,6 +2348,7 @@ impl<'ast> Analyzer<'ast> {
             Expression::Array { elements, .. } => elements
                 .iter()
                 .any(|elem| self.expr_uses_in_binary_op(name, elem)),
+            Expression::TryOp { expr, .. } => self.expr_uses_in_binary_op(name, expr),
             _ => false,
         }
     }
@@ -2093,27 +2483,16 @@ impl<'ast> Analyzer<'ast> {
                         OwnershipMode::Owned
                     }
                 } else {
-                    // THE WINDJAMMER WAY: Respect explicit ownership for non-Copy types
-                    // If a parameter is explicitly declared as `String` (not `&string`),
-                    // it should remain Owned, not be auto-borrowed just because it's read-only.
-                    // This respects the user's explicit API contract.
+                    // THE WINDJAMMER WAY: The compiler infers ownership, not the user.
+                    // Non-Copy types follow the analyzer's inference:
+                    // - Borrowed: parameter is only read (default for read-only params)
+                    // - MutBorrowed: parameter is mutated
+                    // - Owned: parameter is consumed (returned, stored, iterated, etc.)
                     //
-                    // Only apply inference for implicitly-typed parameters.
-                    match &param.type_ {
-                        Type::String
-                        | Type::Vec(_)
-                        | Type::Array(_, _)
-                        | Type::Custom(_)
-                        | Type::Parameterized(_, _) => {
-                            // Explicitly owned types should stay owned unless mutated
-                            if inferred == OwnershipMode::MutBorrowed {
-                                OwnershipMode::MutBorrowed
-                            } else {
-                                OwnershipMode::Owned
-                            }
-                        }
-                        _ => inferred,
-                    }
+                    // Users write `data: Vec<f32>` and the compiler figures out whether
+                    // it should be `&Vec<f32>`, `&mut Vec<f32>`, or `Vec<f32>` in Rust.
+                    // This matches call sites where `&self.data` is naturally passed.
+                    inferred
                 }
             })
             .collect();
@@ -2160,16 +2539,23 @@ impl<'ast> Analyzer<'ast> {
     }
 
     /// Check if a type is a generic type parameter (like T, G, S, T1, T2, etc.)
+    /// or an impl Trait parameter (like `impl Describable`).
     /// Generic type parameters are typically single uppercase letters or uppercase with numbers.
+    /// impl Trait parameters use static dispatch and should always be Owned
+    /// (adding & would change the trait bound from `T: Trait` to `&T: Trait`).
     /// This matches the logic in codegen/rust/generator.rs is_generic_type().
     fn is_generic_type_param(ty: &Type) -> bool {
-        if let Type::Custom(name) = ty {
-            // Generic type parameters are uppercase letters, possibly followed by numbers
-            // Examples: T, G, S, T1, T2, KEY, VALUE
-            name.chars().next().is_some_and(|c| c.is_uppercase())
-                && (name.len() == 1 || name.chars().all(|c| c.is_uppercase() || c.is_numeric()))
-        } else {
-            false
+        match ty {
+            Type::Custom(name) => {
+                // Generic type parameters are uppercase letters, possibly followed by numbers
+                // Examples: T, G, S, T1, T2, KEY, VALUE
+                name.chars().next().is_some_and(|c| c.is_uppercase())
+                    && (name.len() == 1 || name.chars().all(|c| c.is_uppercase() || c.is_numeric()))
+            }
+            // impl Trait parameters (e.g., `item: impl Describable`) should always be Owned.
+            // Borrowing would change from `impl Trait` to `&impl Trait`, breaking trait dispatch.
+            Type::ImplTrait(_) => true,
+            _ => false,
         }
     }
 
@@ -3843,6 +4229,7 @@ impl<'ast> Analyzer<'ast> {
                 self.expression_uses_identifier(name, start)
                     || self.expression_uses_identifier(name, end)
             }
+            Expression::TryOp { expr, .. } => self.expression_uses_identifier(name, expr),
             _ => false,
         }
     }
