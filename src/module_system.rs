@@ -629,11 +629,32 @@ pub fn generate_mod_rs_for_submodule(module: &Module, output_dir: &Path) -> Resu
             }
         }
 
-        // Add re-exports if specified
+        // Add re-exports if specified in mod.wj
         if !pub_uses.is_empty() {
-            content.push_str("\n// Re-exports\n");
+            content.push_str("\n// Re-exports (from mod.wj)\n");
             for pub_use in pub_uses {
                 content.push_str(&format!("pub use {};\n", pub_use));
+            }
+        } else if !has_conflicts {
+            // THE WINDJAMMER WAY: Auto-generate re-exports when mod.wj has no explicit pub use.
+            // This ensures `use crate::module::Type;` works without requiring the user to
+            // write `pub use` declarations for every type — the compiler does the work.
+            let submodule_names: HashSet<&String> =
+                module.submodules.iter().map(|s| &s.name).collect();
+            content.push_str("\n// Auto-generated re-exports\n");
+            // Re-export .wj file modules (not already covered by submodules)
+            for module_file in &module_files {
+                if !submodule_names.contains(module_file)
+                    && (pub_mods.is_empty() || pub_mods.contains(module_file))
+                {
+                    content.push_str(&format!("pub use {}::*;\n", module_file));
+                }
+            }
+            // Re-export subdirectory modules
+            for submodule in &module.submodules {
+                if pub_mods.is_empty() || pub_mods.contains(&submodule.name) {
+                    content.push_str(&format!("pub use {}::*;\n", submodule.name));
+                }
             }
         }
     } else {

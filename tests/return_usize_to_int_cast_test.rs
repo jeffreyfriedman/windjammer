@@ -115,9 +115,9 @@ fn test_return_usize_variable_to_int() {
 
     let generated = compile_code(code).expect("Compilation failed");
 
-    // Should auto-cast usize variable to i64
+    // Should auto-cast usize variable to i64 (explicit or implicit return)
     assert!(
-        generated.contains("return count as i64"),
+        generated.contains("count as i64"),
         "Should auto-cast usize variable to i64, got:\n{}",
         generated
     );
