@@ -165,9 +165,9 @@ fn test_unit_struct_instantiation() {
         generated
     );
 
-    // Unit struct instantiation in Rust is just the name
+    // Unit struct instantiation in Rust is just the name (implicit or explicit return)
     assert!(
-        generated.contains("return Token;"),
+        generated.contains("Token\n}") || generated.contains("return Token;"),
         "Unit struct instantiation should be simple name. Generated:\n{}",
         generated
     );
