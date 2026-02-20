@@ -30,46 +30,64 @@
 ///
 /// Fix: Preserve explicit `return` when inside if/if-let without corresponding else.
 
+use anyhow::Result;
+use std::fs;
 use std::path::PathBuf;
 use std::process::Command;
 
-fn compile_wj_source(source: &str) -> String {
-    let tmp_dir = std::env::temp_dir().join(format!("wj-test-return-if-{}", std::process::id()));
-    std::fs::create_dir_all(&tmp_dir).unwrap();
+fn get_wj_compiler() -> PathBuf {
+    PathBuf::from(env!("CARGO_BIN_EXE_wj"))
+}
 
-    let source_path = tmp_dir.join("test.wj");
-    std::fs::write(&source_path, source).unwrap();
+fn compile_wj_source(source: &str) -> Result<String> {
+    let timestamp = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)?
+        .as_nanos();
+    let temp_dir = std::env::temp_dir().join(format!("wj_return_if_test_{}", timestamp));
+    fs::create_dir_all(&temp_dir)?;
 
-    let output_path = tmp_dir.join("output");
-    std::fs::create_dir_all(&output_path).unwrap();
+    let src_dir = temp_dir.join("src_wj");
+    fs::create_dir_all(&src_dir)?;
 
-    let compiler_binary = std::env::current_exe()
-        .unwrap()
-        .parent()
-        .unwrap()
-        .parent()
-        .unwrap()
-        .join("wj");
+    fs::write(src_dir.join("main.wj"), source)?;
 
-    let result = Command::new(&compiler_binary)
-        .args(&["compile", source_path.to_str().unwrap(), "-o", output_path.to_str().unwrap()])
-        .output()
-        .expect("Failed to run compiler");
+    fs::write(
+        temp_dir.join("wj.toml"),
+        r#"[package]
+name = "test-return-if"
+version = "0.1.0"
 
-    if !result.status.success() {
-        panic!(
+[dependencies]
+"#,
+    )?;
+
+    let output_dir = temp_dir.join("src");
+    let output = Command::new(get_wj_compiler())
+        .args(["build", "--no-cargo"])
+        .arg(src_dir.to_str().unwrap())
+        .arg("--output")
+        .arg(output_dir.to_str().unwrap())
+        .output()?;
+
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    let stdout = String::from_utf8_lossy(&output.stdout);
+
+    if !output.status.success() {
+        anyhow::bail!(
             "Compiler failed:\nstdout: {}\nstderr: {}",
-            String::from_utf8_lossy(&result.stdout),
-            String::from_utf8_lossy(&result.stderr)
+            stdout, stderr
         );
     }
 
-    let rust_file = output_path.join("test.rs");
-    std::fs::read_to_string(rust_file).expect("Failed to read generated Rust")
+    let rust_file = output_dir.join("main.rs");
+    Ok(fs::read_to_string(rust_file).unwrap_or_else(|_| {
+        panic!("Failed to read generated main.rs\nstdout: {}\nstderr: {}", stdout, stderr)
+    }))
 }
 
 #[test]
-fn test_return_in_if_let_without_else() {
+#[cfg_attr(tarpaulin, ignore)]
+fn test_return_in_if_let_without_else() -> Result<()> {
     let source = r#"
 struct Frame {
     index: i64,
@@ -98,7 +116,7 @@ fn main() {
 }
 "#;
 
-    let rust_code = compile_wj_source(source);
+    let rust_code = compile_wj_source(source)?;
     
     // Must preserve explicit return in if-let without else
     assert!(
@@ -114,10 +132,13 @@ fn main() {
         "Must NOT optimize to implicit return in if-let without else!\n\nGenerated:\n{}",
         rust_code
     );
+    
+    Ok(())
 }
 
 #[test]
-fn test_return_in_if_without_else() {
+#[cfg_attr(tarpaulin, ignore)]
+fn test_return_in_if_without_else() -> Result<()> {
     let source = r#"
 fn check_positive(x: i64) -> i64 {
     if x > 0 {
@@ -131,7 +152,7 @@ fn main() {
 }
 "#;
 
-    let rust_code = compile_wj_source(source);
+    let rust_code = compile_wj_source(source)?;
     
     // Must preserve explicit return in if without else
     assert!(
@@ -139,10 +160,13 @@ fn main() {
         "Must preserve explicit 'return' in if without else!\n\nGenerated:\n{}",
         rust_code
     );
+    
+    Ok(())
 }
 
 #[test]
-fn test_can_optimize_if_else_return() {
+#[cfg_attr(tarpaulin, ignore)]
+fn test_can_optimize_if_else_return() -> Result<()> {
     let source = r#"
 fn abs(x: i64) -> i64 {
     if x < 0 {
@@ -157,7 +181,7 @@ fn main() {
 }
 "#;
 
-    let rust_code = compile_wj_source(source);
+    let rust_code = compile_wj_source(source)?;
     
     // CAN optimize returns in if-else (both branches have return/value)
     // This is safe because if-else always evaluates to a value
@@ -170,10 +194,13 @@ fn main() {
         "Should generate either implicit or explicit returns for if-else\n\nGenerated:\n{}",
         rust_code
     );
+    
+    Ok(())
 }
 
 #[test]
-fn test_nested_if_let_preserve_return() {
+#[cfg_attr(tarpaulin, ignore)]
+fn test_nested_if_let_preserve_return() -> Result<()> {
     let source = r#"
 fn get_value(outer: Option<Option<i64>>) -> i64 {
     if let Some(inner) = outer {
@@ -189,7 +216,7 @@ fn main() {
 }
 "#;
 
-    let rust_code = compile_wj_source(source);
+    let rust_code = compile_wj_source(source)?;
     
     // Must preserve explicit return in nested if-let without else
     assert!(
@@ -197,4 +224,6 @@ fn main() {
         "Must preserve explicit 'return' in nested if-let without else!\n\nGenerated:\n{}",
         rust_code
     );
+    
+    Ok(())
 }
