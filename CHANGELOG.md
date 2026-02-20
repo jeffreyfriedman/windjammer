@@ -1,4 +1,4 @@
-## [0.43.0] - 2026-02-19
+## [0.44.0] - 2026-02-19
 ### Focus: Production-Ready Compiler - Zero Errors, Zero Warnings, Cross-Platform
 This release represents a major milestone: **90+ bug fixes** through rigorous TDD + dogfooding methodology, resulting in a **production-ready compiler** that generates idiomatic, Clippy-clean Rust code across all platforms.
 
