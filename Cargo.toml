@@ -77,7 +77,7 @@ crossterm = "0.29"
 # TOML parsing for wj.toml
 toml = "0.9"
 # Temporary directories for wj run
-tempfile = "3.8"
+tempfile = "3.25"
 # Incremental compilation with Salsa
 salsa = "0.24"
 # Arena allocation for AST (eliminates Drop recursion, improves performance)
