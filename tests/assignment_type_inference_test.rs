@@ -60,9 +60,11 @@ impl Counter {
 
     // Should either have no cast or cast to usize
     // The ideal is no cast at all for usize + int literal
+    // Also accept compound assignment optimization: self.index += 1
     assert!(
         output.contains("self.index = self.index + 1")
             || output.contains("self.index + 1usize")
+            || output.contains("self.index += 1")
             || output.contains("as usize"),
         "Assignment to usize field should not cast to i32, got:\n{}",
         output

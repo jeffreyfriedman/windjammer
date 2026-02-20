@@ -143,6 +143,72 @@ pub fn type_to_rust(type_: &Type) -> String {
     }
 }
 
+/// Check if a type contains any references (including nested in Option, Result, etc.)
+pub fn type_contains_reference(type_: &Type) -> bool {
+    match type_ {
+        Type::Reference(_) | Type::MutableReference(_) => true,
+        Type::Option(inner) => type_contains_reference(inner),
+        Type::Result(ok, err) => type_contains_reference(ok) || type_contains_reference(err),
+        Type::Vec(inner) => type_contains_reference(inner),
+        Type::Array(inner, _) => type_contains_reference(inner),
+        Type::Tuple(types) => types.iter().any(type_contains_reference),
+        Type::Parameterized(_, args) => args.iter().any(type_contains_reference),
+        _ => false,
+    }
+}
+
+/// Convert a Windjammer type to Rust, adding lifetime 'a to all references.
+/// Used when the function signature requires explicit lifetime annotations.
+pub fn type_to_rust_with_lifetime(type_: &Type) -> String {
+    match type_ {
+        Type::Reference(inner) => {
+            // Special case: &Vec<T> → &'a [T]
+            if let Type::Vec(elem) = &**inner {
+                format!("&'a [{}]", type_to_rust_with_lifetime(elem))
+            // Special case: &[T; N]
+            } else if let Type::Array(elem, size) = &**inner {
+                format!("&'a [{}; {}]", type_to_rust_with_lifetime(elem), size)
+            // Special case: &String → &'a str
+            } else if matches!(**inner, Type::String) {
+                "&'a str".to_string()
+            // Dynamic dispatch references
+            } else if let Type::TraitObject(trait_name) = &**inner {
+                format!("&'a dyn {}", trait_name)
+            } else if let Type::ImplTrait(trait_name) = &**inner {
+                format!("&'a dyn {}", trait_name)
+            } else {
+                format!("&'a {}", type_to_rust_with_lifetime(inner))
+            }
+        }
+        Type::MutableReference(inner) => {
+            if let Type::TraitObject(trait_name) = &**inner {
+                format!("&'a mut dyn {}", trait_name)
+            } else if let Type::ImplTrait(trait_name) = &**inner {
+                format!("&'a mut dyn {}", trait_name)
+            } else {
+                format!("&'a mut {}", type_to_rust_with_lifetime(inner))
+            }
+        }
+        // For container types, recurse to add lifetime to nested references
+        Type::Option(inner) => format!("Option<{}>", type_to_rust_with_lifetime(inner)),
+        Type::Result(ok, err) => format!(
+            "Result<{}, {}>",
+            type_to_rust_with_lifetime(ok),
+            type_to_rust_with_lifetime(err)
+        ),
+        Type::Tuple(types) => {
+            let rust_types: Vec<String> = types.iter().map(type_to_rust_with_lifetime).collect();
+            format!("({})", rust_types.join(", "))
+        }
+        Type::Parameterized(base, args) => {
+            let rust_args: Vec<String> = args.iter().map(type_to_rust_with_lifetime).collect();
+            format!("{}<{}>", base, rust_args.join(", "))
+        }
+        // Non-reference types: delegate to standard conversion
+        _ => type_to_rust(type_),
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
