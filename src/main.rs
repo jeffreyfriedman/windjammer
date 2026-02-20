@@ -515,6 +515,16 @@ pub fn build_project(path: &Path, output: &Path, target: CompilationTarget) -> R
                         if has_copy {
                             global_copy_structs.insert(decl.name.clone());
                         }
+                        // CROSS-MODULE STRUCT FIELD TYPES: Collect field types for type inference
+                        // Enables CodeGenerator to resolve field types on imported structs,
+                        // preventing unnecessary .clone() on Copy-type fields
+                        let mut struct_fields = HashMap::new();
+                        for field in &decl.fields {
+                            struct_fields.insert(field.name.clone(), field.field_type.clone());
+                        }
+                        module_compiler
+                            .global_struct_field_types
+                            .insert(decl.name.clone(), struct_fields);
                     }
                     parser::Item::Enum { decl, .. } => {
                         use crate::parser::ast::EnumVariantData;
@@ -556,8 +566,11 @@ pub fn build_project(path: &Path, output: &Path, target: CompilationTarget) -> R
         }
     }
 
-    // Transfer Copy structs to ModuleCompiler's registry
+    // Transfer Copy structs AND enums to ModuleCompiler's registry
+    // Both user-defined Copy structs and unit-only enums (always Copy) must be included
+    // so the CodeGenerator can suppress unnecessary .clone() on these types.
     module_compiler.copy_structs_registry = global_copy_structs;
+    module_compiler.copy_structs_registry.extend(copy_enums);
 
     // PASS 1: Quick parse all files to register trait definitions
     // This ensures all traits are available before any file compilation
@@ -897,6 +910,10 @@ struct ModuleCompiler {
     // BUG #8 FIX: Global signature registry for cross-file method signature resolution
     // This enables correct argument passing for methods defined in other modules
     global_signatures: analyzer::SignatureRegistry, // All method signatures from all files
+    // CROSS-MODULE STRUCT FIELD TYPES: Track all struct field types across files
+    // Enables type inference for field accesses on imported structs (e.g., stack.quantity → i32)
+    // Without this, Copy-type fields on cross-module structs get unnecessary .clone()
+    global_struct_field_types: HashMap<String, HashMap<String, parser::Type>>,
 }
 
 #[allow(dead_code)]
@@ -922,6 +939,7 @@ impl ModuleCompiler {
             _trait_parsers: Vec::new(),          // ARENA FIX: Keep trait parsers alive
             compiling_files: HashSet::new(),     // RECURSION GUARD: Track compilation chain
             global_signatures: analyzer::SignatureRegistry::new(), // BUG #8 FIX: Global signatures
+            global_struct_field_types: HashMap::new(), // Cross-module struct field types
         }
     }
 
@@ -1149,6 +1167,10 @@ impl ModuleCompiler {
 
         let mut generator = codegen::CodeGenerator::new_for_module(per_file_registry, self.target);
         generator.set_analyzed_trait_methods(analyzed_trait_methods);
+        // CROSS-MODULE STRUCT FIELD TYPES: Pre-populate for type inference on imported structs
+        generator.set_global_struct_field_types(self.global_struct_field_types.clone());
+        // USER-DEFINED COPY TYPES: Enable Copy detection for @derive(Copy) structs/enums
+        generator.set_copy_types_registry(self.copy_structs_registry.clone());
         let rust_code = generator.generate_program(&program, &analyzed);
 
         // THEN merge into global for future files' cross-module lookups
@@ -1653,12 +1675,22 @@ fn compile_file_impl(
         }
     }
 
-    // Register traits from this program into the global registry
+    // Register traits and struct field types from this program into the global registry
     for item in &program.items {
         if let parser::Item::Trait { decl, .. } = item {
             module_compiler
                 .trait_registry
                 .insert(decl.name.clone(), decl.clone());
+        }
+        // CROSS-MODULE STRUCT FIELD TYPES: Register struct field types for imported type inference
+        if let parser::Item::Struct { decl, .. } = item {
+            let mut field_types = HashMap::new();
+            for field in &decl.fields {
+                field_types.insert(field.name.clone(), field.field_type.clone());
+            }
+            module_compiler
+                .global_struct_field_types
+                .insert(decl.name.clone(), field_types);
         }
     }
 
@@ -1855,6 +1887,11 @@ fn compile_file_impl(
             };
             generator.set_inferred_bounds(inferred_bounds_map);
             generator.set_analyzed_trait_methods(analyzed_trait_methods);
+            // CROSS-MODULE STRUCT FIELD TYPES: Pre-populate for type inference on imported structs
+            generator
+                .set_global_struct_field_types(module_compiler.global_struct_field_types.clone());
+            // USER-DEFINED COPY TYPES: Enable Copy detection for @derive(Copy) structs/enums
+            generator.set_copy_types_registry(module_compiler.copy_structs_registry.clone());
 
             // Set source file for error mapping
             generator.set_source_file(input_path);
@@ -1896,6 +1933,10 @@ fn compile_file_impl(
         };
         generator.set_inferred_bounds(inferred_bounds_map);
         generator.set_analyzed_trait_methods(analyzed_trait_methods);
+        // CROSS-MODULE STRUCT FIELD TYPES: Pre-populate for type inference on imported structs
+        generator.set_global_struct_field_types(module_compiler.global_struct_field_types.clone());
+        // USER-DEFINED COPY TYPES: Enable Copy detection for @derive(Copy) structs/enums
+        generator.set_copy_types_registry(module_compiler.copy_structs_registry.clone());
 
         // Set source file for error mapping
         generator.set_source_file(input_path);

@@ -39,6 +39,7 @@ temp_*.wj
 # Build artifacts
 *.o
 *.a
+*.rlib
 *.so
 *.dylib
 *.dll
