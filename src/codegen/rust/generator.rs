@@ -619,6 +619,7 @@ impl<'ast> CodeGenerator<'ast> {
             // TDD FIX: Only optimize return statements in function body (not nested blocks)
             let should_optimize_return =
                 self.in_function_body && matches!(stmt, Statement::Return { .. });
+            
             // Simplified: (is_last && A) || (is_last && B) = is_last && (A || B)
             if is_last
                 && (should_optimize_return
@@ -4756,10 +4757,17 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
                 output.push_str(&self.generate_expression(condition));
                 output.push_str(" {\n");
 
-                // TDD: Only clear in_function_body for if-statements that are NOT the last statement
-                // If this is the last statement, keep the flag so branch returns get optimized
+                // DOGFOODING FIX: Preserve explicit returns in if-without-else
+                // In Rust, `if` without `else` must evaluate to `()`, so any value expression
+                // (including implicit returns) is invalid: E0308 "if without else has incompatible types"
+                // 
+                // Safe to optimize returns ONLY in if-else (both branches have values/returns)
+                // Must preserve returns in if-without-else (then block evaluates to ())
                 let old_in_func_body = self.in_function_body;
-                if !self.current_is_last_statement {
+                if else_block.is_none() || !self.current_is_last_statement {
+                    // Disable return optimization if:
+                    // 1. No else branch (if-without-else) → preserve returns
+                    // 2. Not last statement (early exit) → preserve returns
                     self.in_function_body = false;
                 }
 
@@ -4922,6 +4930,16 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
                         output.push_str(&value_str);
                         output.push_str(" {\n");
 
+                        // DOGFOODING FIX: Preserve explicit returns in if-let-without-else
+                        // Match-to-if-let optimization must NOT optimize returns in the then block
+                        // when there's no else block, to prevent E0308 errors.
+                        let has_else = wildcard_body_stmts.is_some();
+                        let old_in_func_body = self.in_function_body;
+                        if !has_else {
+                            // No else block → disable return optimization
+                            self.in_function_body = false;
+                        }
+
                         // Generate the then-block body
                         self.indent_level += 1;
                         if let Expression::Block { statements, .. } = main_arm.body {
@@ -4945,6 +4963,9 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
                             output.push_str(&self.indent());
                             output.push('}');
                         }
+                        
+                        // Restore flag after generating both then and else blocks
+                        self.in_function_body = old_in_func_body;
 
                         output.push('\n');
 
