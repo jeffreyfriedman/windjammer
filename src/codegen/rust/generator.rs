@@ -91,6 +91,10 @@ pub struct CodeGenerator<'ast> {
     // EXPRESSION CONTEXT: Track if we're generating code whose value will be used
     // Prevents adding semicolons to final expressions in if-else/match when used as values
     in_expression_context: bool,
+    // TDD: Track if we're generating the top-level function body (enables return optimization)
+    in_function_body: bool,
+    // TDD: Track if the current statement being generated is the last in its block
+    current_is_last_statement: bool,
     // TRAIT TRACKING: Track which custom types support PartialEq
     partial_eq_types: std::collections::HashSet<String>,
     // MATCH ARM CONTEXT: Force string conversion in match arm blocks
@@ -117,6 +121,21 @@ pub struct CodeGenerator<'ast> {
     inferred_borrowed_params: std::collections::HashSet<String>,
     // ASSIGNMENT TARGET: Flag to suppress auto-clone when generating assignment targets
     generating_assignment_target: bool,
+    // EXPLICIT CLONE SUPPRESSION: When the source has `.clone()` (MethodCall with method "clone"),
+    // suppress auto-clone on the object expression to prevent double .clone().clone()
+    in_explicit_clone_call: bool,
+    // FIELD CHAIN OPTIMIZATION: When accessing a Copy sub-field (e.g., .y on Vec2),
+    // suppress borrowed-iterator cloning on the intermediate object.
+    // e.g., enemy.velocity.y → no need to clone velocity just to read .y
+    suppress_borrowed_clone: bool,
+    // VEC INDEX CONTEXT: When generating the object of a FieldAccess, suppress Vec index
+    // auto-clone since Rust allows field access on &T returned by Vec indexing.
+    // e.g., players[i].score → no clone needed, just accesses the field through the ref.
+    in_field_access_object: bool,
+    // BORROW CONTEXT: When generating the operand of & or &mut, suppress Vec index
+    // auto-clone since we want a reference to the original, not a reference to a clone.
+    // e.g., &self.items[i] → reference to element, NOT &self.items[i].clone()
+    in_borrow_context: bool,
     // RECURSION GUARD: Track traits currently being generated to prevent infinite recursion
     generating_traits: std::collections::HashSet<String>,
     // RECURSION DEPTH: Track recursion depth to prevent stack overflow
@@ -129,6 +148,16 @@ pub struct CodeGenerator<'ast> {
     // STRUCT FIELD TYPE TRACKING: Map struct names to their field types
     // Enables type inference for field accesses (e.g., self.transforms → ComponentArray<T>)
     struct_field_types: std::collections::HashMap<String, std::collections::HashMap<String, Type>>,
+    // USER-DEFINED COPY TYPES: Registry of structs/enums with @derive(Copy)
+    // Enables is_copy_type to recognize types like VoxelType as Copy, preventing unnecessary .clone()
+    copy_types_registry: std::collections::HashSet<String>,
+    // STRUCT LITERAL CONTEXT: When generating values for struct literal fields,
+    // array literals should use fixed-size [...] syntax instead of vec![...],
+    // since struct fields have explicit type annotations (e.g., [f32; 3]).
+    in_struct_literal_field: bool,
+    // ENUM VARIANT TYPE TRACKING: Map "EnumName::VariantName" to field types
+    // Enables string literal to String coercion in enum variant constructors
+    enum_variant_types: std::collections::HashMap<String, Vec<Type>>,
 }
 
 // RECURSION GUARD MACRO: Check depth before entering recursive functions
@@ -217,17 +246,52 @@ impl<'ast> CodeGenerator<'ast> {
             unused_let_bindings: std::collections::HashSet::new(),
             inferred_borrowed_params: std::collections::HashSet::new(),
             generating_assignment_target: false,
+            in_explicit_clone_call: false,
+            suppress_borrowed_clone: false,
+            in_field_access_object: false,
+            in_borrow_context: false,
             partial_eq_types: std::collections::HashSet::new(),
             in_match_arm_needing_string: false,
             in_statement_match: false,
             local_variable_scopes: Vec::new(),
             in_expression_context: false,
+            in_function_body: false,
+            current_is_last_statement: false,
             analyzed_trait_methods: std::collections::HashMap::new(),
             generating_traits: std::collections::HashSet::new(),
             recursion_depth: 0,
             local_var_types: std::collections::HashMap::new(),
             struct_field_types: std::collections::HashMap::new(),
+            copy_types_registry: std::collections::HashSet::new(),
+            in_struct_literal_field: false,
+            enum_variant_types: std::collections::HashMap::new(),
         }
+    }
+
+    /// Pre-populate struct field types from cross-module definitions.
+    /// This enables type inference for fields on imported structs,
+    /// preventing unnecessary .clone() on Copy-type fields.
+    pub fn set_global_struct_field_types(
+        &mut self,
+        field_types: std::collections::HashMap<
+            String,
+            std::collections::HashMap<String, crate::parser::Type>,
+        >,
+    ) {
+        // Merge global types into local (local takes priority if there's overlap)
+        for (struct_name, fields) in field_types {
+            self.struct_field_types
+                .entry(struct_name)
+                .or_default()
+                .extend(fields);
+        }
+    }
+
+    /// Set Copy types registry from the global compiler state.
+    /// This enables is_copy_type to recognize user-defined types with @derive(Copy)
+    /// (e.g., VoxelType, FaceDirection) in addition to primitive Copy types.
+    pub fn set_copy_types_registry(&mut self, registry: std::collections::HashSet<String>) {
+        self.copy_types_registry = registry;
     }
 
     /// Set analyzed trait methods (used for trait signature inference from impls)
@@ -550,15 +614,22 @@ impl<'ast> CodeGenerator<'ast> {
             self.current_statement_idx = i;
 
             let is_last = i == len - 1;
+            // TDD: Track if this is the last statement (used by If handler)
+            self.current_is_last_statement = is_last;
+            // TDD FIX: Only optimize return statements in function body (not nested blocks)
+            let should_optimize_return =
+                self.in_function_body && matches!(stmt, Statement::Return { .. });
+            // Simplified: (is_last && A) || (is_last && B) = is_last && (A || B)
             if is_last
-                && matches!(
-                    stmt,
-                    Statement::Expression { .. }
-                        | Statement::Thread { .. }
-                        | Statement::Async { .. }
-                )
+                && (should_optimize_return
+                    || matches!(
+                        stmt,
+                        Statement::Expression { .. }
+                            | Statement::Thread { .. }
+                            | Statement::Async { .. }
+                    ))
             {
-                // Last statement is an expression or thread/async block - generate without discard (it's the return value)
+                // Last statement is an expression, thread/async block, or return - generate as implicit return
                 match stmt {
                     Statement::Expression { expr, .. } => {
                         output.push_str(&self.indent());
@@ -599,6 +670,7 @@ impl<'ast> CodeGenerator<'ast> {
                                 expr_str = format!("{}.to_string()", expr_str);
                             }
                             // self.field needs .clone() when self is borrowed
+                            // BUT: Skip .clone() for Copy types (f32, i32, bool, etc.)
                             else if let Expression::FieldAccess { object, .. } = expr {
                                 if let Expression::Identifier { name: obj_name, .. } = &**object {
                                     if obj_name == "self" && !expr_str.ends_with(".clone()") {
@@ -611,7 +683,13 @@ impl<'ast> CodeGenerator<'ast> {
                                                     )
                                             });
                                         if self_is_borrowed {
-                                            expr_str = format!("{}.clone()", expr_str);
+                                            let is_copy = self
+                                                .infer_expression_type(expr)
+                                                .as_ref()
+                                                .is_some_and(|t| self.is_type_copy(t));
+                                            if !is_copy {
+                                                expr_str = format!("{}.clone()", expr_str);
+                                            }
                                         }
                                     }
                                 }
@@ -678,9 +756,112 @@ impl<'ast> CodeGenerator<'ast> {
                         output.push_str(&self.indent());
                         output.push_str("})\n");
                     }
+                    Statement::Return { value, .. } => {
+                        // TDD FIX: Convert explicit return to implicit return when last statement
+                        // Avoids Clippy warning: "unneeded `return` statement"
+                        if let Some(expr) = value {
+                            output.push_str(&self.indent());
+                            let mut expr_str = self.generate_expression(expr);
+
+                            // WINDJAMMER PHILOSOPHY: Auto-convert implicit returns when function returns String
+                            // Same logic as Statement::Expression implicit returns
+                            let returns_string = match &self.current_function_return_type {
+                                Some(Type::String) => true,
+                                Some(Type::Custom(name)) if name == "String" => true,
+                                _ => false,
+                            };
+
+                            let in_match_needing_string = self.in_match_arm_needing_string;
+                            let expr_uses_as_str = expr_str.contains(".as_str()");
+                            let should_suppress = self.suppress_string_conversion;
+
+                            if (returns_string || in_match_needing_string)
+                                && !expr_uses_as_str
+                                && !should_suppress
+                            {
+                                // String literal needs .to_string()
+                                if matches!(
+                                    expr,
+                                    Expression::Literal {
+                                        value: Literal::String(_),
+                                        ..
+                                    }
+                                ) && !expr_str.ends_with(".to_string()")
+                                {
+                                    expr_str = format!("{}.to_string()", expr_str);
+                                }
+                                // self.field needs .clone() when self is borrowed
+                                // BUT: Skip .clone() for Copy types (f32, i32, bool, etc.)
+                                else if let Expression::FieldAccess { object, .. } = expr {
+                                    if let Expression::Identifier { name: obj_name, .. } = &**object
+                                    {
+                                        if obj_name == "self" && !expr_str.ends_with(".clone()") {
+                                            let self_is_borrowed =
+                                                self.current_function_params.iter().any(|p| {
+                                                    p.name == "self"
+                                                        && matches!(
+                                                            p.ownership,
+                                                            crate::parser::OwnershipHint::Ref
+                                                        )
+                                                });
+                                            if self_is_borrowed {
+                                                let is_copy = self
+                                                    .infer_expression_type(expr)
+                                                    .as_ref()
+                                                    .is_some_and(|t| self.is_type_copy(t));
+                                                if !is_copy {
+                                                    expr_str = format!("{}.clone()", expr_str);
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+
+                            // FIXED: Auto-cast usize to i64 for implicit returns
+                            // Same logic as Statement::Expression implicit returns
+                            let returns_int = match &self.current_function_return_type {
+                                Some(Type::Int) => true,
+                                Some(Type::Custom(name)) if name == "i64" || name == "int" => true,
+                                _ => false,
+                            };
+
+                            if returns_int && self.expression_produces_usize(expr) {
+                                // Implicit return of .len() - auto-cast!
+                                expr_str = format!("{} as i64", expr_str);
+                            }
+
+                            // WINDJAMMER PHILOSOPHY: Auto-add .cloned() for HashMap.get() and similar methods
+                            // When returning Option<T> but method returns Option<&T>, add .cloned()
+                            let returns_option_owned = self.returns_option_owned_type();
+                            if returns_option_owned
+                                && self.is_method_returning_option_ref(expr)
+                                && !expr_str.ends_with(".cloned()")
+                                && !expr_str.ends_with(".clone()")
+                            {
+                                expr_str = format!("{}.cloned()", expr_str);
+                            }
+
+                            output.push_str(&expr_str);
+                            output.push('\n');
+                        }
+                        // Void return as last statement is omitted (block returns () implicitly)
+                    }
                     _ => unreachable!(),
                 }
+            } else if !is_last {
+                // TDD FIX: Non-last statements in a block ALWAYS need semicolons,
+                // even when the block is used in an expression context (e.g., match arm body
+                // inside `let _ = match ... { Arm => { expr1; expr2 } }`).
+                // Temporarily clear in_expression_context so intermediate expression
+                // statements get their semicolons.
+                let old_expr_ctx = self.in_expression_context;
+                self.in_expression_context = false;
+                output.push_str(&self.generate_statement(stmt));
+                self.in_expression_context = old_expr_ctx;
             } else {
+                // Last statement of a non-Expression type (e.g., Statement::If used as block value):
+                // Preserve in_expression_context so inner branches retain correct semicolon behavior
                 output.push_str(&self.generate_statement(stmt));
             }
         }
@@ -1100,8 +1281,20 @@ impl<'ast> CodeGenerator<'ast> {
         // Example: quest/manager.rs gets `use super::*;` which imports QuestId, Quest, etc.
         // from quest/mod.rs's re-exports.
         // For root-level modules, `super` refers to the crate root (lib.rs), which is harmless.
+        //
+        // IMPORTANT: When the file has explicit glob imports (use crate::X::*), we must NOT
+        // add `use super::*` because two glob imports bringing the same name into scope causes
+        // Rust error E0659 ("ambiguous name"). For example, if mod.rs re-exports GizmoMode
+        // from scene_view, and the file also has `use crate::gizmos::*` which exports its own
+        // GizmoMode, both globs would bring GizmoMode into scope, making it ambiguous.
         if self.is_module {
-            implicit_imports.push_str("#[allow(unused_imports)]\nuse super::*;\n");
+            let has_explicit_glob_imports = imports.lines().any(|line| {
+                let trimmed = line.trim();
+                trimmed.ends_with("::*;") && !trimmed.starts_with("//")
+            });
+            if !has_explicit_glob_imports {
+                implicit_imports.push_str("#[allow(unused_imports)]\nuse super::*;\n");
+            }
         }
 
         // Add property testing imports if needed
@@ -1989,11 +2182,12 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
             traits.push("PartialEq".to_string());
         }
 
-        let all_unit = e
-            .variants
-            .iter()
-            .all(|v| matches!(v.data, crate::parser::EnumVariantData::Unit));
-        if all_unit {
+        // WINDJAMMER PHILOSOPHY: Auto-derive Copy for enums when ALL variant fields are Copy types.
+        // This includes unit-only enums (trivially Copy) and data-carrying enums where
+        // every field in every variant is a Copy type (i32, f32, bool, etc.).
+        // Enums with String, Vec, or other non-Copy fields should NOT get Copy.
+        let all_variants_copy = self.all_enum_variants_are_copy(&e.variants);
+        if all_variants_copy {
             traits.push("Copy".to_string());
         }
         output.push_str(&format!("#[derive({})]\n", traits.join(", ")));
@@ -3078,20 +3272,69 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
             self.indent_level += 1;
         }
 
+        eprintln!("DEBUG: About to generate function body for {}", func.name);
+
         // Generate function body
         // THE WINDJAMMER WAY: Treat last expression specially (no semicolon for return value)
+        // TDD FIX: Also convert explicit `return expr` to implicit return when last statement
         let body_len = func.body.len();
+        eprintln!(
+            "DEBUG generate_function: func={}, body_len={}",
+            func.name, body_len
+        );
         for (i, stmt) in func.body.iter().enumerate() {
             let is_last = i == body_len - 1;
+            let stmt_name = match stmt {
+                Statement::Return { .. } => "Return",
+                Statement::Expression { .. } => "Expression",
+                _ => "Other",
+            };
+            eprintln!(
+                "DEBUG generate_function: i={}, is_last={}, stmt_type={}",
+                i, is_last, stmt_name
+            );
+            let cond_matches = matches!(
+                stmt,
+                Statement::Expression { .. } | Statement::Return { .. }
+            );
+            eprintln!(
+                "DEBUG: is_last={}, cond_matches={}, both={}",
+                is_last,
+                cond_matches,
+                is_last && cond_matches
+            );
 
-            // If this is the last statement and it's an expression, generate it without semicolon
-            if is_last && matches!(stmt, Statement::Expression { .. }) {
-                if let Statement::Expression { expr, .. } = stmt {
-                    output.push_str(&self.indent());
-                    output.push_str(&self.generate_expression(expr));
-                    output.push('\n');
+            // If this is the last statement, use implicit return (suppress `return` keyword)
+            if is_last
+                && matches!(
+                    stmt,
+                    Statement::Expression { .. } | Statement::Return { .. }
+                )
+            {
+                eprintln!("DEBUG: **** ENTERING implicit return handler ****");
+
+                match stmt {
+                    Statement::Expression { expr, .. } => {
+                        output.push_str(&self.indent());
+                        output.push_str(&self.generate_expression(expr));
+                        output.push('\n');
+                    }
+                    Statement::Return {
+                        value: Some(expr), ..
+                    } => {
+                        // TDD FIX: Convert explicit `return expr` to implicit return
+                        // Generates idiomatic Rust without Clippy warnings
+                        output.push_str(&self.indent());
+                        output.push_str(&self.generate_expression(expr));
+                        output.push('\n');
+                    }
+                    Statement::Return { value: None, .. } => {
+                        // Void return as last statement — omit entirely (function returns () implicitly)
+                    }
+                    _ => unreachable!(),
                 }
             } else {
+                // Not last statement — generate normally (early returns keep `return` keyword)
                 output.push_str(&self.generate_statement(stmt));
             }
         }
@@ -3553,6 +3796,14 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
         output.push_str("fn ");
         output.push_str(&func.name);
 
+        // WINDJAMMER LIFETIME INFERENCE: Determine if explicit lifetime annotations are needed.
+        // Rust's lifetime elision rules handle most cases automatically:
+        //   1. Single input reference → output gets that lifetime
+        //   2. &self/&mut self → output gets self's lifetime
+        //   3. Multiple input references with no self → MUST be explicit
+        // We only add 'a when case 3 applies AND the return type contains references.
+        let needs_lifetime = self.function_needs_lifetime_annotations(func, analyzed);
+
         // Add type parameters with bounds: fn foo<T: Display, U: Debug>(...)
         // Merge inferred bounds with explicit bounds
         let type_params = if let Some(inferred) = self.inferred_bounds.get(&func.name) {
@@ -3574,9 +3825,16 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
             func.type_params.clone()
         };
 
-        if !type_params.is_empty() {
+        if needs_lifetime || !type_params.is_empty() {
             output.push('<');
-            output.push_str(&self.format_type_params(&type_params));
+            let mut parts = Vec::new();
+            if needs_lifetime {
+                parts.push("'a".to_string());
+            }
+            if !type_params.is_empty() {
+                parts.push(self.format_type_params(&type_params));
+            }
+            output.push_str(&parts.join(", "));
             output.push('>');
         }
 
@@ -3825,6 +4083,20 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
                     }
                 };
 
+                // WINDJAMMER LIFETIME INFERENCE: Add 'a lifetime to reference parameters
+                // when the function needs explicit lifetime annotations.
+                let type_str = if needs_lifetime && param.name != "self" {
+                    if let Some(stripped) = type_str.strip_prefix("&mut ") {
+                        format!("&'a mut {}", stripped)
+                    } else if let Some(stripped) = type_str.strip_prefix("&") {
+                        format!("&'a {}", stripped)
+                    } else {
+                        type_str
+                    }
+                } else {
+                    type_str
+                };
+
                 // TDD FIX: Auto-infer `mut` for owned parameters
                 // THE WINDJAMMER WAY: Users don't track mutability - the compiler does.
                 // If a parameter has mutating method calls or field mutations,
@@ -3869,7 +4141,13 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
 
         if let Some(return_type) = &func.return_type {
             output.push_str(" -> ");
-            output.push_str(&self.type_to_rust(return_type));
+            if needs_lifetime {
+                output.push_str(&crate::codegen::rust::types::type_to_rust_with_lifetime(
+                    return_type,
+                ));
+            } else {
+                output.push_str(&self.type_to_rust(return_type));
+            }
         }
 
         // Add where clause if present
@@ -3878,7 +4156,12 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
         output.push_str(" {\n");
         self.indent_level += 1;
 
+        // TDD: Generate function body with return optimization
+        // Set flag to enable implicit return for last statement
+        let old_in_function_body = self.in_function_body;
+        self.in_function_body = true;
         let mut body_code = self.generate_block(&func.body);
+        self.in_function_body = old_in_function_body;
 
         // PHASE 6 OPTIMIZATION: Add defer drop logic before function returns
         // This defers heavy deallocations to a background thread for 10,000x speedup
@@ -4044,6 +4327,23 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
                             Expression::StructLiteral {
                                 name: struct_name, ..
                             } => Some(Type::Custom(struct_name.to_string())),
+                            // Literal types: let x = 25 → i32, let y = 3.14 → f32, let b = true → bool
+                            Expression::Literal {
+                                value: crate::parser::Literal::Int(_),
+                                ..
+                            } => Some(Type::Int),
+                            Expression::Literal {
+                                value: crate::parser::Literal::Float(_),
+                                ..
+                            } => Some(Type::Float),
+                            Expression::Literal {
+                                value: crate::parser::Literal::Bool(_),
+                                ..
+                            } => Some(Type::Bool),
+                            Expression::Literal {
+                                value: crate::parser::Literal::String(_),
+                                ..
+                            } => Some(Type::String),
                             Expression::Call { function, .. } => {
                                 // Type::method() pattern (e.g., Foo::new())
                                 if let Expression::FieldAccess { object, field, .. } = *function {
@@ -4062,16 +4362,26 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
                                         {
                                             Some(Type::Custom(type_name.to_string()))
                                         } else {
-                                            None
+                                            // Not a constructor — look up return type from signature registry
+                                            // e.g., MathHelper::fade(x) → return type is f32
+                                            let qualified = format!("{}::{}", type_name, field);
+                                            self.signature_registry
+                                                .get_signature(&qualified)
+                                                .and_then(|sig| sig.return_type.clone())
                                         }
                                     } else {
                                         None
                                     }
                                 } else {
-                                    None
+                                    // Simple function call: look up in signature registry
+                                    self.infer_expression_type(value)
                                 }
                             }
-                            _ => None,
+                            _ => {
+                                // Fall back to general expression type inference
+                                // Handles if/else, binary ops, method calls, etc.
+                                self.infer_expression_type(value)
+                            }
                         }
                     };
                     if let Some(t) = inferred_type {
@@ -4352,6 +4662,7 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
                             return_str = format!("{}.to_string()", return_str);
                         }
                         // self.field needs .clone() when self is borrowed
+                        // BUT: Skip .clone() for Copy types (f32, i32, bool, etc.)
                         else if let Expression::FieldAccess { object, .. } = e {
                             if let Expression::Identifier { name: obj_name, .. } = &**object {
                                 if obj_name == "self" && !return_str.ends_with(".clone()") {
@@ -4364,7 +4675,13 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
                                                 )
                                         });
                                     if self_is_borrowed {
-                                        return_str = format!("{}.clone()", return_str);
+                                        let is_copy = self
+                                            .infer_expression_type(e)
+                                            .as_ref()
+                                            .is_some_and(|t| self.is_type_copy(t));
+                                        if !is_copy {
+                                            return_str = format!("{}.clone()", return_str);
+                                        }
                                     }
                                 }
                             }
@@ -4439,6 +4756,13 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
                 output.push_str(&self.generate_expression(condition));
                 output.push_str(" {\n");
 
+                // TDD: Only clear in_function_body for if-statements that are NOT the last statement
+                // If this is the last statement, keep the flag so branch returns get optimized
+                let old_in_func_body = self.in_function_body;
+                if !self.current_is_last_statement {
+                    self.in_function_body = false;
+                }
+
                 self.indent_level += 1;
                 output.push_str(&self.generate_block(then_block));
                 self.indent_level -= 1;
@@ -4455,11 +4779,188 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
                     output.push('}');
                 }
 
+                self.in_function_body = old_in_func_body;
+
                 self.suppress_string_conversion = old_suppress;
                 output.push('\n');
                 output
             }
             Statement::Match { value, arms, .. } => {
+                // TDD FIX: Optimize boolean match expressions to matches! macro
+                // Clippy warns about match expressions that just return true/false
+                // Example: match x { Some(_) => true, None => false } → matches!(x, Some(_))
+                if arms.len() == 2 && arms[0].guard.is_none() && arms[1].guard.is_none() {
+                    // Check if both arms have simple literal bodies (true/false)
+                    let arm0_is_true = matches!(
+                        arms[0].body,
+                        Expression::Literal {
+                            value: Literal::Bool(true),
+                            ..
+                        }
+                    );
+                    let arm0_is_false = matches!(
+                        arms[0].body,
+                        Expression::Literal {
+                            value: Literal::Bool(false),
+                            ..
+                        }
+                    );
+                    let arm1_is_true = matches!(
+                        arms[1].body,
+                        Expression::Literal {
+                            value: Literal::Bool(true),
+                            ..
+                        }
+                    );
+                    let arm1_is_false = matches!(
+                        arms[1].body,
+                        Expression::Literal {
+                            value: Literal::Bool(false),
+                            ..
+                        }
+                    );
+
+                    // Pattern 1: first arm true, second arm false
+                    // match x { Pattern => true, _ => false } → matches!(x, Pattern)
+                    if arm0_is_true && arm1_is_false {
+                        let value_str = self.generate_expression(value);
+                        let pattern_str = self.generate_pattern(&arms[0].pattern);
+                        let mut output = self.indent();
+                        output.push_str(&format!("matches!({}, {})\n", value_str, pattern_str));
+                        return output;
+                    }
+
+                    // Pattern 2: first arm false, second arm true
+                    // match x { Pattern => false, _ => true } → !matches!(x, Pattern)
+                    if arm0_is_false && arm1_is_true {
+                        let value_str = self.generate_expression(value);
+                        let pattern_str = self.generate_pattern(&arms[0].pattern);
+                        let mut output = self.indent();
+                        output.push_str(&format!("!matches!({}, {})\n", value_str, pattern_str));
+                        return output;
+                    }
+                }
+
+                // TDD FIX: Detect `if let` pattern and generate `if let` instead of `match`
+                //
+                // The parser converts `if let Pattern = expr { body }` into:
+                //   Statement::Match { arms: [MatchArm(Pattern, body), MatchArm(Wildcard, empty_block)] }
+                //
+                // We detect this pattern (2 arms, last is Wildcard) and generate proper
+                // `if let` syntax, eliminating clippy's "single pattern match" warnings.
+                //
+                // THE WINDJAMMER WAY: The compiler generates idiomatic Rust, not just correct Rust.
+                if arms.len() == 2
+                    && matches!(arms[1].pattern, Pattern::Wildcard)
+                    && arms[1].guard.is_none()
+                {
+                    let wildcard_body_is_empty =
+                        if let Expression::Block { statements, .. } = arms[1].body {
+                            statements.is_empty()
+                        } else {
+                            false
+                        };
+
+                    let wildcard_body_stmts: Option<&[&Statement]> =
+                        if let Expression::Block { statements, .. } = arms[1].body {
+                            if statements.is_empty() {
+                                None
+                            } else {
+                                Some(statements)
+                            }
+                        } else {
+                            None
+                        };
+
+                    // Only convert to if-let when the wildcard arm is empty or has an else body
+                    // Skip when borrow-break is needed (rare edge case, keep as match)
+                    let match_binds_refs_early_check = self.match_expression_binds_refs(value);
+                    let needs_borrow_break_check = match_binds_refs_early_check
+                        && self.match_scrutinee_is_self_method_call(value)
+                        && self.match_arms_mutate_self(arms);
+
+                    if !needs_borrow_break_check
+                        && (wildcard_body_is_empty || wildcard_body_stmts.is_some())
+                    {
+                        let value_str = self.generate_expression(value);
+                        let main_arm = &arms[0];
+
+                        // Track pattern-bound variables (same as regular match)
+                        let match_binds_refs = self.match_expression_binds_refs(value);
+                        let mut bound_vars = std::collections::HashSet::new();
+                        self.extract_pattern_bindings(&main_arm.pattern, &mut bound_vars);
+
+                        let added_borrowed: Vec<String> = if match_binds_refs {
+                            bound_vars.iter().cloned().collect()
+                        } else {
+                            Vec::new()
+                        };
+                        for var in &added_borrowed {
+                            self.borrowed_iterator_vars.insert(var.clone());
+                        }
+
+                        self.local_variable_scopes.push(bound_vars);
+
+                        let match_bound_type_entries: Vec<(String, Type)> =
+                            self.infer_match_bound_types(value, &main_arm.pattern);
+                        for (var_name, var_type) in &match_bound_type_entries {
+                            self.local_var_types
+                                .insert(var_name.clone(), var_type.clone());
+                        }
+
+                        // Generate: if let Pattern = value {
+                        let mut output = self.indent();
+                        output.push_str("if let ");
+                        output.push_str(&self.generate_pattern(&main_arm.pattern));
+
+                        if let Some(guard) = &main_arm.guard {
+                            output.push_str(" if ");
+                            output.push_str(&self.generate_expression(guard));
+                        }
+
+                        output.push_str(" = ");
+                        output.push_str(&value_str);
+                        output.push_str(" {\n");
+
+                        // Generate the then-block body
+                        self.indent_level += 1;
+                        if let Expression::Block { statements, .. } = main_arm.body {
+                            output.push_str(&self.generate_block(statements));
+                        } else {
+                            output.push_str(&self.indent());
+                            output.push_str(&self.generate_expression(main_arm.body));
+                            output.push_str(";\n");
+                        }
+                        self.indent_level -= 1;
+
+                        output.push_str(&self.indent());
+                        output.push('}');
+
+                        // Generate else block if wildcard arm has a non-empty body
+                        if let Some(else_stmts) = wildcard_body_stmts {
+                            output.push_str(" else {\n");
+                            self.indent_level += 1;
+                            output.push_str(&self.generate_block(else_stmts));
+                            self.indent_level -= 1;
+                            output.push_str(&self.indent());
+                            output.push('}');
+                        }
+
+                        output.push('\n');
+
+                        // Clean up scopes
+                        self.local_variable_scopes.pop();
+                        for (var_name, _) in &match_bound_type_entries {
+                            self.local_var_types.remove(var_name);
+                        }
+                        for var in &added_borrowed {
+                            self.borrowed_iterator_vars.remove(var);
+                        }
+
+                        return output;
+                    }
+                }
+
                 // Check if any arm has a string literal pattern
                 // If so, add .as_str() to the match value for String types
                 // BUT: Don't add .as_str() if the match value is a tuple (tuple patterns handle their own string matching)
@@ -4484,10 +4985,13 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
                 // THE WINDJAMMER WAY: The compiler handles this automatically by extracting
                 // the scrutinee into an owned temporary, breaking the borrow chain:
                 //   let __match_borrow_break = self.method().map(|v| v.to_owned());
-                //   match __match_borrow_break.as_deref() { ... }
+                //   match __match_borrow_break.as_ref() { ... }
                 //
-                // This preserves the bound variable type (&str) while the owned data lives
-                // in the local temporary, freeing self for mutation in the arm body.
+                // We use .as_ref() (not .as_deref()) because .as_deref() requires the
+                // inner type to implement Deref, which fails for custom types like
+                // DialogueNode. .as_ref() works universally for all types:
+                //   Option<String>.as_ref() → Option<&String> (auto-coerces to &str)
+                //   Option<Custom>.as_ref() → Option<&Custom> (works for any type)
                 let match_binds_refs_early = self.match_expression_binds_refs(value);
                 let needs_borrow_break = match_binds_refs_early
                     && self.match_scrutinee_is_self_method_call(value)
@@ -4502,7 +5006,7 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
                         value_str
                     ));
                     output.push_str(&self.indent());
-                    output.push_str("match __match_borrow_break.as_deref()");
+                    output.push_str("match __match_borrow_break.as_ref()");
                 } else {
                     output.push_str("match ");
                     if has_string_literal && !is_tuple_match {
@@ -4770,6 +5274,17 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
                     }
                 }
 
+                // TDD FIX: Track range iteration variables as usize
+                // When iterating `for i in 0..items.len()`, the loop variable `i` is usize.
+                // This prevents redundant `i as usize` casts in the loop body.
+                if let Some(var) = &loop_var {
+                    if let Expression::Range { end, .. } = iterable {
+                        if self.expression_produces_usize(end) {
+                            self.usize_variables.insert(var.clone());
+                        }
+                    }
+                }
+
                 // TDD FIX: Track for-loop variable types for method signature lookup
                 // When iterating `for slot in slots` where `slots: Vec<Option<T>>`,
                 // `slot` has type `Option<T>`. This enables match-bound type inference:
@@ -4883,38 +5398,85 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
 
                 // PHASE 5 OPTIMIZATION: Check if this assignment matches x = x + y pattern
                 // If so, convert to compound assignment: x += y
-                if let Expression::Identifier {
-                    name: target_var, ..
-                } = target
+                // Handles both simple identifiers (x = x + y) and field access (self.x = self.x + y)
+                if let Expression::Binary {
+                    left, right, op, ..
+                } = value
                 {
-                    if let Expression::Binary {
-                        left, right, op, ..
-                    } = value
-                    {
-                        if let Expression::Identifier { name: left_var, .. } = &**left {
-                            if left_var == target_var {
-                                // Pattern matched: x = x op y → x op= y
-                                let compound_op_str = match op {
-                                    BinaryOp::Add => Some("+="),
-                                    BinaryOp::Sub => Some("-="),
-                                    BinaryOp::Mul => Some("*="),
-                                    BinaryOp::Div => Some("/="),
-                                    _ => None,
-                                };
+                    let targets_match = match (target, &**left) {
+                        // Simple: x = x + y
+                        (
+                            Expression::Identifier { name: t, .. },
+                            Expression::Identifier { name: l, .. },
+                        ) => t == l,
+                        // Field access (any depth): self.x, obj.field, entity.transform.x
+                        // Compare by generated string to handle nested field chains uniformly
+                        (Expression::FieldAccess { .. }, Expression::FieldAccess { .. })
+                        | (Expression::Index { .. }, Expression::Index { .. }) => {
+                            self.generate_expression(target) == self.generate_expression(left)
+                        }
+                        _ => false,
+                    };
 
-                                if let Some(op_str) = compound_op_str {
-                                    // Generate compound assignment instead
-                                    self.generating_assignment_target = true;
-                                    output.push_str(&self.generate_expression(target));
-                                    self.generating_assignment_target = false;
-                                    output.push(' ');
-                                    output.push_str(op_str);
-                                    output.push(' ');
-                                    output.push_str(&self.generate_expression(right));
-                                    output.push_str(";\n");
-                                    return output;
-                                }
-                            }
+                    // SAFETY: Only apply compound assignment for types known to support it.
+                    // Primitive types (i32, f32, i64, f64, usize, u32, String) always
+                    // implement AddAssign etc. Custom types (Vec3, Color) may NOT,
+                    // even if they implement Add + Copy.
+                    let target_type = self.infer_expression_type(target);
+                    // Check if type is a known custom type that may NOT implement AddAssign.
+                    // Types like Vec2, Vec3, Color implement Add but not AddAssign.
+                    let is_known_non_assignable = target_type.as_ref().is_some_and(|t| {
+                        if let Type::Custom(name) = t {
+                            // Blacklist: custom types from the game engine that implement
+                            // Add/Sub/Mul but NOT AddAssign/SubAssign/MulAssign
+                            matches!(
+                                name.as_str(),
+                                "Vec2"
+                                    | "Vec3"
+                                    | "Vec4"
+                                    | "Color"
+                                    | "Quat"
+                                    | "Mat3"
+                                    | "Mat4"
+                                    | "Point"
+                                    | "Size"
+                            )
+                        } else {
+                            false
+                        }
+                    });
+                    // Compound assignment is safe when:
+                    // 1. Simple identifier: x = x + y always implies x += y works
+                    // 2. Not a known non-assignable custom type (Vec3, Color, etc.)
+                    //    If type is None (inference failed) or primitive, it's safe because
+                    //    field assignments like self.hp = self.hp + 1 are almost always numeric.
+                    let is_compound_safe = !is_known_non_assignable;
+
+                    if targets_match && is_compound_safe {
+                        let compound_op_str = match op {
+                            BinaryOp::Add => Some("+="),
+                            BinaryOp::Sub => Some("-="),
+                            BinaryOp::Mul => Some("*="),
+                            BinaryOp::Div => Some("/="),
+                            BinaryOp::Mod => Some("%="),
+                            BinaryOp::BitAnd => Some("&="),
+                            BinaryOp::BitOr => Some("|="),
+                            BinaryOp::BitXor => Some("^="),
+                            BinaryOp::Shl => Some("<<="),
+                            BinaryOp::Shr => Some(">>="),
+                            _ => None,
+                        };
+
+                        if let Some(op_str) = compound_op_str {
+                            self.generating_assignment_target = true;
+                            output.push_str(&self.generate_expression(target));
+                            self.generating_assignment_target = false;
+                            output.push(' ');
+                            output.push_str(op_str);
+                            output.push(' ');
+                            output.push_str(&self.generate_expression(right));
+                            output.push_str(";\n");
+                            return output;
                         }
                     }
                 }
@@ -5142,6 +5704,16 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
     }
 
     /// TDD FIX: Detect if a match expression produces references for pattern-bound variables
+    /// Check if a type is Copy, considering both primitive types (i32, f32, bool, etc.)
+    /// and user-defined types with @derive(Copy) (e.g., VoxelType, FaceDirection).
+    fn is_type_copy(&self, ty: &Type) -> bool {
+        crate::codegen::rust::type_analysis::is_copy_type(ty)
+            || match ty {
+                Type::Custom(name) => self.copy_types_registry.contains(name.as_str()),
+                _ => false,
+            }
+    }
+
     /// Infer the types of variables bound in match arm patterns.
     /// When matching `Some(x)` on `opt: Option<Stack>`, returns [("x", Type::Custom("Stack"))].
     /// This enables qualified method signature lookup for match-bound variables.
@@ -5191,6 +5763,17 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
                         return Some(param.type_.clone());
                     }
                 }
+                // In impl blocks, identifiers may refer to struct fields (implicit self)
+                // e.g., `mouse_x` in `impl Game` → `self.mouse_x` → type is Game.mouse_x's type
+                if self.in_impl_block && self.current_struct_fields.contains(name) {
+                    if let Some(struct_name) = &self.current_struct_name {
+                        if let Some(fields) = self.struct_field_types.get(struct_name.as_str()) {
+                            if let Some(field_type) = fields.get(name.as_str()) {
+                                return Some(field_type.clone());
+                            }
+                        }
+                    }
+                }
                 None
             }
             // obj.field → look up field type from struct_field_types
@@ -5220,9 +5803,27 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
                         }
                     } else {
                         // var.field → look up var's type, then its field
-                        if let Some(var_type) = self.local_var_types.get(name.as_str()) {
-                            let type_name = match var_type {
+                        // Check local variables first, then function parameters
+                        let var_type =
+                            self.local_var_types
+                                .get(name.as_str())
+                                .cloned()
+                                .or_else(|| {
+                                    self.current_function_params
+                                        .iter()
+                                        .find(|p| p.name == *name)
+                                        .map(|p| p.type_.clone())
+                                });
+                        if let Some(var_type) = var_type {
+                            let type_name = match &var_type {
                                 Type::Custom(n) => n.as_str(),
+                                // Handle references: &Recipe → Recipe, &mut Recipe → Recipe
+                                Type::Reference(inner) | Type::MutableReference(inner) => {
+                                    match inner.as_ref() {
+                                        Type::Custom(n) => n.as_str(),
+                                        _ => "",
+                                    }
+                                }
                                 _ => "",
                             };
                             if let Some(fields) = self.struct_field_types.get(type_name) {
@@ -5286,6 +5887,21 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
                 if method == "len" || method == "count" || method == "capacity" {
                     return Some(Type::Custom("usize".to_string()));
                 }
+                // .clone() returns the same type as the object
+                // This enables type inference through cloned iterables:
+                //   for x in &collection.clone() → x has same element type as collection
+                if method == "clone" {
+                    return self.infer_expression_type(object);
+                }
+                // Iterator methods: return the collection type so
+                // extract_iterator_element_type can extract the element type.
+                // This enables type inference for loop variables:
+                //   for brick in self.bricks.iter_mut() → brick: Brick
+                if method == "iter" || method == "iter_mut" || method == "into_iter" {
+                    if let Some(obj_type) = self.infer_expression_type(object) {
+                        return Some(obj_type);
+                    }
+                }
                 // Look up from the method return type registry (populated during impl generation)
                 if let Some(t) = self.method_return_types.get(method.as_str()) {
                     return Some(t.clone());
@@ -5324,6 +5940,77 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
                 self.signature_registry
                     .get_signature(method)
                     .and_then(|sig| sig.return_type.clone())
+            }
+            // Block expression: infer from the last statement's expression
+            // Handles: let x = { if cond { 64.0 } else { 32.0 } }
+            Expression::Block { statements, .. } => {
+                if let Some(last_stmt) = statements.last() {
+                    match last_stmt {
+                        Statement::Expression { expr, .. } => self.infer_expression_type(expr),
+                        Statement::If { then_block, .. } => {
+                            // Infer from the then branch's last expression
+                            if let Some(last) = then_block.last() {
+                                if let Statement::Expression { expr, .. } = last {
+                                    return self.infer_expression_type(expr);
+                                }
+                            }
+                            None
+                        }
+                        _ => None,
+                    }
+                } else {
+                    None
+                }
+            }
+            // Literal expressions: directly known types
+            Expression::Literal { value, .. } => match value {
+                crate::parser::Literal::Int(_) => Some(Type::Int),
+                crate::parser::Literal::Float(_) => Some(Type::Float),
+                crate::parser::Literal::Bool(_) => Some(Type::Bool),
+                crate::parser::Literal::String(_) => Some(Type::String),
+                _ => None,
+            },
+            // Binary operations: infer from operands (result usually matches operand type)
+            Expression::Binary { left, right, .. } => self
+                .infer_expression_type(left)
+                .or_else(|| self.infer_expression_type(right)),
+            // Cast expressions: the target type is explicit
+            Expression::Cast { type_, .. } => Some(type_.clone()),
+            // Call expressions: Type::method(args) → look up return type from signature registry
+            // This is critical for Copy-type inference: let u = MathHelper::fade(x) → u is f32
+            Expression::Call { function, .. } => {
+                // Extract function name for signature lookup
+                // Pattern: Type::method() → "Type::method"
+                if let Expression::FieldAccess { object, field, .. } = function {
+                    if let Expression::Identifier {
+                        name: type_name, ..
+                    } = object
+                    {
+                        let qualified = format!("{}::{}", type_name, field);
+                        if let Some(sig) = self.signature_registry.get_signature(&qualified) {
+                            return sig.return_type.clone();
+                        }
+                    }
+                }
+                // Pattern: simple function call → "function_name"
+                if let Expression::Identifier { name, .. } = function {
+                    if let Some(sig) = self.signature_registry.get_signature(name.as_str()) {
+                        return sig.return_type.clone();
+                    }
+                }
+                None
+            }
+            // Index expressions: vec[i] → element type of the collection
+            Expression::Index { object, .. } => {
+                if let Some(obj_type) = self.infer_expression_type(object) {
+                    match obj_type {
+                        Type::Vec(inner) => Some(*inner),
+                        Type::Array(inner, _) => Some(*inner),
+                        _ => None,
+                    }
+                } else {
+                    None
+                }
             }
             _ => None,
         }
@@ -5705,24 +6392,27 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
                 };
 
                 // AUTO-CLONE: Check if this variable needs to be cloned at this point
-                if let Some(ref analysis) = self.auto_clone_analysis {
-                    if analysis
-                        .needs_clone(name, self.current_statement_idx)
-                        .is_some()
-                    {
-                        // Skip .clone() for Copy types
-                        // - String literal variables (they're &str, clone is a no-op)
-                        // - usize variables (Copy type, no need to clone)
-                        // - Variables with names suggesting Copy types
-                        let is_copy_type = analysis.string_literal_vars.contains(name)
-                            || self.usize_variables.contains(name)
-                            || name.contains("usize")  // sparse_idx_usize, etc.
-                            || name.contains("index")  // index, idx, etc.
-                            || matches!(name.as_str(), "i" | "j" | "k" | "idx" | "pos");
+                // CRITICAL: Never clone assignment targets (left side of `=`)
+                // DOUBLE-CLONE FIX: Skip auto-clone when inside an explicit .clone() call
+                if !self.generating_assignment_target && !self.in_explicit_clone_call {
+                    if let Some(ref analysis) = self.auto_clone_analysis {
+                        if analysis
+                            .needs_clone(name, self.current_statement_idx)
+                            .is_some()
+                        {
+                            // Skip .clone() for Copy types — they are implicitly copied,
+                            // so .clone() is unnecessary noise.
+                            let is_copy_type = analysis.string_literal_vars.contains(name)
+                                || self.usize_variables.contains(name)
+                                || self
+                                    .infer_expression_type(expr_to_generate)
+                                    .as_ref()
+                                    .is_some_and(|t| self.is_type_copy(t));
 
-                        if !is_copy_type {
-                            // Automatically insert .clone() - this is the magic!
-                            return format!("{}.clone()", base_name);
+                            if !is_copy_type {
+                                // Automatically insert .clone() - this is the magic!
+                                return format!("{}.clone()", base_name);
+                            }
                         }
                     }
                 }
@@ -5732,6 +6422,41 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
             Expression::Binary {
                 left, op, right, ..
             } => {
+                // TDD FIX: Optimize .len() comparisons to .is_empty()
+                // Clippy warns about .len() == 0, .len() != 0, .len() > 0
+                // Transform to .is_empty() or !.is_empty()
+                if let Expression::MethodCall {
+                    object,
+                    method,
+                    arguments,
+                    ..
+                } = left
+                {
+                    if method == "len" && arguments.is_empty() {
+                        // Check if comparing to 0
+                        if let Expression::Literal {
+                            value: Literal::Int(0),
+                            ..
+                        } = right
+                        {
+                            match op {
+                                BinaryOp::Eq => {
+                                    // .len() == 0 → .is_empty()
+                                    let obj_str = self.generate_expression(object);
+                                    return format!("{}.is_empty()", obj_str);
+                                }
+                                BinaryOp::Ne | BinaryOp::Gt => {
+                                    // .len() != 0 → !.is_empty()
+                                    // .len() > 0 → !.is_empty()
+                                    let obj_str = self.generate_expression(object);
+                                    return format!("!{}.is_empty()", obj_str);
+                                }
+                                _ => {}
+                            }
+                        }
+                    }
+                }
+
                 // Special handling for string concatenation
                 if matches!(op, BinaryOp::Add) {
                     // Only treat as string concat if at least one operand is definitely a string literal
@@ -5787,6 +6512,15 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
                     }
                 );
 
+                // COMPARISON CLONE SUPPRESSION: For comparison operators (==, !=, <, >, etc.),
+                // suppress borrowed-iterator cloning on operands. Comparisons work on references
+                // in Rust (&String == &String, &T == &T via PartialEq), so cloning is unnecessary.
+                // e.g., `recipe.name.clone() == target` → `recipe.name == target`
+                let prev_suppress = self.suppress_borrowed_clone;
+                if is_comparison {
+                    self.suppress_borrowed_clone = true;
+                }
+
                 // Wrap operands in parens if they have lower precedence
                 let mut left_str = match left {
                     Expression::Binary { op: left_op, .. } => {
@@ -5809,6 +6543,9 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
                     _ => self.generate_expression(right),
                 };
 
+                // Restore previous suppress state
+                self.suppress_borrowed_clone = prev_suppress;
+
                 // WINDJAMMER PHILOSOPHY: Auto-cast int/usize in comparisons
                 // When comparing int (i64) with usize, automatically cast to make it work.
                 //
@@ -5828,8 +6565,8 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
                 if is_comparison && left_is_usize && !right_is_usize {
                     // Left is usize, right is NOT usize
                     if right_is_int_literal {
-                        // Int literals are always non-negative, safe to cast to usize
-                        right_str = format!("{} as usize", right_str);
+                        // Int literals in comparisons with usize don't need explicit cast —
+                        // Rust infers the literal type from context. `vec.len() > 0` is fine.
                     } else {
                         // Cast the usize side (LEFT) to i64 for safety
                         // Use parens around compound expressions to prevent precedence issues
@@ -5845,8 +6582,8 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
                 } else if is_comparison && right_is_usize && !left_is_usize {
                     // Right is usize, left is NOT usize
                     if left_is_int_literal {
-                        // Int literals are always non-negative, safe to cast to usize
-                        left_str = format!("{} as usize", left_str);
+                        // Int literals in comparisons with usize don't need explicit cast —
+                        // Rust infers the literal type from context.
                     } else {
                         // Cast the usize side (RIGHT) to i64 for safety
                         // Use parens around compound expressions to prevent precedence issues
@@ -5861,12 +6598,19 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
                 // If both are usize: no cast (usize == usize is fine)
                 // If neither is usize: no cast (i64 == i64 is fine)
 
-                // AUTO-CAST: When doing arithmetic between usize and int literal, cast literal to usize
-                // E.g., items.len() - 1 -> items.len() - 1usize
+                // AUTO-CAST: When doing arithmetic between usize and int literal, Rust infers
+                // the literal type from context. So `items.len() - 1` works without casting.
+                // Only cast if the literal is negative (usize can't represent negative values).
                 if is_arithmetic && left_is_usize && right_is_int_literal && !right_is_usize {
-                    right_str = format!("{} as usize", right_str);
+                    let is_negative = matches!(right, Expression::Literal { value: Literal::Int(n), .. } if *n < 0);
+                    if is_negative {
+                        right_str = format!("{} as usize", right_str);
+                    }
                 } else if is_arithmetic && right_is_usize && left_is_int_literal && !left_is_usize {
-                    left_str = format!("{} as usize", left_str);
+                    let is_negative = matches!(left, Expression::Literal { value: Literal::Int(n), .. } if *n < 0);
+                    if is_negative {
+                        left_str = format!("{} as usize", left_str);
+                    }
                 }
 
                 let op_str = operators::binary_op_to_rust(op);
@@ -5890,8 +6634,22 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
                 format!("{} {} {}", left_str, op_str, right_str)
             }
             Expression::Unary { op, operand, .. } => {
-                let operand_str = self.generate_expression(operand);
                 let op_str = operators::unary_op_to_rust(op);
+
+                // BORROW CONTEXT: When generating &expr or &mut expr, suppress Vec index
+                // auto-clone in the operand. We want a reference to the original element.
+                // e.g., &self.items[i] → NOT &self.items[i].clone()
+                //        &mut self.items[i] → NOT &mut self.items[i].clone()
+                let is_borrow = matches!(
+                    op,
+                    crate::parser::UnaryOp::Ref | crate::parser::UnaryOp::MutRef
+                );
+                let prev_borrow = self.in_borrow_context;
+                if is_borrow {
+                    self.in_borrow_context = true;
+                }
+                let operand_str = self.generate_expression(operand);
+                self.in_borrow_context = prev_borrow;
 
                 // CRITICAL: Preserve parentheses for binary expressions in unary context
                 // !(a || b) should generate !(a || b), not !a || b
@@ -5912,72 +6670,85 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
                 // Extract function name for signature lookup
                 let func_name = ast_utilities::extract_function_name(function);
 
-                // Special case: convert test assertion functions to macros
-                // THE WINDJAMMER WAY: assert_eq(a, b) -> assert_eq!(a, b)
-                // NOTE: assert_gt, assert_gte, assert_is_some, assert_is_none, etc. are runtime functions, not macros
-                // Print functions need special handling (format! unwrapping, interpolation)
-                // so they are NOT in the simple macro list — handled separately below.
-                let test_macros = [
-                    "assert",
-                    "assert_eq",
-                    "assert_ne",
-                    "assert_ok",
-                    "assert_err",
-                    "panic",
-                    "vec",
-                    "format",
-                    "write",
-                    "writeln",
-                    "dbg",
-                    "todo",
-                    "unimplemented",
-                    "unreachable",
-                ];
+                // THE WINDJAMMER WAY: User-defined functions always take priority
+                // over built-in name mappings. If the user defines a function with
+                // the same name as a test macro or runtime function (e.g., their own
+                // `assert_approx`), their definition wins. We check the signature
+                // registry: if the function exists and is NOT extern, it's user-defined.
+                let is_user_defined = self
+                    .signature_registry
+                    .get_signature(&func_name)
+                    .map(|sig| !sig.is_extern)
+                    .unwrap_or(false);
 
-                if test_macros.contains(&func_name.as_str()) {
-                    let args: Vec<String> = arguments
-                        .iter()
-                        .map(|(_label, arg)| self.generate_expression(arg))
-                        .collect();
-                    return format!("{}!({})", func_name, args.join(", "));
-                }
+                if !is_user_defined {
+                    // Special case: convert test assertion functions to macros
+                    // THE WINDJAMMER WAY: assert_eq(a, b) -> assert_eq!(a, b)
+                    // NOTE: assert_gt, assert_gte, assert_is_some, assert_is_none, etc. are runtime functions, not macros
+                    // Print functions need special handling (format! unwrapping, interpolation)
+                    // so they are NOT in the simple macro list — handled separately below.
+                    let test_macros = [
+                        "assert",
+                        "assert_eq",
+                        "assert_ne",
+                        "assert_ok",
+                        "assert_err",
+                        "panic",
+                        "vec",
+                        "format",
+                        "write",
+                        "writeln",
+                        "dbg",
+                        "todo",
+                        "unimplemented",
+                        "unreachable",
+                    ];
 
-                // Special case: qualify test assertion runtime functions
-                // THE WINDJAMMER WAY: These are functions, not macros, so they need proper paths
-                let test_functions = [
-                    "assert_gt",
-                    "assert_lt",
-                    "assert_gte",
-                    "assert_lte",
-                    "assert_approx",
-                    "assert_not_empty",
-                    "assert_empty",
-                    "assert_contains",
-                    "assert_is_some",
-                    "assert_is_none",
-                ];
+                    if test_macros.contains(&func_name.as_str()) {
+                        let args: Vec<String> = arguments
+                            .iter()
+                            .map(|(_label, arg)| self.generate_expression(arg))
+                            .collect();
+                        return format!("{}!({})", func_name, args.join(", "));
+                    }
 
-                if test_functions.contains(&func_name.as_str()) {
-                    let args: Vec<String> = arguments
-                        .iter()
-                        .enumerate()
-                        .map(|(idx, (_label, arg))| {
-                            let generated = self.generate_expression(arg);
-                            // assert_is_some and assert_is_none expect &Option, so add & for first arg
-                            if (func_name == "assert_is_some" || func_name == "assert_is_none")
-                                && idx == 0
-                            {
-                                format!("&{}", generated)
-                            } else {
-                                generated
-                            }
-                        })
-                        .collect();
-                    return format!(
-                        "windjammer_runtime::test::{}({})",
-                        func_name,
-                        args.join(", ")
-                    );
+                    // Special case: qualify test assertion runtime functions
+                    // THE WINDJAMMER WAY: These are functions, not macros, so they need proper paths
+                    let test_functions = [
+                        "assert_gt",
+                        "assert_lt",
+                        "assert_gte",
+                        "assert_lte",
+                        "assert_approx",
+                        "assert_not_empty",
+                        "assert_empty",
+                        "assert_contains",
+                        "assert_is_some",
+                        "assert_is_none",
+                    ];
+
+                    if test_functions.contains(&func_name.as_str()) {
+                        let args: Vec<String> = arguments
+                            .iter()
+                            .enumerate()
+                            .map(|(idx, (_label, arg))| {
+                                let generated = self.generate_expression(arg);
+                                // assert_is_some and assert_is_none expect &Option, so add & for first arg
+                                if (func_name == "assert_is_some" || func_name == "assert_is_none")
+                                    && idx == 0
+                                {
+                                    format!("&{}", generated)
+                                } else {
+                                    generated
+                                }
+                            })
+                            .collect();
+                        return format!(
+                            "windjammer_runtime::test::{}({})",
+                            func_name,
+                            args.join(", ")
+                        );
+                    }
                 }
 
                 // Special case: convert print/println/eprintln/eprint() to macros
@@ -6148,6 +6919,37 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
                     return format!("assert!({})", args.join(", "));
                 }
 
+                // WINDJAMMER FIX: Call(FieldAccess) → method call
+                // When the parser produces Call { function: FieldAccess { object, field }, args }
+                // instead of MethodCall { object, method, args }, we need to handle it as
+                // a method call to avoid the FieldAccess auto-clone inserting .clone()
+                // between the method name and the call parentheses.
+                // e.g., e.get_tag() should NOT become e.get_tag.clone()()
+                if let Expression::FieldAccess {
+                    object: call_obj,
+                    field: call_method,
+                    ..
+                } = &**function
+                {
+                    // DOUBLE-CLONE FIX: When the method is .clone(), suppress auto-clone on
+                    // the object to prevent .clone().clone(). Same as MethodCall handler.
+                    let prev_explicit_clone = self.in_explicit_clone_call;
+                    if call_method == "clone" {
+                        self.in_explicit_clone_call = true;
+                    }
+                    let mut obj_str = self.generate_expression(call_obj);
+                    self.in_explicit_clone_call = prev_explicit_clone;
+                    // DOUBLE-CLONE SAFETY NET: Strip redundant auto-clone from object
+                    if call_method == "clone" && obj_str.ends_with(".clone()") {
+                        obj_str = obj_str[..obj_str.len() - 8].to_string();
+                    }
+                    let args: Vec<String> = arguments
+                        .iter()
+                        .map(|(_label, arg)| self.generate_expression(arg))
+                        .collect();
+                    return format!("{}.{}({})", obj_str, call_method, args.join(", "));
+                }
+
                 let func_str = self.generate_expression(function);
 
                 // WINDJAMMER PHILOSOPHY: Some/Ok/Err with string literals need .to_string()
@@ -6238,7 +7040,15 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
                     .iter()
                     .enumerate()
                     .map(|(i, (_label, arg))| {
+                        // CRITICAL: Reset in_field_access_object for argument generation.
+                        // Arguments are independent expressions, NOT part of a field/method/index chain.
+                        // Without this, `process_property(prop.name, prop.value).as_str()` would
+                        // leak in_field_access_object from the MethodCall handler into prop.name/prop.value,
+                        // suppressing necessary .clone() calls.
+                        let prev_field_access_obj = self.in_field_access_object;
+                        self.in_field_access_object = false;
                         let mut arg_str = self.generate_expression(arg);
+                        self.in_field_access_object = prev_field_access_obj;
 
                         // Auto-convert string literals to String for functions expecting owned String
                         // THE WINDJAMMER WAY: Smart inference based on available information!
@@ -6261,10 +7071,15 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
                                     func_name == "new" || func_name.ends_with("::new")
                                 }
                             } else {
-                                // No signature found
-                                // THE WINDJAMMER WAY: Heuristic for constructors
-                                // Functions named 'new' (or Type::new) taking string params likely expect String
-                                func_name == "new" || func_name.ends_with("::new")
+                                // No signature found — check enum variant registry
+                                // WINDJAMMER FIX: Enum variant constructors like GameEvent::ItemPickup("text")
+                                // need .to_string() when the variant field is String type
+                                if let Some(variant_types) = self.enum_variant_types.get(&func_name) {
+                                    variant_types.get(i).is_some_and(|ty| matches!(ty, Type::String))
+                                } else {
+                                    // Fallback heuristic for constructors
+                                    func_name == "new" || func_name.ends_with("::new")
+                                }
                             };
 
                             if should_convert {
@@ -6408,6 +7223,7 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
 
                                         // AUTO-CLONE: When passing a field from a borrowed parameter
                                         // to a function that expects an owned value, clone it
+                                        // BUT: Skip .clone() for Copy types (f32, i32, bool, etc.)
                                         if let Expression::FieldAccess {
                                             object: field_obj, ..
                                         } = arg
@@ -6429,7 +7245,13 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
                                                 if (is_explicitly_borrowed || is_inferred_borrowed)
                                                     && !arg_str.ends_with(".clone()")
                                                 {
-                                                    arg_str = format!("{}.clone()", arg_str);
+                                                    // Skip .clone() for Copy types — they are implicitly copied
+                                                    let is_copy = self.infer_expression_type(arg)
+                                                        .as_ref()
+                                                        .is_some_and(|t| self.is_type_copy(t));
+                                                    if !is_copy {
+                                                        arg_str = format!("{}.clone()", arg_str);
+                                                    }
                                                 }
                                             }
                                         }
@@ -6457,7 +7279,13 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
                                     if (is_explicitly_borrowed || is_inferred_borrowed)
                                         && !arg_str.ends_with(".clone()")
                                     {
-                                        arg_str = format!("{}.clone()", arg_str);
+                                        // Skip .clone() for Copy types — they are implicitly copied
+                                        let is_copy = self.infer_expression_type(arg)
+                                            .as_ref()
+                                            .is_some_and(|t| self.is_type_copy(t));
+                                        if !is_copy {
+                                            arg_str = format!("{}.clone()", arg_str);
+                                        }
                                     }
                                 }
                             }
@@ -6491,8 +7319,29 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
                 arguments,
                 ..
             } => {
-                let obj_str = self.generate_expression_with_precedence(object);
+                // METHOD CALL CONTEXT: Suppress Vec index auto-clone when generating the
+                // object of a method call. Methods take &self or &mut self, so Rust allows
+                // calling methods on &T returned by Vec indexing without cloning.
+                // e.g., self.lights[i].is_enabled() → no need to clone the whole Light2D
+                let prev_field_access = self.in_field_access_object;
+                self.in_field_access_object = true;
+                // DOUBLE-CLONE FIX: When the source has explicit .clone(), suppress auto-clone
+                // on the object to prevent .clone().clone(). The explicit clone IS the clone.
+                let prev_explicit_clone = self.in_explicit_clone_call;
+                if method == "clone" {
+                    self.in_explicit_clone_call = true;
+                }
+                let mut obj_str = self.generate_expression_with_precedence(object);
+                self.in_field_access_object = prev_field_access;
+                self.in_explicit_clone_call = prev_explicit_clone;
 
+                // DOUBLE-CLONE SAFETY NET: If the object was auto-cloned by the FieldAccess
+                // handler and this IS a .clone() call, strip the redundant auto-clone.
+                // e.g., "stack.item.clone()" from auto-clone + ".clone()" from source
+                //     → should be "stack.item.clone()", not "stack.item.clone().clone()"
+                if method == "clone" && obj_str.ends_with(".clone()") {
+                    obj_str = obj_str[..obj_str.len() - 8].to_string();
+                }
                 // BUG #8 FIX: Look up method signature with qualified name (Type::method)
                 // First try to infer the type from the object expression
                 let type_name = self.infer_type_name(object);
@@ -6543,7 +7392,42 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
                     .iter()
                     .enumerate()
                     .map(|(i, (_label, arg))| {
-                        let mut arg_str = self.generate_expression(arg);
+                        // CRITICAL: Reset in_field_access_object for method argument generation.
+                        // Same rationale as function call arguments — method arguments are
+                        // independent expressions, not part of a field/method/index chain.
+                        // TDD FIX: STRIP explicit &ref when parameter expects owned value.
+                        // WINDJAMMER PHILOSOPHY: The developer shouldn't need to think about &.
+                        // If the user writes `&object.transform` but the method takes `Transform` (owned),
+                        // the compiler strips the & and passes by value (Copy types) or moves.
+                        // Example: self.render_transform(&object.transform) → self.render_transform(object.transform)
+                        let arg_to_generate = if let Expression::Unary {
+                            op: crate::parser::UnaryOp::Ref,
+                            operand,
+                            ..
+                        } = arg
+                        {
+                            if let Some(ref sig) = method_signature {
+                                let sig_param_idx = if sig.has_self_receiver { i + 1 } else { i };
+                                let param_is_owned = sig
+                                    .param_ownership
+                                    .get(sig_param_idx)
+                                    .is_some_and(|&o| matches!(o, crate::analyzer::OwnershipMode::Owned));
+                                if param_is_owned {
+                                    operand // Strip & — generate the inner expression
+                                } else {
+                                    arg // Keep the & — parameter expects a reference
+                                }
+                            } else {
+                                arg // No signature info — keep as-is
+                            }
+                        } else {
+                            arg // Not a & expression — keep as-is
+                        };
+
+                        let prev_field_access_obj = self.in_field_access_object;
+                        self.in_field_access_object = false;
+                        let mut arg_str = self.generate_expression(arg_to_generate);
+                        self.in_field_access_object = prev_field_access_obj;
 
                         // TDD FIX: AUTO-WRAP function pointers in iterator adapter methods.
                         // Rust's .filter()/.any()/.find() on iter() yield &&T, expecting FnMut(&&T) -> bool,
@@ -6787,6 +7671,28 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
                 // TODO: Re-enable with proper type checking when VNode type bindings are implemented
                 let processed_args = args;
 
+                // WINDJAMMER STDLIB → RUST TRANSLATION
+                // Some Windjammer methods don't exist in Rust and need translation.
+                //
+                // reversed() → into_iter().rev().collect::<Vec<_>>()
+                if method == "reversed" && processed_args.is_empty() {
+                    return format!("{}.into_iter().rev().collect::<Vec<_>>()", obj_str);
+                }
+                // enumerate() → iter().enumerate()
+                // Rust Vec doesn't have .enumerate() — only iterators do.
+                // But if the object already ends with .iter(), .iter_mut(), or
+                // .into_iter(), don't add a redundant .iter() prefix.
+                if method == "enumerate" && processed_args.is_empty() {
+                    let already_iterator = obj_str.ends_with(".iter()")
+                        || obj_str.ends_with(".iter_mut()")
+                        || obj_str.ends_with(".into_iter()");
+                    if already_iterator {
+                        return format!("{}.enumerate()", obj_str);
+                    } else {
+                        return format!("{}.iter().enumerate()", obj_str);
+                    }
+                }
+
                 let base_expr = format!(
                     "{}{}{}{}({})",
                     obj_str,
@@ -6796,22 +7702,96 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
                     processed_args.join(", ")
                 );
 
-                // AUTO-CLONE: Check if this method call needs to be cloned
-                if let Some(path) = ast_utilities::extract_field_access_path(expr_to_generate) {
-                    if let Some(ref analysis) = self.auto_clone_analysis {
-                        if analysis
-                            .needs_clone(&path, self.current_statement_idx)
-                            .is_some()
-                        {
-                            // Automatically insert .clone() for method call result!
-                            return format!("{}.clone()", base_expr);
-                        }
-                    }
-                }
+                // AUTO-CLONE: Method call results are ALWAYS owned values.
+                // Unlike field accesses (self.field borrows from self) or identifiers
+                // (which may be borrowed), calling a method produces a fresh value.
+                // The auto-clone analysis may flag the *object* for cloning, but that
+                // doesn't mean the *result of the method call* needs cloning.
+                //
+                // Exception: methods that return references (get, first, last) are
+                // handled separately by should_add_cloned().
+                //
+                // WINDJAMMER PHILOSOPHY: Only clone when semantically necessary.
+                // Method call results are never borrowed — cloning them is pure noise.
                 base_expr
             }
             Expression::FieldAccess { object, field, .. } => {
+                // FIELD CHAIN OPTIMIZATION: If we're accessing a likely-Copy sub-field
+                // (e.g., .x, .y, .width, .speed), suppress borrowed-iterator cloning
+                // on the intermediate object. In Rust, (&enemy).velocity.y works fine
+                // through auto-deref — no need to clone the intermediate Vec2.
+                let field_is_likely_copy = matches!(
+                    field.as_str(),
+                    "x" | "y"
+                        | "z"
+                        | "w"
+                        | "width"
+                        | "height"
+                        | "depth"
+                        | "r"
+                        | "g"
+                        | "b"
+                        | "a"
+                        | "left"
+                        | "right"
+                        | "top"
+                        | "bottom"
+                        | "min"
+                        | "max"
+                        | "start"
+                        | "end"
+                        | "offset"
+                        | "scale"
+                        | "speed"
+                        | "time"
+                        | "delta"
+                        | "angle"
+                        | "radius"
+                        | "distance"
+                        | "visible"
+                        | "enabled"
+                        | "active"
+                        | "selected"
+                        | "focused"
+                        | "id"
+                        | "type"
+                        | "kind"
+                        | "priority"
+                        | "level"
+                        | "len"
+                        | "count"
+                        | "size"
+                        | "index"
+                        | "idx"
+                        | "vx"
+                        | "vy"
+                        | "vz"
+                        | "dx"
+                        | "dy"
+                        | "dz"
+                        | "health"
+                        | "damage"
+                        | "score"
+                        | "lives"
+                        | "frame"
+                );
+                // Also check via type inference if the outer expression (self.obj.field) is Copy
+                let field_is_copy_by_type = self
+                    .infer_expression_type(expr_to_generate)
+                    .as_ref()
+                    .is_some_and(|t| self.is_type_copy(t));
+
+                let prev_suppress = self.suppress_borrowed_clone;
+                let prev_field_access = self.in_field_access_object;
+                if field_is_likely_copy || field_is_copy_by_type {
+                    self.suppress_borrowed_clone = true;
+                }
+                // Suppress Vec index clone when we're just accessing a field
+                // e.g., players[i].score → no need to clone the whole Player
+                self.in_field_access_object = true;
                 let obj_str = self.generate_expression_with_precedence(object);
+                self.in_field_access_object = prev_field_access;
+                self.suppress_borrowed_clone = prev_suppress;
 
                 // Determine if this is a module/type path (::) or field access (.)
                 // Check the object to decide:
@@ -6839,41 +7819,131 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
 
                 // AUTO-CLONE: Check if this field access needs to be cloned
                 // Extract the full path (e.g., "config.paths")
-                if let Some(path) = ast_utilities::extract_field_access_path(expr_to_generate) {
-                    if let Some(ref analysis) = self.auto_clone_analysis {
-                        if analysis
-                            .needs_clone(&path, self.current_statement_idx)
-                            .is_some()
-                        {
-                            // Automatically insert .clone() for field access!
-                            return format!("{}.clone()", base_expr);
+                // CRITICAL: Never clone assignment targets (left side of `=`)
+                // e.g., `emitter.lifetime = 1.0` must NOT become `emitter.clone().lifetime = 1.0`
+                // DOUBLE-CLONE FIX: Skip auto-clone when we're inside an explicit .clone() call
+                // The source already has .clone(), so we must not add another one.
+                if !self.generating_assignment_target && !self.in_explicit_clone_call {
+                    if let Some(path) = ast_utilities::extract_field_access_path(expr_to_generate) {
+                        if let Some(ref analysis) = self.auto_clone_analysis {
+                            if analysis
+                                .needs_clone(&path, self.current_statement_idx)
+                                .is_some()
+                            {
+                                // Skip .clone() for Copy types (f32, i32, bool, etc.)
+                                // They are implicitly copied — .clone() is unnecessary noise.
+                                let is_copy = self
+                                    .infer_expression_type(expr_to_generate)
+                                    .as_ref()
+                                    .is_some_and(|t| self.is_type_copy(t));
+                                if !is_copy {
+                                    // Type inference failed — fall back to name heuristic
+                                    // Fields like x, y, z, width, height are almost always Copy
+                                    let is_likely_copy_field = matches!(
+                                        field.as_str(),
+                                        "x" | "y"
+                                            | "z"
+                                            | "w"
+                                            | "width"
+                                            | "height"
+                                            | "depth"
+                                            | "r"
+                                            | "g"
+                                            | "b"
+                                            | "a"
+                                            | "left"
+                                            | "right"
+                                            | "top"
+                                            | "bottom"
+                                            | "min"
+                                            | "max"
+                                            | "start"
+                                            | "end"
+                                            | "offset"
+                                            | "scale"
+                                            | "speed"
+                                            | "time"
+                                            | "delta"
+                                            | "angle"
+                                            | "radius"
+                                            | "distance"
+                                            | "visible"
+                                            | "enabled"
+                                            | "active"
+                                            | "selected"
+                                            | "focused"
+                                            | "id"
+                                            | "type"
+                                            | "kind"
+                                            | "priority"
+                                            | "level"
+                                            | "len"
+                                            | "count"
+                                            | "size"
+                                            | "index"
+                                            | "idx"
+                                            | "vx"
+                                            | "vy"
+                                            | "vz"
+                                            | "dx"
+                                            | "dy"
+                                            | "dz"
+                                            | "health"
+                                            | "damage"
+                                            | "score"
+                                            | "lives"
+                                            | "frame"
+                                    );
+                                    if !is_likely_copy_field {
+                                        return format!("{}.clone()", base_expr);
+                                    }
+                                }
+                            }
                         }
                     }
                 }
 
                 // BORROWED ITERATOR: If accessing fields through a borrowed iterator variable,
-                // we need to clone String fields since we can't move out of a reference
+                // we need to clone non-Copy fields since we can't move out of a reference
                 // BUT: Don't clone for assignment targets (left side of =)
-                if !self.generating_assignment_target {
+                // AND: Don't clone when a parent FieldAccess is reading a Copy sub-field
+                //      (e.g., bullet.velocity.y → .y is Copy, so no need to clone velocity)
+                // AND: Don't clone when inside an explicit .clone() call (prevents double clone)
+                // AND: Don't clone when this is an intermediate object in a field access chain
+                //      (e.g., stack.item.stats.armor → don't clone item, Rust auto-derefs through &)
+                // AND: Don't clone in borrow context (&recipe.ingredients → reference is sufficient)
+                // WINDJAMMER PHILOSOPHY: Use type inference first, fall back to name heuristics
+                if !self.generating_assignment_target
+                    && !self.suppress_borrowed_clone
+                    && !self.in_explicit_clone_call
+                    && !self.in_field_access_object
+                    && !self.in_borrow_context
+                {
                     if let Expression::Identifier { name: var_name, .. } = &**object {
                         if self.borrowed_iterator_vars.contains(var_name) {
-                            // Clone non-Copy fields (String-like names)
-                            // Exclude obvious Copy fields
-                            // ALSO exclude method names that look like fields (as_str, to_string, etc.)
-                            let needs_clone = !matches!(
-                                field.as_str(),
-                                "len" | "count" | "size" | "index" | "idx" | "i" | "j" | "k" |
-                                "x" | "y" | "z" | "w" | "width" | "height" | "depth" |
-                                "r" | "g" | "b" | "a" | "left" | "right" | "top" | "bottom" |
-                                "min" | "max" | "start" | "end" | "offset" | "scale" |
-                                "speed" | "time" | "delta" | "angle" | "radius" | "distance" |
-                                "visible" | "enabled" | "active" | "selected" | "focused" |
-                                "id" | "type" | "kind" | "priority" | "level" |
-                                // Method-like names that should NOT be cloned (they're method calls, not fields)
-                                "as_str" | "to_string" | "clone" | "iter" | "iter_mut" | "is_empty"
-                            );
-                            if needs_clone && !base_expr.ends_with(".clone()") {
-                                return format!("{}.clone()", base_expr);
+                            // First: use type inference to check if the field type is Copy
+                            let is_copy = self
+                                .infer_expression_type(expr_to_generate)
+                                .as_ref()
+                                .is_some_and(|t| self.is_type_copy(t));
+
+                            if !is_copy {
+                                // Fall back to name-based heuristics for fields we KNOW are Copy
+                                let is_likely_copy_field = matches!(
+                                    field.as_str(),
+                                    "len" | "count" | "size" | "index" | "idx" | "i" | "j" | "k" |
+                                    "x" | "y" | "z" | "w" | "width" | "height" | "depth" |
+                                    "r" | "g" | "b" | "a" | "left" | "right" | "top" | "bottom" |
+                                    "min" | "max" | "start" | "end" | "offset" | "scale" |
+                                    "speed" | "time" | "delta" | "angle" | "radius" | "distance" |
+                                    "visible" | "enabled" | "active" | "selected" | "focused" |
+                                    "id" | "type" | "kind" | "priority" | "level" |
+                                    // Method-like names that should NOT be cloned
+                                    "as_str" | "to_string" | "clone" | "iter" | "iter_mut" | "is_empty"
+                                );
+                                if !is_likely_copy_field && !base_expr.ends_with(".clone()") {
+                                    return format!("{}.clone()", base_expr);
+                                }
                             }
                         }
                     }
@@ -6893,10 +7963,19 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
                 let field_str: Vec<String> = fields
                     .iter()
                     .map(|(field_name, expr)| {
+                        // STRUCT LITERAL CONTEXT: Array literals in struct fields should use
+                        // fixed-size [...] syntax, not vec![...], because struct fields have
+                        // explicit type annotations (e.g., position: [f32; 3]).
+                        let prev_in_struct_field = self.in_struct_literal_field;
+                        self.in_struct_literal_field = true;
+
                         // WINDJAMMER PHILOSOPHY: Auto-convert string literals to String
                         // In Windjammer, `string` type is always owned (maps to Rust String)
                         // So string literals in struct fields should be converted automatically
                         let mut expr_str = self.generate_expression(expr);
+
+                        // Restore previous context
+                        self.in_struct_literal_field = prev_in_struct_field;
 
                         // Auto-convert string literals to String for struct fields
                         if matches!(
@@ -7043,7 +8122,14 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
                 }
             }
             Expression::Index { object, index, .. } => {
+                // INDEX CHAIN OPTIMIZATION: When generating the object of an Index expression,
+                // suppress auto-clone. In `a[i][j]`, Rust auto-derefs `a[i]` (returns &Vec<T>)
+                // to access [j]. Cloning the intermediate Vec is wasteful and wrong.
+                // Same logic as in_field_access_object for FieldAccess chains.
+                let prev_field_access = self.in_field_access_object;
+                self.in_field_access_object = true;
                 let obj_str = self.generate_expression(object);
+                self.in_field_access_object = prev_field_access;
 
                 // Special case: if index is a Range, this is slice syntax
                 // FIXED: Don't add & - Rust will auto-coerce to &[T] when needed
@@ -7096,38 +8182,88 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
                         }
                 ) && !idx_str.contains(" as ")
                 {
-                    // Simple identifier or integer literal - add usize cast
-                    format!("{} as usize", idx_str)
+                    // Skip cast if identifier is already usize (e.g. assigned from `expr as usize`)
+                    if let Expression::Identifier { name, .. } = &**index {
+                        if self.usize_variables.contains(name)
+                            || self.expression_produces_usize(index)
+                        {
+                            idx_str // Already usize — no cast needed
+                        } else {
+                            format!("{} as usize", idx_str)
+                        }
+                    } else if let Expression::Literal {
+                        value: Literal::Int(n),
+                        ..
+                    } = &**index
+                    {
+                        // Integer literal: Rust infers type from context in index position,
+                        // so `arr[0]` works without `as usize`. Only cast if negative
+                        // (which would be a logic error, but preserve the cast for clarity).
+                        if *n < 0 {
+                            format!("{} as usize", idx_str)
+                        } else {
+                            idx_str
+                        }
+                    } else {
+                        format!("{} as usize", idx_str)
+                    }
                 } else {
                     idx_str
                 };
 
                 let base_expr = format!("{}[{}]", obj_str, final_idx);
 
-                // TODO: Vec indexing of non-Copy types causes E0507
-                // Need to implement context-aware borrowing:
-                // - If used for field access: &vec[idx]
-                // - If returned/stored: vec[idx].clone()
-                // - If Copy type: vec[idx] (no change)
+                // WINDJAMMER PHILOSOPHY: Auto-clone Vec indexing for non-Copy types.
+                // Rust doesn't allow moving out of a Vec index (E0507).
+                // For Copy types: vec[idx] works directly (value is copied).
+                // For non-Copy types: vec[idx].clone() is needed.
                 //
-                // For now, this generates vec[idx] which works for Copy types
-                // but fails for non-Copy types. The proper fix requires:
-                // 1. Type inference to detect non-Copy types
-                // 2. Usage analysis to determine if borrow or clone is needed
-                // 3. Context-aware code generation
-                //
-                // AUTO-CLONE: Check if this index expression needs to be cloned
-                if let Some(path) = ast_utilities::extract_field_access_path(expr_to_generate) {
-                    if let Some(ref analysis) = self.auto_clone_analysis {
-                        if analysis
-                            .needs_clone(&path, self.current_statement_idx)
-                            .is_some()
-                        {
-                            // Automatically insert .clone() for index expression!
-                            return format!("{}.clone()", base_expr);
+                // CRITICAL: NEVER auto-clone in these contexts:
+                // 1. Assignment target: vec[i] = value (can't assign to .clone())
+                // 2. Borrow context: &vec[i] (want reference to original, not to clone)
+                // 3. Field access: vec[i].field (Rust allows field access through ref)
+                // 4. Comparison context: vec[i] == val (comparisons work on &T)
+                let suppress_clone = self.generating_assignment_target
+                    || self.in_borrow_context
+                    || self.in_field_access_object
+                    || self.suppress_borrowed_clone;
+
+                if !suppress_clone {
+                    // First check auto_clone_analysis (path-based analysis)
+                    if let Some(path) = ast_utilities::extract_field_access_path(expr_to_generate) {
+                        if let Some(ref analysis) = self.auto_clone_analysis {
+                            if analysis
+                                .needs_clone(&path, self.current_statement_idx)
+                                .is_some()
+                            {
+                                let is_copy = self
+                                    .infer_expression_type(expr_to_generate)
+                                    .as_ref()
+                                    .is_some_and(|t| self.is_type_copy(t));
+                                if !is_copy {
+                                    return format!("{}.clone()", base_expr);
+                                }
+                            }
+                        }
+                    }
+
+                    // Fallback: Type-based auto-clone for Vec<NonCopy>[idx]
+                    // If we can infer the collection's element type and it's not Copy, clone.
+                    // This handles the common case: vec[i] passed to a function taking ownership.
+                    if let Some(obj_type) = self.infer_expression_type(object) {
+                        let element_type = match &obj_type {
+                            Type::Vec(inner) => Some(inner.as_ref()),
+                            Type::Array(inner, _) => Some(inner.as_ref()),
+                            _ => None,
+                        };
+                        if let Some(elem_type) = element_type {
+                            if !self.is_type_copy(elem_type) {
+                                return format!("{}.clone()", base_expr);
+                            }
                         }
                     }
                 }
+
                 base_expr
             }
             Expression::Tuple {
@@ -7142,10 +8278,25 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
             } => {
                 let expr_strs: Vec<String> =
                     exprs.iter().map(|e| self.generate_expression(e)).collect();
-                // FIXED: Generate array literal [...] instead of vec![...]
-                // Array literals create stack-allocated arrays: [1, 2, 3]
-                // vec! macro creates heap-allocated vectors: vec![1, 2, 3]
-                format!("[{}]", expr_strs.join(", "))
+
+                // WINDJAMMER PHILOSOPHY: Array literal syntax determines Rust output.
+                //
+                // In WJ, `[a, b, c]` is a fixed-size array literal → generates `[a, b, c]` in Rust.
+                // In WJ, `vec![a, b, c]` is an explicit Vec constructor → generates `vec![a, b, c]`.
+                //
+                // Empty arrays `[]` remain `vec![]` because Rust's empty `[]` can't infer its type.
+                //
+                // This distinction is critical: `painter.line_segment([p1, p2], stroke)` expects
+                // `[Pos2; 2]`, not `Vec<Pos2>`. The developer chose `[...]` syntax intentionally.
+                if exprs.is_empty() {
+                    // Empty array [] → vec![] (Vec::new())
+                    // Rust's [] is a fixed-size array and can't infer type from later usage.
+                    "vec![]".to_string()
+                } else {
+                    // Non-empty array literals: generate fixed-size array [a, b, c]
+                    // The developer uses `vec![...]` macro syntax when Vec is needed.
+                    format!("[{}]", expr_strs.join(", "))
+                }
             }
             Expression::MacroInvocation {
                 is_repeat,
@@ -7237,7 +8388,45 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
                 // Use semicolon for repeat, comma for regular args
                 let separator = if *is_repeat { "; " } else { ", " };
 
-                format!("{}!{}{}{}", name, open, arg_strs.join(separator), close)
+                // WINDJAMMER FIX: String literal coercion in vec![]
+                // In Windjammer, `string` maps to Rust `String`, so vec!["a", "b"] must
+                // become vec!["a".to_string(), "b".to_string()] for Vec<String>.
+                // Only apply when: macro is vec, brackets delimiter, has string literal args.
+                let final_arg_strs: Vec<String> = if name == "vec"
+                    && matches!(delimiter, MacroDelimiter::Brackets)
+                    && !*is_repeat
+                {
+                    arg_strs
+                        .iter()
+                        .enumerate()
+                        .map(|(idx, s)| {
+                            // Check if the original arg is a string literal
+                            if idx < args.len() {
+                                if let Expression::Literal {
+                                    value: Literal::String(_),
+                                    ..
+                                } = &args[idx]
+                                {
+                                    // Add .to_string() if not already present
+                                    if !s.ends_with(".to_string()") {
+                                        return format!("{}.to_string()", s);
+                                    }
+                                }
+                            }
+                            s.clone()
+                        })
+                        .collect()
+                } else {
+                    arg_strs
+                };
+
+                format!(
+                    "{}!{}{}{}",
+                    name,
+                    open,
+                    final_arg_strs.join(separator),
+                    close
+                )
             }
             Expression::Cast { expr, type_, .. } => {
                 // Add parentheses around binary expressions for correct precedence
@@ -7261,8 +8450,29 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
                 statements: stmts, ..
             } => {
                 // Special case: if the block contains only a match statement, generate it as a match expression
+                // BUT: Skip this optimization when the match is an if-let pattern (2 arms, last is wildcard with empty body)
+                // In that case, fall through to normal block generation which will generate `if let` via Statement::Match handler
                 if stmts.len() == 1 {
                     if let Statement::Match { value, arms, .. } = &stmts[0] {
+                        // Check if this is an if-let pattern that should be generated as `if let`
+                        let is_if_let_pattern = arms.len() == 2
+                            && matches!(arms[1].pattern, Pattern::Wildcard)
+                            && arms[1].guard.is_none()
+                            && matches!(arms[1].body, Expression::Block { statements, .. } if statements.is_empty());
+
+                        if is_if_let_pattern {
+                            // Fall through to normal block generation — generate_statement will emit `if let`
+                            let mut output = String::from("{\n");
+                            self.indent_level += 1;
+                            for stmt in stmts {
+                                output.push_str(&self.generate_statement(stmt));
+                            }
+                            self.indent_level -= 1;
+                            output.push_str(&self.indent());
+                            output.push('}');
+                            return output;
+                        }
+
                         let mut output = String::from("match ");
 
                         // Check if any arm has a string literal pattern
@@ -7392,7 +8602,7 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
                                 | Statement::Async { .. }
                         )
                     {
-                        // Last statement is an expression or thread/async block - generate without discard (it's the return value)
+                        // Last statement is an expression, thread/async block - generate as implicit return
                         match stmt {
                             Statement::Expression { expr, .. } => {
                                 output.push_str(&self.indent());
@@ -7448,7 +8658,17 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
                             }
                             _ => unreachable!(),
                         }
+                    } else if !is_last {
+                        // TDD FIX: Non-last statements in a block expression ALWAYS need
+                        // semicolons, even in expression context (e.g., match arm body
+                        // inside `let _ = match ... { Arm => { expr1; expr2 } }`).
+                        let old_expr_ctx = self.in_expression_context;
+                        self.in_expression_context = false;
+                        output.push_str(&self.generate_statement(stmt));
+                        self.in_expression_context = old_expr_ctx;
                     } else {
+                        // Last statement of a non-Expression type (e.g., Statement::If used as block value):
+                        // Preserve in_expression_context so inner branches retain correct semicolon behavior
                         output.push_str(&self.generate_statement(stmt));
                     }
                 }
@@ -7663,6 +8883,101 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
             .all(|field| self.is_partial_eq_type(&field.field_type))
     }
 
+    /// Check if all enum variants have only Copy fields.
+    /// Unit variants are trivially Copy. Tuple/Struct variants check each field type.
+    fn all_enum_variants_are_copy(&self, variants: &[crate::parser::EnumVariant]) -> bool {
+        use crate::parser::EnumVariantData;
+        variants.iter().all(|variant| match &variant.data {
+            EnumVariantData::Unit => true, // Unit variants are always Copy
+            EnumVariantData::Tuple(types) => types.iter().all(type_analysis::is_copy_type),
+            EnumVariantData::Struct(fields) => fields
+                .iter()
+                .all(|(_, field_type)| type_analysis::is_copy_type(field_type)),
+        })
+    }
+
+    /// WINDJAMMER LIFETIME INFERENCE: Determine if a function needs explicit lifetime annotations.
+    ///
+    /// Rust's lifetime elision rules handle most cases:
+    ///   1. Single input reference → output gets that lifetime
+    ///   2. &self/&mut self → output gets self's lifetime
+    ///   3. Multiple input references with no self → MUST be explicit
+    ///
+    /// We only add 'a when case 3 applies AND the return type contains references.
+    fn function_needs_lifetime_annotations(
+        &self,
+        func: &FunctionDecl<'ast>,
+        analyzed: &AnalyzedFunction<'ast>,
+    ) -> bool {
+        use crate::codegen::rust::types::type_contains_reference;
+
+        // First check: does the return type contain any references?
+        let return_has_ref = match &func.return_type {
+            Some(ret_type) => type_contains_reference(ret_type),
+            None => false,
+        };
+
+        if !return_has_ref {
+            return false;
+        }
+
+        // Check if there's a self parameter (explicit or inferred)
+        let has_self = func.parameters.iter().any(|p| p.name == "self")
+            || analyzed.inferred_ownership.contains_key("self");
+
+        if has_self {
+            // &self/&mut self methods: Rust elision rule 2 handles this
+            return false;
+        }
+
+        // Count the number of reference parameters (explicit refs + analyzer-inferred refs)
+        let ref_param_count = func
+            .parameters
+            .iter()
+            .enumerate()
+            .filter(|(param_idx, param)| {
+                if param.name == "self" {
+                    return false;
+                }
+
+                // Check if the parameter type is already a reference
+                let inferred_type = analyzed
+                    .inferred_param_types
+                    .get(*param_idx)
+                    .unwrap_or(&param.type_);
+
+                if matches!(
+                    inferred_type,
+                    Type::Reference(_) | Type::MutableReference(_)
+                ) {
+                    return true;
+                }
+
+                // Check explicit ownership hints
+                if matches!(
+                    param.ownership,
+                    crate::parser::OwnershipHint::Ref | crate::parser::OwnershipHint::Mut
+                ) {
+                    return true;
+                }
+
+                // Check analyzer-inferred ownership
+                if let Some(ownership) = analyzed.inferred_ownership.get(&param.name) {
+                    matches!(
+                        ownership,
+                        crate::analyzer::OwnershipMode::Borrowed
+                            | crate::analyzer::OwnershipMode::MutBorrowed
+                    )
+                } else {
+                    false
+                }
+            })
+            .count();
+
+        // Need explicit lifetime when 2+ reference params and reference return
+        ref_param_count >= 2
+    }
+
     fn all_enum_variants_are_partial_eq(&self, variants: &[crate::parser::EnumVariant]) -> bool {
         use crate::parser::EnumVariantData;
         variants.iter().all(|variant| {
@@ -7700,8 +9015,32 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
                     if self.all_enum_variants_are_partial_eq_recursive(&e.variants) {
                         self.partial_eq_types.insert(e.name.clone());
                     }
+                    // ENUM VARIANT TYPES: Collect field types for each variant
+                    // Enables string literal → String coercion in enum variant constructors
+                    self.collect_enum_variant_types(e);
                 }
                 _ => {}
+            }
+        }
+    }
+
+    /// Collect field types for each enum variant into the enum_variant_types registry.
+    /// Maps "EnumName::VariantName" → Vec<Type> for tuple variants.
+    fn collect_enum_variant_types(&mut self, e: &crate::parser::EnumDecl) {
+        use crate::parser::EnumVariantData;
+        for variant in &e.variants {
+            let key = format!("{}::{}", e.name, variant.name);
+            match &variant.data {
+                EnumVariantData::Unit => {
+                    self.enum_variant_types.insert(key, vec![]);
+                }
+                EnumVariantData::Tuple(types) => {
+                    self.enum_variant_types.insert(key, types.clone());
+                }
+                EnumVariantData::Struct(fields) => {
+                    let types: Vec<Type> = fields.iter().map(|(_, ty)| ty.clone()).collect();
+                    self.enum_variant_types.insert(key, types);
+                }
             }
         }
     }
@@ -8275,9 +9614,15 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
                                 && matches!(p.ownership, crate::parser::OwnershipHint::Ref)
                         });
                     }
-                    // Check if it's a borrowed parameter
+                    // Check if it's a borrowed parameter (ownership hint OR reference type)
                     return self.current_function_params.iter().any(|p| {
-                        &p.name == name && matches!(p.ownership, crate::parser::OwnershipHint::Ref)
+                        &p.name == name
+                            && (matches!(p.ownership, crate::parser::OwnershipHint::Ref)
+                                || matches!(
+                                    &p.type_,
+                                    crate::parser::Type::Reference(_)
+                                        | crate::parser::Type::MutableReference(_)
+                                ))
                     });
                 }
                 false
@@ -8285,7 +9630,13 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
             // Direct variable that's a borrowed parameter (explicit or inferred)
             Expression::Identifier { name, .. } => {
                 self.current_function_params.iter().any(|p| {
-                    &p.name == name && matches!(p.ownership, crate::parser::OwnershipHint::Ref)
+                    &p.name == name
+                        && (matches!(p.ownership, crate::parser::OwnershipHint::Ref)
+                            || matches!(
+                                &p.type_,
+                                crate::parser::Type::Reference(_)
+                                    | crate::parser::Type::MutableReference(_)
+                            ))
                 }) || self.inferred_borrowed_params.contains(name)
             }
             // Method calls that return iterators over references

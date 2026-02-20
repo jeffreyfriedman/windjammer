@@ -1,3 +1,10 @@
+## [0.42.0] - In Progress
+### Focus: Dogfooding & Game Engine Improvements
+- Continued TDD dogfooding with windjammer-game engine
+- Compiler fixes discovered through real game development
+
+---
+
 ## [0.41.0] - 2026-02-10
 ### Added — Cross-Backend Conformance
 - **29 cross-backend conformance tests** verifying byte-identical output across Rust, Go, JavaScript, and Interpreter backends
