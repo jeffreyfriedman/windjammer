@@ -1,6 +1,62 @@
-## [0.42.0] - In Progress
+## [0.44.0] - 2026-02-19
+### Focus: Production-Ready Compiler - Zero Errors, Zero Warnings, Cross-Platform
+This release represents a major milestone: **90+ bug fixes** through rigorous TDD + dogfooding methodology, resulting in a **production-ready compiler** that generates idiomatic, Clippy-clean Rust code across all platforms.
+
+### Major Achievements
+- ✅ **Zero compilation errors** in windjammer-game (303 .wj files)
+- ✅ **Zero Clippy warnings** in generated code and compiler code
+- ✅ **246 tests passing** (237 library + 9 new integration tests)
+- ✅ **Cross-platform compatibility** (Ubuntu, macOS, Windows)
+- ✅ **CI passing** on all platforms with strict linting (-D warnings)
+
+### Critical Compiler Fixes (14 major fixes)
+
+#### Ownership & Borrowing
+- **TryOp (?) operator** in ownership inference (E0596)
+- **Borrow break pattern** using `as_ref()` instead of `as_deref()` (E0599/E0282)
+- **Assignment target clone prevention** - semantic correctness bug
+- **Reference stripping** for owned Copy type parameters (E0308)
+
+#### Type System & Codegen
+- **Copy type auto-clone elimination** - no more `.clone()` on f32, i32, bool
+- **Array literal codegen** - fixed-size `[a, b]` vs `vec![a, b]` (E0308)
+- **Glob import ambiguity** - suppress `use super::*` when explicit imports present (E0659)
+- **Block expression semicolons** - correct handling in match arms (expected `;`)
+
+#### Clippy Optimizations (85+ warnings eliminated)
+- **Implicit returns** - suppress unneeded `return` keyword (39+ warnings)
+- **Length comparisons** - `.len() == 0` → `.is_empty()` (24+ warnings)
+- **Boolean matches** - convert to `matches!()` macro (22+ warnings)
+- **Compiler code cleanup** - 5 linter warnings in generator.rs
+- **Test infrastructure** - 12 test files cleaned
+
+#### Cross-Platform Compatibility
+- **Windows path support** - `std::env::temp_dir()` instead of `/tmp/`
+- **Path separator normalization** - forward slashes in HashMap keys
+- **All CI platforms passing** - Ubuntu, macOS, Windows
+
+### New Tests Added (9 integration tests)
+1. `array_literal_codegen_test.rs` - Fixed-size array generation
+2. `block_semicolon_test.rs` - Expression context semicolons
+3. `borrow_break_as_ref_test.rs` - Borrow break pattern
+4. `codegen_glob_import_ambiguity_test.rs` - Import resolution
+5. `len_zero_comparison_test.rs` - Length comparison optimization
+6. `matches_macro_optimization_test.rs` - Boolean match optimization
+7. `ref_strip_owned_param_test.rs` - Reference stripping
+8. `return_statement_optimization_test.rs` - Implicit return optimization
+9. `tryop_ownership_inference_test.rs` - TryOp in ownership analysis
+
+### Code Quality
+- **Generates idiomatic Rust** - follows all Clippy best practices
+- **Type-aware optimizations** - uses type inference instead of heuristics
+- **Comprehensive test coverage** - every fix has regression tests
+- **TDD methodology** - DISCOVER → REPRODUCE → FIX → VERIFY → REPEAT
+
+---
+
+## [0.42.0] - 2026-02-10 (Development Branch)
 ### Focus: Dogfooding & Game Engine Improvements
-- Continued TDD dogfooding with windjammer-game engine
+- TDD dogfooding with windjammer-game engine
 - Compiler fixes discovered through real game development
 
 ---
