@@ -52,7 +52,7 @@ sqlx = { version = "0.8", features = ["runtime-tokio-native-tls", "sqlite"], def
 log = "0.4"
 env_logger = "0.11"
 rand = "0.8"
-getrandom = { version = "0.2", features = ["js"] }
+getrandom = { version = "0.3", features = ["js"] }
 regex = "1.10"
 chrono = "0.4"
 
