@@ -619,7 +619,6 @@ impl<'ast> CodeGenerator<'ast> {
             // TDD FIX: Only optimize return statements in function body (not nested blocks)
             let should_optimize_return =
                 self.in_function_body && matches!(stmt, Statement::Return { .. });
-            
             // Simplified: (is_last && A) || (is_last && B) = is_last && (A || B)
             if is_last
                 && (should_optimize_return
