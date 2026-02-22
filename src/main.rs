@@ -2100,6 +2100,36 @@ fn check_file(file_path: &Path) -> Result<()> {
     Ok(())
 }
 
+/// TDD FIX (Bug #2): File type detection for Cargo.toml target generation
+#[derive(Debug, PartialEq)]
+enum RustFileType {
+    Test,    // Contains #[test] functions
+    Binary,  // Contains fn main()
+    Library, // Neither (just library code)
+}
+
+/// Detect what type of Rust file this is by scanning its contents
+fn detect_rust_file_type(path: &Path) -> RustFileType {
+    if let Ok(contents) = std::fs::read_to_string(path) {
+        let has_main = contents.contains("fn main()") || contents.contains("fn main(");
+        let has_test = contents.contains("#[test]");
+        
+        // Priority: main() takes precedence (binaries can have tests)
+        // Files with ONLY tests (no main) are test targets
+        // Files with neither are library modules (no target needed)
+        if has_main {
+            RustFileType::Binary
+        } else if has_test {
+            RustFileType::Test
+        } else {
+            RustFileType::Library
+        }
+    } else {
+        // Can't read file - assume library
+        RustFileType::Library
+    }
+}
+
 #[allow(dead_code)]
 fn create_cargo_toml_with_deps(
     output_dir: &Path,
@@ -2510,24 +2540,44 @@ fn create_cargo_toml_with_deps(
         // Binary project with main.rs - generate [[bin]] section
         "[[bin]]\nname = \"windjammer-app\"\npath = \"main.rs\"\n\n".to_string()
     } else {
-        // Multiple standalone files - generate [[bin]] sections for each
-        let mut bin_sections = Vec::new();
+        // TDD FIX (Bug #2): Detect test files and generate appropriate targets
+        // Multiple standalone files - detect file type and generate [[bin]] or [[test]]
+        let mut target_sections = Vec::new();
         if let Ok(entries) = fs::read_dir(output_dir) {
             for entry in entries.flatten() {
                 if let Some(filename) = entry.file_name().to_str() {
                     if filename.ends_with(".rs") {
-                        let bin_name = filename.strip_suffix(".rs").unwrap_or(filename);
-                        bin_sections.push(format!(
-                            "[[bin]]\nname = \"{}\"\npath = \"{}\"\n",
-                            bin_name, filename
-                        ));
+                        let file_path = entry.path();
+                        let file_type = detect_rust_file_type(&file_path);
+                        
+                        let target_name = filename.strip_suffix(".rs").unwrap_or(filename);
+                        
+                        match file_type {
+                            RustFileType::Test => {
+                                // Test file: generate [[test]] target
+                                target_sections.push(format!(
+                                    "[[test]]\nname = \"{}\"\npath = \"{}\"\n",
+                                    target_name, filename
+                                ));
+                            }
+                            RustFileType::Binary => {
+                                // Executable: generate [[bin]] target
+                                target_sections.push(format!(
+                                    "[[bin]]\nname = \"{}\"\npath = \"{}\"\n",
+                                    target_name, filename
+                                ));
+                            }
+                            RustFileType::Library => {
+                                // Library code: no target needed (just a module)
+                            }
+                        }
                     }
                 }
             }
         }
 
-        if !bin_sections.is_empty() {
-            format!("{}\n", bin_sections.join("\n"))
+        if !target_sections.is_empty() {
+            format!("{}\n", target_sections.join("\n"))
         } else {
             String::new()
         }
