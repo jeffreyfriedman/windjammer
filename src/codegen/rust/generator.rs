@@ -7315,21 +7315,61 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
                     })
                     .collect();
 
-                // WINDJAMMER PHILOSOPHY: Auto-wrap extern function calls in unsafe blocks
-                // THE WINDJAMMER WAY: Users shouldn't have to write `unsafe` manually
-                let call_str = format!("{}({})", func_str, args.join(", "));
-
+                // TDD FIX (Bug #3): Extract format!() macros in arguments to temp variables
+                // The args vec has already been generated as Rust strings
+                // Check if any contain format!() and extract them
+                let has_format_arg = args.iter().any(|arg_str| arg_str.contains("format!("));
+                
                 // Check if this is an extern function call
                 let is_extern_call = if let Some(ref sig) = signature {
                     sig.is_extern
                 } else {
                     false
                 };
-
-                if is_extern_call {
-                    format!("unsafe {{ {} }}", call_str)
+                
+                // WINDJAMMER PHILOSOPHY: Auto-wrap extern function calls in unsafe blocks
+                // THE WINDJAMMER WAY: Users shouldn't have to write `unsafe` manually
+                if has_format_arg {
+                    // Extract format!() macros to temp variables
+                    let mut temp_decls = String::new();
+                    let mut temp_counter = 0;
+                    let fixed_args: Vec<String> = args
+                        .iter()
+                        .map(|arg_str| {
+                            if arg_str.starts_with("format!(") || arg_str.starts_with("&format!(") {
+                                // Strip leading & if present
+                                let format_expr = if arg_str.starts_with("&") {
+                                    &arg_str[1..]
+                                } else {
+                                    arg_str
+                                };
+                                // Extract to temp var
+                                let temp_name = format!("_temp{}", temp_counter);
+                                temp_counter += 1;
+                                temp_decls.push_str(&format!("let {} = {}; ", temp_name, format_expr));
+                                format!("&{}", temp_name)
+                            } else {
+                                arg_str.clone()
+                            }
+                        })
+                        .collect();
+                    
+                    let call_expr = format!("{}({})", func_str, fixed_args.join(", "));
+                    
+                    // Wrap in unsafe block if extern, otherwise regular block
+                    if is_extern_call {
+                        format!("unsafe {{ {}{}  }}", temp_decls, call_expr)
+                    } else {
+                        format!("{{ {}{} }}", temp_decls, call_expr)
+                    }
                 } else {
-                    call_str
+                    // No format!() args - generate normally with optional unsafe wrapper
+                    let call_str = format!("{}({})", func_str, args.join(", "));
+                    if is_extern_call {
+                        format!("unsafe {{ {} }}", call_str)
+                    } else {
+                        call_str
+                    }
                 }
             }
             Expression::MethodCall {
@@ -7713,14 +7753,54 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
                     }
                 }
 
-                let base_expr = format!(
-                    "{}{}{}{}({})",
-                    obj_str,
-                    separator,
-                    method,
-                    turbofish,
-                    processed_args.join(", ")
-                );
+                // TDD FIX (Bug #3): Extract format!() macros in method arguments too
+                let has_format_arg = processed_args.iter().any(|arg_str| arg_str.contains("format!("));
+                
+                let base_expr = if has_format_arg {
+                    // Extract format!() macros to temp variables
+                    let mut temp_decls = String::new();
+                    let mut temp_counter = 0;
+                    let fixed_args: Vec<String> = processed_args
+                        .iter()
+                        .map(|arg_str| {
+                            if arg_str.starts_with("format!(") || arg_str.starts_with("&format!(") {
+                                // Strip leading & if present
+                                let format_expr = if arg_str.starts_with("&") {
+                                    &arg_str[1..]
+                                } else {
+                                    arg_str
+                                };
+                                // Extract to temp var
+                                let temp_name = format!("_temp{}", temp_counter);
+                                temp_counter += 1;
+                                temp_decls.push_str(&format!("let {} = {}; ", temp_name, format_expr));
+                                format!("&{}", temp_name)
+                            } else {
+                                arg_str.clone()
+                            }
+                        })
+                        .collect();
+                    
+                    // Wrap in block: { let _temp0 = format!(...); obj.method(&_temp0, ...) }
+                    format!(
+                        "{{ {}{}{}{}{}({}) }}",
+                        temp_decls,
+                        obj_str,
+                        separator,
+                        method,
+                        turbofish,
+                        fixed_args.join(", ")
+                    )
+                } else {
+                    format!(
+                        "{}{}{}{}({})",
+                        obj_str,
+                        separator,
+                        method,
+                        turbofish,
+                        processed_args.join(", ")
+                    )
+                };
 
                 // AUTO-CLONE: Method call results are ALWAYS owned values.
                 // Unlike field accesses (self.field borrows from self) or identifiers
