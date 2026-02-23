@@ -472,6 +472,11 @@ impl Parser {
                 self.advance();
                 Type::Infer
             }
+            Token::Self_ => {
+                // Self type (e.g. in &self, &mut self parameter types)
+                self.advance();
+                Type::Custom("Self".to_string())
+            }
             _ => return Err(format!("Expected type, got {:?}", self.current_token())),
         };
 
