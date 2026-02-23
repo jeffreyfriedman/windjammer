@@ -480,6 +480,10 @@ if (import.meta.url === `file://${process.argv[1]}`) {
                 // JavaScript doesn't have references, just use the inner pattern
                 self.pattern_to_js(inner)
             }
+            crate::parser::Pattern::Ref(name) | crate::parser::Pattern::RefMut(name) => {
+                // JS doesn't have ref/ref mut, just use the identifier
+                name.clone()
+            }
             crate::parser::Pattern::Tuple(patterns) => {
                 let js_patterns: Vec<String> =
                     patterns.iter().map(|p| self.pattern_to_js(p)).collect();
@@ -1129,6 +1133,10 @@ if (import.meta.url === `file://${process.argv[1]}`) {
                 // JavaScript doesn't have references, just match the inner pattern
                 self.generate_pattern_match(inner, match_value)
             }
+            Pattern::Ref(name) | Pattern::RefMut(name) => {
+                // ref x and ref mut x in JS: bind the variable like Identifier
+                format!("((({} = {}) !== undefined) || true)", name, match_value)
+            }
             Pattern::Literal(lit) => format!("{} === {}", match_value, self.generate_literal(lit)),
             Pattern::EnumVariant(name, binding) => {
                 use crate::parser::EnumPatternBinding;
@@ -1273,6 +1281,7 @@ if (import.meta.url === `file://${process.argv[1]}`) {
                 format!("[{}]", pattern_strs.join(", "))
             }
             Pattern::Reference(inner) => self.generate_pattern(inner), // JS doesn't have references
+            Pattern::Ref(name) | Pattern::RefMut(name) => name.clone(), // JS doesn't have ref
             Pattern::EnumVariant(name, _) => name.clone(),             // Simplified for JS
             Pattern::Literal(lit) => self.generate_literal(lit),
             Pattern::Or(_) => "_".to_string(), // Simplified for JS

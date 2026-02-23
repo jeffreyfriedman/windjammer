@@ -83,6 +83,7 @@ pub fn pattern_has_string_literal(pattern: &Pattern) -> bool {
         Pattern::Literal(Literal::String(_)) => true,
         Pattern::Tuple(patterns) => patterns.iter().any(pattern_has_string_literal),
         Pattern::Or(patterns) => patterns.iter().any(pattern_has_string_literal),
+        Pattern::Ref(_) | Pattern::RefMut(_) => false, // ref patterns don't contain literals
         _ => false,
     }
 }

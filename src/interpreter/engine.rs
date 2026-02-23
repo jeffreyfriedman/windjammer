@@ -609,6 +609,7 @@ impl<'a> Interpreter<'a> {
             }
             Pattern::Or(patterns) => patterns.iter().any(|p| self.pattern_matches(p, value)),
             Pattern::Reference(inner) => self.pattern_matches(inner, value),
+            Pattern::Ref(_) | Pattern::RefMut(_) => true, // Always matches (creates binding)
         }
     }
 
