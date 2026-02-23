@@ -1016,8 +1016,15 @@ impl Parser {
                             false
                         };
 
-                        if is_assignment {
-                            // Parse as statement (assignment)
+                        // TDD: break/continue/return in match arm (e.g. None => break) must be parsed
+                        // as statements, not expressions. Expression parser doesn't handle them.
+                        let is_control_flow = matches!(
+                            self.current_token(),
+                            Token::Break | Token::Continue | Token::Return
+                        );
+
+                        if is_assignment || is_control_flow {
+                            // Parse as statement (assignment or break/continue/return)
                             let stmt = self.parse_statement()?;
                             // Wrap in block expression
                             let block = self.alloc_expr(Expression::Block {
