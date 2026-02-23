@@ -13,7 +13,7 @@
 | System | Lines | Status | Notes |
 |--------|-------|--------|-------|
 | **Voxel (Phases 1-3)** | 510 | ✅ Complete | Grid, Color, Meshing, **Octree SVO** |
-| **Dialogue System** | 300 | ✅ Complete | Branching, Paragon/Renegade, Conditions |
+| **Dialogue System** | 300 | ✅ Complete | Branching, Honest/Aggressive, Conditions |
 | **Quest System** | 400 | ✅ Complete | Objectives, Rewards, Manager, Journal |
 | **Examples (converted)** | 260 | ✅ Complete | simple_test, complete_voxel_demo |
 | **Tilemap (converted)** | 200 | ✅ Complete | From FFI, thin wrapper |
@@ -61,7 +61,7 @@
 ### Systems Now 100% in Windjammer
 
 - ✅ **Voxel Rendering** (Grid, Color, Meshing, Octree SVO)
-- ✅ **Dialogue System** (Branching, Paragon/Renegade)
+- ✅ **Dialogue System** (Branching, Honest/Aggressive)
 - ✅ **Quest System** (Objectives, Rewards, Journal)
 - ✅ **Math3D** (Dot, Cross, Normalize, TRS Matrix) ← **NEW!**
 - ✅ **Frustum Culling** (Planes, Visibility Tests) ← **NEW!**
@@ -105,7 +105,7 @@
 
 ---
 
-## 🎮 IMPACT ON MASS EFFECT GAME
+## 🎮 IMPACT ON THE INHERITORS GAME
 
 ### Milestone 1: Vertical Slice - NOW POSSIBLE!
 
@@ -117,7 +117,7 @@ All critical systems are ready:
 - ✅ Scene hierarchy (scene graph)
 - ✅ LOD optimization
 - ✅ Voxel rendering (octree)
-- ✅ Dialogue (recruitment, paragon/renegade)
+- ✅ Dialogue (recruitment, honor/ruthlessness)
 - ✅ Quests (objectives, rewards)
 
 **We can NOW build the vertical slice!** 🎯
@@ -126,8 +126,8 @@ All critical systems are ready:
 
 1. **Complete character_controller conversion** (in progress)
 2. **Integrate systems:** Player + Camera + AI
-3. **Build first level:** Citadel hub area
-4. **Implement Garrus recruitment:** Dialogue + Quest + Combat
+3. **Build first level:** Veridex hub area
+4. **Implement Lyra recruitment:** Dialogue + Quest + Combat
 5. **Test vertical slice:** Player explores, talks, completes quest
 
 ---
@@ -252,8 +252,8 @@ All critical systems are ready:
 
 ### Medium Priority (This Week)
 5. ⏳ **Convert animation systems** (clip, skeleton, blend_tree)
-6. ⏳ **Build first game level** (Citadel hub)
-7. ⏳ **Implement Garrus recruitment** (dialogue + quest + combat)
+6. ⏳ **Build first game level** (Veridex hub)
+7. ⏳ **Implement Lyra recruitment** (dialogue + quest + combat)
 
 ### Low Priority (Next Week)
 8. ⏳ **Physics integration** (Box2D or custom)
@@ -270,12 +270,12 @@ All critical systems are ready:
 - **Status:** ~58% complete, on track!
 
 ### Medium-term (1-2 months)
-- **Goal:** Full Garrus recruitment quest playable
+- **Goal:** Full Lyra recruitment quest playable
 - **Metric:** 85%+ game-host logic
 - **Status:** Systems ready, content in progress
 
 ### Long-term (3-6 months)
-- **Goal:** Full Mass Effect-style RPG demo
+- **Goal:** Full The Inheritors RPG demo
 - **Metric:** 95%+ game-host logic
 - **Status:** Foundation solid, architecture proven
 
@@ -325,6 +325,6 @@ All critical systems are ready:
 
 ---
 
-**Next Session:** Complete ref pattern TDD, test vertical slice, build Citadel! 🚀
+**Next Session:** Complete ref pattern TDD, test vertical slice, build Veridex! 🚀
 
 **Status:** Ready to ship! 🎯
