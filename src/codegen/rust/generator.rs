@@ -2916,11 +2916,17 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
         output.push('(');
 
         // Generate parameters
-        let params: Vec<String> = func
-            .parameters
-            .iter()
-            .map(|param| format!("{}: {}", param.name, self.type_to_rust(&param.type_)))
-            .collect();
+        // WINDJAMMER FFI: Convert `str` parameters to FFI-compatible (*const u8, usize) pairs
+        let mut params: Vec<String> = Vec::new();
+        for param in &func.parameters {
+            if matches!(&param.type_, Type::Custom(name) if name == "str") {
+                // FFI: str -> (*const u8, usize)
+                params.push(format!("{}_ptr: *const u8", param.name));
+                params.push(format!("{}_len: usize", param.name));
+            } else {
+                params.push(format!("{}: {}", param.name, self.type_to_rust(&param.type_)));
+            }
+        }
 
         output.push_str(&params.join(", "));
         output.push(')');
@@ -7106,10 +7112,17 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
                         }
                     });
 
+                // Check if this is an extern function call for FFI str handling
+                let is_extern_call = if let Some(ref sig) = signature {
+                    sig.is_extern
+                } else {
+                    false
+                };
+
                 let args: Vec<String> = arguments
                     .iter()
                     .enumerate()
-                    .map(|(i, (_label, arg))| {
+                    .flat_map(|(i, (_label, arg))| {
                         // CRITICAL: Reset in_field_access_object for argument generation.
                         // Arguments are independent expressions, NOT part of a field/method/index chain.
                         // Without this, `process_property(prop.name, prop.value).as_str()` would
@@ -7119,6 +7132,22 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
                         self.in_field_access_object = false;
                         let mut arg_str = self.generate_expression(arg);
                         self.in_field_access_object = prev_field_access_obj;
+                        
+                        // WINDJAMMER FFI: Convert string arguments to (*const u8, usize) for extern functions
+                        if is_extern_call {
+                            if let Some(ref sig) = signature {
+                                if let Some(param_type) = sig.param_types.get(i) {
+                                    if matches!(param_type, Type::Custom(name) if name == "str") {
+                                        // Expand str to (ptr, len)
+                                        // Always use .as_bytes() for consistency (works for both &str and String)
+                                        return vec![
+                                            format!("{}.as_bytes().as_ptr()", arg_str),
+                                            format!("{}.as_bytes().len()", arg_str),
+                                        ];
+                                    }
+                                }
+                            }
+                        }
 
                         // Auto-convert string literals to String for functions expecting owned String
                         // THE WINDJAMMER WAY: Smart inference based on available information!
@@ -7206,7 +7235,7 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
                                             && !is_param_already_ref
                                             && !is_copy_param
                                         {
-                                            return format!("&{}", arg_str);
+                                            return vec![format!("&{}", arg_str)];
                                         }
                                     }
                                     OwnershipMode::MutBorrowed => {
@@ -7239,7 +7268,7 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
                                             } else {
                                                 arg_str
                                             };
-                                            return format!("&mut {}", mut_arg_str);
+                                            return vec![format!("&mut {}", mut_arg_str)];
                                         }
                                     }
                                     OwnershipMode::Owned => {
@@ -7361,7 +7390,7 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
                             }
                         }
 
-                        arg_str
+                        vec![arg_str]
                     })
                     .collect();
 
@@ -7369,13 +7398,6 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
                 // The args vec has already been generated as Rust strings
                 // Check if any contain format!() and extract them
                 let has_format_arg = args.iter().any(|arg_str| arg_str.contains("format!("));
-                
-                // Check if this is an extern function call
-                let is_extern_call = if let Some(ref sig) = signature {
-                    sig.is_extern
-                } else {
-                    false
-                };
                 
                 // WINDJAMMER PHILOSOPHY: Auto-wrap extern function calls in unsafe blocks
                 // THE WINDJAMMER WAY: Users shouldn't have to write `unsafe` manually
