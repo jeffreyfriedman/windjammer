@@ -253,6 +253,8 @@ pub enum Pattern<'ast> {
     Tuple(Vec<Pattern<'ast>>),      // Tuple pattern: (a, b, c)
     Or(Vec<Pattern<'ast>>),         // Or pattern: pattern1 | pattern2 | pattern3
     Reference(&'ast Pattern<'ast>), // Reference pattern: &x
+    Ref(String),                     // Ref binding: ref x (borrows without moving)
+    RefMut(String),                  // RefMut binding: ref mut x (mutable borrow)
 }
 
 // ============================================================================

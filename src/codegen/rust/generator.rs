@@ -4191,6 +4191,8 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
             Pattern::Wildcard => "_".to_string(),
             Pattern::Identifier(name) => name.clone(),
             Pattern::Reference(inner) => format!("&{}", self.pattern_to_rust(inner)),
+            Pattern::Ref(name) => format!("ref {}", name),
+            Pattern::RefMut(name) => format!("ref mut {}", name),
             Pattern::Tuple(patterns) => {
                 let rust_patterns: Vec<String> =
                     patterns.iter().map(|p| self.pattern_to_rust(p)).collect();
@@ -5609,6 +5611,8 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
             Pattern::Wildcard => "_".to_string(),
             Pattern::Identifier(name) => name.clone(),
             Pattern::Reference(inner) => format!("&{}", self.generate_pattern(inner)),
+            Pattern::Ref(name) => format!("ref {}", name),
+            Pattern::RefMut(name) => format!("ref mut {}", name),
             Pattern::EnumVariant(name, binding) => {
                 use crate::parser::EnumPatternBinding;
                 match binding {
@@ -5680,6 +5684,10 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
             Pattern::Reference(inner) => {
                 // &pattern - recurse into inner pattern
                 self.extract_pattern_bindings(inner, bindings);
+            }
+            Pattern::Ref(name) | Pattern::RefMut(name) => {
+                // ref x or ref mut x - binds 'x' by reference
+                bindings.insert(name.clone());
             }
             Pattern::EnumVariant(_name, binding) => {
                 use crate::parser::EnumPatternBinding;
@@ -6178,6 +6186,7 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
             Pattern::Wildcard | Pattern::Literal(_) => false,
             Pattern::Identifier(_) => true, // Binding moves the value
             Pattern::Reference(inner) => self.pattern_extracts_value(inner),
+            Pattern::Ref(_) | Pattern::RefMut(_) => false, // ref/ref mut borrow, don't move
             Pattern::Tuple(patterns) => patterns.iter().any(|p| self.pattern_extracts_value(p)),
             Pattern::EnumVariant(_, binding) => match binding {
                 EnumPatternBinding::None | EnumPatternBinding::Wildcard => false,
@@ -6639,9 +6648,22 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
                 // When the left operand is a cast (or ends with `as TYPE`) and the operator
                 // is `<`, we must wrap the left side in parentheses to disambiguate.
                 // Other comparison operators (>=, <=, ==, !=, >) don't have this ambiguity.
-                let left_needs_cast_parens = op_str == "<"
+                //
+                // TDD FIX (VOXEL DOGFOODING): Bitwise operators (<<, >>, |, &, ^) have
+                // LOWER precedence than `as` in Rust, so `(x as u32) << 8` is required.
+                // Without parens: `x as u32 << 8` is parsed as `x as (u32 << 8)` - WRONG!
+                //
+                // DISCOVERED: VoxelColor::to_hex() compilation failure
+                //   Source: `let r = (self.r as u32) << 24;`
+                //   Generated: `let r = self.r as u32 << 24;`  ← Missing parens!
+                //   Error: `<<` is interpreted as start of generic arguments for `u32`
+                let needs_cast_parens_for_op = matches!(
+                    op_str,
+                    "<" | ">" | "<<" | ">>" | "|" | "&" | "^"
+                );
+                let left_needs_cast_parens = needs_cast_parens_for_op
                     && (matches!(left, Expression::Cast { .. }) || left_str.contains(" as "));
-                let right_needs_cast_parens = op_str == ">"
+                let right_needs_cast_parens = needs_cast_parens_for_op
                     && (matches!(right, Expression::Cast { .. }) || right_str.contains(" as "));
 
                 if left_needs_cast_parens {

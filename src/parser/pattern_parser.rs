@@ -29,6 +29,46 @@ impl Parser {
 
     /// Parse a single pattern
     pub fn parse_pattern(&mut self) -> Result<Pattern<'static>, String> {
+        // TDD FIX: Check for `ref` or `ref mut` patterns
+        // Syntax: `ref x` or `ref mut x`
+        // Used in match arms to borrow without moving: `Some(ref c) => c.len()`
+        if let Token::Ident(name) = self.current_token() {
+            if name == "ref" {
+                self.advance();
+                
+                // Check for `ref mut`
+                if let Token::Ident(mut_name) = self.current_token() {
+                    if mut_name == "mut" {
+                        self.advance();
+                        
+                        // Expect identifier after `ref mut`
+                        if let Token::Ident(var_name) = self.current_token() {
+                            let var = var_name.clone();
+                            self.advance();
+                            return Ok(Pattern::RefMut(var));
+                        } else {
+                            return Err(format!(
+                                "Expected identifier after 'ref mut', got {:?}",
+                                self.current_token()
+                            ));
+                        }
+                    }
+                }
+                
+                // Just `ref`, expect identifier
+                if let Token::Ident(var_name) = self.current_token() {
+                    let var = var_name.clone();
+                    self.advance();
+                    return Ok(Pattern::Ref(var));
+                } else {
+                    return Err(format!(
+                        "Expected identifier after 'ref', got {:?}",
+                        self.current_token()
+                    ));
+                }
+            }
+        }
+        
         match self.current_token() {
             Token::Underscore => {
                 self.advance();
@@ -398,6 +438,7 @@ impl Parser {
                     "_or_pattern".to_string()
                 }
             }
+            Pattern::Ref(name) | Pattern::RefMut(name) => name.clone(),
         }
     }
 
@@ -438,6 +479,8 @@ impl Parser {
                 let parts: Vec<String> = patterns.iter().map(Self::pattern_to_string).collect();
                 parts.join(" | ")
             }
+            Pattern::Ref(name) => format!("ref {}", name),
+            Pattern::RefMut(name) => format!("ref mut {}", name),
         }
     }
 
@@ -462,6 +505,8 @@ impl Parser {
                 patterns.iter().any(Self::is_pattern_refutable)
             }
             Pattern::Reference(inner) => Self::is_pattern_refutable(inner),
+            Pattern::Ref(_) => false,      // ref x is irrefutable (always matches and borrows)
+            Pattern::RefMut(_) => false,   // ref mut x is irrefutable
 
             // Refutable patterns
             Pattern::EnumVariant(_, _) => true,
