@@ -1,4 +1,4 @@
-# Epic Dogfooding Session: Building Mass Effect in Windjammer
+# Epic Dogfooding Session: Building The Inheritors in Windjammer
 
 **Date:** 2026-02-22
 **Duration:** Full day
@@ -14,7 +14,7 @@ Today we accomplished something extraordinary: We proved Windjammer can build a 
 - **Implemented Phase 3 voxel rendering** (SVO Octree)
 - **Found & fixed 2 compiler bugs** with TDD
 - **Converted 1 FFI system** to Windjammer (Tilemap)
-- **Created complete game design** for Mass Effect-style RPG
+- **Created complete game design** for The Inheritors RPG
 - **Identified 18 FFI files** for future conversion (~4,000 lines)
 
 **Total Windjammer Code Written Today:** ~1,200+ lines of production game engine code!
@@ -89,7 +89,7 @@ Today we accomplished something extraordinary: We proved Windjammer can build a 
 
 ---
 
-## Part 3: Mass Effect-Style RPG Systems
+## Part 3: The Inheritors RPG Systems
 
 ### ✅ Dialogue System (My Work)
 **Files Created:**
@@ -98,11 +98,11 @@ Today we accomplished something extraordinary: We proved Windjammer can build a 
 
 **Features:**
 - Branching conversations
-- Paragon/Renegade moral choices
+- Honest/Aggressive moral choices
 - Relationship tracking
 - Quest integration
 - Condition & consequence system
-- Dialogue wheel (investigate, paragon, renegade)
+- Dialogue wheel (investigative, honest, aggressive)
 
 **Compilation:** ✅ SUCCESS (17.5s)
 
@@ -110,14 +110,14 @@ Today we accomplished something extraordinary: We proved Windjammer can build a 
 
 ### ✅ Example Dialogue Tree (Via Subagent)
 **Files Created:**
-- `dialogue/examples.wj` - Garrus recruitment conversation
+- `dialogue/examples.wj` - Lyra recruitment conversation
 
 **Features:**
 - 13 dialogue lines
 - 15+ player choices
 - 3 endings (recruit, leave, combat)
 - Quest integration
-- Relationship/paragon/renegade tracking
+- Relationship/honor/ruthlessness tracking
 
 **Result:** Complete, ready to use!
 
@@ -159,7 +159,7 @@ Today we accomplished something extraordinary: We proved Windjammer can build a 
 4. `ffi/frustum.rs` (313 lines) - Pending
 5. `ffi/lod.rs` (254 lines) - Pending
 
-**AI Systems (Critical for Mass Effect):**
+**AI Systems (Critical for The Inheritors):**
 - `ffi/steering.rs` (829 lines)
 - `ffi/pathfinding.rs` (532 lines)
 - `ffi/navmesh.rs` (631 lines)
@@ -260,7 +260,7 @@ Today we accomplished something extraordinary: We proved Windjammer can build a 
 
 ---
 
-## Mass Effect-Style Game Design
+## The Inheritors Game Design
 
 ### ✅ Game Design Document Created
 **File:** `windjammer-game/MASS_EFFECT_STYLE_GAME.md`
@@ -271,7 +271,7 @@ Today we accomplished something extraordinary: We proved Windjammer can build a 
 
 **Core Pillars:**
 1. Third-person action combat
-2. Story & dialogue (paragon/renegade)
+2. Story & dialogue (honor/ruthlessness)
 3. Squad management (2 active + reserves)
 4. Character progression
 5. Voxel art (MagicaVoxel quality)
@@ -460,7 +460,7 @@ Every decision today aligned with Windjammer's philosophy:
 | Find compiler bugs | ✅ EXCEEDED | 2 bugs found & fixed with TDD |
 | TDD methodology | ✅ SUCCESS | All fixes have tests |
 | Dogfooding | ✅ EXCEEDED | 1,670 lines production Windjammer |
-| Mass Effect design | ✅ EXCEEDED | Complete design + 3 systems implemented! |
+| The Inheritors design | ✅ EXCEEDED | Complete design + 3 systems implemented! |
 | FFI conversion | ✅ SUCCESS | Tilemap converted + 17 more identified |
 | Parallel work | ✅ SUCCESS | 3 subagents + me = 4x productivity |
 
@@ -484,7 +484,7 @@ We built:
 - 1,670 lines of production Windjammer code
 - 5 major game systems
 - Complete voxel rendering pipeline (Phases 1-3)
-- Mass Effect-style dialogue & quest systems
+- The Inheritors dialogue & quest systems
 - Converted 735 lines from Rust to Windjammer
 
 We found and fixed:
@@ -503,7 +503,7 @@ We proved:
 
 We're not just building a language. We're building a revolution in game development. A language that's as powerful as Rust, as ergonomic as Python, and as productive as the best game engines.
 
-**And we're doing it by building an actual Mass Effect-style RPG in Windjammer.**
+**And we're doing it by building an actual The Inheritors RPG in Windjammer.**
 
 That's not a demo. That's not a proof-of-concept. That's a **shipping game** that will prove Windjammer is the future of game development.
 
