@@ -521,6 +521,12 @@ pub enum Item<'ast> {
         traits: Vec<String>,
         location: SourceLocation,
     }, // bound Printable = Display + Debug
+    TypeAlias {
+        name: String,
+        target: Type,
+        is_pub: bool,
+        location: SourceLocation,
+    }, // pub type QuestStatus = QuestState
 }
 
 impl<'ast> Item<'ast> {
@@ -537,6 +543,7 @@ impl<'ast> Item<'ast> {
             Item::Use { location, .. } => location.clone(),
             Item::Mod { location, .. } => location.clone(),
             Item::BoundAlias { location, .. } => location.clone(),
+            Item::TypeAlias { location, .. } => location.clone(),
         }
     }
 }

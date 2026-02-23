@@ -419,6 +419,28 @@ impl Parser {
                     location: self.current_location(),
                 })
             }
+            Token::Type => {
+                self.advance(); // consume 'type'
+                let name = if let Token::Ident(n) = self.current_token() {
+                    let name = n.clone();
+                    self.advance();
+                    name
+                } else {
+                    return Err("Expected type alias name".to_string());
+                };
+                self.expect(Token::Assign)?;
+                let target = self.parse_type()?;
+                // Semicolon optional (ASI)
+                if self.current_token() == &Token::Semicolon {
+                    self.advance();
+                }
+                Ok(Item::TypeAlias {
+                    name,
+                    target,
+                    is_pub,
+                    location: self.current_location(),
+                })
+            }
             _ => Err(format!(
                 "Unexpected token: {:?} (at token position {})",
                 self.current_token(),

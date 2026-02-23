@@ -483,6 +483,20 @@ impl<'ast> CodeGenerator<'ast> {
                 output.push_str("}\n");
                 output
             }
+            Item::TypeAlias {
+                name,
+                target,
+                is_pub,
+                ..
+            } => {
+                let pub_prefix = if *is_pub { "pub " } else { "" };
+                format!(
+                    "{}type {} = {};\n",
+                    pub_prefix,
+                    name,
+                    self.type_to_rust(target)
+                )
+            }
             _ => String::new(), // Ignore other items for now
         }
     }
@@ -1050,6 +1064,20 @@ impl<'ast> CodeGenerator<'ast> {
                             self.generate_expression_immut(value)
                         ));
                     }
+                }
+                Item::TypeAlias {
+                    name,
+                    target,
+                    is_pub,
+                    ..
+                } => {
+                    let pub_prefix = if *is_pub { "pub " } else { "" };
+                    body.push_str(&format!(
+                        "{}type {} = {};\n",
+                        pub_prefix,
+                        name,
+                        self.type_to_rust(target)
+                    ));
                 }
                 _ => {}
             }
@@ -10449,6 +10477,7 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
                 .iter()
                 .any(|i| Self::item_references_collection(i, type_name)),
             Item::Use { .. } | Item::BoundAlias { .. } => false,
+            Item::TypeAlias { target, .. } => Self::type_references_name(target, type_name),
         }
     }
 
