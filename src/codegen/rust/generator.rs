@@ -7045,10 +7045,58 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
                 // Err("literal") -> Err("literal".to_string())
                 // Also: Some(borrowed_iterator_var) -> Some(borrowed_iterator_var.clone())
                 if matches!(func_name.as_str(), "Some" | "Ok" | "Err") {
-                    let args: Vec<String> = arguments
+                    // TDD FIX (Bug #16 completion): Extract format!() to temp variables for enum variants too!
+                    let generated_args: Vec<String> = arguments
                         .iter()
-                        .map(|(_label, arg)| {
-                            let arg_str = self.generate_expression(arg);
+                        .map(|(_label, arg)| self.generate_expression(arg))
+                        .collect();
+                    
+                    let has_format_arg = generated_args.iter().any(|arg_str| arg_str.contains("format!("));
+                    
+                    if has_format_arg {
+                        // Extract format!() macros to temp variables
+                        let mut temp_decls = String::new();
+                        let mut temp_counter = 0;
+                        let fixed_args: Vec<String> = generated_args
+                            .iter()
+                            .map(|arg_str| {
+                                if arg_str.starts_with("format!(") || arg_str.starts_with("&format!(") {
+                                    // Strip leading & if present
+                                    let format_expr = if arg_str.starts_with("&") {
+                                        &arg_str[1..]
+                                    } else {
+                                        arg_str
+                                    };
+                                    // Extract to temp var
+                                    let temp_name = format!("_temp{}", temp_counter);
+                                    temp_counter += 1;
+                                    temp_decls.push_str(&format!("let {} = {}; ", temp_name, format_expr));
+                                    
+                                    // TDD FIX: Don't add & for owned parameters
+                                    // Err(format!(...)) should be Err(_temp0), not Err(&_temp0)
+                                    // Original arg didn't have &, so pass owned value
+                                    if arg_str.starts_with("&") {
+                                        format!("&{}", temp_name)
+                                    } else {
+                                        temp_name
+                                    }
+                                } else {
+                                    arg_str.clone()
+                                }
+                            })
+                            .collect();
+                        
+                        return format!("{{ {}{}({}) }}", temp_decls, func_str, fixed_args.join(", "));
+                    }
+                    
+                    let args: Vec<String> = generated_args
+                        .iter()
+                        .enumerate()
+                        .map(|(i, arg_str)| {
+                            // Get the original argument expression for type checking
+                            let arg = &arguments[i].1;
+                            let mut result = arg_str.clone();
+                            
                             // Auto-convert string literals to String for Option/Result wrappers
                             if matches!(
                                 arg,
@@ -7057,7 +7105,7 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
                                     ..
                                 }
                             ) {
-                                format!("{}.to_string()", arg_str)
+                                format!("{}.to_string()", result)
                             } else if let Expression::Identifier { name, .. } = arg {
                                 // BUGFIX: Don't clone if function returns Option<&T>, Option<&mut T>, or Result<&T, E>
                                 // When returning Option<&Squad>, Some(squad) should NOT become Some(squad.clone())
@@ -7090,16 +7138,16 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
                                 if !returns_option_ref
                                     && !returns_result_ref
                                     && self.borrowed_iterator_vars.contains(name)
-                                    && !arg_str.ends_with(".clone()")
+                                    && !result.ends_with(".clone()")
                                 {
                                     // Function returns owned, but variable is borrowed - need to clone
-                                    format!("{}.clone()", arg_str)
+                                    format!("{}.clone()", result)
                                 } else {
                                     // Function returns reference, or variable not borrowed - don't clone
-                                    arg_str
+                                    result
                                 }
                             } else {
-                                arg_str
+                                result
                             }
                         })
                         .collect();
@@ -7240,11 +7288,19 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
                                             })
                                             .unwrap_or(false);
 
-                                        // Insert & if not already a reference and not a string literal
+                                        // TDD FIX (Bug #16): Don't add & to temp variables!
+                                        // Temp variables (like _temp0) hold OWNED values from format!()
+                                        // format!() returns String, not &str, so _temp0 is String
+                                        // If we add &, we get &String when we need String
+                                        let is_temp_variable = arg_str.starts_with("_temp") 
+                                            && arg_str.chars().skip(5).all(|c| c.is_numeric());
+                                        
+                                        // Insert & if not already a reference and not a string literal and not a temp var
                                         if !expression_helpers::is_reference_expression(arg)
                                             && !is_string_literal
                                             && !is_param_already_ref
                                             && !is_copy_param
+                                            && !is_temp_variable
                                         {
                                             return vec![format!("&{}", arg_str)];
                                         }
@@ -7420,8 +7476,10 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
                         .iter()
                         .map(|arg_str| {
                             if arg_str.starts_with("format!(") || arg_str.starts_with("&format!(") {
+                                // TDD FIX (Bug #16 COMPLETE): Check if original had & to preserve intent
+                                let has_borrow_prefix = arg_str.starts_with("&");
                                 // Strip leading & if present
-                                let format_expr = if arg_str.starts_with("&") {
+                                let format_expr = if has_borrow_prefix {
                                     &arg_str[1..]
                                 } else {
                                     arg_str
@@ -7430,7 +7488,15 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
                                 let temp_name = format!("_temp{}", temp_counter);
                                 temp_counter += 1;
                                 temp_decls.push_str(&format!("let {} = {}; ", temp_name, format_expr));
-                                format!("&{}", temp_name)
+                                
+                                // TDD FIX: Only add & if original had it!
+                                // format!() returns owned String, so if caller wants owned, pass temp directly
+                                // If caller wants borrowed, pass &temp (when original was &format!())
+                                if has_borrow_prefix {
+                                    format!("&{}", temp_name)
+                                } else {
+                                    temp_name
+                                }
                             } else {
                                 arg_str.clone()
                             }
