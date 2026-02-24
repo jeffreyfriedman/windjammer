@@ -2062,6 +2062,11 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
                 }
                 if !traits.is_empty() {
                     output.push_str(&format!("#[derive({})]\n", traits.join(", ")));
+                    
+                    // TDD FIX: Register this struct as Copy if explicitly derived
+                    if traits.contains(&"Copy".to_string()) {
+                        self.copy_types_registry.insert(s.name.clone());
+                    }
                 }
             } else {
                 // Map Windjammer decorator to Rust attribute
@@ -2094,6 +2099,12 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
             let inferred_traits = self.infer_derivable_traits(s);
             if !inferred_traits.is_empty() {
                 output.push_str(&format!("#[derive({})]\n", inferred_traits.join(", ")));
+                
+                // TDD FIX: Register this struct as Copy if it was inferred
+                // This allows other structs to know this type is Copy when checking their fields
+                if inferred_traits.contains(&"Copy".to_string()) {
+                    self.copy_types_registry.insert(s.name.clone());
+                }
             }
         }
 
@@ -9046,7 +9057,36 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
     fn all_fields_are_copy(&self, fields: &[crate::parser::StructField]) -> bool {
         fields
             .iter()
-            .all(|field| type_analysis::is_copy_type(&field.field_type))
+            .all(|field| self.is_copy_type_with_registry(&field.field_type))
+    }
+    
+    /// TDD FIX: Check if a type is Copy, including user-defined types with @derive(Copy)
+    /// This is needed for auto-deriving Copy on structs with custom Copy fields.
+    /// For example: struct Plane { normal: Vec3, distance: f32 }
+    /// Vec3 has Copy derived, so Plane should also get Copy derived automatically.
+    fn is_copy_type_with_registry(&self, ty: &Type) -> bool {
+        use crate::parser::Type;
+        match ty {
+            // Primitive types are always Copy
+            Type::Int | Type::Int32 | Type::Uint | Type::Float | Type::Bool => true,
+            Type::Reference(_) => true,         // References are Copy
+            Type::MutableReference(_) => false, // Mutable references are not Copy
+            Type::RawPointer { .. } => true,    // Raw pointers are Copy
+            Type::Tuple(types) => types.iter().all(|t| self.is_copy_type_with_registry(t)),
+            Type::Custom(name) => {
+                // Check if it's a known primitive type name
+                let is_primitive = matches!(
+                    name.as_str(),
+                    "i8" | "i16" | "i32" | "i64" | "i128" | "isize"
+                    | "u8" | "u16" | "u32" | "u64" | "u128" | "usize"
+                    | "f32" | "f64" | "bool" | "char"
+                );
+                
+                // TDD FIX: Also check the copy_types_registry for user-defined Copy types!
+                is_primitive || self.copy_types_registry.contains(name.as_str())
+            }
+            _ => false, // String, Vec, Option, Result, other types are not Copy
+        }
     }
 
     fn all_fields_are_partial_eq(&self, fields: &[crate::parser::StructField]) -> bool {
